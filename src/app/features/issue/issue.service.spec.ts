@@ -59,6 +59,7 @@ describe('IssueService', () => {
   ): ICalIssueReduced => ({
     id: 'cal-event-456',
     calProviderId: 'calendar-provider-1',
+    issueProviderKey: 'ICAL',
     title: 'Calendar Event',
     start: new Date('2025-01-20T14:00:00Z').getTime(),
     duration: 3600000,

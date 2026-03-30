@@ -2381,6 +2381,9 @@
       "CREATE_TASK_TOUCH": "Dodirnite + za dodavanje prvog zadatka",
       "EXPLORE": "Slobodno klikajte i istražujte! Pomoć možete pronaći u bočnoj traci.",
       "EXPLORE_TOUCH": "Slobodno istražujte! Pomoć možete pronaći u izborniku.",
+      "TASK_TAP_TOUCH": "Dodirnite zadatak da otvorite njegove detalje.",
+      "TASK_SWIPE_LEFT_TOUCH": "Povucite zadatak ulijevo za više radnji",
+      "TASK_SWIPE_RIGHT_TOUCH": "Povucite zadatak udesno da ga označite dovršenim",
       "OR_PRESS": "ili pritisnite",
       "SKIP_ARIA": "Zatvori savjet"
     }

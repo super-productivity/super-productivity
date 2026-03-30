@@ -119,7 +119,6 @@ export class ReminderModule {
           futureCount: futureReminders.length,
           reminders: reminders.map((r) => ({
             id: r.id.substring(0, 8),
-            title: r.title.substring(0, 30),
             remindAt: r.reminderData?.remindAt
               ? new Date(r.reminderData.remindAt).toISOString()
               : 'unknown',

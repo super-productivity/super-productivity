@@ -255,7 +255,7 @@ export class IssueProviderTabComponent implements OnDestroy, AfterViewInit {
       throw new Error('Issue Provider and Search Result Type dont match');
     }
 
-    Log.log('Add issue', item);
+    Log.log('Add issue', { issueType: item.issueType });
 
     this._issueService.addTaskFromIssue({
       issueDataReduced: item.issueData,

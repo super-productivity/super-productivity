@@ -308,7 +308,7 @@ jobs:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
           release: false
-          args: "--publish never" # Explicit: don't auto-publish unsigned exe files
+          args: '--publish never' # Explicit: don't auto-publish unsigned exe files
 
       # --- Code signing (must succeed — we never publish unsigned exe files) ---
 

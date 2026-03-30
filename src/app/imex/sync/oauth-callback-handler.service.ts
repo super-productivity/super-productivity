@@ -40,7 +40,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
       (event: URLOpenListenerEvent) => {
         SyncLog.log('OAuthCallbackHandler: Received URL', event.url);
 
-        if (event.url.startsWith('com.super-productivity.app://plugin-oauth-callback')) {
+        if (event.url.includes('plugin-oauth-callback')) {
           this._handlePluginOAuthCallback(event.url);
         } else if (event.url.startsWith('com.super-productivity.app://oauth-callback')) {
           const callbackData = this._parseOAuthCallback(event.url);

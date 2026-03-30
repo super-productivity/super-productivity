@@ -3452,4 +3452,66 @@ describe('ConflictResolutionService', () => {
       });
     });
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUG CONFIRMATION TEST (Issue #6571)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('Bug #6571: LWW apply failure does not throw', () => {
+    const now = Date.now();
+
+    const createOpForBug = (
+      id: string,
+      clientId: string,
+      timestamp: number,
+    ): Operation => ({
+      id,
+      clientId,
+      actionType: 'test' as ActionType,
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: 'task-1',
+      payload: { source: clientId },
+      vectorClock: { [clientId]: 1 },
+      timestamp,
+      schemaVersion: 1,
+    });
+
+    beforeEach(() => {
+      mockOpLogStore.hasOp.and.resolveTo(false);
+      mockOpLogStore.append.and.callFake(() => Promise.resolve(1));
+      mockOpLogStore.appendWithVectorClockUpdate.and.callFake(() => Promise.resolve(1));
+      mockOpLogStore.markApplied.and.resolveTo(undefined);
+      mockOpLogStore.markRejected.and.resolveTo(undefined);
+      mockOpLogStore.markFailed.and.resolveTo(undefined);
+    });
+
+    it('should throw when applyOperations has a failedOp', async () => {
+      const localOp = createOpForBug('local-1', 'client-a', now - 1000);
+      const remoteOp = createOpForBug('remote-1', 'client-b', now);
+
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          localOps: [localOp],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+      ];
+
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: [],
+        failedOp: { op: remoteOp, error: new Error('Apply failed for task-1') },
+      });
+
+      // FIXED: Should throw on apply failure (parity with applyNonConflictingOps)
+      await expectAsync(service.autoResolveConflictsLWW(conflicts)).toBeRejectedWithError(
+        'Apply failed for task-1',
+      );
+
+      expect(mockOpLogStore.markFailed).toHaveBeenCalled();
+      expect(mockSnackService.open).toHaveBeenCalled();
+    });
+  });
 });

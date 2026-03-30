@@ -296,8 +296,9 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     if (!provider) {
       return undefined;
     }
-    const http = this._pluginHttp.createHttpHelper(() =>
-      provider.definition.getHeaders(cfg.pluginConfig),
+    const http = this._pluginHttp.createHttpHelper(
+      () => provider.definition.getHeaders(cfg.pluginConfig),
+      { allowPrivateNetwork: provider.allowPrivateNetwork },
     );
     return { provider, http };
   }

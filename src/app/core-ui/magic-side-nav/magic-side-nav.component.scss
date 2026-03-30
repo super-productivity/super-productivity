@@ -27,6 +27,42 @@
   transition: none !important;
 }
 
+:host(.initializing),
+:host(.initializing) * {
+  transition: none !important;
+  animation: none !important;
+}
+
+:host(.initializing) {
+  .nav-sidenav,
+  .resize-handle {
+    opacity: 0;
+  }
+}
+
+:host(.initial-shell-enter) {
+  .nav-sidenav {
+    animation: sidenav-fade-in var(--transition-duration-l) var(--ani-enter-timing) both;
+  }
+}
+
+:host(.initial-enter) {
+  .nav-list,
+  .resize-handle {
+    animation: sidenav-fade-in var(--transition-duration-l) var(--ani-enter-timing) both;
+  }
+}
+
+@keyframes sidenav-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 // Mobile menu open button (only shows when menu is closed)
 .mobile-menu-open {
   display: flex;
@@ -101,7 +137,7 @@
   // Milkglass effect when background image is present (light theme)
   :host-context(.hasBgImage) & {
     background: var(--c-light-50);
-    backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px);
   }
 
   // Milkglass effect for dark theme with background image
@@ -129,6 +165,10 @@
     box-shadow: 4px 0 16px var(--c-dark-30);
     // Remove CSS transitions - let Angular animations handle it
     transition: none !important;
+  }
+
+  :host-context(.hasBgImage:not(.isDarkTheme)) &.mobile {
+    background: var(--bg);
   }
 
   :host-context(body.isNativeMobile) &.mobile {

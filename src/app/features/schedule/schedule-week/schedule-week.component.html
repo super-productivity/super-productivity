@@ -101,7 +101,7 @@
         (cdkDragMoved)="dragMoved($event)"
         (cdkDragStarted)="dragStarted($event)"
         (cdkDragReleased)="dragReleased($event)"
-        [cdkDragStartDelay]="IS_TOUCH_PRIMARY ? 75 : 0"
+        [cdkDragStartDelay]="isTouchActive() ? 75 : 0"
         [event]="ev"
       ></schedule-event>
     } @else {
@@ -136,7 +136,7 @@
               (cdkDragMoved)="dragMoved($event)"
               (cdkDragStarted)="dragStarted($event)"
               (cdkDragReleased)="dragReleased($event)"
-              [cdkDragStartDelay]="IS_TOUCH_PRIMARY ? DRAG_DELAY_FOR_TOUCH : 0"
+              [cdkDragStartDelay]="isTouchActive() ? DRAG_DELAY_FOR_TOUCH : 0"
             ></schedule-event>
           } @else {
             <schedule-event

@@ -55,6 +55,7 @@ import {
 } from '@angular/router';
 import { APP_ROUTES } from './app/app.routes';
 import { StoreModule } from '@ngrx/store';
+// import { Store } from '@ngrx/store'; // #6230: uncomment if re-enabling __e2eTestHelpers below
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
@@ -285,6 +286,20 @@ bootstrapApplication(AppComponent, {
   ],
 }).then((appRef) => {
   appInjector = appRef.injector;
+
+  // #6230: Expose store and HydrationStateService for e2e tests in dev mode only.
+  // Commented out because the tests that use it (Test A and B in
+  // e2e/tests/recurring/repeat-task-day-change-bug-6230.spec.ts) are also commented out.
+  // Uncomment both if investigating #6230 further. Also uncomment the Store import above.
+  // if (!environment.production && !environment.stage) {
+  //   const storeRef = appRef.injector.get(Store);
+  //   import('./app/op-log/apply/hydration-state.service').then((m) => {
+  //     (window as any).__e2eTestHelpers = {
+  //       store: storeRef,
+  //       hydrationState: appRef.injector.get(m.HydrationStateService),
+  //     };
+  //   });
+  // }
 
   // Dismiss native startup overlay after all data is loaded (Android only)
   if (IS_ANDROID_WEB_VIEW) {

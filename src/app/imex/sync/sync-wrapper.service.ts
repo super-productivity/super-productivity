@@ -629,6 +629,7 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else {
+        this._providerManager.setSyncStatus('ERROR');
         const errStr = getSyncErrorStr(error);
         this._snackService.open({
           // msg: T.F.SYNC.S.UNKNOWN_ERROR,

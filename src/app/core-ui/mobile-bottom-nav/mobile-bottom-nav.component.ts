@@ -20,6 +20,7 @@ import {
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { T } from '../../t.const';
 import { WorkContextService } from '../../features/work-context/work-context.service';
+import { IS_ANDROID_NATIVE } from '../../util/is-native-platform';
 
 @Component({
   selector: 'mobile-bottom-nav',
@@ -45,6 +46,7 @@ export class MobileBottomNavComponent {
   private readonly _workContextService = inject(WorkContextService);
 
   isEntrance = input(false);
+  readonly isAndroid = IS_ANDROID_NATIVE;
 
   readonly T = T;
   readonly TODAY_TAG = TODAY_TAG;

@@ -218,7 +218,7 @@ if (IS_ANDROID_WEB_VIEW) {
     const pendingShare = androidInterface.getPendingShareData?.();
     if (pendingShare) {
       const parsed = JSON.parse(pendingShare);
-      DroidLog.log('Pulled pending share data from SharedPreferences', parsed);
+      DroidLog.log('Pulled pending share data from SharedPreferences');
       androidInterface.onShareWithAttachment$.next(parsed);
     }
   } catch (e) {

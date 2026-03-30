@@ -2405,6 +2405,9 @@
       "CREATE_TASK_TOUCH": "點按 + 新增你的第一個任務",
       "EXPLORE": "隨意點擊探索吧！你可以在側邊欄找到說明。",
       "EXPLORE_TOUCH": "隨意點按探索吧！你可以在選單中找到說明。",
+      "TASK_TAP_TOUCH": "點按任務以開啟詳細資訊。",
+      "TASK_SWIPE_LEFT_TOUCH": "向左滑動任務以查看更多操作",
+      "TASK_SWIPE_RIGHT_TOUCH": "向右滑動任務以將其標記為完成",
       "OR_PRESS": "或按",
       "SKIP_ARIA": "關閉提示"
     }

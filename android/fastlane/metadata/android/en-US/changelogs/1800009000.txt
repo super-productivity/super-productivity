@@ -1,0 +1,10 @@
+- improve mobile gesture hints
+- fix migration handling integration spec
+- rename built-in Google Calendar ICAL button
+- improve initial render
+- use neutral close button in fullscreen editor
+- improve add task bar task reveal timing
+- prevent scroll-to-top when closing add-task bar on touch devices
+- hide hover controls on touch-only devices
+- save task title on mobile when tapping outside bottom panel
+- suppress persistence snack during initial preset selection

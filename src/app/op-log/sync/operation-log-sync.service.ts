@@ -299,22 +299,22 @@ export class OperationLogSyncService {
       // Check for piggybacked SYNC_IMPORT — mirrors the download path check (lines 552-604).
       // Without this, a SYNC_IMPORT from another client arriving as a piggybacked op
       // would silently replace local state via processRemoteOps().
-      const piggybackedImport = result.piggybackedOps.find((op) =>
+      const piggybackedFullStateOp = result.piggybackedOps.find((op) =>
         FULL_STATE_OP_TYPES.has(op.opType),
       );
-      if (piggybackedImport) {
+      if (piggybackedFullStateOp) {
         const pendingOps = await this.opLogStore.getUnsynced();
         const hasMeaningfulPending = this._hasMeaningfulPendingOps(pendingOps);
 
         // Skip the conflict dialog for password-change SYNC_IMPORTs when there are no
         // meaningful pending ops. The data is identical, only the encryption changed.
         const isEncryptionOnlyChange =
-          piggybackedImport.syncImportReason === 'PASSWORD_CHANGED' &&
+          piggybackedFullStateOp.syncImportReason === 'PASSWORD_CHANGED' &&
           !hasMeaningfulPending;
 
         if (!isEncryptionOnlyChange && this._hasAnyMeaningfulData(pendingOps)) {
           OpLog.warn(
-            `OperationLogSyncService: Piggybacked SYNC_IMPORT from client ${piggybackedImport.clientId} ` +
+            `OperationLogSyncService: Piggybacked ${piggybackedFullStateOp.opType} from client ${piggybackedFullStateOp.clientId} ` +
               `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
           );
 
@@ -322,11 +322,11 @@ export class OperationLogSyncService {
             syncProvider,
             {
               filteredOpCount: pendingOps.length,
-              localImportTimestamp: piggybackedImport.timestamp ?? Date.now(),
-              syncImportReason: piggybackedImport.syncImportReason,
+              localImportTimestamp: piggybackedFullStateOp.timestamp ?? Date.now(),
+              syncImportReason: piggybackedFullStateOp.syncImportReason,
               scenario: 'INCOMING_IMPORT',
             },
-            'OperationLogSyncService (piggybacked SYNC_IMPORT)',
+            'OperationLogSyncService (piggybacked full-state op)',
           );
           if (resolution === 'CANCEL') {
             return { kind: 'cancelled' };
@@ -387,7 +387,11 @@ export class OperationLogSyncService {
       );
       localWinOpsCreated += rejectionResult.mergedOpsCreated;
     } catch (rejectionError) {
+      // FIX #6571: Propagate rejection handler errors instead of swallowing them.
+      // Previously, errors here were logged but not rethrown, causing uploadPendingOps
+      // to return kind='completed' with permanentRejectionCount=0, masking the failure.
       OpLog.err('OperationLogSyncService: Error handling rejected ops', rejectionError);
+      throw rejectionError;
     }
 
     // Update pending ops status for UI indicator
@@ -429,6 +433,16 @@ export class OperationLogSyncService {
     options?: { forceFromSeq0?: boolean },
   ): Promise<DownloadOutcome> {
     const result = await this.downloadService.downloadRemoteOps(syncProvider, options);
+
+    // FIX #6571: Check download success before processing results.
+    // Previously, success=false was ignored and treated as "no new ops",
+    // causing sync to report IN_SYNC despite a failed download.
+    if (!result.success) {
+      throw new Error(
+        'Download failed - partial or no data received. ' +
+          `failedFileCount=${result.failedFileCount}`,
+      );
+    }
 
     // Server migration detected: gap on empty server
     // Create a SYNC_IMPORT operation with full local state to seed the new server
@@ -655,22 +669,22 @@ export class OperationLogSyncService {
     // - USE_REMOTE: discard local ops, apply the remote SYNC_IMPORT
     // - USE_LOCAL: force upload local state (overriding remote)
     // ─────────────────────────────────────────────────────────────────────────
-    const incomingSyncImport = result.newOps.find((op) =>
+    const incomingFullStateOp = result.newOps.find((op) =>
       FULL_STATE_OP_TYPES.has(op.opType),
     );
-    if (incomingSyncImport) {
+    if (incomingFullStateOp) {
       const pendingLocalOps = await this.opLogStore.getUnsynced();
       const hasMeaningfulPending = this._hasMeaningfulPendingOps(pendingLocalOps);
 
       // Skip the conflict dialog for password-change SYNC_IMPORTs when there are no
       // meaningful pending ops. The data is identical, only the encryption changed.
       const isEncryptionOnlyChange =
-        incomingSyncImport.syncImportReason === 'PASSWORD_CHANGED' &&
+        incomingFullStateOp.syncImportReason === 'PASSWORD_CHANGED' &&
         !hasMeaningfulPending;
 
       if (!isEncryptionOnlyChange && this._hasAnyMeaningfulData(pendingLocalOps)) {
         OpLog.warn(
-          `OperationLogSyncService: Incoming SYNC_IMPORT from client ${incomingSyncImport.clientId} ` +
+          `OperationLogSyncService: Incoming ${incomingFullStateOp.opType} from client ${incomingFullStateOp.clientId} ` +
             `with ${pendingLocalOps.length} pending local ops. Showing conflict dialog.`,
         );
 
@@ -678,11 +692,11 @@ export class OperationLogSyncService {
           syncProvider,
           {
             filteredOpCount: pendingLocalOps.length,
-            localImportTimestamp: incomingSyncImport.timestamp ?? Date.now(),
-            syncImportReason: incomingSyncImport.syncImportReason,
+            localImportTimestamp: incomingFullStateOp.timestamp ?? Date.now(),
+            syncImportReason: incomingFullStateOp.syncImportReason,
             scenario: 'INCOMING_IMPORT',
           },
-          'OperationLogSyncService (incoming SYNC_IMPORT)',
+          'OperationLogSyncService (incoming full-state op)',
         );
         if (resolution === 'CANCEL') {
           return { kind: 'cancelled' };

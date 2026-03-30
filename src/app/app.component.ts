@@ -70,6 +70,7 @@ import { setKeyboardLayoutService } from './util/check-key-combo';
 import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
+import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 
 const ONBOARDING_PRESET_EXIT_DELAY = 1000;
 const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
@@ -133,6 +134,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _exampleTasksService = inject(ExampleTasksService);
   private _keyboardLayoutService = inject(KeyboardLayoutService);
   private _dataInitStateService = inject(DataInitStateService);
+  private _materialIconsLoaderService = inject(MaterialIconsLoaderService);
   readonly onboardingHintService = inject(OnboardingHintService);
 
   private _syncTriggerService = inject(SyncTriggerService);
@@ -191,6 +193,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   constructor() {
     this._startupService.init();
+    void this._materialIconsLoaderService.ensureFontReady();
 
     // Skip onboarding for existing users with data
     if (this.isShowOnboardingPresets()) {
@@ -349,6 +352,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   onTaskAdded({ taskId }: { taskId: string; isAddToBottom: boolean }): void {
     this.layoutService.setPendingFocusTaskId(taskId);
+    this.layoutService.scrollToNewTask(taskId);
   }
 
   readonly bgOverlayOpacity = computed((): number => {

@@ -1937,7 +1937,7 @@ describe('OperationLogSyncService', () => {
         rejectedOps: [],
       });
 
-      // No pending ops but meaningful local data
+      // No pending ops but meaningful local data — dialog should show
       opLogStoreSpy.getUnsynced.and.resolveTo([]);
       stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
         task: { ids: ['task-1'] },
@@ -2124,6 +2124,176 @@ describe('OperationLogSyncService', () => {
       await service.uploadPendingOps(mockProvider);
 
       expect(forceDownloadSpy).toHaveBeenCalledWith(mockProvider);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUG CONFIRMATION TESTS (Issue #6571)
+  // These tests confirm bugs where sync reports success despite errors.
+  // Each test documents current (buggy) behavior and expected (fixed) behavior.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('Bug #6571: sync reports IN_SYNC despite errors', () => {
+    let uploadServiceSpy: jasmine.SpyObj<OperationLogUploadService>;
+    let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
+
+    beforeEach(() => {
+      uploadServiceSpy = TestBed.inject(
+        OperationLogUploadService,
+      ) as jasmine.SpyObj<OperationLogUploadService>;
+      downloadServiceSpy = TestBed.inject(
+        OperationLogDownloadService,
+      ) as jasmine.SpyObj<OperationLogDownloadService>;
+
+      // Default: not a fresh client
+      (opLogStoreSpy as any).loadStateCache = jasmine
+        .createSpy('loadStateCache')
+        .and.returnValue(Promise.resolve({ state: {} }));
+      (opLogStoreSpy as any).getLastSeq = jasmine
+        .createSpy('getLastSeq')
+        .and.returnValue(Promise.resolve(1));
+    });
+
+    describe('Bug 1: download failure (success=false) treated as no_new_ops', () => {
+      it('should NOT return no_new_ops when download failed (success=false)', async () => {
+        downloadServiceSpy.downloadRemoteOps.and.returnValue(
+          Promise.resolve({
+            newOps: [],
+            success: false,
+            failedFileCount: 0,
+          }),
+        );
+
+        const mockProvider = {
+          isReady: () => Promise.resolve(true),
+          setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+        } as any;
+
+        // FIXED: Should throw when download failed, not silently return no_new_ops
+        await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWithError(
+          /Download failed/,
+        );
+      });
+    });
+
+    describe('Bug 3: handleRejectedOps error is swallowed', () => {
+      it('should propagate errors from handleRejectedOps', async () => {
+        opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+
+        uploadServiceSpy.uploadPendingOps.and.returnValue(
+          Promise.resolve({
+            uploadedCount: 1,
+            piggybackedOps: [],
+            rejectedCount: 1,
+            rejectedOps: [{ opId: 'op-1', error: 'conflict' }],
+          }),
+        );
+
+        rejectedOpsHandlerServiceSpy.handleRejectedOps.and.rejectWith(
+          new Error('Rejection handling failed'),
+        );
+
+        const mockProvider = {
+          isReady: () => Promise.resolve(true),
+        } as any;
+
+        // FIXED: Should reject when rejection handler throws
+        await expectAsync(service.uploadPendingOps(mockProvider)).toBeRejectedWithError(
+          'Rejection handling failed',
+        );
+      });
+    });
+
+    describe('lastServerSeq preservation on error (prevents permanent divergence)', () => {
+      it('should NOT persist lastServerSeq when download fails (success=false)', async () => {
+        downloadServiceSpy.downloadRemoteOps.and.returnValue(
+          Promise.resolve({
+            newOps: [],
+            success: false,
+            failedFileCount: 0,
+            latestServerSeq: 42,
+          }),
+        );
+
+        const setLastServerSeqSpy = jasmine.createSpy('setLastServerSeq').and.resolveTo();
+
+        const mockProvider = {
+          isReady: () => Promise.resolve(true),
+          setLastServerSeq: setLastServerSeqSpy,
+        } as any;
+
+        // Download fails — error thrown
+        await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejected();
+
+        // CRITICAL: lastServerSeq must NOT be persisted.
+        // If it were, the client would never re-download the failed ops.
+        expect(setLastServerSeqSpy).not.toHaveBeenCalled();
+      });
+
+      it('should NOT persist lastServerSeq when processRemoteOps throws', async () => {
+        const remoteOp: Operation = {
+          id: 'remote-1',
+          clientId: 'client-B',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK' as const,
+          entityId: 'task-1',
+          payload: {},
+          vectorClock: { clientB: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        };
+
+        downloadServiceSpy.downloadRemoteOps.and.returnValue(
+          Promise.resolve({
+            newOps: [remoteOp],
+            success: true,
+            failedFileCount: 0,
+            latestServerSeq: 42,
+          }),
+        );
+
+        // processRemoteOps throws (e.g., LWW apply failure after Bug 2 fix)
+        remoteOpsProcessingServiceSpy.processRemoteOps.and.rejectWith(
+          new Error('Apply failed during conflict resolution'),
+        );
+
+        const setLastServerSeqSpy = jasmine.createSpy('setLastServerSeq').and.resolveTo();
+
+        const mockProvider = {
+          isReady: () => Promise.resolve(true),
+          setLastServerSeq: setLastServerSeqSpy,
+        } as any;
+
+        await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejected();
+
+        // CRITICAL: lastServerSeq must NOT be persisted.
+        // Client will re-download from the old seq on next sync.
+        expect(setLastServerSeqSpy).not.toHaveBeenCalled();
+      });
+
+      it('should persist lastServerSeq on successful download (control test)', async () => {
+        downloadServiceSpy.downloadRemoteOps.and.returnValue(
+          Promise.resolve({
+            newOps: [],
+            success: true,
+            failedFileCount: 0,
+            latestServerSeq: 42,
+          }),
+        );
+
+        const setLastServerSeqSpy = jasmine.createSpy('setLastServerSeq').and.resolveTo();
+
+        const mockProvider = {
+          isReady: () => Promise.resolve(true),
+          setLastServerSeq: setLastServerSeqSpy,
+        } as any;
+
+        await service.downloadRemoteOps(mockProvider);
+
+        // On success, lastServerSeq IS persisted
+        expect(setLastServerSeqSpy).toHaveBeenCalledWith(42);
+      });
     });
   });
 });

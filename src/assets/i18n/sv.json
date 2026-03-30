@@ -2392,6 +2392,9 @@
       "CREATE_TASK_TOUCH": "Tryck på + för att lägga till din första uppgift",
       "EXPLORE": "Klicka runt och utforska fritt! Du hittar hjälp i sidopanelen.",
       "EXPLORE_TOUCH": "Tryck runt och utforska fritt! Du hittar hjälp i menyn.",
+      "TASK_TAP_TOUCH": "Tryck på en uppgift för att öppna detaljerna.",
+      "TASK_SWIPE_LEFT_TOUCH": "Svep uppgiften åt vänster för fler åtgärder",
+      "TASK_SWIPE_RIGHT_TOUCH": "Svep uppgiften åt höger för att markera den som klar",
       "OR_PRESS": "eller tryck",
       "SKIP_ARIA": "Stäng ledtråd"
     }

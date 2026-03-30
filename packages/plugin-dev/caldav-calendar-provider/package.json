@@ -1,0 +1,20 @@
+{
+  "name": "@super-productivity/caldav-calendar-provider",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.11",
+    "jsdom": "^29.0.1",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:../../plugin-api"
+  }
+}

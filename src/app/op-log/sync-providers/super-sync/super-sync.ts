@@ -198,6 +198,7 @@ export class SuperSyncProvider
     opId: string,
     isCleanSlate?: boolean,
     snapshotOpType?: RestorePointType,
+    syncImportReason?: string,
   ): Promise<SnapshotUploadResponse> {
     SyncLog.normal(this.logLabel, 'uploadSnapshot: Starting...', {
       clientId,
@@ -221,6 +222,7 @@ export class SuperSyncProvider
       opId, // CRITICAL: Server must use this ID to prevent ID mismatch bugs
       isCleanSlate,
       snapshotOpType,
+      ...(syncImportReason ? { syncImportReason } : {}),
     });
 
     // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip

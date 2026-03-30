@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Trykk + for å legge til din første oppgave",
       "EXPLORE": "Klikk deg gjerne rundt og utforsk! Du finner hjelp i sidepanelet.",
       "EXPLORE_TOUCH": "Trykk deg gjerne rundt og utforsk! Du finner hjelp i menyen.",
+      "TASK_TAP_TOUCH": "Trykk på en oppgave for å åpne detaljene.",
+      "TASK_SWIPE_LEFT_TOUCH": "Sveip oppgaven mot venstre for flere handlinger",
+      "TASK_SWIPE_RIGHT_TOUCH": "Sveip oppgaven mot høyre for å markere den som fullført",
       "OR_PRESS": "eller trykk",
       "SKIP_ARIA": "Lukk hint"
     }

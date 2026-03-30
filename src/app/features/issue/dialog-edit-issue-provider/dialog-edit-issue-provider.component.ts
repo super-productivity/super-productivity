@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  inject,
+  signal,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
@@ -53,6 +59,7 @@ import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
+import { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 // ClickUp is now a plugin — no built-in config component needed
 import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
@@ -104,11 +111,14 @@ export class DialogEditIssueProviderComponent {
   isConnectionWorks = signal(false);
   isOAuthConnected = signal(false);
   isOAuthConnecting = signal(false);
+  optionsLoadState = signal<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
   form = new FormGroup({});
+  showLoadOptionsButton = false;
 
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private _pluginBridge = inject(PluginBridgeService);
   private _pluginHttp = inject(PluginHttpService);
+  private _cdr = inject(ChangeDetectorRef);
 
   issueProviderKey: IssueProviderKey = (this.d.issueProvider?.issueProviderKey ||
     this.d.issueProviderKey) as IssueProviderKey;
@@ -116,9 +126,13 @@ export class DialogEditIssueProviderComponent {
   isEdit: boolean = !!this.issueProvider && !this.d.isDuplicate;
 
   model: Partial<IssueProvider> = this.isEdit
-    ? { ...this.issueProvider }
+    ? this._migratePluginConfigForEdit({ ...this.issueProvider })
     : this.d.isDuplicate && this.issueProvider
-      ? { ...this.issueProvider, id: nanoid(), migratedFromProjectId: undefined }
+      ? this._migratePluginConfigForEdit({
+          ...this.issueProvider,
+          id: nanoid(),
+          migratedFromProjectId: undefined,
+        })
       : ({
           ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
           ...(this._pluginRegistry.hasProvider(this.issueProviderKey)
@@ -142,6 +156,8 @@ export class DialogEditIssueProviderComponent {
   title: string = this._pluginRegistry.hasProvider(this.issueProviderKey)
     ? this._pluginRegistry.getName(this.issueProviderKey) || this.issueProviderKey
     : ISSUE_PROVIDER_HUMANIZED[this.issueProviderKey as BuiltInIssueProviderKey];
+
+  isAgendaView = this._pluginRegistry.getUseAgendaView(this.issueProviderKey);
 
   configFormSection: ConfigFormSection<IssueIntegrationCfg> | undefined =
     this._pluginRegistry.hasProvider(this.issueProviderKey)
@@ -274,6 +290,8 @@ export class DialogEditIssueProviderComponent {
           type: 'SUCCESS',
           msg: T.F.ISSUE.S.CONNECTION_SUCCESS,
         });
+        // Reload dynamic options (e.g. calendar lists) after successful connection
+        await this._loadDynamicOptions();
       } else {
         this._snackService.open({
           type: 'ERROR',
@@ -331,13 +349,7 @@ export class DialogEditIssueProviderComponent {
     this.isConnectionWorks.set(false);
   }
 
-  async connectOAuth(oauthConfig: {
-    authUrl: string;
-    tokenUrl: string;
-    clientId: string;
-    clientSecret?: string;
-    scopes: string[];
-  }): Promise<void> {
+  async connectOAuth(oauthConfig: OAuthFlowConfig): Promise<void> {
     const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
     if (!pluginId) {
       return;
@@ -375,22 +387,27 @@ export class DialogEditIssueProviderComponent {
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
 
-  private async _loadDynamicOptions(): Promise<void> {
+  /**
+   * @returns true if all fields loaded successfully, false if any failed
+   */
+  private async _loadDynamicOptions(): Promise<boolean> {
     const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
     if (!provider) {
-      return;
+      return false;
     }
     const configFields = this._pluginRegistry.getConfigFields(this.issueProviderKey);
     const dynamicFields = configFields.filter((f) => typeof f.loadOptions === 'function');
     if (!dynamicFields.length) {
-      return;
+      return true;
     }
 
     const pluginConfig = (this.model as Record<string, unknown>)['pluginConfig'] ?? {};
-    const http = this._pluginHttp.createHttpHelper(() =>
-      provider.definition.getHeaders(pluginConfig as Record<string, unknown>),
+    const http = this._pluginHttp.createHttpHelper(
+      () => provider.definition.getHeaders(pluginConfig as Record<string, unknown>),
+      { allowPrivateNetwork: provider.allowPrivateNetwork },
     );
 
+    let anyFailed = false;
     for (const field of dynamicFields) {
       try {
         const options = await field.loadOptions!(
@@ -407,6 +424,7 @@ export class DialogEditIssueProviderComponent {
           formlyField.props.options = options;
         }
       } catch (e) {
+        anyFailed = true;
         console.error(
           `[DialogEditIssueProvider] loadOptions failed for field '${field.key}':`,
           e,
@@ -418,8 +436,20 @@ export class DialogEditIssueProviderComponent {
         });
       }
     }
-    // Trigger formly refresh
+    // Trigger formly refresh — reassign both fields and model so mat-select
+    // re-evaluates display labels for already-selected values.
+    // Use detectChanges() instead of markForCheck() because plugin bridge
+    // async calls may resolve outside Zone.js (e.g. Electron IPC).
     this.fields = [...this.fields];
+    const currentPluginCfg = (this.model as Record<string, unknown>)['pluginConfig'];
+    this.model = currentPluginCfg
+      ? {
+          ...this.model,
+          pluginConfig: { ...(currentPluginCfg as Record<string, unknown>) },
+        }
+      : { ...this.model };
+    this._cdr.detectChanges();
+    return !anyFailed;
   }
 
   private _findFormlyField(
@@ -438,6 +468,29 @@ export class DialogEditIssueProviderComponent {
       }
     }
     return undefined;
+  }
+
+  /**
+   * For plugin providers, run any necessary config migrations so the edit dialog
+   * displays migrated values instead of showing empty required fields.
+   */
+  private _migratePluginConfigForEdit(
+    model: Partial<IssueProvider>,
+  ): Partial<IssueProvider> {
+    const pluginConfig = (model as { pluginConfig?: Record<string, unknown> })
+      .pluginConfig;
+    if (!pluginConfig) return model;
+    // Shallow-clone pluginConfig to avoid mutating store state
+    const migrated = { ...pluginConfig };
+    // Migrate old single-calendar calendarId to multi-calendar config shape
+    if (
+      migrated['calendarId'] &&
+      !((migrated['readCalendarIds'] as string[])?.length > 0)
+    ) {
+      migrated['readCalendarIds'] = [migrated['calendarId'] as string];
+      migrated['writeCalendarId'] = migrated['writeCalendarId'] || migrated['calendarId'];
+    }
+    return { ...model, pluginConfig: migrated } as Partial<IssueProvider>;
   }
 
   private _getDefaultPluginConfig(): Record<string, unknown> {
@@ -463,6 +516,8 @@ export class DialogEditIssueProviderComponent {
       return undefined;
     }
 
+    const isAgendaView = this._pluginRegistry.getUseAgendaView(pluginKey);
+
     const regularFields = configFields.filter(
       (f) => !f.advanced && f.type !== 'oauthButton',
     );
@@ -474,16 +529,25 @@ export class DialogEditIssueProviderComponent {
       this._mapPluginConfigField(f),
     ) as LimitedFormlyFieldConfig<IssueIntegrationCfg>[];
 
-    items.push({
-      type: 'collapsible' as any,
-      props: { label: T.F.ISSUE.DIALOG.ADVANCED_CONFIG },
-      fieldGroup: [
-        ...(ISSUE_PROVIDER_COMMON_FORM_FIELDS as any[]),
-        ...advancedFields.map((f) => this._mapPluginConfigField(f)),
-      ],
-    } as any);
+    // For agenda-view providers (e.g. Google Calendar), skip generic issue provider
+    // fields (auto-import, polling, default note) and two-way sync config — the
+    // ownership model makes them unnecessary.
+    const advancedFieldGroup = isAgendaView
+      ? advancedFields.map((f) => this._mapPluginConfigField(f))
+      : [
+          ...(ISSUE_PROVIDER_COMMON_FORM_FIELDS as any[]),
+          ...advancedFields.map((f) => this._mapPluginConfigField(f)),
+        ];
 
-    if (fieldMappings?.length) {
+    if (advancedFieldGroup.length) {
+      items.push({
+        type: 'collapsible' as any,
+        props: { label: T.F.ISSUE.DIALOG.ADVANCED_CONFIG },
+        fieldGroup: advancedFieldGroup,
+      } as any);
+    }
+
+    if (!isAgendaView && fieldMappings?.length) {
       items.push(this._buildTwoWaySyncSection(pluginKey, fieldMappings) as any);
     }
 
@@ -503,6 +567,7 @@ export class DialogEditIssueProviderComponent {
     url?: string;
     pattern?: string;
     options?: { value: string; label: string }[];
+    showIf?: string;
   }): unknown {
     if (f.type === 'link') {
       return {
@@ -513,7 +578,7 @@ export class DialogEditIssueProviderComponent {
     const formlyType =
       f.type === 'checkbox'
         ? 'checkbox'
-        : f.type === 'select'
+        : f.type === 'select' || f.type === 'multiSelect'
           ? 'select'
           : f.type === 'textarea'
             ? 'textarea'
@@ -521,12 +586,21 @@ export class DialogEditIssueProviderComponent {
     return {
       key: ('pluginConfig.' + f.key) as keyof IssueIntegrationCfg,
       type: formlyType,
+      ...(f.showIf
+        ? {
+            hideExpression: (m: Record<string, unknown>) =>
+              !(m['pluginConfig'] as Record<string, unknown> | undefined)?.[f.showIf!],
+          }
+        : {}),
       templateOptions: {
         label: f.label,
         required: f.required ?? false,
         ...(f.description ? { description: f.description } : {}),
         ...(f.type === 'password' ? { type: 'password' } : {}),
-        ...(f.type === 'select' ? { options: f.options } : {}),
+        ...(f.type === 'select' || f.type === 'multiSelect'
+          ? { options: f.options }
+          : {}),
+        ...(f.type === 'multiSelect' ? { multiple: true } : {}),
         ...(f.pattern ? { pattern: f.pattern } : {}),
       },
     };
@@ -582,13 +656,7 @@ export class DialogEditIssueProviderComponent {
 
   private _getOAuthButtons(): {
     label: string;
-    oauthConfig: {
-      authUrl: string;
-      tokenUrl: string;
-      clientId: string;
-      clientSecret?: string;
-      scopes: string[];
-    };
+    oauthConfig: OAuthFlowConfig;
   }[] {
     if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
       return [];
@@ -610,6 +678,26 @@ export class DialogEditIssueProviderComponent {
     this.isOAuthConnected.set(hasTokens);
     if (hasTokens) {
       await this._loadDynamicOptions();
+    } else {
+      // For non-OAuth plugins (e.g. CalDAV with Basic Auth), show a "Load Calendars"
+      // button and attempt to load dynamic options if credentials are already saved.
+      const configFields = this._pluginRegistry.getConfigFields(this.issueProviderKey);
+      const hasLoadOptions = configFields.some(
+        (f) => typeof f.loadOptions === 'function',
+      );
+      const hasNoOAuth = !configFields.some((f) => f.type === 'oauthButton');
+      if (hasLoadOptions && hasNoOAuth) {
+        this.showLoadOptionsButton = true;
+        if (this.isEdit) {
+          await this.loadDynamicOptions();
+        }
+      }
     }
+  }
+
+  async loadDynamicOptions(): Promise<void> {
+    this.optionsLoadState.set('loading');
+    const success = await this._loadDynamicOptions();
+    this.optionsLoadState.set(success ? 'loaded' : 'failed');
   }
 }

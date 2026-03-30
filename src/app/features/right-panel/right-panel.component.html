@@ -4,7 +4,7 @@
 @if (isOpen()) {
   <div
     swipeGesture
-    (swiperight)="IS_TOUCH_PRIMARY && close()"
+    (swiperight)="isTouchActive() && close()"
     [style]="sideStyle()"
     class="side"
     @slideRightPanel

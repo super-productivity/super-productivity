@@ -8,7 +8,11 @@ import {
   deleteOAuthTokens,
 } from './plugin-oauth-token-store';
 import { IS_ELECTRON } from '../../app.constants';
-import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
+import {
+  IS_NATIVE_PLATFORM,
+  IS_IOS_NATIVE,
+  IS_ANDROID_NATIVE,
+} from '../../util/is-native-platform';
 import { PluginLog } from '../../core/log';
 
 /**
@@ -36,9 +40,24 @@ export class PluginOAuthBridgeService {
     pluginId: string,
     config: OAuthFlowConfig,
   ): Promise<OAuthTokenResult> {
-    const redirectUri = this._pluginOAuthService.getRedirectUri();
+    // Validate URLs before starting the loopback server. On Electron,
+    // getRedirectUri() starts a server — avoid leaking it if config is invalid.
+    this._pluginOAuthService.validateOAuthConfig(config);
+
+    // On native mobile, use the platform-specific client ID (which authenticates
+    // via app signing, not a client secret) and drop the secret.
+    const nativeClientId = IS_ANDROID_NATIVE
+      ? config.mobileClientId
+      : IS_IOS_NATIVE
+        ? config.iosClientId
+        : undefined;
+    const effectiveConfig: OAuthFlowConfig = nativeClientId
+      ? { ...config, clientId: nativeClientId, clientSecret: undefined }
+      : config;
+
+    const redirectUri = await this._pluginOAuthService.getRedirectUri();
     const { url, codeVerifier, state } = await this._pluginOAuthService.buildAuthUrl(
-      config,
+      effectiveConfig,
       redirectUri,
     );
 
@@ -47,19 +66,19 @@ export class PluginOAuthBridgeService {
     const code = await this._pluginOAuthService.waitForRedirectCode(pluginId, state);
 
     const tokens = await this._pluginOAuthService.exchangeCodeForTokens({
-      tokenUrl: config.tokenUrl,
-      clientId: config.clientId,
+      tokenUrl: effectiveConfig.tokenUrl,
+      clientId: effectiveConfig.clientId,
       code,
       codeVerifier,
       redirectUri,
-      clientSecret: config.clientSecret,
+      clientSecret: effectiveConfig.clientSecret,
     });
 
     this._pluginOAuthService.storeTokens(pluginId, {
       ...tokens,
-      tokenUrl: config.tokenUrl,
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
+      tokenUrl: effectiveConfig.tokenUrl,
+      clientId: effectiveConfig.clientId,
+      clientSecret: effectiveConfig.clientSecret,
     });
 
     await this._persistOAuthTokens(pluginId);

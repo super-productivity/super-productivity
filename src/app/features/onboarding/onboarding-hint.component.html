@@ -7,7 +7,7 @@
     [style.top.px]="isFloating() ? null : pos.top"
     [style.left.px]="isFloating() ? null : pos.left"
   >
-    @if (!isFloating()) {
+    @if (!isFloating() && onboardingHintService.currentStep() !== 'explore') {
       <div
         class="hint-arrow"
         [class.arrow-up]="pos.arrowDirection === 'up'"
@@ -15,9 +15,30 @@
         [style.left.px]="pos.arrowOffset"
       ></div>
     }
-    <div class="hint-chip">
+    <div
+      #hintChipEl
+      class="hint-chip"
+    >
       <div class="hint-text">
-        <span>{{ hintMessage() | translate }}</span>
+        @if (hintMessage()) {
+          <div class="hint-message">{{ hintMessage() | translate }}</div>
+        }
+        @if (hintActions().length) {
+          <div
+            class="hint-actions"
+            [class.has-message]="!!hintMessage()"
+            [class.hint-actions-enter]="
+              onboardingHintService.currentStep() === 'task-swipe-right'
+            "
+          >
+            @for (action of hintActions(); track action.text) {
+              <div class="hint-action">
+                <mat-icon>{{ action.icon }}</mat-icon>
+                <span>{{ action.text | translate }}</span>
+              </div>
+            }
+          </div>
+        }
         @if (shortcutHint(); as shortcut) {
           <span class="shortcut-hint">
             {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>

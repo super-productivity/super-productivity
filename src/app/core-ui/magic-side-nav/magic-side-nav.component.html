@@ -31,8 +31,7 @@
   <!-- Main Navigation Sidebar -->
   <nav
     class="nav-sidenav"
-    [@mobileNav]="isMobile() ? void 0 : true"
-    [@mobileNavRight]="isMobile() ? true : void 0"
+    [@mobileNavRight]="isMobile() ? 'visible' : 'desktop'"
     [class.fullMode]="isFullMode() || isMobile()"
     [class.compactMode]="!isFullMode() && !isMobile()"
     [class.mobile]="isMobile()"
@@ -70,120 +69,122 @@
       </button>
     }
 
-    <!-- Navigation Items -->
-    <ul
-      class="nav-list"
-      role="list"
-    >
-      @for (item of config().items; track item.id) {
-        @switch (item.type) {
-          @case ('separator') {
-            <hr
-              class="nav-separator"
-              [style.margin-top]="item.mtAuto && 'auto'"
-            />
-          }
-          @case ('tree') {
-            <li
-              class="nav-item has-children"
-              role="listitem"
-            >
-              <nav-list-tree
+    @if (isDataLoaded()) {
+      <!-- Navigation Items -->
+      <ul
+        class="nav-list"
+        role="list"
+      >
+        @for (item of config().items; track item.id) {
+          @switch (item.type) {
+            @case ('separator') {
+              <hr
+                class="nav-separator"
+                [style.margin-top]="item.mtAuto && 'auto'"
+              />
+            }
+            @case ('tree') {
+              <li
+                class="nav-item has-children"
+                role="listitem"
+              >
+                <nav-list-tree
+                  [item]="item"
+                  [showLabels]="showText()"
+                  [isExpanded]="isGroupExpanded(item)"
+                  [activeWorkContextId]="activeWorkContextId()"
+                  (itemClick)="onItemClick($event)"
+                ></nav-list-tree>
+              </li>
+            }
+            @case ('menu') {
+              <nav-mat-menu
                 [item]="item"
                 [showLabels]="showText()"
-                [isExpanded]="isGroupExpanded(item)"
-                [activeWorkContextId]="activeWorkContextId()"
                 (itemClick)="onItemClick($event)"
-              ></nav-list-tree>
-            </li>
-          }
-          @case ('menu') {
-            <nav-mat-menu
-              [item]="item"
-              [showLabels]="showText()"
-              (itemClick)="onItemClick($event)"
-            ></nav-mat-menu>
-          }
-          @default {
-            <li
-              class="nav-item"
-              role="listitem"
-            >
-              @switch (item.type) {
-                @case ('workContext') {
-                  <nav-item
-                    [workContext]="item.workContext"
-                    [type]="item.workContextType"
-                    [defaultIcon]="item.defaultIcon"
-                    [activeWorkContextId]="activeWorkContextId() || ''"
-                    [variant]="'nav'"
-                    [showLabels]="showText()"
-                    [attr.data-project-id]="
-                      item.workContextType === WorkContextType.PROJECT
-                        ? item.workContext.id
-                        : null
-                    "
-                    [attr.data-tag-id]="
-                      item.workContextType === WorkContextType.TAG
-                        ? item.workContext.id
-                        : null
-                    "
-                    (clicked)="onItemClick(item)"
-                  ></nav-item>
+              ></nav-mat-menu>
+            }
+            @default {
+              <li
+                class="nav-item"
+                role="listitem"
+              >
+                @switch (item.type) {
+                  @case ('workContext') {
+                    <nav-item
+                      [workContext]="item.workContext"
+                      [type]="item.workContextType"
+                      [defaultIcon]="item.defaultIcon"
+                      [activeWorkContextId]="activeWorkContextId() || ''"
+                      [variant]="'nav'"
+                      [showLabels]="showText()"
+                      [attr.data-project-id]="
+                        item.workContextType === WorkContextType.PROJECT
+                          ? item.workContext.id
+                          : null
+                      "
+                      [attr.data-tag-id]="
+                        item.workContextType === WorkContextType.TAG
+                          ? item.workContext.id
+                          : null
+                      "
+                      (clicked)="onItemClick(item)"
+                    ></nav-item>
+                  }
+                  @case ('route') {
+                    <nav-item
+                      [container]="'route'"
+                      [navRoute]="item.route"
+                      [icon]="item.icon"
+                      [svgIcon]="item.svgIcon"
+                      [label]="item.label"
+                      [showLabels]="showText()"
+                      [tourClass]="item.tourClass"
+                      [featureConfigKey]="item.featureConfigKey"
+                      (clicked)="onItemClick(item)"
+                    ></nav-item>
+                  }
+                  @case ('href') {
+                    <nav-item
+                      [container]="'href'"
+                      [navHref]="item.href"
+                      [icon]="item.icon"
+                      [svgIcon]="item.svgIcon"
+                      [label]="item.label"
+                      [showLabels]="showText()"
+                      [tourClass]="item.tourClass"
+                      (clicked)="onItemClick(item)"
+                    ></nav-item>
+                  }
+                  @case ('action') {
+                    <nav-item
+                      [container]="'action'"
+                      [icon]="item.icon"
+                      [svgIcon]="item.svgIcon"
+                      [label]="item.label"
+                      [showLabels]="showText()"
+                      [tourClass]="item.tourClass"
+                      (clicked)="onItemClick(item)"
+                    ></nav-item>
+                  }
+                  @case ('plugin') {
+                    <nav-item
+                      [container]="'action'"
+                      [icon]="item.icon"
+                      [svgIcon]="item.svgIcon"
+                      [label]="item.label"
+                      [showLabels]="showText()"
+                      [tourClass]="item.tourClass"
+                      (clicked)="onItemClick(item)"
+                    ></nav-item>
+                  }
                 }
-                @case ('route') {
-                  <nav-item
-                    [container]="'route'"
-                    [navRoute]="item.route"
-                    [icon]="item.icon"
-                    [svgIcon]="item.svgIcon"
-                    [label]="item.label"
-                    [showLabels]="showText()"
-                    [tourClass]="item.tourClass"
-                    [featureConfigKey]="item.featureConfigKey"
-                    (clicked)="onItemClick(item)"
-                  ></nav-item>
-                }
-                @case ('href') {
-                  <nav-item
-                    [container]="'href'"
-                    [navHref]="item.href"
-                    [icon]="item.icon"
-                    [svgIcon]="item.svgIcon"
-                    [label]="item.label"
-                    [showLabels]="showText()"
-                    [tourClass]="item.tourClass"
-                    (clicked)="onItemClick(item)"
-                  ></nav-item>
-                }
-                @case ('action') {
-                  <nav-item
-                    [container]="'action'"
-                    [icon]="item.icon"
-                    [svgIcon]="item.svgIcon"
-                    [label]="item.label"
-                    [showLabels]="showText()"
-                    [tourClass]="item.tourClass"
-                    (clicked)="onItemClick(item)"
-                  ></nav-item>
-                }
-                @case ('plugin') {
-                  <nav-item
-                    [container]="'action'"
-                    [icon]="item.icon"
-                    [svgIcon]="item.svgIcon"
-                    [label]="item.label"
-                    [showLabels]="showText()"
-                    [tourClass]="item.tourClass"
-                    (clicked)="onItemClick(item)"
-                  ></nav-item>
-                }
-              }
-            </li>
+              </li>
+            }
           }
         }
-      }
-    </ul>
+      </ul>
+    }
   </nav>
 }
 

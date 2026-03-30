@@ -599,8 +599,19 @@ export class RemoteOpsProcessingService {
    *        Pass true when calling from within the sp_op_log lock.
    */
   async validateAfterSync(callerHoldsLock: boolean = false): Promise<void> {
-    await this.validateStateService.validateAndRepairCurrentState('sync', {
-      callerHoldsLock,
-    });
+    // FIX #6571: Check and surface validation result.
+    // Previously, the boolean return was discarded — validation failures
+    // were invisible and sync reported IN_SYNC despite invalid state.
+    const isValid = await this.validateStateService.validateAndRepairCurrentState(
+      'sync',
+      { callerHoldsLock },
+    );
+    if (!isValid) {
+      OpLog.err('RemoteOpsProcessingService: State validation failed after sync');
+      this.snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.SYNC_VALIDATION_FAILED,
+      });
+    }
   }
 }

@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Tippe auf +, um deine erste Aufgabe hinzuzufügen",
       "EXPLORE": "Klick dich ruhig durch und entdecke alles! Hilfe findest du in der Seitenleiste.",
       "EXPLORE_TOUCH": "Tipp dich ruhig durch und entdecke alles! Hilfe findest du im Menü.",
+      "TASK_TAP_TOUCH": "Tippe auf eine Aufgabe, um ihre Details zu öffnen.",
+      "TASK_SWIPE_LEFT_TOUCH": "Wische die Aufgabe nach links für weitere Aktionen",
+      "TASK_SWIPE_RIGHT_TOUCH": "Wische die Aufgabe nach rechts, um sie als erledigt zu markieren",
       "OR_PRESS": "oder drücke",
       "SKIP_ARIA": "Hinweis schließen"
     }

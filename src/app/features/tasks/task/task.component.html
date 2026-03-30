@@ -2,8 +2,8 @@
 <swipe-block
   [isDone]="t.isDone"
   [canSwipe]="!taskTitleEditEl?.isEditing()"
-  [excludeSelector]="'done-toggle'"
   (swipeRight)="toggleTaskDone()"
+  (swipeRightTriggered)="onSwipeRightTriggered($event)"
   (swipeLeft)="openContextMenu()"
 >
   <div class="inner-wrapper">
@@ -22,6 +22,7 @@
           [isDone]="t.isDone"
           [isCurrent]="isCurrent()"
           [showDoneAnimation]="showDoneAnimation()"
+          [showUndoneAnimation]="showUndoneAnimation()"
           (toggled)="toggleTaskDone()"
           [attr.aria-label]="T.F.TASK.CMP.TOGGLE_DONE | translate"
         ></done-toggle>
@@ -35,7 +36,7 @@
 
           <task-title
             [resetToLastExternalValueTrigger]="t"
-            [style.pointer-events]="IS_TOUCH_PRIMARY && t.title.length ? 'none' : 'auto'"
+            [style.pointer-events]="isTouchActive() && t.title.length ? 'none' : 'auto'"
             #taskTitleEditEl
             (valueEdited)="updateTaskTitleIfChanged($event)"
             [value]="t.title"
@@ -95,7 +96,7 @@
         </div>
 
         <div class="controls">
-          @if (isFirstLineHover && !IS_TOUCH_PRIMARY) {
+          @if (isFirstLineHover && !isTouchActive()) {
             <task-hover-controls
               [isShowAddToToday]="isShowAddToToday()"
               [isShowRemoveFromToday]="isShowRemoveFromToday()"

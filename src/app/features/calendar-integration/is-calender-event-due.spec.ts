@@ -5,7 +5,14 @@ describe('isCalenderEventDue()', () => {
   it('should be true if event starts now', () => {
     expect(
       isCalenderEventDue(
-        { id: 'CID', calProviderId: 'PR', start: 5, title: 'T', duration: 1 },
+        {
+          id: 'CID',
+          calProviderId: 'PR',
+          start: 5,
+          title: 'T',
+          duration: 1,
+          issueProviderKey: 'ICAL',
+        },
         {
           showBannerBeforeThreshold: 0,
         } as IssueProviderCalendar,
@@ -18,7 +25,14 @@ describe('isCalenderEventDue()', () => {
   it('should be true if event starts within provider threshold', () => {
     expect(
       isCalenderEventDue(
-        { id: 'CID', calProviderId: 'PR', start: 5, title: 'T', duration: 1 },
+        {
+          id: 'CID',
+          calProviderId: 'PR',
+          start: 5,
+          title: 'T',
+          duration: 1,
+          issueProviderKey: 'ICAL',
+        },
         {
           showBannerBeforeThreshold: 2,
         } as IssueProviderCalendar,
@@ -31,7 +45,14 @@ describe('isCalenderEventDue()', () => {
   it('should be false if event starts outside the provider threshold', () => {
     expect(
       isCalenderEventDue(
-        { id: 'CID', calProviderId: 'PR', start: 5, title: 'T', duration: 1 },
+        {
+          id: 'CID',
+          calProviderId: 'PR',
+          start: 5,
+          title: 'T',
+          duration: 1,
+          issueProviderKey: 'ICAL',
+        },
         {
           showBannerBeforeThreshold: 2,
         } as IssueProviderCalendar,
@@ -44,7 +65,14 @@ describe('isCalenderEventDue()', () => {
   it('should be false if event has NOT started yet and there is NO provider threshold', () => {
     expect(
       isCalenderEventDue(
-        { id: 'CID', calProviderId: 'PR', start: 5, title: 'T', duration: 1 },
+        {
+          id: 'CID',
+          calProviderId: 'PR',
+          start: 5,
+          title: 'T',
+          duration: 1,
+          issueProviderKey: 'ICAL',
+        },
         {
           showBannerBeforeThreshold: null,
         } as IssueProviderCalendar,
@@ -57,7 +85,14 @@ describe('isCalenderEventDue()', () => {
   it('should be if false if event was skipped', () => {
     expect(
       isCalenderEventDue(
-        { id: 'CID', calProviderId: 'PR', start: 5, title: 'T', duration: 1 },
+        {
+          id: 'CID',
+          calProviderId: 'PR',
+          start: 5,
+          title: 'T',
+          duration: 1,
+          issueProviderKey: 'ICAL',
+        },
         {
           showBannerBeforeThreshold: 0,
         } as IssueProviderCalendar,
@@ -70,7 +105,14 @@ describe('isCalenderEventDue()', () => {
   it('should be if false if event is in the far future', () => {
     expect(
       isCalenderEventDue(
-        { id: 'CID', calProviderId: 'PR', start: 6, title: 'T', duration: 88 },
+        {
+          id: 'CID',
+          calProviderId: 'PR',
+          start: 6,
+          title: 'T',
+          duration: 88,
+          issueProviderKey: 'ICAL',
+        },
         {
           showBannerBeforeThreshold: 0,
         } as IssueProviderCalendar,

@@ -72,7 +72,6 @@ export class NotifyService {
         if (success) {
           Log.log('NotifyService: Mobile notification scheduled successfully', {
             id: notificationId,
-            title,
             platform: this._platformService.platform,
           });
         }

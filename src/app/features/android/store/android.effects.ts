@@ -141,7 +141,7 @@ export class AndroidEffects {
               const pendingShare = androidInterface.getPendingShareData?.();
               if (pendingShare) {
                 const parsed = JSON.parse(pendingShare);
-                DroidLog.log('Resume: found pending share data', parsed);
+                DroidLog.log('Resume: found pending share data');
                 androidInterface.onShareWithAttachment$.next(parsed);
               }
             } catch (e) {

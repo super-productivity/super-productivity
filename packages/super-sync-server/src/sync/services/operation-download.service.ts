@@ -50,6 +50,7 @@ export class OperationDownloadService {
         schemaVersion: row.schemaVersion,
         timestamp: Number(row.clientTimestamp),
         isPayloadEncrypted: row.isPayloadEncrypted,
+        syncImportReason: row.syncImportReason ?? undefined,
       },
       receivedAt: Number(row.receivedAt),
     }));
@@ -219,6 +220,7 @@ export class OperationDownloadService {
             schemaVersion: row.schemaVersion,
             timestamp: Number(row.clientTimestamp),
             isPayloadEncrypted: row.isPayloadEncrypted,
+            syncImportReason: row.syncImportReason ?? undefined,
           },
           receivedAt: Number(row.receivedAt),
         }));

@@ -44,35 +44,19 @@ case "$COMMAND" in
     docker exec -it "$CONTAINER_NAME" node dist/scripts/monitor.js "$COMMAND" "$@"
     ;;
 
-  # Analysis commands (need TypeScript - use npx tsx)
+  # Analysis commands (compiled scripts)
   analyze)
     SUBCOMMAND=$1
     shift || true
 
-    echo -e "${YELLOW}Running: analyze-storage.ts $SUBCOMMAND $@${NC}"
-
-    # Check if tsx is available, if not use npx or install
-    if docker exec "$CONTAINER_NAME" sh -c "command -v tsx >/dev/null 2>&1"; then
-      # tsx already installed
-      docker exec -it "$CONTAINER_NAME" tsx scripts/analyze-storage.ts "$SUBCOMMAND" "$@"
-    else
-      # Try npx first (faster, no installation needed)
-      echo -e "${YELLOW}Using npx tsx (first time may be slower)...${NC}"
-      docker exec -it "$CONTAINER_NAME" npx tsx scripts/analyze-storage.ts "$SUBCOMMAND" "$@"
-    fi
+    echo -e "${YELLOW}Running: analyze-storage.js $SUBCOMMAND $@${NC}"
+    docker exec -it "$CONTAINER_NAME" node dist/scripts/analyze-storage.js "$SUBCOMMAND" "$@"
     ;;
 
-  # Full monitoring suite
+  # Full monitoring suite (compiled scripts)
   monitor-all|all)
     echo -e "${YELLOW}Running: Full monitoring suite${NC}"
-
-    # Check if tsx is available, if not use npx
-    if docker exec "$CONTAINER_NAME" sh -c "command -v tsx >/dev/null 2>&1"; then
-      docker exec -it "$CONTAINER_NAME" tsx scripts/run-all-monitoring.ts "$@"
-    else
-      echo -e "${YELLOW}Using npx tsx (first time may be slower)...${NC}"
-      docker exec -it "$CONTAINER_NAME" npx tsx scripts/run-all-monitoring.ts "$@"
-    fi
+    docker exec -it "$CONTAINER_NAME" node dist/scripts/run-all-monitoring.js "$@"
     ;;
 
   # Interactive shell
@@ -111,7 +95,7 @@ Basic Monitoring (uses compiled scripts):
   ops [--user ID] [--tail N]    Recent operations analysis
   logs [--tail N] [--search X]  View server logs
 
-Analysis (uses TypeScript - auto-installs tsx):
+Analysis (compiled scripts):
   analyze operation-sizes [--user ID]       Operation size distribution
   analyze operation-timeline [--user ID]    Temporal patterns
   analyze operation-types [--user ID]       Breakdown by type

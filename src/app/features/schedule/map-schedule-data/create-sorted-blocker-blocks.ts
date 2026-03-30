@@ -11,6 +11,7 @@ import {
   ScheduleWorkStartEndCfg,
 } from '../schedule.model';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { isSameDay } from '../../../util/is-same-day';
 const PROJECTION_DAYS: number = 30;
 
 export const createSortedBlockerBlocks = (
@@ -21,6 +22,7 @@ export const createSortedBlockerBlocks = (
   lunchBreakCfg?: ScheduleLunchBreakCfg,
   now: number = Date.now(),
   nrOfDays: number = PROJECTION_DAYS,
+  realNow?: number,
 ): BlockedBlock[] => {
   if (typeof now !== 'number') {
     throw new Error('No valid now given');
@@ -32,6 +34,7 @@ export const createSortedBlockerBlocks = (
       now,
       nrOfDays,
       scheduledTaskRepeatCfgs,
+      realNow,
     ),
     ...createBlockerBlocksForWorkStartEnd(now, nrOfDays, workStartEndCfg),
     ...createBlockerBlocksForLunchBreak(now, nrOfDays, lunchBreakCfg),
@@ -56,10 +59,11 @@ const createBlockerBlocksForScheduledRepeatProjections = (
   now: number,
   nrOfDays: number,
   scheduledTaskRepeatCfgs: TaskRepeatCfg[],
+  realNow?: number,
 ): BlockedBlock[] => {
   const blockedBlocks: BlockedBlock[] = [];
-
-  let i: number = 1;
+  const isViewingCurrentDay = realNow === undefined || isSameDay(realNow, now);
+  let i: number = isViewingCurrentDay ? 1 : 0;
   while (i < nrOfDays) {
     // Calculate proper day start instead of adding 24-hour increments
     const nowDate = new Date(now);

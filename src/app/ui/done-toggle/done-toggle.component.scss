@@ -12,18 +12,14 @@ $check-len: 18;
   }
 }
 
-// circumference of r=10 circle: 2 * π * 10 ≈ 62.83
-$circle-circumference: 62.83;
-
-@keyframes circle-draw {
-  0% {
-    stroke-dashoffset: $circle-circumference;
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0);
   }
-  35% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: 0;
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -49,6 +45,11 @@ $circle-circumference: 62.83;
   .done-toggle-svg {
     width: 22px;
     height: 22px;
+    transition: transform 150ms ease;
+  }
+
+  &.is-scale-up .done-toggle-svg {
+    transform: scale(1.15);
   }
 
   .done-circle {
@@ -71,23 +72,10 @@ $circle-circumference: 62.83;
     transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
   }
 
-  .progress-ring {
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    fill: none;
-    stroke-dasharray: $circle-circumference;
-    stroke-dashoffset: 0;
-    transform-origin: center;
-    transform: rotate(-90deg);
-    animation: circle-draw 6s ease-in-out infinite;
-    opacity: 0.3;
-    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
-  }
-
   .play-indicator {
     fill: var(--c-accent);
-    opacity: 1;
+    transform-origin: center;
+    animation: pop-in var(--transition-duration-m) var(--ani-enter-timing) both;
     transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
   }
 
@@ -103,16 +91,11 @@ $circle-circumference: 62.83;
   }
 
   &.is-current:not(.is-done) {
-    .done-circle {
-      opacity: 0;
-    }
-
     &:hover {
       .done-circle {
         opacity: 0.6;
       }
 
-      .progress-ring,
       .play-indicator {
         opacity: 0;
       }

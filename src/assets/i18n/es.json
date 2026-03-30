@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Toca + para añadir tu primera tarea",
       "EXPLORE": "¡Explora libremente haciendo clic por aquí! Puedes encontrar ayuda en la barra lateral.",
       "EXPLORE_TOUCH": "¡Explora libremente tocando por aquí! Puedes encontrar ayuda en el menú.",
+      "TASK_TAP_TOUCH": "Toca una tarea para abrir sus detalles.",
+      "TASK_SWIPE_LEFT_TOUCH": "Desliza la tarea a la izquierda para ver más acciones",
+      "TASK_SWIPE_RIGHT_TOUCH": "Desliza la tarea a la derecha para marcarla como hecha",
       "OR_PRESS": "o pulsa",
       "SKIP_ARIA": "Cerrar indicación"
     }

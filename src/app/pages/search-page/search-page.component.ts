@@ -137,7 +137,7 @@ export class SearchPageComponent implements OnInit {
       : tagMap.get(tagId);
 
     if (!context) {
-      Log.err(`Could not find context for task: ${task.title}`);
+      Log.err(`Could not find context for task: ${task.id}`);
       context = { ...DEFAULT_TAG, icon: 'help_outline', color: 'black' };
     }
 

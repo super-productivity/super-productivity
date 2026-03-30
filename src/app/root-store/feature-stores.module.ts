@@ -69,6 +69,7 @@ import { MobileNotificationEffects } from '../features/mobile/store/mobile-notif
 import { IS_NATIVE_PLATFORM } from '../util/is-native-platform';
 import { NextcloudDeckIssueEffects } from '../features/issue/providers/nextcloud-deck/nextcloud-deck-issue.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
+import { TimeBlockSyncEffects } from '../features/calendar-integration/time-block/time-block-sync.effects';
 import { ElectronEffects } from '../core/electron/electron.effects';
 import { DropboxEffects } from '../imex/sync/dropbox/store/dropbox.effects';
 import { FinishDayBeforeCloseEffects } from '../features/finish-day-before-close/finish-day-before-close.effects';
@@ -185,6 +186,7 @@ import {
     EffectsModule.forFeature([IssueTwoWaySyncEffects]),
     EffectsModule.forFeature([NextcloudDeckIssueEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
+    EffectsModule.forFeature([TimeBlockSyncEffects]),
     EffectsModule.forFeature([ElectronEffects]),
     EffectsModule.forFeature([DropboxEffects]),
     EffectsModule.forFeature([FinishDayBeforeCloseEffects]),

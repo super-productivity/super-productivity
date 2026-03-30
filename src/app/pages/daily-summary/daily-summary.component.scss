@@ -74,6 +74,11 @@ $summary-point-inner-margin: var(--s);
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  transition: opacity 0.2s ease;
+
+  &.is-loading-archive {
+    opacity: 0.6;
+  }
 
   p {
     margin: 5px;

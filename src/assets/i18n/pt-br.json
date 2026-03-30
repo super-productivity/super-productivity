@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Toque em + para adicionar sua primeira tarefa",
       "EXPLORE": "Fique à vontade para clicar e explorar! Você encontra ajuda na barra lateral.",
       "EXPLORE_TOUCH": "Fique à vontade para explorar! Você encontra ajuda no menu.",
+      "TASK_TAP_TOUCH": "Toque em uma tarefa para abrir os detalhes.",
+      "TASK_SWIPE_LEFT_TOUCH": "Deslize a tarefa para a esquerda para mais ações",
+      "TASK_SWIPE_RIGHT_TOUCH": "Deslize a tarefa para a direita para marcá-la como concluída",
       "OR_PRESS": "ou pressione",
       "SKIP_ARIA": "Fechar dica"
     }

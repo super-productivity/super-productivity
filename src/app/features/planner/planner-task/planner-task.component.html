@@ -2,8 +2,8 @@
 
 <swipe-block
   [isDone]="task.isDone"
-  [excludeSelector]="'done-toggle'"
   (swipeRight)="toggleTaskDone()"
+  (swipeRightTriggered)="onSwipeRightTriggered($event)"
   (swipeLeft)="openContextMenu()"
 >
   <div class="task-content">
@@ -11,6 +11,7 @@
       [isDone]="task.isDone"
       [isCurrent]="isCurrent"
       [showDoneAnimation]="showDoneAnimation()"
+      [showUndoneAnimation]="showUndoneAnimation()"
       [attr.aria-label]="T.F.TASK.CMP.TOGGLE_DONE | translate"
       (toggled)="toggleTaskDone()"
     ></done-toggle>

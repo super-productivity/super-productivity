@@ -22,7 +22,7 @@ import { NoteComponent } from '../note/note.component';
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 import { DRAG_DELAY_FOR_TOUCH, HISTORY_STATE } from '../../../app.constants';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { isTouchActive } from '../../../util/input-intent';
 import { LayoutService } from 'src/app/core-ui/layout/layout.service';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
 
@@ -117,5 +117,5 @@ export class NotesComponent implements OnInit {
   }
 
   protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly isTouchActive = isTouchActive;
 }

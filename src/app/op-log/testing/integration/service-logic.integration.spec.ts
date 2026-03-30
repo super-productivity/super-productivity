@@ -142,6 +142,11 @@ class MockOperationSyncProvider
     reason: string,
     vectorClock: any,
     schemaVersion: number,
+    _isPayloadEncrypted?: boolean,
+    _opId?: string,
+    _isCleanSlate?: boolean,
+    _snapshotOpType?: string,
+    _syncImportReason?: string,
   ): Promise<any> {
     return { accepted: true, serverSeq: ++this._lastServerSeq };
   }

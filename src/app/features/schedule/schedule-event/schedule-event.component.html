@@ -42,8 +42,11 @@
       </mat-icon>
     }
     @case ('CAL_PROJECTION') {
-      <mat-icon>{{ $any(se().data)?.icon || 'event' }}</mat-icon>
-      <mat-icon>add</mat-icon>
+      <mat-icon
+        class="ico"
+        inline="true"
+        >{{ $any(se().data)?.icon || 'event' }}
+      </mat-icon>
     }
     <!--- --->
     @default {}
@@ -87,6 +90,57 @@
     #taskContextMenu
     [task]="task()"
   ></task-context-menu>
+}
+
+@if (se().type === SVEType.CalendarEvent) {
+  <div
+    [matMenuTriggerFor]="calContextMenu"
+    #calMenuTrigger="matMenuTrigger"
+    class="cal-menu-trigger"
+  ></div>
+  <mat-menu #calContextMenu="matMenu">
+    @if (hasCalendarEventUrl()) {
+      <button
+        mat-menu-item
+        (click)="openCalendarEventLink()"
+      >
+        <mat-icon>open_in_new</mat-icon>
+        {{ T.F.CALENDARS.CONTEXT_MENU.OPEN_IN_CALENDAR | translate }}
+      </button>
+    }
+    @if (isCalendarEventFromPlugin()) {
+      <button
+        mat-menu-item
+        (click)="rescheduleCalendarEvent()"
+      >
+        <mat-icon>schedule</mat-icon>
+        {{ T.F.CALENDARS.CONTEXT_MENU.RESCHEDULE | translate }}
+      </button>
+    }
+    <button
+      mat-menu-item
+      (click)="createCalendarEventAsTask()"
+    >
+      <mat-icon>add</mat-icon>
+      {{ T.F.CALENDARS.CONTEXT_MENU.CREATE_TASK | translate }}
+    </button>
+    <button
+      mat-menu-item
+      (click)="hideCalendarEvent()"
+    >
+      <mat-icon>visibility_off</mat-icon>
+      {{ T.G.HIDE | translate }}
+    </button>
+    @if (isCalendarEventFromPlugin()) {
+      <button
+        mat-menu-item
+        (click)="deleteCalendarEvent()"
+      >
+        <mat-icon color="warn">delete</mat-icon>
+        {{ T.F.CALENDARS.CONTEXT_MENU.DELETE_EVENT | translate }}
+      </button>
+    }
+  </mat-menu>
 }
 
 @if (isResizable()) {

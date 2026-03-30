@@ -76,13 +76,16 @@ class AdditionalLogErrorBase<T = unknown[]> extends Error {
     super(extractedMessage ?? 'Unknown error');
 
     if (additional.length > 0) {
-      OpLog.log(this.name, ...additional);
       try {
-        // Sanitize before logging to avoid exposing tokens in logs
+        // Sanitize before logging to avoid exposing tokens and user content in logs
         const sanitized = additional.map(sanitizeForLogging);
-        OpLog.log('additional error log: ' + JSON.stringify(sanitized));
+        OpLog.log(this.name + ' additional error log: ' + JSON.stringify(sanitized));
       } catch (e) {
-        OpLog.log('additional error log not stringified: ', additional, e);
+        OpLog.log(
+          this.name +
+            ' additional error log not stringifiable: ' +
+            (e instanceof Error ? e.message : 'unknown'),
+        );
       }
     }
     this.additionalLog = additional as T;

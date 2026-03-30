@@ -759,21 +759,21 @@ export const createProjectReliably = async (
     .first();
   await projectsTree.waitFor({ state: 'visible' });
 
-  // The "Create Project" button is an additional-btn with an 'add' icon
-  const addBtn = projectsTree.locator('.additional-btn mat-icon:has-text("add")').first();
+  // Hover the group header to make additional buttons visible and clickable
+  // (buttons have pointer-events: none by default, only enabled on hover)
+  const groupNavItem = projectsTree.locator('nav-item').first();
+  await groupNavItem.hover();
+  await page.waitForTimeout(UI_SETTLE_SMALL);
 
-  if (await addBtn.isVisible()) {
+  // Target the button element (not the mat-icon inside it)
+  const addBtn = projectsTree.locator(
+    '.additional-btns button[mat-icon-button]:has(mat-icon:text("add"))',
+  );
+  try {
+    await addBtn.waitFor({ state: 'visible', timeout: 5000 });
     await addBtn.click();
-  } else {
-    // Try to hover the group header to make buttons appear
-    const groupNavItem = projectsTree.locator('nav-item').first();
-    await groupNavItem.hover();
-    await page.waitForTimeout(UI_SETTLE_SMALL);
-    if (await addBtn.isVisible()) {
-      await addBtn.click();
-    } else {
-      throw new Error('Could not find Create Project button');
-    }
+  } catch {
+    await addBtn.click({ force: true });
   }
 
   // Dialog

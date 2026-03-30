@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Napauta + lisätäksesi ensimmäisen tehtävän",
       "EXPLORE": "Napsauttele vapaasti ja tutustu! Ohje löytyy sivupalkista.",
       "EXPLORE_TOUCH": "Napauttele vapaasti ja tutustu! Ohje löytyy valikosta.",
+      "TASK_TAP_TOUCH": "Napauta tehtävää avataksesi sen tiedot.",
+      "TASK_SWIPE_LEFT_TOUCH": "Pyyhkäise tehtävää vasemmalle nähdäksesi lisää toimintoja",
+      "TASK_SWIPE_RIGHT_TOUCH": "Pyyhkäise tehtävää oikealle merkitäksesi sen tehdyksi",
       "OR_PRESS": "tai paina",
       "SKIP_ARIA": "Sulje vihje"
     }

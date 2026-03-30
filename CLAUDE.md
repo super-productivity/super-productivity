@@ -158,3 +158,4 @@ Use Angular commit message format: `type(scope): description`
 | Re-declaring Material theme styles   | Use existing theme variables                                                        |
 | `inject(Actions)` in effects         | Use `inject(LOCAL_ACTIONS)` - effects must not run for remote sync ops              |
 | Selector-based effects that dispatch | Convert to action-based or guard with `HydrationStateService.isApplyingRemoteOps()` |
+| `Log.log(task)` / `Log.log(title)`   | `Log.log({ id: task.id })` — log history is exportable; never log user content      |

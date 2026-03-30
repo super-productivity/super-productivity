@@ -71,6 +71,7 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
     isEncryptionEnabled: false,
     localFileSync: {},
     webDav: {},
+    nextcloud: {},
     superSync: {},
     _isInitialSetup: true,
   };
@@ -150,6 +151,11 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
             } else if (newProvider === SyncProviderId.LocalFile && privateCfg) {
               providerSpecificUpdate = {
                 localFileSync: privateCfg as any,
+                encryptKey: privateCfg.encryptKey || '',
+              };
+            } else if (newProvider === SyncProviderId.Nextcloud && privateCfg) {
+              providerSpecificUpdate = {
+                nextcloud: privateCfg as any,
                 encryptKey: privateCfg.encryptKey || '',
               };
             } else if (newProvider === SyncProviderId.Dropbox && privateCfg) {

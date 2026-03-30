@@ -609,6 +609,7 @@ describe('OperationLogUploadService', () => {
           'op-1', // op.id
           undefined, // isCleanSlate
           'SYNC_IMPORT', // snapshotOpType
+          undefined, // syncImportReason
         );
       });
 
@@ -628,6 +629,7 @@ describe('OperationLogUploadService', () => {
           'op-1', // op.id
           true, // isCleanSlate - auto true for BackupImport
           'BACKUP_IMPORT', // snapshotOpType
+          undefined, // syncImportReason
         );
       });
 
@@ -647,6 +649,7 @@ describe('OperationLogUploadService', () => {
           'op-1', // op.id
           true, // isCleanSlate - auto true for Repair
           'REPAIR', // snapshotOpType
+          undefined, // syncImportReason
         );
       });
 
@@ -910,8 +913,8 @@ describe('OperationLogUploadService', () => {
         // Get the call arguments
         const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
 
-        // Verify all 9 args are passed including op.id, isCleanSlate, and snapshotOpType
-        expect(callArgs.length).toBe(9);
+        // Verify all 10 args are passed including op.id, isCleanSlate, snapshotOpType, and syncImportReason
+        expect(callArgs.length).toBe(10);
 
         // Verify specific args
         expect(callArgs[1]).toBe('client-1'); // clientId
@@ -962,6 +965,7 @@ describe('OperationLogUploadService', () => {
           'op-1', // op.id
           true, // isCleanSlate - auto true for BackupImport
           'BACKUP_IMPORT', // snapshotOpType
+          undefined, // syncImportReason
         );
       });
 

@@ -27,6 +27,7 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  isLocalRestApiEnabled?: boolean;
   startOfNextDay: number;
   isDisableAnimations: boolean;
   // optional because it was added later
@@ -130,6 +131,13 @@ export interface SuperSyncConfig extends WebDavConfig {
   encryptKey?: string | null;
 }
 
+export interface NextcloudConfig {
+  serverUrl?: string | null;
+  userName?: string | null;
+  password?: string | null;
+  syncFolderPath?: string | null;
+}
+
 export interface LocalFileSyncConfig {
   // TODO remove and migrate
   syncFilePath?: string | null;
@@ -177,6 +185,8 @@ export type SyncConfig = Readonly<{
   superSync?: SuperSyncConfig;
   /* NOTE: view model for form only*/
   localFileSync?: LocalFileSyncConfig;
+  /* NOTE: view model for form only*/
+  nextcloud?: NextcloudConfig;
 }>;
 
 export type ScheduleConfig = Readonly<{

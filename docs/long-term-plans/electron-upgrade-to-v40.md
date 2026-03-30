@@ -21,17 +21,17 @@ Super Productivity ships on Linux as AppImage, deb, snap, rpm, and has a communi
 
 ### Ecosystem Snapshot
 
-| App | Electron | Snap Strategy | Flatpak Runtime | Wayland |
-|-----|----------|--------------|-----------------|---------|
-| VS Code | **39.8.3** | Classic, forces X11 via wrapper | N/A | X11 in snap |
-| Obsidian | **39.7.0** | N/A | **25.08**, wrapper-controlled Wayland | Auto in Flatpak |
-| Bitwarden | **39.2.6** | Strict/core22, allowNativeWayland=true | N/A | Buggy in snap |
-| Element | **41.0.2** | N/A | **25.08** | Auto in Flatpak |
-| Signal | N/A | core24 + gnome extension (custom snapcraft.yaml) | **25.08** | Auto in Flatpak |
-| Joplin | **38.x** | core24 + gnome extension (custom snapcraft.yaml) | **25.08** | Enabled |
-| Tidal HiFi | **40.7.0** | **core22 + gnome-42-2204 plug override** | N/A | Enabled |
-| Teams-for-Linux | **39.8.2** | core22, forces X11 via executableArgs | N/A | X11 in snap |
-| **Super Productivity** | **37.10.3** | core22, allowNativeWayland=true, gnome-3-28-1804 | **24.08** | Force-disabled |
+| App                    | Electron    | Snap Strategy                                    | Flatpak Runtime                       | Wayland         |
+| ---------------------- | ----------- | ------------------------------------------------ | ------------------------------------- | --------------- |
+| VS Code                | **39.8.3**  | Classic, forces X11 via wrapper                  | N/A                                   | X11 in snap     |
+| Obsidian               | **39.7.0**  | N/A                                              | **25.08**, wrapper-controlled Wayland | Auto in Flatpak |
+| Bitwarden              | **39.2.6**  | Strict/core22, allowNativeWayland=true           | N/A                                   | Buggy in snap   |
+| Element                | **41.0.2**  | N/A                                              | **25.08**                             | Auto in Flatpak |
+| Signal                 | N/A         | core24 + gnome extension (custom snapcraft.yaml) | **25.08**                             | Auto in Flatpak |
+| Joplin                 | **38.x**    | core24 + gnome extension (custom snapcraft.yaml) | **25.08**                             | Enabled         |
+| Tidal HiFi             | **40.7.0**  | **core22 + gnome-42-2204 plug override**         | N/A                                   | Enabled         |
+| Teams-for-Linux        | **39.8.2**  | core22, forces X11 via executableArgs            | N/A                                   | X11 in snap     |
+| **Super Productivity** | **37.10.3** | core22, allowNativeWayland=true, gnome-3-28-1804 | **24.08**                             | Force-disabled  |
 
 ### Key Findings
 
@@ -45,7 +45,7 @@ Super Productivity ships on Linux as AppImage, deb, snap, rpm, and has a communi
 ### Past Attempts
 
 1. **Electron 38 (Oct 2025):** 25+ commits trying Mesa drivers, env vars, plugs configs in snap. All failed. Reverted (commit `6486b41bd9`).
-2. **Electron 39 (Dec 2025):** Forced X11 via `app.commandLine.appendSwitch('ozone-platform', 'x11')` globally for all Linux. Reverted next day (commit `6e60bde789`) — still crashed because `allowNativeWayland: true` in electron-builder.yaml caused the snap launch wrapper to attempt Wayland initialization *before* the Electron main process ran.
+2. **Electron 39 (Dec 2025):** Forced X11 via `app.commandLine.appendSwitch('ozone-platform', 'x11')` globally for all Linux. Reverted next day (commit `6e60bde789`) — still crashed because `allowNativeWayland: true` in electron-builder.yaml caused the snap launch wrapper to attempt Wayland initialization _before_ the Electron main process ran.
 
 ---
 
@@ -129,7 +129,10 @@ if (
   const gnomePlatformPath = join(process.env.SNAP || '', 'gnome-platform');
   try {
     const fs = require('fs');
-    if (!fs.existsSync(gnomePlatformPath) || fs.readdirSync(gnomePlatformPath).length === 0) {
+    if (
+      !fs.existsSync(gnomePlatformPath) ||
+      fs.readdirSync(gnomePlatformPath).length === 0
+    ) {
       app.commandLine.appendSwitch('ozone-platform', 'x11');
       log('Snap: gnome-42-2204 runtime not found, forcing X11');
     }
@@ -141,6 +144,7 @@ if (
 ```
 
 Key differences from the failed December 2025 attempt:
+
 - Scoped to Snap only (`process.env.SNAP`), not all Linux
 - Only forces X11 when the gnome-42-2204 runtime is missing (not unconditionally)
 - Respects user override (`--ozone-platform=` check)
@@ -158,13 +162,13 @@ Also fix the linter-invalid socket combination (Flathub linter flags `x11` + `wa
 
 ```yaml
 # Before (linter error):
-  - --socket=x11
-  - --socket=wayland
-  - --socket=fallback-x11
+- --socket=x11
+- --socket=wayland
+- --socket=fallback-x11
 
 # After (linter-valid):
-  - --socket=wayland
-  - --socket=fallback-x11
+- --socket=wayland
+- --socket=fallback-x11
 ```
 
 > **Note:** The Flathub manifest is maintained separately at
@@ -184,6 +188,7 @@ Also fix the linter-invalid socket combination (Flathub linter flags `x11` + `wa
 **Option A (preferred): Remove the handler entirely.**
 
 The handler was added in 2020 (commit `2c8255b081`, issue #549) for Electron ~10. Modern Electron handles `file://` URLs correctly by default. The CSP already permits `file:` in `img-src`. Test by commenting out lines 293-296 and verifying:
+
 - Angular app loads correctly
 - Task attachment images with `file://` paths display (including paths with spaces)
 - Background images set to `file://` paths work
@@ -194,15 +199,23 @@ If removing works → delete lines 293-296. No new code needed.
 **Option B (fallback): Use `pathToFileURL` + `bypassCustomProtocolHandlers`.**
 
 Add to electron imports:
+
 ```typescript
 import { pathToFileURL } from 'url';
 import {
-  App, app, BrowserWindow, globalShortcut, ipcMain,
-  net, powerMonitor, protocol,
+  App,
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  net,
+  powerMonitor,
+  protocol,
 } from 'electron';
 ```
 
 Replace lines 293-296:
+
 ```typescript
 protocol.handle('file', (request) => {
   const pathname = decodeURI(new URL(request.url).pathname);
@@ -213,6 +226,7 @@ protocol.handle('file', (request) => {
 ```
 
 Key differences from the previously planned code:
+
 - `bypassCustomProtocolHandlers: true` prevents infinite recursion
 - `new URL(request.url).pathname` properly parses the URL structure
 - `pathToFileURL()` properly encodes spaces as `%20`, `#` as `%23`, converts Windows backslashes
@@ -243,7 +257,9 @@ appIN.on('ready', () => {
         const gpuCachePath = join(userDataPath, 'GPUCache');
         if (fs.existsSync(gpuCachePath)) {
           fs.rmSync(gpuCachePath, { recursive: true, force: true });
-          log(`Cleared GPUCache after Electron upgrade (${lastVersion} → ${currentVersion})`);
+          log(
+            `Cleared GPUCache after Electron upgrade (${lastVersion} → ${currentVersion})`,
+          );
         }
         fs.mkdirSync(userDataPath, { recursive: true });
         fs.writeFileSync(versionFile, currentVersion);
@@ -289,6 +305,7 @@ Verify `@types/node` compatibility — Electron 40 uses Node 24, and there's a k
 **Repo:** [github.com/flathub/com.super_productivity.SuperProductivity](https://github.com/flathub/com.super_productivity.SuperProductivity)
 
 The Flathub manifest is maintained separately and is currently behind peers:
+
 - Runtime 24.08 (peers on **25.08**: Signal, FreeTube, Obsidian, Element)
 - 1-line wrapper script (peers: 50-85 line scripts with TMPDIR isolation)
 - Wayland force-disabled via `--unset-env=XDG_SESSION_TYPE` (since PR #58, Oct 2025)
@@ -297,6 +314,7 @@ The Flathub manifest is maintained separately and is currently behind peers:
 
 > **Flathub linter constraint:** `--socket=x11` + `--socket=wayland` is flagged as an **ERROR**.
 > Only two valid socket patterns exist:
+>
 > 1. X11-only: `--socket=x11` + `--share=ipc`
 > 2. Wayland + fallback: `--socket=wayland` + `--socket=fallback-x11` + `--share=ipc`
 >
@@ -304,6 +322,7 @@ The Flathub manifest is maintained separately and is currently behind peers:
 > `--socket=wayland` — this would fail the linter. Another reason this config is dead code.
 
 **Phase 1 — Runtime upgrade + missing permissions (1 PR):**
+
 - Bump `runtime-version` and `base-version` from `24.08` to `25.08`
   (25.08 BaseApp bundles zypak v2025.09 + libsecret 0.21.7)
 - Add `--system-talk-name=org.freedesktop.login1` (idle/sleep detection)
@@ -311,6 +330,7 @@ The Flathub manifest is maintained separately and is currently behind peers:
 - Add `"automerge-flathubbot-prs": true` to `flathub.json` (if using extra-data)
 
 **Phase 2 — Re-enable Wayland (1 PR):**
+
 - Remove `--unset-env=XDG_SESSION_TYPE` (a workaround, not needed for Electron 40+)
 - Replace `--socket=x11` with `--socket=wayland` + `--socket=fallback-x11`
 - Electron 40+ auto-detects Wayland — no `--ozone-platform-hint` flag needed
@@ -318,6 +338,7 @@ The Flathub manifest is maintained separately and is currently behind peers:
 - Signal Desktop pattern: trust Electron's built-in Wayland detection
 
 **Phase 3 — Enhance wrapper script (1 PR):**
+
 ```bash
 #!/bin/sh
 
@@ -342,6 +363,7 @@ exec zypak-wrapper.sh /app/superproductivity/superproductivity "$@"
 ```
 
 **Target finish-args (gold standard, following Signal Desktop + Flathub linter):**
+
 ```yaml
 finish-args:
   - --socket=wayland
@@ -369,6 +391,7 @@ finish-args:
 ## What NOT to change
 
 Based on the failed 25+ commit Electron 38 attempt:
+
 - Do NOT add Mesa/GPU driver packages to snap stagePackages
 - Do NOT try software rendering (`LIBGL_ALWAYS_SOFTWARE`)
 - Do NOT change CI workflows
@@ -379,16 +402,16 @@ Based on the failed 25+ commit Electron 38 attempt:
 
 ## Breaking Changes Audit (Electron 38→40)
 
-| Breaking Change | Version | Affects SP? | Action |
-|----------------|---------|-------------|--------|
-| macOS 11 dropped | E38 | Low | Document in release notes |
-| `ozone-platform` defaults to `auto` | E38 | **Critical** | gnome-42-2204 plug override + code fallback |
-| `ELECTRON_OZONE_PLATFORM_HINT` removed | E38 | No | Not used in codebase |
-| `window.open` always resizable | E39 | No | All popups denied via `setWindowOpenHandler` |
-| Node.js 22→24 | E40 | **Medium** | No native modules; test TLS connections (OpenSSL 3.5) |
-| Clipboard deprecated in renderer | E40 | No | SP uses clipboard in main process only |
-| `protocol.registerFileProtocol` deprecated | E25+ | **Yes** | Migrated in step 5 |
-| `url.format()` documentation-deprecated | E25+ | Minor | Migrated in step 7 |
+| Breaking Change                            | Version | Affects SP?  | Action                                                |
+| ------------------------------------------ | ------- | ------------ | ----------------------------------------------------- |
+| macOS 11 dropped                           | E38     | Low          | Document in release notes                             |
+| `ozone-platform` defaults to `auto`        | E38     | **Critical** | gnome-42-2204 plug override + code fallback           |
+| `ELECTRON_OZONE_PLATFORM_HINT` removed     | E38     | No           | Not used in codebase                                  |
+| `window.open` always resizable             | E39     | No           | All popups denied via `setWindowOpenHandler`          |
+| Node.js 22→24                              | E40     | **Medium**   | No native modules; test TLS connections (OpenSSL 3.5) |
+| Clipboard deprecated in renderer           | E40     | No           | SP uses clipboard in main process only                |
+| `protocol.registerFileProtocol` deprecated | E25+    | **Yes**      | Migrated in step 5                                    |
+| `url.format()` documentation-deprecated    | E25+    | Minor        | Migrated in step 7                                    |
 
 ### Node.js 22→24 Details
 
@@ -400,26 +423,26 @@ Based on the failed 25+ commit Electron 38 attempt:
 
 ## Expected behavior after upgrade
 
-| Distribution | Wayland session | X11 session |
-|---|---|---|
-| **Snap** | Native Wayland via gnome-42-2204 (X11 fallback if runtime missing) | Normal X11 |
-| **AppImage** | Native Wayland (Electron auto) | Normal X11 |
-| **deb/rpm** | Native Wayland (Electron auto) | Normal X11 |
-| **Flatpak** | Native Wayland (after Flathub manifest update) | Normal X11 |
+| Distribution | Wayland session                                                    | X11 session |
+| ------------ | ------------------------------------------------------------------ | ----------- |
+| **Snap**     | Native Wayland via gnome-42-2204 (X11 fallback if runtime missing) | Normal X11  |
+| **AppImage** | Native Wayland (Electron auto)                                     | Normal X11  |
+| **deb/rpm**  | Native Wayland (Electron auto)                                     | Normal X11  |
+| **Flatpak**  | Native Wayland (after Flathub manifest update)                     | Normal X11  |
 
 ---
 
 ## Risk Assessment
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| gnome-42-2204 auto-connect fails in Snap Store | Low | High | File store request at forum.snapcraft.io (turnaround: days). Fallback: set `allowNativeWayland: false`. |
-| Snap crashes despite gnome-42-2204 | Low | High | Defense-in-depth X11 fallback in start-app.ts |
-| AppImage/deb regressions on Wayland | Low | Medium | No forced X11 for non-Snap; Electron 40 Wayland is more mature |
-| `protocol.handle` breaks file loading | Low | High | Try removing handler entirely first (Option A). `registerFileProtocol` still works in E40 as fallback. |
-| OpenSSL 3.5 rejects legacy server certs | Medium | Medium | Document in release notes. Users can downgrade TLS security via environment variables if needed. |
-| `@types/node` v24 type conflicts at build | Medium | Low | `skipLibCheck` or pin types version |
-| `stage-packages` exclusion list mismatch with core22 + gnome-42-2204 | Low | Low | May increase snap size; functionally correct |
+| Risk                                                                 | Likelihood | Impact | Mitigation                                                                                              |
+| -------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| gnome-42-2204 auto-connect fails in Snap Store                       | Low        | High   | File store request at forum.snapcraft.io (turnaround: days). Fallback: set `allowNativeWayland: false`. |
+| Snap crashes despite gnome-42-2204                                   | Low        | High   | Defense-in-depth X11 fallback in start-app.ts                                                           |
+| AppImage/deb regressions on Wayland                                  | Low        | Medium | No forced X11 for non-Snap; Electron 40 Wayland is more mature                                          |
+| `protocol.handle` breaks file loading                                | Low        | High   | Try removing handler entirely first (Option A). `registerFileProtocol` still works in E40 as fallback.  |
+| OpenSSL 3.5 rejects legacy server certs                              | Medium     | Medium | Document in release notes. Users can downgrade TLS security via environment variables if needed.        |
+| `@types/node` v24 type conflicts at build                            | Medium     | Low    | `skipLibCheck` or pin types version                                                                     |
+| `stage-packages` exclusion list mismatch with core22 + gnome-42-2204 | Low        | Low    | May increase snap size; functionally correct                                                            |
 
 ---
 
@@ -458,6 +481,7 @@ snapcraft upload --release=beta super-productivity_*.snap
 ```
 
 **Critical post-upload check:**
+
 ```bash
 # Install on a clean system and verify auto-connect
 snap install super-productivity --channel=beta
@@ -484,6 +508,7 @@ Submit PR to the Flathub repo with runtime 25.08 upgrade and Wayland re-enableme
 ### Custom snapcraft.yaml (long-term)
 
 The gnome-42-2204 plug override is a pragmatic workaround. The long-term solution is a **custom snapcraft.yaml** with `extensions: [gnome]` on core24, following Signal Desktop and Joplin. This provides:
+
 - Automatic gnome-46-2404 runtime + mesa-2404 GPU drivers
 - Proper `desktop-launch` command chain
 - No dependency on electron-builder's unmaintained snap template

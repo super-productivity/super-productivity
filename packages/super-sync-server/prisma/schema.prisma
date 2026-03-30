@@ -75,6 +75,7 @@ model Operation {
   clientTimestamp    BigInt  @map("client_timestamp")
   receivedAt         BigInt  @map("received_at")
   isPayloadEncrypted Boolean @default(false) @map("is_payload_encrypted")
+  syncImportReason   String? @map("sync_import_reason")
 
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 

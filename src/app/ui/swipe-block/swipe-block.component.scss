@@ -9,14 +9,34 @@
   position: relative;
 }
 
-// SWIPE BLOCKS
-.block-left,
+// STRIKETHROUGH LINE (swipe-right gesture)
+.strikethrough-line {
+  position: absolute;
+  left: 48px;
+  height: 2px;
+  width: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: calc(var(--z-swipe-block) + 1);
+  background: var(--text-color-muted);
+
+  :host-context(.isDarkTheme) & {
+    height: 2px;
+    background: var(--text-color-muted);
+  }
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 1;
+}
+
+// SWIPE BLOCK (swipe-left gesture)
 .block-right {
   pointer-events: none;
   color: var(--palette-primary-contrast-500);
   position: absolute;
   bottom: 2px;
   top: 1px;
+  right: 0;
   width: 0;
   z-index: var(--z-swipe-block);
   transition: var(--transition-standard);
@@ -33,14 +53,6 @@
     left: 50%;
     transform: translate(-50%, -50%) scaleX(1);
   }
-}
-
-.block-left {
-  left: 0;
-}
-
-.block-right {
-  right: 0;
 }
 
 .isPreventPointerEventsWhilePanning {

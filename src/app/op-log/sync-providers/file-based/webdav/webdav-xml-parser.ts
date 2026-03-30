@@ -29,7 +29,7 @@ export class WebdavXmlParser {
   </D:prop>
 </D:propfind>`;
 
-  constructor(private _cleanRev: (rev: string) => string) {}
+  constructor() {}
 
   /**
    * Validates that response content is not an HTML error page

@@ -11,7 +11,7 @@
   yPosition="below"
   xPosition="after"
   [backdropClass]="
-    IS_TOUCH_PRIMARY ? 'cdk-overlay-dark-backdrop' : 'cdk-overlay-transparent-backdrop'
+    isTouchActive() ? 'cdk-overlay-dark-backdrop' : 'cdk-overlay-transparent-backdrop'
   "
   (close)="onClose()"
 >
@@ -86,7 +86,7 @@
 
   @if (
     isTimeTrackingEnabled() &&
-    ((isAdvancedControls() && IS_TOUCH_PRIMARY) || !isAdvancedControls()) &&
+    ((isAdvancedControls() && isTouchActive()) || !isAdvancedControls()) &&
     !task.isDone &&
     !isCurrent &&
     !task.subTaskIds.length
@@ -121,7 +121,7 @@
   }
   @if (
     isAdvancedControls() &&
-    IS_TOUCH_PRIMARY &&
+    isTouchActive() &&
     !task.isDone &&
     isCurrent &&
     !task.subTaskIds.length
@@ -137,7 +137,7 @@
       <span class="key-i">{{ kb.togglePlay }}</span>
     </button>
   }
-  @if (IS_TOUCH_PRIMARY || !isAdvancedControls()) {
+  @if (isTouchActive() || !isAdvancedControls()) {
     <button
       (click)="toggleTaskDone()"
       mat-menu-item

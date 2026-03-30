@@ -2381,6 +2381,9 @@
       "CREATE_TASK_TOUCH": "+를 탭하여 첫 번째 작업을 추가하세요",
       "EXPLORE": "자유롭게 클릭하며 둘러보세요! 사이드바에서 도움말을 찾을 수 있습니다.",
       "EXPLORE_TOUCH": "자유롭게 탭하며 둘러보세요! 메뉴에서 도움말을 찾을 수 있습니다.",
+      "TASK_TAP_TOUCH": "작업을 탭해 세부 정보를 여세요.",
+      "TASK_SWIPE_LEFT_TOUCH": "추가 작업을 보려면 작업을 왼쪽으로 스와이프하세요",
+      "TASK_SWIPE_RIGHT_TOUCH": "완료로 표시하려면 작업을 오른쪽으로 스와이프하세요",
       "OR_PRESS": "또는",
       "SKIP_ARIA": "힌트 닫기"
     }

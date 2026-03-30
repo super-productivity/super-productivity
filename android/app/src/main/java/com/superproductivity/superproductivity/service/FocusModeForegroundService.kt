@@ -124,9 +124,8 @@ class FocusModeForegroundService : Service() {
             }
 
             else -> {
-                // Service restarted by system - we have no state to restore
                 Log.d(TAG, "Service started without action, stopping")
-                stopSelf()
+                stopForegroundAndSelf()
             }
         }
 
@@ -156,6 +155,23 @@ class FocusModeForegroundService : Service() {
         if (!isPaused) {
             handler.post(updateRunnable)
         }
+    }
+
+    /**
+     * Posts a minimal foreground notification before stopping, so that the
+     * foreground-service contract is satisfied even on error / unknown-action paths.
+     */
+    private fun stopForegroundAndSelf() {
+        try {
+            val notification = androidx.core.app.NotificationCompat.Builder(this, FocusModeNotificationHelper.CHANNEL_ID)
+                .setSmallIcon(com.superproductivity.superproductivity.R.drawable.ic_stat_sp)
+                .build()
+            startForeground(FocusModeNotificationHelper.NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to post foreground notification before stop", e)
+        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun stopFocusMode() {

@@ -14,6 +14,10 @@ import {
   PluginNodeScriptResult,
   PluginManifest,
 } from '../packages/plugin-api/src/types';
+import {
+  LocalRestApiRequestPayload,
+  LocalRestApiResponsePayload,
+} from './shared-with-frontend/local-rest-api.model';
 
 export interface ElectronAPI {
   on(
@@ -209,8 +213,12 @@ export interface ElectronAPI {
   ): Promise<PluginNodeScriptResult>;
 
   // Plugin OAuth
+  pluginOAuthPrepare(): Promise<{ port: number }>;
   pluginOAuthStart(url: string): void;
   onPluginOAuthCb(
     listener: (data: { code?: string; error?: string; state?: string }) => void,
   ): void;
+
+  onLocalRestApiRequest(listener: (payload: LocalRestApiRequestPayload) => void): void;
+  sendLocalRestApiResponse(payload: LocalRestApiResponsePayload): void;
 }

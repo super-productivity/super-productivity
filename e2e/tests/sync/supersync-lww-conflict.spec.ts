@@ -854,17 +854,19 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .first();
       await projectsTree.waitFor({ state: 'visible' });
 
-      const addBtn = projectsTree
-        .locator('.additional-btn mat-icon:has-text("add")')
-        .first();
+      // Hover the group header to make additional buttons visible and clickable
       const groupNavItem = projectsTree.locator('nav-item').first();
       await groupNavItem.hover();
       await page.waitForTimeout(200);
 
-      if (await addBtn.isVisible()) {
+      const addBtn = projectsTree.locator(
+        '.additional-btns button[mat-icon-button]:has(mat-icon:text("add"))',
+      );
+      try {
+        await addBtn.waitFor({ state: 'visible', timeout: 5000 });
         await addBtn.click();
-      } else {
-        throw new Error('Could not find Create Project button');
+      } catch {
+        await addBtn.click({ force: true });
       }
 
       const nameInput = page.getByRole('textbox', { name: 'Project Name' });

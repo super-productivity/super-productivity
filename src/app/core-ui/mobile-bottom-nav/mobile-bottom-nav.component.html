@@ -25,6 +25,7 @@
     mat-fab
     class="add-task-button"
     [class.smaller]="hasProjectBacklog()"
+    [class.hide-for-native]="isAndroid && isEntrance()"
     color="primary"
     (click)="showAddTaskBar()"
   >

@@ -73,6 +73,7 @@ const mockHttpHelper: PluginHttp = {
   put: jasmine.createSpy('put'),
   patch: jasmine.createSpy('patch'),
   delete: jasmine.createSpy('delete'),
+  request: jasmine.createSpy('request'),
 };
 
 describe('createPluginSyncAdapter', () => {

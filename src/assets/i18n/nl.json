@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Tik op + om je eerste taak toe te voegen",
       "EXPLORE": "Klik gerust rond en ontdek alles! Je vindt hulp in de zijbalk.",
       "EXPLORE_TOUCH": "Tik gerust rond en ontdek alles! Je vindt hulp in het menu.",
+      "TASK_TAP_TOUCH": "Tik op een taak om de details te openen.",
+      "TASK_SWIPE_LEFT_TOUCH": "Veeg de taak naar links voor meer acties",
+      "TASK_SWIPE_RIGHT_TOUCH": "Veeg de taak naar rechts om deze als voltooid te markeren",
       "OR_PRESS": "of druk op",
       "SKIP_ARIA": "Hint sluiten"
     }

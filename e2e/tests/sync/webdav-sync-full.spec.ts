@@ -1,3 +1,4 @@
+import { type Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/webdav.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
@@ -8,7 +9,23 @@ import {
   createSyncFolder,
   waitForSyncComplete,
   generateSyncFolderName,
+  closeContextsSafely,
 } from '../../utils/sync-helpers';
+
+/**
+ * Dismiss the Vite error overlay if present.
+ * In development mode, TypeScript errors can cause a full-page overlay
+ * that intercepts all pointer events. Pressing Escape dismisses it.
+ */
+const dismissViteOverlay = async (page: Page): Promise<void> => {
+  const overlay = page.locator('vite-error-overlay');
+  const isVisible = await overlay.isVisible().catch(() => false);
+  if (isVisible) {
+    console.log('[Test] Dismissing vite-error-overlay');
+    await page.keyboard.press('Escape');
+    await overlay.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+  }
+};
 
 test.describe('@webdav WebDAV Sync Full Flow', () => {
   // Run sync tests serially to avoid WebDAV server contention
@@ -289,5 +306,262 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     // Cleanup
     await contextA.close();
     await contextB2.close();
+  });
+
+  /**
+   * Scenario: Near-simultaneous uploads from two clients preserve all data
+   *
+   * Verifies that the content-hash-based conflict detection (GET-compare-PUT)
+   * correctly handles concurrent uploads. When two clients sync at nearly the
+   * same time, the second client should detect the hash mismatch, retry with
+   * merged data, and no tasks should be lost.
+   *
+   * Setup:
+   * - Client A and Client B both configured with WebDAV sync to the same folder
+   * - Client A creates TaskA, syncs; Client B downloads TaskA
+   *
+   * Actions:
+   * 1. Client A creates TaskA2, Client B creates TaskB
+   * 2. Trigger sync on Client A, then Client B shortly after (without waiting
+   *    for A to finish). The slight offset gives A time to start uploading so
+   *    B's hash check can detect the change, triggering conflict retry.
+   * 3. Wait for both syncs to complete (handling any conflict dialogs)
+   * 4. Run convergence syncs until both clients have all data
+   *
+   * Verify:
+   * - Both clients have TaskA, TaskA2, and TaskB -- no data lost
+   */
+  test('should preserve all data when two clients sync near-simultaneously', async ({
+    browser,
+    baseURL,
+    request,
+    webdavServerUp,
+  }) => {
+    test.slow(); // Sync tests take longer
+
+    const url = baseURL || 'http://localhost:4242';
+    const concurrentFolder = generateSyncFolderName('e2e-concurrent');
+    const concurrentConfig = {
+      ...WEBDAV_CONFIG_TEMPLATE,
+      syncFolderPath: `/${concurrentFolder}`,
+    };
+
+    await createSyncFolder(request, concurrentFolder);
+
+    // --- Setup Client A ---
+    const { context: contextA, page: pageA } = await setupSyncClient(browser, url);
+    await dismissViteOverlay(pageA);
+    const syncPageA = new SyncPage(pageA);
+    const workViewPageA = new WorkViewPage(pageA);
+
+    pageA.on('console', (msg) => {
+      const text = msg.text();
+      if (
+        text.includes('FileBasedSyncAdapter') ||
+        text.includes('OperationLogSyncService') ||
+        text.includes('SyncService')
+      ) {
+        console.log(`[Concurrent-A] ${msg.type()}: ${text}`);
+      }
+    });
+
+    // --- Setup Client B ---
+    const { context: contextB, page: pageB } = await setupSyncClient(browser, url);
+    await dismissViteOverlay(pageB);
+    const syncPageB = new SyncPage(pageB);
+    const workViewPageB = new WorkViewPage(pageB);
+
+    pageB.on('console', (msg) => {
+      const text = msg.text();
+      if (
+        text.includes('FileBasedSyncAdapter') ||
+        text.includes('OperationLogSyncService') ||
+        text.includes('SyncService') ||
+        text.includes('RemoteOpsProcessingService') ||
+        text.includes('OperationApplierService')
+      ) {
+        console.log(`[Concurrent-B] ${msg.type()}: ${text}`);
+      }
+    });
+
+    try {
+      // --- Initialize both clients ---
+      await workViewPageA.waitForTaskList();
+      await syncPageA.setupWebdavSync(concurrentConfig);
+      await expect(syncPageA.syncBtn).toBeVisible();
+      console.log('[Concurrent] Client A configured');
+
+      await workViewPageB.waitForTaskList();
+      await syncPageB.setupWebdavSync(concurrentConfig);
+      await expect(syncPageB.syncBtn).toBeVisible();
+      console.log('[Concurrent] Client B configured');
+
+      // --- Step 1: Client A creates TaskA and syncs ---
+      await workViewPageA.addTask('TaskA');
+      await expect(pageA.locator('task')).toHaveCount(1);
+      await waitForStatePersistence(pageA);
+
+      await syncPageA.triggerSync();
+      await waitForSyncComplete(pageA, syncPageA);
+      console.log('[Concurrent] Client A synced TaskA');
+
+      // --- Step 2: Client B downloads TaskA ---
+      await syncPageB.triggerSync();
+      await waitForSyncComplete(pageB, syncPageB);
+      await expect(pageB.locator('task')).toHaveCount(1, { timeout: 10000 });
+      await expect(pageB.locator('task').first()).toContainText('TaskA');
+      console.log('[Concurrent] Client B downloaded TaskA');
+
+      // --- Step 3: Both clients create tasks independently ---
+      await workViewPageA.addTask('TaskA2');
+      await expect(pageA.locator('task')).toHaveCount(2);
+      await waitForStatePersistence(pageA);
+      console.log('[Concurrent] Client A created TaskA2');
+
+      await workViewPageB.addTask('TaskB');
+      await expect(pageB.locator('task')).toHaveCount(2);
+      await waitForStatePersistence(pageB);
+      console.log('[Concurrent] Client B created TaskB');
+
+      // --- Step 4: Near-simultaneous sync ---
+      // Trigger Client A first, then Client B after a short delay. We do NOT
+      // wait for A to complete, but the slight offset ensures A's upload is
+      // in-flight (or complete) when B attempts its own upload. This exercises
+      // the content-hash conflict detection: B's pre-upload GET returns a
+      // different hash than expected, triggering a retry with merged data.
+      console.log('[Concurrent] Triggering near-simultaneous syncs...');
+
+      const syncPromiseA = (async () => {
+        await syncPageA.triggerSync();
+        return waitForSyncComplete(pageA, syncPageA);
+      })();
+
+      // Brief delay so A's upload has a head start, then fire B
+      await pageB.waitForTimeout(500);
+
+      const syncPromiseB = (async () => {
+        await syncPageB.triggerSync();
+        return waitForSyncComplete(pageB, syncPageB);
+      })();
+
+      // Wait for both syncs to complete
+      const [resultA, resultB] = await Promise.all([syncPromiseA, syncPromiseB]);
+      console.log(`[Concurrent] Simultaneous sync results: A=${resultA}, B=${resultB}`);
+
+      // Handle conflict dialogs if they appear
+      if (resultA === 'conflict') {
+        console.log('[Concurrent] Client A got conflict, using remote');
+        await pageA
+          .locator('dialog-sync-conflict button', { hasText: /Remote/i })
+          .click();
+        const confirmDialog = pageA.locator('dialog-confirm');
+        try {
+          await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
+          await confirmDialog.locator('button[color="warn"]').click();
+        } catch {
+          // Confirmation might not appear
+        }
+        await waitForSyncComplete(pageA, syncPageA);
+      }
+
+      if (resultB === 'conflict') {
+        console.log('[Concurrent] Client B got conflict, using remote');
+        await pageB
+          .locator('dialog-sync-conflict button', { hasText: /Remote/i })
+          .click();
+        const confirmDialog = pageB.locator('dialog-confirm');
+        try {
+          await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
+          await confirmDialog.locator('button[color="warn"]').click();
+        } catch {
+          // Confirmation might not appear
+        }
+        await waitForSyncComplete(pageB, syncPageB);
+      }
+
+      // --- Step 5: Convergence syncs ---
+      // Sync both clients sequentially to ensure they converge on the same state.
+      // Multiple rounds may be needed: one client's upload from step 4
+      // might not yet include the other client's data.
+      console.log('[Concurrent] Starting convergence syncs...');
+      for (let round = 1; round <= 3; round++) {
+        await syncPageA.triggerSync();
+        const convergenceResultA = await waitForSyncComplete(pageA, syncPageA);
+        if (convergenceResultA === 'conflict') {
+          await pageA
+            .locator('dialog-sync-conflict button', { hasText: /Remote/i })
+            .click();
+          const cd = pageA.locator('dialog-confirm');
+          try {
+            await cd.waitFor({ state: 'visible', timeout: 3000 });
+            await cd.locator('button[color="warn"]').click();
+          } catch {
+            // Confirmation might not appear
+          }
+          await waitForSyncComplete(pageA, syncPageA);
+        }
+
+        await syncPageB.triggerSync();
+        const convergenceResultB = await waitForSyncComplete(pageB, syncPageB);
+        if (convergenceResultB === 'conflict') {
+          await pageB
+            .locator('dialog-sync-conflict button', { hasText: /Remote/i })
+            .click();
+          const cd = pageB.locator('dialog-confirm');
+          try {
+            await cd.waitFor({ state: 'visible', timeout: 3000 });
+            await cd.locator('button[color="warn"]').click();
+          } catch {
+            // Confirmation might not appear
+          }
+          await waitForSyncComplete(pageB, syncPageB);
+        }
+
+        // Check if both clients have all 3 tasks
+        const countA = await pageA.locator('task').count();
+        const countB = await pageB.locator('task').count();
+        console.log(
+          `[Concurrent] Convergence round ${round}: A has ${countA} tasks, B has ${countB} tasks`,
+        );
+
+        if (countA >= 3 && countB >= 3) {
+          console.log(`[Concurrent] Both clients converged after round ${round}`);
+          break;
+        }
+      }
+
+      // --- Step 6: Verify no data was lost ---
+      // Both clients should have all 3 tasks: TaskA, TaskA2, TaskB
+      const titlesA = await pageA.locator('.task-title').allInnerTexts();
+      const titlesB = await pageB.locator('.task-title').allInnerTexts();
+      console.log(`[Concurrent] Final tasks on A: ${JSON.stringify(titlesA)}`);
+      console.log(`[Concurrent] Final tasks on B: ${JSON.stringify(titlesB)}`);
+
+      // Verify Client A has all tasks
+      await expect(pageA.locator('task', { hasText: 'TaskA2' })).toBeVisible({
+        timeout: 5000,
+      });
+      await expect(pageA.locator('task', { hasText: 'TaskB' })).toBeVisible({
+        timeout: 5000,
+      });
+
+      // Verify Client B has all tasks
+      await expect(pageB.locator('task', { hasText: 'TaskA2' })).toBeVisible({
+        timeout: 5000,
+      });
+      await expect(pageB.locator('task', { hasText: 'TaskB' })).toBeVisible({
+        timeout: 5000,
+      });
+
+      // Both should have exactly 3 tasks (TaskA, TaskA2, TaskB)
+      await expect(pageA.locator('task')).toHaveCount(3, { timeout: 5000 });
+      await expect(pageB.locator('task')).toHaveCount(3, { timeout: 5000 });
+
+      console.log(
+        '[Concurrent] All tasks preserved on both clients after near-simultaneous sync',
+      );
+    } finally {
+      await closeContextsSafely(contextA, contextB);
+    }
   });
 });

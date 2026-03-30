@@ -350,6 +350,12 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     >;
     return handleRemoveTasksFromTodayTag(state, taskIds);
   },
+  [TaskSharedActions.localRemoveOverdueFromToday.type]: () => {
+    const { taskIds } = action as ReturnType<
+      typeof TaskSharedActions.localRemoveOverdueFromToday
+    >;
+    return handleRemoveTasksFromTodayTag(state, taskIds);
+  },
   [TaskSharedActions.moveTaskInTodayTagList.type]: () => {
     const { toTaskId, fromTaskId } = action as ReturnType<
       typeof TaskSharedActions.moveTaskInTodayTagList

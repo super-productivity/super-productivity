@@ -79,7 +79,22 @@ class CapacitorMainActivity : BridgeActivity() {
             return
         }
 
-        printWebViewVersion(bridge.webView)
+        val webView = bridge?.webView
+        if (webView == null) {
+            Log.e("CapacitorMainActivity", "Bridge or WebView is null after onCreate — finishing activity")
+            val result = webViewCompatibility ?: WebViewCompatibilityChecker.Result(
+                status = WebViewCompatibilityChecker.Status.BLOCK,
+                majorVersion = null,
+                providerPackage = null,
+                providerVersionName = null,
+                source = WebViewCompatibilityChecker.VersionSource.UNKNOWN,
+            )
+            WebViewBlockActivity.present(this, result)
+            finish()
+            return
+        }
+
+        printWebViewVersion(webView)
 
         // DEBUG ONLY
         if (BuildConfig.DEBUG) {
@@ -104,18 +119,18 @@ class CapacitorMainActivity : BridgeActivity() {
         supportActionBar?.hide()
 
         // Initialize JavaScriptInterface
-        javaScriptInterface = JavaScriptInterface(this, bridge.webView)
+        javaScriptInterface = JavaScriptInterface(this, webView)
 
         // Initialize WebView
-        WebHelper().setupView(bridge.webView, false)
+        WebHelper().setupView(webView, false)
 
         // Inject JavaScriptInterface into Capacitor's WebView
-        bridge.webView.addJavascriptInterface(
+        webView.addJavascriptInterface(
             javaScriptInterface,
             WINDOW_INTERFACE_PROPERTY
         )
         if (BuildConfig.FLAVOR.equals("fdroid")) {
-            bridge.webView.addJavascriptInterface(
+            webView.addJavascriptInterface(
                 javaScriptInterface,
                 WINDOW_PROPERTY_F_DROID
             )
@@ -124,9 +139,9 @@ class CapacitorMainActivity : BridgeActivity() {
 
         // Register OnBackPressedCallback to handle back button press
         onBackPressedDispatcher.addCallback(this) {
-            Log.v("TW", "onBackPressed ${bridge.webView.canGoBack()}")
-            if (bridge.webView.canGoBack()) {
-                bridge.webView.goBack()
+            Log.v("TW", "onBackPressed ${webView.canGoBack()}")
+            if (webView.canGoBack()) {
+                webView.goBack()
             } else {
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
@@ -296,14 +311,14 @@ class CapacitorMainActivity : BridgeActivity() {
         super.onSaveInstanceState(outState)
         // Save scoped storage permission on Android 10+
         storageHelper.onSaveInstanceState(outState)
-        bridge.webView.saveState(outState)
+        bridge?.webView?.saveState(outState)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         // Restore scoped storage permission on Android 10+
         storageHelper.onRestoreInstanceState(savedInstanceState)
-        bridge.webView.restoreState(savedInstanceState)
+        bridge?.webView?.restoreState(savedInstanceState)
     }
 
     override fun onPause() {

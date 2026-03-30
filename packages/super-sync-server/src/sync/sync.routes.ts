@@ -68,6 +68,16 @@ const OperationSchema = z.object({
   timestamp: z.number(),
   schemaVersion: z.number(),
   isPayloadEncrypted: z.boolean().optional(), // True if payload is E2E encrypted
+  syncImportReason: z
+    .enum([
+      'PASSWORD_CHANGED',
+      'FILE_IMPORT',
+      'BACKUP_RESTORE',
+      'FORCE_UPLOAD',
+      'SERVER_MIGRATION',
+      'REPAIR',
+    ])
+    .optional(),
 });
 
 const UploadOpsSchema = z.object({
@@ -91,6 +101,16 @@ const UploadSnapshotSchema = z.object({
   vectorClock: z.record(z.string(), z.number()),
   schemaVersion: z.number().optional(),
   isPayloadEncrypted: z.boolean().optional(),
+  syncImportReason: z
+    .enum([
+      'PASSWORD_CHANGED',
+      'FILE_IMPORT',
+      'BACKUP_RESTORE',
+      'FORCE_UPLOAD',
+      'SERVER_MIGRATION',
+      'REPAIR',
+    ])
+    .optional(),
   // Client's operation ID - server MUST use this to prevent ID mismatch bugs
   opId: z.string().uuid().optional(),
   isCleanSlate: z.boolean().optional(),
@@ -673,6 +693,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           opId,
           isCleanSlate,
           snapshotOpType,
+          syncImportReason,
         } = parseResult.data;
         const syncService = getSyncService();
 
@@ -732,6 +753,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           timestamp: Date.now(),
           schemaVersion: schemaVersion ?? 1,
           isPayloadEncrypted: isPayloadEncrypted ?? false,
+          syncImportReason,
         };
 
         const results = await syncService.uploadOps(userId, clientId, [op], isCleanSlate);
@@ -870,9 +892,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         const restorePoints = await syncService.getRestorePoints(userId, limit);
 
-        Logger.info(
-          `[user:${userId}] Returning ${restorePoints.length} restore points`,
-        );
+        Logger.info(`[user:${userId}] Returning ${restorePoints.length} restore points`);
 
         return reply.send({ restorePoints });
       } catch (err) {
@@ -908,15 +928,11 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           });
         }
 
-        Logger.info(
-          `[user:${userId}] Restore snapshot requested at seq=${targetSeq}`,
-        );
+        Logger.info(`[user:${userId}] Restore snapshot requested at seq=${targetSeq}`);
 
         const snapshot = await syncService.generateSnapshotAtSeq(userId, targetSeq);
 
-        Logger.info(
-          `[user:${userId}] Restore snapshot generated at seq=${targetSeq}`,
-        );
+        Logger.info(`[user:${userId}] Restore snapshot generated at seq=${targetSeq}`);
 
         return reply.send(snapshot);
       } catch (err) {

@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Tocca + per aggiungere la tua prima attività",
       "EXPLORE": "Sentiti libero di cliccare ovunque ed esplorare! Puoi trovare aiuto nella barra laterale.",
       "EXPLORE_TOUCH": "Sentiti libero di esplorare! Puoi trovare aiuto nel menu.",
+      "TASK_TAP_TOUCH": "Tocca un'attività per aprirne i dettagli.",
+      "TASK_SWIPE_LEFT_TOUCH": "Scorri l'attività verso sinistra per altre azioni",
+      "TASK_SWIPE_RIGHT_TOUCH": "Scorri l'attività verso destra per contrassegnarla come completata",
       "OR_PRESS": "o premi",
       "SKIP_ARIA": "Chiudi suggerimento"
     }

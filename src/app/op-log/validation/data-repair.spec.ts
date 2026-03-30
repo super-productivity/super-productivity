@@ -224,7 +224,7 @@ describe('dataRepair()', () => {
     });
   });
 
-  it('should remove non-existent tag ids from archived tasks', () => {
+  it('should preserve stale tag ids on archived tasks (harmless, see #6270)', () => {
     const existingTag: Tag = {
       ...DEFAULT_TAG,
       id: 'existingTag',
@@ -261,7 +261,9 @@ describe('dataRepair()', () => {
 
     const repairedTask = result.data.archiveYoung.task.entities['archived-1'] as Task;
 
-    expect(repairedTask.tagIds).toEqual(['existingTag']);
+    // Stale tagIds on archived tasks are preserved (#6270), but TODAY_TAG is
+    // always stripped (architectural invariant: TODAY_TAG must never be in tagIds)
+    expect(repairedTask.tagIds).toEqual(['existingTag', 'missingTag']);
   });
 
   it('should remove notes with missing data from the project lists', () => {
@@ -1074,9 +1076,8 @@ describe('dataRepair()', () => {
     });
   });
 
-  it('should delete non-existent project ids for tasks in "taskArchive"', () => {
+  it('should preserve stale projectId on archived tasks (harmless, see #6270)', () => {
     const taskArchiveState = {
-      // ...mock.archiveYoung.task,
       ...fakeEntityStateFromArray<Task>([
         {
           ...DEFAULT_TASK,
@@ -1087,31 +1088,19 @@ describe('dataRepair()', () => {
       ]),
     } as any;
 
-    expect(
-      dataRepair({
-        ...mock,
-
-        archiveYoung: {
-          lastTimeTrackingFlush: 0,
-          timeTracking: mock.archiveYoung.timeTracking,
-          task: taskArchiveState,
-        },
-      } as any).data,
-    ).toEqual({
+    const result = dataRepair({
       ...mock,
       archiveYoung: {
         lastTimeTrackingFlush: 0,
         timeTracking: mock.archiveYoung.timeTracking,
-        task: {
-          ...taskArchiveState,
-          entities: {
-            TEST: {
-              ...taskArchiveState.entities.TEST,
-            },
-          },
-        },
+        task: taskArchiveState,
       },
-    });
+    } as any);
+
+    // Stale projectId on archived tasks is harmless — preserved, not rewritten
+    expect(result.data.archiveYoung.task.entities['TEST']!.projectId).toBe(
+      'NON_EXISTENT',
+    );
   });
 
   it('should delete non-existent project ids for issueProviders', () => {
@@ -1255,7 +1244,7 @@ describe('dataRepair()', () => {
     expect(result.data.task.entities.t2!.repeatCfgId).toBeUndefined();
   });
 
-  it('should clear non-existent repeatCfgId from archived tasks', () => {
+  it('should preserve stale repeatCfgId on archived tasks (harmless, see #6270)', () => {
     const archiveYoungState = {
       task: {
         ...fakeEntityStateFromArray<Task>([
@@ -1276,10 +1265,10 @@ describe('dataRepair()', () => {
       archiveYoung: archiveYoungState,
     } as any);
 
-    // repeatCfgId should be cleared from archived task
-    expect(
-      result.data.archiveYoung.task.entities['archived-t1']!.repeatCfgId,
-    ).toBeUndefined();
+    // Stale repeatCfgId on archived tasks is harmless — preserved, not cleared
+    expect(result.data.archiveYoung.task.entities['archived-t1']!.repeatCfgId).toBe(
+      'NON_EXISTENT_REPEAT_CFG',
+    );
   });
 
   it('should preserve valid repeatCfgId on tasks', () => {
@@ -1922,7 +1911,7 @@ describe('dataRepair()', () => {
     });
   });
 
-  it('should remove non-existent tags from tasks and archive tasks', () => {
+  it('should remove non-existent tags from active tasks but preserve on archived tasks (#6270)', () => {
     const tagState = {
       ...mock.tag,
       ...fakeEntityStateFromArray<Tag>([
@@ -1999,14 +1988,20 @@ describe('dataRepair()', () => {
       },
     });
 
+    // Active tasks: stale tags are stripped
     expect(result.data.task.entities['TASK1']?.tagIds).toEqual(['VALID_TAG']);
     expect(result.data.task.entities['TASK2']?.tagIds).toEqual(['VALID_TAG']);
     expect(result.data.task.entities['TASK3']?.tagIds).toEqual([]);
     expect(result.data.task.entities['TASK4']?.tagIds).toEqual([]);
+    // Archived tasks: stale tags are preserved (#6270), but TODAY_TAG is always
+    // stripped (architectural invariant: TODAY_TAG must never be in tagIds)
     expect(result.data.archiveYoung.task.entities['ARCHIVE_TASK1']?.tagIds).toEqual([
       'VALID_TAG',
+      'NON_EXISTENT_ARCHIVE_TAG',
     ]);
-    expect(result.data.archiveYoung.task.entities['ARCHIVE_TASK2']?.tagIds).toEqual([]);
+    expect(result.data.archiveYoung.task.entities['ARCHIVE_TASK2']?.tagIds).toEqual([
+      'MISSING_TAG',
+    ]);
   });
 
   describe('should handle missing or undefined entity states (issue #6428)', () => {

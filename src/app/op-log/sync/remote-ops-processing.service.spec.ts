@@ -1170,5 +1170,21 @@ describe('RemoteOpsProcessingService', () => {
         { callerHoldsLock: true },
       );
     });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUG CONFIRMATION TEST (Issue #6571)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    it('Bug #6571: should surface validation failure via snackbar', async () => {
+      validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(false);
+
+      // FIXED: Should show warning snackbar when validation fails
+      await service.validateAfterSync();
+
+      expect(validateStateServiceSpy.validateAndRepairCurrentState).toHaveBeenCalled();
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR' }),
+      );
+    });
   });
 });

@@ -92,7 +92,7 @@ export class CapacitorReminderService {
 
     Log.log('📱 CapacitorReminderService.scheduleReminder called', {
       notificationId: options.notificationId,
-      title: options.title.substring(0, 30),
+      reminderId: options.reminderId,
       triggerAt: new Date(triggerAt).toISOString(),
       triggerInMs: triggerAt - now,
       triggerInMinutes: Math.round((triggerAt - now) / 1000 / 60),
@@ -126,7 +126,7 @@ export class CapacitorReminderService {
 
         Log.log('✅ CapacitorReminderService: Android reminder scheduled successfully', {
           notificationId: options.notificationId,
-          title: options.title,
+          reminderId: options.reminderId,
           triggerAt: new Date(triggerAt).toISOString(),
         });
         return true;
@@ -181,7 +181,7 @@ export class CapacitorReminderService {
 
         Log.log('CapacitorReminderService: iOS reminder scheduled', {
           notificationId: options.notificationId,
-          title: options.title,
+          reminderId: options.reminderId,
           triggerAt: new Date(triggerAt).toISOString(),
         });
         return true;

@@ -213,11 +213,6 @@ mat-sidenav {
 }
 
 .app-entrance {
-  // Side nav slides in from left (desktop only)
-  magic-side-nav {
-    animation: entrance-slide-left 450ms ease-out 50ms backwards;
-  }
-
   // Main content area fades + slides up as a whole
   .main-content {
     animation: entrance-slide-up 450ms ease-out 150ms backwards;
@@ -226,7 +221,6 @@ mat-sidenav {
 
 @media (prefers-reduced-motion: reduce) {
   .app-entrance {
-    magic-side-nav,
     .main-content {
       animation: none;
     }

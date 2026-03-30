@@ -168,6 +168,7 @@ export interface Operation {
   timestamp: number;
   schemaVersion: number;
   isPayloadEncrypted?: boolean; // True if payload is E2E encrypted
+  syncImportReason?: string;
 }
 
 export interface ServerOperation {

@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Ketuk + untuk menambahkan tugas pertama Anda",
       "EXPLORE": "Silakan klik-klik dan jelajahi! Bantuan bisa ditemukan di bilah samping.",
       "EXPLORE_TOUCH": "Silakan jelajahi! Bantuan bisa ditemukan di menu.",
+      "TASK_TAP_TOUCH": "Ketuk tugas untuk membuka detailnya.",
+      "TASK_SWIPE_LEFT_TOUCH": "Geser tugas ke kiri untuk tindakan lainnya",
+      "TASK_SWIPE_RIGHT_TOUCH": "Geser tugas ke kanan untuk menandainya selesai",
       "OR_PRESS": "atau tekan",
       "SKIP_ARIA": "Tutup petunjuk"
     }

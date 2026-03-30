@@ -42,7 +42,7 @@ import { TaskViewCustomizerService } from '../../task-view-customizer/task-view-
 import { TaskLog } from '../../../core/log';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { isTouchActive } from '../../../util/input-intent';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 
 export type TaskListId = 'PARENT' | 'SUB';
@@ -79,7 +79,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
   dropListService = inject(DropListService);
   private _layoutService = inject(LayoutService);
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly isTouchActive = isTouchActive;
   protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
   // Lock Y-axis on small screens only — on wider screens the task list may sit
   // beside a side-nav or other drop targets that require horizontal dragging.
@@ -200,14 +200,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     const srcListData = ev.previousContainer.data;
     const targetListData = ev.container.data;
     const draggedTask = ev.item.data;
-    TaskLog.log({
-      ev,
-      srcListData,
-      targetListData,
-      draggedTask,
+    TaskLog.log('drop', {
       listId: this.listId(),
       listModelId: this.listModelId(),
-      filteredTasks: this.filteredTasks(),
+      taskCount: this.filteredTasks()?.length,
     });
 
     if (this._scheduleExternalDragService.isCancelNextDrop()) {

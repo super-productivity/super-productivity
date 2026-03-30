@@ -2404,6 +2404,9 @@
       "CREATE_TASK_TOUCH": "İlk görevinizi eklemek için + işaretine dokunun",
       "EXPLORE": "Tıklayarak keşfedin! Yardımı yan panelde bulabilirsiniz.",
       "EXPLORE_TOUCH": "Dokunarak keşfedin! Yardımı menüde bulabilirsiniz.",
+      "TASK_TAP_TOUCH": "Ayrıntılarını açmak için bir göreve dokunun.",
+      "TASK_SWIPE_LEFT_TOUCH": "Daha fazla işlem için görevi sola kaydırın",
+      "TASK_SWIPE_RIGHT_TOUCH": "Tamamlandı olarak işaretlemek için görevi sağa kaydırın",
       "OR_PRESS": "veya basın",
       "SKIP_ARIA": "İpucunu kapat"
     }

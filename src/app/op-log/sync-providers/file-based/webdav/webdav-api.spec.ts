@@ -6,10 +6,10 @@ import { WebdavXmlParser } from './webdav-xml-parser';
 import {
   HttpNotOkAPIError,
   InvalidDataSPError,
-  NoRevAPIError,
   RemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError,
 } from '../../../core/errors/sync-errors';
+import { md5HashSync } from '../../../../util/md5-hash';
 
 describe('WebdavApi', () => {
   let api: WebdavApi;
@@ -61,7 +61,7 @@ describe('WebdavApi', () => {
       };
       mockXmlParser.parseMultiplePropsFromXml.and.returnValue([mockFileMeta]);
 
-      const result = await api.getFileMeta('/test.txt', null);
+      const result = await api.getFileMeta('/test.txt');
 
       expect(mockHttpAdapter.request).toHaveBeenCalledWith({
         url: 'http://example.com/webdav/test.txt',
@@ -89,7 +89,7 @@ describe('WebdavApi', () => {
       };
       mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
 
-      await expectAsync(api.getFileMeta('/test.txt', null)).toBeRejectedWith(
+      await expectAsync(api.getFileMeta('/test.txt')).toBeRejectedWith(
         jasmine.any(RemoteFileNotFoundAPIError),
       );
     });
@@ -103,7 +103,7 @@ describe('WebdavApi', () => {
       mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
       mockXmlParser.parseMultiplePropsFromXml.and.returnValue([]);
 
-      await expectAsync(api.getFileMeta('/test.txt', null)).toBeRejectedWith(
+      await expectAsync(api.getFileMeta('/test.txt')).toBeRejectedWith(
         jasmine.any(RemoteFileNotFoundAPIError),
       );
     });
@@ -128,7 +128,7 @@ describe('WebdavApi', () => {
         },
       ]);
 
-      await api.getFileMeta('/folder/file with spaces.txt', null);
+      await api.getFileMeta('/folder/file with spaces.txt');
 
       expect(mockHttpAdapter.request).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -136,51 +136,21 @@ describe('WebdavApi', () => {
         }),
       );
     });
-
-    it('should fall back to HEAD metadata when PROPFIND fails and fallback is enabled', async () => {
-      const mockResponse = {
-        status: 500,
-        headers: {},
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      const headMeta = {
-        filename: 'test.txt',
-        basename: 'test.txt',
-        lastmod: 'Wed, 15 Jan 2025 10:00:00 GMT',
-        size: 42,
-        type: 'file',
-        etag: 'Wed, 15 Jan 2025 10:00:00 GMT',
-        data: {},
-        path: '/test.txt',
-      };
-      const headSpy = spyOn<any>(api, '_getFileMetaViaHead').and.returnValue(
-        Promise.resolve(headMeta),
-      );
-
-      const result = await api.getFileMeta('/test.txt', null, true);
-
-      expect(headSpy).toHaveBeenCalledWith('http://example.com/webdav/test.txt');
-      expect(result).toEqual(headMeta);
-    });
   });
 
   describe('download', () => {
-    it('should download file successfully', async () => {
+    it('should return MD5 hash of content as rev', async () => {
+      const content = 'file content';
+      const expectedHash = md5HashSync(content);
       const mockResponse = {
         status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 10:00:00 GMT',
-        },
-        data: 'file content',
+        headers: {},
+        data: content,
       };
       mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
       mockXmlParser.validateResponseContent.and.stub();
 
-      const result = await api.download({
-        path: '/test.txt',
-      });
+      const result = await api.download({ path: '/test.txt' });
 
       expect(mockHttpAdapter.request).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -190,601 +160,275 @@ describe('WebdavApi', () => {
       );
 
       expect(mockXmlParser.validateResponseContent).toHaveBeenCalledWith(
-        'file content',
+        content,
         '/test.txt',
         'download',
         'file content',
       );
 
-      expect(result).toEqual(
-        jasmine.objectContaining({
-          rev: 'Wed, 15 Jan 2025 10:00:00 GMT',
-          dataStr: 'file content',
-          lastModified: 'Wed, 15 Jan 2025 10:00:00 GMT',
-        }),
-      );
-      expect(result.legacyRev).toBeUndefined();
-    });
-
-    it('should return legacyRev when ETag is present', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 10:00:00 GMT',
-          etag: '"abc123"',
-        },
-        data: 'file content',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-      mockXmlParser.validateResponseContent.and.stub();
-
-      const result = await api.download({
-        path: '/test.txt',
+      expect(result).toEqual({
+        rev: expectedHash,
+        dataStr: content,
       });
-
-      expect(result).toEqual(
-        jasmine.objectContaining({
-          rev: 'Wed, 15 Jan 2025 10:00:00 GMT',
-          legacyRev: 'abc123', // Cleaned ETag
-          dataStr: 'file content',
-          lastModified: 'Wed, 15 Jan 2025 10:00:00 GMT',
-        }),
-      );
     });
 
-    it('should use last-modified as rev when no etag', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 10:00:00 GMT',
-        },
-        data: 'content',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+    it('should produce the same hash for the same content', async () => {
+      const content = 'identical content';
       mockXmlParser.validateResponseContent.and.stub();
 
-      const result = await api.download({
-        path: '/test.txt',
-      });
+      mockHttpAdapter.request.and.returnValue(
+        Promise.resolve({ status: 200, headers: {}, data: content }),
+      );
+      const result1 = await api.download({ path: '/file1.txt' });
 
-      expect(result.rev).toBe('Wed, 15 Jan 2025 10:00:00 GMT');
+      mockHttpAdapter.request.and.returnValue(
+        Promise.resolve({ status: 200, headers: {}, data: content }),
+      );
+      const result2 = await api.download({ path: '/file2.txt' });
+
+      expect(result1.rev).toBe(result2.rev);
     });
 
-    it('should fetch metadata when Last-Modified header is missing but ETag is present', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          etag: '"abc123"',
-        },
-        data: 'file content',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+    it('should produce different hashes for different content', async () => {
       mockXmlParser.validateResponseContent.and.stub();
 
-      spyOn(api, 'getFileMeta').and.returnValue(
-        Promise.resolve({
-          filename: 'test.txt',
-          basename: 'test.txt',
-          lastmod: 'Wed, 15 Jan 2025 10:00:00 GMT',
-          size: 100,
-          type: 'file',
-          etag: 'Wed, 15 Jan 2025 10:00:00 GMT',
-          data: {
-            etag: '"meta-etag-should-not-override"',
-          },
-          path: '/test.txt',
-        }),
+      mockHttpAdapter.request.and.returnValue(
+        Promise.resolve({ status: 200, headers: {}, data: 'content A' }),
       );
+      const result1 = await api.download({ path: '/file.txt' });
 
-      const result = await api.download({
-        path: '/test.txt',
-      });
+      mockHttpAdapter.request.and.returnValue(
+        Promise.resolve({ status: 200, headers: {}, data: 'content B' }),
+      );
+      const result2 = await api.download({ path: '/file.txt' });
 
-      expect(api.getFileMeta).toHaveBeenCalledWith('/test.txt', null, true);
-      expect(result.rev).toBe('Wed, 15 Jan 2025 10:00:00 GMT');
-      expect(result.legacyRev).toBe('abc123');
-      expect(result.lastModified).toBe('Wed, 15 Jan 2025 10:00:00 GMT');
+      expect(result1.rev).not.toBe(result2.rev);
     });
 
-    it('should set legacyRev from metadata when GET response omits both headers', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {},
-        data: 'file content',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+    it('should produce identical rev when downloading the same unchanged file twice', async () => {
+      const content = '{"tasks":[],"projects":[]}';
       mockXmlParser.validateResponseContent.and.stub();
 
-      spyOn(api, 'getFileMeta').and.returnValue(
-        Promise.resolve({
-          filename: 'test.txt',
-          basename: 'test.txt',
-          lastmod: 'Wed, 15 Jan 2025 10:00:00 GMT',
-          size: 100,
-          type: 'file',
-          etag: 'Wed, 15 Jan 2025 10:00:00 GMT',
-          data: {
-            etag: '"propfind-etag-456"',
-          },
-          path: '/test.txt',
-        }),
+      mockHttpAdapter.request.and.returnValue(
+        Promise.resolve({ status: 200, headers: {}, data: content }),
       );
+      const result1 = await api.download({ path: '/sync/sync-data.json' });
 
-      const result = await api.download({
-        path: '/test.txt',
-      });
-
-      expect(result.rev).toBe('Wed, 15 Jan 2025 10:00:00 GMT');
-      expect(result.legacyRev).toBe('propfind-etag-456');
-      expect(result.lastModified).toBe('Wed, 15 Jan 2025 10:00:00 GMT');
-    });
-
-    it('should throw NoRevAPIError if metadata fallback cannot provide a revision', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {},
-        data: 'file content',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-      mockXmlParser.validateResponseContent.and.stub();
-
-      spyOn(api, 'getFileMeta').and.returnValue(
-        Promise.resolve({
-          filename: 'test.txt',
-          basename: 'test.txt',
-          lastmod: '',
-          size: 0,
-          type: 'file',
-          etag: '',
-          data: {},
-          path: '/test.txt',
-        }),
+      mockHttpAdapter.request.and.returnValue(
+        Promise.resolve({ status: 200, headers: {}, data: content }),
       );
+      const result2 = await api.download({ path: '/sync/sync-data.json' });
 
-      await expectAsync(
-        api.download({
-          path: '/test.txt',
-        }),
-      ).toBeRejectedWith(jasmine.any(NoRevAPIError));
-    });
-
-    it('should use ETag as fallback revision when metadata fallback fails', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          etag: '"etag-fallback-123"',
-        },
-        data: 'file content',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-      mockXmlParser.validateResponseContent.and.stub();
-
-      // Simulate metadata fallback failing
-      spyOn(api, 'getFileMeta').and.returnValue(
-        Promise.reject(new Error('PROPFIND failed')),
-      );
-
-      const result = await api.download({
-        path: '/test.txt',
-      });
-
-      // Should use ETag as fallback revision
-      expect(result.rev).toBe('etag-fallback-123');
-      expect(result.legacyRev).toBe('etag-fallback-123');
-      expect(result.dataStr).toBe('file content');
+      expect(result1.rev).toBe(result2.rev);
+      expect(typeof result1.rev).toBe('string');
+      expect(result1.rev.length).toBeGreaterThan(0);
     });
 
     it('should throw InvalidDataSPError when response body is empty', async () => {
       const mockResponse = {
         status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 10:00:00 GMT',
-        },
+        headers: {},
         data: '',
       };
       mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
 
-      await expectAsync(
-        api.download({
-          path: '/test.txt',
-        }),
-      ).toBeRejectedWith(jasmine.any(InvalidDataSPError));
+      await expectAsync(api.download({ path: '/test.txt' })).toBeRejectedWith(
+        jasmine.any(InvalidDataSPError),
+      );
 
       // validateResponseContent should NOT be called when empty body is detected
       expect(mockXmlParser.validateResponseContent).not.toHaveBeenCalled();
     });
 
-    // Test removed: If-None-Match header functionality has been removed
-    // Test removed: If-Modified-Since header functionality has been removed
-    // Test removed: If-Modified-Since header functionality has been removed
-    // Test removed: 304 Not Modified handling has been removed
-    // Test removed: 304 Not Modified handling has been removed
-    // Test removed: localRev parameter has been removed from download method
-    // Test removed: localRev parameter has been removed from download method
+    it('should call validateResponseContent to detect HTML error pages', async () => {
+      const htmlContent = '<html><body>Error</body></html>';
+      const mockResponse = {
+        status: 200,
+        headers: {},
+        data: htmlContent,
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+      mockXmlParser.validateResponseContent.and.throwError('HTML error page detected');
+
+      await expectAsync(api.download({ path: '/test.txt' })).toBeRejected();
+
+      expect(mockXmlParser.validateResponseContent).toHaveBeenCalledWith(
+        htmlContent,
+        '/test.txt',
+        'download',
+        'file content',
+      );
+    });
   });
 
   describe('upload', () => {
-    it('should upload file successfully', async () => {
+    it('should upload without expectedRev using plain PUT and return hash of uploaded data', async () => {
+      const uploadData = 'new content';
+      const expectedHash = md5HashSync(uploadData);
       const mockResponse = {
         status: 201,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
-        },
+        headers: {},
         data: '',
       };
       mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
 
       const result = await api.upload({
         path: '/test.txt',
-        data: 'new content',
+        data: uploadData,
         expectedRev: null,
       });
 
+      // Should only make one request (the PUT)
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(1);
       expect(mockHttpAdapter.request).toHaveBeenCalledWith(
         jasmine.objectContaining({
           url: 'http://example.com/webdav/test.txt',
           method: 'PUT',
-          body: 'new content',
+          body: uploadData,
           headers: jasmine.objectContaining({
             'Content-Type': 'application/octet-stream',
           }),
         }),
       );
 
-      expect(result).toEqual(
-        jasmine.objectContaining({
-          rev: 'Wed, 15 Jan 2025 11:00:00 GMT',
-          lastModified: 'Wed, 15 Jan 2025 11:00:00 GMT',
-        }),
-      );
-      expect(result.legacyRev).toBeUndefined();
+      expect(result).toEqual({ rev: expectedHash });
     });
 
-    it('should return legacyRev when ETag is present in upload response', async () => {
-      const mockResponse = {
-        status: 201,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
-          etag: '"newrev123"',
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+    it('should do GET-compare-PUT when expectedRev is provided', async () => {
+      const existingContent = 'existing content';
+      const existingHash = md5HashSync(existingContent);
+      const uploadData = 'new content';
+      const expectedUploadHash = md5HashSync(uploadData);
+
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) {
+          // First call: GET to check current content
+          return Promise.resolve({
+            status: 200,
+            headers: {},
+            data: existingContent,
+          });
+        }
+        // Second call: PUT to upload
+        return Promise.resolve({ status: 201, headers: {}, data: '' });
+      });
 
       const result = await api.upload({
         path: '/test.txt',
-        data: 'new content',
-        expectedRev: null,
+        data: uploadData,
+        expectedRev: existingHash,
       });
 
-      expect(result).toEqual(
-        jasmine.objectContaining({
-          rev: 'Wed, 15 Jan 2025 11:00:00 GMT',
-          legacyRev: 'newrev123', // Cleaned ETag
-          lastModified: 'Wed, 15 Jan 2025 11:00:00 GMT',
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(2);
+      // First call should be GET
+      expect(mockHttpAdapter.request.calls.argsFor(0)[0]).toEqual(
+        jasmine.objectContaining({ method: 'GET' }),
+      );
+      // Second call should be PUT
+      expect(mockHttpAdapter.request.calls.argsFor(1)[0]).toEqual(
+        jasmine.objectContaining({ method: 'PUT', body: uploadData }),
+      );
+
+      expect(result).toEqual({ rev: expectedUploadHash });
+    });
+
+    it('should throw RemoteFileChangedUnexpectedly when content hash mismatches expectedRev', async () => {
+      const existingContent = 'modified content on remote';
+      const staleHash = md5HashSync('original content');
+
+      mockHttpAdapter.request.and.returnValue(
+        Promise.resolve({
+          status: 200,
+          headers: {},
+          data: existingContent,
         }),
+      );
+
+      await expectAsync(
+        api.upload({
+          path: '/test.txt',
+          data: 'new content',
+          expectedRev: staleHash,
+        }),
+      ).toBeRejectedWith(jasmine.any(RemoteFileChangedUnexpectedly));
+
+      // Should have only made the GET request, not the PUT
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(1);
+      expect(mockHttpAdapter.request.calls.argsFor(0)[0]).toEqual(
+        jasmine.objectContaining({ method: 'GET' }),
       );
     });
 
-    it('should NOT send If-Unmodified-Since when expectedRev is null', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: { 'last-modified': 'Thu, 01 Jan 2025 00:00:00 GMT' },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+    it('should skip GET check when isForceOverwrite is true', async () => {
+      const uploadData = 'force overwrite content';
+      const expectedHash = md5HashSync(uploadData);
 
-      await api.upload({ path: '/test.json', data: 'test', expectedRev: null });
+      mockHttpAdapter.request.and.returnValue(
+        Promise.resolve({ status: 201, headers: {}, data: '' }),
+      );
 
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      expect(requestArgs).toBeDefined();
-      expect(requestArgs.headers['If-Unmodified-Since']).toBeUndefined();
-    });
-
-    it('should NOT send If-Unmodified-Since when expectedRev is undefined', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: { 'last-modified': 'Thu, 01 Jan 2025 00:00:00 GMT' },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      await api.upload({ path: '/test.json', data: 'test' });
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      expect(requestArgs).toBeDefined();
-      expect(requestArgs.headers['If-Unmodified-Since']).toBeUndefined();
-    });
-
-    it('should NOT send If-Unmodified-Since when isForceOverwrite is true', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: { 'last-modified': 'Thu, 01 Jan 2025 00:00:00 GMT' },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      await api.upload({
-        path: '/test.json',
-        data: 'test',
-        expectedRev: 'Thu, 01 Jan 2024 00:00:00 GMT',
+      const result = await api.upload({
+        path: '/test.txt',
+        data: uploadData,
+        expectedRev: 'some-old-rev',
         isForceOverwrite: true,
       });
 
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      expect(requestArgs).toBeDefined();
-      expect(requestArgs.headers['If-Unmodified-Since']).toBeUndefined();
-    });
-
-    it('should handle conditional upload with date string', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: 'Wed, 15 Jan 2025 10:00:00 GMT',
-      });
-
-      expect(mockHttpAdapter.request).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          headers: jasmine.objectContaining({
-            'If-Unmodified-Since': jasmine.any(String),
-          }),
-        }),
+      // Should only make one request (the PUT), no GET
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(1);
+      expect(mockHttpAdapter.request.calls.argsFor(0)[0]).toEqual(
+        jasmine.objectContaining({ method: 'PUT' }),
       );
+      expect(result).toEqual({ rev: expectedHash });
     });
 
-    it('should handle conditional upload with ISO date string', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+    it('should proceed with PUT when GET returns 404 (new file)', async () => {
+      const uploadData = 'new file content';
+      const expectedHash = md5HashSync(uploadData);
 
-      const isoDate = '2022-01-15T12:00:00.000Z'; // ISO date string
-
-      await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: isoDate,
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) {
+          // GET returns 404 via RemoteFileNotFoundAPIError
+          return Promise.reject(new RemoteFileNotFoundAPIError('/test.txt'));
+        }
+        // PUT succeeds
+        return Promise.resolve({ status: 201, headers: {}, data: '' });
       });
 
-      expect(mockHttpAdapter.request).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          headers: jasmine.objectContaining({
-            'If-Unmodified-Since': jasmine.any(String),
-          }),
-        }),
-      );
-    });
-
-    it('should add 1-second buffer to If-Unmodified-Since header to handle sub-second precision', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // Use a known date: Wed, 15 Jan 2025 10:00:00 GMT
-      const expectedRev = 'Wed, 15 Jan 2025 10:00:00 GMT';
-      // The buffered date should be: Wed, 15 Jan 2025 10:00:01 GMT
-
-      await api.upload({
+      const result = await api.upload({
         path: '/test.txt',
-        data: 'new content',
-        expectedRev,
+        data: uploadData,
+        expectedRev: 'some-rev',
       });
 
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      // The header should have 1 second added (10:00:01 instead of 10:00:00)
-      expect(requestArgs.headers['If-Unmodified-Since']).toBe(
-        'Wed, 15 Jan 2025 10:00:01 GMT',
-      );
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ rev: expectedHash });
     });
 
-    it('should NOT add buffer to If-Match header when expectedRev is an ETag', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // ETag that is not a valid date - no buffer should be applied
-      const etag = 'abc123-etag-value';
-
-      await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: etag,
-      });
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      // ETag should be used as-is (with quotes), no time buffer
-      expect(requestArgs.headers['If-Match']).toBe('"abc123-etag-value"');
-      expect(requestArgs.headers['If-Unmodified-Since']).toBeUndefined();
-    });
-
-    it('should add 1-second buffer to ISO date format', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // ISO date: 2025-01-15T10:00:00.000Z
-      const isoDate = '2025-01-15T10:00:00.000Z';
-
-      await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: isoDate,
-      });
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      // The header should have 1 second added (10:00:01 instead of 10:00:00)
-      expect(requestArgs.headers['If-Unmodified-Since']).toBe(
-        'Wed, 15 Jan 2025 10:00:01 GMT',
-      );
-    });
-
-    it('should handle date boundary rollover with 1-second buffer', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Thu, 16 Jan 2025 00:00:00 GMT',
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // Date at 23:59:59 - adding 1 second should roll over to next day
-      const expectedRev = 'Wed, 15 Jan 2025 23:59:59 GMT';
-
-      await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev,
-      });
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      // Should roll over to 00:00:00 on the next day
-      expect(requestArgs.headers['If-Unmodified-Since']).toBe(
-        'Thu, 16 Jan 2025 00:00:00 GMT',
-      );
-    });
-
-    it('should use If-Match header when expectedRev is an ETag (not a valid date)', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // ETag that is not a valid date
-      const etag = 'abc123-etag-value';
-
-      await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: etag,
-      });
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      expect(requestArgs.headers['If-Match']).toBe('"abc123-etag-value"');
-      expect(requestArgs.headers['If-Unmodified-Since']).toBeUndefined();
-    });
-
-    it('should properly quote ETag in If-Match header per RFC 7232', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: { 'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT' },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // Unquoted ETag
-      await api.upload({
-        path: '/test.txt',
-        data: 'content',
-        expectedRev: 'simple-etag',
-      });
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      expect(requestArgs.headers['If-Match']).toBe('"simple-etag"');
-    });
-
-    it('should not double-quote already quoted ETags in If-Match header', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: { 'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT' },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // Already quoted ETag
-      await api.upload({
-        path: '/test.txt',
-        data: 'content',
-        expectedRev: '"already-quoted-etag"',
-      });
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      expect(requestArgs.headers['If-Match']).toBe('"already-quoted-etag"');
-    });
-
-    it('should handle 412 Precondition Failed with ETag-based If-Match', async () => {
-      const errorResponse = new Response(null, { status: 412 });
-      const error = new HttpNotOkAPIError(errorResponse);
-      mockHttpAdapter.request.and.returnValue(Promise.reject(error));
-
-      // Using ETag (not a date) should trigger If-Match
-      await expectAsync(
-        api.upload({
-          path: '/test.txt',
-          data: 'new content',
-          expectedRev: 'etag-that-changed',
-        }),
-      ).toBeRejectedWith(jasmine.any(RemoteFileChangedUnexpectedly));
-    });
-
-    it('should handle 412 Precondition Failed', async () => {
-      const errorResponse = new Response(null, { status: 412 });
-      const error = new HttpNotOkAPIError(errorResponse);
-      mockHttpAdapter.request.and.returnValue(Promise.reject(error));
-
-      await expectAsync(
-        api.upload({
-          path: '/test.txt',
-          data: 'new content',
-          expectedRev: 'oldrev',
-        }),
-      ).toBeRejectedWith(jasmine.any(RemoteFileChangedUnexpectedly));
-    });
-
-    it('should handle 409 Conflict by creating parent directory', async () => {
+    it('should handle 409 Conflict by creating parent directory and retrying', async () => {
+      const uploadData = 'new content';
+      const expectedHash = md5HashSync(uploadData);
       const errorResponse = new Response(null, { status: 409 });
       const error = new HttpNotOkAPIError(errorResponse);
 
-      // First call fails with 409
-      // Second call to create directory succeeds
-      // Third call to upload succeeds
+      // First call: PUT fails with 409
+      // Second call: MKCOL to create directory succeeds
+      // Third call: PUT retry succeeds
       const mockResponses = [
         Promise.reject(error),
         Promise.resolve({ status: 201, headers: {}, data: '' }),
-        Promise.resolve({
-          status: 201,
-          headers: { 'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT' },
-          data: '',
-        }),
+        Promise.resolve({ status: 201, headers: {}, data: '' }),
       ];
       let callCount = 0;
       mockHttpAdapter.request.and.callFake(() => mockResponses[callCount++]);
 
       const result = await api.upload({
         path: '/folder/test.txt',
-        data: 'new content',
+        data: uploadData,
         expectedRev: null,
       });
 
@@ -796,157 +440,7 @@ describe('WebdavApi', () => {
           method: 'MKCOL',
         }),
       );
-      expect(result.rev).toBe('Wed, 15 Jan 2025 11:00:00 GMT');
-    });
-
-    it('should fetch metadata when no rev in response headers', async () => {
-      const mockUploadResponse = {
-        status: 201,
-        headers: {}, // No etag or last-modified
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockUploadResponse));
-
-      // Mock getFileMeta to be called after upload
-      spyOn(api, 'getFileMeta').and.returnValue(
-        Promise.resolve({
-          filename: 'test.txt',
-          basename: 'test.txt',
-          lastmod: 'Wed, 15 Jan 2025 12:00:00 GMT',
-          size: 100,
-          type: 'file',
-          etag: 'Wed, 15 Jan 2025 12:00:00 GMT', // Using lastmod as etag
-          data: {},
-          path: '/test.txt',
-        }),
-      );
-
-      const result = await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: null,
-      });
-
-      expect(api.getFileMeta).toHaveBeenCalledWith('/test.txt', null, true);
-      expect(result).toEqual(
-        jasmine.objectContaining({
-          rev: 'Wed, 15 Jan 2025 12:00:00 GMT',
-          lastModified: 'Wed, 15 Jan 2025 12:00:00 GMT',
-        }),
-      );
-      expect(result.legacyRev).toBeUndefined();
-    });
-
-    it('should return legacyRev from HEAD request when PUT returns no headers', async () => {
-      // First request (PUT) returns no headers
-      const putResponse = {
-        status: 201,
-        headers: {},
-        data: '',
-      };
-
-      // HEAD request returns both Last-Modified and ETag
-      const headResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 13:00:00 GMT',
-          etag: '"head-etag-123"',
-        },
-        data: '',
-      };
-
-      mockHttpAdapter.request.and.callFake((params) => {
-        if (params.method === 'PUT') {
-          return Promise.resolve(putResponse);
-        } else if (params.method === 'HEAD') {
-          return Promise.resolve(headResponse);
-        } else {
-          return Promise.reject(new Error('Unexpected method'));
-        }
-      });
-
-      const result = await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: null,
-      });
-
-      expect(result).toEqual({
-        rev: 'Wed, 15 Jan 2025 13:00:00 GMT',
-        legacyRev: 'head-etag-123',
-        lastModified: 'Wed, 15 Jan 2025 13:00:00 GMT',
-      });
-    });
-
-    it('should extract legacyRev from PROPFIND meta when HEAD fails', async () => {
-      // PUT returns no headers
-      const putResponse = {
-        status: 201,
-        headers: {},
-        data: '',
-      };
-
-      mockHttpAdapter.request.and.callFake((params) => {
-        if (params.method === 'PUT') {
-          return Promise.resolve(putResponse);
-        } else if (params.method === 'HEAD') {
-          return Promise.reject(new Error('HEAD failed'));
-        } else {
-          return Promise.reject(new Error('Unexpected method'));
-        }
-      });
-
-      // Mock getFileMeta to return data with etag
-      spyOn(api, 'getFileMeta').and.returnValue(
-        Promise.resolve({
-          filename: 'test.txt',
-          basename: 'test.txt',
-          lastmod: 'Wed, 15 Jan 2025 14:00:00 GMT',
-          size: 100,
-          type: 'file',
-          etag: 'Wed, 15 Jan 2025 14:00:00 GMT',
-          data: {
-            etag: '"propfind-etag-456"', // Original ETag in data
-          },
-          path: '/test.txt',
-        }),
-      );
-
-      const result = await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: null,
-      });
-
-      expect(result).toEqual({
-        rev: 'Wed, 15 Jan 2025 14:00:00 GMT',
-        legacyRev: 'propfind-etag-456',
-        lastModified: 'Wed, 15 Jan 2025 14:00:00 GMT',
-      });
-    });
-
-    it('should handle upload with ETag in initial response', async () => {
-      const mockResponse = {
-        status: 201,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 15:00:00 GMT',
-          ETag: '"W/\\"weak-etag-789\\""', // Weak ETag with nested quotes
-        },
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      const result = await api.upload({
-        path: '/test.txt',
-        data: 'new content',
-        expectedRev: null,
-      });
-
-      expect(result).toEqual({
-        rev: 'Wed, 15 Jan 2025 15:00:00 GMT',
-        legacyRev: 'W\\weak-etag-789\\', // Cleaned (removes / and " but not \)
-        lastModified: 'Wed, 15 Jan 2025 15:00:00 GMT',
-      });
+      expect(result).toEqual({ rev: expectedHash });
     });
 
     it('should throw InvalidDataSPError when upload data is empty string', async () => {
@@ -976,7 +470,7 @@ describe('WebdavApi', () => {
   });
 
   describe('remove', () => {
-    it('should remove file successfully', async () => {
+    it('should remove file with plain DELETE', async () => {
       const mockResponse = {
         status: 204,
         headers: {},
@@ -992,182 +486,6 @@ describe('WebdavApi', () => {
           method: 'DELETE',
         }),
       );
-    });
-
-    it('should handle conditional delete with date string', async () => {
-      const mockResponse = {
-        status: 204,
-        headers: {},
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      await api.remove('/test.txt', 'Wed, 15 Jan 2025 10:00:00 GMT');
-
-      expect(mockHttpAdapter.request).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          url: 'http://example.com/webdav/test.txt',
-          method: 'DELETE',
-          headers: jasmine.objectContaining({
-            'If-Unmodified-Since': jasmine.any(String),
-          }),
-        }),
-      );
-    });
-
-    it('should add 1-second buffer to If-Unmodified-Since header for delete', async () => {
-      const mockResponse = {
-        status: 204,
-        headers: {},
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // Use a known date: Wed, 15 Jan 2025 10:00:00 GMT
-      const expectedRev = 'Wed, 15 Jan 2025 10:00:00 GMT';
-      // The buffered date should be: Wed, 15 Jan 2025 10:00:01 GMT
-
-      await api.remove('/test.txt', expectedRev);
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      // The header should have 1 second added (10:00:01 instead of 10:00:00)
-      expect(requestArgs.headers['If-Unmodified-Since']).toBe(
-        'Wed, 15 Jan 2025 10:00:01 GMT',
-      );
-    });
-
-    it('should NOT set If-Unmodified-Since when delete expectedRev is not a valid date', async () => {
-      const mockResponse = {
-        status: 204,
-        headers: {},
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
-
-      // ETag that is not a valid date
-      await api.remove('/test.txt', 'abc123-etag-value');
-
-      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
-      // No If-Unmodified-Since header should be set for non-date revisions
-      expect(requestArgs.headers['If-Unmodified-Since']).toBeUndefined();
-    });
-  });
-
-  describe('_cleanRev', () => {
-    it('should clean revision strings', () => {
-      expect((api as any)._cleanRev('"abc123"')).toBe('abc123');
-      expect((api as any)._cleanRev('abc/123')).toBe('abc123');
-      expect((api as any)._cleanRev('"abc/123"')).toBe('abc123');
-      expect((api as any)._cleanRev('&quot;abc123&quot;')).toBe('abc123');
-      expect((api as any)._cleanRev('')).toBe('');
-    });
-
-    it('should handle various ETag formats', () => {
-      // Standard ETag with quotes
-      expect((api as any)._cleanRev('"12345"')).toBe('12345');
-
-      // Weak ETag
-      expect((api as any)._cleanRev('W/"weak-etag"')).toBe('Wweak-etag');
-
-      // ETag with escaped quotes
-      expect((api as any)._cleanRev('"escaped\\\\"quotes\\\\""')).toBe(
-        'escaped\\\\quotes\\\\',
-      );
-
-      // ETag with HTML entities
-      expect((api as any)._cleanRev('&quot;html-entity&quot;')).toBe('html-entity');
-
-      // Complex ETag with multiple special characters
-      expect((api as any)._cleanRev('"complex/etag/with/slashes"')).toBe(
-        'complexetagwithslashes',
-      );
-
-      // Empty or null cases
-      expect((api as any)._cleanRev(null)).toBe('');
-      expect((api as any)._cleanRev(undefined)).toBe('');
-      expect((api as any)._cleanRev('   ')).toBe('');
-
-      // ETag with surrounding whitespace
-      expect((api as any)._cleanRev('  "whitespace"  ')).toBe('whitespace');
-    });
-  });
-
-  describe('_getFileMetaViaHead', () => {
-    it('should parse HEAD response into FileMeta data', async () => {
-      const mockHeadResponse = {
-        status: 200,
-        headers: {
-          'last-modified': 'Wed, 15 Jan 2025 15:00:00 GMT',
-          'content-length': '128',
-          'content-type': 'application/json',
-        },
-        data: '',
-      };
-      const requestSpy = spyOn<any>(api, '_makeRequest').and.returnValue(
-        Promise.resolve(mockHeadResponse),
-      );
-
-      const result = await (api as any)._getFileMetaViaHead(
-        'http://example.com/webdav/test.json',
-      );
-
-      expect(requestSpy).toHaveBeenCalledWith({
-        url: 'http://example.com/webdav/test.json',
-        method: 'HEAD',
-      });
-      expect(result).toEqual({
-        filename: 'test.json',
-        basename: 'test.json',
-        lastmod: 'Wed, 15 Jan 2025 15:00:00 GMT',
-        size: 128,
-        type: 'application/json',
-        etag: 'Wed, 15 Jan 2025 15:00:00 GMT',
-        data: {
-          'content-type': 'application/json',
-          'content-length': '128',
-          'last-modified': 'Wed, 15 Jan 2025 15:00:00 GMT',
-          etag: '',
-          href: 'http://example.com/webdav/test.json',
-        },
-        path: 'http://example.com/webdav/test.json',
-      });
-    });
-
-    it('should throw InvalidDataSPError when both Last-Modified and ETag headers are missing', async () => {
-      spyOn<any>(api, '_makeRequest').and.returnValue(
-        Promise.resolve({
-          status: 200,
-          headers: {},
-          data: '',
-        }),
-      );
-
-      await expectAsync(
-        (api as any)._getFileMetaViaHead('http://example.com/webdav/test.json'),
-      ).toBeRejectedWith(jasmine.any(InvalidDataSPError));
-    });
-
-    it('should use ETag as fallback when Last-Modified header is missing', async () => {
-      const mockHeadResponse = {
-        status: 200,
-        headers: {
-          etag: '"abc123-etag"',
-          'content-length': '256',
-          'content-type': 'application/json',
-        },
-        data: '',
-      };
-      spyOn<any>(api, '_makeRequest').and.returnValue(Promise.resolve(mockHeadResponse));
-
-      const result = await (api as any)._getFileMetaViaHead(
-        'http://example.com/webdav/test.json',
-      );
-
-      // ETag should be cleaned and used as lastmod
-      expect(result.lastmod).toBe('abc123-etag');
-      expect(result.etag).toBe('abc123-etag');
-      expect(result.filename).toBe('test.json');
-      expect(result.size).toBe(256);
     });
   });
 
@@ -1215,10 +533,8 @@ describe('WebdavApi', () => {
     });
 
     it('should fallback gracefully for invalid URLs', () => {
-      // Fallback behavior verification
       const invalidBase = 'not-a-valid-url';
       const path = '/file.txt';
-      // The fallback just concatenates and tries to encode
       expect((api as any)._buildFullPath(invalidBase, path)).toBe(
         'not-a-valid-url/file.txt',
       );
@@ -1227,7 +543,6 @@ describe('WebdavApi', () => {
 
   describe('listFiles', () => {
     it('should handle invalid status codes safely when creating error Response', async () => {
-      // Simulate a response with an invalid status (e.g., 0 from a network failure)
       const mockResponse = {
         status: 0,
         headers: {},
@@ -1278,7 +593,6 @@ describe('WebdavApi', () => {
 
   describe('_createDirectory', () => {
     it('should re-throw unexpected errors instead of swallowing them', async () => {
-      // Simulate a 403 Forbidden error on MKCOL
       const errorResponse = new Response(null, { status: 403 });
       const error = new HttpNotOkAPIError(errorResponse);
 
@@ -1286,12 +600,10 @@ describe('WebdavApi', () => {
       mockHttpAdapter.request.and.callFake((params) => {
         callCount++;
         if (params.method === 'PUT' && callCount === 1) {
-          // First upload fails with 409 Conflict
           const conflictResponse = new Response(null, { status: 409 });
           return Promise.reject(new HttpNotOkAPIError(conflictResponse));
         }
         if (params.method === 'MKCOL') {
-          // Directory creation fails with 403 Permission Denied
           return Promise.reject(error);
         }
         return Promise.resolve({ status: 200, headers: {}, data: '' });
@@ -1309,6 +621,8 @@ describe('WebdavApi', () => {
     it('should not throw for known "directory exists" status codes', async () => {
       const errorResponse405 = new Response(null, { status: 405 });
       const error405 = new HttpNotOkAPIError(errorResponse405);
+      const uploadData = 'content';
+      const expectedHash = md5HashSync(uploadData);
 
       let callCount = 0;
       mockHttpAdapter.request.and.callFake((params) => {
@@ -1318,25 +632,21 @@ describe('WebdavApi', () => {
           return Promise.reject(new HttpNotOkAPIError(conflictResponse));
         }
         if (params.method === 'MKCOL') {
-          // 405 means directory already exists — should not throw
+          // 405 means directory already exists - should not throw
           return Promise.reject(error405);
         }
         if (params.method === 'PUT') {
-          return Promise.resolve({
-            status: 201,
-            headers: { 'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT' },
-            data: '',
-          });
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
         }
         return Promise.resolve({ status: 200, headers: {}, data: '' });
       });
 
       const result = await api.upload({
         path: '/folder/test.txt',
-        data: 'content',
+        data: uploadData,
         expectedRev: null,
       });
-      expect(result.rev).toBe('Wed, 15 Jan 2025 11:00:00 GMT');
+      expect(result).toEqual({ rev: expectedHash });
     });
   });
 
@@ -1355,13 +665,13 @@ describe('WebdavApi', () => {
           lastmod: '',
           size: 0,
           type: 'file',
-          etag: 'Wed, 15 Jan 2025 10:00:00 GMT', // Using lastmod as etag
+          etag: '',
           data: {},
           path: '/test.txt',
         },
       ]);
 
-      await api.getFileMeta('/test.txt', null);
+      await api.getFileMeta('/test.txt');
 
       expect(mockGetCfg).toHaveBeenCalled();
     });
@@ -1370,196 +680,7 @@ describe('WebdavApi', () => {
       const error = new Error('Config error');
       mockGetCfg.and.returnValue(Promise.reject(error));
 
-      await expectAsync(api.getFileMeta('/test.txt', null)).toBeRejectedWith(error);
-    });
-  });
-
-  describe('testConditionalHeaders', () => {
-    it('should return true when server returns 412 for old date', async () => {
-      let requestCount = 0;
-      mockHttpAdapter.request.and.callFake((params: any) => {
-        requestCount++;
-        if (params.method === 'PUT' && requestCount === 1) {
-          // First upload succeeds
-          return Promise.resolve({
-            status: 200,
-            headers: { 'last-modified': 'Thu, 01 Jan 2025 00:00:00 GMT' },
-            data: '',
-          });
-        }
-        if (params.method === 'PROPFIND') {
-          // getFileMeta returns lastmod
-          return Promise.resolve({
-            status: 207,
-            headers: {},
-            data: '<?xml version="1.0"?><multistatus/>',
-          });
-        }
-        if (params.method === 'PUT' && requestCount >= 2) {
-          // Second upload with old date fails with 412
-          return Promise.reject(
-            new HttpNotOkAPIError(new Response(null, { status: 412 })),
-          );
-        }
-        if (params.method === 'DELETE') {
-          // Cleanup succeeds
-          return Promise.resolve({
-            status: 204,
-            headers: {},
-            data: '',
-          });
-        }
-        return Promise.resolve({
-          status: 200,
-          headers: {},
-          data: '',
-        });
-      });
-
-      mockXmlParser.parseMultiplePropsFromXml.and.returnValue([
-        {
-          filename: 'test.txt',
-          basename: 'test.txt',
-          lastmod: 'Thu, 01 Jan 2025 00:00:00 GMT',
-          size: 100,
-          type: 'file',
-          etag: '"abc123"',
-          data: {},
-          path: '/test.txt',
-        },
-      ]);
-
-      const result = await api.testConditionalHeaders('/test-path');
-      expect(result).toBe(true);
-    });
-
-    it('should return false when server ignores If-Unmodified-Since', async () => {
-      mockHttpAdapter.request.and.callFake((params: any) => {
-        if (params.method === 'PUT') {
-          // Both uploads succeed (server ignores conditional header)
-          return Promise.resolve({
-            status: 200,
-            headers: { 'last-modified': 'Thu, 01 Jan 2025 00:00:00 GMT' },
-            data: '',
-          });
-        }
-        if (params.method === 'PROPFIND') {
-          return Promise.resolve({
-            status: 207,
-            headers: {},
-            data: '<?xml version="1.0"?><multistatus/>',
-          });
-        }
-        if (params.method === 'DELETE') {
-          return Promise.resolve({
-            status: 204,
-            headers: {},
-            data: '',
-          });
-        }
-        return Promise.resolve({
-          status: 200,
-          headers: {},
-          data: '',
-        });
-      });
-
-      mockXmlParser.parseMultiplePropsFromXml.and.returnValue([
-        {
-          filename: 'test.txt',
-          basename: 'test.txt',
-          lastmod: 'Thu, 01 Jan 2025 00:00:00 GMT',
-          size: 100,
-          type: 'file',
-          etag: '"abc123"',
-          data: {},
-          path: '/test.txt',
-        },
-      ]);
-
-      const result = await api.testConditionalHeaders('/test-path');
-      expect(result).toBe(false);
-    });
-
-    it('should return false when server does not return lastmod', async () => {
-      mockHttpAdapter.request.and.callFake((params: any) => {
-        if (params.method === 'PUT') {
-          return Promise.resolve({
-            status: 200,
-            headers: {},
-            data: '',
-          });
-        }
-        if (params.method === 'PROPFIND') {
-          return Promise.resolve({
-            status: 207,
-            headers: {},
-            data: '<?xml version="1.0"?><multistatus/>',
-          });
-        }
-        if (params.method === 'DELETE') {
-          return Promise.resolve({
-            status: 204,
-            headers: {},
-            data: '',
-          });
-        }
-        return Promise.resolve({
-          status: 200,
-          headers: {},
-          data: '',
-        });
-      });
-
-      // No lastmod in metadata
-      mockXmlParser.parseMultiplePropsFromXml.and.returnValue([
-        {
-          filename: 'test.txt',
-          basename: 'test.txt',
-          lastmod: '',
-          size: 100,
-          type: 'file',
-          etag: '"abc123"',
-          data: {},
-          path: '/test.txt',
-        },
-      ]);
-
-      const result = await api.testConditionalHeaders('/test-path');
-      expect(result).toBe(false);
-    });
-
-    it('should clean up test file even on error', async () => {
-      let deleteWasCalled = false;
-      mockHttpAdapter.request.and.callFake((params: any) => {
-        if (params.method === 'PUT') {
-          return Promise.resolve({
-            status: 200,
-            headers: { 'last-modified': 'Thu, 01 Jan 2025 00:00:00 GMT' },
-            data: '',
-          });
-        }
-        if (params.method === 'PROPFIND') {
-          // Error during metadata retrieval
-          return Promise.reject(new Error('Network error'));
-        }
-        if (params.method === 'DELETE') {
-          deleteWasCalled = true;
-          return Promise.resolve({
-            status: 204,
-            headers: {},
-            data: '',
-          });
-        }
-        return Promise.resolve({
-          status: 200,
-          headers: {},
-          data: '',
-        });
-      });
-
-      await expectAsync(api.testConditionalHeaders('/test-path')).toBeRejected();
-      expect(deleteWasCalled).toBe(true);
+      await expectAsync(api.getFileMeta('/test.txt')).toBeRejectedWith(error);
     });
   });
 });

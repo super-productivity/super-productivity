@@ -53,7 +53,7 @@
     },
     "SET_UP_SYNC": {
       "TITLE": "Set up Sync",
-      "NOTES": "Keep your data safe and accessible across devices.\n\n**How to set up:**\n1. Open **Settings** (gear icon in the sidebar)\n2. Go to **Sync**\n3. Choose a provider: Super Sync, Dropbox, WebDAV, or local file sync\n4. Follow the setup instructions"
+      "NOTES": "Keep your data safe and accessible across devices.\n\n**How to set up:**\n1. Open **Settings** (gear icon in the sidebar)\n2. Go to **Sync**\n3. Choose a provider: Super Sync, Nextcloud, Dropbox, or local file sync\n4. Follow the setup instructions"
     },
     "GO_FURTHER": {
       "TITLE": "Go further",
@@ -167,8 +167,18 @@
         "EVENT_STR": "event",
         "EVENTS_STR": "events"
       },
+      "CONTEXT_MENU": {
+        "CREATE_TASK": "Create as task",
+        "OPEN_IN_CALENDAR": "Open in calendar",
+        "RESCHEDULE": "Reschedule",
+        "DELETE_EVENT": "Delete event"
+      },
       "S": {
-        "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}",
+        "EVENT_HIDDEN": "Calendar event hidden",
+        "EVENT_RESCHEDULED": "Event rescheduled",
+        "EVENT_DELETED": "Event deleted",
+        "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}"
       }
     },
     "CLIPBOARD_IMAGE": {
@@ -422,7 +432,15 @@
         "ADVANCED_CONFIG": "Advanced Config",
         "CONNECTED": "Connected",
         "DELETE_CONFIRM": "Are you sure you want to delete this issue provider? Deleting it means that <strong>all previously imported issue tasks will loose their reference</strong>. This cannot be undone!",
-        "DISCONNECT": "Disconnect"
+        "DISCONNECT": "Disconnect",
+        "EDIT_TITLE": "Edit {{title}} Config",
+        "LOAD_OPTIONS": "Load Options",
+        "LOAD_OPTIONS_FAILED": "Failed to load options",
+        "LOADING_OPTIONS": "Loading options...",
+        "OPTIONS_LOADED": "Options loaded",
+        "RELOAD_OPTIONS": "Reload Options",
+        "SETUP_TITLE": "Setup {{title}} Config",
+        "TEST_CONNECTION": "Test Connection"
       }
     },
     "ISSUE_PANEL": {
@@ -1210,7 +1228,7 @@
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
         "LOCAL_FILE": {
-          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use WebDAV, Dropbox, or SuperSync instead.",
+          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use Nextcloud, Dropbox, or SuperSync instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
           "L_SYNC_FOLDER_PATH": "Sync folder path"
         },
@@ -1271,13 +1289,17 @@
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use the same password on all devices. A forgotten password can be reset by overwriting remote data.",
           "SETUP_ENCRYPTION_TITLE": "SuperSync: Set Password"
         },
+        "NEXTCLOUD": {
+          "L_SERVER_URL": "Nextcloud Server URL",
+          "SERVER_URL_DESCRIPTION": "e.g. https://cloud.example.com or https://example.com/nextcloud",
+          "L_APP_PASSWORD": "App Password",
+          "APP_PASSWORD_DESCRIPTION": "Go to Nextcloud → Settings → Security → App passwords to generate one"
+        },
         "TITLE": "Sync",
         "WEB_DAV": {
-          "CONDITIONAL_HEADER_WARNING_MSG": "Your WebDAV server does not support conditional headers (If-Unmodified-Since). This means Super Productivity cannot detect concurrent changes from other devices during upload.<br><br>Sync will still work, but there is a small risk of data conflicts if you make changes on multiple devices simultaneously.",
-          "CONDITIONAL_HEADER_WARNING_TITLE": "Reduced Sync Safety",
-          "CORS_INFO": "<strong>Making it work in a web browser:</strong> Allow Super Productivity to make CORS requests to your WebDAV server. This can have negative security implications! For Nextcloud, please refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information. One approach to make this work on mobile is allowing \"https://app.super-productivity.com\" via the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
+          "CORS_INFO": "<strong>Making it work in a web browser:</strong> You need to allow Super Productivity to make CORS requests to your server. For Nextcloud, one approach is allowing \"https://app.super-productivity.com\" via the <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> app. Refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information.",
           "D_SYNC_FOLDER_PATH": "Path relative to the WebDAV server root where sync files will be stored (e.g. '/super-productivity' or '/'). This is NOT your server's internal directory path.",
-          "INFO": "<strong>Warning:</strong> WebDAV implementations differ wildly. Super Productivity is known to work well with Nextcloud, <strong>but it may not work with your provider</strong>. Test thoroughly before relying on it.",
+          "INFO": "<strong>Warning:</strong> Generic WebDAV sync is provided <strong>as-is without support</strong>. If you are using Nextcloud, please use the Nextcloud sync option instead.",
           "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Password",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
@@ -1346,6 +1368,7 @@
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
         "SUCCESS_DOWNLOAD": "Synced data from remote",
         "SUCCESS_VIA_BUTTON": "Data successfully synced",
+        "SYNC_VALIDATION_FAILED": "State validation failed after sync. Some data may be inconsistent.",
         "TIMEOUT_ERROR": "Sync operation timed out. {{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "Too many sync operations to download. Some changes may be missing.",
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}",
@@ -1942,6 +1965,7 @@
     "NO_CON": "You are currently offline. Please reconnect to the internet.",
     "NONE": "None",
     "OK": "Ok",
+    "OPEN_IN_BROWSER": "Open in browser",
     "OVERDUE": "Overdue",
     "PASSWORD_STRENGTH_FAIR": "Fair",
     "PASSWORD_STRENGTH_STRONG": "Strong",
@@ -1977,7 +2001,9 @@
       "TITLE": "App Features",
       "USER_PROFILES": "User profiles (experimental — might be removed)",
       "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data. (Experimental feature. No guarantees. Make sure to have a backup!)",
-      "USER_PROFILES_WARNING": "<strong>Experimental feature:</strong> This feature is still in development and may be removed or significantly changed in a future update. Use at your own risk and make sure to keep backups of your data."
+      "USER_PROFILES_WARNING": "<strong>Experimental feature:</strong> This feature is still in development and may be removed or significantly changed in a future update. Use at your own risk and make sure to keep backups of your data.",
+      "EXPERIMENTAL_WARNING_TITLE": "Experimental Feature",
+      "EXPERIMENTAL_WARNING_MSG": "This feature is experimental. It may have bugs, change significantly, or be removed in a future update. Make sure to keep backups of your data.<br/><br/>Do you want to enable it?"
     },
     "AUTO_BACKUPS": {
       "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
@@ -2147,6 +2173,7 @@
       "TIME_LOCALE_IT_IT": "Italian: 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_JA_JP": "Japanese: 24-hour, YYYY/MM/DD",
       "TIME_LOCALE_KO_KR": "Korean: 12-hour AM/PM, YYYY. MM. DD",
+      "TIME_LOCALE_PL_PL": "Polish: 24-hour, DD.MM.YYYY",
       "TIME_LOCALE_PT_BR": "Portuguese (Brazil): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_RO_MD": "Romanian (Moldova): 24-hour, DD.MM.YYYY",
       "TIME_LOCALE_RO_RO": "Romanian: 24-hour, DD.MM.YYYY",
@@ -2175,6 +2202,8 @@
       "IS_DARK_MODE": "Dark Mode",
       "IS_DISABLE_ANIMATIONS": "Disable all animations",
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
+      "IS_LOCAL_REST_API_ENABLED": "Enable local REST API (desktop only)",
+      "IS_LOCAL_REST_API_ENABLED_HINT": "Allows local scripts to control the running app via http://127.0.0.1:3876. Any application running on this computer will be able to read and modify your tasks.",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
       "IS_SHOW_TIP_LONGER": "Show productivity tip on app start a little longer",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",
@@ -2436,7 +2465,10 @@
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
       "EXPLORE": "Feel free to click around and explore! You can find help in the sidebar.",
-      "EXPLORE_TOUCH": "Feel free to tap around and explore! You can find help in the menu.",
+      "EXPLORE_TOUCH": "Feel free to explore. You can find help in the sidebar.",
+      "TASK_TAP_TOUCH": "Tap a task to open its details.",
+      "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
+      "TASK_SWIPE_RIGHT_TOUCH": "Swipe task right to mark it as done",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Dismiss hint"
     }
@@ -2639,6 +2671,7 @@
     "CREATE_NEW_PROFILE": "Create New Profile",
     "CREATED": "Created:",
     "DELETE_PROFILE": "Delete Profile",
+    "DEPRECATION_WARNING": "The experimental User Profiles feature will be removed in a future update. Please export your profile data as a backup.",
     "DIALOG_TITLE": "Manage User Profiles",
     "EXISTING_PROFILES": "Existing Profiles",
     "EXPORT_PROFILE": "Export Profile",

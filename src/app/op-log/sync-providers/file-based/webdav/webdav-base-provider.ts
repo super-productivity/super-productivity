@@ -6,7 +6,6 @@ import { SyncCredentialStore } from '../../credential-store.service';
 import {
   InvalidDataSPError,
   MissingCredentialsSPError,
-  NoRevAPIError,
   RemoteFileChangedUnexpectedly,
   UploadRevToMatchMismatchAPIError,
 } from '../../../core/errors/sync-errors';
@@ -69,11 +68,10 @@ export abstract class WebdavBaseProvider<
 
   async getFileRev(
     targetPath: string,
-    localRev: string | null,
+    _localRev: string | null,
   ): Promise<{ rev: string }> {
-    const { filePath } = await this._getConfigAndPath(targetPath);
-    const meta = await this._api.getFileMeta(filePath, localRev, true);
-    return { rev: meta.lastmod };
+    const r = await this.downloadFile(targetPath);
+    return { rev: r.rev };
   }
 
   async uploadFile(
@@ -89,14 +87,14 @@ export abstract class WebdavBaseProvider<
     });
     const { filePath } = await this._getConfigAndPath(targetPath);
 
-    let result;
     try {
-      result = await this._api.upload({
+      const result = await this._api.upload({
         path: filePath,
         data: dataStr,
         isForceOverwrite: isForceOverwrite,
         expectedRev: isForceOverwrite ? null : localRev,
       });
+      return { rev: result.rev };
     } catch (e) {
       // Translate RemoteFileChangedUnexpectedly to UploadRevToMatchMismatchAPIError
       // so the retry mechanism in FileBasedSyncAdapterService._uploadWithRetry() can handle it
@@ -105,17 +103,9 @@ export abstract class WebdavBaseProvider<
       }
       throw e;
     }
-
-    if (!result.rev) {
-      throw new NoRevAPIError();
-    }
-
-    return { rev: result.rev };
   }
 
-  async downloadFile(
-    targetPath: string,
-  ): Promise<{ rev: string; legacyRev?: string; dataStr: string }> {
+  async downloadFile(targetPath: string): Promise<{ rev: string; dataStr: string }> {
     SyncLog.debug(this.logLabel, 'downloadFile', { targetPath });
     const { filePath } = await this._getConfigAndPath(targetPath);
 
@@ -126,11 +116,8 @@ export abstract class WebdavBaseProvider<
     if (result.dataStr == null) {
       throw new InvalidDataSPError(targetPath);
     }
-    if (typeof result.rev !== 'string') {
-      throw new NoRevAPIError();
-    }
 
-    return { rev: result.rev, legacyRev: result.legacyRev, dataStr: result.dataStr };
+    return { rev: result.rev, dataStr: result.dataStr };
   }
 
   async removeFile(targetPath: string): Promise<void> {

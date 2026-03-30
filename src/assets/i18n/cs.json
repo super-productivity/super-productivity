@@ -2404,6 +2404,9 @@
       "CREATE_TASK_TOUCH": "Klepněte na + pro přidání prvního úkolu",
       "EXPLORE": "Klidně klikejte a prozkoumávejte! Nápovědu najdete v postranním panelu.",
       "EXPLORE_TOUCH": "Klidně prozkoumávejte! Nápovědu najdete v menu.",
+      "TASK_TAP_TOUCH": "Klepnutím na úkol otevřete jeho podrobnosti.",
+      "TASK_SWIPE_LEFT_TOUCH": "Přejeďte úkol doleva pro další akce",
+      "TASK_SWIPE_RIGHT_TOUCH": "Přejeďte úkol doprava a označte ho jako hotový",
       "OR_PRESS": "nebo stiskněte",
       "SKIP_ARIA": "Zavřít nápovědu"
     }

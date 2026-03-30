@@ -2404,6 +2404,9 @@
       "CREATE_TASK_TOUCH": "点按 + 添加你的第一个任务",
       "EXPLORE": "随意点击探索吧！你可以在侧边栏找到帮助。",
       "EXPLORE_TOUCH": "随意点按探索吧！你可以在菜单中找到帮助。",
+      "TASK_TAP_TOUCH": "点按任务以打开详情。",
+      "TASK_SWIPE_LEFT_TOUCH": "向左滑动任务以查看更多操作",
+      "TASK_SWIPE_RIGHT_TOUCH": "向右滑动任务以将其标记为完成",
       "OR_PRESS": "或按",
       "SKIP_ARIA": "关闭提示"
     }

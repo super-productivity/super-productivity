@@ -53,7 +53,7 @@ import { DialogEditTaskAttachmentComponent } from '../../task-attachment/dialog-
 import { throttle } from '../../../../util/decorators';
 import { DialogConfirmComponent } from '../../../../ui/dialog-confirm/dialog-confirm.component';
 import { Update } from '@ngrx/entity';
-import { IS_TOUCH_PRIMARY } from 'src/app/util/is-mouse-primary';
+import { isTouchActive } from 'src/app/util/input-intent';
 import { T } from 'src/app/t.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Store } from '@ngrx/store';
@@ -119,7 +119,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
 
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
 
   isAdvancedControls = input<boolean>(false);
@@ -218,7 +218,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       ev.stopPropagation();
       ev.stopImmediatePropagation();
 
-      if (!IS_TOUCH_PRIMARY && (ev instanceof MouseEvent || isTouchEventInstance(ev))) {
+      if (!isTouchActive() && (ev instanceof MouseEvent || isTouchEventInstance(ev))) {
         const clientX = 'touches' in ev ? ev.touches[0].clientX : ev.clientX;
         const clientY = 'touches' in ev ? ev.touches[0].clientY : ev.clientY;
         this.contextMenuPosition.x = clientX + 10 + 'px';
@@ -236,8 +236,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
     this._isOpenedFromKeyboard = isOpenedFromKeyBoard;
     this.contextMenuTrigger()?.openMenu();
+    this._taskFocusService.isTaskContextMenuOpen.set(true);
 
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       this._touchMenuTimeout = setTimeout(() => {
         const boxes = document.querySelectorAll(
           '.cdk-overlay-connected-position-bounding-box',
@@ -307,12 +308,13 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   onClose(): void {
     // Don't manually set focusedTaskId to null here - let the task component's
     // focus/blur handlers manage it automatically to avoid race conditions
+    this._taskFocusService.isTaskContextMenuOpen.set(false);
     this.focusRelatedTaskOrNext();
     this.close.emit();
   }
 
   get kb(): KeyboardConfig {
-    if (IS_TOUCH_PRIMARY || !this.isAdvancedControls()) {
+    if (isTouchActive() || !this.isAdvancedControls()) {
       return {} as any;
     }
     return (this._globalConfigService.cfg()?.keyboard as KeyboardConfig) || {};

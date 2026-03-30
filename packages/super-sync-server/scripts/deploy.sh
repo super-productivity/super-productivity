@@ -15,7 +15,7 @@
 set -e
 
 # Check required dependencies
-for cmd in docker curl jq git; do
+for cmd in docker curl git; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "ERROR: Required command '$cmd' not found"
         exit 1
@@ -110,10 +110,7 @@ if ! docker compose $COMPOSE_FILES up -d --wait --wait-timeout 60 2>&1; then
 
     # Show status of non-running containers
     echo "    Container status:"
-    docker compose $COMPOSE_FILES ps --format json | jq -c 'if type == "array" then .[] else . end' | while IFS= read -r line; do
-        STATE=$(echo "$line" | jq -r '.State // empty')
-        NAME=$(echo "$line" | jq -r '.Name // empty')
-        SERVICE=$(echo "$line" | jq -r '.Service // empty')
+    docker compose $COMPOSE_FILES ps --format '{{.Name}}\t{{.Service}}\t{{.State}}' | while IFS=$'\t' read -r NAME SERVICE STATE; do
         if [ -n "$STATE" ] && [ "$STATE" != "running" ]; then
             echo "      $NAME ($STATE)"
             echo ""

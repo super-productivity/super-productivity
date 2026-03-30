@@ -175,8 +175,18 @@ export const createWindow = async ({
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Headers', ['*']);
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Methods', ['*']);
 
+    // CORS preflight must return 2xx to pass the browser check. Stripping
+    // the Origin header (above) can cause some servers to respond with a
+    // non-200 status for OPTIONS, which the browser rejects even with the
+    // injected CORS headers.
+    const statusLine =
+      details.method === 'OPTIONS' && details.statusCode >= 300
+        ? 'HTTP/1.1 200 OK'
+        : undefined;
+
     callback({
       responseHeaders,
+      statusLine,
     });
   });
 

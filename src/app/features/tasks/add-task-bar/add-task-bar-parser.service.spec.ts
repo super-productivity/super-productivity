@@ -103,6 +103,21 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateCleanText).not.toHaveBeenCalled();
     });
 
+    it('should ignore stale parse results after resetPreviousResult', async () => {
+      const parsePromise = service.parseAndUpdateText(
+        'stale task',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      service.resetPreviousResult();
+      await parsePromise;
+
+      expect(mockStateService.updateCleanText).not.toHaveBeenCalled();
+    });
+
     describe('Date Parsing', () => {
       it('should handle default date when no date syntax present and no current state', async () => {
         const defaultDate = '2024-01-15';

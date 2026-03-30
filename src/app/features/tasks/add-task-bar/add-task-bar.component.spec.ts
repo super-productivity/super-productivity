@@ -273,6 +273,17 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
+  describe('addTask', () => {
+    it('should not add a task when the visible input is empty', async () => {
+      component.stateService.updateCleanText('Stale task');
+      component.stateService.updateInputTxt('   ');
+
+      await component.addTask();
+
+      expect(mockTaskService.add).not.toHaveBeenCalled();
+    });
+  });
+
   describe('defaultProject$ observable', () => {
     it('should return current project when in project work context', async () => {
       // Set project work context
@@ -531,6 +542,31 @@ describe('AddTaskBarComponent', () => {
         .toPromise();
 
       expect(defaultProject).toBeUndefined();
+    });
+  });
+
+  describe('_setProjectInitially', () => {
+    it('should use projectId from additionalFields instead of defaultProject$', () => {
+      // Set tag work context (would normally fall back to INBOX_PROJECT)
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      fixture.componentRef.setInput('additionalFields', { projectId: 'project-2' });
+      fixture.detectChanges();
+
+      expect(component.stateService.state().projectId).toBe('project-2');
+    });
+
+    it('should fall back to defaultProject$ when additionalFields has no projectId', () => {
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      fixture.componentRef.setInput('additionalFields', { isDone: false });
+      fixture.detectChanges();
+
+      expect(component.stateService.state().projectId).toBe('INBOX_PROJECT');
     });
   });
 

@@ -2400,6 +2400,9 @@
       "CREATE_TASK_TOUCH": "Ťuknite na + pre pridanie prvej úlohy",
       "EXPLORE": "Kľudne klikajte a objavujte! Pomoc nájdete v bočnom paneli.",
       "EXPLORE_TOUCH": "Kľudne objavujte! Pomoc nájdete v menu.",
+      "TASK_TAP_TOUCH": "Ťuknite na úlohu a otvorte jej podrobnosti.",
+      "TASK_SWIPE_LEFT_TOUCH": "Potiahnite úlohu doľava pre ďalšie akcie",
+      "TASK_SWIPE_RIGHT_TOUCH": "Potiahnite úlohu doprava a označte ju ako hotovú",
       "OR_PRESS": "alebo stlačte",
       "SKIP_ARIA": "Zavrieť nápovedu"
     }

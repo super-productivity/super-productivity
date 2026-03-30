@@ -11,6 +11,7 @@ const baseEvent: CalendarIntegrationEvent = {
   title: 'Event',
   start: 0,
   duration: 0,
+  issueProviderKey: 'ICAL',
 };
 
 describe('getCalendarEventIdCandidates', () => {

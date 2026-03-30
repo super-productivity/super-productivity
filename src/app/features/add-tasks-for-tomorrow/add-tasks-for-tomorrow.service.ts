@@ -147,6 +147,15 @@ export class AddTasksForTomorrowService {
       .pipe(first())
       .toPromise();
 
+    // #6230 diagnostic: log whether any repeat configs need processing.
+    // If this logs 0 repeatCfgs when the user expects tasks to appear,
+    // the issue is upstream (configs not loaded, or already marked as processed).
+    TaskLog.log('[AddTasksForTomorrow] addAllDueToday repeat configs', {
+      todayStr,
+      repeatCfgCount: dueRepeatCfgs?.length ?? 0,
+      repeatCfgIds: dueRepeatCfgs?.map((c) => c.id) ?? [],
+    });
+
     const promises = dueRepeatCfgs.sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
       return this._taskRepeatCfgService.createRepeatableTask(repeatCfg, todayTS);
     });

@@ -1,9 +1,3 @@
-<!--@let issueProviderKey = d.issueProvider?.issueProviderKey || d.issueProviderKey;-->
-<!--&lt;!&ndash;&ndash;&gt;-->
-<!--@let isEdit = !!d.issueProvider?.issueProviderKey;-->
-<!--&lt;!&ndash;&ndash;&gt;-->
-<!--@let model = isEdit ? d.issueProvider : DEFAULT_ISSUE_PROVIDER_CFGS[issueProviderKey];-->
-
 <h1 mat-dialog-title>
   @if (issueProviderKey | issueIcon; as icon) {
     <mat-icon
@@ -13,10 +7,10 @@
   } @else {
     <mat-icon class="dialog-header-icon">extension</mat-icon>
   }
-  <!-- TODO improve title -->
-
-  {{ isEdit ? 'Edit' : 'Setup' }} {{ title }} Config
-  <!--  <span>{{T.F.JIRA.DIALOG_INITIAL.TITLE|translate}}</span>-->
+  {{
+    (isEdit ? T.F.ISSUE.DIALOG.EDIT_TITLE : T.F.ISSUE.DIALOG.SETUP_TITLE)
+      | translate: { title: title }
+  }}
 </h1>
 
 <form
@@ -97,7 +91,7 @@
         </div>
       }
       @for (btn of oauthButtons; track btn.label) {
-        <div style="margin-bottom: 16px">
+        <div class="action-row">
           @if (isOAuthConnected()) {
             <button
               mat-stroked-button
@@ -108,11 +102,8 @@
               <mat-icon>link_off</mat-icon>
               {{ T.F.ISSUE.DIALOG.DISCONNECT | translate }}
             </button>
-            <span style="margin-left: 8px; color: var(--palette-accent)">
-              <mat-icon
-                style="vertical-align: middle; font-size: 18px; width: 18px; height: 18px"
-                >check_circle</mat-icon
-              >
+            <span class="connected-status">
+              <mat-icon class="connected-status-icon">check_circle</mat-icon>
               {{ T.F.ISSUE.DIALOG.CONNECTED | translate }}
             </span>
           } @else {
@@ -129,6 +120,63 @@
           }
         </div>
       }
+      @if (showLoadOptionsButton) {
+        <div class="action-row">
+          @switch (optionsLoadState()) {
+            @case ('loading') {
+              <button
+                mat-stroked-button
+                type="button"
+                disabled
+              >
+                <mat-icon class="spin">sync</mat-icon>
+                {{ T.F.ISSUE.DIALOG.LOADING_OPTIONS | translate }}
+              </button>
+            }
+            @case ('loaded') {
+              <button
+                mat-stroked-button
+                type="button"
+                color="primary"
+                (click)="loadDynamicOptions()"
+              >
+                <mat-icon>refresh</mat-icon>
+                {{ T.F.ISSUE.DIALOG.RELOAD_OPTIONS | translate }}
+              </button>
+              <span class="connected-status">
+                <mat-icon class="connected-status-icon">check_circle</mat-icon>
+                {{ T.F.ISSUE.DIALOG.OPTIONS_LOADED | translate }}
+              </span>
+            }
+            @case ('failed') {
+              <button
+                mat-stroked-button
+                type="button"
+                color="warn"
+                (click)="loadDynamicOptions()"
+              >
+                <mat-icon>refresh</mat-icon>
+                {{ T.F.ISSUE.DIALOG.LOAD_OPTIONS | translate }}
+              </button>
+              <span class="error-status">
+                <mat-icon class="error-status-icon">error</mat-icon>
+                {{ T.F.ISSUE.DIALOG.LOAD_OPTIONS_FAILED | translate }}
+              </span>
+            }
+            @default {
+              <button
+                mat-stroked-button
+                type="button"
+                color="primary"
+                (click)="loadDynamicOptions()"
+              >
+                <mat-icon>cloud_download</mat-icon>
+                {{ T.F.ISSUE.DIALOG.LOAD_OPTIONS | translate }}
+              </button>
+            }
+          }
+        </div>
+      }
       <formly-form
         [model]="model"
         (modelChange)="formlyModelChange($event)"
@@ -136,14 +184,16 @@
         [form]="form"
       ></formly-form>
 
-      <chip-list-input
-        (addItem)="addTag($event)"
-        (addNewItem)="addNewTag($event)"
-        (removeItem)="removeTag($event)"
-        [label]="T.F.ISSUE.DEFAULT_TAGS_LABEL | translate"
-        [model]="model.defaultTagIds || []"
-        [suggestions]="tagSuggestions()"
-      ></chip-list-input>
+      @if (!isAgendaView) {
+        <chip-list-input
+          (addItem)="addTag($event)"
+          (addNewItem)="addNewTag($event)"
+          (removeItem)="removeTag($event)"
+          [label]="T.F.ISSUE.DEFAULT_TAGS_LABEL | translate"
+          [model]="model.defaultTagIds || []"
+          [suggestions]="tagSuggestions()"
+        ></chip-list-input>
+      }
 
       @switch (issueProviderKey) {
         <!-- -->
@@ -227,8 +277,7 @@
           [disabled]="form.invalid"
         >
           <mat-icon>online_prediction</mat-icon>
-          Test
-          <!--      {{ T.G.DELETE|translate }}-->
+          {{ T.F.ISSUE.DIALOG.TEST_CONNECTION | translate }}
         </button>
       }
       <!-- -->

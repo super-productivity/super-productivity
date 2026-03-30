@@ -238,6 +238,12 @@ mat-option.isDone {
 mat-icon,
 .mat-icon {
   vertical-align: middle;
+  visibility: hidden;
+}
+
+body.isMaterialSymbolsLoaded .mat-icon,
+body.isMaterialSymbolsLoaded mat-icon {
+  visibility: visible;
 }
 
 .mat-icon.mat-icon {

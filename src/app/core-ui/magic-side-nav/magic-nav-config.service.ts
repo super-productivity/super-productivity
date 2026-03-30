@@ -108,6 +108,16 @@ export class MagicNavConfigService {
   private readonly isSearchEnabled = computed(
     () => this._configService.appFeatures().isSearchEnabled,
   );
+  readonly areInitialTreesReady = computed(() => {
+    const visibleProjects = this._visibleProjects();
+    const tags = this._tags();
+
+    const areProjectsReady =
+      visibleProjects.length === 0 || this._menuTreeService.hasProjectTree();
+    const areTagsReady = tags.length === 0 || this._menuTreeService.hasTagTree();
+
+    return areProjectsReady && areTagsReady;
+  });
 
   constructor() {
     // TODO these should probably live in the _menuTreeService

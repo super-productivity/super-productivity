@@ -334,6 +334,18 @@ export interface OAuthFlowConfig {
    * non-confidential (e.g., Google installed-app credentials per RFC 8252).
    */
   clientSecret?: string;
+  /**
+   * Client ID for Android (authenticates via package name + SHA-1 signing key).
+   * Overrides `clientId` on Android and omits `clientSecret`.
+   * Requires "Custom URI scheme" enabled in Google Cloud Console.
+   */
+  mobileClientId?: string;
+  /**
+   * Client ID for iOS (authenticates via bundle ID).
+   * Overrides `clientId` on iOS and omits `clientSecret`.
+   * Requires "Custom URI scheme" enabled in Google Cloud Console.
+   */
+  iosClientId?: string;
   scopes: string[];
   /** Additional query parameters to append to the authorization URL (e.g. access_type, prompt). */
   extraAuthParams?: Record<string, string>;

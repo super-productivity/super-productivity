@@ -95,6 +95,7 @@ export class UserProfileButtonComponent {
       await this.profileService.switchProfile(profileId);
     } catch (error) {
       console.error('Failed to switch profile:', error);
+    } finally {
       this.isLoading.set(false);
     }
   }

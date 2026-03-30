@@ -152,6 +152,9 @@ export class SimulatedClient {
       vectorClock: entry.op.vectorClock,
       timestamp: entry.op.timestamp,
       schemaVersion: entry.op.schemaVersion,
+      ...(entry.op.syncImportReason
+        ? { syncImportReason: entry.op.syncImportReason }
+        : {}),
     }));
 
     // Upload to server

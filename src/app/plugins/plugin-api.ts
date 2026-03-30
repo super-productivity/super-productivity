@@ -180,16 +180,13 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
-    PluginLog.log(
-      `Plugin ${this._pluginId} requested to update task ${taskId}:`,
-      updates,
-    );
+    PluginLog.log(`Plugin ${this._pluginId} requested to update task ${taskId}`);
     const taskCopyUpdates = taskDataToPartialTaskCopy(updates);
     return this._pluginBridge.updateTask(taskId, taskCopyUpdates);
   }
 
   async addTask(taskData: PluginCreateTaskData): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add task:`, taskData);
+    PluginLog.log(`Plugin ${this._pluginId} requested to add task`);
     return this._pluginBridge.addTask(taskData);
   }
 
@@ -205,16 +202,13 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async addProject(projectData: Partial<Project>): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add project:`, projectData);
+    PluginLog.log(`Plugin ${this._pluginId} requested to add project`);
     const projectCopyData = projectDataToPartialProjectCopy(projectData);
     return this._pluginBridge.addProject(projectCopyData);
   }
 
   async updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
-    PluginLog.log(
-      `Plugin ${this._pluginId} requested to update project ${projectId}:`,
-      updates,
-    );
+    PluginLog.log(`Plugin ${this._pluginId} requested to update project ${projectId}`);
     const projectCopyUpdates = projectDataToPartialProjectCopy(updates);
     return this._pluginBridge.updateProject(projectId, projectCopyUpdates);
   }
@@ -226,13 +220,13 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async addTag(tagData: Partial<Tag>): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add tag:`, tagData);
+    PluginLog.log(`Plugin ${this._pluginId} requested to add tag`);
     const tagCopyData = tagDataToPartialTagCopy(tagData);
     return this._pluginBridge.addTag(tagCopyData);
   }
 
   async updateTag(tagId: string, updates: Partial<Tag>): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to update tag ${tagId}:`, updates);
+    PluginLog.log(`Plugin ${this._pluginId} requested to update tag ${tagId}`);
     const tagCopyUpdates = tagDataToPartialTagCopy(updates);
     return this._pluginBridge.updateTag(tagId, tagCopyUpdates);
   }

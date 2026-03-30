@@ -53,7 +53,8 @@ import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen
 import { Update } from '@ngrx/entity';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { DateService } from '../../../core/date/date.service';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { isTouchActive } from '../../../util/input-intent';
+import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { KeyboardConfig } from '../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
@@ -146,6 +147,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   isBacklog = input<boolean>(false);
   isInSubTaskList = input<boolean>(false);
   showDoneAnimation = signal(false);
+  showUndoneAnimation = signal(false);
 
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
@@ -252,7 +254,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   });
 
   T: typeof T = T;
-  IS_TOUCH_PRIMARY: boolean = IS_TOUCH_PRIMARY;
+  isTouchActive = isTouchActive;
   isDragOver: boolean = false;
   isDragReady = signal(false);
   private _dragReadyTimeout: number | undefined;
@@ -355,7 +357,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive() || IS_HYBRID_DEVICE) {
       const el = this._elementRef.nativeElement;
       const onStart = (): void => this.onHostTouchStart();
       const onEnd = (): void => this.onHostTouchEnd();
@@ -692,6 +694,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this.toggleTaskDone();
   }
 
+  onSwipeRightTriggered(isTriggered: boolean): void {
+    if (this.task().isDone) {
+      this.showUndoneAnimation.set(isTriggered);
+    } else {
+      this.showDoneAnimation.set(isTriggered);
+    }
+  }
+
   toggleTaskDone(): void {
     window.clearTimeout(this._doneAnimationTimeout);
     this.focusNext(true, true);
@@ -797,7 +807,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (targetEl.closest('task-title')) {
       return;
     }
-    if (IS_TOUCH_PRIMARY && this.task().title.length) {
+    if (isTouchActive() && this.task().title.length) {
       this.toggleShowDetailPanel(event);
     } else {
       this.focusSelf();
@@ -805,7 +815,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   focusPrevious(isFocusReverseIfNotPossible: boolean = false): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return;
     }
 
@@ -834,7 +844,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     isFocusReverseIfNotPossible: boolean = false,
     isTaskMovedInList = false,
   ): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return;
     }
 
@@ -855,14 +865,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   focusSelf(): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return;
     }
     this._focusSelfElement();
   }
 
   focusSelfOrNextIfNotPossible(): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return;
     }
 
@@ -903,7 +913,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   onHostContextMenu(event: MouseEvent): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       event.preventDefault();
       return;
     }
@@ -1077,7 +1087,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   get kb(): KeyboardConfig {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return {} as KeyboardConfig;
     }
     return (this._configService.cfg()?.keyboard as KeyboardConfig) || {};

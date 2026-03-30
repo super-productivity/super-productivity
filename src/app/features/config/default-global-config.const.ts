@@ -47,6 +47,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
     isMinimizeToTray: false,
+    isLocalRestApiEnabled: false,
     isTrayShowCurrentCountdown: true,
     startOfNextDay: 0,
     isDisableAnimations: false,
@@ -230,6 +231,13 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
 
     localFileSync: {
       syncFolderPath: '',
+    },
+
+    nextcloud: {
+      serverUrl: null,
+      userName: null,
+      password: null,
+      syncFolderPath: 'super-productivity',
     },
   },
 } as const;

@@ -514,7 +514,10 @@ export class IssueService {
       related_to,
       ...additionalFromProviderIssueService
     } = this._getAddTaskData(issueProviderKey, issueDataReduced);
-    IssueLog.log({ title, related_to, additionalFromProviderIssueService });
+    IssueLog.log({
+      related_to,
+      additionalKeys: Object.keys(additionalFromProviderIssueService),
+    });
 
     const getTaskDefaults = async (): Promise<Partial<TaskCopy>> => {
       const providerCfg = await this._issueProviderService

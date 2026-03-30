@@ -105,18 +105,24 @@ export class PlannerService {
       combineLatest([
         this._store.select(selectAllTaskRepeatCfgs),
         this._store.select(selectTodayTaskIds),
-        this._calendarIntegrationService.icalEvents$,
+        this._calendarIntegrationService.calendarEvents$,
         this.allDueWithTimeTasks$,
         this._globalTrackingIntervalService.todayDateStr$,
       ]).pipe(
         switchMap(
-          ([taskRepeatCfgs, todayListTaskIds, icalEvents, allTasksPlanned, todayStr]) =>
+          ([
+            taskRepeatCfgs,
+            todayListTaskIds,
+            calendarEvents,
+            allTasksPlanned,
+            todayStr,
+          ]) =>
             this._store.select(
               selectPlannerDays(
                 daysToShow,
                 taskRepeatCfgs,
                 todayListTaskIds,
-                icalEvents,
+                calendarEvents,
                 allTasksPlanned,
                 todayStr,
               ),
