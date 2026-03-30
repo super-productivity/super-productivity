@@ -3,7 +3,7 @@ SuperSync has been deployed!
 
 WARNING: supersync.publicUrl is not set. Server will reject requests in production mode.
 {{- end }}
-{{- if and .Values.ingress.enabled .Values.ingress.tls (not (index .Values.ingress.tls 0)) }}
+{{- if and .Values.ingress.enabled .Values.ingress.tls (eq (len .Values.ingress.tls) 0) }}
 
 WARNING: Ingress is enabled without TLS. Consider enabling TLS for production use.
 {{- end }}

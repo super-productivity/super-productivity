@@ -13,7 +13,11 @@ spec:
     - Ingress
     - Egress
   ingress:
-    - ports:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | default "ingress-nginx" }}
+      ports:
         - port: {{ .Values.supersync.port }}
           protocol: TCP
   egress:
@@ -24,6 +28,11 @@ spec:
               app.kubernetes.io/name: {{ include "supersync.name" . }}-postgresql
               app.kubernetes.io/instance: {{ .Release.Name }}
       ports:
+        - port: 5432
+          protocol: TCP
+    {{- else }}
+    # Allow egress to external database (any destination on port 5432)
+    - ports:
         - port: 5432
           protocol: TCP
     {{- end }}

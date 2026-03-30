@@ -20,8 +20,8 @@ fullnameOverride: ""
 serviceAccount:
   # -- Whether to create a ServiceAccount
   create: true
-  # -- Automount the service account token
-  automount: true
+  # -- Automount the service account token (not needed by this app)
+  automount: false
   # -- Annotations to add to the ServiceAccount
   annotations: {}
   # -- The name of the ServiceAccount to use. If not set and create is true, a name is generated.
@@ -56,6 +56,10 @@ supersync:
     secure: false
     # -- Sender email address
     from: ""
+    # -- SMTP username
+    user: ""
+    # -- SMTP password
+    password: ""
     # -- Use an existing Kubernetes secret for SMTP credentials.
     # The secret must contain SMTP_USER and SMTP_PASS keys.
     existingSecret: ""
@@ -141,6 +145,11 @@ ingress:
   # -- Ingress class name
   className: ""
   # -- Ingress annotations
+  # WebSocket support requires extended timeouts. Example for nginx-ingress:
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  # For Traefik:
+  #   traefik.ingress.kubernetes.io/router.middlewares: ...
   annotations: {}
   # -- Ingress host rules
   hosts:
@@ -184,13 +193,15 @@ autoscaling:
 podDisruptionBudget:
   # -- Enable PDB
   enabled: false
-  # -- Minimum number of available pods
-  minAvailable: 1
+  # -- Maximum number of unavailable pods (use this instead of minAvailable for single-replica)
+  maxUnavailable: 1
 
 # -- Network Policy configuration
 networkPolicy:
   # -- Enable NetworkPolicy
   enabled: false
+  # -- Namespace of the ingress controller (for ingress from: selector)
+  ingressNamespace: "ingress-nginx"
 
 # -- Node selector for pod scheduling
 nodeSelector: {}

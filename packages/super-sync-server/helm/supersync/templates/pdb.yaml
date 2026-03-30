@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "supersync.labels" . | nindent 4 }}
 spec:
-  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable | default 1 }}
   selector:
     matchLabels:
       {{- include "supersync.selectorLabels" . | nindent 6 }}

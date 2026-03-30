@@ -1,3 +1,6 @@
+{{- if and .Values.autoscaling.enabled (gt (.Values.autoscaling.maxReplicas | int) 1) }}
+  {{- fail "autoscaling with maxReplicas > 1 is not supported: WebSocket connection state is in-memory and not shared across replicas" }}
+{{- end }}
 {{- if .Values.autoscaling.enabled -}}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
