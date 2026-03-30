@@ -60,7 +60,7 @@
             matSuffix
             style="cursor: pointer"
             (click)="unPinSearch()"
-            [matTooltip]="'Clear pinned search query'"
+            [matTooltip]="T.F.ISSUE.SEARCH.CLEAR_PINNED_SEARCH | translate"
             >bookmark</mat-icon
           >
         } @else if (
@@ -71,7 +71,7 @@
             matSuffix
             style="cursor: pointer"
             (click)="pinSearch()"
-            [matTooltip]="'Remember search query'"
+            [matTooltip]="T.F.ISSUE.SEARCH.REMEMBER_SEARCH | translate"
             >bookmark_add</mat-icon
           >
         }

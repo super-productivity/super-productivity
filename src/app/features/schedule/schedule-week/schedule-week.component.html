@@ -122,7 +122,7 @@
         <div
           class="excess-entries-header"
           [matTooltipPosition]="'above'"
-          [matTooltip]="'Tasks planned for day, but that are beyond the available time budget'"
+          [matTooltip]="T.F.SCHEDULE.BEYOND_BUDGET_TOOLTIP | translate"
         >
           <mat-icon>hourglass_disabled</mat-icon>
           {{ beyondBudgetDay.length }}

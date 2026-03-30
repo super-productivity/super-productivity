@@ -8,7 +8,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { of } from 'rxjs';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 
 describe('InlineMarkdownComponent', () => {
   let component: InlineMarkdownComponent;
@@ -35,6 +35,7 @@ describe('InlineMarkdownComponent', () => {
         MarkdownModule.forRoot(),
         NoopAnimationsModule,
         TranslateModule.forRoot(),
+        TranslatePipe,
       ],
       providers: [
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },

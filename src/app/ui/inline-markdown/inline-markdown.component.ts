@@ -31,6 +31,8 @@ import { TaskAttachmentService } from '../../features/tasks/task-attachment/task
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 import { handleListKeydown } from './markdown-toolbar.util';
+import { TranslatePipe } from '@ngx-translate/core';
+import { T } from '../../t.const';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
@@ -47,6 +49,7 @@ const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
     MatTooltip,
     MatIcon,
     ResolveClipboardImagesDirective,
+    TranslatePipe,
   ],
 })
 export class InlineMarkdownComponent implements OnInit, OnDestroy {
@@ -60,6 +63,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _isFullscreenDialogOpen = false;
   private _resolveGeneration = 0;
 
+  readonly T = T;
   readonly isLock = input<boolean>(false);
   readonly isShowControls = input<boolean>(false);
   readonly isShowChecklistToggle = input<boolean>(false);

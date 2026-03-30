@@ -20,6 +20,8 @@ import { containsEmoji, extractFirstEmoji } from '../../../util/extract-first-em
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { startWith } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { T } from 'src/app/t.const';
+import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({
   selector: 'icon-input',
@@ -36,6 +38,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
     MatOption,
     MatSuffix,
     MatTooltip,
+    TranslatePipe,
   ],
 })
 export class IconInputComponent extends FieldType<FormlyFieldConfig> implements OnInit {
@@ -48,6 +51,8 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
 
   protected readonly IS_ELECTRON = IS_ELECTRON;
   isLinux = IS_ELECTRON && window.ea.isLinux();
+
+  readonly T = T;
 
   get type(): string {
     return this.to.type || 'text';

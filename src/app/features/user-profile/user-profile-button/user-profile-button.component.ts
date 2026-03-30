@@ -29,7 +29,9 @@ import { T } from '../../../t.const';
     <button
       mat-icon-button
       [matTooltip]="
-        'User Profile: ' + (profileService.activeProfile()?.name || 'Loading...')
+        (T.USER_PROFILES.PROFILE_TOOLTIP_PREFIX | translate) +
+        ' ' +
+        (profileService.activeProfile()?.name || 'Loading...')
       "
       [matMenuTriggerFor]="profileMenu"
       class="profile-btn"

@@ -7,6 +7,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
 import { IssueProvider } from '../../issue/issue.model';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { TranslateModule } from '@ngx-translate/core';
 
 const createIssueProvider = (): IssueProvider =>
   ({
@@ -34,7 +35,11 @@ describe('IssueProviderTabComponent', () => {
     store.select.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
-      imports: [IssueProviderTabComponent, NoopAnimationsModule],
+      imports: [
+        IssueProviderTabComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
       providers: [
         DropListService,
         { provide: IssueService, useValue: issueService },

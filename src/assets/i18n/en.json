@@ -441,6 +441,10 @@
         "RELOAD_OPTIONS": "Reload Options",
         "SETUP_TITLE": "Setup {{title}} Config",
         "TEST_CONNECTION": "Test Connection"
+      },
+      "SEARCH": {
+        "CLEAR_PINNED_SEARCH": "Clear pinned search query",
+        "REMEMBER_SEARCH": "Remember search query"
       }
     },
     "ISSUE_PANEL": {
@@ -599,6 +603,7 @@
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Click Counters over time",
         "SIMPLE_COUNTERS": "Simple Counters & Habit Tracking",
         "SIMPLE_STOPWATCH_COUNTERS_OVER_TIME": "Stopwatch Counters over time",
+        "SHARE_HEATMAP": "Share Heatmap",
         "TASKS_DONE_CREATED": "Tasks (completed/created)",
         "TIME_ESTIMATED": "Time Estimated",
         "TIME_FRAME_1_MONTH": "1 month",
@@ -943,6 +948,7 @@
       "S_REMINDER_ERR": "Error for reminder interface"
     },
     "SCHEDULE": {
+      "BEYOND_BUDGET_TOOLTIP": "Tasks planned for day, but that are beyond the available time budget",
       "D_INITIAL": {
         "TEXT": "<p>The Schedule will provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended), regular tasks will never be placed outside of these boundaries.</p>",
         "TITLE": "Schedule"
@@ -951,10 +957,16 @@
       "INSERT_BEFORE": "Before",
       "LUNCH_BREAK": "Lunch Break",
       "MONTH": "Month",
+      "NEXT_MONTH": "Next Month",
+      "NEXT_PERIOD": "Next",
+      "NEXT_WEEK": "Next Week",
       "NO_TASKS": "Currently there are no tasks. Please add some tasks via the plus (+) button in the top bar.",
       "NOW": "Now",
       "PLAN_END_DAY": "End of {{date}}",
       "PLAN_START_DAY": "Start of {{date}}",
+      "PREVIOUS_MONTH": "Previous Month",
+      "PREVIOUS_PERIOD": "Previous",
+      "PREVIOUS_WEEK": "Previous Week",
       "SHIFT_KEY_INFO": "Hold Shift to toggle day planning mode",
       "START": "Work Start"
     },
@@ -1937,6 +1949,7 @@
   },
   "G": {
     "ADD": "Add",
+    "ADD_CHECKLIST_ITEM": "Add checklist item",
     "ADVANCED_CFG": "Advanced Config",
     "APPLY": "Apply",
     "CANCEL": "Cancel",
@@ -1965,6 +1978,8 @@
     "NO_CON": "You are currently offline. Please reconnect to the internet.",
     "NONE": "None",
     "OK": "Ok",
+    "OPEN_EMOJI_PICKER": "Open system emoji picker if any",
+    "OPEN_FULLSCREEN": "Open in fullscreen",
     "OPEN_IN_BROWSER": "Open in browser",
     "OVERDUE": "Overdue",
     "PASSWORD_STRENGTH_FAIR": "Fair",
@@ -2494,6 +2509,7 @@
     "FOCUS_SUMMARY": "Focus Sessions",
     "NO_TASKS": "There are no tasks for this day",
     "PLAN_TOMORROW": "Plan",
+    "REMOVE_DAILY_SUMMARY_NOTE": "Remove daily summary note",
     "REVIEW_TASKS": "Review",
     "ROUND_5M": "Round all tasks to 5 minutes",
     "ROUND_15M": "Round all tasks to 15 minutes",
@@ -2678,6 +2694,7 @@
     "MANAGE_PROFILES": "Manage Profiles...",
     "PROFILE_NAME": "Profile Name",
     "PROFILE_NAME_PLACEHOLDER": "e.g. Work, Personal",
+    "PROFILE_TOOLTIP_PREFIX": "User Profile:",
     "RENAME": "Rename",
     "SAVE": "Save"
   },

@@ -5,8 +5,16 @@
     mat-icon-button
     (click)="goToPreviousPeriod()"
     [disabled]="isViewingToday()"
-    [attr.aria-label]="isMonthView() ? 'Go to previous month' : 'Go to previous week'"
-    [matTooltip]="isMonthView() ? 'Previous Month' : 'Previous Week'"
+    [attr.aria-label]="
+      isMonthView()
+        ? (T.F.SCHEDULE.PREVIOUS_MONTH | translate)
+        : (T.F.SCHEDULE.PREVIOUS_WEEK | translate)
+    "
+    [matTooltip]="
+      isMonthView()
+        ? (T.F.SCHEDULE.PREVIOUS_MONTH | translate)
+        : (T.F.SCHEDULE.PREVIOUS_WEEK | translate)
+    "
   >
     <mat-icon>chevron_left</mat-icon>
   </button>
@@ -23,8 +31,16 @@
   <button
     mat-icon-button
     (click)="goToNextPeriod()"
-    [attr.aria-label]="isMonthView() ? 'Go to next month' : 'Go to next week'"
-    [matTooltip]="isMonthView() ? 'Next Month' : 'Next Week'"
+    [attr.aria-label]="
+      isMonthView()
+        ? (T.F.SCHEDULE.NEXT_MONTH | translate)
+        : (T.F.SCHEDULE.NEXT_WEEK | translate)
+    "
+    [matTooltip]="
+      isMonthView()
+        ? (T.F.SCHEDULE.NEXT_MONTH | translate)
+        : (T.F.SCHEDULE.NEXT_WEEK | translate)
+    "
   >
     <mat-icon>chevron_right</mat-icon>
   </button>
