@@ -151,7 +151,7 @@
     "@material-symbols/font-400": "^0.40.2",
     "@noble/ciphers": "^2.1.1",
     "capacitor-plugin-safe-area": "^4.0.3",
-    "electron-dl": "^3.5.2",
+    "electron-dl": "^4.0.0",
     "electron-localshortcut": "^3.2.1",
     "electron-log": "^5.4.3",
     "electron-window-state": "^5.0.3",
