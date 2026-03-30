@@ -27,6 +27,10 @@ export abstract class WebdavBaseProvider<
   protected readonly _api: WebdavApi;
   public privateCfg: SyncCredentialStore<T>;
 
+  /** Tracks whether server capabilities have been detected in this session */
+  private _capabilitiesDetected = false;
+  private _capabilityDetectionPromise: Promise<void> | null = null;
+
   constructor(protected _extraPath?: string) {
     this._api = new WebdavApi(() => this._cfgOrError());
     // Use SyncProviderId.WebDAV directly since T extends SyncProviderId.WebDAV
@@ -73,7 +77,10 @@ export abstract class WebdavBaseProvider<
   ): Promise<{ rev: string }> {
     const { filePath } = await this._getConfigAndPath(targetPath);
     const meta = await this._api.getFileMeta(filePath, localRev, true);
-    return { rev: meta.lastmod };
+    // Prefer ETag for exact matching (avoids subsecond precision issues with Last-Modified)
+    const etag = meta.data?.etag;
+    const cleanedEtag = etag ? etag.replace(/"/g, '').replace(/\//g, '').trim() : '';
+    return { rev: cleanedEtag || meta.lastmod };
   }
 
   async uploadFile(
@@ -87,6 +94,7 @@ export abstract class WebdavBaseProvider<
       localRev,
       isForceOverwrite,
     });
+    await this._ensureCapabilitiesDetected();
     const { filePath } = await this._getConfigAndPath(targetPath);
 
     let result;
@@ -143,6 +151,74 @@ export abstract class WebdavBaseProvider<
     SyncLog.debug(this.logLabel, 'listFiles', { dirPath });
     const { filePath } = await this._getConfigAndPath(dirPath);
     return this._api.listFiles(filePath);
+  }
+
+  /**
+   * Detects server capabilities on first use if not already cached in config.
+   * Tests whether the server supports conditional headers (If-Unmodified-Since / If-Match)
+   * and caches the result in serverCapabilities so it persists across restarts.
+   */
+  protected async _ensureCapabilitiesDetected(): Promise<void> {
+    if (this._capabilitiesDetected) {
+      return;
+    }
+
+    // Deduplicate concurrent calls
+    if (this._capabilityDetectionPromise) {
+      await this._capabilityDetectionPromise;
+      return;
+    }
+
+    this._capabilityDetectionPromise = this._detectCapabilities();
+    try {
+      await this._capabilityDetectionPromise;
+    } finally {
+      this._capabilityDetectionPromise = null;
+    }
+  }
+
+  private async _detectCapabilities(): Promise<void> {
+    try {
+      const cfg = await this.privateCfg.load();
+      if (cfg?.serverCapabilities) {
+        this._capabilitiesDetected = true;
+        return;
+      }
+
+      SyncLog.normal(
+        `${this.logLabel}: Running server capability detection (first sync)...`,
+      );
+      const testPath = `${cfg?.syncFolderPath || '/'}/.sp-cap-test-${Date.now()}`;
+      const supportsConditionalHeaders = await this._api.testConditionalHeaders(testPath);
+
+      // Cache result in config so it persists
+      if (cfg) {
+        await this.privateCfg.setComplete({
+          ...cfg,
+          serverCapabilities: {
+            supportsETags: true,
+            supportsIfHeader: supportsConditionalHeaders,
+            supportsLastModified: true,
+          },
+        } as PrivateCfgByProviderId<T>);
+      }
+
+      if (!supportsConditionalHeaders) {
+        SyncLog.warn(
+          `${this.logLabel}: Server does not support conditional headers. ` +
+            `Conflict detection will rely on syncVersion only.`,
+        );
+      }
+    } catch (e) {
+      SyncLog.warn(
+        `${this.logLabel}: Capability detection failed, will retry next sync`,
+        e,
+      );
+      // Don't cache failure — retry next time
+      return;
+    }
+
+    this._capabilitiesDetected = true;
   }
 
   protected _getFilePath(targetPath: string, cfg: WebdavPrivateCfg): string {

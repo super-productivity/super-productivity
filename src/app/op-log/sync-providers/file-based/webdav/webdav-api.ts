@@ -151,16 +151,26 @@ export class WebdavApi {
     const fullPath = this._buildFullPath(cfg.baseUrl, path);
 
     try {
-      const response = await this._makeRequest({
+      let response = await this._makeRequest({
         url: fullPath,
         method: WebDavHttpMethod.GET,
       });
 
-      // Guard against empty response body (e.g. CapacitorHttp on some Android providers)
+      // Guard against empty response body (e.g. CapacitorHttp on some Android providers).
+      // Retry once since this is often a transient Capacitor bridge issue.
       if (!response.data || response.data.length === 0) {
-        throw new InvalidDataSPError(
-          `Download of ${path} returned empty response body (HTTP ${response.status}).`,
+        SyncLog.warn(
+          `${WebdavApi.L}.download() empty response body for ${path} (HTTP ${response.status}), retrying once...`,
         );
+        response = await this._makeRequest({
+          url: fullPath,
+          method: WebDavHttpMethod.GET,
+        });
+        if (!response.data || response.data.length === 0) {
+          throw new InvalidDataSPError(
+            `Download of ${path} returned empty response body after retry (HTTP ${response.status}).`,
+          );
+        }
       }
 
       // Validate it's not an HTML error page
@@ -171,34 +181,35 @@ export class WebdavApi {
         'file content',
       );
 
-      // Get revision from Last-Modified
-      let lastModified =
+      // Get revision headers
+      const lastModified =
         response.headers['last-modified'] || response.headers['Last-Modified'];
-
-      // Get ETag for legacy compatibility
       const etagHeader = response.headers['etag'] || response.headers['ETag'];
-      let legacyRev = etagHeader ? this._cleanRev(etagHeader) : undefined;
+      const cleanedEtag = etagHeader ? this._cleanRev(etagHeader) : undefined;
 
-      let rev = lastModified || '';
-      const isLastModifiedMissing = !lastModified;
-      const isLegacyRevMissing = !legacyRev;
+      // Prefer ETag over Last-Modified as the primary revision marker.
+      // ETags use exact string matching (If-Match) which avoids the subsecond
+      // precision issue with If-Unmodified-Since / Last-Modified (see #6218).
+      let rev = cleanedEtag || lastModified || '';
+      // Keep Last-Modified as legacyRev for backwards compatibility
+      let legacyRev = lastModified || undefined;
 
-      // Fallback: Some servers may omit Last-Modified on GET, so request metadata separately
-      if (isLastModifiedMissing) {
+      // Fallback: Some servers may omit both headers on GET, so request metadata separately
+      if (!rev) {
         SyncLog.verbose(
-          `${WebdavApi.L}.download() missing Last-Modified header, trying metadata fallback for ${path}`,
+          `${WebdavApi.L}.download() missing ETag and Last-Modified headers, trying metadata fallback for ${path}`,
         );
         try {
           const meta = await this.getFileMeta(path, null, true);
-          if (!lastModified && meta.lastmod) {
-            lastModified = meta.lastmod;
-            rev = lastModified;
+          const metaEtag = meta.data?.etag;
+          if (metaEtag) {
+            rev = this._cleanRev(metaEtag);
           }
-          if (isLegacyRevMissing) {
-            const metaEtag = meta.data?.etag;
-            if (metaEtag) {
-              legacyRev = this._cleanRev(metaEtag);
-            }
+          if (!rev && meta.lastmod) {
+            rev = meta.lastmod;
+          }
+          if (!legacyRev && meta.lastmod) {
+            legacyRev = meta.lastmod;
           }
         } catch (e) {
           SyncLog.warn(
@@ -208,17 +219,9 @@ export class WebdavApi {
         }
       }
 
-      // Fallback to ETag if Last-Modified is still not available
-      if (!rev && legacyRev) {
-        rev = legacyRev;
-        SyncLog.warn(
-          `${WebdavApi.L}.download() no Last-Modified for ${path}, using ETag as revision.`,
-        );
-      }
-
       if (!rev) {
         SyncLog.err(
-          `${WebdavApi.L}.download() no revision markers (Last-Modified or ETag) found for ${path}. ` +
+          `${WebdavApi.L}.download() no revision markers (ETag or Last-Modified) found for ${path}. ` +
             `Check your WebDAV server or reverse proxy configuration.`,
         );
         throw new NoRevAPIError(`No revision markers available for: ${path}`);
@@ -359,37 +362,38 @@ export class WebdavApi {
         }
       }
 
-      // Get the new revision from Last-Modified
+      // Get revision headers - prefer ETag for exact matching (avoids #6218)
       const lastModified =
         response.headers['last-modified'] || response.headers['Last-Modified'];
-
-      // Get ETag for legacy compatibility
       const etag = response.headers['etag'] || response.headers['ETag'];
-      const legacyRev = etag ? this._cleanRev(etag) : undefined;
+      const cleanedEtag = etag ? this._cleanRev(etag) : undefined;
 
-      let rev = lastModified || '';
+      let rev = cleanedEtag || lastModified || '';
+      const legacyRev = lastModified || undefined;
 
       if (!rev) {
-        // Some WebDAV servers don't return Last-Modified on PUT
-        // Try to get it from a HEAD request first (cheaper than PROPFIND)
+        // Some WebDAV servers don't return headers on PUT
+        // Try to get them from a HEAD request first (cheaper than PROPFIND)
         SyncLog.verbose(
-          `${WebdavApi.L}.upload() no Last-Modified in PUT response, fetching via HEAD`,
+          `${WebdavApi.L}.upload() no ETag or Last-Modified in PUT response, fetching via HEAD`,
         );
         try {
           const headResponse = await this._makeRequest({
             url: fullPath,
             method: WebDavHttpMethod.HEAD,
           });
+          const headEtag = headResponse.headers['etag'] || headResponse.headers['ETag'];
           const headLastMod =
             headResponse.headers['last-modified'] ||
             headResponse.headers['Last-Modified'];
-          rev = headLastMod || '';
+          rev = headEtag ? this._cleanRev(headEtag) : headLastMod || '';
 
           if (rev) {
-            // Try to get ETag from HEAD response for legacy compatibility
-            const headEtag = headResponse.headers['etag'] || headResponse.headers['ETag'];
-            const headLegacyRev = headEtag ? this._cleanRev(headEtag) : undefined;
-            return { rev, legacyRev: headLegacyRev, lastModified: rev };
+            return {
+              rev,
+              legacyRev: headLastMod || undefined,
+              lastModified: headLastMod,
+            };
           }
         } catch (headError) {
           SyncLog.verbose(
@@ -400,12 +404,11 @@ export class WebdavApi {
 
         // If HEAD didn't work, fall back to PROPFIND
         const meta = await this.getFileMeta(path, null, true);
-        // Extract original ETag from meta.data if available
         const metaEtag = meta.data?.etag;
-        const metaLegacyRev = metaEtag ? this._cleanRev(metaEtag) : undefined;
+        const metaRev = metaEtag ? this._cleanRev(metaEtag) : meta.lastmod;
         return {
-          rev: meta.lastmod,
-          legacyRev: metaLegacyRev,
+          rev: metaRev,
+          legacyRev: meta.lastmod || undefined,
           lastModified: meta.lastmod,
         };
       }

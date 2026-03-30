@@ -95,6 +95,9 @@ export class FileBasedSyncAdapterService {
   /** Cache TTL - 30 seconds (sync cycle should complete within this) */
   private readonly _CACHE_TTL_MS = 30_000;
 
+  /** Guard against overlapping sync operations on the same provider */
+  private _activeSyncOps = new Set<string>();
+
   /** Tracks whether we've loaded persisted state from localStorage */
   private _persistedStateLoaded = false;
 
@@ -547,6 +550,32 @@ export class FileBasedSyncAdapterService {
     lastKnownServerSeq?: number,
   ): Promise<OpUploadResponse> {
     const providerKey = this._getProviderKey(provider);
+    const lockKey = `upload:${providerKey}`;
+    if (this._activeSyncOps.has(lockKey)) {
+      OpLog.warn(
+        'FileBasedSyncAdapter: Upload already in progress for this provider, skipping',
+      );
+      return {
+        results: [],
+        latestSeq: this._localSeqCounters.get(providerKey) || 0,
+      };
+    }
+    this._activeSyncOps.add(lockKey);
+    try {
+      return await this._uploadOpsInner(provider, cfg, encryptKey, ops, clientId);
+    } finally {
+      this._activeSyncOps.delete(lockKey);
+    }
+  }
+
+  private async _uploadOpsInner(
+    provider: SyncProviderServiceInterface<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    ops: SyncOperation[],
+    clientId: string,
+  ): Promise<OpUploadResponse> {
+    const providerKey = this._getProviderKey(provider);
 
     // Step 1: Get current sync state
     const { currentData, currentSyncVersion, fileExists, revToMatch } =
@@ -624,6 +653,41 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async _downloadOps(
+    provider: SyncProviderServiceInterface<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    sinceSeq: number,
+    excludeClient?: string,
+    limit: number = 500,
+  ): Promise<OpDownloadResponse> {
+    const providerKey = this._getProviderKey(provider);
+    const lockKey = `download:${providerKey}`;
+    if (this._activeSyncOps.has(lockKey)) {
+      OpLog.warn(
+        'FileBasedSyncAdapter: Download already in progress for this provider, skipping',
+      );
+      return {
+        ops: [],
+        hasMore: false,
+        latestSeq: this._localSeqCounters.get(providerKey) || 0,
+      };
+    }
+    this._activeSyncOps.add(lockKey);
+    try {
+      return await this._downloadOpsInner(
+        provider,
+        cfg,
+        encryptKey,
+        sinceSeq,
+        excludeClient,
+        limit,
+      );
+    } finally {
+      this._activeSyncOps.delete(lockKey);
+    }
+  }
+
+  private async _downloadOpsInner(
     provider: SyncProviderServiceInterface<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
