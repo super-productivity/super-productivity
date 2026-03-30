@@ -79,7 +79,7 @@ export abstract class WebdavBaseProvider<
     const meta = await this._api.getFileMeta(filePath, localRev, true);
     // Prefer ETag for exact matching (avoids subsecond precision issues with Last-Modified)
     const etag = meta.data?.etag;
-    const cleanedEtag = etag ? etag.replace(/"/g, '').replace(/\//g, '').trim() : '';
+    const cleanedEtag = etag ? WebdavBaseProvider._cleanRev(etag) : '';
     return { rev: cleanedEtag || meta.lastmod };
   }
 
@@ -180,7 +180,12 @@ export abstract class WebdavBaseProvider<
   private async _detectCapabilities(): Promise<void> {
     try {
       const cfg = await this.privateCfg.load();
-      if (cfg?.serverCapabilities) {
+      if (!cfg) {
+        SyncLog.warn(`${this.logLabel}: Cannot detect capabilities without config`);
+        return;
+      }
+
+      if (cfg.serverCapabilities) {
         this._capabilitiesDetected = true;
         return;
       }
@@ -188,20 +193,18 @@ export abstract class WebdavBaseProvider<
       SyncLog.normal(
         `${this.logLabel}: Running server capability detection (first sync)...`,
       );
-      const testPath = `${cfg?.syncFolderPath || '/'}/.sp-cap-test-${Date.now()}`;
+      const testPath = `${cfg.syncFolderPath || '/'}/.sp-cap-test-${Date.now()}`;
       const supportsConditionalHeaders = await this._api.testConditionalHeaders(testPath);
 
       // Cache result in config so it persists
-      if (cfg) {
-        await this.privateCfg.setComplete({
-          ...cfg,
-          serverCapabilities: {
-            supportsETags: true,
-            supportsIfHeader: supportsConditionalHeaders,
-            supportsLastModified: true,
-          },
-        } as PrivateCfgByProviderId<T>);
-      }
+      await this.privateCfg.setComplete({
+        ...cfg,
+        serverCapabilities: {
+          supportsETags: true,
+          supportsIfHeader: supportsConditionalHeaders,
+          supportsLastModified: true,
+        },
+      } as PrivateCfgByProviderId<T>);
 
       if (!supportsConditionalHeaders) {
         SyncLog.warn(
@@ -209,16 +212,25 @@ export abstract class WebdavBaseProvider<
             `Conflict detection will rely on syncVersion only.`,
         );
       }
+
+      this._capabilitiesDetected = true;
     } catch (e) {
       SyncLog.warn(
         `${this.logLabel}: Capability detection failed, will retry next sync`,
         e,
       );
-      // Don't cache failure — retry next time
-      return;
+      // Don't set _capabilitiesDetected — retry next time
     }
+  }
 
-    this._capabilitiesDetected = true;
+  /** Cleans ETag values — mirrors WebdavApi._cleanRev() for consistency */
+  private static _cleanRev(rev: string): string {
+    if (!rev) return '';
+    return rev
+      .replace(/"/g, '')
+      .replace(/\//g, '')
+      .replace(/&quot;/g, '')
+      .trim();
   }
 
   protected _getFilePath(targetPath: string, cfg: WebdavPrivateCfg): string {

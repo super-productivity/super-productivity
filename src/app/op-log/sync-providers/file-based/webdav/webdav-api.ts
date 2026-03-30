@@ -428,11 +428,15 @@ export class WebdavApi {
       const headers: Record<string, string> = {};
 
       if (expectedRev) {
-        // Try to parse as date for If-Unmodified-Since
         const parsedDate = new Date(expectedRev);
-        if (!isNaN(parsedDate.getTime())) {
-          // Add 1 second buffer to handle sub-second filesystem precision differences.
-          // See: https://github.com/super-productivity/super-productivity/issues/6218
+        if (isNaN(parsedDate.getTime())) {
+          // Not a valid date — treat as ETag and use If-Match
+          const quotedEtag = expectedRev.startsWith('"')
+            ? expectedRev
+            : `"${expectedRev}"`;
+          headers[WebDavHttpHeader.IF_MATCH] = quotedEtag;
+        } else {
+          // Valid date — use If-Unmodified-Since with 1s buffer (#6218)
           const bufferedDate = new Date(parsedDate.getTime() + 1000);
           headers[WebDavHttpHeader.IF_UNMODIFIED_SINCE] = bufferedDate.toUTCString();
         }

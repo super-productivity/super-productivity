@@ -547,13 +547,13 @@ export class FileBasedSyncAdapterService {
     encryptKey: string | undefined,
     ops: SyncOperation[],
     clientId: string,
-    lastKnownServerSeq?: number,
+    _lastKnownServerSeq?: number, // Not used in file-based sync (interface requirement)
   ): Promise<OpUploadResponse> {
     const providerKey = this._getProviderKey(provider);
-    const lockKey = `upload:${providerKey}`;
+    const lockKey = `sync:${providerKey}`;
     if (this._activeSyncOps.has(lockKey)) {
       OpLog.warn(
-        'FileBasedSyncAdapter: Upload already in progress for this provider, skipping',
+        'FileBasedSyncAdapter: Sync already in progress for this provider, skipping upload',
       );
       return {
         results: [],
@@ -661,10 +661,10 @@ export class FileBasedSyncAdapterService {
     limit: number = 500,
   ): Promise<OpDownloadResponse> {
     const providerKey = this._getProviderKey(provider);
-    const lockKey = `download:${providerKey}`;
+    const lockKey = `sync:${providerKey}`;
     if (this._activeSyncOps.has(lockKey)) {
       OpLog.warn(
-        'FileBasedSyncAdapter: Download already in progress for this provider, skipping',
+        'FileBasedSyncAdapter: Sync already in progress for this provider, skipping download',
       );
       return {
         ops: [],
