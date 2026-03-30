@@ -278,13 +278,16 @@ class CapacitorMainActivity : BridgeActivity() {
         if (Intent.ACTION_SEND == intent.action && intent.type != null) {
             if (intent.type?.startsWith("text/") == true) {
                 val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: "Shared Content"
+                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: ""
+                val sharedSubject = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: ""
                 Log.d("SP_SHARE", "Shared text: $sharedText")
                 Log.d("SP_SHARE", "Shared title: $sharedTitle")
+                Log.d("SP_SHARE", "Shared subject: $sharedSubject")
 
                 if (sharedText != null) {
                     val json = JSONObject()
                     json.put("title", sharedTitle)
+                    json.put("subject", sharedSubject)
                     val type = if (sharedText.startsWith("http")) "LINK" else "NOTE"
                     json.put("type", type)
                     json.put("path", sharedText)

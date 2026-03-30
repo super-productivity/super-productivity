@@ -22,15 +22,12 @@ export class AndroidEffects {
       () =>
         androidInterface.onShareWithAttachment$.pipe(
           tap((shareData) => {
-            const truncatedTitle =
-              shareData.title.length > 150
-                ? shareData.title.substring(0, 147) + '...'
-                : shareData.title;
-            const taskTitle = `Check: ${truncatedTitle}`;
+            const taskTitle = this._buildTaskTitle(shareData);
             const taskId = this._taskService.add(taskTitle);
             const icon = shareData.type === 'LINK' ? 'link' : 'file_present';
             this._taskAttachmentService.addAttachment(taskId, {
-              title: shareData.title,
+              title:
+                shareData.subject?.trim() || shareData.title?.trim() || shareData.path,
               type: shareData.type,
               path: shareData.path,
               icon,
@@ -129,6 +126,57 @@ export class AndroidEffects {
         ),
       { dispatch: false },
     );
+
+  private _buildTaskTitle(shareData: {
+    title: string;
+    subject: string;
+    type: string;
+    path: string;
+  }): string {
+    const subject = shareData.subject?.trim() || '';
+    const title = shareData.title?.trim() || '';
+    const path = shareData.path?.trim() || '';
+
+    let taskTitle: string;
+
+    if (shareData.type === 'LINK') {
+      // For links: prefer subject (page title from browsers), then title, then readable URL
+      if (subject) {
+        taskTitle = subject;
+      } else if (title) {
+        taskTitle = title;
+      } else {
+        taskTitle = this._readableUrl(path);
+      }
+    } else {
+      // For notes: prefer subject, then title, then first line of text
+      if (subject) {
+        taskTitle = subject;
+      } else if (title) {
+        taskTitle = title;
+      } else {
+        const firstLine = path.split('\n')[0].trim();
+        taskTitle = firstLine || 'Shared note';
+      }
+    }
+
+    return taskTitle.length > 150 ? taskTitle.substring(0, 147) + '...' : taskTitle;
+  }
+
+  private _readableUrl(url: string): string {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.replace(/^www\./, '');
+      const pathPart = parsed.pathname.replace(/\/$/, '');
+      if (pathPart && pathPart !== '/') {
+        const decoded = decodeURIComponent(pathPart).replace(/[/_-]/g, ' ').trim();
+        return decoded ? `${host}: ${decoded}` : host;
+      }
+      return host;
+    } catch {
+      return url;
+    }
+  }
 
   // Check for pending share data on resume (catches app killed after receiving share)
   checkPendingShareOnResume$ =
