@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { isEmailAllowed } from './email-allowlist';
 import * as jwt from 'jsonwebtoken';
 import {
   verifyEmail,
@@ -246,6 +247,10 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
         }
         const { email } = parseResult.data;
 
+        if (!isEmailAllowed(email)) {
+          return reply.status(403).send({ error: 'Registration is not allowed for this email address.' });
+        }
+
         const options = await generateRegistrationOptions(email);
         return reply.send(options);
       } catch (err) {
@@ -279,6 +284,10 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
           });
         }
         const { email, credential } = parseResult.data;
+
+        if (!isEmailAllowed(email)) {
+          return reply.status(403).send({ error: 'Registration is not allowed for this email address.' });
+        }
 
         const result = await verifyRegistration(email, credential as any, Date.now());
         return reply.status(201).send(result);
@@ -508,6 +517,10 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
           });
         }
         const { email } = parseResult.data;
+
+        if (!isEmailAllowed(email)) {
+          return reply.status(403).send({ error: 'Registration is not allowed for this email address.' });
+        }
 
         const result = await registerWithMagicLink(email, Date.now());
         return reply.status(201).send(result);
