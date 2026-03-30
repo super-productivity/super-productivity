@@ -41,6 +41,7 @@
     <planner-task
       cdkDrag
       [cdkDragData]="task"
+      [cdkDragStartDelay]="dragDelayForTouch()"
       [task]="task"
       [tagsToHide]="panelCfg().includedTagIds || []"
     >

@@ -15,8 +15,7 @@ import { MatIcon } from '@angular/material/icon';
 import { TaskCopy } from '../../tasks/task.model';
 import { OVERDUE_LIST_ID } from '../planner.model';
 import { TranslatePipe } from '@ngx-translate/core';
-import { isTouchActive } from '../../../util/input-intent';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
+import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
@@ -47,8 +46,7 @@ export class PlannerDayOverdueComponent {
 
   OVERDUE_LIST_ID = OVERDUE_LIST_ID;
   protected readonly T = T;
-  protected readonly isTouchActive = isTouchActive;
-  protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
   // Lock Y-axis on small screens only — on wider screens the planner uses a
   // multi-column grid where cross-column dragging requires horizontal movement.
   protected readonly isXs = this._layoutService.isXs;

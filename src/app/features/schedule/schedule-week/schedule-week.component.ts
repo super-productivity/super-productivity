@@ -23,8 +23,7 @@ import { ScheduleEventComponent } from '../schedule-event/schedule-event.compone
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../../t.const';
-import { isTouchActive } from '../../../util/input-intent';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
+import { dragDelayForTouch, isTouchActive } from '../../../util/input-intent';
 import { MatTooltip } from '@angular/material/tooltip';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
@@ -84,7 +83,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
 
   FH = FH;
   protected readonly isTouchActive = isTouchActive;
-  DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
+  dragDelayForTouch = dragDelayForTouch;
   SVEType: typeof SVEType = SVEType;
   T: typeof T = T;
   protected readonly isDraggableSE = isDraggableSE;

@@ -32,8 +32,7 @@ import { ShortTimeHtmlPipe } from '../../../ui/pipes/short-time-html.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { ShortDate2Pipe } from '../../../ui/pipes/short-date2.pipe';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
-import { isTouchActive } from '../../../util/input-intent';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
+import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
@@ -78,8 +77,7 @@ export class PlannerDayComponent {
 
   protected readonly T = T;
   protected readonly SCHEDULE_ITEM_TYPE = ScheduleItemType;
-  protected readonly isTouchActive = isTouchActive;
-  protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
   // Lock Y-axis on small screens only — on wider screens the planner uses a
   // multi-column grid where cross-column dragging requires horizontal movement.
   protected readonly isXs = this._layoutService.isXs;

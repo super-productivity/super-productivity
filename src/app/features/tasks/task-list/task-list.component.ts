@@ -42,8 +42,7 @@ import { TaskViewCustomizerService } from '../../task-view-customizer/task-view-
 import { TaskLog } from '../../../core/log';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
-import { isTouchActive } from '../../../util/input-intent';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
+import { dragDelayForTouch } from '../../../util/input-intent';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
@@ -79,8 +78,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
   dropListService = inject(DropListService);
   private _layoutService = inject(LayoutService);
-  protected readonly isTouchActive = isTouchActive;
-  protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
   // Lock Y-axis on small screens only — on wider screens the task list may sit
   // beside a side-nav or other drop targets that require horizontal dragging.
   protected readonly isXs = this._layoutService.isXs;
