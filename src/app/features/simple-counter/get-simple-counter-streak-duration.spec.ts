@@ -4,13 +4,21 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 /* eslint-disable no-mixed-operators */
+
+// DST-safe helper: uses calendar arithmetic (setDate) instead of
+// millisecond subtraction (Date.now() - N * 86400000) which breaks
+// during DST transitions when a day is 23 or 25 hours.
+const daysAgo = (n: number): Date => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d;
+};
+
 describe('getSimpleCounterStreakDuration()', () => {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterday = daysAgo(1);
   const Y_STR = getDbDateStr(yesterday);
 
-  const twoDaysAgo = new Date();
-  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+  const twoDaysAgo = daysAgo(2);
   const TWO_DAYS_AGO_STR = getDbDateStr(twoDaysAgo);
 
   describe('specific-days mode (existing behavior)', () => {
@@ -137,19 +145,19 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           [getDbDateStr()]: 1,
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 12 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(1))]: 1,
+          [getDbDateStr(daysAgo(2))]: 1,
+          [getDbDateStr(daysAgo(3))]: 1,
+          [getDbDateStr(daysAgo(4))]: 1,
+          [getDbDateStr(daysAgo(5))]: 1,
+          [getDbDateStr(daysAgo(6))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(8))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
+          [getDbDateStr(daysAgo(10))]: 1,
+          [getDbDateStr(daysAgo(11))]: 1,
+          [getDbDateStr(daysAgo(12))]: 1,
+          [getDbDateStr(daysAgo(13))]: 1,
         },
         isTrackStreaks: true,
         streakMinValue: 1,
@@ -167,21 +175,21 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           [getDbDateStr()]: 1,
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 12 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 15 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(1))]: 1,
+          [getDbDateStr(daysAgo(2))]: 1,
+          [getDbDateStr(daysAgo(3))]: 1,
+          [getDbDateStr(daysAgo(4))]: 0,
+          [getDbDateStr(daysAgo(5))]: 1,
+          [getDbDateStr(daysAgo(6))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(8))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
+          [getDbDateStr(daysAgo(10))]: 1,
+          [getDbDateStr(daysAgo(11))]: 0,
+          [getDbDateStr(daysAgo(12))]: 1,
+          [getDbDateStr(daysAgo(13))]: 1,
+          [getDbDateStr(daysAgo(14))]: 1,
+          [getDbDateStr(daysAgo(15))]: 1,
         },
         isTrackStreaks: true,
         streakMinValue: 1,
@@ -193,7 +201,7 @@ describe('getSimpleCounterStreakDuration()', () => {
           4: true,
           5: true,
           6: true,
-          ...{ [new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).getDay()]: false },
+          ...{ [daysAgo(4).getDay()]: false },
         },
       },
     ];
@@ -209,19 +217,19 @@ describe('getSimpleCounterStreakDuration()', () => {
       {
         id: '1',
         countOnDay: {
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 12 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(1))]: 1,
+          [getDbDateStr(daysAgo(2))]: 1,
+          [getDbDateStr(daysAgo(3))]: 1,
+          [getDbDateStr(daysAgo(4))]: 1,
+          [getDbDateStr(daysAgo(5))]: 1,
+          [getDbDateStr(daysAgo(6))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(8))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
+          [getDbDateStr(daysAgo(10))]: 1,
+          [getDbDateStr(daysAgo(11))]: 1,
+          [getDbDateStr(daysAgo(12))]: 1,
+          [getDbDateStr(daysAgo(13))]: 1,
         },
         isTrackStreaks: true,
         streakMinValue: 1,
@@ -239,21 +247,21 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           [getDbDateStr()]: 1,
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 12 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 15 * 24 * 60 * 60 * 1000))]: 2,
+          [getDbDateStr(daysAgo(1))]: 2,
+          [getDbDateStr(daysAgo(2))]: 2,
+          [getDbDateStr(daysAgo(3))]: 2,
+          [getDbDateStr(daysAgo(4))]: 0,
+          [getDbDateStr(daysAgo(5))]: 2,
+          [getDbDateStr(daysAgo(6))]: 2,
+          [getDbDateStr(daysAgo(7))]: 2,
+          [getDbDateStr(daysAgo(8))]: 2,
+          [getDbDateStr(daysAgo(9))]: 2,
+          [getDbDateStr(daysAgo(10))]: 2,
+          [getDbDateStr(daysAgo(11))]: 0,
+          [getDbDateStr(daysAgo(12))]: 2,
+          [getDbDateStr(daysAgo(13))]: 2,
+          [getDbDateStr(daysAgo(14))]: 2,
+          [getDbDateStr(daysAgo(15))]: 2,
         },
         isTrackStreaks: true,
         streakMinValue: 2,
@@ -265,7 +273,7 @@ describe('getSimpleCounterStreakDuration()', () => {
           4: true,
           5: true,
           6: true,
-          ...{ [new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).getDay()]: false },
+          ...{ [daysAgo(4).getDay()]: false },
         },
       },
     ];
@@ -280,19 +288,19 @@ describe('getSimpleCounterStreakDuration()', () => {
       {
         id: '1',
         countOnDay: {
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 12 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(1))]: 0,
+          [getDbDateStr(daysAgo(2))]: 1,
+          [getDbDateStr(daysAgo(3))]: 1,
+          [getDbDateStr(daysAgo(4))]: 1,
+          [getDbDateStr(daysAgo(5))]: 1,
+          [getDbDateStr(daysAgo(6))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(8))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
+          [getDbDateStr(daysAgo(10))]: 1,
+          [getDbDateStr(daysAgo(11))]: 1,
+          [getDbDateStr(daysAgo(12))]: 1,
+          [getDbDateStr(daysAgo(13))]: 1,
         },
         isTrackStreaks: true,
         streakMinValue: 1,
@@ -310,21 +318,21 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           [getDbDateStr()]: 1,
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 12 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 15 * 24 * 60 * 60 * 1000))]: 2,
+          [getDbDateStr(daysAgo(1))]: 0,
+          [getDbDateStr(daysAgo(2))]: 2,
+          [getDbDateStr(daysAgo(3))]: 2,
+          [getDbDateStr(daysAgo(4))]: 0,
+          [getDbDateStr(daysAgo(5))]: 2,
+          [getDbDateStr(daysAgo(6))]: 2,
+          [getDbDateStr(daysAgo(7))]: 2,
+          [getDbDateStr(daysAgo(8))]: 2,
+          [getDbDateStr(daysAgo(9))]: 2,
+          [getDbDateStr(daysAgo(10))]: 2,
+          [getDbDateStr(daysAgo(11))]: 0,
+          [getDbDateStr(daysAgo(12))]: 2,
+          [getDbDateStr(daysAgo(13))]: 2,
+          [getDbDateStr(daysAgo(14))]: 2,
+          [getDbDateStr(daysAgo(15))]: 2,
         },
         isTrackStreaks: true,
         streakMinValue: 2,
@@ -336,7 +344,7 @@ describe('getSimpleCounterStreakDuration()', () => {
           4: true,
           5: true,
           6: true,
-          ...{ [new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).getDay()]: false },
+          ...{ [daysAgo(4).getDay()]: false },
         },
       },
     ];
@@ -345,9 +353,7 @@ describe('getSimpleCounterStreakDuration()', () => {
       it('should return 0 if streak, and 13 when edited', () => {
         expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(0);
 
-        (sc as SimpleCounterCopy).countOnDay[
-          getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))
-        ] = 2;
+        (sc as SimpleCounterCopy).countOnDay[getDbDateStr(daysAgo(1))] = 2;
 
         expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(13);
       });
@@ -357,19 +363,19 @@ describe('getSimpleCounterStreakDuration()', () => {
       {
         id: '1',
         countOnDay: {
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 12 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(1))]: 1,
+          [getDbDateStr(daysAgo(2))]: 1,
+          [getDbDateStr(daysAgo(3))]: 1,
+          [getDbDateStr(daysAgo(4))]: 1,
+          [getDbDateStr(daysAgo(5))]: 1,
+          [getDbDateStr(daysAgo(6))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(8))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
+          [getDbDateStr(daysAgo(10))]: 1,
+          [getDbDateStr(daysAgo(11))]: 1,
+          [getDbDateStr(daysAgo(12))]: 1,
+          [getDbDateStr(daysAgo(13))]: 1,
         },
         isTrackStreaks: true,
         streakMinValue: 1,
@@ -387,21 +393,21 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           [getDbDateStr()]: 1,
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 0,
-          [getDbDateStr(new Date(Date.now() - 12 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))]: 2,
-          [getDbDateStr(new Date(Date.now() - 15 * 24 * 60 * 60 * 1000))]: 2,
+          [getDbDateStr(daysAgo(1))]: 2,
+          [getDbDateStr(daysAgo(2))]: 2,
+          [getDbDateStr(daysAgo(3))]: 2,
+          [getDbDateStr(daysAgo(4))]: 0,
+          [getDbDateStr(daysAgo(5))]: 2,
+          [getDbDateStr(daysAgo(6))]: 2,
+          [getDbDateStr(daysAgo(7))]: 2,
+          [getDbDateStr(daysAgo(8))]: 2,
+          [getDbDateStr(daysAgo(9))]: 2,
+          [getDbDateStr(daysAgo(10))]: 2,
+          [getDbDateStr(daysAgo(11))]: 0,
+          [getDbDateStr(daysAgo(12))]: 2,
+          [getDbDateStr(daysAgo(13))]: 2,
+          [getDbDateStr(daysAgo(14))]: 2,
+          [getDbDateStr(daysAgo(15))]: 2,
         },
         isTrackStreaks: true,
         streakMinValue: 2,
@@ -413,7 +419,7 @@ describe('getSimpleCounterStreakDuration()', () => {
           4: true,
           5: true,
           6: true,
-          ...{ [new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).getDay()]: false },
+          ...{ [daysAgo(4).getDay()]: false },
         },
       },
     ];
@@ -422,9 +428,7 @@ describe('getSimpleCounterStreakDuration()', () => {
       it('should return 13 if streak, and 0 when edited', () => {
         expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(13);
 
-        (sc as SimpleCounterCopy).countOnDay[
-          getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))
-        ] = 0;
+        (sc as SimpleCounterCopy).countOnDay[getDbDateStr(daysAgo(1))] = 0;
 
         expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(0);
       });
@@ -472,9 +476,9 @@ describe('getSimpleCounterStreakDuration()', () => {
       const counter: Partial<SimpleCounterCopy> = {
         id: '1',
         countOnDay: {
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(1))]: 1,
+          [getDbDateStr(daysAgo(2))]: 1,
+          [getDbDateStr(daysAgo(3))]: 1,
         },
         isTrackStreaks: true,
         streakMode: 'weekly-frequency',
@@ -489,11 +493,11 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           // Last week - 3 completions
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
+          [getDbDateStr(daysAgo(10))]: 1,
           // This week - only 1 completion
-          [getDbDateStr(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(1))]: 1,
         },
         isTrackStreaks: true,
         streakMode: 'weekly-frequency',
@@ -508,14 +512,14 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           // Two weeks ago - 2 completions (FAILS frequency of 3)
-          [getDbDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 15 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(14))]: 1,
+          [getDbDateStr(daysAgo(15))]: 1,
           // Last week - 5 completions (MEETS frequency of 3)
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 11 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(8))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
+          [getDbDateStr(daysAgo(10))]: 1,
+          [getDbDateStr(daysAgo(11))]: 1,
         },
         isTrackStreaks: true,
         streakMode: 'weekly-frequency',
@@ -530,14 +534,14 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           // Two weeks ago - 3 completions (MEETS frequency of 3)
-          [getDbDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 15 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 16 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(14))]: 1,
+          [getDbDateStr(daysAgo(15))]: 1,
+          [getDbDateStr(daysAgo(16))]: 1,
           // Last week - 4 completions (MEETS frequency of 3)
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(8))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
+          [getDbDateStr(daysAgo(10))]: 1,
         },
         isTrackStreaks: true,
         streakMode: 'weekly-frequency',
@@ -552,16 +556,16 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           // Three weeks ago - 3 completions
-          [getDbDateStr(new Date(Date.now() - 21 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 22 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 23 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(21))]: 1,
+          [getDbDateStr(daysAgo(22))]: 1,
+          [getDbDateStr(daysAgo(23))]: 1,
           // Two weeks ago - only 2 completions (breaks streak!)
-          [getDbDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 15 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(14))]: 1,
+          [getDbDateStr(daysAgo(15))]: 1,
           // Last week - 3 completions
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 1,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 1,
+          [getDbDateStr(daysAgo(7))]: 1,
+          [getDbDateStr(daysAgo(8))]: 1,
+          [getDbDateStr(daysAgo(9))]: 1,
         },
         isTrackStreaks: true,
         streakMode: 'weekly-frequency',
@@ -576,9 +580,9 @@ describe('getSimpleCounterStreakDuration()', () => {
         id: '1',
         countOnDay: {
           // Last week - 3 days but only 2 meet the min value
-          [getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))]: 5,
-          [getDbDateStr(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))]: 5,
-          [getDbDateStr(new Date(Date.now() - 9 * 24 * 60 * 60 * 1000))]: 2, // below threshold
+          [getDbDateStr(daysAgo(7))]: 5,
+          [getDbDateStr(daysAgo(8))]: 5,
+          [getDbDateStr(daysAgo(9))]: 2, // below threshold
         },
         isTrackStreaks: true,
         streakMode: 'weekly-frequency',
