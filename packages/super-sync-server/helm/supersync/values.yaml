@@ -184,8 +184,8 @@ autoscaling:
   enabled: false
   # -- Minimum number of replicas
   minReplicas: 1
-  # -- Maximum number of replicas
-  maxReplicas: 3
+  # -- Maximum number of replicas (must be 1 until shared WS state is implemented)
+  maxReplicas: 1
   # -- Target CPU utilization percentage
   targetCPUUtilizationPercentage: 80
 

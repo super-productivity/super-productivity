@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { DestroyRef, inject, Injectable } from '@angular/core';
 import { BehaviorSubject, combineLatest, firstValueFrom, Observable, of } from 'rxjs';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
@@ -10,7 +10,7 @@ import {
   switchMap,
   timeout,
 } from 'rxjs/operators';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import {
   SyncAlreadyInProgressError,
   LockAcquisitionTimeoutError,
@@ -100,9 +100,11 @@ export class SyncWrapperService {
     map((cfg) => toSyncProviderId(cfg.syncProvider)),
   );
 
+  private _destroyRef = inject(DestroyRef);
+
   // Disconnect WebSocket when sync provider changes away from SuperSync or sync is disabled
   private _wsProviderCleanup = this.syncProviderId$
-    .pipe(distinctUntilChanged())
+    .pipe(distinctUntilChanged(), takeUntilDestroyed(this._destroyRef))
     .subscribe((providerId) => {
       if (providerId !== SyncProviderId.SuperSync) {
         this.disconnectWebSocket();
@@ -127,6 +129,7 @@ export class SyncWrapperService {
       }
       return cfg.syncInterval;
     }),
+    distinctUntilChanged(),
   );
 
   isEnabledAndReady$: Observable<boolean> = this._providerManager.isProviderReady$;
@@ -481,7 +484,10 @@ export class SyncWrapperService {
       SyncLog.log('SyncWrapperService: Sync complete, status=IN_SYNC');
 
       // Connect WebSocket after first successful SuperSync sync (fire-and-forget)
-      if (!this._superSyncWsService.isConnected()) {
+      if (
+        providerId === SyncProviderId.SuperSync &&
+        !this._superSyncWsService.isConnected()
+      ) {
         this.connectWebSocket().catch((err) => {
           SyncLog.warn(
             'SyncWrapperService: WebSocket connection failed, will retry on next sync',

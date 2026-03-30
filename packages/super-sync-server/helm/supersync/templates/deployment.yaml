@@ -1,3 +1,6 @@
+{{- if gt (.Values.replicaCount | int) 1 }}
+  {{- fail "replicaCount > 1 is not supported: WebSocket connection state is in-memory and not shared across replicas" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,7 +43,7 @@ spec:
         - name: migrate-db
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ['sh', '-c', 'npx prisma db push --skip-generate --accept-data-loss']
+          command: ['sh', '-c', 'npx prisma@5.22.0 migrate deploy']
           env:
             {{- if .Values.postgresql.enabled }}
             - name: POSTGRES_USER

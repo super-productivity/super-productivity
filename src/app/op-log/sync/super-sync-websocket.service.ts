@@ -5,15 +5,12 @@ import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 
 export interface NewOpsNotification {
   latestSeq: number;
-  fromClientId: string;
 }
 
 interface WsMessage {
   type: string;
   latestSeq?: number;
-  fromClientId?: string;
   timestamp?: number;
-  userId?: number;
 }
 
 const MIN_RECONNECT_DELAY_MS = 1000;
@@ -149,10 +146,7 @@ export class SuperSyncWebSocketService implements OnDestroy {
     switch (msg.type) {
       case 'new_ops':
         if (msg.latestSeq !== undefined) {
-          this._newOpsNotification$.next({
-            latestSeq: msg.latestSeq,
-            fromClientId: msg.fromClientId ?? '',
-          });
+          this._newOpsNotification$.next({ latestSeq: msg.latestSeq });
         }
         break;
       case 'ping':

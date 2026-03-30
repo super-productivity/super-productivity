@@ -25,15 +25,29 @@ export class WebSocketConnectionService {
   private static readonly PONG_TIMEOUT_MS = 10_000;
   /** Debounce notifications: max 1 per 100ms per user (latest-seq-wins) */
   private static readonly NOTIFY_DEBOUNCE_MS = 100;
+  /** Max WebSocket connections per user to prevent resource exhaustion */
+  private static readonly MAX_CONNECTIONS_PER_USER = 10;
 
   private pendingNotifications = new Map<
     number,
-    { timer: ReturnType<typeof setTimeout>; excludeClientIds: Set<string> }
+    {
+      timer: ReturnType<typeof setTimeout>;
+      excludeClientIds: Set<string>;
+      latestSeq: number;
+    }
   >();
 
   addConnection(userId: number, clientId: string, ws: WebSocket): void {
     if (!this.connections.has(userId)) {
       this.connections.set(userId, new Set());
+    }
+    const userSet = this.connections.get(userId)!;
+    if (userSet.size >= WebSocketConnectionService.MAX_CONNECTIONS_PER_USER) {
+      Logger.warn(
+        `[ws:user:${userId}] Connection rejected: max connections per user reached`,
+      );
+      ws.close(4008, 'Too many connections');
+      return;
     }
     const client: ConnectedClient = {
       ws,
@@ -41,7 +55,7 @@ export class WebSocketConnectionService {
       userId,
       lastPong: Date.now(),
     };
-    this.connections.get(userId)!.add(client);
+    userSet.add(client);
 
     // Send connected message
     this._sendMessage(ws, {
@@ -70,8 +84,8 @@ export class WebSocketConnectionService {
     });
 
     ws.on('error', (err: Error) => {
+      // Close event follows error — cleanup is handled there
       Logger.warn(`[ws:user:${userId}:${clientId}] WebSocket error: ${err.message}`);
-      this.removeConnection(userId, client);
     });
 
     const userConns = this.connections.get(userId)?.size ?? 0;
@@ -113,30 +127,27 @@ export class WebSocketConnectionService {
     const userSet = this.connections.get(userId);
     if (!userSet || userSet.size === 0) return;
 
-    const pending = this.pendingNotifications.get(userId);
+    let pending = this.pendingNotifications.get(userId);
     if (pending) {
-      // Accumulate excluded client IDs across debounced calls
       clearTimeout(pending.timer);
       pending.excludeClientIds.add(excludeClientId);
-      const timer = setTimeout(() => {
-        const entry = this.pendingNotifications.get(userId);
-        this.pendingNotifications.delete(userId);
-        if (entry) {
-          this._sendNewOpsNotification(userId, entry.excludeClientIds, latestSeq);
-        }
-      }, WebSocketConnectionService.NOTIFY_DEBOUNCE_MS);
-      pending.timer = timer;
+      pending.latestSeq = latestSeq;
     } else {
-      const excludeClientIds = new Set([excludeClientId]);
-      const timer = setTimeout(() => {
-        const entry = this.pendingNotifications.get(userId);
-        this.pendingNotifications.delete(userId);
-        if (entry) {
-          this._sendNewOpsNotification(userId, entry.excludeClientIds, latestSeq);
-        }
-      }, WebSocketConnectionService.NOTIFY_DEBOUNCE_MS);
-      this.pendingNotifications.set(userId, { timer, excludeClientIds });
+      pending = {
+        timer: null as unknown as ReturnType<typeof setTimeout>,
+        excludeClientIds: new Set([excludeClientId]),
+        latestSeq,
+      };
+      this.pendingNotifications.set(userId, pending);
     }
+
+    pending.timer = setTimeout(() => {
+      const entry = this.pendingNotifications.get(userId);
+      this.pendingNotifications.delete(userId);
+      if (entry) {
+        this._sendNewOpsNotification(userId, entry.excludeClientIds, entry.latestSeq);
+      }
+    }, WebSocketConnectionService.NOTIFY_DEBOUNCE_MS);
   }
 
   private _sendNewOpsNotification(

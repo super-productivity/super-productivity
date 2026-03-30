@@ -158,7 +158,10 @@ export const createServer = (
       });
 
       // WebSocket support for real-time sync notifications
-      await fastifyServer.register(websocket);
+      // maxPayload: only app-level pong messages expected from clients (~20 bytes)
+      await fastifyServer.register(websocket, {
+        options: { maxPayload: 1024 },
+      });
 
       // Health Check - verifies database connectivity
       // Exempt from rate limiting (Kubernetes probes hit this every 5-15s)
