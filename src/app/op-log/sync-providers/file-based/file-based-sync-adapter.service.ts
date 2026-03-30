@@ -873,6 +873,39 @@ export class FileBasedSyncAdapterService {
     schemaVersion: number,
   ): Promise<SnapshotUploadResponse> {
     const providerKey = this._getProviderKey(provider);
+    const lockKey = `sync:${providerKey}`;
+    if (this._activeSyncOps.has(lockKey)) {
+      OpLog.warn(
+        'FileBasedSyncAdapter: Sync already in progress for this provider, skipping snapshot upload',
+      );
+      return { accepted: false, serverSeq: this._localSeqCounters.get(providerKey) || 0 };
+    }
+    this._activeSyncOps.add(lockKey);
+    try {
+      return await this._uploadSnapshotInner(
+        provider,
+        cfg,
+        encryptKey,
+        clientId,
+        reason,
+        vectorClock,
+        schemaVersion,
+      );
+    } finally {
+      this._activeSyncOps.delete(lockKey);
+    }
+  }
+
+  private async _uploadSnapshotInner(
+    provider: SyncProviderServiceInterface<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    clientId: string,
+    reason: 'initial' | 'recovery' | 'migration',
+    vectorClock: Record<string, number>,
+    schemaVersion: number,
+  ): Promise<SnapshotUploadResponse> {
+    const providerKey = this._getProviderKey(provider);
 
     OpLog.normal(`FileBasedSyncAdapter: Uploading snapshot (reason=${reason})`);
 
@@ -942,6 +975,14 @@ export class FileBasedSyncAdapterService {
     provider: SyncProviderServiceInterface<SyncProviderId>,
   ): Promise<{ success: boolean }> {
     const providerKey = this._getProviderKey(provider);
+    const lockKey = `sync:${providerKey}`;
+    if (this._activeSyncOps.has(lockKey)) {
+      OpLog.warn(
+        'FileBasedSyncAdapter: Sync already in progress for this provider, skipping deleteAllData',
+      );
+      return { success: false };
+    }
+    this._activeSyncOps.add(lockKey);
 
     OpLog.normal('FileBasedSyncAdapter: Deleting all sync data');
 
@@ -983,6 +1024,8 @@ export class FileBasedSyncAdapterService {
     } catch (e) {
       OpLog.err('FileBasedSyncAdapter: Failed to delete all data', e);
       return { success: false };
+    } finally {
+      this._activeSyncOps.delete(lockKey);
     }
   }
 

@@ -224,8 +224,8 @@ describe('WebdavApi', () => {
 
       expect(result).toEqual(
         jasmine.objectContaining({
-          rev: 'Wed, 15 Jan 2025 10:00:00 GMT',
-          legacyRev: 'abc123', // Cleaned ETag
+          rev: 'abc123', // Cleaned ETag (preferred over Last-Modified)
+          legacyRev: 'Wed, 15 Jan 2025 10:00:00 GMT', // Last-Modified as legacy
           dataStr: 'file content',
           lastModified: 'Wed, 15 Jan 2025 10:00:00 GMT',
         }),
@@ -459,8 +459,8 @@ describe('WebdavApi', () => {
 
       expect(result).toEqual(
         jasmine.objectContaining({
-          rev: 'Wed, 15 Jan 2025 11:00:00 GMT',
-          legacyRev: 'newrev123', // Cleaned ETag
+          rev: 'newrev123', // Cleaned ETag (preferred over Last-Modified)
+          legacyRev: 'Wed, 15 Jan 2025 11:00:00 GMT', // Last-Modified as legacy
           lastModified: 'Wed, 15 Jan 2025 11:00:00 GMT',
         }),
       );
