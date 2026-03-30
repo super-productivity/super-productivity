@@ -33,7 +33,7 @@
   @for (note of notes; track note.id) {
     <div
       cdkDrag
-      [cdkDragStartDelay]="isTouchActive() ? DRAG_DELAY_FOR_TOUCH : 0"
+      [cdkDragStartDelay]="dragDelayForTouch()"
     >
       <note
         [isFocus]="isElementWasAdded && $index === 0"

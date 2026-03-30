@@ -50,7 +50,7 @@
       <div
         class="habit-row"
         cdkDrag
-        [cdkDragStartDelay]="isTouchActive() ? DRAG_DELAY_FOR_TOUCH : 0"
+        [cdkDragStartDelay]="dragDelayForTouch()"
       >
         <div
           class="habit-title"
