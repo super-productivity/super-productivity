@@ -24,7 +24,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { ScheduleCalendarMapEntry } from '../../schedule/schedule.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { calculateAvailableHours } from '../util/calculate-available-hours';
-import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
+import { selectTimelineConfig } from '../../config/store/global-config.reducer';
 import { ScheduleConfig } from '../../config/global-config.model';
 import {
   selectStartOfNextDayDiffMs,
@@ -113,10 +113,9 @@ export const selectPlannerDays = (
   return createSelector(
     selectTaskFeatureState,
     selectPlannerState,
-    // TODO this could be more efficient by limiting this to changes of the relevant stuff
-    selectConfigFeatureState,
+    selectTimelineConfig,
     selectStartOfNextDayDiffMs,
-    (taskState, plannerState, globalConfig, startOfNextDayDiffMs): PlannerDay[] => {
+    (taskState, plannerState, scheduleConfig, startOfNextDayDiffMs): PlannerDay[] => {
       const allDatesWithData = Object.keys(plannerState.days);
       const dayDatesToUse = [
         ...dayDates,
@@ -139,7 +138,7 @@ export const selectPlannerDays = (
           calendarEvents,
           unplannedTaskIdsToday,
           deadlineMap,
-          globalConfig.schedule,
+          scheduleConfig,
           startOfNextDayDiffMs,
         ),
       );

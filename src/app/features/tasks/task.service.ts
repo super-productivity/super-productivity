@@ -124,7 +124,7 @@ export class TaskService {
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
-    // NOTE: we can't use share here, as we need the last emitted value
+    distinctUntilChanged(),
   );
   currentTaskId = toSignal(this.currentTaskId$, { initialValue: null });
 
@@ -139,10 +139,7 @@ export class TaskService {
   );
 
   selectedTaskId = toSignal(
-    this._store.pipe(
-      select(selectSelectedTaskId),
-      // NOTE: we can't use share here, as we need the last emitted value
-    ),
+    this._store.pipe(select(selectSelectedTaskId), distinctUntilChanged()),
     { initialValue: null },
   );
 
@@ -165,10 +162,7 @@ export class TaskService {
   );
 
   taskDetailPanelTargetPanel$: Observable<TaskDetailTargetPanel | null | undefined> =
-    this._store.pipe(
-      select(selectTaskDetailTargetPanel),
-      // NOTE: we can't use share here, as we need the last emitted value
-    );
+    this._store.pipe(select(selectTaskDetailTargetPanel), distinctUntilChanged());
 
   isTaskDataLoaded$: Observable<boolean> = this._store.pipe(
     select(selectIsTaskDataLoaded),
@@ -249,8 +243,7 @@ export class TaskService {
       });
 
     // Flush accumulated time when task stops (currentTaskId becomes null or changes)
-    this.currentTaskId$.pipe(distinctUntilChanged()).subscribe((newTaskId) => {
-      // When task changes or stops, flush any accumulated time
+    this.currentTaskId$.subscribe(() => {
       this._flushAccumulatedTimeSpent();
     });
 

@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import {
   MatButtonToggle,
   MatButtonToggleChange,
@@ -18,6 +18,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 @Component({
   selector: 'theme-selector',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatButtonToggleGroup,
     MatButtonToggle,

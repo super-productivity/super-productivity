@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import {
   AfterViewInit,
+  ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
@@ -63,6 +64,7 @@ const INITIAL_ENTER_ANIMATION_DURATION_MS = 425;
     '[class.resizing]': 'isResizing()',
   },
   animations: magicSideNavAnimations,
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private readonly _destroyRef = inject(DestroyRef);

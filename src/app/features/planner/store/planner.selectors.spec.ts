@@ -316,6 +316,189 @@ describe('Planner Selectors - All Day Events', () => {
   });
 });
 
+describe('Planner Selectors - selectPlannerDays', () => {
+  const today = getDbDateStr();
+
+  const createMockTask = (overrides: Partial<Task> & { id: string }): Task => {
+    const { id, ...rest } = overrides;
+    return {
+      id,
+      title: `Task ${id}`,
+      created: Date.now(),
+      isDone: false,
+      subTaskIds: [],
+      tagIds: [],
+      projectId: 'project1',
+      timeSpentOnDay: {},
+      timeEstimate: 0,
+      timeSpent: 0,
+      attachments: [],
+      ...rest,
+    };
+  };
+
+  const emptyTaskState: TaskState = {
+    ids: [],
+    entities: {},
+    currentTaskId: null,
+    selectedTaskId: null,
+    lastCurrentTaskId: null,
+    isDataLoaded: true,
+    taskDetailTargetPanel: null,
+  };
+
+  const emptyPlannerState: PlannerState = {
+    days: {},
+    addPlannedTasksDialogLastShown: undefined,
+  };
+
+  const defaultScheduleConfig = {
+    isWorkStartEndEnabled: false,
+    workStart: '09:00',
+    workEnd: '17:00',
+    isLunchBreakEnabled: false,
+    lunchBreakStart: '12:00',
+    lunchBreakEnd: '13:00',
+  };
+
+  // The factory returns a selector; test its projector directly
+  const createPlannerDaysSelector = (
+    dayDates: string[] = [today],
+    todayStr: string = today,
+    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  ) => fromSelectors.selectPlannerDays(dayDates, [], [], [], [], todayStr);
+
+  it('should return a PlannerDay for each day date', () => {
+    const selector = createPlannerDaysSelector([today]);
+    const result = selector.projector(
+      emptyTaskState,
+      emptyPlannerState,
+      defaultScheduleConfig,
+      0,
+    );
+
+    expect(result.length).toBe(1);
+    expect(result[0].dayDate).toBe(today);
+    expect(result[0].isToday).toBe(true);
+  });
+
+  it('should include tasks from planner state for a non-today day', () => {
+    const tomorrow = getDbDateStr(new Date(Date.now() + 86400000));
+    const task = createMockTask({ id: 't1', title: 'Plan task' });
+    const taskState: TaskState = {
+      ...emptyTaskState,
+      ids: ['t1'],
+      entities: { t1: task },
+    };
+    const plannerState: PlannerState = {
+      ...emptyPlannerState,
+      days: { [tomorrow]: ['t1'] },
+    };
+
+    const selector = fromSelectors.selectPlannerDays([tomorrow], [], [], [], [], today);
+    const result = selector.projector(taskState, plannerState, defaultScheduleConfig, 0);
+
+    expect(result[0].tasks.length).toBe(1);
+    expect(result[0].tasks[0].id).toBe('t1');
+  });
+
+  it('should include unplanned today tasks passed to factory', () => {
+    const task = createMockTask({ id: 't1', title: 'Today task' });
+    const taskState: TaskState = {
+      ...emptyTaskState,
+      ids: ['t1'],
+      entities: { t1: task },
+    };
+
+    // Pass t1 as a todayListTaskId (unplanned since allPlannedTasks is empty)
+    const selector = fromSelectors.selectPlannerDays([today], [], ['t1'], [], [], today);
+    const result = selector.projector(
+      taskState,
+      emptyPlannerState,
+      defaultScheduleConfig,
+      0,
+    );
+
+    expect(result[0].tasks.length).toBe(1);
+    expect(result[0].tasks[0].id).toBe('t1');
+  });
+
+  it('should compute availableHours when schedule config is enabled', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+    const selector = createPlannerDaysSelector([today]);
+    const result = selector.projector(
+      emptyTaskState,
+      emptyPlannerState,
+      scheduleConfig,
+      0,
+    );
+
+    // 8 hours = 28800000 ms
+    expect(result[0].availableHours).toBe(28800000);
+    expect(result[0].progressPercentage).toBe(0);
+  });
+
+  it('should not set availableHours when schedule is disabled', () => {
+    const selector = createPlannerDaysSelector([today]);
+    const result = selector.projector(
+      emptyTaskState,
+      emptyPlannerState,
+      defaultScheduleConfig,
+      0,
+    );
+
+    expect(result[0].availableHours).toBeUndefined();
+    expect(result[0].progressPercentage).toBeUndefined();
+  });
+
+  it('should include additional days from planner state not in dayDates', () => {
+    const tomorrow = getDbDateStr(new Date(Date.now() + 86400000));
+    const task = createMockTask({ id: 't1' });
+    const taskState: TaskState = {
+      ...emptyTaskState,
+      ids: ['t1'],
+      entities: { t1: task },
+    };
+    const plannerState: PlannerState = {
+      ...emptyPlannerState,
+      days: { [tomorrow]: ['t1'] },
+    };
+
+    const selector = createPlannerDaysSelector([today]);
+    const result = selector.projector(taskState, plannerState, defaultScheduleConfig, 0);
+
+    // Should include both today (from dayDates) and tomorrow (from planner state)
+    expect(result.length).toBe(2);
+    const dayDates = result.map((d) => d.dayDate);
+    expect(dayDates).toContain(today);
+    expect(dayDates).toContain(tomorrow);
+  });
+
+  it('should filter out deleted tasks from planner days', () => {
+    const plannerState: PlannerState = {
+      ...emptyPlannerState,
+      days: { [today]: ['deleted-task'] },
+    };
+
+    const selector = createPlannerDaysSelector([today]);
+    const result = selector.projector(
+      emptyTaskState,
+      plannerState,
+      defaultScheduleConfig,
+      0,
+    );
+
+    expect(result[0].tasks.length).toBe(0);
+  });
+});
+
 describe('Planner Selectors - selectAllTasksDueToday', () => {
   const today = getDbDateStr();
   const yesterday = getDbDateStr(new Date(Date.now() - 86400000));
