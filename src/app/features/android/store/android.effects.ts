@@ -139,25 +139,16 @@ export class AndroidEffects {
 
     let taskTitle: string;
 
-    if (shareData.type === 'LINK') {
-      // For links: prefer subject (page title from browsers), then title, then readable URL
-      if (subject) {
-        taskTitle = subject;
-      } else if (title) {
-        taskTitle = title;
-      } else {
-        taskTitle = this._readableUrl(path);
-      }
+    // Prefer subject (page title from browsers), then title, then type-specific fallback
+    if (subject) {
+      taskTitle = subject;
+    } else if (title) {
+      taskTitle = title;
+    } else if (shareData.type === 'LINK') {
+      taskTitle = this._readableUrl(path);
     } else {
-      // For notes: prefer subject, then title, then first line of text
-      if (subject) {
-        taskTitle = subject;
-      } else if (title) {
-        taskTitle = title;
-      } else {
-        const firstLine = path.split('\n')[0].trim();
-        taskTitle = firstLine || 'Shared note';
-      }
+      const firstLine = path.split('\n')[0].trim();
+      taskTitle = firstLine || 'Shared note';
     }
 
     return taskTitle.length > 150 ? taskTitle.substring(0, 147) + '...' : taskTitle;
@@ -169,7 +160,10 @@ export class AndroidEffects {
       const host = parsed.hostname.replace(/^www\./, '');
       const pathPart = parsed.pathname.replace(/\/$/, '');
       if (pathPart && pathPart !== '/') {
-        const decoded = decodeURIComponent(pathPart).replace(/[/_-]/g, ' ').trim();
+        const decoded = decodeURIComponent(pathPart)
+          .replace(/[/_-]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
         return decoded ? `${host}: ${decoded}` : host;
       }
       return host;
