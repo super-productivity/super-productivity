@@ -23,7 +23,7 @@
     mat-button
     (click)="goToToday()"
     [disabled]="isViewingToday()"
-    aria-label="Go to today"
+    [attr.aria-label]="T.F.SCHEDULE.NOW | translate"
   >
     {{ T.F.SCHEDULE.NOW | translate }}
   </button>

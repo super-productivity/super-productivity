@@ -31,7 +31,7 @@ import { T } from '../../../t.const';
       [matTooltip]="
         (T.USER_PROFILES.PROFILE_TOOLTIP_PREFIX | translate) +
         ' ' +
-        (profileService.activeProfile()?.name || 'Loading...')
+        (profileService.activeProfile()?.name || '...')
       "
       [matMenuTriggerFor]="profileMenu"
       class="profile-btn"
