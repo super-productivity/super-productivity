@@ -1,0 +1,8 @@
+- change very small container to 359px
+- fix selector spec failures from MockStore overrideResult leak
+- fix selector spec failures caused by NgRx memoization leak
+- recover from detect-it touchOnly misclassification on desktop (#7064)
+- override picomatch to 4.0.4 to fix high severity vulnerability
+- add white noise as alternative to ticking sound
+- upgrade prisma from 5.22.0 to 7.6.0
+- default shouldInheritSubtasks to true when task has subtasks
