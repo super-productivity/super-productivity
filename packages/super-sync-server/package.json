@@ -55,7 +55,7 @@
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.18.1",
     "nodemon": "^3.1.11",
-    "prisma": "5.22.0",
+    "prisma": "7.6.0",
     "supertest": "^7.1.4",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.0",
