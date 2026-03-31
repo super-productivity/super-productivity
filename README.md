@@ -9,7 +9,7 @@
 <p>
 
 <p align="center">
-  :globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://github.com/super-productivity/super-productivity/releases">Download</a>
+  :globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install">Download</a>
 </p>
 
 <br/>
@@ -21,11 +21,7 @@
 <p align="center">
   <a href="https://lbesson.mit-license.org"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square"/></a>
   &nbsp;
-  <a href="https://github.com/super-productivity/super-productivity/releases"><img alt="GitHub All Releases" src="https://img.shields.io/github/downloads/super-productivity/super-productivity/total"/></a>
-  &nbsp;
-  <a href="https://community.chocolatey.org/packages/super-productivity"><img alt="Chocolatey package" src="https://img.shields.io/chocolatey/dt/super-productivity?color=blue&label=chocolatey"/></a>
-  &nbsp;
-  <a href="https://www.producthunt.com/posts/super-productivity"><img alt="On product hunt" src="https://img.shields.io/badge/on-product%20hunt-blue.svg?style=flat-square"/></a>
+  <a href="https://github.com/super-productivity/super-productivity/discussions"><img alt="GitHub Discussions" src="https://img.shields.io/badge/Community-Discussions-blue?style=flat-square&logo=github"/></a>
 </p>
 
 <p align="center">
@@ -40,22 +36,27 @@
   <a href="https://youtu.be/_mvMXWLsL-8"><img src="https://github.com/user-attachments/assets/15384cae-8ba3-4474-bc2c-13e7765c2dd1" alt="animated"/></a>
 </p>
 
+## :computer: Downloads & Install
 <p align="center">
-  <a href='https://flathub.org/apps/com.super_productivity.SuperProductivity' target="_blank"> <img alt='Get it on Flathub'src='https://flathub.org/api/badge?locale=en' height="50"/></a>
-  &nbsp;
-  <a href="https://snapcraft.io/superproductivity" target="_blank"><img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" height="50"/></a>
-  &nbsp;
-  <a href='//www.microsoft.com/store/apps/9NHFVG8361TW?cid=storebadge&ocid=badge' target="_blank"><img src='https://developer.microsoft.com/store/badges/images/English_get-it-from-MS.png' alt='English badge' height="50"/></a>
-  &nbsp;
-  <a href='http://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/super-productivity/super-productivity/releases'><img src='https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png' alt='Obtanium Badge' height="50"/></a>
+  <a href='https://flathub.org/apps/com.super_productivity.SuperProductivity' target="_blank"> <img alt='Get it on Flathub'src='https://flathub.org/api/badge?locale=en' height="30"/></a>
+  <a href="https://snapcraft.io/superproductivity" target="_blank"><img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" height="30"/></a>
+  <a href='//www.microsoft.com/store/apps/9NHFVG8361TW?cid=storebadge&ocid=badge' target="_blank"><img src='https://developer.microsoft.com/store/badges/images/English_get-it-from-MS.png' alt='English badge' height="30"/></a>
+  <a href='//play.google.com/store/apps/details?id=com.superproductivity.superproductivity' target="_blank"><img src='docs/screens/google-play-badge.svg' alt='Play Store Badge' height="30"/></a>
+  <a href='//f-droid.org/en/packages/com.superproductivity.superproductivity' target="_blank"><img src='https://f-droid.org/assets/fdroid-logo-text_S0MUfk_FsnAYL7n2MQye-34IoSNm6QM6xYjDnMqkufo=.svg' alt='F-Droid Badge' height="30"/></a>
+  <a href='http://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/super-productivity/super-productivity/releases'><img src='https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png' alt='Obtanium Badge' height="30"/></a>
+  <a href='//apps.apple.com/app/super-productivity/id1482572463?l=en' target="_blank"><img src='docs/screens/app-store-badge.svg' alt='App Store Badge' height="30"/></a>
 </p>
 
 <p align="center">
-  <a href='//play.google.com/store/apps/details?id=com.superproductivity.superproductivity' target="_blank"><img src='docs/screens/google-play-badge.svg' alt='Play Store Badge' height="50" style="height:50px;"/></a>
-  &nbsp;
-  <a href='//f-droid.org/en/packages/com.superproductivity.superproductivity' target="_blank"><img src='https://f-droid.org/assets/fdroid-logo-text_S0MUfk_FsnAYL7n2MQye-34IoSNm6QM6xYjDnMqkufo=.svg' alt='F-Droid Badge' height="50"/></a>
-  &nbsp;
-  <a href='//apps.apple.com/app/super-productivity/id1482572463?l=en' target="_blank"><img src='docs/screens/app-store-badge.svg' alt='App Store Badge' height="50" style="height:50px;"/></a>
+  <strong>For all current downloads, package links, and platform-specific notes:
+  <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install" target="_blank">
+    check the wiki</strong>.<br/>
+    <img
+      src="docs/screens/get-it-on-github.webp"
+      alt="Get it on GitHub"
+      height="120"
+    />
+  </a>
 </p>
 
 <hr>
@@ -66,7 +67,6 @@
     <img
       src="https://upload.wikimedia.org/wikipedia/commons/4/49/Flag_of_Ukraine.svg"
       alt="Ukraine Flag"
-      width="520"
       height="120"
     /><br/>
     <strong>Humanitarian Aid for Ukraine</strong><br/>
@@ -145,133 +145,6 @@ Can be used when adding a task. <strong>(Each of these can be disabled in settin
 Check out the web version even though it is a bit limited: Time tracking only works if the app is open and for idle time tracking to work, the chrome extension must be installed.
 
 If you want the Jira integration and idle time tracking to work, you also have to download and install the [Super Productivity Chrome Extension](https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb).
-
-## :computer: Downloads & Install
-
-### All Platforms
-
-[Install from the releases page](https://github.com/super-productivity/super-productivity/releases).
-
-### Windows
-
-Due to certification issues it's recommended to download the app from the Microsoft Store:
-
-<a href='//www.microsoft.com/store/apps/9nhfvg8361tw?cid=storebadge&ocid=badge'><img src='https://developer.microsoft.com/store/badges/images/English_get-it-from-MS.png' alt='English badge' height="50"/></a>
-
-<div style="height:20px;"></div>
-
-You can also install the app using [Chocolatey](https://community.chocolatey.org/packages/super-productivity):
-
-```powershell
-choco install super-productivity
-```
-
-or using [Scoop](https://scoop.sh/#/apps?q=super-productivity&id=26ccca2d7edd51629727a9468c4136ea89a652a0):
-
-```powershell
-scoop install extras/super-productivity
-```
-
-### Linux
-
-#### Snap - Most distributions
-
-<a href="https://snapcraft.io/superproductivity"><img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" height="50"/></a>
-
-<div style="height:20px;"></div>
-
-Install via command-line:
-
-```bash
-# stable
-sudo snap install superproductivity
-
-# edge channel releases
-sudo snap install --channel=edge superproductivity
-
-# it is also recommended to disable updates to the app while it is running:
-sudo snap set core experimental.refresh-app-awareness=true
-```
-
-**Important: Enable Local File Sync**
-To use local file sync, you need to manually connect the `home` interface:
-
-```bash
-sudo snap connect superproductivity:home
-```
-
-**⚠️ Snap Data Persistence Warning**
-When uninstalling the snap package, all user data (tasks, projects, settings) stored in `~/snap/superproductivity/common/` may be removed. Always export your data before uninstalling. Consider using Flatpak, AppImage, or .deb packages if you prefer data to persist in the standard `~/.config/` location.
-
-For more details, see [issue #6031](https://github.com/super-productivity/super-productivity/issues/6031).
-
-#### Flatpak - Most distributions
-
-<a href='https://flathub.org/apps/com.super_productivity.SuperProductivity'><img alt='Get it on Flathub' src='https://flathub.org/api/badge?locale=en' height="50"/></a>
-
-<div style="height:20px;"></div>
-
-Must install Flatpak first. See [setup instructions for all distributions](https://flathub.org/setup).
-
-Install via command-line:
-
-```bash
-# install
-flatpak install flathub com.super_productivity.SuperProductivity
-
-# run
-flatpak run com.super_productivity.SuperProductivity
-```
-
-#### AUR - Arch Linux
-
-- With AUR helpers
-
-  ```bash
-  paru -S superproductivity-bin
-  # or
-  yay -S superproductivity-bin
-  ```
-
-- Without AUR helpers
-  ```bash
-  git clone https://aur.archlinux.org/superproductivity-bin.git
-  cd superproductivity-bin
-  makepkg -si
-  ```
-
-#### AppImage
-
-If you encounter problems, please have a look here:
-https://github.com/super-productivity/super-productivity/issues/3193#issuecomment-2131315513
-
-### MacOS
-
-<a href='//apps.apple.com/app/super-productivity/id1482572463?l=en' target="_blank"><img src='docs/screens/app-store-badge.svg' alt='App Store Badge' height="50" style="height:50px;"></a>
-
-<div style="height:20px;"></div>
-
-Install via [homebrew cask](https://github.com/caskroom/homebrew-cask):
-
-```bash
-brew install --cask superproductivity
-```
-
-### Android
-
-<a href='//play.google.com/store/apps/details?id=com.superproductivity.superproductivity' target="_blank"><img src='docs/screens/google-play-badge.svg' alt='Play Store Badge' height="50" style="height:50px;"/></a>
-&nbsp;
-<a href='//f-droid.org/en/packages/com.superproductivity.superproductivity' target="_blank"><img src='https://f-droid.org/assets/fdroid-logo-text_S0MUfk_FsnAYL7n2MQye-34IoSNm6QM6xYjDnMqkufo=.svg' alt='F-Droid Badge' height="50"/></a>
-
-<div style="height:20px;"></div>
-
-A new version of the Android app is now available with **Connectivity-Free Mode**, allowing you to use the app without an internet connection.
-
-This update offers more flexibility, supporting both fully offline usage and integration with services like WebDAV and Dropbox for syncing. Enjoy a smoother, more reliable experience whether you're online or offline.
-
-Stay tuned for even more exciting updates!
-
-The sources can be [found here](/android).
 
 ## Community
 
