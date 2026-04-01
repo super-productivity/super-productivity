@@ -61,7 +61,7 @@
     "prisma": "7.6.0",
     "supertest": "^7.1.4",
     "ts-node": "^10.9.1",
-    "typescript": "^5.0.0",
+    "typescript": "^6.0.2",
     "vitest": "^4.1.2"
   }
 }
