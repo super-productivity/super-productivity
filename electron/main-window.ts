@@ -23,6 +23,7 @@ import {
   hideTaskWidget,
   showTaskWidget,
 } from './task-widget/task-widget';
+import { ensureIndicator } from './indicator';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
@@ -459,6 +460,7 @@ const appCloseHandler = (app: App): void => {
     if (!getIsQuiting()) {
       event.preventDefault();
       if (getIsMinimizeToTray()) {
+        ensureIndicator();
         setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();
         showTaskWidget();
@@ -498,6 +500,7 @@ const appMinimizeHandler = (app: App): void => {
     mainWin.on('minimize', (event: Event) => {
       if (getIsMinimizeToTray()) {
         event.preventDefault();
+        ensureIndicator();
         setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();
         showTaskWidget();

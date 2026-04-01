@@ -13,7 +13,16 @@ import {
 } from './task-widget/task-widget';
 import { getWin } from './main-window';
 
-let tray: Tray;
+type IndicatorConfig = {
+  showApp: () => void;
+  quitApp: () => void;
+  app: App;
+  ICONS_FOLDER: string;
+  forceDarkTray: boolean;
+};
+
+let tray: Tray | undefined;
+let indicatorConfig: IndicatorConfig | undefined;
 let _showApp: () => void;
 let _quitApp: () => void;
 let _todayTasks: {
@@ -40,6 +49,8 @@ let _lastCurrentPomodoroSessionTime: number;
 let _lastIsFocusModeEnabled: boolean;
 let _lastCurrentFocusSessionTime: number;
 let _lastFocusModeMode: string;
+let _isAppListenersInitialized = false;
+let _isListenersInitialized = false;
 
 const IS_MAC = process.platform === 'darwin';
 const IS_LINUX = process.platform === 'linux';
@@ -82,6 +93,13 @@ export const initIndicator = ({
   ICONS_FOLDER: string;
   forceDarkTray: boolean;
 }): Tray => {
+  indicatorConfig = {
+    showApp,
+    quitApp,
+    app,
+    ICONS_FOLDER,
+    forceDarkTray,
+  };
   DIR = ICONS_FOLDER + 'indicator/';
   shouldUseDarkColors =
     forceDarkTray ||
@@ -95,40 +113,76 @@ export const initIndicator = ({
   initAppListeners(app);
   initListeners();
 
-  const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
-  const trayIconPath = DIR + `stopped${suf}`;
-  if (IS_WINDOWS) {
-    try {
-      tray = new Tray(trayIconPath, getWindowsTrayGuid());
-    } catch (e) {
-      log('Tray creation with GUID failed, retrying without GUID:', e);
-      tray = new Tray(trayIconPath);
-    }
-  } else {
-    tray = new Tray(trayIconPath);
-  }
-  tray.setContextMenu(createContextMenu());
+  return ensureIndicator();
+};
 
-  tray.on('click', () => {
-    showApp();
-  });
+export const ensureIndicator = ({
+  refresh = false,
+}: { refresh?: boolean } = {}): Tray => {
+  if (!indicatorConfig) {
+    throw new Error('Indicator not initialized');
+  }
+
+  if (refresh && tray) {
+    tray.destroy();
+    tray = undefined;
+  }
+
+  if (tray) {
+    return tray;
+  }
+
+  tray = createTray();
+  syncTray(tray);
 
   return tray;
 };
 
+const createTray = (): Tray => {
+  const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
+  const trayIconPath = DIR + `stopped${suf}`;
+  let nextTray: Tray;
+  if (IS_WINDOWS) {
+    try {
+      nextTray = new Tray(trayIconPath, getWindowsTrayGuid());
+    } catch (e) {
+      log('Tray creation with GUID failed, retrying without GUID:', e);
+      nextTray = new Tray(trayIconPath);
+    }
+  } else {
+    nextTray = new Tray(trayIconPath);
+  }
+  nextTray.setContextMenu(createContextMenu());
+
+  nextTray.on('click', () => {
+    indicatorConfig?.showApp();
+  });
+
+  return nextTray;
+};
+
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function initAppListeners(app: App): void {
-  if (tray) {
-    app.on('before-quit', () => {
-      if (tray) {
-        tray.destroy();
-      }
-    });
+  if (_isAppListenersInitialized) {
+    return;
   }
+
+  _isAppListenersInitialized = true;
+  app.on('before-quit', () => {
+    if (tray) {
+      tray.destroy();
+      tray = undefined;
+    }
+  });
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function initListeners(): void {
+  if (_isListenersInitialized) {
+    return;
+  }
+  _isListenersInitialized = true;
+
   let isTaskWidgetEnabled = false;
   // Listen for settings updates to handle task widget enable/disable
   ipcMain.on(IPC.UPDATE_SETTINGS, (ev, settings: GlobalConfigState) => {
@@ -149,7 +203,7 @@ function initListeners(): void {
   });
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
-    if (_isRunning) {
+    if (_isRunning && tray) {
       setTrayIcon(tray, getRunningIconPath(progress));
     }
 
@@ -344,6 +398,58 @@ function initListeners(): void {
   // }
   // });
 }
+
+const syncTray = (tr: Tray): void => {
+  const menuMsg = _lastCurrentTask
+    ? createIndicatorMessage(
+        _lastCurrentTask,
+        _lastIsPomodoroEnabled || false,
+        _lastCurrentPomodoroSessionTime || 0,
+        true,
+        _lastIsFocusModeEnabled || false,
+        _lastCurrentFocusSessionTime || 0,
+        _lastFocusModeMode,
+      )
+    : _lastMsg;
+
+  tr.setContextMenu(createContextMenu(menuMsg));
+
+  const isTrayShowCurrentTask = getIsTrayShowCurrentTask();
+  const isTrayShowCurrentCountdown = getIsTrayShowCurrentCountdown();
+  const trayMsg = _lastCurrentTask
+    ? createIndicatorMessage(
+        _lastCurrentTask,
+        _lastIsPomodoroEnabled || false,
+        _lastCurrentPomodoroSessionTime || 0,
+        isTrayShowCurrentCountdown,
+        _lastIsFocusModeEnabled || false,
+        _lastCurrentFocusSessionTime || 0,
+        _lastFocusModeMode,
+      )
+    : '';
+
+  if (_lastCurrentTask?.title && isTrayShowCurrentTask) {
+    tr.setTitle(trayMsg);
+    if (!IS_MAC) {
+      tr.setToolTip(trayMsg);
+    }
+  } else {
+    tr.setTitle('');
+    if (!IS_MAC) {
+      tr.setToolTip('');
+    }
+  }
+
+  if (_lastCurrentTask?.title && !_lastIsFocusModeEnabled) {
+    const progress = _lastCurrentTask.timeEstimate
+      ? _lastCurrentTask.timeSpent / _lastCurrentTask.timeEstimate
+      : undefined;
+    setTrayIcon(tr, getRunningIconPath(progress));
+  } else {
+    const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
+    setTrayIcon(tr, DIR + `stopped${suf}`);
+  }
+};
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function createIndicatorMessage(
