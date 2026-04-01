@@ -255,7 +255,7 @@
     "karma-cli": "^2.0.0",
     "karma-coverage-istanbul-reporter": "~3.0.2",
     "karma-jasmine": "~5.1.0",
-    "karma-jasmine-html-reporter": "^1.6.0",
+    "karma-jasmine-html-reporter": "^2.2.0",
     "karma-spec-reporter": "^0.0.36",
     "marked": "^17.0.1",
     "nanoid": "^5.1.6",
