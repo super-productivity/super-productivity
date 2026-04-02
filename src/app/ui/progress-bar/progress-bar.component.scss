@@ -21,6 +21,32 @@
     border-radius: var(--card-border-radius);
   }
 
+  &.isAlwaysVisible {
+    &:after {
+      background: var(--separator-color);
+      width: auto;
+    }
+
+    &:before {
+      content: '';
+      background: inherit;
+      position: absolute;
+      width: var(--progress-bar-value, 0%);
+      height: 3px;
+      top: -5px;
+      left: 2px;
+      max-width: calc(100% - 4px);
+      border-radius: var(--card-border-radius);
+    }
+  }
+
+  &.isStackedBelowProgress {
+    &:before,
+    &:after {
+      top: 0;
+    }
+  }
+
   //margin-bottom: -2px;
 
   ////  background-color: #999999;

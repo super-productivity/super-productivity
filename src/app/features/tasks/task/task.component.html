@@ -278,6 +278,11 @@
       ></progress-bar>
     }
     @if (t.subTasks?.length) {
+      <progress-bar
+        [cssClass]="subTaskProgressCssClass()"
+        [isAlwaysVisible]="true"
+        [progress]="subTaskProgress()"
+      ></progress-bar>
       <div class="sub-tasks">
         <button
           (click)="toggleSubTaskMode()"

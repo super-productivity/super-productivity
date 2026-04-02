@@ -104,6 +104,7 @@ import { millisecondsDiffToRemindOption } from '../util/remind-option-to-millise
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 import { SnackService } from '../../../core/snack/snack.service';
+import { calcSubTaskProgress } from '../util/calc-sub-task-progress';
 
 @Component({
   selector: 'task',
@@ -272,6 +273,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   // Checklist progress derived from markdown checklist in task notes (null = no checklist)
   checklistProgress = computed<ChecklistProgress | null>(() =>
     getChecklistProgress(this.task().notes),
+  );
+
+  subTaskProgress = computed<number>(() => {
+    return calcSubTaskProgress(this.task().subTasks);
+  });
+
+  subTaskProgressCssClass = computed<string>(() =>
+    this.isCurrent() && this.progress() > 1
+      ? 'bg-success sub-task-progress isStackedBelowProgress'
+      : 'bg-success sub-task-progress',
   );
 
   isShowRemoveFromToday = computed(() => {
