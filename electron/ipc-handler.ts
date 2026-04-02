@@ -3,6 +3,7 @@ import { pluginNodeExecutor } from './plugin-node-executor';
 import {
   initAppControlIpc,
   initAppDataIpc,
+  initAutoUpdateIpc,
   initExecIpc,
   initGlobalShortcutsIpc,
   initJiraIpc,
@@ -22,6 +23,7 @@ export const initIpcInterfaces = (): void => {
 
   initAppDataIpc();
   initAppControlIpc();
+  initAutoUpdateIpc();
   initSystemIpc();
   initJiraIpc();
   initGlobalShortcutsIpc();
