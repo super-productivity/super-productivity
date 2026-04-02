@@ -94,7 +94,7 @@ snap:
     - removable-media # Allows sync to external drives/USB storage
 
 flatpak:
-  runtimeVersion: '23.08'
+  runtimeVersion: '25.08'
   finishArgs:
     - --share=network
     - --share=ipc
