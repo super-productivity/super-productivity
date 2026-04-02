@@ -267,6 +267,19 @@ export const hideTaskWidget = (): void => {
   }
 };
 
+export const toggleTaskWidgetVisibility = (): void => {
+  if (!isTaskWidgetEnabled) {
+    return;
+  }
+
+  if (taskWidgetWin && !taskWidgetWin.isDestroyed() && taskWidgetWin.isVisible()) {
+    hideTaskWidget();
+    return;
+  }
+
+  showTaskWidget();
+};
+
 const initListeners = (): void => {
   if (listenersRegistered) {
     return;
