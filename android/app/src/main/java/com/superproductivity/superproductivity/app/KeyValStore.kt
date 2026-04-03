@@ -45,7 +45,6 @@ class KeyValStore(private val context: Context) :
             values.put(KEY_CREATED_AT, "time('now')")
             row = db.replace(DATABASE_TABLE, null, values)
             Log.v(TAG, "save db value size: " + value?.length)
-            db.close()
         }
         return row
     }
@@ -64,14 +63,12 @@ class KeyValStore(private val context: Context) :
         dbHelper.readableDatabase?.let { database ->
             database.query(
                 DATABASE_TABLE, arrayOf(VALUE), "$KEY=?", arrayOf(newKey), null, null, null
-            )?.let { cursor ->
+            )?.use { cursor ->
                 if (cursor.moveToNext()) {
                     value = cursor.getString(cursor.getColumnIndexOrThrow(VALUE))
                 }
                 Log.v(TAG, "get db value size:" + value.length)
-                cursor.close()
             }
-            database.close()
         }
         return value
     }
@@ -82,7 +79,6 @@ class KeyValStore(private val context: Context) :
         if (db != null) {
             db.delete(DATABASE_TABLE, null, null)
             Log.v(TAG, "cleared db ")
-            db.close()
         }
     }
 
