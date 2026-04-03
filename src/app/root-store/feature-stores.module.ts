@@ -65,6 +65,7 @@ import { AndroidEffects } from '../features/android/store/android.effects';
 import { AndroidFocusModeEffects } from '../features/android/store/android-focus-mode.effects';
 import { AndroidForegroundTrackingEffects } from '../features/android/store/android-foreground-tracking.effects';
 import { AndroidSyncBridgeEffects } from '../features/android/store/android-sync-bridge.effects';
+import { AndroidWidgetEffects } from '../features/android/store/android-widget.effects';
 import { MobileNotificationEffects } from '../features/mobile/store/mobile-notification.effects';
 import { IS_NATIVE_PLATFORM } from '../util/is-native-platform';
 import { NextcloudDeckIssueEffects } from '../features/issue/providers/nextcloud-deck/nextcloud-deck-issue.effects';
@@ -177,6 +178,7 @@ import {
             AndroidFocusModeEffects,
             AndroidForegroundTrackingEffects,
             AndroidSyncBridgeEffects,
+            AndroidWidgetEffects,
           ]
         : []),
     ]),
