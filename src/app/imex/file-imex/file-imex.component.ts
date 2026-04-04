@@ -261,11 +261,8 @@ export class FileImexComponent implements OnInit {
 
   async downloadBackup(): Promise<void> {
     const data = await this._backupService.loadCompleteBackup(true);
-    const fileName = `${getBackupTimestamp()}.json`;
-    const result = await download(
-      `super-productivity-backup_${fileName}`,
-      JSON.stringify(data),
-    );
+    const fileName = `sp-backup_${getBackupTimestamp()}.json`;
+    const result = await download(fileName, JSON.stringify(data));
     if ((IS_NATIVE_PLATFORM && !result.wasCanceled) || result.isSnap) {
       this._snackService.open({
         type: 'SUCCESS',
@@ -278,11 +275,8 @@ export class FileImexComponent implements OnInit {
 
   async privacyAppDataDownload(): Promise<void> {
     const data = await this._backupService.loadCompleteBackup(true);
-    const fileName = `${getBackupTimestamp()}.json`;
-    const result = await download(
-      `super-productivity-backup(anonimized)_${fileName}`,
-      privacyExport(data),
-    );
+    const fileName = `sp-backup-anonimized_${getBackupTimestamp()}.json`;
+    const result = await download(fileName, privacyExport(data));
     if ((IS_NATIVE_PLATFORM && !result.wasCanceled) || result.isSnap) {
       this._snackService.open({
         type: 'SUCCESS',

@@ -1,5 +1,6 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { waitForAppReady } from './waits';
+import { MIGRATION_BACKUP_PREFIX } from '../../src/app/op-log/persistence/operation-log-migration.service';
 
 /**
  * Legacy Migration E2E Test Helpers
@@ -130,7 +131,7 @@ export const createLegacyMigratedClient = async (
   // Wait for migration backup file (key indicator that migration ran)
   const download = await downloadPromise;
   if (download) {
-    expect(download.suggestedFilename()).toContain('sp-pre-migration-backup');
+    expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
     console.log(`[Legacy Client ${clientName}] Migration backup downloaded`);
   } else {
     console.warn(

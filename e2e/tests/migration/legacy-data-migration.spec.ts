@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import legacyData from '../../fixtures/legacy-full-migration-backup.json';
+import { MIGRATION_BACKUP_PREFIX } from '../../../src/app/op-log/persistence/operation-log-migration.service';
 
 /**
  * Legacy Data Migration E2E Tests
@@ -202,7 +203,7 @@ test.describe('@migration Legacy Data Migration', () => {
       // ========================================================================
       // The backup download is the key indicator that migration ran
       const download = await downloadPromise;
-      expect(download.suggestedFilename()).toContain('sp-pre-migration-backup');
+      expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
 
       // ========================================================================
       // STEP 5: Wait for app to be fully loaded
@@ -449,7 +450,7 @@ test.describe('@migration Legacy Data Migration', () => {
       // Backup should have been downloaded (if migration started)
       const download = await downloadPromise;
       if (download) {
-        expect(download.suggestedFilename()).toContain('sp-pre-migration-backup');
+        expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
       }
     } finally {
       await context.close();
