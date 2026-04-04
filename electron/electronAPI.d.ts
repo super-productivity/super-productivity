@@ -86,6 +86,8 @@ export interface ElectronAPI {
 
   isLinux(): boolean;
 
+  isGnomeDesktop(): boolean;
+
   isMacOS(): boolean;
 
   isSnap(): boolean;

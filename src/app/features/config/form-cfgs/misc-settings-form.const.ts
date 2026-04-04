@@ -4,7 +4,7 @@ import {
   MiscConfig,
 } from '../global-config.model';
 import { T } from '../../../t.const';
-import { IS_ELECTRON } from '../../../app.constants';
+import { IS_ELECTRON, IS_GNOME_DESKTOP } from '../../../app.constants';
 
 export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
   title: T.GCF.MISC.TITLE,
@@ -90,7 +90,7 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.IS_TRAY_SHOW_CURRENT_COUNTDOWN,
       },
     },
-    ...((IS_ELECTRON
+    ...((!IS_GNOME_DESKTOP
       ? [
           {
             key: 'isUseCustomWindowTitleBar',

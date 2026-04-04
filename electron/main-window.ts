@@ -16,7 +16,7 @@ import { format } from 'url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { readFileSync, stat } from 'fs';
 import { error, log } from 'electron-log/main';
-import { IS_MAC } from './common.const';
+import { IS_MAC, IS_GNOME_DESKTOP } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
@@ -95,11 +95,11 @@ export const createWindow = async ({
   const isUseCustomWindowTitleBar =
     persistedIsUseCustomWindowTitleBar ?? legacyIsUseObsidianStyleHeader ?? true;
   const titleBarStyle: BrowserWindowConstructorOptions['titleBarStyle'] =
-    isUseCustomWindowTitleBar || IS_MAC ? 'hidden' : 'default';
+    isUseCustomWindowTitleBar || IS_MAC || IS_GNOME_DESKTOP ? 'hidden' : 'default';
   // Determine initial symbol color based on system theme preference
   const initialSymbolColor = nativeTheme.shouldUseDarkColors ? '#fff' : '#000';
   const titleBarOverlay: BrowserWindowConstructorOptions['titleBarOverlay'] =
-    isUseCustomWindowTitleBar && !IS_MAC
+    isUseCustomWindowTitleBar && !IS_MAC && !IS_GNOME_DESKTOP
       ? {
           color: getTitleBarColor(nativeTheme.shouldUseDarkColors),
           symbolColor: initialSymbolColor,
