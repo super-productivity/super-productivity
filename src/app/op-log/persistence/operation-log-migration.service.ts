@@ -188,7 +188,7 @@ export class OperationLogMigrationService {
     this._setStatus(dialogRef, 'backup');
 
     const legacyData = await this.legacyPfDb.loadAllEntityData();
-    const filename = `${MIGRATION_BACKUP_PREFIX}-${getBackupTimestamp()}.json`;
+    const filename = `${MIGRATION_BACKUP_PREFIX}_${getBackupTimestamp()}.json`;
 
     await download(filename, JSON.stringify(legacyData));
     OpLog.normal(`OperationLogMigrationService: Backup created: ${filename}`);
