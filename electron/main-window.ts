@@ -12,7 +12,6 @@ import {
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
 import * as path from 'path';
 import { join, normalize } from 'path';
-import { format } from 'url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { readFileSync, stat } from 'fs';
 import { error, log } from 'electron-log/main';
@@ -208,11 +207,7 @@ export const createWindow = async ({
     ? customUrl
     : IS_DEV
       ? 'http://localhost:4200'
-      : format({
-          pathname: normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html')),
-          protocol: 'file:',
-          slashes: true,
-        });
+      : `file://${normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html'))}`;
 
   mainWin.loadURL(url).then(() => {
     // Set window title for dev mode
