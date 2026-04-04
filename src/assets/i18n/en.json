@@ -692,6 +692,9 @@
       }
     },
     "NOTE": {
+      "C": {
+        "CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK": "Save the current note before opening a new task?"
+      },
       "D_FULLSCREEN": {
         "TOOLBAR": {
           "BOLD": "Bold",
@@ -1948,6 +1951,7 @@
     "CONFIRM": "Confirm",
     "CONTINUE": "Continue",
     "DELETE": "Delete",
+    "DISCARD": "Discard",
     "DISMISS": "Dismiss",
     "DO_IT": "Do it!",
     "DONT_SHOW_AGAIN": "Do not show again",

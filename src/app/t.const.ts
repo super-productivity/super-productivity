@@ -703,6 +703,10 @@ const T = {
       },
     },
     NOTE: {
+      C: {
+        CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK:
+          'F.NOTE.C.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK',
+      },
       D_FULLSCREEN: {
         TOOLBAR: {
           BOLD: 'F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD',
@@ -1995,6 +1999,7 @@ const T = {
     CONFIRM: 'G.CONFIRM',
     CONTINUE: 'G.CONTINUE',
     DELETE: 'G.DELETE',
+    DISCARD: 'G.DISCARD',
     DISMISS: 'G.DISMISS',
     DO_IT: 'G.DO_IT',
     DONT_SHOW_AGAIN: 'G.DONT_SHOW_AGAIN',
