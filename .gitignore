@@ -15,6 +15,9 @@ src/app/config/env.generated.ts
 /tmp
 /logs
 packages/plugin-api/dist/**
+packages/cli/dist/**
+packages/mcp-server/dist/**
+packages/mcp-server/node_modules
 docs/ai/tmp
 
 # dependencies
