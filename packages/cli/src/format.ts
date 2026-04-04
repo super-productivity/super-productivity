@@ -11,8 +11,12 @@ const check = (done: boolean): string => (done ? `${GREEN}\u2713${RESET}` : '\u2
 
 function msToHuman(ms: number): string {
   if (ms <= 0) return '0m';
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.round((ms % 3_600_000) / 60_000);
+  let h = Math.floor(ms / 3_600_000);
+  let m = Math.round((ms % 3_600_000) / 60_000);
+  if (m === 60) {
+    h++;
+    m = 0;
+  }
   if (h > 0 && m > 0) return `${h}h${m}m`;
   if (h > 0) return `${h}h`;
   return `${m}m`;
