@@ -1878,7 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Пожалуйста, введите полный URL файла резервной копии JSON Super Productivity, который вы хотите импортировать.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Импорт из URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Импорт из URL",
-    "PRIVACY_EXPORT": "Экспортировать обезличенные данные (отправить contact@super-productivity.com для отладки)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Экспортировать обезличенные данные (отправить contact@super-productivity.com для отладки)",
     "S_BACKUP_DOWNLOADED": "Резервная копия загружена в папку с документами Android",
     "S_ERR_IMPORT_FAILED": "Ошибка импорта данных",
     "S_ERR_INVALID_DATA": "Ошибка импорта: неверный JSON",

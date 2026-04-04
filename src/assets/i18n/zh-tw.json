@@ -1879,7 +1879,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "請輸入要匯入的 Super Productivity 備份 JSON 檔案的完整網址。",
     "IMPORT_FROM_URL_DIALOG_TITLE": "從網址匯入",
     "OPEN_IMPORT_FROM_URL_DIALOG": "從網址匯入",
-    "PRIVACY_EXPORT": "匯出匿名資料（傳送至 contact@super-productivity.com 以進行除錯）",
+    "PRIVACY_EXPORT_DESCRIPTION": "匯出匿名資料（傳送至 contact@super-productivity.com 以進行除錯）",
     "S_BACKUP_DOWNLOADED": "備份已下載至 Android 文件資料夾",
     "S_ERR_IMPORT_FAILED": "匯入資料失敗",
     "S_ERR_INVALID_DATA": "匯入失敗：無效的 JSON",

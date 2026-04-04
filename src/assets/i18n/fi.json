@@ -1878,7 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Anna koko URL-osoite Super Productivityn varmuuskopio JSON-tiedostolle, jonka haluat tuoda.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Tuo URL-osoitteesta",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Tuo URL-osoitteesta",
-    "PRIVACY_EXPORT": "Vie anonyymit tiedot (lähetettäväksi osoitteeseen contact@super-productivity.com vianetsintää varten)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Vie anonyymit tiedot (lähetettäväksi osoitteeseen contact@super-productivity.com vianetsintää varten)",
     "S_BACKUP_DOWNLOADED": "Varmuuskopio ladattu android-asiakirjakansioon",
     "S_ERR_IMPORT_FAILED": "Tietojen tuonti epäonnistui",
     "S_ERR_INVALID_DATA": "Tuonti epäonnistui: Virheellinen JSON",

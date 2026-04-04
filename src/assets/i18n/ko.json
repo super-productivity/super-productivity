@@ -1862,7 +1862,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "가져오려는 Super Productivity 백업 JSON 파일의 전체 URL을 입력하세요.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "URL에서 가져오기",
     "OPEN_IMPORT_FROM_URL_DIALOG": "URL에서 가져오기",
-    "PRIVACY_EXPORT": "익명화된 데이터 내보내기(디버깅을 위해 contact@super-productivity.com 으로 보내기)",
+    "PRIVACY_EXPORT_DESCRIPTION": "익명화된 데이터 내보내기(디버깅을 위해 contact@super-productivity.com 으로 보내기)",
     "S_BACKUP_DOWNLOADED": "백업은 안드로이드 문서 폴더에 다운로드되었습니다.",
     "S_ERR_IMPORT_FAILED": "데이터 가져오기 실패",
     "S_ERR_INVALID_DATA": "가져 오기 실패 : 잘못된 JSON",

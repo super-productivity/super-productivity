@@ -1878,7 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Vennligst skriv inn den fullstendige URL-en til Super Productivity sikkerhetskopi JSON-filen du ønsker å importere.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Importer fra URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Importer fra URL",
-    "PRIVACY_EXPORT": "Eksporter anonymiserte data (for å sende til contact@super-productivity.com for feilsøking)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Eksporter anonymiserte data (for å sende til contact@super-productivity.com for feilsøking)",
     "S_BACKUP_DOWNLOADED": "Sikkerhetskopi lastet ned til Android-dokumentmappe",
     "S_ERR_IMPORT_FAILED": "Import av data mislyktes",
     "S_ERR_INVALID_DATA": "Import mislyktes: Ugyldig JSON",

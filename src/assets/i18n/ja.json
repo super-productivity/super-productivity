@@ -1873,7 +1873,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "インポートしたいSuper ProductivityのバックアップJSONファイルの完全なURLを入力してください。",
     "IMPORT_FROM_URL_DIALOG_TITLE": "URLからインポート",
     "OPEN_IMPORT_FROM_URL_DIALOG": "URLからインポート",
-    "PRIVACY_EXPORT": "匿名化されたデータをエクスポートする（デバッグ用に contact@super-productivity.com に送信する）。",
+    "PRIVACY_EXPORT_DESCRIPTION": "匿名化されたデータをエクスポートする（デバッグ用に contact@super-productivity.com に送信する）。",
     "S_BACKUP_DOWNLOADED": "バックアップをAndroidドキュメントフォルダにダウンロードしました",
     "S_ERR_IMPORT_FAILED": "データのインポートに失敗しました",
     "S_ERR_INVALID_DATA": "インポートに失敗しました：無効なJSON",

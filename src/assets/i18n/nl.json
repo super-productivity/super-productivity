@@ -1878,7 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Voer de volledige URL in van het Super Productivity-back-up JSON-bestand dat je wilt importeren.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Importeren van URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Importeren van URL",
-    "PRIVACY_EXPORT": "Geanonimiseerde gegevens exporteren (om naar contact@super-productivity.com te sturen voor debugging)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Geanonimiseerde gegevens exporteren (om naar contact@super-productivity.com te sturen voor debugging)",
     "S_BACKUP_DOWNLOADED": "Back-up gedownload naar de map met Android-documenten",
     "S_ERR_IMPORT_FAILED": "Het importeren van gegevens is mislukt",
     "S_ERR_INVALID_DATA": "Importeren mislukt: ongeldige JSON",

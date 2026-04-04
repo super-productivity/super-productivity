@@ -1873,7 +1873,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "لطفاً نشانی کامل فایل پشتیبان JSON از Super Productivity را که می‌خواهید وارد کنید، وارد نمایید.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "وارد کردن از URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "وارد کردن از URL",
-    "PRIVACY_EXPORT": "صادر کردن داده های ناشناس (برای ارسال به contact@super-productivity.com برای اشکال زدایی)",
+    "PRIVACY_EXPORT_DESCRIPTION": "صادر کردن داده های ناشناس (برای ارسال به contact@super-productivity.com برای اشکال زدایی)",
     "S_BACKUP_DOWNLOADED": "پشتیبان گیری در پوشه اسناد اندروید دانلود شده است",
     "S_ERR_IMPORT_FAILED": "وارد کردن داده ها انجام نشد",
     "S_ERR_INVALID_DATA": "وارد کردن انجام نشد: JSON نامعتبر",

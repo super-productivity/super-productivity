@@ -1878,7 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Por favor introduce la URL completa del archivo JSON de copia de seguridad de Super Productivity que quieres importar.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Importar desde URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Importar desde URL",
-    "PRIVACY_EXPORT": "Exportar datos anonimizados (para enviar a contact@super-productivity.com para depuración)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Exportar datos anonimizados (para enviar a contact@super-productivity.com para depuración)",
     "S_BACKUP_DOWNLOADED": "Copia de seguridad descargada a la carpeta de documentos de android",
     "S_ERR_IMPORT_FAILED": "Error al importar datos",
     "S_ERR_INVALID_DATA": "Importación fallida: JSON Inválido",
