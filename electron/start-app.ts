@@ -1,15 +1,7 @@
 import { initIpcInterfaces } from './ipc-handler';
 import { initPluginOAuth } from './plugin-oauth';
 import electronLog, { info, log, warn } from 'electron-log/main';
-import {
-  App,
-  app,
-  BrowserWindow,
-  globalShortcut,
-  ipcMain,
-  powerMonitor,
-  protocol,
-} from 'electron';
+import { App, app, BrowserWindow, globalShortcut, ipcMain, powerMonitor } from 'electron';
 import { join } from 'path';
 import { initDebug } from './debug';
 import electronDl from 'electron-dl';
@@ -321,11 +313,6 @@ export const startApp = (): void => {
       if (wasVisibleBeforeSuspend) {
         showOrFocus(mainWin);
       }
-    });
-
-    protocol.registerFileProtocol('file', (request, callback) => {
-      const pathname = decodeURI(request.url.replace('file:///', ''));
-      callback(pathname);
     });
   });
 
