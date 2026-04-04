@@ -8,12 +8,27 @@ const ACTION_FLAG_COMMAND_PAIRS: ReadonlyArray<
   ['--new-note', 'new-note'],
   ['--new-task', 'new-task'],
 ];
+const COMMAND_FLAG_PREFIXES = ['--toggle-', '--new-'] as const;
 
 const PROTOCOL_PREFIX = 'superproductivity://';
 
 export const parseDesktopCommandFromArgv = (
   argv: string[],
 ): DesktopCommandParseResult => {
+  const unknownCommandFlag = argv.find(
+    (arg) =>
+      arg.startsWith('--') &&
+      COMMAND_FLAG_PREFIXES.some((prefix) => arg.startsWith(prefix)) &&
+      !ACTION_FLAG_COMMAND_PAIRS.some(([flag]) => flag === arg),
+  );
+
+  if (unknownCommandFlag) {
+    return {
+      kind: 'error',
+      error: `Unknown desktop command flag: ${unknownCommandFlag}`,
+    };
+  }
+
   const matchingFlags = argv.filter((arg) =>
     ACTION_FLAG_COMMAND_PAIRS.some(([flag]) => flag === arg),
   );

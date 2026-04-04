@@ -35,6 +35,13 @@ describe('desktop command parser', () => {
     });
   });
 
+  it('should reject unknown desktop command-like flags', () => {
+    expect(parseDesktopCommandFromArgv(['app', '--toggle-'])).toEqual({
+      kind: 'error',
+      error: 'Unknown desktop command flag: --toggle-',
+    });
+  });
+
   it('should parse existing create-task protocol URLs', () => {
     expect(
       parseDesktopCommandFromProtocolUrl('superproductivity://create-task/Foo%20Bar'),

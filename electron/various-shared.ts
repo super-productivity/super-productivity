@@ -23,13 +23,19 @@ export function showOrFocus(passedWin: BrowserWindow): void {
     return;
   }
 
-  if (win.isVisible()) {
-    win.focus();
-  } else {
-    // restore explicitly
-    if (win.isMinimized()) win.restore();
+  // Restore first so the focus/raise path can operate on a normal window.
+  if (win.isMinimized()) {
+    win.restore();
+  }
+
+  if (!win.isVisible()) {
     win.show();
     if (getWasMaximizedBeforeHide()) win.maximize();
+  } else {
+    // Re-show and raise already-visible windows because focus() alone can fail to
+    // bring the existing instance to the foreground on some Linux window managers.
+    win.show();
+    win.moveTop();
   }
 
   // Hide task widget when main window is shown
