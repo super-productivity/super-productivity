@@ -29,6 +29,7 @@ import {
   processPendingProtocolUrls,
 } from './protocol-handler';
 import { getIsQuiting, setIsLocked } from './shared-state';
+import * as fs from 'fs';
 
 const ICONS_FOLDER = __dirname + '/assets/icons/';
 const IS_MAC = process.platform === 'darwin';
@@ -147,6 +148,38 @@ export const startApp = (): void => {
 
   // APP EVENT LISTENERS
   // -------------------
+  appIN.on('ready', () => {
+    // Clear GPU cache when Electron version changes to prevent blank/black screens.
+    // Stale GPU shader caches from old Electron versions cause rendering failures.
+    // Pattern used by Obsidian's Flatpak wrapper.
+    if (process.platform === 'linux') {
+      const userDataPath = app.getPath('userData');
+      const versionFile = join(userDataPath, '.electron-version');
+      const currentVersion = process.versions.electron;
+      try {
+        let lastVersion = '';
+        try {
+          lastVersion = fs.readFileSync(versionFile, 'utf8').trim();
+        } catch {
+          // File doesn't exist on first run
+        }
+        if (lastVersion !== currentVersion) {
+          const gpuCachePath = join(userDataPath, 'GPUCache');
+          if (fs.existsSync(gpuCachePath)) {
+            fs.rmSync(gpuCachePath, { recursive: true, force: true });
+            log(
+              `Cleared GPUCache after Electron upgrade (${lastVersion} -> ${currentVersion})`,
+            );
+          }
+          fs.mkdirSync(userDataPath, { recursive: true });
+          fs.writeFileSync(versionFile, currentVersion);
+        }
+      } catch (e) {
+        log('Failed to check/clear GPU cache:', e);
+      }
+    }
+  });
+
   appIN.on('ready', () => createMainWin());
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
