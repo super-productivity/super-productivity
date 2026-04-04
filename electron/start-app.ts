@@ -21,9 +21,14 @@ import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
 import { initIndicator } from './indicator';
 import { quitApp, showOrFocus } from './various-shared';
-import { createWindow } from './main-window';
+import { createWindow, getIsAppReady } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
 import { destroyTaskWidget } from './task-widget/task-widget';
+import {
+  flushPendingDesktopCommands,
+  queueOrExecuteDesktopCommand,
+} from './desktop-command-executor';
+import { parseDesktopCommandFromArgv } from './desktop-command-parser';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
@@ -57,6 +62,16 @@ export const startApp = (): void => {
 
   // LOAD IPC STUFF
   initIpcInterfaces();
+
+  ipcMain.on(IPC.APP_READY, () => {
+    setTimeout(() => {
+      flushPendingDesktopCommands({
+        getMainWindow: () => mainWin,
+        isAppReady: getIsAppReady,
+        showOrFocus,
+      });
+    });
+  });
 
   electronLog.initialize();
 
@@ -98,6 +113,18 @@ export const startApp = (): void => {
       isShowDevTools = true;
     }
   });
+
+  const parsedDesktopCommand = parseDesktopCommandFromArgv(process.argv);
+  if (parsedDesktopCommand.kind === 'error') {
+    log(parsedDesktopCommand.error);
+  } else if (parsedDesktopCommand.kind === 'command') {
+    queueOrExecuteDesktopCommand({
+      command: parsedDesktopCommand.command,
+      getMainWindow: () => mainWin,
+      isAppReady: getIsAppReady,
+      showOrFocus,
+    });
+  }
 
   // TODO remove at one point in the future and only leave the directory setting part
   // Special handling for snaps, since default user folder will cause problems when updating
@@ -382,6 +409,12 @@ export const startApp = (): void => {
     setTimeout(() => {
       processPendingProtocolUrls(mainWin);
     }, 1000);
+
+    flushPendingDesktopCommands({
+      getMainWindow: () => mainWin,
+      isAppReady: getIsAppReady,
+      showOrFocus,
+    });
   }
 
   // eslint-disable-next-line prefer-arrow/prefer-arrow-functions

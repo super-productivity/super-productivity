@@ -2,8 +2,9 @@ import { globalShortcut, ipcMain } from 'electron';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { KeyboardConfig } from '../../src/app/features/config/keyboard-config.model';
 import { getWin } from '../main-window';
-import { showOrFocus } from '../various-shared';
 import { errorHandlerWithFrontendInform } from '../error-handler-with-frontend-inform';
+import { executeDesktopCommand } from '../desktop-command-executor';
+import { showOrFocus } from '../various-shared';
 
 export const initGlobalShortcutsIpc = (): void => {
   ipcMain.on(IPC.REGISTER_GLOBAL_SHORTCUTS_EVENT, (ev, cfg) => {
@@ -32,34 +33,29 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
         switch (key) {
           case 'globalShowHide':
             actionFn = () => {
-              if (mainWin.isFocused()) {
-                // we need to blur the window for windows
-                mainWin.blur();
-                mainWin.hide();
-              } else {
-                showOrFocus(mainWin);
-              }
+              executeDesktopCommand({ type: 'toggle-visibility' }, mainWin, {
+                showOrFocus,
+              });
             };
             break;
 
           case 'globalToggleTaskStart':
             actionFn = () => {
-              mainWin.webContents.send(IPC.TASK_TOGGLE_START);
+              executeDesktopCommand({ type: 'toggle-time-tracking' }, mainWin, {
+                showOrFocus,
+              });
             };
             break;
 
           case 'globalAddNote':
             actionFn = () => {
-              showOrFocus(mainWin);
-              mainWin.webContents.send(IPC.ADD_NOTE);
+              executeDesktopCommand({ type: 'new-note' }, mainWin, { showOrFocus });
             };
             break;
 
           case 'globalAddTask':
             actionFn = () => {
-              showOrFocus(mainWin);
-              // NOTE: delay slightly to make sure app is ready
-              mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
+              executeDesktopCommand({ type: 'new-task' }, mainWin, { showOrFocus });
             };
             break;
 
