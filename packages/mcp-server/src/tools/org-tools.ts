@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SuperProductivityClient } from '@super-productivity/cli';
 import { z } from 'zod';
+import { toolError, jsonResult } from './util.js';
 
 const QueryParam = {
   query: z.string().optional().describe('Filter by title'),
@@ -18,10 +19,12 @@ export function registerOrgTools(
     'Get an overview of the Super Productivity app: current task, total task count.',
     {} as AnyParams,
     async () => {
-      const status = await client.status();
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(status, null, 2) }],
-      };
+      try {
+        const status = await client.status();
+        return jsonResult(status);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -30,10 +33,12 @@ export function registerOrgTools(
     'List all projects. Optionally filter by name.',
     QueryParam as AnyParams,
     async (params: z.objectOutputType<typeof QueryParam, z.ZodTypeAny>) => {
-      const projects = await client.listProjects(params.query);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(projects, null, 2) }],
-      };
+      try {
+        const projects = await client.listProjects(params.query);
+        return jsonResult(projects);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -42,10 +47,12 @@ export function registerOrgTools(
     'List all tags. Optionally filter by name.',
     QueryParam as AnyParams,
     async (params: z.objectOutputType<typeof QueryParam, z.ZodTypeAny>) => {
-      const tags = await client.listTags(params.query);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(tags, null, 2) }],
-      };
+      try {
+        const tags = await client.listTags(params.query);
+        return jsonResult(tags);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 }

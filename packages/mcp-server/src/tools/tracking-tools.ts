@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SuperProductivityClient } from '@super-productivity/cli';
 import { z } from 'zod';
+import { toolError, jsonResult, textResult } from './util.js';
 
 const TaskIdParam = {
   taskId: z.string().describe('The task ID to start tracking'),
@@ -18,17 +19,15 @@ export function registerTrackingTools(
     'Get the task currently being time-tracked, or null if nothing is running.',
     {} as AnyParams,
     async () => {
-      const task = await client.getCurrentTask();
-      if (!task) {
-        return {
-          content: [
-            { type: 'text' as const, text: 'No task is currently being tracked.' },
-          ],
-        };
+      try {
+        const task = await client.getCurrentTask();
+        if (!task) {
+          return textResult('No task is currently being tracked.');
+        }
+        return jsonResult(task);
+      } catch (err) {
+        return toolError(err);
       }
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(task, null, 2) }],
-      };
     },
   );
 
@@ -37,12 +36,12 @@ export function registerTrackingTools(
     'Start tracking time on a task. Stops any previously tracked task.',
     TaskIdParam as AnyParams,
     async (params: z.objectOutputType<typeof TaskIdParam, z.ZodTypeAny>) => {
-      await client.startTask(params.taskId);
-      return {
-        content: [
-          { type: 'text' as const, text: `Started tracking task ${params.taskId}.` },
-        ],
-      };
+      try {
+        await client.startTask(params.taskId);
+        return textResult(`Started tracking task ${params.taskId}.`);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -51,8 +50,12 @@ export function registerTrackingTools(
     'Stop tracking time on the current task.',
     {} as AnyParams,
     async () => {
-      await client.stopTask();
-      return { content: [{ type: 'text' as const, text: 'Stopped tracking.' }] };
+      try {
+        await client.stopTask();
+        return textResult('Stopped tracking.');
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 }

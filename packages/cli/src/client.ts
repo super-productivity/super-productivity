@@ -139,20 +139,31 @@ export class SuperProductivityClient {
     try {
       res = await fetch(`${this._baseUrl}${path}`, {
         ...init,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(init.headers as Record<string, string>),
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
     } catch {
       throw new AppNotRunningError();
     }
 
-    const body = (await res.json()) as ApiBody;
+    let body: ApiBody;
+    try {
+      body = (await res.json()) as ApiBody;
+    } catch {
+      throw new SuperProductivityError(
+        `Unexpected response (HTTP ${res.status})`,
+        'INVALID_RESPONSE',
+        res.status,
+      );
+    }
 
     if (!body.ok) {
       const err = body.error;
-      throw new SuperProductivityError(err.message, err.code, res.status, err.details);
+      throw new SuperProductivityError(
+        typeof err?.message === 'string' ? err.message : `HTTP ${res.status}`,
+        typeof err?.code === 'string' ? err.code : 'UNKNOWN',
+        res.status,
+        err?.details,
+      );
     }
 
     return body.data as T;

@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SuperProductivityClient } from '@super-productivity/cli';
 import { z } from 'zod';
+import { toolError, jsonResult, textResult } from './util.js';
 
 const ListTasksParams = {
   query: z
@@ -74,16 +75,18 @@ export function registerTaskTools(
     'Search and list tasks from Super Productivity. Returns active non-done tasks by default.',
     ListTasksParams as AnyParams,
     async (params: z.objectOutputType<typeof ListTasksParams, z.ZodTypeAny>) => {
-      const tasks = await client.listTasks({
-        query: params.query,
-        projectId: params.projectId,
-        tagId: params.tagId,
-        includeDone: params.includeDone,
-        source: params.source,
-      });
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(tasks, null, 2) }],
-      };
+      try {
+        const tasks = await client.listTasks({
+          query: params.query,
+          projectId: params.projectId,
+          tagId: params.tagId,
+          includeDone: params.includeDone,
+          source: params.source,
+        });
+        return jsonResult(tasks);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -92,10 +95,12 @@ export function registerTaskTools(
     'Get full details of a single task by its ID, including notes, time tracking, subtask IDs, and due dates.',
     TaskIdParam as AnyParams,
     async (params: z.objectOutputType<typeof TaskIdParam, z.ZodTypeAny>) => {
-      const task = await client.getTask(params.taskId);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(task, null, 2) }],
-      };
+      try {
+        const task = await client.getTask(params.taskId);
+        return jsonResult(task);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -104,16 +109,18 @@ export function registerTaskTools(
     'Create a new task in Super Productivity.',
     CreateTaskParams as AnyParams,
     async (params: z.objectOutputType<typeof CreateTaskParams, z.ZodTypeAny>) => {
-      const task = await client.createTask(params.title, {
-        notes: params.notes,
-        projectId: params.projectId,
-        tagIds: params.tagIds,
-        dueDay: params.dueDay,
-        timeEstimate: params.timeEstimate,
-      });
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(task, null, 2) }],
-      };
+      try {
+        const task = await client.createTask(params.title, {
+          notes: params.notes,
+          projectId: params.projectId,
+          tagIds: params.tagIds,
+          dueDay: params.dueDay,
+          timeEstimate: params.timeEstimate,
+        });
+        return jsonResult(task);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -122,11 +129,13 @@ export function registerTaskTools(
     'Update fields on an existing task. Only provided fields are changed.',
     UpdateTaskParams as AnyParams,
     async (params: z.objectOutputType<typeof UpdateTaskParams, z.ZodTypeAny>) => {
-      const { taskId, ...fields } = params;
-      const task = await client.updateTask(taskId, fields);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(task, null, 2) }],
-      };
+      try {
+        const { taskId, ...fields } = params;
+        const task = await client.updateTask(taskId, fields);
+        return jsonResult(task);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -135,12 +144,12 @@ export function registerTaskTools(
     'Mark a task as done.',
     TaskIdParam as AnyParams,
     async (params: z.objectOutputType<typeof TaskIdParam, z.ZodTypeAny>) => {
-      const task = await client.updateTask(params.taskId, { isDone: true });
-      return {
-        content: [
-          { type: 'text' as const, text: `Task "${task.title}" marked as done.` },
-        ],
-      };
+      try {
+        const task = await client.updateTask(params.taskId, { isDone: true });
+        return textResult(`Task "${task.title}" marked as done.`);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -149,10 +158,12 @@ export function registerTaskTools(
     'Permanently delete a task.',
     TaskIdParam as AnyParams,
     async (params: z.objectOutputType<typeof TaskIdParam, z.ZodTypeAny>) => {
-      await client.deleteTask(params.taskId);
-      return {
-        content: [{ type: 'text' as const, text: `Task ${params.taskId} deleted.` }],
-      };
+      try {
+        await client.deleteTask(params.taskId);
+        return textResult(`Task ${params.taskId} deleted.`);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -161,10 +172,12 @@ export function registerTaskTools(
     'Move a task to the archive.',
     TaskIdParam as AnyParams,
     async (params: z.objectOutputType<typeof TaskIdParam, z.ZodTypeAny>) => {
-      await client.archiveTask(params.taskId);
-      return {
-        content: [{ type: 'text' as const, text: `Task ${params.taskId} archived.` }],
-      };
+      try {
+        await client.archiveTask(params.taskId);
+        return textResult(`Task ${params.taskId} archived.`);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 
@@ -173,10 +186,12 @@ export function registerTaskTools(
     'Restore a task from the archive back to the active task list.',
     TaskIdParam as AnyParams,
     async (params: z.objectOutputType<typeof TaskIdParam, z.ZodTypeAny>) => {
-      const task = await client.restoreTask(params.taskId);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(task, null, 2) }],
-      };
+      try {
+        const task = await client.restoreTask(params.taskId);
+        return jsonResult(task);
+      } catch (err) {
+        return toolError(err);
+      }
     },
   );
 }

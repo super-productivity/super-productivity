@@ -20,7 +20,19 @@ const client = new SuperProductivityClient();
 function arg(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
   if (idx === -1 || idx + 1 >= args.length) return undefined;
-  return args[idx + 1];
+  const next = args[idx + 1];
+  if (next.startsWith('--')) return undefined;
+  return next;
+}
+
+function allArgs(args: string[], flag: string): string[] {
+  const result: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === flag && i + 1 < args.length && !args[i + 1].startsWith('--')) {
+      result.push(args[i + 1]);
+    }
+  }
+  return result;
 }
 
 function hasFlag(args: string[], flag: string): boolean {
@@ -62,7 +74,7 @@ Task list options:
 
 Task create/update options:
   --project <id>                  Set project
-  --tag <id>                      Add tag (can repeat)
+  --tag <id>                      Add tag (repeatable)
   --due <YYYY-MM-DD>              Set due date
   --estimate <duration>           Set time estimate (e.g. 1h30m, 45m)
   --notes <text>                  Set notes
@@ -130,8 +142,8 @@ async function run(argv: string[]): Promise<void> {
       const fields: TaskCreateFields = {};
       const projectId = arg(args, '--project');
       if (projectId) fields.projectId = projectId;
-      const tagId = arg(args, '--tag');
-      if (tagId) fields.tagIds = [tagId];
+      const tagIds = allArgs(args, '--tag');
+      if (tagIds.length) fields.tagIds = tagIds;
       const due = arg(args, '--due');
       if (due) fields.dueDay = due;
       const notes = arg(args, '--notes');
@@ -159,8 +171,8 @@ async function run(argv: string[]): Promise<void> {
       if (notes) fields.notes = notes;
       const projectId = arg(args, '--project');
       if (projectId) fields.projectId = projectId;
-      const tagId = arg(args, '--tag');
-      if (tagId) fields.tagIds = [tagId];
+      const tagIds = allArgs(args, '--tag');
+      if (tagIds.length) fields.tagIds = tagIds;
       const due = arg(args, '--due');
       if (due) fields.dueDay = due;
       const estimate = arg(args, '--estimate');

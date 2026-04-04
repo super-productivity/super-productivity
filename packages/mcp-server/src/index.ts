@@ -26,71 +26,111 @@ registerOrgTools(server, client);
 // Resources
 // ---------------------------------------------------------------------------
 
-server.resource('current-task', 'sp://current-task', async (uri) => {
-  const task = await client.getCurrentTask();
+function todayLocal(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function resourceError(uri: URL, message: string) {
   return {
     contents: [
       {
         uri: uri.href,
-        mimeType: 'application/json',
-        text: JSON.stringify(task, null, 2),
+        mimeType: 'text/plain' as const,
+        text: `Error: ${message}`,
       },
     ],
   };
+}
+
+server.resource('current-task', 'sp://current-task', async (uri) => {
+  try {
+    const task = await client.getCurrentTask();
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'application/json' as const,
+          text: JSON.stringify(task, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    return resourceError(uri, err instanceof Error ? err.message : String(err));
+  }
 });
 
 server.resource('active-tasks', 'sp://tasks/active', async (uri) => {
-  const tasks = await client.listTasks({ source: 'active' });
-  return {
-    contents: [
-      {
-        uri: uri.href,
-        mimeType: 'application/json',
-        text: JSON.stringify(tasks, null, 2),
-      },
-    ],
-  };
+  try {
+    const tasks = await client.listTasks({ source: 'active' });
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'application/json' as const,
+          text: JSON.stringify(tasks, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    return resourceError(uri, err instanceof Error ? err.message : String(err));
+  }
 });
 
 server.resource('today-tasks', 'sp://tasks/today', async (uri) => {
-  const today = new Date().toISOString().slice(0, 10);
-  const tasks = await client.listTasks({ source: 'active', includeDone: true });
-  const todayTasks = tasks.filter((t) => t.dueDay === today);
-  return {
-    contents: [
-      {
-        uri: uri.href,
-        mimeType: 'application/json',
-        text: JSON.stringify(todayTasks, null, 2),
-      },
-    ],
-  };
+  try {
+    const today = todayLocal();
+    const tasks = await client.listTasks({ source: 'active', includeDone: true });
+    const todayTasks = tasks.filter((t) => t.dueDay === today);
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'application/json' as const,
+          text: JSON.stringify(todayTasks, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    return resourceError(uri, err instanceof Error ? err.message : String(err));
+  }
 });
 
 server.resource('projects', 'sp://projects', async (uri) => {
-  const projects = await client.listProjects();
-  return {
-    contents: [
-      {
-        uri: uri.href,
-        mimeType: 'application/json',
-        text: JSON.stringify(projects, null, 2),
-      },
-    ],
-  };
+  try {
+    const projects = await client.listProjects();
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'application/json' as const,
+          text: JSON.stringify(projects, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    return resourceError(uri, err instanceof Error ? err.message : String(err));
+  }
 });
 
 server.resource('tags', 'sp://tags', async (uri) => {
-  const tags = await client.listTags();
-  return {
-    contents: [
-      {
-        uri: uri.href,
-        mimeType: 'application/json',
-        text: JSON.stringify(tags, null, 2),
-      },
-    ],
-  };
+  try {
+    const tags = await client.listTags();
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'application/json' as const,
+          text: JSON.stringify(tags, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    return resourceError(uri, err instanceof Error ? err.message : String(err));
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -101,6 +141,14 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
+
+const shutdown = async (): Promise<void> => {
+  await server.close();
+  process.exit(0);
+};
+
+process.on('SIGINT', () => void shutdown());
+process.on('SIGTERM', () => void shutdown());
 
 main().catch((err: unknown) => {
   console.error('Failed to start MCP server:', err);
