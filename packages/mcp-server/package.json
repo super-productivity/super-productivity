@@ -1,0 +1,49 @@
+{
+  "name": "@super-productivity/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Super Productivity — lets AI assistants manage tasks, projects, and time tracking",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "sp-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "super-productivity",
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "task-management"
+  ],
+  "author": "Johannes Millan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/super-productivity/super-productivity.git",
+    "directory": "packages/mcp-server"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@super-productivity/cli": "*",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
