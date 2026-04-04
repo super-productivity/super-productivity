@@ -37,10 +37,10 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@super-productivity/cli": "^1.0.0",
     "zod": "^3.24.4"
   },
   "devDependencies": {
-    "@super-productivity/cli": "*",
     "typescript": "^5.0.0"
   },
   "engines": {
