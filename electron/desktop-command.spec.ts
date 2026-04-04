@@ -76,19 +76,22 @@ describe('desktop command executor', () => {
   let showOrFocusSpy: jasmine.Spy;
   let sendSpy: jasmine.Spy;
   let hideSpy: jasmine.Spy;
-  let blurSpy: jasmine.Spy;
   let isFocusedSpy: jasmine.Spy;
+  let isMinimizedSpy: jasmine.Spy;
+  let isVisibleSpy: jasmine.Spy;
 
   beforeEach(() => {
     sendSpy = jasmine.createSpy('send');
     hideSpy = jasmine.createSpy('hide');
-    blurSpy = jasmine.createSpy('blur');
     isFocusedSpy = jasmine.createSpy('isFocused').and.returnValue(false);
+    isMinimizedSpy = jasmine.createSpy('isMinimized').and.returnValue(false);
+    isVisibleSpy = jasmine.createSpy('isVisible').and.returnValue(true);
     showOrFocusSpy = jasmine.createSpy('showOrFocus');
     mainWin = {
-      blur: blurSpy,
       hide: hideSpy,
       isFocused: isFocusedSpy,
+      isMinimized: isMinimizedSpy,
+      isVisible: isVisibleSpy,
       webContents: {
         send: sendSpy,
       },
@@ -100,19 +103,33 @@ describe('desktop command executor', () => {
     resetPendingDesktopCommands();
   });
 
-  it('should hide focused window for toggle visibility', () => {
-    isFocusedSpy.and.returnValue(true);
+  it('should hide visible non-minimized window for toggle visibility', () => {
+    isVisibleSpy.and.returnValue(true);
+    isMinimizedSpy.and.returnValue(false);
 
     executeDesktopCommand({ type: 'toggle-visibility' }, mainWin, {
       showOrFocus: showOrFocusSpy,
     });
 
-    expect(blurSpy).toHaveBeenCalled();
     expect(hideSpy).toHaveBeenCalled();
     expect(showOrFocusSpy).not.toHaveBeenCalled();
   });
 
   it('should show or focus hidden window for toggle visibility', () => {
+    isVisibleSpy.and.returnValue(false);
+
+    executeDesktopCommand({ type: 'toggle-visibility' }, mainWin, {
+      showOrFocus: showOrFocusSpy,
+    });
+
+    expect(showOrFocusSpy).toHaveBeenCalledWith(mainWin);
+    expect(hideSpy).not.toHaveBeenCalled();
+  });
+
+  it('should show or focus minimized window for toggle visibility', () => {
+    isVisibleSpy.and.returnValue(true);
+    isMinimizedSpy.and.returnValue(true);
+
     executeDesktopCommand({ type: 'toggle-visibility' }, mainWin, {
       showOrFocus: showOrFocusSpy,
     });

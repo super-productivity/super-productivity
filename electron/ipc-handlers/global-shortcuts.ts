@@ -6,6 +6,9 @@ import { errorHandlerWithFrontendInform } from '../error-handler-with-frontend-i
 import { executeDesktopCommand } from '../desktop-command-executor';
 import { showOrFocus } from '../various-shared';
 
+const TOGGLE_VISIBILITY_REPEAT_GAP_MS = 1000;
+let lastToggleVisibilityEvent = 0;
+
 export const initGlobalShortcutsIpc = (): void => {
   ipcMain.on(IPC.REGISTER_GLOBAL_SHORTCUTS_EVENT, (ev, cfg) => {
     registerShowAppShortCuts(cfg);
@@ -33,6 +36,21 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
         switch (key) {
           case 'globalShowHide':
             actionFn = () => {
+              const now = Date.now();
+              const sinceLastMs = now - lastToggleVisibilityEvent;
+              lastToggleVisibilityEvent = now;
+
+              // On some Linux/Wayland setups Electron's globalShortcut repeats while the
+              // key combo is held. Treat hidden-window repeats with a short required quiet
+              // gap as the same physical press, and only allow re-show after a real pause.
+              if (
+                !mainWin.isVisible() &&
+                !mainWin.isMinimized() &&
+                sinceLastMs < TOGGLE_VISIBILITY_REPEAT_GAP_MS
+              ) {
+                return;
+              }
+
               executeDesktopCommand({ type: 'toggle-visibility' }, mainWin, {
                 showOrFocus,
               });

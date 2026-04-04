@@ -72,7 +72,6 @@ export const startApp = (): void => {
       });
     });
   });
-
   electronLog.initialize();
 
   app.commandLine.appendSwitch('enable-speech-dispatcher');

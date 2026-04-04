@@ -1,11 +1,11 @@
-import { log } from 'electron-log/main';
 import { DesktopCommand } from './desktop-command';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 
 export interface DesktopCommandWindow {
-  blur(): void;
   hide(): void;
   isFocused(): boolean;
+  isMinimized(): boolean;
+  isVisible(): boolean;
   webContents: {
     send(channel: IPC, ...args: unknown[]): void;
   };
@@ -24,8 +24,7 @@ export const executeDesktopCommand = (
 ): void => {
   switch (command.type) {
     case 'toggle-visibility':
-      if (mainWin.isFocused()) {
-        mainWin.blur();
+      if (mainWin.isVisible() && !mainWin.isMinimized()) {
         mainWin.hide();
       } else {
         showOrFocus(mainWin);
@@ -71,7 +70,6 @@ export const flushPendingDesktopCommands = ({
     return;
   }
 
-  log(`Processing ${pendingDesktopCommands.length} pending desktop command(s)`);
   const commands = [...pendingDesktopCommands];
   pendingDesktopCommands.length = 0;
   commands.forEach((command) => executeDesktopCommand(command, mainWin, { showOrFocus }));
