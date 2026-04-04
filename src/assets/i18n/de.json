@@ -1878,6 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Bitte geben Sie die vollständige URL der Super Productivity-Backup-JSON-Datei ein, die Sie importieren möchten.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Aus URL importieren",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Aus URL importieren",
+    "PRIVACY_EXPORT": "Daten exportieren (anonymisiert)",
     "PRIVACY_EXPORT_DESCRIPTION": "Exportiere anonymisierte Daten (zum Senden an contact@super-productivity.com zur Fehlersuche)",
     "S_BACKUP_DOWNLOADED": "Backup in den Android-Dokumentenordner heruntergeladen",
     "S_ERR_IMPORT_FAILED": "Datenimport fehlgeschlagen",

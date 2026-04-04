@@ -1878,6 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Silakan masukkan URL lengkap file cadangan JSON Super Productivity yang ingin Anda impor.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Impor dari URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Impor dari URL",
+    "PRIVACY_EXPORT": "Ekspor data (anonim)",
     "PRIVACY_EXPORT_DESCRIPTION": "Ekspor data anonim (untuk dikirim ke contact@super-productivity.com untuk debugging)",
     "S_BACKUP_DOWNLOADED": "Cadangan diunduh ke folder dokumen android",
     "S_ERR_IMPORT_FAILED": "Mengimpor data gagal",

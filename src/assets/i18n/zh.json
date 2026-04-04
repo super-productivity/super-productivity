@@ -1878,6 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "请输入您要导入的超级生产力备份 JSON 文件的完整 URL。",
     "IMPORT_FROM_URL_DIALOG_TITLE": "从 URL 导入",
     "OPEN_IMPORT_FROM_URL_DIALOG": "从 URL 导入",
+    "PRIVACY_EXPORT": "导出数据（匿名化）",
     "PRIVACY_EXPORT_DESCRIPTION": "导出匿名化数据（发送至 contact@super-productivity.com 进行调试）",
     "S_BACKUP_DOWNLOADED": "备份已下载至安卓文档文件夹",
     "S_ERR_IMPORT_FAILED": "导入数据失败",

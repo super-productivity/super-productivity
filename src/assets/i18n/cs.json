@@ -1878,6 +1878,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Zadejte úplnou URL adresu záložního JSON souboru ze Super Productivity, který chcete importovat.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Importovat z URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Importovat z URL",
+    "PRIVACY_EXPORT": "Exportovat data (anonymizovaná)",
     "PRIVACY_EXPORT_DESCRIPTION": "Exportovat anonymizovaná data (pro odeslání na contact@super-productivity.com pro ladění)",
     "S_BACKUP_DOWNLOADED": "Záloha byla stažena do složky dokumentů Android",
     "S_ERR_IMPORT_FAILED": "Importování dat selhalo",

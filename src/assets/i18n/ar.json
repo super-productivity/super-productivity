@@ -1873,6 +1873,7 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "يرجى إدخال عنوان URL الكامل لملف نسخ Super Productivity الاحتياطي بتنسيق JSON الذي تريد استيراده.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "الاستيراد من URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "الاستيراد من URL",
+    "PRIVACY_EXPORT": "تصدير البيانات (مجهولة المصدر)",
     "PRIVACY_EXPORT_DESCRIPTION": "تصدير البيانات مجهولة المصدر (لإرسالها إلى contact@super-productivity.com للتصحيح)",
     "S_BACKUP_DOWNLOADED": "تم تنزيل النسخة الاحتياطية إلى مجلد مستندات android",
     "S_ERR_IMPORT_FAILED": "فشل استيراد البيانات",
