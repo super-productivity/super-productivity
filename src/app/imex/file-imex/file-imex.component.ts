@@ -10,7 +10,7 @@ import { HttpClient } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { SnackService } from '../../core/snack/snack.service';
 import { download } from '../../util/download';
-import { getBackupTimestamp } from '../../../../electron/shared-with-frontend/get-backup-timestamp';
+import { getBackupTimestamp } from '../../util/get-backup-timestamp';
 import { DialogImportFromUrlComponent } from '../dialog-import-from-url/dialog-import-from-url.component';
 import { T } from '../../t.const';
 import { TODAY_TAG } from '../../features/tag/tag.const';
@@ -275,7 +275,7 @@ export class FileImexComponent implements OnInit {
 
   async privacyAppDataDownload(): Promise<void> {
     const data = await this._backupService.loadCompleteBackup(true);
-    const fileName = `sp-backup-anonimized_${getBackupTimestamp()}.json`;
+    const fileName = `sp-backup-anonymized_${getBackupTimestamp()}.json`;
     const result = await download(fileName, privacyExport(data));
     if ((IS_NATIVE_PLATFORM && !result.wasCanceled) || result.isSnap) {
       this._snackService.open({

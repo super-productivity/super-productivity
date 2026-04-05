@@ -19,7 +19,7 @@ import { uuidv7 } from '../../util/uuid-v7';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { AppDataComplete } from '../model/model-config';
-import { getBackupTimestamp } from '../../../../electron/shared-with-frontend/get-backup-timestamp';
+import { getBackupTimestamp } from '../../util/get-backup-timestamp';
 
 export const MIGRATION_BACKUP_PREFIX = 'sp-pre-migration-backup';
 
