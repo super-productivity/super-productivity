@@ -172,6 +172,35 @@ export const startApp = (): void => {
     }
   });
 
+  appIN.on('ready', () => {
+    // Defense-in-depth: Force X11 in Snap if the gnome-42-2204 runtime is not
+    // available or Wayland init fails. The primary fix is the gnome-42-2204
+    // plug override in electron-builder.yaml. This code catches edge cases where
+    // the content snap is not connected or the runtime is missing.
+    // Users can override with: superproductivity --ozone-platform=wayland
+    if (
+      process.platform === 'linux' &&
+      process.env.SNAP &&
+      !process.argv.some((arg) => arg.includes('--ozone-platform='))
+    ) {
+      // Check if the gnome-42-2204 runtime is mounted at the expected path.
+      // If not, fall back to X11 to prevent crashes.
+      const gnomePlatformPath = join(process.env.SNAP || '', 'gnome-platform');
+      try {
+        if (
+          !fs.existsSync(gnomePlatformPath) ||
+          fs.readdirSync(gnomePlatformPath).length === 0
+        ) {
+          app.commandLine.appendSwitch('ozone-platform', 'x11');
+          log('Snap: gnome-42-2204 runtime not found, forcing X11');
+        }
+      } catch {
+        app.commandLine.appendSwitch('ozone-platform', 'x11');
+        log('Snap: Could not check gnome runtime, forcing X11');
+      }
+    }
+  });
+
   appIN.on('ready', () => createMainWin());
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
