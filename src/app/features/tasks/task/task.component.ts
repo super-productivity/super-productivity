@@ -974,7 +974,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   moveTaskToProject(projectId: string): void {
     void this._taskBatchOperationService
       .moveToProject(this.task(), projectId)
-      .then(() => this.focusSelf());
+      .then((isMoved) => {
+        if (isMoved) {
+          this.focusSelf();
+        }
+      });
   }
 
   toggleSelection(event?: MouseEvent): void {
@@ -1019,7 +1023,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       return true;
     }
 
-    return this._taskSelectionService.isSelectionMode();
+    return false;
   }
 
   moveToBacklog(): void {

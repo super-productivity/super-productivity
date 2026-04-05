@@ -50,13 +50,14 @@ export class TaskSelectionToolbarComponent {
       return [];
     }
 
-    const currentProjectIds = new Set(
-      selectedTasks
-        .map((task) => task.projectId)
-        .filter((projectId): projectId is string => !!projectId),
-    );
+    const firstProjectId = selectedTasks[0].projectId;
+    const allTasksInSameProject =
+      !!firstProjectId &&
+      selectedTasks.every((task) => task.projectId === firstProjectId);
 
-    return projects.filter((project) => !currentProjectIds.has(project.id));
+    return allTasksInSameProject
+      ? projects.filter((project) => project.id !== firstProjectId)
+      : projects;
   });
 
   protected readonly hasProjectTargets = computed(
@@ -121,7 +122,32 @@ export class TaskSelectionToolbarComponent {
       return;
     }
 
-    for (const task of selectedTasks) {
+    const uniqueTasksById = Array.from(
+      new Map(selectedTasks.map((task) => [task.id, task])).values(),
+    );
+    const recurringTasks: TaskWithSubTasks[] = [];
+    const nonRecurringTasks: TaskWithSubTasks[] = [];
+    const seenRepeatCfgIds = new Set<string>();
+
+    for (const task of uniqueTasksById) {
+      if (task.repeatCfgId) {
+        if (seenRepeatCfgIds.has(task.repeatCfgId)) {
+          continue;
+        }
+        seenRepeatCfgIds.add(task.repeatCfgId);
+        recurringTasks.push(task);
+      } else {
+        nonRecurringTasks.push(task);
+      }
+    }
+
+    await Promise.all(
+      nonRecurringTasks.map((task) =>
+        this._taskBatchOperationService.moveToProject(task, pickedProjectId),
+      ),
+    );
+
+    for (const task of recurringTasks) {
       await this._taskBatchOperationService.moveToProject(task, pickedProjectId);
     }
     this._selectionService.clearSelection();

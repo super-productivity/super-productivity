@@ -1664,10 +1664,12 @@
       },
       "SELECT_OR_CREATE": "Select or create task",
       "TASK_SELECTION": {
-        "COUNT": "{{count}} tasks selected",
+        "COUNT_ONE": "{{count}} task selected",
+        "COUNT_OTHER": "{{count}} tasks selected",
         "TITLE": "Move selected tasks",
         "D_CONFIRM_DELETE": {
-          "MSG": "Are you sure you want to delete <strong>{{count}}</strong> selected tasks?"
+          "MSG_ONE": "Are you sure you want to delete <strong>{{count}}</strong> selected task?",
+          "MSG_OTHER": "Are you sure you want to delete <strong>{{count}}</strong> selected tasks?"
         }
       },
       "SUMMARY_TABLE": {
