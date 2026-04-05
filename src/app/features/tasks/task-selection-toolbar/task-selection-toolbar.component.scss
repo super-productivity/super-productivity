@@ -1,0 +1,43 @@
+@use '../../../../styles/_globals.scss' as *;
+
+:host {
+  position: fixed;
+  left: 50%;
+  bottom: var(--s3);
+  transform: translateX(-50%);
+  z-index: var(--z-add-task-bar);
+  pointer-events: none;
+}
+
+.toolbar-wrap {
+  pointer-events: none;
+}
+
+.toolbar {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s) var(--s2);
+  background: var(--card-bg);
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--s3);
+  box-shadow: var(--whiteframe-shadow-8dp);
+
+  @include mq(xs, max) {
+    width: calc(100vw - var(--s3));
+    justify-content: space-between;
+  }
+}
+
+.count {
+  color: var(--text-color-most-intense);
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+}

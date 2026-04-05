@@ -21,10 +21,9 @@ import {
   MatMenuItem,
   MatMenuTrigger,
 } from '@angular/material/menu';
-import { Task, TaskCopy, TaskWithSubTasks } from '../../task.model';
-import { EMPTY, forkJoin, from, Observable, of, ReplaySubject, Subject } from 'rxjs';
+import { Task, TaskWithSubTasks } from '../../task.model';
+import { from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
-  concatMap,
   delay,
   distinctUntilChanged,
   first,
@@ -32,17 +31,14 @@ import {
   switchMap,
   take,
   takeUntil,
-  tap,
 } from 'rxjs/operators';
 import { Project } from '../../../project/project.model';
 import { TaskService } from '../../task.service';
-import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
 import { TaskAttachmentService } from '../../task-attachment/task-attachment.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { ProjectService } from '../../../project/project.service';
-import { _MISSING_PROJECT_ } from '../../../project/project.const';
 import { WorkContextService } from '../../../work-context/work-context.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
 import { KeyboardConfig } from '../../../config/keyboard-config.model';
@@ -52,7 +48,6 @@ import { DialogTimeEstimateComponent } from '../../dialog-time-estimate/dialog-t
 import { DialogEditTaskAttachmentComponent } from '../../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { throttle } from '../../../../util/decorators';
 import { DialogConfirmComponent } from '../../../../ui/dialog-confirm/dialog-confirm.component';
-import { Update } from '@ngrx/entity';
 import { isTouchActive } from 'src/app/util/input-intent';
 import { T } from 'src/app/t.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -79,6 +74,7 @@ import { TaskLog } from '../../../../core/log';
 import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
 import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
+import { TaskBatchOperationService } from '../../task-batch-operation.service';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -103,7 +99,6 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
 export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _taskService = inject(TaskService);
-  private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
   private readonly _attachmentService = inject(TaskAttachmentService);
@@ -118,6 +113,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
+  private readonly _taskBatchOperationService = inject(TaskBatchOperationService);
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
@@ -570,96 +566,15 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   async moveTaskToProject(projectId: string): Promise<void> {
     if (projectId === this.task.projectId) {
       return;
-    } else if (!this.task.repeatCfgId) {
-      const taskWithSubTasks = await this._getTaskWithSubtasks();
-      this._taskService.moveToProject(taskWithSubTasks, projectId);
+    }
+
+    const taskWithSubTasks = await this._getTaskWithSubtasks();
+    const isMoved = await this._taskBatchOperationService.moveToProject(
+      taskWithSubTasks,
+      projectId,
+    );
+    if (isMoved) {
       this.onClose();
-    } else {
-      const taskWithSubTasks = await this._getTaskWithSubtasks();
-
-      forkJoin([
-        this._taskRepeatCfgService
-          .getTaskRepeatCfgById$(this.task.repeatCfgId)
-          .pipe(first()),
-        this._taskService
-          .getTasksWithSubTasksByRepeatCfgId$(this.task.repeatCfgId)
-          .pipe(first()),
-        this._taskService.getArchiveTasksForRepeatCfgId(this.task.repeatCfgId),
-        this._projectService.getByIdOnce$(projectId),
-      ])
-        .pipe(
-          concatMap(
-            ([
-              reminderCfg,
-              nonArchiveInstancesWithSubTasks,
-              archiveInstances,
-              targetProject,
-            ]) => {
-              TaskLog.log({
-                reminderCfg,
-                nonArchiveInstancesWithSubTasks,
-                archiveInstances,
-              });
-
-              // if there is only a single instance (probably just created) than directly update the task repeat cfg
-              if (
-                nonArchiveInstancesWithSubTasks.length === 1 &&
-                archiveInstances.length === 0
-              ) {
-                this._taskRepeatCfgService.updateTaskRepeatCfg(reminderCfg.id, {
-                  projectId,
-                });
-                this._taskService.moveToProject(taskWithSubTasks, projectId);
-                this.onClose();
-                return EMPTY;
-              }
-
-              return this._matDialog
-                .open(DialogConfirmComponent, {
-                  data: {
-                    okTxt: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.OK,
-                    message: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.MSG,
-                    translateParams: {
-                      projectName: targetProject?.title ?? _MISSING_PROJECT_,
-                      tasksNr:
-                        nonArchiveInstancesWithSubTasks.length + archiveInstances.length,
-                    },
-                  },
-                })
-                .afterClosed()
-                .pipe(
-                  tap((isConfirm) => {
-                    if (isConfirm) {
-                      this._taskRepeatCfgService.updateTaskRepeatCfg(reminderCfg.id, {
-                        projectId,
-                      });
-                      nonArchiveInstancesWithSubTasks.forEach((nonArchiveTask) => {
-                        this._taskService.moveToProject(nonArchiveTask, projectId);
-                      });
-
-                      const archiveUpdates: Update<TaskCopy>[] = [];
-                      archiveInstances.forEach((archiveTask) => {
-                        archiveUpdates.push({
-                          id: archiveTask.id,
-                          changes: { projectId },
-                        });
-                        if (archiveTask.subTaskIds.length) {
-                          archiveTask.subTaskIds.forEach((subId) => {
-                            archiveUpdates.push({
-                              id: subId,
-                              changes: { projectId },
-                            });
-                          });
-                        }
-                      });
-                      this._taskService.updateArchiveTasks(archiveUpdates);
-                    }
-                  }),
-                );
-            },
-          ),
-        )
-        .subscribe(() => this.onClose());
     }
   }
 

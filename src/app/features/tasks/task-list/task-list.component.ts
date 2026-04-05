@@ -116,6 +116,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     return filterDoneTasks(tasks, currentId, isHideDone, isHideAll);
   });
 
+  visibleTaskIds = computed(() => this.filteredTasks().map((task) => task.id));
+
   doneTasksLength = computed(() => {
     return this.tasks()?.filter((task) => task.isDone).length ?? 0;
   });

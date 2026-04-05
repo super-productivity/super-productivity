@@ -18,6 +18,15 @@
         class="title-and-left-btns-wrapper"
         (click)="titleBarClick($event)"
       >
+        @if (isSelectionMode()) {
+          <mat-checkbox
+            class="selection-checkbox"
+            color="primary"
+            [checked]="isMultiSelected()"
+            (click)="toggleSelection($event)"
+          ></mat-checkbox>
+        }
+
         <done-toggle
           [isDone]="t.isDone"
           [isCurrent]="isCurrent()"

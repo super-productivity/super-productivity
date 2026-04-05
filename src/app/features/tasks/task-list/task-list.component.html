@@ -33,6 +33,7 @@
 >
   @for (task of filteredTasks(); track trackByFn($index, task); let i = $index) {
     <task
+      [allVisibleTaskIds]="visibleTaskIds()"
       [isInSubTaskList]="isSubTaskList()"
       [isBacklog]="isBacklog()"
       [task]="task"

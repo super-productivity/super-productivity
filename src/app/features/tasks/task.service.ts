@@ -192,6 +192,8 @@ export class TaskService {
   private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
+  readonly taskEntities = this._taskEntities;
+
   // Batch sync for time tracking: accumulates duration per task, syncs every 5 minutes
   private static readonly SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
   private _timeAccumulator = new BatchedTimeSyncAccumulator(
