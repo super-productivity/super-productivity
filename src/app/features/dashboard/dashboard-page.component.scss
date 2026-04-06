@@ -70,7 +70,7 @@
   &.edit-mode {
     outline: 2px dashed var(--divider-color);
     outline-offset: 2px;
-    border-radius: var(--card-border-radius, 8px);
+    border-radius: var(--card-border-radius, 4px);
   }
 }
 
@@ -83,7 +83,7 @@
 }
 
 .cdk-drag-animating {
-  transition: transform var(--transition-duration-m, 250ms) cubic-bezier(0, 0, 0.2, 1);
+  transition: transform var(--transition-duration-m) cubic-bezier(0, 0, 0.2, 1);
 }
 
 .empty-state {

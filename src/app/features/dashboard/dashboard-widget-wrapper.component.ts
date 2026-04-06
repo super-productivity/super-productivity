@@ -74,10 +74,10 @@ import { CdkDragHandle } from '@angular/cdk/drag-drop';
         display: flex;
         flex-direction: column;
         background: var(--card-bg);
-        border-radius: var(--card-border-radius, 8px);
+        border-radius: var(--card-border-radius, 4px);
         overflow: hidden;
         min-height: 0;
-        box-shadow: var(--card-shadow, 0 1px 3px rgba(0, 0, 0, 0.12));
+        box-shadow: var(--card-shadow);
       }
 
       .widget-header {
