@@ -38,7 +38,7 @@ import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
       </div>
     } @else {
       <div class="no-task">
-        <mat-icon>play_circle_outline</mat-icon>
+        <mat-icon>play_circle</mat-icon>
         <span>No active task</span>
       </div>
     }
