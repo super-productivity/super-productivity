@@ -14,7 +14,11 @@ import { MatButton } from '@angular/material/button';
 import { DashboardWidgetSize } from '@super-productivity/plugin-api';
 import { selectDashboardConfig } from '../config/store/global-config.reducer';
 import { updateGlobalConfigSection } from '../config/store/global-config.actions';
-import { DashboardLayoutItem } from './dashboard.model';
+import {
+  BUILTIN_WIDGET_IDS,
+  DashboardLayoutItem,
+  TaskListWidgetConfig,
+} from './dashboard.model';
 import { BUILTIN_WIDGETS, WIDGET_SIZE_COL_SPAN } from './dashboard.const';
 import { DashboardWidgetWrapperComponent } from './dashboard-widget-wrapper.component';
 import { CurrentTaskWidgetComponent } from './widgets/current-task-widget.component';
@@ -129,6 +133,17 @@ export class DashboardPageComponent {
     }
     const items = config.items.map((item) =>
       item.widgetId === widgetId ? { ...item, isVisible: false } : item,
+    );
+    this._updateConfig(items);
+  }
+
+  onTaskListConfigChange(taskListConfig: TaskListWidgetConfig): void {
+    const config = this._dashboardConfig();
+    if (!config) {
+      return;
+    }
+    const items = config.items.map((item) =>
+      item.widgetId === BUILTIN_WIDGET_IDS.TASK_LIST ? { ...item, taskListConfig } : item,
     );
     this._updateConfig(items);
   }

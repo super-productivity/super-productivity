@@ -1,9 +1,17 @@
 import { DashboardWidgetSize } from '@super-productivity/plugin-api';
 
+export type TaskListFilter = 'undone' | 'done' | 'all';
+
+export interface TaskListWidgetConfig {
+  filter: TaskListFilter;
+  maxTasks: number;
+}
+
 export interface DashboardLayoutItem {
   widgetId: string;
   size: DashboardWidgetSize;
   isVisible: boolean;
+  taskListConfig?: TaskListWidgetConfig;
 }
 
 export type DashboardConfig = Readonly<{

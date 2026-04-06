@@ -67,6 +67,7 @@ export const ONBOARDING_PRESETS: OnboardingPreset[] = [
       isIssuesPanelEnabled: true,
       isProjectNotesEnabled: true,
       isHabitsEnabled: true,
+      isDashboardEnabled: true,
     },
   },
 ];

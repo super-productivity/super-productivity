@@ -1,4 +1,9 @@
-import { BUILTIN_WIDGET_IDS, BuiltinWidgetDef, DashboardConfig } from './dashboard.model';
+import {
+  BUILTIN_WIDGET_IDS,
+  BuiltinWidgetDef,
+  DashboardConfig,
+  TaskListWidgetConfig,
+} from './dashboard.model';
 
 export const BUILTIN_WIDGETS: BuiltinWidgetDef[] = [
   {
@@ -45,11 +50,19 @@ export const BUILTIN_WIDGETS: BuiltinWidgetDef[] = [
   },
 ];
 
+export const DEFAULT_TASK_LIST_CONFIG: TaskListWidgetConfig = {
+  filter: 'undone',
+  maxTasks: 15,
+};
+
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   items: BUILTIN_WIDGETS.map((w) => ({
     widgetId: w.id,
     size: w.defaultSize,
     isVisible: true,
+    ...(w.id === BUILTIN_WIDGET_IDS.TASK_LIST
+      ? { taskListConfig: DEFAULT_TASK_LIST_CONFIG }
+      : {}),
   })),
 };
 

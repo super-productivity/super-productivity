@@ -56,7 +56,10 @@
             <recent-activity-widget />
           }
           @case ('builtin:task-list') {
-            <task-list-widget />
+            <task-list-widget
+              [config]="item.taskListConfig"
+              (configChange)="onTaskListConfigChange($event)"
+            />
           }
           @default {
             @if (item.widgetId.startsWith('plugin:')) {
