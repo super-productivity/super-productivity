@@ -38,6 +38,10 @@
         line-height: 1.2;
       }
 
+      .big-number-suffix {
+        font-size: 0.5em;
+      }
+
       .progress-bar {
         height: 6px;
         background: var(--divider-color);
@@ -64,10 +68,21 @@
         font-weight: 600;
         cursor: pointer;
         word-break: break-word;
+        background: none;
+        border: none;
+        color: inherit;
+        font-family: inherit;
+        padding: 0;
+        text-align: left;
       }
 
       .current-task-title:hover {
         color: var(--c-primary);
+      }
+
+      .current-task-title:focus-visible {
+        outline: 2px solid var(--c-primary);
+        outline-offset: 2px;
       }
 
       .current-task-time {
@@ -112,6 +127,12 @@
         font-size: 1em;
       }
 
+      .error-state {
+        color: var(--text-color-muted);
+        padding: var(--s2);
+        text-align: center;
+      }
+
       @media (max-width: 600px) {
         .dashboard {
           grid-template-columns: 1fr;
@@ -129,13 +150,19 @@
         <h3>Today's Progress</h3>
         <div class="big-number">
           <span id="done-count">0</span>
-          <span
-            class="text-muted"
-            style="font-size: 0.5em"
+          <span class="text-muted big-number-suffix"
             >/ <span id="total-count">0</span> tasks</span
           >
         </div>
-        <div class="progress-bar">
+        <div
+          class="progress-bar"
+          role="progressbar"
+          aria-valuenow="0"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-label="Task completion progress"
+          id="progress-bar"
+        >
           <div
             class="progress-fill"
             id="progress-fill"
@@ -215,6 +242,12 @@
     </div>
 
     <script>
+      // --- Constants ---
+
+      var MAX_STREAK_DAYS = 180;
+      var MAX_WAIT_RETRIES = 100; // 100 * 100ms = 10 seconds
+      var DEBOUNCE_MS = 400;
+
       // --- Utility functions ---
 
       function formatDateStr(date) {
@@ -229,8 +262,10 @@
         if (!ms || ms <= 0) return '0m';
         var h = Math.floor(ms / 3600000);
         var m = Math.floor((ms % 3600000) / 60000);
+        var s = Math.floor((ms % 60000) / 1000);
         if (h > 0) return h + 'h ' + m + 'm';
-        return m + 'm';
+        if (m > 0) return m + 'm';
+        return s + 's';
       }
 
       function formatDurationLive(ms) {
@@ -243,12 +278,6 @@
         return m + ':' + String(s).padStart(2, '0');
       }
 
-      function escapeHtml(text) {
-        var div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-      }
-
       // --- State ---
 
       var todayStr = formatDateStr(new Date());
@@ -256,7 +285,21 @@
       var sessionStart = null;
       var timerInterval = null;
       var refreshTimer = null;
+      var midnightTimer = null;
       var streakData = { version: 1, days: {} };
+
+      // --- Midnight rollover ---
+
+      function scheduleMidnightCheck() {
+        clearInterval(midnightTimer);
+        midnightTimer = setInterval(function () {
+          var now = formatDateStr(new Date());
+          if (now !== todayStr) {
+            todayStr = now;
+            debouncedRefresh();
+          }
+        }, 60000);
+      }
 
       // --- Widget: Today's Progress ---
 
@@ -280,16 +323,41 @@
           }
         });
 
+        var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
         document.getElementById('done-count').textContent = done;
         document.getElementById('total-count').textContent = total;
-        document.getElementById('progress-fill').style.width =
-          total > 0 ? Math.round((done / total) * 100) + '%' : '0%';
+        var progressFill = document.getElementById('progress-fill');
+        progressFill.style.width = pct + '%';
+        var progressBar = document.getElementById('progress-bar');
+        progressBar.setAttribute('aria-valuenow', String(pct));
         document.getElementById('time-tracked').textContent = formatDuration(timeTracked);
         document.getElementById('time-estimated').textContent =
           formatDuration(timeEstimated);
       }
 
       // --- Widget: Current Task ---
+
+      function restartTimer() {
+        clearInterval(timerInterval);
+        timerInterval = null;
+
+        if (!currentTask) return;
+
+        var baseTime =
+          (currentTask.timeSpentOnDay && currentTask.timeSpentOnDay[todayStr]) || 0;
+        sessionStart = Date.now();
+
+        var el = document.getElementById('current-task-timer');
+        if (el) el.textContent = formatDurationLive(baseTime);
+
+        timerInterval = setInterval(function () {
+          var elapsed = Date.now() - sessionStart;
+          var display = baseTime + elapsed;
+          var timerEl = document.getElementById('current-task-timer');
+          if (timerEl) timerEl.textContent = formatDurationLive(display);
+        }, 1000);
+      }
 
       function updateCurrentTaskWidget(payload) {
         currentTask = payload ? payload.current : null;
@@ -299,46 +367,52 @@
         var container = document.getElementById('current-task-content');
 
         if (!currentTask) {
-          container.innerHTML = '<div class="empty-state">No active task</div>';
+          container.innerHTML = '';
+          var emptyDiv = document.createElement('div');
+          emptyDiv.className = 'empty-state';
+          emptyDiv.textContent = 'No active task';
+          container.appendChild(emptyDiv);
           return;
         }
 
-        var baseTime =
-          (currentTask.timeSpentOnDay && currentTask.timeSpentOnDay[todayStr]) || 0;
-        sessionStart = Date.now();
+        container.innerHTML = '';
 
-        container.innerHTML =
-          '<div class="current-task-title" id="current-task-title">' +
-          escapeHtml(currentTask.title) +
-          '</div>' +
-          '<div class="current-task-time" id="current-task-timer">' +
-          formatDurationLive(baseTime) +
-          '</div>' +
-          '<button class="btn-outline" id="btn-pause" style="margin-top: var(--s)">Pause</button>';
-
-        document.getElementById('current-task-title').onclick = function () {
+        var titleBtn = document.createElement('button');
+        titleBtn.className = 'current-task-title';
+        titleBtn.id = 'current-task-title';
+        titleBtn.textContent = currentTask.title;
+        titleBtn.onclick = function () {
           PluginAPI.dispatchAction({
             type: '[Task] SetSelectedTask',
             id: currentTask.id,
           });
         };
-        document.getElementById('btn-pause').onclick = function () {
+
+        var timerDiv = document.createElement('div');
+        timerDiv.className = 'current-task-time';
+        timerDiv.id = 'current-task-timer';
+
+        var pauseBtn = document.createElement('button');
+        pauseBtn.className = 'btn-outline';
+        pauseBtn.id = 'btn-pause';
+        pauseBtn.style.marginTop = 'var(--s)';
+        pauseBtn.textContent = 'Pause';
+        pauseBtn.onclick = function () {
           PluginAPI.dispatchAction({ type: '[Task] Toggle start' });
         };
 
-        timerInterval = setInterval(function () {
-          var elapsed = Date.now() - sessionStart;
-          var display = baseTime + elapsed;
-          var el = document.getElementById('current-task-timer');
-          if (el) el.textContent = formatDurationLive(display);
-        }, 1000);
+        container.appendChild(titleBtn);
+        container.appendChild(timerDiv);
+        container.appendChild(pauseBtn);
+
+        restartTimer();
       }
 
       // --- Widget: Streaks ---
 
       async function loadStreakData() {
         try {
-          var raw = await PluginAPI.loadPersistedData();
+          var raw = await PluginAPI.loadSyncedData();
           if (raw) {
             var parsed = JSON.parse(raw);
             if (parsed && parsed.version === 1 && parsed.days) {
@@ -347,6 +421,15 @@
           }
         } catch (e) {
           console.error('Failed to load streak data:', e);
+        }
+      }
+
+      function pruneStreakData() {
+        var keys = Object.keys(streakData.days).sort();
+        if (keys.length <= MAX_STREAK_DAYS) return;
+        var toRemove = keys.length - MAX_STREAK_DAYS;
+        for (var i = 0; i < toRemove; i++) {
+          delete streakData.days[keys[i]];
         }
       }
 
@@ -364,6 +447,15 @@
         });
 
         return { time: timeToday, done: doneToday };
+      }
+
+      function parseDateParts(dateStr) {
+        var parts = dateStr.split('-');
+        return new Date(
+          parseInt(parts[0], 10),
+          parseInt(parts[1], 10) - 1,
+          parseInt(parts[2], 10),
+        );
       }
 
       function calculateStreaks() {
@@ -385,7 +477,7 @@
           d.setDate(d.getDate() - 1);
         }
 
-        for (var i = 0; i < 3650; i++) {
+        for (var i = 0; i < MAX_STREAK_DAYS; i++) {
           var key = formatDateStr(d);
           var entry = streakData.days[key];
           if (entry && entry.time > 0) {
@@ -406,8 +498,8 @@
             if (streak > best) best = streak;
             // Check if next key is consecutive
             if (j + 1 < keys.length) {
-              var curr = new Date(keys[j]);
-              var next = new Date(keys[j + 1]);
+              var curr = parseDateParts(keys[j]);
+              var next = parseDateParts(keys[j + 1]);
               var diff = (curr - next) / 86400000;
               if (Math.round(diff) !== 1) {
                 streak = 0;
@@ -440,6 +532,7 @@
 
       async function persistStreakData() {
         try {
+          pruneStreakData();
           await PluginAPI.persistDataSynced(JSON.stringify(streakData));
         } catch (e) {
           console.error('Failed to persist streak data:', e);
@@ -464,13 +557,14 @@
         refreshTimer = setTimeout(async function () {
           try {
             var tasks = await PluginAPI.getCurrentContextTasks();
+            if (!Array.isArray(tasks)) return;
             renderProgress(tasks);
             renderStreaks(tasks);
             persistStreakData();
           } catch (e) {
             console.error('Refresh failed:', e);
           }
-        }, 2000);
+        }, DEBOUNCE_MS);
       }
 
       function setupHooks() {
@@ -491,6 +585,7 @@
             payload.task.id === currentTask.id
           ) {
             currentTask = payload.task;
+            restartTimer();
           }
           debouncedRefresh();
         });
@@ -506,10 +601,15 @@
         try {
           await loadStreakData();
           var tasks = await PluginAPI.getCurrentContextTasks();
+          if (!Array.isArray(tasks)) {
+            console.error('getCurrentContextTasks did not return an array');
+            return;
+          }
           renderProgress(tasks);
           renderStreaks(tasks);
           setupActions();
           setupHooks();
+          scheduleMidnightCheck();
           // Persist to capture today's data on open
           persistStreakData();
         } catch (e) {
@@ -518,11 +618,22 @@
       }
 
       function waitForPlugin() {
-        if (typeof PluginAPI !== 'undefined') {
-          init();
-        } else {
-          setTimeout(waitForPlugin, 100);
+        var retries = 0;
+        function check() {
+          if (typeof PluginAPI !== 'undefined') {
+            init();
+          } else if (retries < MAX_WAIT_RETRIES) {
+            retries++;
+            setTimeout(check, 100);
+          } else {
+            var el = document.querySelector('.dashboard');
+            if (el) {
+              el.innerHTML =
+                '<div class="error-state">Failed to load Plugin API. Please reload.</div>';
+            }
+          }
         }
+        check();
       }
 
       waitForPlugin();

@@ -4,6 +4,7 @@
   "manifestVersion": 1,
   "version": "1.0.0",
   "minSupVersion": "13.0.0",
+  "author": "Super Productivity",
   "description": "Overview dashboard showing task progress, current task, and daily activity.",
   "hooks": ["currentTaskChange", "taskComplete", "taskUpdate", "finishDay"],
   "permissions": [
@@ -14,6 +15,7 @@
     "loadSyncedData"
   ],
   "iFrame": true,
+  "sidePanel": true,
   "type": "standard",
   "assets": [],
   "icon": "icon.svg"
