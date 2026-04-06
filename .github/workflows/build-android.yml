@@ -28,11 +28,11 @@ jobs:
           distribution: 'temurin'
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@39e147cb9de83bb9910b8ef8bd7fff0ee20fcd6f # v6.0.1
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
       #      - name: Build with Gradle
       #        run: ./gradlew build
       - name: Setup android-sdk
-        uses: android-actions/setup-android@651bceb6f9ca583f16b8d75b62c36ded2ae6fc9c # v4.0.0
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: true #make accepting the android sdk license verbose

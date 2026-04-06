@@ -18,7 +18,7 @@ jobs:
       - run: sed "s/PACKAGE_VERSION/${package_version}/g" build/linux/PKGBUILD_template > build/linux/PKGBUILD
 
       - name: Publish AUR package
-        uses: KSXGitHub/github-actions-deploy-aur@2ac5a4c1d7035885d46b10e3193393be8460b6f1 # v4.1.1
+        uses: KSXGitHub/github-actions-deploy-aur@abe8ac26b51011c88be58c8809fd2ac674068ea5 # v4.1.2
         with:
           pkgname: superproductivity-bin
           pkgbuild: build/linux/PKGBUILD

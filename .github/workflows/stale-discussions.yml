@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: stalesweeper
-        uses: zenoprax/stalesweeper@v1.0.0
+        uses: zenoprax/stalesweeper@v1.1.2
         env:
           DAYS_BEFORE_CLOSE: ${{ github.event_name == 'schedule' && '180' || github.event.inputs.days-before-close }}
           DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || github.event.inputs.dry-run }}
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: stalesweeper
-        uses: zenoprax/stalesweeper@v1.0.0
+        uses: zenoprax/stalesweeper@v1.1.2
         env:
           DAYS_BEFORE_CLOSE: ${{ github.event_name == 'schedule' && '90' || github.event.inputs.days-before-close }}
           DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || github.event.inputs.dry-run }}
