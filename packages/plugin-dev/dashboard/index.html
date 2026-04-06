@@ -359,8 +359,8 @@
         }, 1000);
       }
 
-      function updateCurrentTaskWidget(payload) {
-        currentTask = payload ? payload.current : null;
+      function updateCurrentTaskWidget(task) {
+        currentTask = task || null;
         clearInterval(timerInterval);
         timerInterval = null;
 
@@ -568,8 +568,8 @@
       }
 
       function setupHooks() {
-        PluginAPI.registerHook(PluginAPI.Hooks.CURRENT_TASK_CHANGE, function (payload) {
-          updateCurrentTaskWidget(payload);
+        PluginAPI.registerHook(PluginAPI.Hooks.CURRENT_TASK_CHANGE, function (task) {
+          updateCurrentTaskWidget(task);
         });
 
         PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, function () {
