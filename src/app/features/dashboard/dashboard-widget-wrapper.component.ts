@@ -76,7 +76,7 @@ import { CdkDragHandle } from '@angular/cdk/drag-drop';
         background: var(--card-bg);
         border-radius: var(--card-border-radius, 8px);
         overflow: hidden;
-        min-height: 120px;
+        min-height: 0;
         box-shadow: var(--card-shadow, 0 1px 3px rgba(0, 0, 0, 0.12));
       }
 

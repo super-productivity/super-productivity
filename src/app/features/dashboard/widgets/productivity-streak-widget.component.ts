@@ -17,11 +17,14 @@ import { ActivityHeatmapComponent } from '../../metric/activity-heatmap/activity
         display: block;
         padding: var(--s2);
         height: 100%;
-        overflow: auto;
+        overflow: hidden;
       }
 
       .heatmap-container {
         width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
       }
     `,
   ],

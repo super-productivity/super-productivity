@@ -7,8 +7,12 @@
   overflow: auto;
   padding: var(--s3);
 
+  @include mq(sm, max) {
+    padding: var(--s2);
+  }
+
   @include mq(xs, max) {
-    padding: var(--s);
+    padding: var(--s) var(--s-half);
   }
 }
 
@@ -21,6 +25,7 @@
   h2 {
     margin: 0;
     font-weight: 400;
+    white-space: nowrap;
   }
 
   .spacer {
@@ -54,10 +59,11 @@
 }
 
 .widget-cell {
-  min-height: 120px;
+  min-height: 100px;
+  overflow: hidden;
 
-  // On small screens, force all widgets to span full width
-  @include mq(xs, max) {
+  // On smaller screens, force all widgets to single-column span
+  @include mq(sm, max) {
     grid-column: span 1 !important;
   }
 
