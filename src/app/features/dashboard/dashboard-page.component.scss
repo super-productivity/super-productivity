@@ -47,6 +47,14 @@
     border: none;
   }
 
+  // In edit mode, switch to a flat column layout so CDK DragDrop
+  // can properly calculate drop positions
+  &.edit-mode {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s);
+  }
+
   @include mq(sm, max) {
     grid-template-columns: repeat(2, 1fr);
     gap: var(--s);
@@ -67,7 +75,7 @@
     grid-column: span 1 !important;
   }
 
-  &.edit-mode {
+  &.cell-edit-mode {
     outline: 2px dashed var(--divider-color);
     outline-offset: 2px;
     border-radius: var(--card-border-radius, 4px);

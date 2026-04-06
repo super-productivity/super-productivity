@@ -19,6 +19,7 @@
 
 <div
   class="dashboard-grid"
+  [class.edit-mode]="isEditMode()"
   cdkDropList
   [cdkDropListDisabled]="!isEditMode()"
   (cdkDropListDropped)="onDrop($event)"
@@ -26,9 +27,10 @@
   @for (item of visibleItems(); track item.widgetId) {
     <div
       class="widget-cell"
-      [style.grid-column]="'span ' + getColSpan(item.size)"
-      [class.edit-mode]="isEditMode()"
+      [style.grid-column]="isEditMode() ? null : 'span ' + getColSpan(item.size)"
+      [class.cell-edit-mode]="isEditMode()"
       cdkDrag
+      cdkDragLockAxis="y"
     >
       <dashboard-widget-wrapper
         [label]="getWidgetLabel(item.widgetId)"
