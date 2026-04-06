@@ -6,12 +6,16 @@
   height: 100%;
   overflow: auto;
   padding: var(--s3);
+
+  @include mq(xs, max) {
+    padding: var(--s);
+  }
 }
 
 .dashboard-toolbar {
   display: flex;
   align-items: center;
-  margin-bottom: var(--s3);
+  margin-bottom: var(--s2);
   gap: var(--s);
 
   h2 {
@@ -22,6 +26,10 @@
   .spacer {
     flex: 1;
   }
+
+  @include mq(xs, max) {
+    margin-bottom: var(--s);
+  }
 }
 
 .dashboard-grid {
@@ -29,17 +37,29 @@
   grid-template-columns: repeat(4, 1fr);
   gap: var(--s2);
 
+  // Override global .cdk-drop-list-disabled red border
+  &.cdk-drop-list-disabled {
+    border: none;
+  }
+
   @include mq(sm, max) {
     grid-template-columns: repeat(2, 1fr);
+    gap: var(--s);
   }
 
   @include mq(xs, max) {
     grid-template-columns: 1fr;
+    gap: var(--s);
   }
 }
 
 .widget-cell {
-  min-height: 150px;
+  min-height: 120px;
+
+  // On small screens, force all widgets to span full width
+  @include mq(xs, max) {
+    grid-column: span 1 !important;
+  }
 
   &.edit-mode {
     outline: 2px dashed var(--divider-color);
@@ -74,5 +94,9 @@
     font-size: 48px;
     width: 48px;
     height: 48px;
+  }
+
+  @include mq(xs, max) {
+    padding: var(--s4);
   }
 }
