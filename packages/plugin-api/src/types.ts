@@ -127,6 +127,10 @@ export interface PluginManifest {
   i18n?: {
     languages: string[]; // Array of supported language codes (e.g., ['en', 'de', 'fr'])
   };
+  dashboardWidgets?: Array<{
+    id: string;
+    indexHtml: string; // Path to widget-specific HTML relative to plugin root
+  }>;
 }
 
 // Hook payload types
@@ -323,6 +327,17 @@ export interface PluginSidePanelBtnCfg {
   onClick: () => void;
 }
 
+export type DashboardWidgetSize = 'small' | 'medium' | 'large';
+
+export interface PluginDashboardWidgetCfg {
+  pluginId: string;
+  id: string;
+  label: string;
+  icon?: string;
+  description?: string;
+  defaultSize: DashboardWidgetSize;
+}
+
 export interface OAuthFlowConfig {
   authUrl: string;
   tokenUrl: string;
@@ -373,6 +388,8 @@ export interface PluginAPI {
   ): void;
 
   registerSidePanelButton(sidePanelBtnCfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>): void;
+
+  registerDashboardWidget(cfg: Omit<PluginDashboardWidgetCfg, 'pluginId'>): void;
 
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
 

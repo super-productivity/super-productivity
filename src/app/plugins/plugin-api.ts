@@ -19,6 +19,7 @@ import {
   PluginNodeScriptResult,
   PluginShortcutCfg,
   PluginSidePanelBtnCfg,
+  PluginDashboardWidgetCfg,
   Project,
   SnackCfg,
   Tag,
@@ -149,6 +150,11 @@ export class PluginAPI implements PluginAPIInterface {
       sidePanelBtnCfg,
     );
     this._boundMethods.registerSidePanelButton(sidePanelBtnCfg);
+  }
+
+  registerDashboardWidget(cfg: Omit<PluginDashboardWidgetCfg, 'pluginId'>): void {
+    PluginLog.log(`Plugin ${this._pluginId} registered dashboard widget`, cfg);
+    this._boundMethods.registerDashboardWidget(cfg);
   }
 
   registerIssueProvider(definition: IssueProviderPluginDefinition): void {
