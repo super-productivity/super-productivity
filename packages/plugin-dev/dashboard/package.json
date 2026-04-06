@@ -1,0 +1,8 @@
+{
+  "name": "dashboard-plugin",
+  "version": "1.0.0",
+  "description": "Dashboard overview with task summary, current task, and activity widgets",
+  "scripts": {
+    "build": "echo 'No build needed for simple plugin'"
+  }
+}

@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Dashboard</title>
+    <style>
+      body {
+        padding: var(--s3);
+      }
+
+      .dashboard {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--s2);
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .widget {
+        min-height: 120px;
+      }
+
+      .widget h3 {
+        margin-bottom: var(--s);
+        font-size: 1em;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-color-muted);
+      }
+
+      .big-number {
+        font-size: 2em;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      .progress-bar {
+        height: 6px;
+        background: var(--divider-color);
+        border-radius: 3px;
+        overflow: hidden;
+        margin: var(--s) 0;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: var(--c-primary);
+        border-radius: 3px;
+        transition: width 0.3s;
+      }
+
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding: var(--s-half) 0;
+      }
+
+      .current-task-title {
+        font-size: 1.1em;
+        font-weight: 600;
+        cursor: pointer;
+        word-break: break-word;
+      }
+
+      .current-task-title:hover {
+        color: var(--c-primary);
+      }
+
+      .current-task-time {
+        font-size: 1.8em;
+        font-weight: 700;
+        margin-top: var(--s);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .empty-state {
+        color: var(--text-color-muted);
+        padding: var(--s2) 0;
+      }
+
+      .streak-row {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s);
+        margin-bottom: var(--s-half);
+      }
+
+      .streak-number {
+        font-size: 2em;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .streak-label {
+        color: var(--text-color-muted);
+        font-size: 0.9em;
+      }
+
+      .actions-grid {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s);
+      }
+
+      .actions-grid button {
+        width: 100%;
+        padding: var(--s) var(--s2);
+        font-size: 1em;
+      }
+
+      @media (max-width: 600px) {
+        .dashboard {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dashboard">
+      <!-- Today's Progress -->
+      <div
+        class="card widget"
+        id="progress-widget"
+      >
+        <h3>Today's Progress</h3>
+        <div class="big-number">
+          <span id="done-count">0</span>
+          <span
+            class="text-muted"
+            style="font-size: 0.5em"
+            >/ <span id="total-count">0</span> tasks</span
+          >
+        </div>
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            id="progress-fill"
+            style="width: 0%"
+          ></div>
+        </div>
+        <div class="stat-row">
+          <span class="text-muted">Time tracked</span>
+          <span id="time-tracked">0m</span>
+        </div>
+        <div class="stat-row">
+          <span class="text-muted">Estimated</span>
+          <span id="time-estimated">0m</span>
+        </div>
+      </div>
+
+      <!-- Current Task -->
+      <div
+        class="card widget"
+        id="current-task-widget"
+      >
+        <h3>Current Task</h3>
+        <div id="current-task-content">
+          <div class="empty-state">No active task</div>
+        </div>
+      </div>
+
+      <!-- Daily Summary / Streaks -->
+      <div
+        class="card widget"
+        id="streaks-widget"
+      >
+        <h3>Streaks</h3>
+        <div class="streak-row">
+          <span
+            class="streak-number text-primary"
+            id="current-streak"
+            >0</span
+          >
+          <span class="streak-label">day streak</span>
+        </div>
+        <div class="stat-row">
+          <span class="text-muted">Best streak</span>
+          <span id="best-streak">0 days</span>
+        </div>
+        <div class="stat-row">
+          <span class="text-muted">Tasks done today</span>
+          <span id="streak-done-today">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="text-muted">Time today</span>
+          <span id="streak-time-today">0m</span>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div
+        class="card widget"
+        id="actions-widget"
+      >
+        <h3>Quick Actions</h3>
+        <div class="actions-grid">
+          <button
+            class="btn-primary"
+            id="btn-add-task"
+          >
+            + Add Task
+          </button>
+          <button
+            class="btn-outline"
+            id="btn-toggle-tracking"
+          >
+            Toggle Tracking
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // --- Utility functions ---
+
+      function formatDateStr(date) {
+        var d = date || new Date();
+        var year = d.getFullYear();
+        var month = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+      }
+
+      function formatDuration(ms) {
+        if (!ms || ms <= 0) return '0m';
+        var h = Math.floor(ms / 3600000);
+        var m = Math.floor((ms % 3600000) / 60000);
+        if (h > 0) return h + 'h ' + m + 'm';
+        return m + 'm';
+      }
+
+      function formatDurationLive(ms) {
+        if (!ms || ms <= 0) return '0:00';
+        var h = Math.floor(ms / 3600000);
+        var m = Math.floor((ms % 3600000) / 60000);
+        var s = Math.floor((ms % 60000) / 1000);
+        if (h > 0)
+          return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        return m + ':' + String(s).padStart(2, '0');
+      }
+
+      function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // --- State ---
+
+      var todayStr = formatDateStr(new Date());
+      var currentTask = null;
+      var sessionStart = null;
+      var timerInterval = null;
+      var refreshTimer = null;
+      var streakData = { version: 1, days: {} };
+
+      // --- Widget: Today's Progress ---
+
+      function renderProgress(tasks) {
+        var rootTasks = tasks.filter(function (t) {
+          return !t.parentId;
+        });
+        var done = rootTasks.filter(function (t) {
+          return t.isDone;
+        }).length;
+        var total = rootTasks.length;
+        var timeTracked = 0;
+        var timeEstimated = 0;
+
+        tasks.forEach(function (t) {
+          if (t.timeSpentOnDay && t.timeSpentOnDay[todayStr]) {
+            timeTracked += t.timeSpentOnDay[todayStr];
+          }
+          if (t.timeEstimate) {
+            timeEstimated += t.timeEstimate;
+          }
+        });
+
+        document.getElementById('done-count').textContent = done;
+        document.getElementById('total-count').textContent = total;
+        document.getElementById('progress-fill').style.width =
+          total > 0 ? Math.round((done / total) * 100) + '%' : '0%';
+        document.getElementById('time-tracked').textContent = formatDuration(timeTracked);
+        document.getElementById('time-estimated').textContent =
+          formatDuration(timeEstimated);
+      }
+
+      // --- Widget: Current Task ---
+
+      function updateCurrentTaskWidget(payload) {
+        currentTask = payload ? payload.current : null;
+        clearInterval(timerInterval);
+        timerInterval = null;
+
+        var container = document.getElementById('current-task-content');
+
+        if (!currentTask) {
+          container.innerHTML = '<div class="empty-state">No active task</div>';
+          return;
+        }
+
+        var baseTime =
+          (currentTask.timeSpentOnDay && currentTask.timeSpentOnDay[todayStr]) || 0;
+        sessionStart = Date.now();
+
+        container.innerHTML =
+          '<div class="current-task-title" id="current-task-title">' +
+          escapeHtml(currentTask.title) +
+          '</div>' +
+          '<div class="current-task-time" id="current-task-timer">' +
+          formatDurationLive(baseTime) +
+          '</div>' +
+          '<button class="btn-outline" id="btn-pause" style="margin-top: var(--s)">Pause</button>';
+
+        document.getElementById('current-task-title').onclick = function () {
+          PluginAPI.dispatchAction({
+            type: '[Task] SetSelectedTask',
+            id: currentTask.id,
+          });
+        };
+        document.getElementById('btn-pause').onclick = function () {
+          PluginAPI.dispatchAction({ type: '[Task] Toggle start' });
+        };
+
+        timerInterval = setInterval(function () {
+          var elapsed = Date.now() - sessionStart;
+          var display = baseTime + elapsed;
+          var el = document.getElementById('current-task-timer');
+          if (el) el.textContent = formatDurationLive(display);
+        }, 1000);
+      }
+
+      // --- Widget: Streaks ---
+
+      async function loadStreakData() {
+        try {
+          var raw = await PluginAPI.loadPersistedData();
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed && parsed.version === 1 && parsed.days) {
+              streakData = parsed;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load streak data:', e);
+        }
+      }
+
+      function computeTodayStats(tasks) {
+        var timeToday = 0;
+        var doneToday = 0;
+
+        tasks.forEach(function (t) {
+          if (t.timeSpentOnDay && t.timeSpentOnDay[todayStr]) {
+            timeToday += t.timeSpentOnDay[todayStr];
+          }
+          if (t.isDone && !t.parentId) {
+            doneToday++;
+          }
+        });
+
+        return { time: timeToday, done: doneToday };
+      }
+
+      function calculateStreaks() {
+        var current = 0;
+        var best = 0;
+        var d = new Date();
+
+        // Check today first
+        var todayEntry = streakData.days[todayStr];
+        if (todayEntry && todayEntry.time > 0) {
+          current = 1;
+        } else {
+          // If no time today yet, start checking from yesterday
+          d.setDate(d.getDate() - 1);
+        }
+
+        // Count consecutive days backwards
+        if (current === 1) {
+          d.setDate(d.getDate() - 1);
+        }
+
+        for (var i = 0; i < 3650; i++) {
+          var key = formatDateStr(d);
+          var entry = streakData.days[key];
+          if (entry && entry.time > 0) {
+            current++;
+            d.setDate(d.getDate() - 1);
+          } else {
+            break;
+          }
+        }
+
+        // Calculate best streak
+        var streak = 0;
+        var keys = Object.keys(streakData.days).sort().reverse();
+        for (var j = 0; j < keys.length; j++) {
+          var entry2 = streakData.days[keys[j]];
+          if (entry2 && entry2.time > 0) {
+            streak++;
+            if (streak > best) best = streak;
+            // Check if next key is consecutive
+            if (j + 1 < keys.length) {
+              var curr = new Date(keys[j]);
+              var next = new Date(keys[j + 1]);
+              var diff = (curr - next) / 86400000;
+              if (Math.round(diff) !== 1) {
+                streak = 0;
+              }
+            }
+          } else {
+            streak = 0;
+          }
+        }
+        if (current > best) best = current;
+
+        return { current: current, best: best };
+      }
+
+      function renderStreaks(tasks) {
+        var todayStats = computeTodayStats(tasks);
+
+        // Update today's entry in streak data
+        streakData.days[todayStr] = todayStats;
+
+        var streaks = calculateStreaks();
+
+        document.getElementById('current-streak').textContent = streaks.current;
+        document.getElementById('best-streak').textContent = streaks.best + ' days';
+        document.getElementById('streak-done-today').textContent = todayStats.done;
+        document.getElementById('streak-time-today').textContent = formatDuration(
+          todayStats.time,
+        );
+      }
+
+      async function persistStreakData() {
+        try {
+          await PluginAPI.persistDataSynced(JSON.stringify(streakData));
+        } catch (e) {
+          console.error('Failed to persist streak data:', e);
+        }
+      }
+
+      // --- Quick Actions ---
+
+      function setupActions() {
+        document.getElementById('btn-add-task').onclick = function () {
+          PluginAPI.dispatchAction({ type: '[Layout] Show AddTaskBar' });
+        };
+        document.getElementById('btn-toggle-tracking').onclick = function () {
+          PluginAPI.dispatchAction({ type: '[Task] Toggle start' });
+        };
+      }
+
+      // --- Hooks & Refresh ---
+
+      function debouncedRefresh() {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(async function () {
+          try {
+            var tasks = await PluginAPI.getCurrentContextTasks();
+            renderProgress(tasks);
+            renderStreaks(tasks);
+            persistStreakData();
+          } catch (e) {
+            console.error('Refresh failed:', e);
+          }
+        }, 2000);
+      }
+
+      function setupHooks() {
+        PluginAPI.registerHook(PluginAPI.Hooks.CURRENT_TASK_CHANGE, function (payload) {
+          updateCurrentTaskWidget(payload);
+        });
+
+        PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, function () {
+          debouncedRefresh();
+        });
+
+        PluginAPI.registerHook(PluginAPI.Hooks.TASK_UPDATE, function (payload) {
+          // Re-sync current task base time if it was updated
+          if (
+            currentTask &&
+            payload &&
+            payload.task &&
+            payload.task.id === currentTask.id
+          ) {
+            currentTask = payload.task;
+          }
+          debouncedRefresh();
+        });
+
+        PluginAPI.registerHook(PluginAPI.Hooks.FINISH_DAY, function () {
+          persistStreakData();
+        });
+      }
+
+      // --- Init ---
+
+      async function init() {
+        try {
+          await loadStreakData();
+          var tasks = await PluginAPI.getCurrentContextTasks();
+          renderProgress(tasks);
+          renderStreaks(tasks);
+          setupActions();
+          setupHooks();
+          // Persist to capture today's data on open
+          persistStreakData();
+        } catch (e) {
+          console.error('Dashboard init failed:', e);
+        }
+      }
+
+      function waitForPlugin() {
+        if (typeof PluginAPI !== 'undefined') {
+          init();
+        } else {
+          setTimeout(waitForPlugin, 100);
+        }
+      }
+
+      waitForPlugin();
+    </script>
+  </body>
+</html>
