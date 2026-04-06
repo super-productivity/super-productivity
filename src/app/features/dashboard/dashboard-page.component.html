@@ -55,6 +55,9 @@
           @case ('builtin:recent-activity') {
             <recent-activity-widget />
           }
+          @case ('builtin:task-list') {
+            <task-list-widget />
+          }
           @default {
             @if (item.widgetId.startsWith('plugin:')) {
               <plugin-dashboard-widget [pluginId]="getPluginId(item.widgetId)" />

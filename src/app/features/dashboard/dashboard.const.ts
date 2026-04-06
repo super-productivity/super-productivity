@@ -36,6 +36,13 @@ export const BUILTIN_WIDGETS: BuiltinWidgetDef[] = [
     description: 'Timeline of recent task completions',
     defaultSize: 'medium',
   },
+  {
+    id: BUILTIN_WIDGET_IDS.TASK_LIST,
+    label: 'Task List',
+    icon: 'checklist',
+    description: "Today's tasks at a glance",
+    defaultSize: 'medium',
+  },
 ];
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {

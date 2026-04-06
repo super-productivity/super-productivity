@@ -16,6 +16,7 @@ export const BUILTIN_WIDGET_IDS = {
   FOCUS_MODE: 'builtin:focus-mode',
   PRODUCTIVITY_STREAK: 'builtin:productivity-streak',
   RECENT_ACTIVITY: 'builtin:recent-activity',
+  TASK_LIST: 'builtin:task-list',
 } as const;
 
 export interface BuiltinWidgetDef {
