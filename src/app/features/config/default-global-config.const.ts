@@ -28,6 +28,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isDonatePageEnabled: true,
     isEnableUserProfiles: false,
     isHabitsEnabled: true,
+    isDashboardEnabled: true,
     isFinishDayEnabled: true,
   },
   localization: {

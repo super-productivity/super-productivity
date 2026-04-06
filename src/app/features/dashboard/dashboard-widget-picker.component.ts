@@ -77,7 +77,7 @@ interface PickerData {
         align-items: center;
         gap: var(--s2);
         padding: var(--s2) 0;
-        border-bottom: 1px solid var(--contrast-50);
+        border-bottom: 1px solid var(--divider-color);
       }
 
       .widget-row:last-child {

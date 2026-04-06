@@ -52,15 +52,15 @@ import { DatePipe } from '@angular/common';
       .activity-list {
         display: flex;
         flex-direction: column;
-        gap: var(--s1);
+        gap: var(--s);
       }
 
       .activity-item {
         display: flex;
         align-items: center;
-        gap: var(--s1);
-        padding: var(--s1) 0;
-        border-bottom: 1px solid var(--contrast-50);
+        gap: var(--s);
+        padding: var(--s) 0;
+        border-bottom: 1px solid var(--divider-color);
       }
 
       .activity-item:last-child {

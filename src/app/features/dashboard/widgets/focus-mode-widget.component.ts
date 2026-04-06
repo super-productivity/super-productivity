@@ -47,7 +47,7 @@ import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: var(--s1);
+        gap: var(--s);
       }
 
       .time-remaining {

@@ -105,6 +105,9 @@ export class MagicNavConfigService {
   private readonly isHabitsEnabled = computed(
     () => this._configService.appFeatures().isHabitsEnabled,
   );
+  private readonly isDashboardEnabled = computed(
+    () => this._configService.appFeatures().isDashboardEnabled,
+  );
   private readonly isSearchEnabled = computed(
     () => this._configService.appFeatures().isSearchEnabled,
   );
@@ -424,6 +427,17 @@ export class MagicNavConfigService {
         svgIcon: 'habit',
         route: '/habits',
         featureConfigKey: 'isHabitsEnabled',
+      });
+    }
+
+    if (this.isDashboardEnabled()) {
+      items.push({
+        type: 'route',
+        id: 'dashboard',
+        label: 'Dashboard',
+        icon: 'dashboard',
+        route: '/dashboard',
+        featureConfigKey: 'isDashboardEnabled',
       });
     }
 

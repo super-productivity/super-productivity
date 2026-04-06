@@ -22,6 +22,7 @@ const BASE_FEATURES: AppFeaturesConfig = {
   isDonatePageEnabled: true,
   isEnableUserProfiles: false,
   isHabitsEnabled: false,
+  isDashboardEnabled: false,
   isFinishDayEnabled: false,
 };
 

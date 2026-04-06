@@ -62,14 +62,14 @@ import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
       .stat-label {
         font-size: 0.85em;
         opacity: 0.6;
-        margin-top: var(--s05);
+        margin-top: var(--s-half);
       }
 
       .progress-bar {
         margin-top: var(--s2);
         height: 6px;
         border-radius: 3px;
-        background: var(--contrast-50);
+        background: var(--divider-color);
         overflow: hidden;
       }
 

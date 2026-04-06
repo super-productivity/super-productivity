@@ -73,7 +73,7 @@ import { CdkDragHandle } from '@angular/cdk/drag-drop';
       :host {
         display: flex;
         flex-direction: column;
-        background: var(--bg-card);
+        background: var(--card-bg);
         border-radius: var(--card-border-radius, 8px);
         overflow: hidden;
         min-height: 120px;
@@ -83,10 +83,10 @@ import { CdkDragHandle } from '@angular/cdk/drag-drop';
       .widget-header {
         display: flex;
         align-items: center;
-        padding: var(--s1) var(--s2);
+        padding: var(--s) var(--s2);
         cursor: grab;
-        gap: var(--s1);
-        border-bottom: 1px solid var(--contrast-50);
+        gap: var(--s);
+        border-bottom: 1px solid var(--divider-color);
       }
 
       .widget-header:active {

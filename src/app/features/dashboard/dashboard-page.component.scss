@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   margin-bottom: var(--s3);
-  gap: var(--s1);
+  gap: var(--s);
 
   h2 {
     margin: 0;
@@ -42,7 +42,7 @@
   min-height: 150px;
 
   &.edit-mode {
-    outline: 2px dashed var(--contrast-100);
+    outline: 2px dashed var(--divider-color);
     outline-offset: 2px;
     border-radius: var(--card-border-radius, 8px);
   }

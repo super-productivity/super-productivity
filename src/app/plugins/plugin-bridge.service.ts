@@ -971,6 +971,7 @@ export class PluginBridgeService implements OnDestroy {
     this._removePluginHeaderButtons(pluginId);
     this._removePluginMenuEntries(pluginId);
     this._removePluginSidePanelButtons(pluginId);
+    this._removePluginDashboardWidgets(pluginId);
     this.unregisterPluginShortcuts(pluginId);
     this._configHandlers.delete(pluginId);
 
@@ -1186,6 +1187,16 @@ export class PluginBridgeService implements OnDestroy {
     this._sidePanelButtons.set(filteredButtons);
 
     PluginLog.log('PluginBridge: Side panel buttons removed for plugin', { pluginId });
+  }
+
+  private _removePluginDashboardWidgets(pluginId: string): void {
+    const currentWidgets = this._dashboardWidgets();
+    const filteredWidgets = currentWidgets.filter(
+      (widget) => widget.pluginId !== pluginId,
+    );
+    this._dashboardWidgets.set(filteredWidgets);
+
+    PluginLog.log('PluginBridge: Dashboard widgets removed for plugin', { pluginId });
   }
 
   /**

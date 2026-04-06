@@ -70,12 +70,12 @@ import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
         font-size: 1.4em;
         font-weight: 300;
         opacity: 0.8;
-        margin-top: var(--s1);
+        margin-top: var(--s);
       }
 
       .task-actions {
         display: flex;
-        gap: var(--s1);
+        gap: var(--s);
       }
 
       .no-task {
