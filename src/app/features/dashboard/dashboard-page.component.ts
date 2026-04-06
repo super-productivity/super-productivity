@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  HostListener,
   inject,
   signal,
 } from '@angular/core';
@@ -17,9 +18,14 @@ import { updateGlobalConfigSection } from '../config/store/global-config.actions
 import {
   BUILTIN_WIDGET_IDS,
   DashboardLayoutItem,
+  MobileWidgetSize,
   TaskListWidgetConfig,
 } from './dashboard.model';
-import { BUILTIN_WIDGETS, WIDGET_SIZE_COL_SPAN } from './dashboard.const';
+import {
+  BUILTIN_WIDGETS,
+  DEFAULT_MOBILE_SIZES,
+  WIDGET_SIZE_COL_SPAN,
+} from './dashboard.const';
 import { DashboardWidgetWrapperComponent } from './dashboard-widget-wrapper.component';
 import { CurrentTaskWidgetComponent } from './widgets/current-task-widget.component';
 import { TodaySummaryWidgetComponent } from './widgets/today-summary-widget.component';
@@ -61,13 +67,29 @@ export class DashboardPageComponent {
   private _pluginWidgets = this._pluginBridge.dashboardWidgets;
 
   isEditMode = signal(false);
+  isMobile = signal(typeof window !== 'undefined' && window.innerWidth < 960);
+
+  @HostListener('window:resize')
+  onResize(): void {
+    this.isMobile.set(window.innerWidth < 960);
+  }
 
   visibleItems = computed(() => {
     const config = this._dashboardConfig();
     if (!config) {
       return [];
     }
-    return config.items.filter((item) => item.isVisible);
+    const mobile = this.isMobile();
+    return config.items.filter((item) => {
+      if (!item.isVisible) {
+        return false;
+      }
+      if (mobile) {
+        const mSize = this._getMobileSize(item);
+        return mSize !== 'hidden';
+      }
+      return true;
+    });
   });
 
   widgetMeta = computed(() => {
@@ -171,6 +193,10 @@ export class DashboardPageComponent {
 
   toggleEditMode(): void {
     this.isEditMode.update((v) => !v);
+  }
+
+  private _getMobileSize(item: DashboardLayoutItem): MobileWidgetSize {
+    return item.mobileSize ?? DEFAULT_MOBILE_SIZES[item.widgetId] ?? item.size;
   }
 
   private _updateConfig(items: DashboardLayoutItem[]): void {

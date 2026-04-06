@@ -2,6 +2,8 @@ import { DashboardWidgetSize } from '@super-productivity/plugin-api';
 
 export type TaskListFilter = 'undone' | 'done' | 'all';
 
+export type MobileWidgetSize = DashboardWidgetSize | 'hidden';
+
 export interface TaskListWidgetConfig {
   filter: TaskListFilter;
   maxTasks: number;
@@ -10,6 +12,7 @@ export interface TaskListWidgetConfig {
 export interface DashboardLayoutItem {
   widgetId: string;
   size: DashboardWidgetSize;
+  mobileSize?: MobileWidgetSize;
   isVisible: boolean;
   taskListConfig?: TaskListWidgetConfig;
 }

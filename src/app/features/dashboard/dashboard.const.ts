@@ -2,6 +2,7 @@ import {
   BUILTIN_WIDGET_IDS,
   BuiltinWidgetDef,
   DashboardConfig,
+  MobileWidgetSize,
   TaskListWidgetConfig,
 } from './dashboard.model';
 
@@ -70,4 +71,13 @@ export const WIDGET_SIZE_COL_SPAN: Record<string, number> = {
   small: 1,
   medium: 2,
   large: 4,
+};
+
+export const DEFAULT_MOBILE_SIZES: Record<string, MobileWidgetSize> = {
+  [BUILTIN_WIDGET_IDS.CURRENT_TASK]: 'small',
+  [BUILTIN_WIDGET_IDS.TODAY_SUMMARY]: 'small',
+  [BUILTIN_WIDGET_IDS.FOCUS_MODE]: 'small',
+  [BUILTIN_WIDGET_IDS.PRODUCTIVITY_STREAK]: 'hidden',
+  [BUILTIN_WIDGET_IDS.RECENT_ACTIVITY]: 'small',
+  [BUILTIN_WIDGET_IDS.TASK_LIST]: 'small',
 };
