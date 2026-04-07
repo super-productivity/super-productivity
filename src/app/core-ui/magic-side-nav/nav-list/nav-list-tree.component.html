@@ -171,4 +171,16 @@
       <span>{{ project.title }}</span>
     </button>
   }
+  @if (archivedProjects().length > 0) {
+    <mat-divider></mat-divider>
+    @for (project of archivedProjects(); track project.id) {
+      <button
+        mat-menu-item
+        (click)="unarchiveProject(project.id)"
+      >
+        <mat-icon>unarchive</mat-icon>
+        <span>{{ project.title }}</span>
+      </button>
+    }
+  }
 </mat-menu>

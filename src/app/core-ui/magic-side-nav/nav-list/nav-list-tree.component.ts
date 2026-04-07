@@ -14,6 +14,7 @@ import { CommonModule, NgStyle } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MatDivider } from '@angular/material/divider';
 import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TreeDndComponent } from '../../../ui/tree-dnd/tree.component';
@@ -49,6 +50,7 @@ const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
     TranslatePipe,
     TreeDndComponent,
     NavItemComponent,
+    MatDivider,
   ],
   templateUrl: './nav-list-tree.component.html',
   styleUrls: ['./nav-list-tree.component.scss'],
@@ -74,6 +76,7 @@ export class NavListTreeComponent implements OnDestroy {
 
   // Access to service methods and data for visibility menu (includes Inbox for unhiding)
   readonly allUnarchivedProjects = this._navConfigService.allUnarchivedProjects;
+  readonly archivedProjects = this._navConfigService.archivedProjects;
 
   // ViewChild for visibility menu trigger to close menu after toggling
   visibilityMenuTrigger = viewChild('visibilityBtn', { read: MatMenuTrigger });
@@ -128,6 +131,11 @@ export class NavListTreeComponent implements OnDestroy {
   toggleProjectVisibility(projectId: string): void {
     this._navConfigService.toggleProjectVisibility(projectId);
     // Close menu to prevent stale positioning after DOM update (#5955)
+    this.visibilityMenuTrigger()?.closeMenu();
+  }
+
+  unarchiveProject(projectId: string): void {
+    this._navConfigService.unarchiveProjectById(projectId);
     this.visibilityMenuTrigger()?.closeMenu();
   }
 
