@@ -2304,6 +2304,7 @@
       "IS_AUTO_MARK_PARENT_AS_DONE": "Automatically mark parent task as completed when all subtasks are completed",
       "IS_CONFIRM_BEFORE_DELETE": "Confirm before deleting tasks",
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Enable Markdown formatting in task notes",
+      "IS_SET_DEFAULT_DAY_FOR_TODAY_TASKS": "Set today's date as default when adding tasks in Today section",
       "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (macOS/Windows only)",
       "NOTES_TEMPLATE": "Task description template",
       "TITLE": "Tasks"

@@ -209,7 +209,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           };
         } else if (
           workContext?.type === WorkContextType.TAG &&
-          workContext?.id === 'TODAY'
+          workContext?.id === 'TODAY' &&
+          this._globalConfigService.cfg()?.tasks?.isSetDefaultDayForTodayTasks
         ) {
           return {
             date: getDbDateStr(),
