@@ -18,61 +18,53 @@ import { CdkDragHandle } from '@angular/cdk/drag-drop';
   imports: [MatIcon, MatIconButton, MatMenuModule, CdkDragHandle],
   template: `
     <div
-      class="widget-header"
+      class="drag-handle"
       cdkDragHandle
+    ></div>
+    <button
+      mat-icon-button
+      [matMenuTriggerFor]="widgetMenu"
+      class="menu-btn"
     >
-      @if (icon) {
-        <mat-icon class="widget-icon">{{ icon }}</mat-icon>
-      }
-      <span class="widget-label">{{ label }}</span>
-      <span class="spacer"></span>
+      <mat-icon>more_vert</mat-icon>
+    </button>
+    <mat-menu #widgetMenu="matMenu">
       <button
-        mat-icon-button
-        [matMenuTriggerFor]="widgetMenu"
-        class="menu-btn"
+        mat-menu-item
+        (click)="sizeChange.emit('small')"
       >
-        <mat-icon>more_vert</mat-icon>
+        <mat-icon>crop_square</mat-icon>
+        <span>Small</span>
       </button>
-      <mat-menu #widgetMenu="matMenu">
-        <button
-          mat-menu-item
-          (click)="sizeChange.emit('small')"
-        >
-          <mat-icon>crop_square</mat-icon>
-          <span>Small</span>
-        </button>
-        <button
-          mat-menu-item
-          (click)="sizeChange.emit('medium')"
-        >
-          <mat-icon>crop_landscape</mat-icon>
-          <span>Medium</span>
-        </button>
-        <button
-          mat-menu-item
-          (click)="sizeChange.emit('large')"
-        >
-          <mat-icon>crop_free</mat-icon>
-          <span>Large</span>
-        </button>
-        <button
-          mat-menu-item
-          (click)="hide.emit()"
-        >
-          <mat-icon>visibility_off</mat-icon>
-          <span>Hide</span>
-        </button>
-      </mat-menu>
-    </div>
-    <div class="widget-content">
-      <ng-content></ng-content>
-    </div>
+      <button
+        mat-menu-item
+        (click)="sizeChange.emit('medium')"
+      >
+        <mat-icon>crop_landscape</mat-icon>
+        <span>Medium</span>
+      </button>
+      <button
+        mat-menu-item
+        (click)="sizeChange.emit('large')"
+      >
+        <mat-icon>crop_free</mat-icon>
+        <span>Large</span>
+      </button>
+      <button
+        mat-menu-item
+        (click)="hide.emit()"
+      >
+        <mat-icon>visibility_off</mat-icon>
+        <span>Hide</span>
+      </button>
+    </mat-menu>
+    <ng-content></ng-content>
   `,
   styles: [
     `
       :host {
-        display: flex;
-        flex-direction: column;
+        display: block;
+        position: relative;
         background: var(--card-bg);
         border-radius: var(--card-border-radius, 4px);
         overflow: hidden;
@@ -80,48 +72,45 @@ import { CdkDragHandle } from '@angular/cdk/drag-drop';
         box-shadow: var(--card-shadow);
       }
 
-      .widget-header {
-        display: flex;
-        align-items: center;
-        padding: var(--s) var(--s2);
+      .drag-handle {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: var(--s2);
         cursor: grab;
-        gap: var(--s);
-        border-bottom: 1px solid var(--divider-color);
+        z-index: 1;
       }
 
-      .widget-header:active {
+      .drag-handle:active {
         cursor: grabbing;
       }
 
-      .widget-icon {
-        font-size: 18px;
-        width: 18px;
-        height: 18px;
-        opacity: 0.7;
-      }
-
-      .widget-label {
-        font-size: 0.85em;
-        font-weight: 500;
-        opacity: 0.8;
-      }
-
-      .spacer {
-        flex: 1;
-      }
-
       .menu-btn {
-        opacity: 0.4;
-        transition: opacity 0.2s;
+        position: absolute;
+        top: var(--s-quarter);
+        right: var(--s-quarter);
+        z-index: 2;
+        opacity: 0;
+        transition: opacity var(--transition-duration-s);
+        width: 28px;
+        height: 28px;
+        line-height: 28px;
+
+        mat-icon {
+          font-size: 18px;
+          width: 18px;
+          height: 18px;
+        }
       }
 
       :host:hover .menu-btn {
-        opacity: 0.8;
+        opacity: 0.6;
       }
 
-      .widget-content {
-        flex: 1;
-        overflow: auto;
+      .menu-btn:focus,
+      .menu-btn:active {
+        opacity: 0.8;
       }
     `,
   ],
