@@ -141,11 +141,17 @@ export class TaskUiEffects {
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === true),
         withLatestFrom(this._store$.pipe(select(selectTaskFeatureState))),
-        tap(([{ task }, taskState]) => {
-          const fullTask = taskState.entities[task.id as string];
+        map(([{ task }, taskState]) => ({
+          task,
+          fullTask: taskState.entities[task.id as string],
+        })),
+        filter(
+          ({ fullTask }): fullTask is Task => !!fullTask,
+        ),
+        tap(({ task, fullTask }) => {
           this._snackService.open({
             translateParams: {
-              title: truncate(fullTask?.title || ''),
+              title: truncate(fullTask.title),
             },
             msg: T.F.TASK.S.TASK_DONE,
             ico: 'check_circle',
