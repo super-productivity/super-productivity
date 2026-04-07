@@ -19,6 +19,7 @@ import {
 import {
   selectCurrentTask,
   selectCurrentTaskId,
+  selectTaskFeatureState,
   selectUnplannedDeadlineTasksForToday,
 } from './task.selectors';
 import { NotifyService } from '../../../core/notify/notify.service';
@@ -127,6 +128,35 @@ export class TaskUiEffects {
               if (payload) {
                 this._store$.dispatch(TaskSharedActions.restoreDeletedTask(payload));
               }
+            },
+          });
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  snackDone$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.updateTask),
+        filter(({ task }) => task.changes.isDone === true),
+        withLatestFrom(this._store$.pipe(select(selectTaskFeatureState))),
+        tap(([{ task }, taskState]) => {
+          const fullTask = taskState.entities[task.id as string];
+          this._snackService.open({
+            translateParams: {
+              title: truncate(fullTask?.title || ''),
+            },
+            msg: T.F.TASK.S.TASK_DONE,
+            ico: 'check_circle',
+            config: { duration: 10000 },
+            actionStr: T.G.UNDO,
+            actionFn: () => {
+              this._store$.dispatch(
+                TaskSharedActions.updateTask({
+                  task: { id: task.id as string, changes: { isDone: false } },
+                }),
+              );
             },
           });
         }),
