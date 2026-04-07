@@ -2,9 +2,11 @@ import { projectReducer } from './project.reducer';
 import { fakeEntityStateFromArray } from '../../../util/fake-entity-state-from-array';
 import { Project } from '../project.model';
 import {
+  archiveProject,
   moveProjectTaskInBacklogList,
   moveProjectTaskToBacklogList,
   moveProjectTaskToRegularList,
+  unarchiveProject,
   updateProjectOrder,
 } from './project.actions';
 import { moveNoteToOtherProject } from '../../note/store/note.actions';
@@ -475,6 +477,68 @@ describe('projectReducer', () => {
         }) as any,
       );
       expect(r).toBe(s);
+    });
+  });
+
+  describe('archiveProject', () => {
+    it('should set isArchived to true', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', isArchived: false },
+        { id: 'P2', isArchived: false },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(s as any, archiveProject({ id: 'P1' }) as any);
+      expect((r.entities as any).P1.isArchived).toBeTrue();
+    });
+
+    it('should not affect other projects', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', isArchived: false },
+        { id: 'P2', isArchived: false },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(s as any, archiveProject({ id: 'P1' }) as any);
+      expect((r.entities as any).P2.isArchived).toBeFalse();
+    });
+  });
+
+  describe('unarchiveProject', () => {
+    it('should set isArchived to false', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', isArchived: true },
+        { id: 'P2', isArchived: true },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(s as any, unarchiveProject({ id: 'P1' }) as any);
+      expect((r.entities as any).P1.isArchived).toBeFalse();
+    });
+
+    it('should not affect other projects', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', isArchived: true },
+        { id: 'P2', isArchived: true },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(s as any, unarchiveProject({ id: 'P1' }) as any);
+      expect((r.entities as any).P2.isArchived).toBeTrue();
+    });
+
+    it('should allow re-archiving an unarchived project', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', isArchived: true },
+      ] as Partial<Project>[]);
+
+      const afterUnarchive = projectReducer(
+        s as any,
+        unarchiveProject({ id: 'P1' }) as any,
+      );
+      expect((afterUnarchive.entities as any).P1.isArchived).toBeFalse();
+
+      const afterReArchive = projectReducer(
+        afterUnarchive as any,
+        archiveProject({ id: 'P1' }) as any,
+      );
+      expect((afterReArchive.entities as any).P1.isArchived).toBeTrue();
     });
   });
 });
