@@ -7,6 +7,8 @@ export type MobileWidgetSize = DashboardWidgetSize | 'hidden';
 export interface TaskListWidgetConfig {
   filter: TaskListFilter;
   maxTasks: number;
+  projectId?: string | null;
+  tagId?: string | null;
 }
 
 export interface DashboardLayoutItem {
@@ -28,6 +30,7 @@ export const BUILTIN_WIDGET_IDS = {
   PRODUCTIVITY_STREAK: 'builtin:productivity-streak',
   RECENT_ACTIVITY: 'builtin:recent-activity',
   TASK_LIST: 'builtin:task-list',
+  NOTES: 'builtin:notes',
 } as const;
 
 export interface BuiltinWidgetDef {

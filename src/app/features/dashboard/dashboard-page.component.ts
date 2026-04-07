@@ -33,6 +33,7 @@ import { FocusModeWidgetComponent } from './widgets/focus-mode-widget.component'
 import { ProductivityStreakWidgetComponent } from './widgets/productivity-streak-widget.component';
 import { RecentActivityWidgetComponent } from './widgets/recent-activity-widget.component';
 import { TaskListWidgetComponent } from './widgets/task-list-widget.component';
+import { NotesWidgetComponent } from './widgets/notes-widget.component';
 import { PluginDashboardWidgetComponent } from './plugin-dashboard-widget.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { moveItemInArray } from '../../util/move-item-in-array';
@@ -53,6 +54,7 @@ import { moveItemInArray } from '../../util/move-item-in-array';
     ProductivityStreakWidgetComponent,
     RecentActivityWidgetComponent,
     TaskListWidgetComponent,
+    NotesWidgetComponent,
     PluginDashboardWidgetComponent,
   ],
   templateUrl: './dashboard-page.component.html',

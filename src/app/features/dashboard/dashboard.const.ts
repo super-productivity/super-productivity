@@ -49,6 +49,13 @@ export const BUILTIN_WIDGETS: BuiltinWidgetDef[] = [
     description: "Today's tasks at a glance",
     defaultSize: 'medium',
   },
+  {
+    id: BUILTIN_WIDGET_IDS.NOTES,
+    label: 'Notes',
+    icon: 'sticky_note_2',
+    description: 'Quick daily note',
+    defaultSize: 'medium',
+  },
 ];
 
 export const DEFAULT_TASK_LIST_CONFIG: TaskListWidgetConfig = {
@@ -80,4 +87,5 @@ export const DEFAULT_MOBILE_SIZES: Record<string, MobileWidgetSize> = {
   [BUILTIN_WIDGET_IDS.PRODUCTIVITY_STREAK]: 'hidden',
   [BUILTIN_WIDGET_IDS.RECENT_ACTIVITY]: 'small',
   [BUILTIN_WIDGET_IDS.TASK_LIST]: 'small',
+  [BUILTIN_WIDGET_IDS.NOTES]: 'small',
 };

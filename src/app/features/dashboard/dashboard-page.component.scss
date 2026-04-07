@@ -47,11 +47,9 @@
     border: none;
   }
 
-  // In edit mode, switch to a flat column layout so CDK DragDrop
-  // can properly calculate drop positions
+  // In edit mode, single column grid so CDK DragDrop works
   &.edit-mode {
-    display: flex;
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: var(--s);
   }
 

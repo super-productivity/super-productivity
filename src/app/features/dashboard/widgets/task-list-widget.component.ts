@@ -15,6 +15,8 @@ import { Store } from '@ngrx/store';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { setCurrentTask } from '../../tasks/store/task.actions';
 import { TaskService } from '../../tasks/task.service';
+import { ProjectService } from '../../project/project.service';
+import { TagService } from '../../tag/tag.service';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { TaskListFilter, TaskListWidgetConfig } from '../dashboard.model';
 import { DEFAULT_TASK_LIST_CONFIG } from '../dashboard.const';
@@ -34,42 +36,69 @@ import { DEFAULT_TASK_LIST_CONFIG } from '../dashboard.const';
         <mat-icon>filter_list</mat-icon>
       </button>
       <mat-menu #filterMenu="matMenu">
+        <div class="menu-section-label">Status</div>
+        @for (opt of filterOptions; track opt.value) {
+          <button
+            mat-menu-item
+            (click)="setFilter(opt.value)"
+          >
+            <mat-icon>{{
+              cfg.filter === opt.value ? 'radio_button_checked' : 'radio_button_unchecked'
+            }}</mat-icon>
+            <span>{{ opt.label }}</span>
+          </button>
+        }
+        <div class="menu-section-label">Project</div>
         <button
           mat-menu-item
-          (click)="setFilter('undone')"
+          (click)="setProject(null)"
         >
           <mat-icon>{{
-            cfg.filter === 'undone' ? 'radio_button_checked' : 'radio_button_unchecked'
+            !cfg.projectId ? 'radio_button_checked' : 'radio_button_unchecked'
           }}</mat-icon>
-          <span>Undone</span>
+          <span>Current context</span>
         </button>
+        @for (project of projects(); track project.id) {
+          <button
+            mat-menu-item
+            (click)="setProject(project.id)"
+          >
+            <mat-icon>{{
+              cfg.projectId === project.id
+                ? 'radio_button_checked'
+                : 'radio_button_unchecked'
+            }}</mat-icon>
+            <span>{{ project.title }}</span>
+          </button>
+        }
+        <div class="menu-section-label">Tag</div>
         <button
           mat-menu-item
-          (click)="setFilter('done')"
+          (click)="setTag(null)"
         >
           <mat-icon>{{
-            cfg.filter === 'done' ? 'radio_button_checked' : 'radio_button_unchecked'
+            !cfg.tagId ? 'radio_button_checked' : 'radio_button_unchecked'
           }}</mat-icon>
-          <span>Done</span>
+          <span>Any</span>
         </button>
-        <button
-          mat-menu-item
-          (click)="setFilter('all')"
-        >
-          <mat-icon>{{
-            cfg.filter === 'all' ? 'radio_button_checked' : 'radio_button_unchecked'
-          }}</mat-icon>
-          <span>All</span>
-        </button>
+        @for (tag of tags(); track tag.id) {
+          <button
+            mat-menu-item
+            (click)="setTag(tag.id)"
+          >
+            <mat-icon>{{
+              cfg.tagId === tag.id ? 'radio_button_checked' : 'radio_button_unchecked'
+            }}</mat-icon>
+            <span>{{ tag.title }}</span>
+          </button>
+        }
       </mat-menu>
-      <span class="filter-label">{{ filterLabel }}</span>
+      <span class="filter-label">{{ filterSummary() }}</span>
     </div>
     @if (filteredTasks().length === 0) {
       <div class="empty">
         <mat-icon>task_alt</mat-icon>
-        <span>{{
-          cfg.filter === 'done' ? 'No completed tasks' : 'All done for today!'
-        }}</span>
+        <span>{{ emptyMessage }}</span>
       </div>
     } @else {
       <div class="task-list">
@@ -126,6 +155,9 @@ import { DEFAULT_TASK_LIST_CONFIG } from '../dashboard.const';
       .filter-label {
         font-size: 0.8em;
         opacity: 0.5;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .empty {
@@ -203,6 +235,8 @@ export class TaskListWidgetComponent {
   private _store = inject(Store);
   private _workContextService = inject(WorkContextService);
   private _taskService = inject(TaskService);
+  private _projectService = inject(ProjectService);
+  private _tagService = inject(TagService);
 
   @Input() set config(val: TaskListWidgetConfig | undefined) {
     this.cfg = val ?? DEFAULT_TASK_LIST_CONFIG;
@@ -213,6 +247,14 @@ export class TaskListWidgetComponent {
   cfg: TaskListWidgetConfig = DEFAULT_TASK_LIST_CONFIG;
 
   currentTaskId = this._taskService.currentTaskId;
+  projects = this._projectService.listSortedForUI;
+  tags = this._tagService.tagsNoMyDayAndNoList;
+
+  filterOptions: { value: TaskListFilter; label: string }[] = [
+    { value: 'undone', label: 'Undone' },
+    { value: 'done', label: 'Done' },
+    { value: 'all', label: 'All' },
+  ];
 
   private _undone = toSignal(this._workContextService.undoneTasks$, {
     initialValue: [],
@@ -234,22 +276,51 @@ export class TaskListWidgetComponent {
       default:
         tasks = this._undone();
     }
+    if (this.cfg.projectId) {
+      tasks = tasks.filter((t) => t.projectId === this.cfg.projectId);
+    }
+    if (this.cfg.tagId) {
+      tasks = tasks.filter((t) => t.tagIds?.includes(this.cfg.tagId!));
+    }
     return tasks.slice(0, this.cfg.maxTasks);
   });
 
-  get filterLabel(): string {
-    switch (this.cfg.filter) {
-      case 'done':
-        return 'Done';
-      case 'all':
-        return 'All';
-      default:
-        return 'Undone';
+  filterSummary = computed(() => {
+    const parts: string[] = [];
+    const filterLabel =
+      this.filterOptions.find((o) => o.value === this.cfg.filter)?.label ?? 'Undone';
+    parts.push(filterLabel);
+    if (this.cfg.projectId) {
+      const p = this.projects().find((pr) => pr.id === this.cfg.projectId);
+      if (p) {
+        parts.push(p.title);
+      }
     }
+    if (this.cfg.tagId) {
+      const t = this.tags().find((tg) => tg.id === this.cfg.tagId);
+      if (t) {
+        parts.push('#' + t.title);
+      }
+    }
+    return parts.join(' · ');
+  });
+
+  get emptyMessage(): string {
+    return this.cfg.filter === 'done' ? 'No completed tasks' : 'All done!';
   }
 
   setFilter(filter: TaskListFilter): void {
     this.cfg = { ...this.cfg, filter };
+    this.configChange.emit(this.cfg);
+  }
+
+  setProject(projectId: string | null): void {
+    this.cfg = { ...this.cfg, projectId };
+    this.configChange.emit(this.cfg);
+  }
+
+  setTag(tagId: string | null): void {
+    this.cfg = { ...this.cfg, tagId };
     this.configChange.emit(this.cfg);
   }
 
