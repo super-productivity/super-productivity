@@ -231,7 +231,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -271,7 +271,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -314,7 +314,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 20,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -348,7 +348,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 20,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -400,7 +400,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 5,
+          max: 30,
           timeWindow: '15 minutes',
         },
       },
@@ -434,7 +434,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -468,7 +468,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
