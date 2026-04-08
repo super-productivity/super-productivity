@@ -345,7 +345,6 @@ export async function pageRoutes(fastify: FastifyInstance) {
         <html>
           <head>
             <title>Complete Login</title>
-            <link rel="stylesheet" href="/style.css" />
             <style>
               body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #0f172a; color: white; margin: 0; }
               .container { text-align: center; padding: 2rem; background: rgba(30, 41, 59, 0.7); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); max-width: 400px; width: 90%; }

@@ -157,7 +157,7 @@ export class SyncWrapperService {
    * Tracks consecutive SuperSync AuthFailSPError occurrences.
    * Tolerates up to 2 transient 401s (e.g. infrastructure errors);
    * on the 3rd consecutive failure, clears the token so re-auth dialog opens.
-   * Reset to 0 on any successful sync.
+   * Reset to 0 on any successful sync or any non-auth error.
    */
   private _consecutiveSuperSyncAuthFailures = 0;
 
@@ -509,6 +509,15 @@ export class SyncWrapperService {
       return SyncStatus.InSync;
     } catch (error) {
       SyncLog.err(error);
+
+      // Reset consecutive SuperSync auth failure counter for non-auth errors.
+      // Only AuthFailSPError for SuperSync should accumulate the counter.
+      if (
+        !(error instanceof AuthFailSPError) ||
+        providerId !== SyncProviderId.SuperSync
+      ) {
+        this._consecutiveSuperSyncAuthFailures = 0;
+      }
 
       if (error instanceof PotentialCorsError) {
         this._snackService.open({

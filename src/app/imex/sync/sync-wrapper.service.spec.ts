@@ -870,6 +870,32 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
     });
 
+    it('should reset auth failure counter when a non-auth error occurs between auth errors', async () => {
+      // Fail twice with auth error
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+      await service.sync();
+      await service.sync();
+      expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
+
+      // Non-auth error resets the counter
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('network timeout')),
+      );
+      await service.sync();
+
+      // Next two auth failures should NOT clear (counter was reset by non-auth error)
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+      mockProviderManager.clearAuthCredentials.calls.reset();
+      await service.sync();
+      await service.sync();
+
+      expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
+    });
+
     it('should call clearAuthCredentials on MissingCredentialsSPError', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new MissingCredentialsSPError('no token')),
