@@ -101,6 +101,10 @@ export const createServer = (
         // Add explicit timeouts for long-running operations
         connectionTimeout: 90000, // 90s - match client timeout
         requestTimeout: 80000, // 80s - must exceed DB timeout (60s) but be less than Caddy (85s)
+        // Trust reverse proxy headers (X-Forwarded-For) so req.ip reflects the
+        // real client IP instead of the proxy's IP. Without this, all clients
+        // behind a reverse proxy (e.g. Caddy) share a single rate-limit bucket.
+        trustProxy: true,
       });
 
       // Security Headers
@@ -123,7 +127,7 @@ export const createServer = (
       // Rate Limiting (prevent brute force)
       if (!fullConfig.testMode?.enabled) {
         await fastifyServer.register(rateLimit, {
-          max: 100,
+          max: 500,
           timeWindow: '15 minutes',
         });
       }

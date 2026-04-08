@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { verifyEmail, verifyLoginMagicLink } from './auth';
+import { verifyEmail } from './auth';
 import { Logger } from './logger';
 
 // Error response helper
@@ -318,13 +318,17 @@ export async function pageRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // Magic link login page - verifies token and displays JWT
+  // Magic link login page - renders a confirmation page with a "Log In" button.
+  // The GET request does NOT consume the single-use token. Instead, the button
+  // triggers a POST to /api/login/magic-link/verify which verifies the token.
+  // This two-step flow prevents email client link prefetchers (Outlook SafeLinks,
+  // Gmail link preview, etc.) from consuming the token before the user clicks.
   fastify.get<{ Querystring: MagicLoginQuery }>(
     '/magic-login',
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -335,48 +339,40 @@ export async function pageRoutes(fastify: FastifyInstance) {
         return reply.status(400).send('Token is required');
       }
 
-      try {
-        // Verify the magic link token and get JWT
-        const result = await verifyLoginMagicLink(token);
-
-        // Redirect to main page with token in sessionStorage
-        // Uses external script to avoid CSP inline script issues
-        return reply.type('text/html').send(`
+      // Render confirmation page — token is passed to the external script
+      // via a data attribute. The script handles verification via POST.
+      return reply.type('text/html').send(`
         <html>
           <head>
-            <title>Login Successful</title>
-          </head>
-          <body data-token="${escapeHtml(result.token)}">
-            <script src="/magic-login-redirect.js"></script>
-          </body>
-        </html>
-        `);
-      } catch (err) {
-        Logger.error(`Magic link login error: ${errorMessage(err)}`);
-        const safeError = escapeHtml(errorMessage(err));
-        return reply.type('text/html').send(`
-        <html>
-          <head>
-            <title>Login Failed</title>
+            <title>Complete Login</title>
+            <link rel="stylesheet" href="/style.css" />
             <style>
               body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #0f172a; color: white; margin: 0; }
               .container { text-align: center; padding: 2rem; background: rgba(30, 41, 59, 0.7); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); max-width: 400px; width: 90%; }
-              h1 { color: #ef4444; margin-bottom: 1rem; }
+              h1 { color: #3b82f6; margin-bottom: 1rem; }
               p { color: #94a3b8; margin-bottom: 1.5rem; }
+              button { width: 100%; padding: 0.75rem 1.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.5rem; font-size: 1rem; cursor: pointer; }
+              button:hover { background: #2563eb; }
+              button:disabled { background: #475569; cursor: not-allowed; }
+              .error { color: #ef4444; margin-top: 1rem; display: none; }
+              .success { color: #10b981; margin-top: 1rem; display: none; }
               a { color: #3b82f6; text-decoration: none; }
               a:hover { text-decoration: underline; }
             </style>
           </head>
-          <body>
+          <body data-token="${escapeHtml(token)}">
             <div class="container">
-              <h1>Login Failed</h1>
-              <p>${safeError}</p>
-              <p><a href="/">Request a new login link</a></p>
+              <h1>Complete Your Login</h1>
+              <p>Click the button below to finish logging in to SuperSync.</p>
+              <button id="login-btn">Log In</button>
+              <p class="error" id="error"></p>
+              <p class="success" id="success">Login successful! Redirecting...</p>
+              <p style="margin-top: 1.5rem;"><a href="/">Request a new login link</a></p>
             </div>
+            <script src="/magic-login-confirm.js"></script>
           </body>
         </html>
-        `);
-      }
+      `);
     },
   );
 }
