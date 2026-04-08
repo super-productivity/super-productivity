@@ -5,8 +5,8 @@ GEM
       base64
       nkf
       rexml
-    addressable (2.8.7)
-      public_suffix (>= 2.0.2, < 7.0)
+    addressable (2.9.0)
+      public_suffix (>= 2.0.2, < 8.0)
     artifactory (3.0.17)
     atomos (0.1.3)
     aws-eventstream (1.4.0)
@@ -172,7 +172,7 @@ GEM
     optparse (0.5.0)
     os (1.1.4)
     plist (3.7.1)
-    public_suffix (6.0.1)
+    public_suffix (7.0.5)
     rake (13.2.1)
     representable (3.2.0)
       declarative (< 0.1.0)
