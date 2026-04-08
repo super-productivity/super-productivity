@@ -25,7 +25,13 @@ import { WorkContextService } from '../../features/work-context/work-context.ser
 import { combineLatest, fromEvent, Observable, of } from 'rxjs';
 import { IS_FIREFOX } from '../../util/is-firefox';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
-import { IS_MOUSE_PRIMARY, IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
+import {
+  IS_HYBRID_DEVICE,
+  IS_MOUSE_PRIMARY,
+  IS_TOUCH_PRIMARY,
+} from '../../util/is-mouse-primary';
+// Injected to ensure constructor runs and registers global pointer event listeners
+import { InputIntentService } from '../input-intent/input-intent.service';
 import { ipcEnterFullScreen$, ipcLeaveFullScreen$ } from '../ipc-events';
 
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
@@ -68,6 +74,7 @@ export class GlobalThemeService {
   private _platformService = inject(CapacitorPlatformService);
   private _environmentInjector = inject(EnvironmentInjector);
   private _destroyRef = inject(DestroyRef);
+  private _inputIntentService = inject(InputIntentService);
   private _hasInitialized = false;
   private _keyboardListenerHandles: PluginListenerHandle[] = [];
   private _focusinListener: ((event: FocusEvent) => void) | null = null;
@@ -397,10 +404,13 @@ export class GlobalThemeService {
       this.document.body.classList.add(BodyClass.isNoTouchOnly);
     }
 
-    if (IS_MOUSE_PRIMARY) {
-      this.document.body.classList.add(BodyClass.isMousePrimary);
-    } else if (IS_TOUCH_PRIMARY) {
-      this.document.body.classList.add(BodyClass.isTouchPrimary);
+    // On hybrid devices, InputIntentService dynamically toggles these classes
+    if (!IS_HYBRID_DEVICE) {
+      if (IS_MOUSE_PRIMARY) {
+        this.document.body.classList.add(BodyClass.isMousePrimary);
+      } else if (IS_TOUCH_PRIMARY) {
+        this.document.body.classList.add(BodyClass.isTouchPrimary);
+      }
     }
   }
 

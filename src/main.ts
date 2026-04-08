@@ -29,6 +29,8 @@ import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
+import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
+import { IS_TOUCH_PRIMARY } from './app/util/is-mouse-primary';
 import { FeatureStoresModule } from './app/root-store/feature-stores.module';
 import {
   MATERIAL_ANIMATIONS,
@@ -40,6 +42,7 @@ import {
 import { FormlyConfigModule } from './app/ui/formly-config.module';
 import { markedOptionsFactory } from './app/ui/marked-options-factory';
 import { MaterialCssVarsModule } from 'angular-material-css-vars';
+import { DEFAULT_TODAY_TAG_COLOR } from './app/features/work-context/work-context.const';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatBottomSheetModule } from '@angular/material/bottom-sheet';
 import { ReminderModule } from './app/features/reminder/reminder.module';
@@ -52,6 +55,7 @@ import {
 } from '@angular/router';
 import { APP_ROUTES } from './app/app.routes';
 import { StoreModule } from '@ngrx/store';
+// import { Store } from '@ngrx/store'; // #6230: uncomment if re-enabling __e2eTestHelpers below
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
@@ -75,6 +79,8 @@ import { PLUGIN_INITIALIZER_PROVIDER } from './app/plugins/plugin-initializer';
 import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-menu/mat-menu-touch-monkey-patch';
 import { Log } from './app/core/log';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
+import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
+import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
 import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
@@ -116,7 +122,9 @@ bootstrapApplication(AppComponent, {
         },
         sanitize: { provide: SANITIZE, useValue: SecurityContext.HTML },
       }),
-      MaterialCssVarsModule.forRoot(),
+      MaterialCssVarsModule.forRoot({
+        primary: DEFAULT_TODAY_TAG_COLOR,
+      }),
       MatSidenavModule,
       MatBottomSheetModule,
       ReminderModule,
@@ -201,6 +209,10 @@ bootstrapApplication(AppComponent, {
       provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,
       useValue: { appearance: 'fill', subscriptSizing: 'dynamic' },
     },
+    // Disable autofocus for touch-primary devices to prevent virtual keyboard popup
+    ...(IS_TOUCH_PRIMARY
+      ? [{ provide: MAT_DIALOG_DEFAULT_OPTIONS, useValue: { autoFocus: false } }]
+      : []),
     provideAnimationsAsync(),
     {
       provide: MATERIAL_ANIMATIONS,
@@ -227,7 +239,7 @@ bootstrapApplication(AppComponent, {
       multi: true,
     },
     // Ensure DataInitService is instantiated at bootstrap.
-    // Its constructor triggers reInit() → hydrateStore() → loadAllData into NgRx.
+    // Its constructor triggers reInit() -> hydrateStore() -> loadAllData into NgRx.
     {
       provide: APP_INITIALIZER,
       useFactory: (_dataInit: DataInitService) => {
@@ -246,12 +258,48 @@ bootstrapApplication(AppComponent, {
       deps: [EncryptionPasswordDialogOpenerService],
       multi: true,
     },
+    // Ensure PluginOAuthRedirectHandler is instantiated at bootstrap.
+    // Its constructor registers platform-specific listeners (postMessage / Electron IPC)
+    // that bridge OAuth redirect callbacks to PluginOAuthService.
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (_handler: PluginOAuthRedirectHandler) => {
+        return () => {};
+      },
+      deps: [PluginOAuthRedirectHandler],
+      multi: true,
+    },
+    // Ensure OAuthCallbackHandlerService is instantiated at bootstrap on native platforms.
+    // Its constructor registers Capacitor's appUrlOpen listener that bridges
+    // both Dropbox and plugin OAuth redirect callbacks.
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (_handler: OAuthCallbackHandlerService) => {
+        return () => {};
+      },
+      deps: [OAuthCallbackHandlerService],
+      multi: true,
+    },
     // Note: ImmediateUploadService now initializes itself in constructor
     // after DataInitStateService.isAllDataLoadedInitially$ fires to avoid
     // race condition where upload attempts happen before sync config is loaded
   ],
 }).then((appRef) => {
   appInjector = appRef.injector;
+
+  // #6230: Expose store and HydrationStateService for e2e tests in dev mode only.
+  // Commented out because the tests that use it (Test A and B in
+  // e2e/tests/recurring/repeat-task-day-change-bug-6230.spec.ts) are also commented out.
+  // Uncomment both if investigating #6230 further. Also uncomment the Store import above.
+  // if (!environment.production && !environment.stage) {
+  //   const storeRef = appRef.injector.get(Store);
+  //   import('./app/op-log/apply/hydration-state.service').then((m) => {
+  //     (window as any).__e2eTestHelpers = {
+  //       store: storeRef,
+  //       hydrationState: appRef.injector.get(m.HydrationStateService),
+  //     };
+  //   });
+  // }
 
   // Dismiss native startup overlay after all data is loaded (Android only)
   if (IS_ANDROID_WEB_VIEW) {

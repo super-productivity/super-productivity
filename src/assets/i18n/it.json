@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity è finanziato interamente dalla comunità. Non ci sono tracciamenti, pubblicità o raccolta dati — le tue attività restano sul tuo dispositivo.",
     "INTRO_2": "Se apprezzi questo approccio e vuoi mantenere il progetto sano e in evoluzione, una donazione volontaria è molto apprezzata."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Impara le scorciatoie da tastiera",
+      "NOTES": "Super Productivity è progettato per essere usato con la tastiera. Impara le scorciatoie per lavorare più velocemente.\n\n**Come iniziare:**\n1. Apri il **menu della barra laterale**\n2. Vai su **Aiuto**\n3. Clicca su **Tour della navigazione da tastiera**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Crea il tuo primo progetto",
+      "NOTES": "I progetti ti aiutano a organizzare le tue attività per area di lavoro. Ogni progetto ha la sua lista di attività e il suo backlog.\n\n**Come creare un progetto:**\n1. Clicca il pulsante **+** accanto a **Progetti** nella barra laterale\n2. Dagli un nome e scegli un colore\n3. Inizia ad aggiungere attività"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Configura la sincronizzazione",
+      "NOTES": "Mantieni i tuoi dati al sicuro e accessibili su tutti i dispositivi.\n\n**Come configurare:**\n1. Apri le **Impostazioni** (icona dell'ingranaggio nella barra laterale)\n2. Vai su **Sincronizzazione**\n3. Scegli un provider: Super Sync, Dropbox, WebDAV o sincronizzazione file locale\n4. Segui le istruzioni di configurazione"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Vai oltre",
+      "NOTES": "C'è molto altro da scoprire!\n\n**Funzionalità dell'app** (nelle Impostazioni) — Attiva integrazioni, abitudini e altre funzionalità. Vai su **Impostazioni → Funzionalità dell'app** per vedere cosa è disponibile.\n\n**Bacheche** — Visualizza le tue attività in bacheche Kanban personalizzabili. Abilitale nelle **Funzionalità dell'app**, poi trovale nel **menu laterale**.\n\n**Pianificazione** — Pianifica la tua giornata assegnando le attività a orari specifici. Trascina le attività nella vista **Pianificazione** nella barra laterale.\n\n**Integrazioni** — Una volta attivate nelle Funzionalità dell'app, importa attività da Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV e molti altri. Puoi anche integrare il tuo calendario. Configurale nel **Pannello dei provider di ticket**.\n\n**Abitudini** — Monitora abitudini e routine ricorrenti. Trovali nel **menu della barra laterale** una volta attivati.\n\n**Plugin** — Aggiungi funzionalità come il Rompi-procrastinazione, Automazioni o Promemoria vocali. Vai su **Impostazioni → Plugin**.\n\n**Personalizza** — Temi, modalità scura, scorciatoie da tastiera, lingua e strumenti di produttività sono tutti nelle **Impostazioni**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,36 @@
     "STATUS_BACKUP": "Creazione backup dei tuoi dati...",
     "STATUS_COMPLETE": "Migrazione completata!",
     "STATUS_MIGRATING": "Migrazione dati..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Come vuoi usare Super Productivity?",
+    "SUBTITLE": "Scegli una configurazione adatta al tuo modo di lavorare. Puoi sempre modificarla nelle Impostazioni.",
+    "PRIVACY_HINT": "I tuoi dati restano al sicuro sul tuo dispositivo. Nulla viene inviato a un server.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Lista attività semplice",
+        "DESCRIPTION": "Un gestore di attività pulito con progetti, tag e note. Senza fronzoli."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Monitoraggio del tempo",
+        "DESCRIPTION": "Registra quanto tempo richiedono le attività. Ideale per fatturare le ore o capire dove va il tuo tempo."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Suite Produttività",
+        "DESCRIPTION": "Pianifica la giornata, crea abitudini, concentrati e monitora il tempo. Tutto in un unico posto."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Clicca su + per aggiungere la tua prima attività",
+      "CREATE_TASK_TOUCH": "Tocca + per aggiungere la tua prima attività",
+      "EXPLORE": "Sentiti libero di cliccare ovunque ed esplorare! Puoi trovare aiuto nella barra laterale.",
+      "EXPLORE_TOUCH": "Sentiti libero di esplorare! Puoi trovare aiuto nel menu.",
+      "TASK_TAP_TOUCH": "Tocca un'attività per aprirne i dettagli.",
+      "TASK_SWIPE_LEFT_TOUCH": "Scorri l'attività verso sinistra per altre azioni",
+      "TASK_SWIPE_RIGHT_TOUCH": "Scorri l'attività verso destra per contrassegnarla come completata",
+      "OR_PRESS": "o premi",
+      "SKIP_ARIA": "Chiudi suggerimento"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Aggiungi attività da oggi",

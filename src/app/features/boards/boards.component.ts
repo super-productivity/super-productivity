@@ -101,6 +101,7 @@ export class BoardsComponent {
           id: nanoid(),
           panels: boardToDuplicate.panels.map((panel) => ({
             ...panel,
+            id: nanoid(),
             taskIds: [],
           })),
           title: `${boardToDuplicate.title} (copy)`,

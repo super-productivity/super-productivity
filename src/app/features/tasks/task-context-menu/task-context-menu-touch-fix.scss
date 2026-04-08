@@ -48,6 +48,13 @@
   }
 }
 
+// Highlight the source task when context menu is open
+.context-menu-highlight {
+  box-shadow: inset 0 0 0 2px var(--primary);
+  z-index: 1;
+  transition: box-shadow 200ms ease-out;
+}
+
 // Animation to re-enable pointer events after delay
 @keyframes enablePointerEvents {
   0% {

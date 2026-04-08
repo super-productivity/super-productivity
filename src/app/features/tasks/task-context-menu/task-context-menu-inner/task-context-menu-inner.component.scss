@@ -26,6 +26,9 @@
   text-align: left;
   display: flex;
   align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .quick-access {

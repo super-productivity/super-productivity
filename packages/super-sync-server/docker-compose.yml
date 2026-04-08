@@ -20,7 +20,7 @@ services:
     container_name: supersync-server
     restart: always
     environment:
-      - NODE_ENV=${NODE_ENV:-development}
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=1900
       - DATABASE_URL=postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}
       - JWT_SECRET=${JWT_SECRET}
@@ -36,7 +36,7 @@ services:
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Super Productivity Sync}
       - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:1900}
     ports:
-      - '1900:1900'
+      - '127.0.0.1:1900:1900'
     volumes:
       - supersync-data:/app/data
     depends_on:
@@ -55,7 +55,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -94,7 +94,7 @@ services:
     logging: *default-logging
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11-alpine
     container_name: supersync-caddy
     restart: always
     ports:
@@ -108,10 +108,10 @@ services:
       - DOMAIN=${DOMAIN}
     networks:
       - internal
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     mem_limit: 256m
     depends_on:
       - supersync

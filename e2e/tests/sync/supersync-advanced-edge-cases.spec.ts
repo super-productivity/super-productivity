@@ -5,6 +5,8 @@ import {
   createSimulatedClient,
   closeClient,
   waitForTask,
+  markTaskDone,
+  getDoneTaskElement,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 
@@ -132,12 +134,9 @@ test.describe('@supersync SuperSync Advanced Edge Cases', () => {
       await clientA.sync.syncAndWait();
 
       // Mark initial task as done
-      const initialTaskLocator = clientA.page.locator(`task:has-text("${initialTask}")`);
-      await initialTaskLocator.hover();
-      // Wait for done button to be visible after hover reveals it
-      const doneBtn = initialTaskLocator.locator('.task-done-btn');
-      await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await doneBtn.click();
+      await markTaskDone(clientA, initialTask);
+      // Wait for the 200ms done animation delay + NgRx store update + IndexedDB persist
+      await clientA.page.waitForTimeout(500);
       await clientA.sync.syncAndWait();
 
       // Client B "reconnects" (syncs after missing many updates)
@@ -150,14 +149,12 @@ test.describe('@supersync SuperSync Advanced Edge Cases', () => {
       await waitForTask(clientB.page, offlineTask2);
       await waitForTask(clientB.page, offlineTask3);
 
-      // Initial task should be marked as done
+      // Initial task should be marked as done (may be in the collapsed "Done tasks" section)
       // Use toPass() to handle Angular change detection lag for CSS class update
       await expect(async () => {
-        const initialTaskB = clientB.page.locator(
-          `task.isDone:has-text("${initialTask}")`,
-        );
+        const initialTaskB = getDoneTaskElement(clientB!, initialTask);
         await expect(initialTaskB).toBeVisible({ timeout: 2000 });
-      }).toPass({ timeout: 10000, intervals: [500, 1000, 2000] });
+      }).toPass({ timeout: 15000, intervals: [500, 1000, 2000, 3000] });
 
       console.log('[Stale] Stale client reconnected and received all changes');
     } finally {

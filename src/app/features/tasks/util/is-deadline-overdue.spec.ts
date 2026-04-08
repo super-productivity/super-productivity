@@ -65,6 +65,18 @@ describe('isDeadlineOverdue', () => {
     });
   });
 
+  describe('malformed deadlineDay (#6908)', () => {
+    it('should return false when deadlineDay is not a valid YYYY-MM-DD string', () => {
+      const task = createTask({ deadlineDay: '-/-/2026' });
+      expect(isDeadlineOverdue(task, TODAY_STR)).toBe(false);
+    });
+
+    it('should return false when deadlineDay is a locale-formatted date', () => {
+      const task = createTask({ deadlineDay: '3/14/2026' });
+      expect(isDeadlineOverdue(task, TODAY_STR)).toBe(false);
+    });
+  });
+
   describe('no deadline', () => {
     it('should return false when task has no deadline fields', () => {
       const task = createTask();

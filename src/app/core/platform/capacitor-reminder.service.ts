@@ -92,7 +92,7 @@ export class CapacitorReminderService {
 
     Log.log('📱 CapacitorReminderService.scheduleReminder called', {
       notificationId: options.notificationId,
-      title: options.title.substring(0, 30),
+      reminderId: options.reminderId,
       triggerAt: new Date(triggerAt).toISOString(),
       triggerInMs: triggerAt - now,
       triggerInMinutes: Math.round((triggerAt - now) / 1000 / 60),
@@ -126,7 +126,7 @@ export class CapacitorReminderService {
 
         Log.log('✅ CapacitorReminderService: Android reminder scheduled successfully', {
           notificationId: options.notificationId,
-          title: options.title,
+          reminderId: options.reminderId,
           triggerAt: new Date(triggerAt).toISOString(),
         });
         return true;
@@ -154,6 +154,10 @@ export class CapacitorReminderService {
               id: options.notificationId,
               title: options.title,
               body: `Reminder: ${options.title}`,
+              // Play the default system notification sound.
+              // Without this, iOS delivers notifications silently (content.sound = nil).
+              // The string 'default' triggers iOS's file-not-found fallback to the system sound.
+              sound: 'default',
               // Include action type for iOS notification actions (Done/Snooze buttons)
               actionTypeId: this._platformService.isIOS()
                 ? REMINDER_ACTION_TYPE_ID
@@ -177,7 +181,7 @@ export class CapacitorReminderService {
 
         Log.log('CapacitorReminderService: iOS reminder scheduled', {
           notificationId: options.notificationId,
-          title: options.title,
+          reminderId: options.reminderId,
           triggerAt: new Date(triggerAt).toISOString(),
         });
         return true;

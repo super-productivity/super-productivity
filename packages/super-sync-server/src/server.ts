@@ -8,9 +8,15 @@ import * as path from 'path';
 import { loadConfigFromEnv, ServerConfig, PrivacyConfig } from './config';
 import { Logger } from './logger';
 import { prisma, disconnectDb } from './db';
+import websocket from '@fastify/websocket';
 import { apiRoutes } from './api';
 import { pageRoutes } from './pages';
 import { syncRoutes, startCleanupJobs, stopCleanupJobs } from './sync';
+import { wsRoutes } from './sync/websocket.routes';
+import {
+  getWsConnectionService,
+  resetWsConnectionService,
+} from './sync/services/websocket-connection.service';
 import { testRoutes } from './test-routes';
 
 // HTML escape to prevent XSS in generated HTML
@@ -151,12 +157,20 @@ export const createServer = (
         prefix: '/',
       });
 
+      // WebSocket support for real-time sync notifications
+      // maxPayload: only app-level pong messages expected from clients (~20 bytes)
+      await fastifyServer.register(websocket, {
+        options: { maxPayload: 1024 },
+      });
+
       // Health Check - verifies database connectivity
-      fastifyServer.get('/health', async (_, reply) => {
+      // Exempt from rate limiting (Kubernetes probes hit this every 5-15s)
+      fastifyServer.get('/health', { config: { rateLimit: false } }, async (_, reply) => {
         try {
           // Simple query to verify DB is responsive
           await prisma.$queryRaw`SELECT 1`;
-          return { status: 'ok', db: 'connected' };
+          const wsConnections = getWsConnectionService().getConnectionCount();
+          return { status: 'ok', db: 'connected', wsConnections };
         } catch (err) {
           Logger.error('Health check failed: DB not responsive', err);
           return reply.status(503).send({
@@ -173,6 +187,9 @@ export const createServer = (
       // Sync Routes (operation-based sync)
       await fastifyServer.register(syncRoutes, { prefix: '/api/sync' });
 
+      // WebSocket routes for real-time sync notifications
+      await fastifyServer.register(wsRoutes, { prefix: '/api/sync' });
+
       // Test Routes (only in test mode)
       if (fullConfig.testMode?.enabled) {
         await fastifyServer.register(testRoutes, { prefix: '/api/test' });
@@ -184,6 +201,9 @@ export const createServer = (
 
       // Start cleanup jobs
       startCleanupJobs();
+
+      // Start WebSocket heartbeat
+      getWsConnectionService().startHeartbeat();
 
       try {
         const address = await fastifyServer.listen({
@@ -198,6 +218,8 @@ export const createServer = (
       }
     },
     stop: async (): Promise<void> => {
+      // Stop WebSocket connections
+      resetWsConnectionService();
       stopCleanupJobs();
       if (fastifyServer) {
         await fastifyServer.close();

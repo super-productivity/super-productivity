@@ -130,9 +130,9 @@ export class ReminderCountdownEffects {
 
     const nrOfAllBanners = dueTasks.length;
     Log.log({
-      firstDueTask,
-      firstDue,
-      dueTasks,
+      firstDueTaskId: firstDueTask?.id,
+      firstDueRemindAt: firstDue.remindAt,
+      dueTaskCount: dueTasks.length,
     });
 
     this._bannerService.open({

@@ -16,8 +16,14 @@ export const computePushDecisions = (
   ctx: FieldMappingContext,
 ): PushDecision[] => {
   const decisions: PushDecision[] = [];
+  const decidedIssueFields = new Set<string>();
+  const mappingByTaskField = new Map(fieldMappings.map((m) => [m.taskField, m]));
 
   for (const mapping of fieldMappings) {
+    if (decidedIssueFields.has(mapping.issueField)) {
+      continue;
+    }
+
     if (!(mapping.taskField in changedTaskFields)) {
       continue;
     }
@@ -29,6 +35,7 @@ export const computePushDecisions = (
         action: 'skip',
         reason: `direction is '${direction}'`,
       });
+      decidedIssueFields.add(mapping.issueField);
       continue;
     }
 
@@ -38,6 +45,7 @@ export const computePushDecisions = (
         action: 'skip',
         reason: 'no baseline (first sync)',
       });
+      decidedIssueFields.add(mapping.issueField);
       continue;
     }
 
@@ -47,6 +55,7 @@ export const computePushDecisions = (
         action: 'skip',
         reason: 'provider changed (provider wins)',
       });
+      decidedIssueFields.add(mapping.issueField);
       continue;
     }
 
@@ -55,6 +64,25 @@ export const computePushDecisions = (
       action: 'push',
       issueValue: mapping.toIssueValue(changedTaskFields[mapping.taskField], ctx),
     });
+    decidedIssueFields.add(mapping.issueField);
+
+    // Clear mutually exclusive fields on the remote
+    for (const exclTaskField of mapping.mutuallyExclusive ?? []) {
+      const exclMapping = mappingByTaskField.get(exclTaskField);
+      if (!exclMapping || decidedIssueFields.has(exclMapping.issueField)) {
+        continue;
+      }
+      const exclDir = syncConfig[exclMapping.taskField] ?? exclMapping.defaultDirection;
+      if (exclDir !== 'pushOnly' && exclDir !== 'both') {
+        continue;
+      }
+      decisions.push({
+        field: exclMapping.issueField,
+        action: 'push',
+        issueValue: exclMapping.toIssueValue(undefined, ctx),
+      });
+      decidedIssueFields.add(exclMapping.issueField);
+    }
   }
 
   return decisions;

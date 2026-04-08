@@ -129,6 +129,89 @@ describe('isRelatedModelDataValid', () => {
     expect(result).toBe(true);
   });
 
+  describe('stale references in archived tasks (issue #6270)', () => {
+    const baseData = (): any => ({
+      project: {
+        ids: ['p1'],
+        entities: { p1: { id: 'p1', taskIds: [], backlogTaskIds: [], noteIds: [] } },
+      },
+      tag: { ids: [], entities: {} },
+      task: { ids: [], entities: {} },
+      taskRepeatCfg: { ids: [], entities: {} },
+      archiveYoung: { task: { ids: [], entities: {} } },
+      archiveOld: { task: { ids: [], entities: {} } },
+      note: { ids: [], entities: {}, todayOrder: [] },
+      issueProvider: { ids: [], entities: {} },
+      reminders: [],
+      menuTree: { projectTree: [], tagTree: [] },
+    });
+
+    const cases = [
+      {
+        archive: 'archiveYoung' as const,
+        field: 'repeatCfgId',
+        taskOverride: { repeatCfgId: 'DELETED_REPEAT_CFG' },
+        logFragment: 'stale repeatCfgId',
+      },
+      {
+        archive: 'archiveOld' as const,
+        field: 'repeatCfgId',
+        taskOverride: { repeatCfgId: 'DELETED_REPEAT_CFG' },
+        logFragment: 'stale repeatCfgId',
+      },
+      {
+        archive: 'archiveYoung' as const,
+        field: 'projectId',
+        taskOverride: { projectId: 'NON_EXISTENT_PROJECT' },
+        logFragment: 'stale projectId',
+      },
+      {
+        archive: 'archiveOld' as const,
+        field: 'projectId',
+        taskOverride: { projectId: 'NON_EXISTENT_PROJECT' },
+        logFragment: 'stale projectId',
+      },
+      {
+        archive: 'archiveYoung' as const,
+        field: 'tagId',
+        taskOverride: { tagIds: ['NON_EXISTENT_TAG'] },
+        logFragment: 'stale tagId',
+      },
+      {
+        archive: 'archiveOld' as const,
+        field: 'tagId',
+        taskOverride: { tagIds: ['NON_EXISTENT_TAG'] },
+        logFragment: 'stale tagId',
+      },
+    ];
+
+    cases.forEach(({ archive, field, taskOverride, logFragment }) => {
+      it(`should pass when ${archive} task has stale ${field} and log warning`, () => {
+        const data = baseData();
+        data[archive].task = {
+          ids: ['t1'],
+          entities: {
+            t1: {
+              id: 't1',
+              projectId: 'p1',
+              tagIds: [],
+              subTaskIds: [],
+              ...taskOverride,
+            },
+          },
+        };
+
+        expect(isRelatedModelDataValid(data)).toBe(true);
+        expect(OpLog.info).toHaveBeenCalledWith(
+          jasmine.stringContaining(
+            `${archive} has 1 tasks with ${logFragment} (harmless)`,
+          ),
+          jasmine.any(Object),
+        );
+      });
+    });
+  });
+
   describe('TODAY_TAG orphaned IDs handling', () => {
     it('should pass validation for TODAY_TAG with orphaned task IDs and log warning', () => {
       const dataWithTodayTagOrphans: any = {

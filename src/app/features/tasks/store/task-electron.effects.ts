@@ -46,7 +46,7 @@ export class TaskElectronEffects {
      * - Responds to explicit IPC request, not store-change driven
      * - take(1) ensures single response per request
      */
-    window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_OVERLAY, () => {
+    window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET, () => {
       this._store$
         .pipe(
           select(selectCurrentTask),

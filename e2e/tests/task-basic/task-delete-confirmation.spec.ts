@@ -87,11 +87,9 @@ test.describe('Task Delete Confirmation', () => {
     await workViewPage.addTask('Task to delete with keyboard');
     await expect(page.locator('task')).toHaveCount(1);
 
-    // Focus the task by clicking on drag-handle (not task-title which would open edit mode)
+    // Focus the task directly (not task-title which would open edit mode)
     const task = page.locator('task').first();
-    const dragHandle = task.locator('.drag-handle').first();
-    await dragHandle.waitFor({ state: 'visible', timeout: 5000 });
-    await dragHandle.click();
+    await task.focus();
     // Wait for focus to settle - the task component needs time to process the click
     await page.waitForTimeout(200);
     // If task isn't focused, try clicking again

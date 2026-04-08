@@ -50,7 +50,7 @@ describe('PlannerService', () => {
         }),
         {
           provide: CalendarIntegrationService,
-          useValue: { icalEvents$: of([]) },
+          useValue: { calendarEvents$: of([]) },
         },
         {
           provide: GlobalTrackingIntervalService,

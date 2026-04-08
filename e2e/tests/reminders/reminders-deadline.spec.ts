@@ -151,10 +151,15 @@ test.describe('Deadline Reminders', () => {
     await expect(page.locator(REMINDER_DIALOG_TASK_1)).toContainText(taskTitle);
 
     // Click "Snooze" to open snooze menu, then "Reschedule until tomorrow"
-    const snoozeBtn = page.locator(REMINDER_DIALOG).locator('button:has(mat-icon:text("snooze"))').first();
+    const snoozeBtn = page
+      .locator(REMINDER_DIALOG)
+      .locator('button:has(mat-icon:text("snooze"))')
+      .first();
     await snoozeBtn.click();
 
-    const rescheduleOption = page.locator('button[mat-menu-item]:has-text("Reschedule for tomorrow")');
+    const rescheduleOption = page.locator(
+      'button[mat-menu-item]:has-text("Reschedule for tomorrow")',
+    );
     await rescheduleOption.waitFor({ state: 'visible', timeout: 5000 });
     await rescheduleOption.click();
 

@@ -7,7 +7,6 @@
   display: flex;
   align-items: stretch;
   @include grabCursor();
-
   color: var(--text-color);
   background: var(--task-c-bg);
   box-shadow: var(--task-shadow);
@@ -28,6 +27,16 @@
     margin-bottom: var(--s-quarter);
     margin-top: var(--s-quarter);
   }
+}
+
+:host.isDragReady:not(.cdk-drag-placeholder) {
+  background: var(--bg-lighter);
+  box-shadow: var(--whiteframe-shadow-8dp);
+  z-index: 1;
+  position: relative;
+  transition:
+    background 150ms ease-out,
+    box-shadow 150ms ease-out;
 }
 
 :host-context(.isLightTheme).isCurrent {
@@ -61,14 +70,24 @@
   }
 }
 
-.play-icon-indicator {
-  color: var(--c-accent);
-  // NOTE: we do this since change detection does not immediately pick up on _taskService.currentTaskId
-  display: none;
+swipe-block {
+  flex-grow: 1;
+  min-width: 0;
+}
 
-  :host.isCurrent & {
-    display: block;
-  }
+.task-content {
+  display: flex;
+  align-items: stretch;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+done-toggle {
+  --done-toggle-size: 30px;
+
+  margin-left: var(--s-half);
+  align-self: center;
+  cursor: pointer;
 }
 
 .wrap {
@@ -110,122 +129,43 @@
 }
 
 .planner-time-remaining-shared {
-  // we overwrite since we need to move down styles to inline-input
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
   padding: 0;
+  padding-right: var(--s);
   border: 1px solid transparent;
 
   &.hasNoTimeSpentOrEstimate {
     text-align: center;
   }
 
-  mat-icon {
-    display: inline-flex;
-  }
-
   inline-input {
-    padding-top: 12px;
-    padding-bottom: 12px;
     min-width: 44px;
     text-align: right;
-    padding-left: var(--s-half);
-    padding-right: var(--s);
   }
 
   inline-input ::ng-deep input {
     line-height: 1.5;
   }
-}
 
-.drag-handle {
-  width: 32px;
-  height: 32px;
-  margin-left: var(--s-half);
-  min-width: 32px;
-  z-index: var(--z-drag-handle);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-  // fixes drag and drop on mobile
-  touch-action: none;
-  align-self: center;
-
-  mat-ico {
-    font-size: 20px;
-  }
-
-  .drag-handle-ico {
-    opacity: 0.4;
-
-    @include mq(xs) {
-      opacity: 0.15;
-    }
-  }
-
-  > * {
-    @include center;
-  }
-
-  .type-ico-wrapper {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    opacity: var(--task-icon-default-opacity);
-    position: absolute;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    @include mq(xs, max) {
-      //display: none;
-    }
+  .sub-task-count {
+    font-style: italic;
+    white-space: nowrap;
+    line-height: 1;
+    margin-top: var(--s-quarter);
 
     mat-icon {
-      margin-left: var(--s);
-      margin-right: var(--s);
-      opacity: 0.8;
-      font-size: var(--planner-item-ico-size);
-      height: var(--planner-item-ico-size);
-      width: var(--planner-item-ico-size);
-      min-width: var(--planner-item-ico-size);
-      max-width: var(--planner-item-ico-size);
-    }
-
-    :host.isCurrent &::ng-deep mat-icon {
-      transform: scale(1.4) !important;
-      transform-origin: center center;
-      opacity: 0.18;
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+      vertical-align: middle;
+      margin-right: 1px;
     }
   }
-}
-
-.mini-badge {
-  line-height: var(--mini-badge-size);
-  width: var(--mini-badge-size);
-  height: var(--mini-badge-size);
-  font-size: 12px;
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  border-radius: 50%;
-  text-align: center;
-  z-index: 2;
-}
-
-.repeat-date-badge {
-  @include center;
-  margin-top: 10px;
-  font-size: 10px;
-  z-index: 10;
-  line-height: 1;
-  text-align: center;
-  padding: 1px var(--s-quarter) 0;
-  @include extraBorder();
-  border-radius: var(--card-border-radius);
-
-  // avoid affecting drag handle
-  pointer-events: none;
-  background: var(--bg-lighter);
 }
 
 .original-time-remaining {

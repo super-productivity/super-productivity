@@ -104,6 +104,12 @@ const SHORT_SYNTAX_URL_REG_EX = new RegExp(
   'gi',
 );
 
+// Markdown link regex: [title](url)
+// Allows one level of balanced parentheses inside the URL so that links like
+// [article](https://en.wikipedia.org/wiki/C_(programming_language)) work.
+const SHORT_SYNTAX_MARKDOWN_LINK_REG_EX =
+  /\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
+
 export const shortSyntax = async (
   task: Task | Partial<Task>,
   config: ShortSyntaxConfig,
@@ -486,6 +492,29 @@ export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> =>
   };
 };
 
+/**
+ * Extracts markdown links [text](url) from title.
+ * Returns the URLs found and a title with markdown links replaced by their display text.
+ */
+const extractMarkdownLinks = (
+  title: string,
+): { urls: string[]; titleWithoutMarkdown: string } => {
+  if (!title.includes('](')) {
+    return { urls: [], titleWithoutMarkdown: title };
+  }
+  const urls: string[] = [];
+  const titleWithoutMarkdown = title.replace(
+    SHORT_SYNTAX_MARKDOWN_LINK_REG_EX,
+    (_match, text: string, url: string) => {
+      if (url) {
+        urls.push(url);
+      }
+      return text;
+    },
+  );
+  return { urls, titleWithoutMarkdown };
+};
+
 const parseUrlAttachments = (
   task: Partial<TaskCopy>,
   config: ShortSyntaxConfig,
@@ -499,8 +528,16 @@ const parseUrlAttachments = (
     return undefined;
   }
 
-  const urlMatches = task.title.match(SHORT_SYNTAX_URL_REG_EX);
-  if (!urlMatches || urlMatches.length === 0) {
+  // 1. Extract markdown links first — they take priority over plain URL matching
+  // This prevents the plain URL regex from greedily including the closing ')' of
+  // markdown syntax like [text](https://example.com/)
+  const { urls: markdownUrls, titleWithoutMarkdown } = extractMarkdownLinks(task.title);
+
+  // 2. Then match remaining plain URLs in the title (after markdown links are replaced)
+  const plainUrlMatches = titleWithoutMarkdown.match(SHORT_SYNTAX_URL_REG_EX) || [];
+
+  const allUrls = [...markdownUrls, ...plainUrlMatches];
+  if (allUrls.length === 0) {
     return undefined;
   }
 
@@ -511,15 +548,13 @@ const parseUrlAttachments = (
   }
 
   // Filter out attachments that already exist (prevent duplicates)
-  const newAttachments = filterDuplicateUrlAttachments(
-    urlMatches,
-    task.attachments || [],
-  );
+  const newAttachments = filterDuplicateUrlAttachments(allUrls, task.attachments || []);
 
-  // Only clean URLs from title if urlBehavior is 'extract'
   let cleanedTitle = task.title;
   if (config.urlBehavior === 'extract') {
-    cleanedTitle = removeUrlsFromTitle(task.title, urlMatches);
+    // In extract mode: replace markdown links with display text, remove plain URLs
+    cleanedTitle = markdownUrls.length > 0 ? titleWithoutMarkdown : task.title;
+    cleanedTitle = removeUrlsFromTitle(cleanedTitle, plainUrlMatches);
   }
 
   // Return undefined if nothing changed

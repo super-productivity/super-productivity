@@ -4,7 +4,7 @@ describe('WebdavXmlParser', () => {
   let parser: WebdavXmlParser;
 
   beforeEach(() => {
-    parser = new WebdavXmlParser((rev: string) => rev.replace(/"/g, ''));
+    parser = new WebdavXmlParser();
   });
 
   describe('PROPFIND_XML', () => {
@@ -201,10 +201,7 @@ describe('WebdavXmlParser', () => {
     });
 
     it('should use lastmod as etag when present', () => {
-      const cleanRevFn = jasmine
-        .createSpy('cleanRevFn')
-        .and.callFake((rev: string) => rev.replace(/"/g, '').toUpperCase());
-      const customParser = new WebdavXmlParser(cleanRevFn);
+      const customParser = new WebdavXmlParser();
 
       const xml = `<?xml version="1.0"?>
         <d:multistatus xmlns:d="DAV:">
@@ -221,7 +218,6 @@ describe('WebdavXmlParser', () => {
         </d:multistatus>`;
 
       const results = customParser.parseMultiplePropsFromXml(xml, '/test.txt');
-      // cleanRevFn should no longer be called for the etag
       expect(results[0].etag).toBe('Wed, 15 Jan 2025 10:00:00 GMT');
     });
 

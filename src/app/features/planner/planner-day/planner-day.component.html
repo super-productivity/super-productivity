@@ -43,6 +43,8 @@
       <planner-task
         cdkDrag
         [cdkDragData]="task"
+        [cdkDragStartDelay]="dragDelayForTouch()"
+        [cdkDragLockAxis]="isXs() ? 'y' : ''"
         [task]="task"
         [day]="day.dayDate"
       ></planner-task>
@@ -126,6 +128,8 @@
               [task]="scheduledItem.task"
               [day]="day.dayDate"
               [cdkDragData]="scheduledItem.task"
+              [cdkDragStartDelay]="dragDelayForTouch()"
+              [cdkDragLockAxis]="isXs() ? 'y' : ''"
             ></planner-task>
           }
           @case (SCHEDULE_ITEM_TYPE.CalEvent) {

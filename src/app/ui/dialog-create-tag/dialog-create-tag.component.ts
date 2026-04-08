@@ -22,6 +22,7 @@ import { DEFAULT_TAG_COLOR } from '../../features/work-context/work-context.cons
 import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { MatOption } from '@angular/material/core';
 import { MaterialIconsLoaderService } from '../material-icons-loader.service';
+import { InputColorPickerComponent } from '../input-color-picker/input-color-picker.component';
 
 export interface CreateTagData {
   title?: string;
@@ -47,6 +48,7 @@ export interface CreateTagData {
     MatAutocomplete,
     MatAutocompleteTrigger,
     MatOption,
+    InputColorPickerComponent,
   ],
 })
 export class DialogCreateTagComponent {

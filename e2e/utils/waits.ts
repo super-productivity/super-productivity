@@ -55,6 +55,32 @@ export const waitForAngularStability = async (
 };
 
 /**
+ * Dismisses the onboarding preset selection screen if present.
+ * Sets the localStorage flag to skip it without altering app feature config.
+ */
+const dismissOnboardingPresets = async (page: Page): Promise<void> => {
+  try {
+    const isVisible = await page
+      .locator('onboarding-preset-selection')
+      .waitFor({ state: 'visible', timeout: 2000 })
+      .then(() => true)
+      .catch(() => false);
+    if (isVisible) {
+      await page.evaluate(() => {
+        localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+        localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+        localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+        localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(500);
+    }
+  } catch {
+    // Preset selection not present, ignore
+  }
+};
+
+/**
  * Shared helper to wait until the application shell and Angular are ready.
  * Optimized for speed - removed networkidle wait and redundant checks.
  *
@@ -73,6 +99,9 @@ export const waitForAppReady = async (
   // Handle any blocking dialogs (pre-migration, confirmation, etc.)
   // These dialogs block app until dismissed
   await dismissBlockingDialogs(page);
+
+  // Dismiss onboarding preset selection if present (blocks entire UI)
+  await dismissOnboardingPresets(page);
 
   // Wait for the loading screen to disappear (if visible).
   // The app shows `.loading-full-page-wrapper` while syncing/importing data.

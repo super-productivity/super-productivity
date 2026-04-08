@@ -11,7 +11,6 @@
   border-radius: var(--s2);
   cursor: pointer;
   vertical-align: middle;
-
   color: var(--text-color-less-intense);
 }
 
@@ -45,6 +44,10 @@ $ico-size: 13px;
   font-size: $ico-size;
   height: $ico-size;
   width: $ico-size;
+  color: var(--text-color-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tag-ico-emoji {

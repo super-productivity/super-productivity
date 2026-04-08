@@ -1,4 +1,4 @@
-import { ActionType, OpType, Operation } from '../core/operation.types';
+import { ActionType, OpType, Operation, SyncImportReason } from '../core/operation.types';
 import {
   SyncProviderBase,
   OperationSyncCapable,
@@ -58,5 +58,8 @@ export const syncOpToOperation = (syncOp: SyncOperation): Operation => {
     vectorClock: syncOp.vectorClock,
     timestamp: syncOp.timestamp,
     schemaVersion: syncOp.schemaVersion,
+    ...(syncOp.syncImportReason
+      ? { syncImportReason: syncOp.syncImportReason as SyncImportReason }
+      : {}),
   };
 };

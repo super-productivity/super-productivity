@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ActionCreateTask,
+  ActionDeleteTask,
   ActionAddTag,
+  ActionMoveToProject,
   ActionDisplaySnack,
   ActionDisplayDialog,
   ActionWebhook,
@@ -19,6 +21,7 @@ describe('Actions', () => {
   beforeEach(() => {
     mockPlugin = {
       addTask: vi.fn(),
+      deleteTask: vi.fn(),
       updateTask: vi.fn(),
       getAllTags: vi.fn(),
       showSnack: vi.fn(),
@@ -52,6 +55,28 @@ describe('Actions', () => {
       const event = {} as TaskEvent;
       await ActionCreateTask.execute(mockContext, event, '');
       expect(mockPlugin.addTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ActionDeleteTask', () => {
+    it('should delete the triggering task', async () => {
+      const event = { task: { id: 'task1', title: 'Delete me' } } as TaskEvent;
+
+      await ActionDeleteTask.execute(mockContext, event, '');
+
+      expect(mockPlugin.deleteTask).toHaveBeenCalledWith('task1');
+      expect(mockPlugin.log.info).toHaveBeenCalledWith(
+        expect.stringContaining('Deleted task "Delete me"'),
+      );
+    });
+
+    it('should warn if task context is missing', async () => {
+      await ActionDeleteTask.execute(mockContext, { task: undefined } as TaskEvent, '');
+
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('without task context'),
+      );
+      expect(mockPlugin.deleteTask).not.toHaveBeenCalled();
     });
   });
 
@@ -99,6 +124,54 @@ describe('Actions', () => {
     });
   });
 
+  describe('ActionMoveToProject', () => {
+    it('should move task to project if it exists', async () => {
+      (mockDataCache.getProjects as any).mockResolvedValue([{ id: 'p1', title: 'Project A' }]);
+      const event = {
+        task: { id: 'task1', projectId: 'p2' },
+      } as unknown as TaskEvent;
+
+      await ActionMoveToProject.execute(mockContext, event, 'Project A');
+
+      expect(mockPlugin.updateTask).toHaveBeenCalledWith('task1', { projectId: 'p1' });
+    });
+
+    it('should warn if project not found', async () => {
+      (mockDataCache.getProjects as any).mockResolvedValue([]);
+      const event = {
+        task: { id: 'task1', projectId: 'p2' },
+      } as unknown as TaskEvent;
+
+      await ActionMoveToProject.execute(mockContext, event, 'NonExistent');
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(expect.stringContaining('not found'));
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+    });
+
+    it('should do nothing if task already in project', async () => {
+      (mockDataCache.getProjects as any).mockResolvedValue([{ id: 'p1', title: 'Project A' }]);
+      const event = {
+        task: { id: 'task1', projectId: 'p1' },
+      } as unknown as TaskEvent;
+
+      await ActionMoveToProject.execute(mockContext, event, 'Project A');
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+      expect(mockPlugin.log.info).toHaveBeenCalledWith(
+        expect.stringContaining('already in project'),
+      );
+    });
+
+    it('should move task to project if ID is used instead of title', async () => {
+      (mockDataCache.getProjects as any).mockResolvedValue([{ id: 'p1', title: 'Project A' }]);
+      const event = {
+        task: { id: 'task1', projectId: 'p2' },
+      } as unknown as TaskEvent;
+
+      await ActionMoveToProject.execute(mockContext, event, 'p1');
+
+      expect(mockPlugin.updateTask).toHaveBeenCalledWith('task1', { projectId: 'p1' });
+    });
+  });
+
   describe('ActionDisplaySnack', () => {
     it('should show snack', async () => {
       await ActionDisplaySnack.execute(mockContext, {} as TaskEvent, 'Hello');
@@ -113,6 +186,19 @@ describe('Actions', () => {
         expect.objectContaining({ htmlContent: '<p>Alert</p>' }),
       );
     });
+
+    it('should escape HTML special characters', async () => {
+      await ActionDisplayDialog.execute(
+        mockContext,
+        {} as TaskEvent,
+        '<script>alert("xss")</script>',
+      );
+      expect(mockPlugin.openDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          htmlContent: '<p>&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;</p>',
+        }),
+      );
+    });
   });
 
   describe('ActionWebhook', () => {
@@ -124,14 +210,34 @@ describe('Actions', () => {
       vi.restoreAllMocks();
     });
 
-    it('should send POST request to webhook url', async () => {
-      const event = { type: 'taskCompleted' } as TaskEvent;
+    it('should send POST request with sanitized task data', async () => {
+      const event = {
+        type: 'taskCompleted',
+        task: {
+          id: 't1',
+          title: 'Test',
+          projectId: 'p1',
+          isDone: true,
+          tagIds: ['tag1'],
+          notes: 'secret notes',
+          timeSpent: 12345,
+        },
+      } as unknown as TaskEvent;
       await ActionWebhook.execute(mockContext, event, 'http://example.com');
       expect(fetch).toHaveBeenCalledWith(
         'http://example.com',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify(event),
+          body: JSON.stringify({
+            type: 'taskCompleted',
+            task: {
+              id: 't1',
+              title: 'Test',
+              projectId: 'p1',
+              isDone: true,
+              tagIds: ['tag1'],
+            },
+          }),
         }),
       );
     });

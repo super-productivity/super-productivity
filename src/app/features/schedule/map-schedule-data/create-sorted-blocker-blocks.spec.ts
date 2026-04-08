@@ -921,6 +921,48 @@ describe('createBlockerBlocks()', () => {
         getDateTimeFromClockString('11:00', 29 * 24 * 60 * 60 * 1000),
       );
     });
+
+    it('should show repeat projections for future dates even if the weekday matches today', () => {
+      if (maybeSkipTimezoneDependent('should show repeat projections for future dates')) {
+        pending('Skipping timezone-dependent test');
+        return;
+      }
+      const now = 0;
+      const oneWeekFromNow = 7 * 24 * 60 * 60 * 1000;
+
+      const fakeRepeatTaskCfgs: TaskRepeatCfg[] = [
+        {
+          ...DUMMY_REPEATABLE_TASK,
+          id: 'R_FUTURE',
+          title: 'Future Task',
+          startTime: '10:00',
+          defaultEstimate: hours(1),
+          monday: true,
+          tuesday: true,
+          wednesday: true,
+          thursday: true,
+          friday: true,
+          saturday: true,
+          sunday: true,
+        },
+      ];
+
+      const r = createSortedBlockerBlocks(
+        [],
+        fakeRepeatTaskCfgs,
+        [],
+        undefined,
+        undefined,
+        oneWeekFromNow,
+        14,
+        now,
+      );
+
+      // The first block should be a projection for day 0 (the viewed date),
+      // which is the exact scenario the bug was about: day 0 was being skipped.
+      expect(r[0].entries[0].type).toBe(BlockedBlockType.ScheduledRepeatProjection);
+      expect(r[0].start).toEqual(getDateTimeFromClockString('10:00', oneWeekFromNow));
+    });
   });
 
   describe('icalEventMap', () => {
@@ -931,6 +973,7 @@ describe('createBlockerBlocks()', () => {
             {
               id: 'AllDayEvent',
               calProviderId: 'PR',
+              issueProviderKey: 'ICAL',
               start: getDateTimeFromClockString('00:00', 24 * 60 * 60 * 1000),
               title: 'All Day Event',
               duration: 0,
@@ -939,6 +982,7 @@ describe('createBlockerBlocks()', () => {
             {
               id: 'TimedEvent',
               calProviderId: 'PR',
+              issueProviderKey: 'ICAL',
               start: getDateTimeFromClockString('14:00', 24 * 60 * 60 * 1000),
               title: 'Timed Event',
               duration: hours(1),
@@ -962,6 +1006,7 @@ describe('createBlockerBlocks()', () => {
             {
               id: 'AllDay1',
               calProviderId: 'PR',
+              issueProviderKey: 'ICAL',
               start: getDateTimeFromClockString('00:00', 0),
               title: 'All Day 1',
               duration: 24 * 60 * 60 * 1000, // 24 hours
@@ -970,6 +1015,7 @@ describe('createBlockerBlocks()', () => {
             {
               id: 'AllDay2',
               calProviderId: 'PR',
+              issueProviderKey: 'ICAL',
               start: getDateTimeFromClockString('00:00', 24 * 60 * 60 * 1000),
               title: 'All Day 2',
               duration: 0,
@@ -995,6 +1041,7 @@ describe('createBlockerBlocks()', () => {
             {
               id: 'EventId',
               calProviderId: 'PR',
+              issueProviderKey: 'ICAL',
               start: getDateTimeFromClockString('10:00', 24 * 60 * 60 * 1000),
               title: 'XXX',
               icon: 'aaa',
@@ -1049,6 +1096,7 @@ describe('createBlockerBlocks()', () => {
             {
               data: {
                 calProviderId: 'PR',
+                issueProviderKey: 'ICAL',
                 duration: 3600000,
                 icon: 'aaa',
                 start: 118800000,
@@ -1488,6 +1536,7 @@ describe('createBlockerBlocks()', () => {
             {
               id: 'CalEvent',
               calProviderId: 'PR',
+              issueProviderKey: 'ICAL',
               start: getDateTimeFromClockString('11:00', 0), // 11:00 - 12:00 (overlaps task)
               title: 'Calendar Event',
               duration: hours(1),

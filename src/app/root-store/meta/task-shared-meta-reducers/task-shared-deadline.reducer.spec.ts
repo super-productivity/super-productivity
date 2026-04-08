@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type,@typescript-eslint/naming-convention */
 import { taskSharedDeadlineMetaReducer } from './task-shared-deadline.reducer';
 import { TaskSharedActions } from '../task-shared.actions';
 import { RootState } from '../../root-state';

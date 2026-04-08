@@ -20,12 +20,14 @@ export type AppFeaturesConfig = Readonly<{
   isDonatePageEnabled: boolean;
   isEnableUserProfiles: boolean;
   isHabitsEnabled: boolean;
+  isFinishDayEnabled: boolean;
 }>;
 
 export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  isLocalRestApiEnabled?: boolean;
   startOfNextDay: number;
   isDisableAnimations: boolean;
   // optional because it was added later
@@ -45,8 +47,8 @@ export type MiscConfig = Readonly<{
   isTurnOffMarkdown?: boolean; // Deprecated
   defaultProjectId?: string | null | false; // Deprecated
   taskNotesTpl?: string; // Deprecated
-  isOverlayIndicatorEnabled?: boolean; // Deprecated – moved to overlayIndicator.isEnabled
-  overlayIndicatorOpacity?: number; // Deprecated – moved to overlayIndicator.opacity
+  isOverlayIndicatorEnabled?: boolean; // Deprecated – moved to taskWidget.isEnabled
+  overlayIndicatorOpacity?: number; // Deprecated – moved to taskWidget.opacity
 }>;
 
 export type TasksConfig = Readonly<{
@@ -129,6 +131,13 @@ export interface SuperSyncConfig extends WebDavConfig {
   encryptKey?: string | null;
 }
 
+export interface NextcloudConfig {
+  serverUrl?: string | null;
+  userName?: string | null;
+  password?: string | null;
+  syncFolderPath?: string | null;
+}
+
 export interface LocalFileSyncConfig {
   // TODO remove and migrate
   syncFilePath?: string | null;
@@ -176,6 +185,8 @@ export type SyncConfig = Readonly<{
   superSync?: SuperSyncConfig;
   /* NOTE: view model for form only*/
   localFileSync?: LocalFileSyncConfig;
+  /* NOTE: view model for form only*/
+  nextcloud?: NextcloudConfig;
 }>;
 
 export type ScheduleConfig = Readonly<{
@@ -225,7 +236,7 @@ export type FocusModeConfig = Readonly<{
   isManualBreakStart?: boolean;
 }>;
 
-export type OverlayIndicatorConfig = Readonly<{
+export type TaskWidgetConfig = Readonly<{
   isEnabled?: boolean;
   isAlwaysShow?: boolean;
   opacity?: number;
@@ -259,7 +270,7 @@ export type GlobalConfigState = Readonly<{
   schedule: ScheduleConfig;
   dominaMode: DominaModeConfig;
   focusMode: FocusModeConfig;
-  overlayIndicator: OverlayIndicatorConfig;
+  taskWidget?: TaskWidgetConfig;
   clipboardImages?: ClipboardImagesConfig;
 
   sync: SyncConfig;
@@ -278,7 +289,7 @@ export type GlobalSectionConfig =
   | DailySummaryNote
   | SyncConfig
   | ClipboardImagesConfig
-  | OverlayIndicatorConfig;
+  | TaskWidgetConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export interface LimitedFormlyFieldConfig<FormModel> extends Omit<

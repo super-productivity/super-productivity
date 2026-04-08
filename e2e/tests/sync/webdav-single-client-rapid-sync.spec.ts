@@ -13,18 +13,10 @@ import {
 /**
  * WebDAV Single Client Rapid Sync E2E Tests
  *
- * These tests verify the bug fix for false 412 Precondition Failed errors
- * during WebDAV sync with a single client. The bug was:
- *
- * 1. HTTP Last-Modified headers have second-level precision
- * 2. Some WebDAV servers store modification times with millisecond precision
- * 3. Client reads Last-Modified, then quickly uploads with If-Unmodified-Since
- * 4. Server's internal timestamp was a few ms later than Last-Modified header
- * 5. Server incorrectly returns 412 even though no other client modified the file
- *
- * The fix: Add a 1-second buffer to the If-Unmodified-Since header to account
- * for this precision mismatch. Vector clocks still provide authoritative
- * conflict detection, so this buffer doesn't compromise data integrity.
+ * These tests verify that rapid successive syncs from a single client
+ * complete without errors. Conflict detection uses content hashing (MD5)
+ * to compare the remote file before uploading, so timing precision
+ * is not a concern.
  *
  * Prerequisites:
  * - WebDAV server running at http://127.0.0.1:2345/
@@ -46,15 +38,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
   };
 
   /**
-   * Scenario: Single client rapid syncs do not cause false 412 errors
-   *
-   * The 412 bug was most likely to occur when:
-   * - A single client syncs
-   * - Immediately creates a task
-   * - Syncs again within the same second
-   *
-   * The If-Unmodified-Since header used the Last-Modified timestamp exactly,
-   * but the server's internal timestamp could be a few milliseconds later.
+   * Scenario: Single client rapid syncs complete without errors
    *
    * Setup:
    * - Client A with WebDAV sync configured
@@ -65,7 +49,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
    * 3. Repeat 5 times in rapid succession
    *
    * Verify:
-   * - All 5 syncs complete successfully (no 412 errors)
+   * - All 5 syncs complete successfully
    * - All 5 tasks are present
    */
   test('Single client rapid syncs do not cause 412 errors', async ({
@@ -83,11 +67,12 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
     const syncPage = new SyncPage(page);
     const workViewPage = new WorkViewPage(page);
 
-    // Track any sync errors
+    // Track any sync errors — use specific patterns to avoid false positives
+    // from unrelated console output that happens to contain "412" (e.g. body sizes)
     const syncErrors: string[] = [];
     page.on('console', (msg) => {
       const text = msg.text();
-      if (text.includes('412') || text.includes('Precondition Failed')) {
+      if (/HTTP 412|status[:\s]+412|Precondition Failed/i.test(text)) {
         syncErrors.push(text);
       }
     });
@@ -126,11 +111,13 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
         console.log(`[RapidSync] Cycle ${i}/5 complete: ${taskName}`);
       }
 
-      // Verify all tasks are present
+      // Verify all tasks are present (allow extra time for Angular to settle after rapid syncing)
       for (const taskName of taskNames) {
-        await expect(page.locator(`task:has-text("${taskName}")`)).toBeVisible();
+        await expect(page.locator(`task:has-text("${taskName}")`)).toBeVisible({
+          timeout: 10000,
+        });
       }
-      await expect(page.locator('task')).toHaveCount(5);
+      await expect(page.locator('task')).toHaveCount(5, { timeout: 10000 });
 
       // Verify no 412 errors occurred
       expect(syncErrors.length).toBe(0);
@@ -183,7 +170,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
     const syncErrors: string[] = [];
     page.on('console', (msg) => {
       const text = msg.text();
-      if (text.includes('412') || text.includes('Precondition Failed')) {
+      if (/HTTP 412|status[:\s]+412|Precondition Failed/i.test(text)) {
         syncErrors.push(text);
       }
     });
@@ -206,7 +193,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
       // Step 1: Mark task done, immediately sync
       const task = page.locator(`task:has-text("${taskName}")`).first();
       await task.hover();
-      await task.locator('.task-done-btn').click();
+      await task.locator('done-toggle').click();
       await expect(task).toHaveClass(/isDone/);
 
       await syncPage.triggerSync();
@@ -283,7 +270,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
     const syncErrors: string[] = [];
     page.on('console', (msg) => {
       const text = msg.text();
-      if (text.includes('412') || text.includes('Precondition Failed')) {
+      if (/HTTP 412|status[:\s]+412|Precondition Failed/i.test(text)) {
         syncErrors.push(text);
       }
     });

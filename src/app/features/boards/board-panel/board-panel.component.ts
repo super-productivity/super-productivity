@@ -37,6 +37,7 @@ import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/
 import { MatDialog } from '@angular/material/dialog';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { first, take } from 'rxjs/operators';
+import { dragDelayForTouch } from '../../../util/input-intent';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { selectUnarchivedProjects } from '../../project/store/project.selectors';
@@ -66,6 +67,7 @@ import {
 })
 export class BoardPanelComponent {
   T = T;
+  dragDelayForTouch = dragDelayForTouch;
 
   panelCfg = input.required<BoardPanelCfg>();
   editBoard = output<void>();

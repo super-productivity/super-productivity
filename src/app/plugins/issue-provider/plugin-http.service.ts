@@ -15,6 +15,27 @@ const BLOCKED_HOSTNAMES = new Set([
   'metadata.google.internal',
 ]);
 
+// Cloud metadata endpoints that must ALWAYS be blocked, even when allowPrivateNetwork is true
+const ALLOWED_HTTP_METHODS = new Set([
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'HEAD',
+  'OPTIONS',
+  'PROPFIND',
+  'REPORT',
+  'MKCALENDAR',
+  'PROPPATCH',
+]);
+
+const CLOUD_METADATA_HOSTNAMES = new Set([
+  '169.254.169.254', // AWS/Azure instance metadata
+  'metadata.google.internal', // GCP instance metadata
+  'fd00:ec2::254', // AWS IMDSv2 IPv6
+]);
+
 const isPrivateIp = (hostname: string): boolean => {
   // IPv4 private ranges
   if (
@@ -35,24 +56,43 @@ const isPrivateIp = (hostname: string): boolean => {
   );
 };
 
+export interface PluginHttpHelperOpts {
+  allowPrivateNetwork?: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PluginHttpService {
   private _http = inject(HttpClient);
 
   createHttpHelper(
     getHeaders: () => Record<string, string> | Promise<Record<string, string>>,
+    opts?: PluginHttpHelperOpts,
   ): PluginHttp {
+    const allowPrivateNetwork = opts?.allowPrivateNetwork ?? false;
+    const doRequest = <T>(
+      method: string,
+      url: string,
+      body?: unknown,
+      options?: PluginHttpOptions,
+    ): Promise<T> =>
+      this._request<T>(method, url, body, options, getHeaders, allowPrivateNetwork);
     return {
       get: <T>(url: string, options?: PluginHttpOptions) =>
-        this._request<T>('GET', url, undefined, options, getHeaders),
+        doRequest<T>('GET', url, undefined, options),
       post: <T>(url: string, body: unknown, options?: PluginHttpOptions) =>
-        this._request<T>('POST', url, body, options, getHeaders),
+        doRequest<T>('POST', url, body, options),
       put: <T>(url: string, body: unknown, options?: PluginHttpOptions) =>
-        this._request<T>('PUT', url, body, options, getHeaders),
+        doRequest<T>('PUT', url, body, options),
       patch: <T>(url: string, body: unknown, options?: PluginHttpOptions) =>
-        this._request<T>('PATCH', url, body, options, getHeaders),
+        doRequest<T>('PATCH', url, body, options),
       delete: <T>(url: string, options?: PluginHttpOptions) =>
-        this._request<T>('DELETE', url, undefined, options, getHeaders),
+        doRequest<T>('DELETE', url, undefined, options),
+      request: <T>(
+        method: string,
+        url: string,
+        body?: unknown,
+        options?: PluginHttpOptions,
+      ) => doRequest<T>(method, url, body, options),
     };
   }
 
@@ -62,8 +102,13 @@ export class PluginHttpService {
     body: unknown | undefined,
     options: PluginHttpOptions | undefined,
     getHeaders: () => Record<string, string> | Promise<Record<string, string>>,
+    allowPrivateNetwork: boolean,
   ): Promise<T> {
-    this._validateUrl(url);
+    const upperMethod = method.toUpperCase();
+    if (!ALLOWED_HTTP_METHODS.has(upperMethod)) {
+      throw new Error(`[PluginHttp] HTTP method not allowed: ${method}`);
+    }
+    this._validateUrl(url, allowPrivateNetwork);
 
     const authHeaders = await Promise.resolve(getHeaders());
     const mergedHeaders = { ...options?.headers, ...authHeaders };
@@ -80,18 +125,21 @@ export class PluginHttpService {
       MAX_TIMEOUT,
     );
 
+    const responseType = options?.responseType === 'text' ? 'text' : 'json';
+
     const obs$ = this._http
-      .request<T>(method, url, {
+      .request(upperMethod, url, {
         body,
         headers: new HttpHeaders(mergedHeaders),
         params,
+        responseType,
       })
       .pipe(timeout(timeoutMs));
 
-    return firstValueFrom(obs$);
+    return firstValueFrom(obs$) as Promise<T>;
   }
 
-  private _validateUrl(url: string): void {
+  private _validateUrl(url: string, allowPrivateNetwork: boolean): void {
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -103,10 +151,20 @@ export class PluginHttpService {
     }
     // Strip brackets from IPv6 addresses (URL.hostname may include them)
     const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
-    if (BLOCKED_HOSTNAMES.has(hostname) || isPrivateIp(hostname)) {
+
+    // Always block cloud metadata endpoints (SSRF protection), even when allowPrivateNetwork is true
+    if (CLOUD_METADATA_HOSTNAMES.has(hostname.toLowerCase())) {
       throw new Error(
-        `[PluginHttp] Requests to private/local networks are not allowed: ${hostname}`,
+        `[PluginHttp] Requests to cloud metadata endpoints are not allowed: ${hostname}`,
       );
+    }
+
+    if (!allowPrivateNetwork) {
+      if (BLOCKED_HOSTNAMES.has(hostname) || isPrivateIp(hostname)) {
+        throw new Error(
+          `[PluginHttp] Requests to private/local networks are not allowed: ${hostname}`,
+        );
+      }
     }
   }
 }

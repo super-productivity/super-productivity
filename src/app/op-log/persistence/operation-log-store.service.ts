@@ -1380,11 +1380,24 @@ export class OperationLogStoreService {
       if (mergedClock[importClientId] !== undefined) {
         clockToStore[importClientId] = mergedClock[importClientId];
       }
-      if (
-        currentClientId !== importClientId &&
-        mergedClock[currentClientId] !== undefined
-      ) {
-        clockToStore[currentClientId] = mergedClock[currentClientId];
+      if (currentClientId !== importClientId) {
+        // Preserve our own counter using the maximum of:
+        // - mergedClock[currentClientId]: from any of the incoming remote ops
+        // - currentClock[currentClientId]: our own counter BEFORE the merge
+        //
+        // This matters when our own ops (e.g. GLOBAL_CONFIG) created a counter
+        // that is NOT reflected in the incoming full-state op's clock (because the
+        // full-state op was created by another client and doesn't know about our ops).
+        // Without this, the reset would drop our own counter, causing subsequent ops
+        // to reuse the same counter value and appear as EQUAL (duplicate) to remote
+        // clients that have already seen our earlier op with that counter.
+        const myCounter = Math.max(
+          mergedClock[currentClientId] ?? 0,
+          currentClock[currentClientId] ?? 0,
+        );
+        if (myCounter > 0) {
+          clockToStore[currentClientId] = myCounter;
+        }
       }
       Log.log(
         `[OpLogStore] mergeRemoteOpClocks: RESET clock to minimal after ${fullStateOp.opType}\n` +

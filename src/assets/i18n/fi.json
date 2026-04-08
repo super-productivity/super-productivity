@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity on täysin yhteisön rahoittama. Ei seurantaa, ei mainoksia eikä tiedonkeruuta — tehtäväsi pysyvät laitteellasi.",
     "INTRO_2": "Jos arvostat tätä lähestymistapaa ja haluat pitää projektin terveenä ja kehittyvänä, vapaaehtoinen lahjoitus on erittäin arvostettu."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Opi pikanäppäimet",
+      "NOTES": "Super Productivity on suunniteltu käytettäväksi näppäimistöllä. Opi pikanäppäimet työskennelläksesi nopeammin.\n\n**Näin pääset alkuun:**\n1. Avaa **sivuvalikko**\n2. Siirry kohtaan **Ohje**\n3. Napsauta **Näppäimistönavigointikierros**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Luo ensimmäinen projektisi",
+      "NOTES": "Projektit auttavat järjestämään tehtäviä työn osa-alueiden mukaan. Jokaisella projektilla on oma tehtäväluettelo ja työlista.\n\n**Näin luot projektin:**\n1. Napsauta **+**-painiketta kohdan **Projektit** vieressä sivupalkissa\n2. Anna sille nimi ja valitse väri\n3. Aloita tehtävien lisääminen"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Määritä synkronointi",
+      "NOTES": "Pidä tietosi turvassa ja saatavilla eri laitteilla.\n\n**Näin määrität:**\n1. Avaa **Asetukset** (hammaspyöräkuvake sivupalkissa)\n2. Siirry kohtaan **Synkronointi**\n3. Valitse palveluntarjoaja: Super Sync, Dropbox, WebDAV tai paikallinen tiedostosynkronointi\n4. Noudata asetusten ohjeita"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Tutustu lisää",
+      "NOTES": "Löydettävää on paljon lisää!\n\n**Sovelluksen ominaisuudet** (Asetuksissa) — Ota käyttöön integraatiot, tavat ja muut ominaisuudet. Siirry kohtaan **Asetukset → Sovelluksen ominaisuudet** nähdäksesi, mitä on saatavilla.\n\n**Taulut** — Visualisoi tehtäväsi muokattavissa Kanban-tauluissa. Ota ne käyttöön **Sovelluksen ominaisuuksissa** ja löydä ne **sivuvalikosta**.\n\n**Aikataulu** — Suunnittele päiväsi aikatauluttamalla tehtäviä tiettyihin aikoihin. Vedä tehtäviä sivupalkin **Aikataulu**-näkymään.\n\n**Integraatiot** — Kun ne on otettu käyttöön Sovelluksen ominaisuuksissa, tuo tehtäviä palveluista Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV ja monista muista. Voit myös integroida kalenterisi. Määritä ne kohdassa **Tehtävien tarjoajapaneeli**.\n\n**Tavat** — Seuraa toistuvia tapoja ja rutiineja. Löydät ne **sivuvalikosta** käyttöönoton jälkeen.\n\n**Lisäosat** — Lisää ominaisuuksia kuten Viivyttelyn torjuja, Automaatiot tai Äänimuistutukset. Siirry kohtaan **Asetukset → Lisäosat**.\n\n**Mukauttaminen** — Teemat, tumma tila, pikanäppäimet, kieli ja tuottavuustyökalut löytyvät kaikki kohdasta **Asetukset**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,36 @@
     "STATUS_COMPLETE": "Siirto valmis!",
     "STATUS_MIGRATING": "Siirretään tietoja...",
     "STATUS_PREPARING": "Valmistellaan siirtoa..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Miten haluat käyttää Super Productivitya?",
+    "SUBTITLE": "Valitse asetukset, jotka sopivat työtapaasi. Voit aina muuttaa tätä myöhemmin Asetuksissa.",
+    "PRIVACY_HINT": "Tietosi pysyvät turvallisesti laitteellasi. Mitään ei lähetetä palvelimelle.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Yksinkertainen tehtävälista",
+        "DESCRIPTION": "Selkeä tehtävienhallinta projekteilla, tunnisteilla ja muistiinpanoilla. Ilman ylimääräistä."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Ajanseuranta",
+        "DESCRIPTION": "Seuraa, kuinka kauan tehtävät kestävät. Erinomainen tuntilaskutukseen tai ajankäytön ymmärtämiseen."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Tuottavuuspaketti",
+        "DESCRIPTION": "Suunnittele päiväsi, rakenna tapoja, keskity syvästi ja seuraa aikaa. Kaikki yhdessä paikassa."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Napsauta + lisätäksesi ensimmäisen tehtävän",
+      "CREATE_TASK_TOUCH": "Napauta + lisätäksesi ensimmäisen tehtävän",
+      "EXPLORE": "Napsauttele vapaasti ja tutustu! Ohje löytyy sivupalkista.",
+      "EXPLORE_TOUCH": "Napauttele vapaasti ja tutustu! Ohje löytyy valikosta.",
+      "TASK_TAP_TOUCH": "Napauta tehtävää avataksesi sen tiedot.",
+      "TASK_SWIPE_LEFT_TOUCH": "Pyyhkäise tehtävää vasemmalle nähdäksesi lisää toimintoja",
+      "TASK_SWIPE_RIGHT_TOUCH": "Pyyhkäise tehtävää oikealle merkitäksesi sen tehdyksi",
+      "OR_PRESS": "tai paina",
+      "SKIP_ARIA": "Sulje vihje"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Lisää tehtäviä tänään",

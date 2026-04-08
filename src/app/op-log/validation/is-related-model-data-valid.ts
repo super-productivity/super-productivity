@@ -7,6 +7,7 @@ import {
   MenuTreeTreeNode,
 } from '../../features/menu-tree/store/menu-tree.model';
 import { TODAY_TAG } from '../../features/tag/tag.const';
+import { TaskArchive } from '../../features/tasks/task.model';
 
 // WARNING: Module-level mutable state. This is not ideal because:
 // 1. Can cause test pollution if tests don't properly isolate
@@ -55,16 +56,7 @@ export const isRelatedModelDataValid = (d: AppDataComplete): boolean => {
   const noteIds = new Set<string>((d.note.ids as string[]) || []);
 
   // Validate projects, tasks and tags relationships
-  if (
-    !validateTasksToProjectsAndTags(
-      d,
-      projectIds,
-      tagIds,
-      taskIds,
-      taskRepeatCfgIds,
-      archiveYoungTaskIds,
-    )
-  ) {
+  if (!validateTasksToProjectsAndTags(d, projectIds, tagIds, taskIds, taskRepeatCfgIds)) {
     return false;
   }
 
@@ -121,13 +113,81 @@ const _validityError = (errTxt: string, additionalInfo?: unknown): void => {
   errorCount++;
 };
 
+interface ArchiveValidationCtx {
+  projectIds: Set<string>;
+  tagIds: Set<string>;
+  taskRepeatCfgIds: Set<string>;
+}
+
+/**
+ * Validates archived tasks. Stale projectId/tagId/repeatCfgId references are
+ * harmless in archives — they're historical records. Consumers handle missing
+ * refs gracefully. We log but don't fail, matching the TODAY_TAG orphan pattern.
+ * See: https://github.com/super-productivity/super-productivity/issues/6270
+ */
+const _validateArchiveTasks = (
+  archiveLabel: 'archiveYoung' | 'archiveOld',
+  archiveTaskState: TaskArchive | undefined,
+  ctx: ArchiveValidationCtx,
+): boolean => {
+  if (!archiveTaskState?.ids) return true;
+
+  const staleProjectIds: string[] = [];
+  const staleTagIds: string[] = [];
+  const staleRepeatCfgIds: string[] = [];
+
+  for (const tid of archiveTaskState.ids) {
+    const task = archiveTaskState.entities[tid];
+    if (!task) {
+      _validityError(
+        `Orphaned task ID in ${archiveLabel}.task.ids (no matching entity)`,
+        {
+          tid,
+          archiveLabel,
+        },
+      );
+      return false;
+    }
+
+    if (task.projectId && !ctx.projectIds.has(task.projectId)) {
+      staleProjectIds.push(tid);
+    }
+    if ((task.tagIds || []).some((tagId) => !ctx.tagIds.has(tagId))) {
+      staleTagIds.push(tid);
+    }
+    if (task.repeatCfgId && !ctx.taskRepeatCfgIds.has(task.repeatCfgId)) {
+      staleRepeatCfgIds.push(tid);
+    }
+  }
+
+  if (staleProjectIds.length > 0) {
+    OpLog.info(
+      `[ValidateState] ${archiveLabel} has ${staleProjectIds.length} tasks with stale projectId (harmless)`,
+      { staleProjectIds },
+    );
+  }
+  if (staleTagIds.length > 0) {
+    OpLog.info(
+      `[ValidateState] ${archiveLabel} has ${staleTagIds.length} tasks with stale tagId (harmless)`,
+      { staleTagIds },
+    );
+  }
+  if (staleRepeatCfgIds.length > 0) {
+    OpLog.info(
+      `[ValidateState] ${archiveLabel} has ${staleRepeatCfgIds.length} tasks with stale repeatCfgId (harmless)`,
+      { staleRepeatCfgIds },
+    );
+  }
+
+  return true;
+};
+
 const validateTasksToProjectsAndTags = (
   d: AppDataComplete,
   projectIds: Set<string>,
   tagIds: Set<string>,
   taskIds: Set<string>,
   taskRepeatCfgIds: Set<string>,
-  archiveYoungTaskIds: Set<string>,
 ): boolean => {
   // Track project-task relationships and ids for consistency validation
   const projectTaskMap = new Map<string, Set<string>>();
@@ -206,89 +266,12 @@ const validateTasksToProjectsAndTags = (
     }
   }
 
-  // Similar validation for archiveYoung tasks
-  if (d.archiveYoung.task?.ids) {
-    for (const tid of d.archiveYoung.task.ids) {
-      const task = d.archiveYoung.task.entities[tid];
-      if (!task) {
-        _validityError('Orphaned task ID in archiveYoung.task.ids (no matching entity)', {
-          tid,
-          d,
-        });
-        return false;
-      }
-
-      if (task.projectId && !projectIds.has(task.projectId)) {
-        _validityError(
-          `projectId ${task.projectId} from archiveYoung task not existing`,
-          {
-            task,
-            d,
-          },
-        );
-        return false;
-      }
-
-      for (const tagId of task.tagIds) {
-        if (!tagIds.has(tagId)) {
-          _validityError(`tagId "${tagId}" from archiveYoung task not existing`, {
-            task,
-            d,
-          });
-          return false;
-        }
-      }
-
-      // Check repeatCfgId reference
-      if (task.repeatCfgId && !taskRepeatCfgIds.has(task.repeatCfgId)) {
-        _validityError(
-          `repeatCfgId "${task.repeatCfgId}" from archiveYoung task not existing`,
-          { task, d },
-        );
-        return false;
-      }
-    }
+  const archiveCtx: ArchiveValidationCtx = { projectIds, tagIds, taskRepeatCfgIds };
+  if (!_validateArchiveTasks('archiveYoung', d.archiveYoung.task, archiveCtx)) {
+    return false;
   }
-
-  // Validation for archiveOld tasks (same checks as archiveYoung)
-  if (d.archiveOld.task?.ids) {
-    for (const tid of d.archiveOld.task.ids) {
-      const task = d.archiveOld.task.entities[tid];
-      if (!task) {
-        _validityError('Orphaned task ID in archiveOld.task.ids (no matching entity)', {
-          tid,
-          d,
-        });
-        return false;
-      }
-
-      if (task.projectId && !projectIds.has(task.projectId)) {
-        _validityError(`projectId ${task.projectId} from archiveOld task not existing`, {
-          task,
-          d,
-        });
-        return false;
-      }
-
-      for (const tagId of task.tagIds) {
-        if (!tagIds.has(tagId)) {
-          _validityError(`tagId "${tagId}" from archiveOld task not existing`, {
-            task,
-            d,
-          });
-          return false;
-        }
-      }
-
-      // Check repeatCfgId reference
-      if (task.repeatCfgId && !taskRepeatCfgIds.has(task.repeatCfgId)) {
-        _validityError(
-          `repeatCfgId "${task.repeatCfgId}" from archiveOld task not existing`,
-          { task, d },
-        );
-        return false;
-      }
-    }
+  if (!_validateArchiveTasks('archiveOld', d.archiveOld.task, archiveCtx)) {
+    return false;
   }
 
   // Check tags-tasks relationship

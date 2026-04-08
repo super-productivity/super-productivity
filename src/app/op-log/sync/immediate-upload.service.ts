@@ -115,6 +115,12 @@ export class ImmediateUploadService implements OnDestroy {
    * Immediate upload is ONLY for SuperSync - file-based providers use periodic sync.
    */
   private _canUpload(): boolean {
+    // E2E tests set this flag to prevent background uploads that interfere
+    // with controlled, sequential sync via syncAndWait()
+    if ((globalThis as any).__SP_E2E_BLOCK_IMMEDIATE_UPLOAD) {
+      return false;
+    }
+
     // Must be online
     if (!isOnline()) {
       return false;

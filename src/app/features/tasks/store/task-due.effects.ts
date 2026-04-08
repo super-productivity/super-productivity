@@ -45,6 +45,15 @@ export class TaskDueEffects {
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   // Uses afterInitialSyncDoneStrict$ to ensure sync has completed before creating repeat tasks,
   // preventing duplicate repeat task instances across clients (fixes repeat task duplication bug).
+  //
+  // KNOWN GAP (#6230): This effect only fires on todayDateStr$ date changes (distinctUntilChanged).
+  // Once it fires for today, there is no intra-day re-check. If addAllDueToday() misses a config
+  // (e.g., due to browser timer throttling around midnight, or system sleep/resume edge cases),
+  // repeat tasks won't appear until the next date change or app restart.
+  // Investigation (2026-03): day-change trigger, sync buffering, and data loading guards all
+  // verified correct in isolation via e2e tests (see git history for Tests A and B).
+  // The exact real-world trigger remains unidentified.
+  // See: e2e/tests/recurring/repeat-task-day-change-bug-6230.spec.ts
   createRepeatableTasksAndAddDueToday$ = createEffect(
     () => {
       return this._syncTriggerService.afterInitialSyncDoneStrict$.pipe(
@@ -71,7 +80,9 @@ export class TaskDueEffects {
             switchMap(() => this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$),
             // NOTE we use concatMap since tap errors only show in console, but are not handled by global handler
             concatMap(() => {
-              TaskLog.log('[TaskDueEffects] Triggering addAllDueToday after sync');
+              TaskLog.log('[TaskDueEffects] Triggering addAllDueToday after sync', {
+                isInSyncWindow: this._hydrationState.isInSyncWindow(),
+              });
               return this._addTasksForTomorrowService.addAllDueToday();
             }),
           ),
@@ -118,8 +129,11 @@ export class TaskDueEffects {
             TaskLog.log('[TaskDueEffects] Removing overdue tasks from today', {
               overdueCount: overdueIds.length,
             });
+            // Use non-persistent action to avoid LWW conflicts with user
+            // actions on other devices (#6992). Every device runs this effect
+            // independently, so syncing the removal is redundant.
             return of(
-              TaskSharedActions.removeTasksFromTodayTag({
+              TaskSharedActions.localRemoveOverdueFromToday({
                 taskIds: overdueIds,
               }),
             );

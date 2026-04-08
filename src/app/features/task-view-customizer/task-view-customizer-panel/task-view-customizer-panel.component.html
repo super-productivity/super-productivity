@@ -177,6 +177,21 @@
 
   <button
     mat-menu-item
+    [matMenuTriggerFor]="filterDeadlineMenu"
+    [class.active]="
+      customizerService.selectedFilter().type === OPTIONS.filter.types.deadline
+    "
+  >
+    <span class="menu-item-content">
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE | translate }}</span>
+      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.deadline) {
+        <mat-icon class="check-icon">check</mat-icon>
+      }
+    </span>
+  </button>
+
+  <button
+    mat-menu-item
     [matMenuTriggerFor]="filterEstimatedTimeMenu"
     [class.active]="
       customizerService.selectedFilter().type === OPTIONS.filter.types.estimatedTime
@@ -278,6 +293,16 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.scheduledDate"
     [options]="PRESETS.schedule"
+    [selectedFilter]="customizerService.selectedFilter()"
+    (byClick)="onFilterWithValue($event)"
+  />
+</mat-menu>
+
+<!-- Filter: Deadline submenu -->
+<mat-menu #filterDeadlineMenu>
+  <task-view-customizer-menu-item
+    [type]="OPTIONS.filter.types.deadline"
+    [options]="PRESETS.deadline"
     [selectedFilter]="customizerService.selectedFilter()"
     (byClick)="onFilterWithValue($event)"
   />

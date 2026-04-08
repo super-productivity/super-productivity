@@ -22,8 +22,9 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 import { EMPTY_SIMPLE_COUNTER } from '../simple-counter.const';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { moveItemInArray } from '../../../util/move-item-in-array';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { dragDelayForTouch } from '../../../util/input-intent';
+import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
+import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 
 @Component({
   selector: 'habit-tracker',
@@ -36,6 +37,7 @@ import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
     MatTooltipModule,
     CdkDropList,
     CdkDrag,
+    LocaleDatePipe,
   ],
   templateUrl: './habit-tracker.component.html',
   styleUrl: './habit-tracker.component.scss',
@@ -46,6 +48,7 @@ export class HabitTrackerComponent {
   disabledSimpleCounters = input<SimpleCounter[]>([]);
 
   private _simpleCounterService = inject(SimpleCounterService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
   private _dateService = inject(DateService);
   private _matDialog = inject(MatDialog);
 
@@ -53,8 +56,7 @@ export class HabitTrackerComponent {
 
   T = T;
   SimpleCounterType = SimpleCounterType;
-  DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
-  IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  dragDelayForTouch = dragDelayForTouch;
 
   dayOffset = signal(0);
 
@@ -98,9 +100,10 @@ export class HabitTrackerComponent {
     const first = this.parseDateLocal(days[0]);
     const last = this.parseDateLocal(days[days.length - 1]);
 
+    const locale = this._dateTimeFormatService.currentLocale();
     const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    const firstStr = first.toLocaleDateString(undefined, formatOptions);
-    const lastStr = last.toLocaleDateString(undefined, formatOptions);
+    const firstStr = first.toLocaleDateString(locale, formatOptions);
+    const lastStr = last.toLocaleDateString(locale, formatOptions);
 
     return `${firstStr} - ${lastStr}`;
   });

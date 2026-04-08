@@ -3,14 +3,10 @@ import { LineChartData, Metric, MetricState } from '../metric.model';
 import { sortWorklogDates } from '../../../util/sortWorklogDates';
 import { METRIC_FEATURE_NAME, metricAdapter } from './metric.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import {
-  selectAllSimpleCounters,
-  selectSimpleCounterFeatureState,
-} from '../../simple-counter/store/simple-counter.reducer';
+import { selectAllSimpleCounters } from '../../simple-counter/store/simple-counter.reducer';
 import { unique } from '../../../util/unique';
 import {
   SimpleCounter,
-  SimpleCounterState,
   SimpleCounterType,
 } from '../../simple-counter/simple-counter.model';
 
@@ -75,15 +71,8 @@ export const selectLastNDaysMetrics = createSelector(
 
 // STATISTICS
 export const selectSimpleCounterClickCounterLineChartData = createSelector(
-  selectSimpleCounterFeatureState,
-  (simpleCounterState: SimpleCounterState, props: { howMany: number }): LineChartData => {
-    // NOTE: for the most weird reasons that fixes the problem with the page refreshing on every single action ???
-    // it doesn't matter if I use the alternative approach here or below for selectSimpleCounterStopWatchLineChartData
-    // just having this here fixes the issue for both and vice versa
-    const simpleCounterItems: SimpleCounter[] = Object.values(
-      simpleCounterState.entities,
-    ) as SimpleCounter[];
-
+  selectAllSimpleCounters,
+  (simpleCounterItems: SimpleCounter[], props: { howMany: number }): LineChartData => {
     const f = -1 * props.howMany;
     const chart: LineChartData = {
       labels: [],

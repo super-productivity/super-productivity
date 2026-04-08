@@ -52,6 +52,10 @@
     }
   }
 
+  :host-context(.isTouchOnly) :host-context(.first-line:hover) & {
+    display: none !important;
+  }
+
   :host-context(.first-line:hover) & {
     display: flex;
 

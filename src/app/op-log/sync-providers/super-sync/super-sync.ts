@@ -198,6 +198,7 @@ export class SuperSyncProvider
     opId: string,
     isCleanSlate?: boolean,
     snapshotOpType?: RestorePointType,
+    syncImportReason?: string,
   ): Promise<SnapshotUploadResponse> {
     SyncLog.normal(this.logLabel, 'uploadSnapshot: Starting...', {
       clientId,
@@ -221,6 +222,7 @@ export class SuperSyncProvider
       opId, // CRITICAL: Server must use this ID to prevent ID mismatch bugs
       isCleanSlate,
       snapshotOpType,
+      ...(syncImportReason ? { syncImportReason } : {}),
     });
 
     // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip
@@ -307,6 +309,26 @@ export class SuperSyncProvider
     );
 
     return validateRestoreSnapshotResponse(response);
+  }
+
+  // === WebSocket Parameters ===
+
+  /**
+   * Returns the base URL and sanitized access token for WebSocket connection.
+   * Returns null if provider is not configured.
+   */
+  async getWebSocketParams(): Promise<{
+    baseUrl: string;
+    accessToken: string;
+  } | null> {
+    const cfg = await this.privateCfg.load();
+    if (!cfg?.accessToken) {
+      return null;
+    }
+    return {
+      baseUrl: this._resolveBaseUrl(cfg),
+      accessToken: this._sanitizeToken(cfg.accessToken),
+    };
   }
 
   // === Data Management ===

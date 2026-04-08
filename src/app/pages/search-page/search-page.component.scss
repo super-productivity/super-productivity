@@ -58,6 +58,26 @@
               text-decoration: line-through;
             }
 
+            .task-subtask {
+              font-style: italic;
+            }
+
+            .subtask-icon {
+              font-size: 1.2rem;
+              width: 1.2rem;
+              height: 1.2rem;
+              opacity: 0.7;
+              margin-right: -0.25rem;
+            }
+
+            .subtask-breadcrumb {
+              opacity: 0.6;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              max-width: 10rem;
+            }
+
             .task-icons {
               display: flex;
               align-items: center;

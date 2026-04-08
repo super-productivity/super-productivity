@@ -320,6 +320,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // Setup methods
   private _setProjectInitially(): void {
+    const additionalProjectId = this.additionalFields()?.projectId;
+    if (additionalProjectId) {
+      this.stateService.updateProjectId(additionalProjectId);
+      return;
+    }
     this.defaultProject$
       .pipe(first(), takeUntilDestroyed(this._destroyRef))
       .subscribe((defaultProject) => {
@@ -423,7 +428,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
 
     const currentState = this.stateService.state();
-    const title = currentState.cleanText || this.stateService.inputTxt().trim();
+    const rawInput = this.stateService.inputTxt().trim();
+    if (!rawInput) return;
+
+    const title = currentState.cleanText || rawInput;
     if (!title) return;
 
     this._isAddingTask = true;

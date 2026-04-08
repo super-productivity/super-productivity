@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity est entièrement financé par la communauté. Il n'y a pas de suivi, pas de publicités, et aucune collecte de données — vos tâches restent sur votre appareil.",
     "INTRO_2": "Si vous appréciez cette approche et souhaitez maintenir le projet en bonne santé et en évolution, un don volontaire est grandement apprécié."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Apprendre les raccourcis clavier",
+      "NOTES": "Super Productivity est conçu pour être utilisé au clavier. Apprenez les raccourcis pour travailler plus vite.\n\n**Comment commencer :**\n1. Ouvrez le **menu de la barre latérale**\n2. Allez dans **Aide**\n3. Cliquez sur **Visite guidée de la navigation au clavier**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Créer votre premier projet",
+      "NOTES": "Les projets vous aident à organiser vos tâches par domaine de travail. Chaque projet a sa propre liste de tâches et son backlog.\n\n**Comment créer un projet :**\n1. Cliquez sur le bouton **+** à côté de **Projets** dans la barre latérale\n2. Donnez-lui un nom et choisissez une couleur\n3. Commencez à y ajouter des tâches"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Configurer la synchronisation",
+      "NOTES": "Gardez vos données en sécurité et accessibles sur tous vos appareils.\n\n**Comment configurer :**\n1. Ouvrez les **Paramètres** (icône d'engrenage dans la barre latérale)\n2. Allez dans **Synchronisation**\n3. Choisissez un fournisseur : Super Sync, Dropbox, WebDAV ou synchronisation par fichier local\n4. Suivez les instructions de configuration"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Aller plus loin",
+      "NOTES": "Il y a encore beaucoup à découvrir !\n\n**Fonctionnalités de l'app** (dans les Paramètres) — Activez les intégrations, les habitudes et d'autres fonctionnalités. Allez dans **Paramètres → Fonctionnalités de l'app** pour voir ce qui est disponible.\n\n**Tableaux** — Visualisez vos tâches dans des tableaux Kanban personnalisables. Activez-les dans **Fonctionnalités**, puis retrouvez-les dans le **menu latéral**.\n\n**Planning** — Planifiez votre journée en attribuant des horaires à vos tâches. Glissez les tâches dans la vue **Planning** de la barre latérale.\n\n**Intégrations** — Une fois activées dans les Fonctionnalités de l'app, importez des tâches depuis Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV et bien d'autres. Vous pouvez aussi intégrer votre calendrier. Configurez-les dans le **Panneau des fournisseurs de tickets**.\n\n**Habitudes** — Suivez vos habitudes et routines récurrentes. Retrouvez-les dans le **menu de la barre latérale** une fois activées.\n\n**Plugins** — Ajoutez des fonctionnalités comme le Briseur de procrastination, les Automatisations ou les Rappels vocaux. Allez dans **Paramètres → Plugins**.\n\n**Personnaliser** — Thèmes, mode sombre, raccourcis clavier, langue et outils de productivité sont tous dans les **Paramètres**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,36 @@
     "STATUS_BACKUP": "Création de la sauvegarde de vos données...",
     "STATUS_COMPLETE": "Migration terminée !",
     "STATUS_MIGRATING": "Migration des données..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Comment souhaitez-vous utiliser Super Productivity ?",
+    "SUBTITLE": "Choisissez une configuration adaptée à votre façon de travailler. Vous pourrez toujours modifier cela plus tard dans les Paramètres.",
+    "PRIVACY_HINT": "Vos données restent en sécurité sur votre appareil. Rien n'est envoyé à un serveur.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Liste de tâches simple",
+        "DESCRIPTION": "Un gestionnaire de tâches épuré avec projets, tags et notes. Sans extras."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Suivi du temps",
+        "DESCRIPTION": "Mesurez le temps passé sur vos tâches. Idéal pour la facturation ou pour comprendre où passe votre temps."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Suite Productivité",
+        "DESCRIPTION": "Planifiez votre journée, développez des habitudes, concentrez-vous et suivez votre temps. Tout en un seul endroit."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Cliquez sur + pour ajouter votre première tâche",
+      "CREATE_TASK_TOUCH": "Appuyez sur + pour ajouter votre première tâche",
+      "EXPLORE": "N'hésitez pas à cliquer partout et à explorer ! Vous trouverez de l'aide dans la barre latérale.",
+      "EXPLORE_TOUCH": "N'hésitez pas à explorer ! Vous trouverez de l'aide dans le menu.",
+      "TASK_TAP_TOUCH": "Appuyez sur une tâche pour ouvrir ses détails.",
+      "TASK_SWIPE_LEFT_TOUCH": "Faites glisser la tâche vers la gauche pour plus d'actions",
+      "TASK_SWIPE_RIGHT_TOUCH": "Faites glisser la tâche vers la droite pour la marquer comme terminée",
+      "OR_PRESS": "ou appuyez sur",
+      "SKIP_ARIA": "Fermer l'indication"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Ajouter des tâches d'aujourd'hui",

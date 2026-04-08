@@ -62,6 +62,8 @@ export class ShortcutService {
     this._activatedRoute.queryParams.subscribe((params) => {
       if (params && params.backlogPos) {
         this.backlogPos = +params.backlogPos;
+      } else {
+        this.backlogPos = undefined;
       }
     });
 

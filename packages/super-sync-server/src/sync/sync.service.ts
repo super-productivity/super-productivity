@@ -514,6 +514,7 @@ export class SyncService {
           clientTimestamp: BigInt(op.timestamp),
           receivedAt: BigInt(now),
           isPayloadEncrypted: op.isPayloadEncrypted ?? false,
+          syncImportReason: op.syncImportReason ?? null,
         },
       });
 

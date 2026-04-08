@@ -25,6 +25,7 @@ import { T } from '../../../t.const';
 import { Update } from '@ngrx/entity';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskArchiveService } from '../../archive/task-archive.service';
 import { DateService } from '../../../core/date/date.service';
@@ -69,7 +70,10 @@ export class TaskRepeatCfgEffects {
   addRepeatCfgToTaskUpdateTask$ = createEffect(() =>
     this._localActions$.pipe(
       ofType(addTaskRepeatCfgToTask),
-      filter(({ startTime, remindAt }) => !!startTime && !!remindAt),
+      filter(
+        ({ startTime, remindAt }) =>
+          !!startTime && !!remindAt && isValidSplitTime(startTime),
+      ),
       concatMap(({ taskId, startTime, remindAt, taskRepeatCfg }) =>
         this._taskService.getByIdOnce$(taskId).pipe(
           map((task) => {
@@ -143,7 +147,7 @@ export class TaskRepeatCfgEffects {
                 task: taskWithoutSubs,
                 taskRepeatCfg,
                 subTaskTemplates: [],
-                isTimedTask: !!(startTime && remindAt),
+                isTimedTask: !!(startTime && remindAt && isValidSplitTime(startTime)),
               };
             }
 
@@ -153,7 +157,7 @@ export class TaskRepeatCfgEffects {
               task: taskWithoutSubs,
               taskRepeatCfg,
               subTaskTemplates,
-              isTimedTask: !!(startTime && remindAt),
+              isTimedTask: !!(startTime && remindAt && isValidSplitTime(startTime)),
             };
           }),
         );
@@ -273,7 +277,11 @@ export class TaskRepeatCfgEffects {
                   lastTaskCreation: firstOccurrence?.getTime() || Date.now(),
                 });
 
-                const isTimedTask = !!(fullCfg.startTime && fullCfg.remindAt);
+                const isTimedTask = !!(
+                  fullCfg.startTime &&
+                  fullCfg.remindAt &&
+                  isValidSplitTime(fullCfg.startTime)
+                );
                 const isFirstOccurrenceToday_ = firstOccurrence
                   ? this._dateService.isToday(firstOccurrence)
                   : true;
@@ -646,6 +654,7 @@ export class TaskRepeatCfgEffects {
       (changes.startTime || changes.remindAt) &&
       completeCfg.remindAt &&
       completeCfg.startTime &&
+      isValidSplitTime(completeCfg.startTime) &&
       this._dateService.isToday(task.created)
     ) {
       const dateTime = getDateTimeFromClockString(

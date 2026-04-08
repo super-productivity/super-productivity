@@ -23,7 +23,7 @@ import {
 import { Task } from '../../../features/tasks/task.model';
 import { OpLog } from '../../../core/log';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 
 /**
@@ -509,6 +509,20 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     }
 
     const entityId = entityData['id'] as string;
+
+    // Sanitize date string fields to prevent corrupted data from sync (#6908)
+    if (entityType === 'TASK') {
+      for (const field of ['dueDay', 'deadlineDay'] as const) {
+        const val = entityData[field];
+        if (typeof val === 'string' && !isDBDateStr(val)) {
+          entityData[field] = undefined;
+          devError(
+            `lwwUpdateMetaReducer: Invalid ${field} "${val}" on task ${entityId}, clearing`,
+          );
+        }
+      }
+    }
+
     const existingEntity = (
       featureState as unknown as {
         entities?: Record<string, Record<string, unknown>>;

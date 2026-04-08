@@ -17,7 +17,8 @@ export interface IssueSyncAdapter<TCfg> {
     cfg: TCfg,
   ): Promise<{
     issueId: string;
-    issueNumber: number;
+    issueNumber?: number;
     issueData: Record<string, unknown>;
   }>;
+  deleteIssue?(issueId: string, cfg: TCfg): Promise<void>;
 }

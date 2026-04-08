@@ -1,9 +1,60 @@
-<mat-icon class="default">{{ calendarEvent().icon || 'event' }}</mat-icon>
-<mat-icon class="add">add</mat-icon>
-<div class="title">
-  {{ calendarEvent().title }}
-  <!--   {{event.start|date:'HH:mm'}} – {{(event.start + event.duration)|date:'HH:mm'}}-->
+<div
+  class="event-content"
+  (click)="openMenu($event)"
+>
+  <mat-icon>{{ calendarEvent().icon || 'event' }}</mat-icon>
+  <div class="title">
+    {{ calendarEvent().title }}
+  </div>
+  <div class="planner-time-remaining-shared">
+    {{ calendarEvent().duration | msToString }}
+  </div>
 </div>
-<div class="planner-time-remaining-shared">
-  {{ calendarEvent().duration | msToString }}
-</div>
+
+<div
+  [matMenuTriggerFor]="contextMenu"
+  class="menu-trigger"
+></div>
+<mat-menu #contextMenu="matMenu">
+  @if (hasEventUrl()) {
+    <button
+      mat-menu-item
+      (click)="openEventLink()"
+    >
+      <mat-icon>open_in_new</mat-icon>
+      {{ T.F.CALENDARS.CONTEXT_MENU.OPEN_IN_CALENDAR | translate }}
+    </button>
+  }
+  @if (isPluginEvent()) {
+    <button
+      mat-menu-item
+      (click)="reschedule()"
+    >
+      <mat-icon>schedule</mat-icon>
+      {{ T.F.CALENDARS.CONTEXT_MENU.RESCHEDULE | translate }}
+    </button>
+  }
+  <button
+    mat-menu-item
+    (click)="createAsTask()"
+  >
+    <mat-icon>add</mat-icon>
+    {{ T.F.CALENDARS.CONTEXT_MENU.CREATE_TASK | translate }}
+  </button>
+  <button
+    mat-menu-item
+    (click)="hide()"
+  >
+    <mat-icon>visibility_off</mat-icon>
+    {{ T.G.HIDE | translate }}
+  </button>
+  @if (isPluginEvent()) {
+    <button
+      mat-menu-item
+      (click)="deleteEvent()"
+    >
+      <mat-icon color="warn">delete</mat-icon>
+      {{ T.F.CALENDARS.CONTEXT_MENU.DELETE_EVENT | translate }}
+    </button>
+  }
+</mat-menu>

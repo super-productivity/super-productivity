@@ -6,11 +6,11 @@ import { TaskCopy } from '../src/app/features/tasks/task.model';
 import { GlobalConfigState } from '../src/app/features/config/global-config.model';
 import { release } from 'os';
 import {
-  updateOverlayAlwaysShow,
-  updateOverlayEnabled,
-  updateOverlayOpacity,
-  updateOverlayTask,
-} from './overlay-indicator/overlay-indicator';
+  updateTaskWidgetAlwaysShow,
+  updateTaskWidgetEnabled,
+  updateTaskWidgetOpacity,
+  updateTaskWidgetTask,
+} from './task-widget/task-widget';
 import { getWin } from './main-window';
 
 let tray: Tray;
@@ -129,22 +129,22 @@ function initAppListeners(app: App): void {
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function initListeners(): void {
-  let isOverlayEnabled = false;
-  // Listen for settings updates to handle overlay enable/disable
+  let isTaskWidgetEnabled = false;
+  // Listen for settings updates to handle task widget enable/disable
   ipcMain.on(IPC.UPDATE_SETTINGS, (ev, settings: GlobalConfigState) => {
-    const isOverlayEnabledNew = settings?.overlayIndicator?.isEnabled || false;
+    const isTaskWidgetEnabledNew = settings?.taskWidget?.isEnabled || false;
 
-    if (isOverlayEnabledNew !== isOverlayEnabled) {
-      isOverlayEnabled = isOverlayEnabledNew;
-      updateOverlayEnabled(isOverlayEnabled);
+    if (isTaskWidgetEnabledNew !== isTaskWidgetEnabled) {
+      isTaskWidgetEnabled = isTaskWidgetEnabledNew;
+      updateTaskWidgetEnabled(isTaskWidgetEnabled);
     }
 
-    if (isOverlayEnabled) {
-      const opacity = settings?.overlayIndicator?.opacity ?? 95;
-      updateOverlayOpacity(opacity);
-      updateOverlayAlwaysShow(settings?.overlayIndicator?.isAlwaysShow || false);
+    if (isTaskWidgetEnabled) {
+      const opacity = settings?.taskWidget?.opacity ?? 95;
+      updateTaskWidgetOpacity(opacity);
+      updateTaskWidgetAlwaysShow(settings?.taskWidget?.isAlwaysShow || false);
     } else {
-      updateOverlayAlwaysShow(false);
+      updateTaskWidgetAlwaysShow(false);
     }
   });
 
@@ -232,7 +232,7 @@ function initListeners(): void {
       _lastCurrentFocusSessionTime = currentFocusSessionTime;
       _lastFocusModeMode = focusModeMode;
 
-      updateOverlayTask(
+      updateTaskWidgetTask(
         currentTask,
         isPomodoroEnabled,
         currentPomodoroSessionTime,

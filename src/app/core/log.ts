@@ -1,3 +1,6 @@
+// IMPORTANT: Log history is exportable and often shared in bug reports.
+// Never pass user-generated content (task titles, notes, project names, etc.)
+// to Log methods — use IDs and counts instead.
 import { environment } from '../../environments/environment';
 
 export enum LogLevel {

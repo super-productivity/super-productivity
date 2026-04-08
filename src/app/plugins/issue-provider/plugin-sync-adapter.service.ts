@@ -9,6 +9,7 @@ import {
   PluginFieldMapping,
   PluginHttp,
 } from './plugin-issue-provider.model';
+import { Task } from '../../features/tasks/task.model';
 
 const convertMapping = (pm: PluginFieldMapping): FieldMapping => ({
   taskField: pm.taskField,
@@ -16,6 +17,9 @@ const convertMapping = (pm: PluginFieldMapping): FieldMapping => ({
   defaultDirection: pm.defaultDirection,
   toIssueValue: pm.toIssueValue,
   toTaskValue: pm.toTaskValue,
+  ...(pm.mutuallyExclusive
+    ? { mutuallyExclusive: pm.mutuallyExclusive as (keyof Task)[] }
+    : {}),
 });
 
 /**
@@ -97,7 +101,7 @@ export const createPluginSyncAdapter = (
       cfg: IssueProviderPluginType,
     ): Promise<{
       issueId: string;
-      issueNumber: number;
+      issueNumber?: number;
       issueData: Record<string, unknown>;
     }> => {
       if (!definition.createIssue) {
@@ -111,5 +115,17 @@ export const createPluginSyncAdapter = (
         issueData: result.issueData as Record<string, unknown>,
       };
     },
+
+    getIssueLastUpdated: (issue: Record<string, unknown>): number => {
+      const lastUpdated = (issue as { lastUpdated?: number }).lastUpdated;
+      return lastUpdated ?? Date.now();
+    },
+
+    deleteIssue: definition.deleteIssue
+      ? async (issueId: string, cfg: IssueProviderPluginType): Promise<void> => {
+          const http = createHttp(cfg);
+          await definition.deleteIssue!(issueId, cfg.pluginConfig, http);
+        }
+      : undefined,
   };
 };

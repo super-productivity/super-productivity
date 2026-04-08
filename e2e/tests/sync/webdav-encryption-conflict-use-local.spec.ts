@@ -8,7 +8,6 @@ import {
   createSyncFolder,
   waitForSyncComplete,
   generateSyncFolderName,
-  dismissTourIfVisible,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
@@ -81,7 +80,6 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
 
     await pageB.goto('/');
     await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
 
     const syncPageB = new SyncPage(pageB);
     const workViewPageB = new WorkViewPage(pageB);

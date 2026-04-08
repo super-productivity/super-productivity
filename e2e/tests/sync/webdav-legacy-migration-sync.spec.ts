@@ -684,6 +684,14 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       });
       const pageB = await contextB.newPage();
 
+      // Suppress onboarding overlay so it doesn't block interactions
+      await pageB.addInitScript(() => {
+        localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+        localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+        localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+        localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+      });
+
       // Auto-accept dialogs for fresh client
       pageB.on('dialog', async (dialog) => {
         if (dialog.type() === 'confirm') {

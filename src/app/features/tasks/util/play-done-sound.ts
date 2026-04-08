@@ -4,6 +4,7 @@ import { getAudioBuffer, playBuffer } from '../../../util/audio-context';
 
 const BASE = './assets/snd';
 const PITCH_OFFSET = -400;
+const MAX_PITCH = 300;
 
 /**
  * Plays the task completion sound with optional pitch variation.
@@ -20,7 +21,7 @@ export const playDoneSound = async (
 
   const pitchIncrement = nrOfDoneTasks * 50;
   const pitchFactor = soundCfg.isIncreaseDoneSoundPitch
-    ? PITCH_OFFSET + pitchIncrement
+    ? Math.min(PITCH_OFFSET + pitchIncrement, MAX_PITCH)
     : 0;
 
   try {

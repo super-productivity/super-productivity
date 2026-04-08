@@ -1,4 +1,4 @@
-import { createSignal, createEffect } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import { Action, ActionType } from '../../types';
 import { Dialog } from './Dialog';
 
@@ -7,6 +7,7 @@ interface ActionDialogProps {
   onClose: () => void;
   onSave: (action: Action) => void;
   initialAction?: Action;
+  projects?: { id: string; title: string }[];
   allowedTypes?: ActionType[];
 }
 
@@ -15,7 +16,9 @@ export function ActionDialog(props: ActionDialogProps) {
 
   const allTypes: ActionType[] = [
     'createTask',
+    'deleteTask',
     'addTag',
+    'moveToProject',
     'displaySnack',
     'displayDialog',
     'webhook',
@@ -38,8 +41,12 @@ export function ActionDialog(props: ActionDialogProps) {
     switch (action().type) {
       case 'createTask':
         return 'e.g. "Follow up task"';
+      case 'deleteTask':
+        return 'Deletes the task that triggered this rule';
       case 'addTag':
         return 'e.g. "review-needed"';
+      case 'moveToProject':
+        return 'e.g. "Project A"';
       case 'displaySnack':
         return 'e.g. "Task completed!"';
       case 'displayDialog':
@@ -49,6 +56,14 @@ export function ActionDialog(props: ActionDialogProps) {
       default:
         return '';
     }
+  };
+
+  const handleTypeChange = (type: ActionType) => {
+    setAction({
+      ...action(),
+      type,
+      value: type === 'deleteTask' ? '' : action().value,
+    });
   };
 
   return (
@@ -61,7 +76,11 @@ export function ActionDialog(props: ActionDialogProps) {
           <button class="btn-outline" onClick={props.onClose}>
             Cancel
           </button>
-          <button class="btn-primary" onClick={() => props.onSave(action())}>
+          <button
+            class="btn-primary"
+            disabled={action().type !== 'deleteTask' && !action().value.trim()}
+            onClick={() => props.onSave(action())}
+          >
             Save
           </button>
         </div>
@@ -71,7 +90,7 @@ export function ActionDialog(props: ActionDialogProps) {
         Type
         <select
           value={action().type}
-          onChange={(e) => setAction({ ...action(), type: e.currentTarget.value as ActionType })}
+          onChange={(e) => handleTypeChange(e.currentTarget.value as ActionType)}
         >
           {availableTypes().map((t) => (
             <option value={t}>{t}</option>
@@ -80,12 +99,25 @@ export function ActionDialog(props: ActionDialogProps) {
       </label>
       <label>
         Value
-        <input
-          type="text"
-          value={action().value}
-          onInput={(e) => setAction({ ...action(), value: e.currentTarget.value })}
-          placeholder={getPlaceholder()}
-        />
+        {action().type === 'moveToProject' && props.projects?.length ? (
+          <select
+            value={action().value}
+            onChange={(e) => setAction({ ...action(), value: e.currentTarget.value })}
+          >
+            <option value="">Select Project</option>
+            {props.projects.map((p) => (
+              <option value={p.id}>{p.title}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={action().value}
+            disabled={action().type === 'deleteTask'}
+            onInput={(e) => setAction({ ...action(), value: e.currentTarget.value })}
+            placeholder={getPlaceholder()}
+          />
+        )}
       </label>
       {action().type === 'webhook' && (
         <p

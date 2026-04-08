@@ -154,12 +154,15 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
       },
-      overlayIndicator: {
-        ...DEFAULT_GLOBAL_CONFIG.overlayIndicator,
-        ...appDataComplete.globalConfig.overlayIndicator,
+      taskWidget: {
+        ...DEFAULT_GLOBAL_CONFIG.taskWidget,
+        // Migrate from old 'overlayIndicator' key
+        ...(appDataComplete.globalConfig as any).overlayIndicator,
+        ...appDataComplete.globalConfig.taskWidget,
         // Migrate deprecated misc.isOverlayIndicatorEnabled
         ...(appDataComplete.globalConfig.misc?.isOverlayIndicatorEnabled !== undefined &&
-        appDataComplete.globalConfig.overlayIndicator?.isEnabled === undefined
+        appDataComplete.globalConfig.taskWidget?.isEnabled === undefined &&
+        (appDataComplete.globalConfig as any).overlayIndicator?.isEnabled === undefined
           ? { isEnabled: appDataComplete.globalConfig.misc.isOverlayIndicatorEnabled }
           : {}),
       },

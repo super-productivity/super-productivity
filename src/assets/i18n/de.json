@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity wird vollständig von der Community finanziert. Es gibt kein Tracking, keine Werbung und keine Datenerfassung – deine Aufgaben bleiben auf deinem Gerät.",
     "INTRO_2": "Wenn du diesen Ansatz schätzt und das Projekt gesund und weiterentwickelt halten möchtest, wird eine freiwillige Spende sehr geschätzt."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Tastenkürzel lernen",
+      "NOTES": "Super Productivity ist für die Bedienung mit der Tastatur konzipiert. Lerne die Tastenkürzel, um schneller zu arbeiten.\n\n**So fängst du an:**\n1. Öffne das **Seitenleistenmenü**\n2. Gehe zu **Hilfe**\n3. Klicke auf **Tastaturnavigations-Tour**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Erstelle dein erstes Projekt",
+      "NOTES": "Projekte helfen dir, deine Aufgaben nach Arbeitsbereichen zu organisieren. Jedes Projekt hat eine eigene Aufgabenliste und ein Backlog.\n\n**So erstellst du ein Projekt:**\n1. Klicke auf den **+**-Button neben **Projekte** in der Seitenleiste\n2. Gib ihm einen Namen und wähle eine Farbe\n3. Beginne, Aufgaben hinzuzufügen"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Synchronisierung einrichten",
+      "NOTES": "Halte deine Daten sicher und geräteübergreifend verfügbar.\n\n**So richtest du es ein:**\n1. Öffne die **Einstellungen** (Zahnrad-Symbol in der Seitenleiste)\n2. Gehe zu **Synchronisierung**\n3. Wähle einen Anbieter: Super Sync, Dropbox, WebDAV oder lokale Dateisynchronisierung\n4. Folge den Einrichtungsanweisungen"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Entdecke mehr",
+      "NOTES": "Es gibt noch viel mehr zu entdecken!\n\n**App-Funktionen** (in den Einstellungen) — Aktiviere Integrationen, Gewohnheiten und andere Funktionen. Gehe zu **Einstellungen → App-Funktionen**, um zu sehen, was verfügbar ist.\n\n**Boards** — Visualisiere deine Aufgaben in anpassbaren Kanban-Boards. Aktiviere sie unter **App-Funktionen** und finde sie im **Seitenmenü**.\n\n**Zeitplan** — Plane deinen Tag, indem du Aufgaben auf bestimmte Zeiten legst. Ziehe Aufgaben in die **Zeitplan**-Ansicht in der Seitenleiste.\n\n**Integrationen** — Sobald in den App-Funktionen aktiviert, importiere Aufgaben von Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV und vielen mehr. Du kannst auch deinen Kalender integrieren. Konfiguriere sie im **Ticket-Anbieter-Panel**.\n\n**Gewohnheiten** — Verfolge wiederkehrende Gewohnheiten und Routinen. Finde sie im **Seitenleistenmenü**, sobald sie aktiviert sind.\n\n**Plugins** — Füge Funktionen wie den Prokrastinations-Buster, Automatisierungen oder Spracherinnerungen hinzu. Gehe zu **Einstellungen → Plugins**.\n\n**Anpassen** — Themes, Dunkelmodus, Tastenkürzel, Sprache und Produktivitätshilfen findest du alle in den **Einstellungen**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,36 @@
     "STATUS_BACKUP": "Backup Ihrer Daten wird erstellt...",
     "STATUS_COMPLETE": "Migration abgeschlossen!",
     "STATUS_MIGRATING": "Daten werden migriert..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Wie möchtest du Super Productivity nutzen?",
+    "SUBTITLE": "Wähle ein Setup, das zu deinem Workflow passt. Du kannst das später jederzeit in den Einstellungen ändern.",
+    "PRIVACY_HINT": "Deine Daten bleiben sicher auf deinem Gerät. Es wird nichts an einen Server gesendet.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Einfache Aufgabenliste",
+        "DESCRIPTION": "Ein übersichtlicher Aufgabenmanager mit Projekten, Tags und Notizen. Ohne Extras."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Zeiterfassung",
+        "DESCRIPTION": "Erfasse, wie lange Aufgaben dauern. Ideal für Stundenabrechnung oder um zu verstehen, wofür deine Zeit draufgeht."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Produktivitäts-Suite",
+        "DESCRIPTION": "Plane deinen Tag, baue Gewohnheiten auf, arbeite fokussiert und erfasse deine Zeit. Alles an einem Ort."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klicke auf +, um deine erste Aufgabe hinzuzufügen",
+      "CREATE_TASK_TOUCH": "Tippe auf +, um deine erste Aufgabe hinzuzufügen",
+      "EXPLORE": "Klick dich ruhig durch und entdecke alles! Hilfe findest du in der Seitenleiste.",
+      "EXPLORE_TOUCH": "Tipp dich ruhig durch und entdecke alles! Hilfe findest du im Menü.",
+      "TASK_TAP_TOUCH": "Tippe auf eine Aufgabe, um ihre Details zu öffnen.",
+      "TASK_SWIPE_LEFT_TOUCH": "Wische die Aufgabe nach links für weitere Aktionen",
+      "TASK_SWIPE_RIGHT_TOUCH": "Wische die Aufgabe nach rechts, um sie als erledigt zu markieren",
+      "OR_PRESS": "oder drücke",
+      "SKIP_ARIA": "Hinweis schließen"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Aufgaben von heute hinzufügen",

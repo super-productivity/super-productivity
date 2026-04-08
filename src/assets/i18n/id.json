@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity sepenuhnya didanai oleh komunitas. Tidak ada pelacakan, iklan, atau pengumpulan data — tugas Anda tetap di perangkat Anda.",
     "INTRO_2": "Jika Anda menghargai pendekatan ini dan ingin menjaga proyek tetap sehat dan berkembang, donasi sukarela sangat dihargai."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Pelajari pintasan keyboard",
+      "NOTES": "Super Productivity dirancang untuk digunakan dengan keyboard. Pelajari pintasan agar bekerja lebih cepat.\n\n**Cara memulai:**\n1. Buka **menu sidebar**\n2. Buka **Bantuan**\n3. Klik **Tur Navigasi Keyboard**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Buat proyek pertama Anda",
+      "NOTES": "Proyek membantu Anda mengorganisasi tugas berdasarkan area kerja. Setiap proyek memiliki daftar tugas dan backlog sendiri.\n\n**Cara membuat proyek:**\n1. Klik tombol **+** di samping **Proyek** di sidebar\n2. Beri nama dan pilih warna\n3. Mulai tambahkan tugas ke dalamnya"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Atur Sinkronisasi",
+      "NOTES": "Jaga data Anda tetap aman dan dapat diakses di berbagai perangkat.\n\n**Cara mengatur:**\n1. Buka **Pengaturan** (ikon roda gigi di sidebar)\n2. Buka **Sinkronisasi**\n3. Pilih penyedia: Super Sync, Dropbox, WebDAV, atau sinkronisasi file lokal\n4. Ikuti petunjuk pengaturan"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Jelajahi lebih lanjut",
+      "NOTES": "Masih banyak yang bisa dijelajahi!\n\n**Fitur Aplikasi** (di Pengaturan) — Aktifkan integrasi, kebiasaan, dan fitur lainnya. Buka **Pengaturan → Fitur Aplikasi** untuk melihat apa saja yang tersedia.\n\n**Papan** — Visualisasikan tugas Anda di papan Kanban yang dapat disesuaikan. Aktifkan di **Fitur Aplikasi**, lalu temukan di **menu samping**.\n\n**Jadwal** — Rencanakan hari Anda dengan menjadwalkan tugas ke waktu tertentu. Seret tugas ke tampilan **Jadwal** di bilah samping.\n\n**Integrasi** — Setelah diaktifkan di Fitur Aplikasi, impor tugas dari Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV, dan banyak lagi. Anda juga bisa mengintegrasikan kalender. Konfigurasikan di **Panel Penyedia Isu**.\n\n**Kebiasaan** — Lacak kebiasaan dan rutinitas yang berulang. Temukan di **menu sidebar** setelah diaktifkan.\n\n**Plugin** — Tambahkan fitur seperti Pembasmi Prokrastinasi, Otomatisasi, atau Pengingat Suara. Buka **Pengaturan → Plugin**.\n\n**Kustomisasi** — Tema, mode gelap, pintasan keyboard, bahasa, dan alat bantu produktivitas semuanya ada di **Pengaturan**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,36 @@
     "STATUS_COMPLETE": "Migrasi selesai!",
     "STATUS_MIGRATING": "Memigrasi data...",
     "STATUS_PREPARING": "Mempersiapkan migrasi..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Bagaimana Anda ingin menggunakan Super Productivity?",
+    "SUBTITLE": "Pilih pengaturan yang sesuai dengan alur kerja Anda. Anda selalu bisa mengubahnya nanti di Pengaturan.",
+    "PRIVACY_HINT": "Data Anda tetap aman di perangkat Anda. Tidak ada yang dikirim ke server.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Daftar tugas sederhana",
+        "DESCRIPTION": "Pengelola tugas yang bersih dengan proyek, tag, dan catatan. Tanpa tambahan."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Pelacak waktu",
+        "DESCRIPTION": "Lacak berapa lama tugas membutuhkan waktu. Cocok untuk penagihan jam kerja atau memahami ke mana waktu Anda dihabiskan."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Paket Produktivitas",
+        "DESCRIPTION": "Rencanakan hari Anda, bangun kebiasaan, fokus mendalam, dan lacak waktu. Semua di satu tempat."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klik + untuk menambahkan tugas pertama Anda",
+      "CREATE_TASK_TOUCH": "Ketuk + untuk menambahkan tugas pertama Anda",
+      "EXPLORE": "Silakan klik-klik dan jelajahi! Bantuan bisa ditemukan di bilah samping.",
+      "EXPLORE_TOUCH": "Silakan jelajahi! Bantuan bisa ditemukan di menu.",
+      "TASK_TAP_TOUCH": "Ketuk tugas untuk membuka detailnya.",
+      "TASK_SWIPE_LEFT_TOUCH": "Geser tugas ke kiri untuk tindakan lainnya",
+      "TASK_SWIPE_RIGHT_TOUCH": "Geser tugas ke kanan untuk menandainya selesai",
+      "OR_PRESS": "atau tekan",
+      "SKIP_ARIA": "Tutup petunjuk"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Tambahkan tugas mulai hari ini",

@@ -73,7 +73,14 @@ class TrackingForegroundService : Service() {
 
         when (intent?.action) {
             ACTION_START -> {
-                val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: return START_NOT_STICKY
+                val taskId = intent.getStringExtra(EXTRA_TASK_ID)
+                if (taskId == null) {
+                    Log.w(TAG, "ACTION_START without taskId")
+                    if (!isTracking) {
+                        stopForegroundAndSelf()
+                    }
+                    return START_NOT_STICKY
+                }
                 val title = intent.getStringExtra(EXTRA_TASK_TITLE) ?: "Task"
                 val timeSpentMs = intent.getLongExtra(EXTRA_TIME_SPENT, 0L)
 
@@ -94,13 +101,29 @@ class TrackingForegroundService : Service() {
             }
 
             else -> {
-                // Service restarted by system - we have no state to restore
                 Log.d(TAG, "Service started without action, stopping")
-                stopSelf()
+                stopForegroundAndSelf()
             }
         }
 
         return START_NOT_STICKY
+    }
+
+    /**
+     * Posts a minimal foreground notification before stopping, so that the
+     * foreground-service contract is satisfied even on error / unknown-action paths.
+     */
+    private fun stopForegroundAndSelf() {
+        try {
+            val notification = androidx.core.app.NotificationCompat.Builder(this, TrackingNotificationHelper.CHANNEL_ID)
+                .setSmallIcon(com.superproductivity.superproductivity.R.drawable.ic_stat_sp)
+                .build()
+            startForeground(TrackingNotificationHelper.NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to post foreground notification before stop", e)
+        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun startTracking(taskId: String, title: String, timeSpentMs: Long) {

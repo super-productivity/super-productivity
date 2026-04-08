@@ -31,12 +31,14 @@ export class RuleRegistry {
           const validated = this.validateRules(parsed);
           if (validated) {
             this.rules = validated;
+            this.plugin.log.info(`RuleRegistry: loaded ${this.rules.length} rules.`);
             return;
           }
           this.initError = new Error('Persisted automation rules are invalid');
           this.plugin.log.warn('Persisted automation rules are invalid, resetting to defaults.');
         }
       }
+      this.plugin.log.info('RuleRegistry: No valid rules found, initializing defaults.');
       this.initDefaultRules();
       await this.saveRules();
     } catch (e) {
@@ -63,10 +65,18 @@ export class RuleRegistry {
     }
 
     const validTriggers = new Set(['taskCompleted', 'taskCreated', 'taskUpdated', 'timeBased']);
-    const validConditions = new Set(['titleContains', 'projectIs', 'hasTag', 'weekdayIs']);
+    const validConditions = new Set([
+      'titleContains',
+      'titleStartsWith',
+      'projectIs',
+      'hasTag',
+      'weekdayIs',
+    ]);
     const validActions = new Set([
       'createTask',
+      'deleteTask',
       'addTag',
+      'moveToProject',
       'displaySnack',
       'displayDialog',
       'webhook',
@@ -77,7 +87,8 @@ export class RuleRegistry {
       typeof c === 'object' &&
       typeof c.type === 'string' &&
       validConditions.has(c.type) &&
-      typeof c.value === 'string';
+      typeof c.value === 'string' &&
+      (c.isRegex === undefined || typeof c.isRegex === 'boolean');
 
     const isValidAction = (a: any) =>
       a &&

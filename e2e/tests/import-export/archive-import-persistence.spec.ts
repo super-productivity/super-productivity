@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Download } from '@playwright/test';
+import { test, expect } from '../../fixtures/test.fixture';
+import { type Page, type Download } from '@playwright/test';
 import { ImportPage } from '../../pages/import.page';
 import * as fs from 'fs';
 
@@ -17,22 +18,6 @@ import * as fs from 'fs';
  *
  * Run with: npm run e2e:file e2e/tests/import-export/archive-import-persistence.spec.ts
  */
-
-/**
- * Helper to dismiss welcome tour dialog if present
- */
-const dismissWelcomeDialog = async (page: Page): Promise<void> => {
-  try {
-    const closeBtn = page.locator('button:has-text("No thanks")').first();
-    const isVisible = await closeBtn.isVisible().catch(() => false);
-    if (isVisible) {
-      await closeBtn.click();
-      await page.waitForTimeout(500);
-    }
-  } catch {
-    // Dialog not present, ignore
-  }
-};
 
 /**
  * Helper to trigger and capture download
@@ -102,8 +87,6 @@ test.describe('@archive-import Archive Import Persistence', () => {
     await expect(page).toHaveURL(/.*tag.*TODAY.*tasks/);
     console.log('[Archive Import Test] Import completed');
 
-    await dismissWelcomeDialog(page);
-
     // Step 2: Export immediately to verify archive is present
     console.log('[Archive Import Test] Step 2: Exporting immediately after import...');
     await page.waitForTimeout(2000); // Wait for IndexedDB writes
@@ -125,7 +108,6 @@ test.describe('@archive-import Archive Import Persistence', () => {
     await page.reload();
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
-    await dismissWelcomeDialog(page);
 
     // Step 4: Export again and verify archive data persisted
     console.log('[Archive Import Test] Step 4: Exporting after reload...');
@@ -177,14 +159,12 @@ test.describe('@archive-import Archive Import Persistence', () => {
     const backupPath = ImportPage.getFixturePath('test-backup-with-archives.json');
     await importPage.importBackupFile(backupPath);
     await expect(page).toHaveURL(/.*tag.*TODAY.*tasks/);
-    await dismissWelcomeDialog(page);
 
     // Reload
     await page.waitForTimeout(2000);
     await page.reload();
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
-    await dismissWelcomeDialog(page);
 
     // Export and verify timeTracking
     await importPage.navigateToImportPage();
@@ -217,14 +197,12 @@ test.describe('@archive-import Archive Import Persistence', () => {
     const backupPath = ImportPage.getFixturePath('test-backup-with-archives.json');
     await importPage.importBackupFile(backupPath);
     await expect(page).toHaveURL(/.*tag.*TODAY.*tasks/);
-    await dismissWelcomeDialog(page);
 
     // Reload
     await page.waitForTimeout(2000);
     await page.reload();
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
-    await dismissWelcomeDialog(page);
 
     // Export and verify
     await importPage.navigateToImportPage();

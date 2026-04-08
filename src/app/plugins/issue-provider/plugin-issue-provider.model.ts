@@ -25,7 +25,12 @@ export interface RegisteredPluginIssueProvider {
   registeredKey: IssueProviderKey;
   definition: IssueProviderPluginDefinition;
   name: string;
+  /** Short human-readable name for UI display (e.g. 'GitHub'). Falls back to name. */
+  humanReadableName: string;
   icon: string;
   pollIntervalMs: number;
   issueStrings: { singular: string; plural: string };
+  useAgendaView?: boolean;
+  defaultAutoAddToBacklog?: boolean;
+  allowPrivateNetwork?: boolean;
 }

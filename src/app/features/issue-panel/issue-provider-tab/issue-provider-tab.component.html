@@ -25,7 +25,7 @@
     </div>
   }
   <!---->
-  @if (ip.issueProviderKey === 'ICAL') {
+  @if (useAgendaView()) {
     <issue-panel-calendar-agenda [issueProvider]="ip"></issue-panel-calendar-agenda>
   } @else {
     <form

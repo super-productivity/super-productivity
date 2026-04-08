@@ -17,7 +17,7 @@ import { isValidUrl } from '../../../util/is-valid-url';
 import { getPluralKey } from '../../../util/get-plural-key';
 import { distinctUntilChangedObject } from '../../../util/distinct-until-changed-object';
 import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
-import { IssueProviderCalendar } from '../../issue/issue.model';
+import { IssueProviderCalendar, IssueProviderKey } from '../../issue/issue.model';
 import { IssueService } from '../../issue/issue.service';
 import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
@@ -97,7 +97,8 @@ export class CalendarIntegrationEffects {
                             !matchesAnyCalendarEventId(calEv, allIssueIds)
                           ) {
                             this._issueService.addTaskFromIssue({
-                              issueProviderKey: 'ICAL',
+                              issueProviderKey:
+                                (calEv.issueProviderKey as IssueProviderKey) || 'ICAL',
                               issueProviderId: calProvider.id,
                               issueDataReduced: calEv,
                               // from this context we should always add to the default project rather than current context
@@ -235,7 +236,7 @@ export class CalendarIntegrationEffects {
             fn: () => {
               this._skipEv(calEv);
               this._issueService.addTaskFromIssue({
-                issueProviderKey: 'ICAL',
+                issueProviderKey: (calEv.issueProviderKey as IssueProviderKey) || 'ICAL',
                 issueProviderId: calProvider.id,
                 issueDataReduced: calEv,
                 // from the banner we should always add to the default project rather than current context

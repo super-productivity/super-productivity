@@ -108,6 +108,16 @@ export class MagicNavConfigService {
   private readonly isSearchEnabled = computed(
     () => this._configService.appFeatures().isSearchEnabled,
   );
+  readonly areInitialTreesReady = computed(() => {
+    const visibleProjects = this._visibleProjects();
+    const tags = this._tags();
+
+    const areProjectsReady =
+      visibleProjects.length === 0 || this._menuTreeService.hasProjectTree();
+    const areTagsReady = tags.length === 0 || this._menuTreeService.hasTagTree();
+
+    return areProjectsReady && areTagsReady;
+  });
 
   constructor() {
     // TODO these should probably live in the _menuTreeService
@@ -291,31 +301,10 @@ export class MagicNavConfigService {
           },
           {
             type: 'action',
-            id: 'tour-welcome',
-            label: T.MH.HM.START_WELCOME,
-            icon: 'directions',
-            action: () => this._startTour(TourId.Welcome),
-          },
-          {
-            type: 'action',
             id: 'tour-keyboard',
             label: T.MH.HM.KEYBOARD,
             icon: 'directions',
             action: () => this._startTour(TourId.KeyboardNav),
-          },
-          {
-            type: 'action',
-            id: 'tour-sync',
-            label: T.MH.HM.SYNC,
-            icon: 'directions',
-            action: () => this._startTour(TourId.Sync),
-          },
-          {
-            type: 'action',
-            id: 'tour-calendars',
-            label: T.MH.HM.CALENDARS,
-            icon: 'directions',
-            action: () => this._startTour(TourId.IssueProviders),
           },
         ],
       },

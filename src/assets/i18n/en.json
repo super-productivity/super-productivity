@@ -7,13 +7,14 @@
     },
     "B_OFFLINE": "You are disconnected from the internet. Syncing and requesting issue provider data will not work.",
     "CONTEXT_MENU": {
-      "CHANGE_BACKGROUND": "Change Background"
+      "CHANGE_PROJECT_SETTINGS": "Change Project Settings",
+      "CHANGE_TAG_SETTINGS": "Change Tag Settings"
     },
     "SKIP_SYNC_WAIT": "Skip waiting for sync",
     "UPDATE_WEB_APP": "New version available. Load new version?"
   },
   "BL": {
-    "NO_TASKS": "There are currently no tasks in your backlog"
+    "NO_TASKS": "Your backlog is empty. Add tasks here to plan them later."
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Issue Provider Panel",
@@ -40,6 +41,24 @@
     "BUTTON_TEXT": "Donate via GitHub Sponsors",
     "INTRO_1": "Super Productivity is funded entirely by the community. There is no tracking, no ads, and no data collection — your tasks stay on your device.",
     "INTRO_2": "If you value this approach and want to keep the project healthy and evolving, a voluntary donation is greatly appreciated."
+  },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Learn the keyboard shortcuts",
+      "NOTES": "Super Productivity is designed to be used with the keyboard. Learn the shortcuts to work faster.\n\n**How to start:**\n1. Open the **sidebar menu**\n2. Go to **Help**\n3. Click **Keyboard Navigation Tour**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Create your first project",
+      "NOTES": "Projects help you organize your tasks by area of work. Each project has its own task list and backlog.\n\n**How to create a project:**\n1. Click the **+** button next to **Projects** in the sidebar\n2. Give it a name and pick a color\n3. Start adding tasks to it"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Set up Sync",
+      "NOTES": "Keep your data safe and accessible across devices.\n\n**How to set up:**\n1. Open **Settings** (gear icon in the sidebar)\n2. Go to **Sync**\n3. Choose a provider: Super Sync, Nextcloud, Dropbox, or local file sync\n4. Follow the setup instructions"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Go further",
+      "NOTES": "There is a lot more to discover!\n\n**App Features** (in Settings) — Enable integrations, habits, and other features. Go to **Settings → App Features** to see what's available.\n\n**Boards** — Visualize your tasks in customizable Kanban-style boards. Enable them in **App Features**, then find them in the **sidebar menu**.\n\n**Schedule** — Plan your day by scheduling tasks to specific times. Drag tasks onto the **Schedule** view in the sidebar to organize your timeline.\n\n**Integrations** — Once enabled in App Features, import tasks from Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV, and many more. You can also integrate your calendar. Configure them in the **Issue Provider Panel**.\n\n**Habits** — Track recurring habits and routines. Find them in the **sidebar menu** once enabled.\n\n**Plugins** — Add features like the Procrastination Buster, Automations, or Voice Reminders. Go to **Settings → Plugins**.\n\n**Customize** — Themes, dark mode, keyboard shortcuts, language, and productivity helpers are all in **Settings**."
+    }
   },
   "F": {
     "ATTACHMENT": {
@@ -148,8 +167,18 @@
         "EVENT_STR": "event",
         "EVENTS_STR": "events"
       },
+      "CONTEXT_MENU": {
+        "CREATE_TASK": "Create as task",
+        "OPEN_IN_CALENDAR": "Open in calendar",
+        "RESCHEDULE": "Reschedule",
+        "DELETE_EVENT": "Delete event"
+      },
       "S": {
-        "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}",
+        "EVENT_HIDDEN": "Calendar event hidden",
+        "EVENT_RESCHEDULED": "Event rescheduled",
+        "EVENT_DELETED": "Event deleted",
+        "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}"
       }
     },
     "CLIPBOARD_IMAGE": {
@@ -321,11 +350,17 @@
         "ISSUE_STR": "issue",
         "ISSUES_STR": "issues"
       },
+      "DEFAULT_NOTE_LABEL": "Default note for imported tasks",
       "DEFAULT_PROJECT_DESCRIPTION": "Project assigned to tasks created from issues.",
       "DEFAULT_PROJECT_LABEL": "Default Super Productivity Project",
-      "DIALOG": {
-        "ADVANCED_CONFIG": "Advanced Config",
-        "DELETE_CONFIRM": "Are you sure you want to delete this issue provider? Deleting it means that <strong>all previously imported issue tasks will loose their reference</strong>. This cannot be undone!"
+      "DEFAULT_TAGS_LABEL": "Default tags for imported tasks",
+      "FORM": {
+        "AUTO_ADD_TO_BACKLOG": "Auto import to default project (requires default project)",
+        "AUTO_POLL": "Poll imported for changes and notify",
+        "POLLING_MODE": "Polling trigger",
+        "POLLING_MODE_DESCRIPTION": "When to poll: only while the relevant project or tag is open, or always in the background",
+        "POLLING_MODE_WHEN_PROJECT_OPEN": "When context is open",
+        "POLLING_MODE_ALWAYS": "Always (in background)"
       },
       "HOW_TO_GET_A_TOKEN": "How to get a token?",
       "ISSUE_CONTENT": {
@@ -369,19 +404,43 @@
         "PLUGIN_NOT_INSTALLED": "Required plugin \"{{pluginName}}\" is not installed.",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling for new {{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}: Polling Changes for {{issuesStr}}",
+        "DELETE_REMOTE_FAILED": "Failed to delete remote issue",
+        "LOAD_OPTIONS_FAILED": "Failed to load options for {{fieldKey}}",
+        "OAUTH_CONNECTED": "OAuth account connected successfully.",
+        "OAUTH_DISCONNECTED": "OAuth account disconnected.",
+        "OAUTH_FAILED": "Authentication failed.",
+        "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Auto-create issues for new tasks",
         "AUTO_CREATE_ISSUES_DESCRIPTION": "Automatically creates an issue when you add a new top-level task to the default project. Requires a default project to be set.",
         "BOTH": "Both (bidirectional)",
+        "DUE_DAY": "Due Day",
+        "DUE_WITH_TIME": "Due Date/Time",
         "NOTES": "Notes / Description sync direction",
         "OFF": "Off",
         "PULL_ONLY": "Pull only",
         "PUSH_ONLY": "Push only",
         "SECTION": "Two-Way Sync (experimental)",
         "STATUS": "Status sync direction",
+        "TIME_ESTIMATE": "Time Estimate",
         "TITLE": "Title sync direction"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "Advanced Config",
+        "CONNECTED": "Connected",
+        "DELETE_CONFIRM": "Are you sure you want to delete this issue provider? Deleting it means that <strong>all previously imported issue tasks will loose their reference</strong>. This cannot be undone!",
+        "DISCONNECT": "Disconnect",
+        "EDIT_TITLE": "Edit {{title}} Config",
+        "LOAD_OPTIONS": "Load Options",
+        "LOAD_OPTIONS_FAILED": "Failed to load options",
+        "LOADING_OPTIONS": "Loading options...",
+        "OPTIONS_LOADED": "Options loaded",
+        "RELOAD_OPTIONS": "Reload Options",
+        "SETUP_TITLE": "Setup {{title}} Config",
+        "TEST_CONNECTION": "Test Connection"
       }
     },
     "ISSUE_PANEL": {
@@ -825,7 +884,7 @@
       "TOOLTIP_VISIBILITY": "Show/hide projects"
     },
     "QUICK_HISTORY": {
-      "NO_DATA": "No data for current year",
+      "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
       "PAGE_TITLE": "Quick History",
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
@@ -1169,7 +1228,7 @@
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
         "LOCAL_FILE": {
-          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use WebDAV, Dropbox, or SuperSync instead.",
+          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use Nextcloud, Dropbox, or SuperSync instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
           "L_SYNC_FOLDER_PATH": "Sync folder path"
         },
@@ -1230,13 +1289,17 @@
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use the same password on all devices. A forgotten password can be reset by overwriting remote data.",
           "SETUP_ENCRYPTION_TITLE": "SuperSync: Set Password"
         },
+        "NEXTCLOUD": {
+          "L_SERVER_URL": "Nextcloud Server URL",
+          "SERVER_URL_DESCRIPTION": "e.g. https://cloud.example.com or https://example.com/nextcloud",
+          "L_APP_PASSWORD": "App Password",
+          "APP_PASSWORD_DESCRIPTION": "Go to Nextcloud → Settings → Security → App passwords to generate one"
+        },
         "TITLE": "Sync",
         "WEB_DAV": {
-          "CONDITIONAL_HEADER_WARNING_MSG": "Your WebDAV server does not support conditional headers (If-Unmodified-Since). This means Super Productivity cannot detect concurrent changes from other devices during upload.<br><br>Sync will still work, but there is a small risk of data conflicts if you make changes on multiple devices simultaneously.",
-          "CONDITIONAL_HEADER_WARNING_TITLE": "Reduced Sync Safety",
-          "CORS_INFO": "<strong>Making it work in a web browser:</strong> Allow Super Productivity to make CORS requests to your WebDAV server. This can have negative security implications! For Nextcloud, please refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information. One approach to make this work on mobile is allowing \"https://app.super-productivity.com\" via the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
+          "CORS_INFO": "<strong>Making it work in a web browser:</strong> You need to allow Super Productivity to make CORS requests to your server. For Nextcloud, one approach is allowing \"https://app.super-productivity.com\" via the <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> app. Refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information.",
           "D_SYNC_FOLDER_PATH": "Path relative to the WebDAV server root where sync files will be stored (e.g. '/super-productivity' or '/'). This is NOT your server's internal directory path.",
-          "INFO": "<strong>Warning:</strong> WebDAV implementations differ wildly. Super Productivity is known to work well with Nextcloud, <strong>but it may not work with your provider</strong>. Test thoroughly before relying on it.",
+          "INFO": "<strong>Warning:</strong> Generic WebDAV sync is provided <strong>as-is without support</strong>. If you are using Nextcloud, please use the Nextcloud sync option instead.",
           "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Password",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
@@ -1274,6 +1337,8 @@
         "ERROR_PERMISSION": "File access denied. Please check your filesystem permissions.",
         "ERROR_PERMISSION_FLATPAK": "File access denied. Grant filesystem permission via Flatseal or use a path inside ~/.var/app/",
         "ERROR_PERMISSION_SNAP": "File access denied. Run 'snap connect super-productivity:home' or use a path inside ~/snap/super-productivity/common/",
+        "ERROR_REMOTE_FILE_EMPTY": "Remote sync file is empty. This can happen after an interrupted sync. Overwrite remote with your local data?",
+        "ERROR_REMOTE_FILE_LOCKED": "Remote sync file is locked by the server. This may resolve on the next sync attempt.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error while syncing. Unable to read remote data. Maybe you enabled encryption and your local password does not match the one used to encrypt the remote data?",
         "FINISH_DAY_SYNC_ERROR": "Sync error while finishing day. Please try again.",
         "FRESH_CLIENT_SYNC_CANCELLED": "Initial sync cancelled. Remote data was not applied.",
@@ -1305,6 +1370,7 @@
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
         "SUCCESS_DOWNLOAD": "Synced data from remote",
         "SUCCESS_VIA_BUTTON": "Data successfully synced",
+        "SYNC_VALIDATION_FAILED": "State validation failed after sync. Some data may be inconsistent.",
         "TIMEOUT_ERROR": "Sync operation timed out. {{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "Too many sync operations to download. Some changes may be missing.",
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}",
@@ -1633,9 +1699,9 @@
         "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to update all of them with the new defaults or only update future tasks?",
         "OK": "Update all instances"
       },
-      "D_DELETE_INSTANCE": {
-        "MSG": "Remove the recurring task instance on {{date}}? This will prevent the task from being created on this date only.",
-        "OK": "Remove Instance"
+      "D_SKIP_INSTANCE": {
+        "MSG": "Skip the recurring task on {{date}}? This will prevent the task from being created on this date only.",
+        "OK": "Skip"
       },
       "D_EDIT": {
         "ADD": "Add Recurring Task Config",
@@ -1671,8 +1737,8 @@
         "QUICK_SETTING": "Recurring Config",
         "REMIND_AT": "Remind at",
         "REMIND_AT_PLACEHOLDER": "Select when to remind",
-        "REMOVE_FOR_DATE": "Remove for {{date}}",
-        "REMOVE_INSTANCE": "Remove today",
+        "SKIP_FOR_DATE": "Skip for {{date}}",
+        "SKIP_INSTANCE": "Skip for today",
         "REPEAT_CYCLE": "Recur cycle",
         "REPEAT_EVERY": "Recur every",
         "SATURDAY": "Saturday",
@@ -1692,10 +1758,17 @@
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
+        "DEADLINE_NEXT_MONTH": "Due Next Month",
+        "DEADLINE_NEXT_WEEK": "Due Next Week",
+        "DEADLINE_THIS_MONTH": "Due This Month",
+        "DEADLINE_THIS_WEEK": "Due This Week",
+        "DEADLINE_TODAY": "Due Today",
+        "DEADLINE_TOMORROW": "Due Tomorrow",
         "ENTER_PROJECT": "Filter Projects",
         "ENTER_TAG": "Filter Tag",
         "ESTIMATED_TIME": "Estimated Time",
         "FILTER_BY": "Filter By",
+        "FILTER_DEADLINE": "Deadline",
         "FILTER_DEFAULT": "No Filter",
         "FILTER_ESTIMATED_TIME": "Estimated Time",
         "FILTER_NOT_SPECIFIED": "Not specified",
@@ -1704,6 +1777,8 @@
         "FILTER_TAG": "Tag",
         "FILTER_TIME_SPENT": "Time Spent",
         "GROUP_BY": "Group By",
+        "GROUP_DEADLINE": "Deadline",
+        "GROUP_DEADLINE_NONE": "No deadline",
         "GROUP_DEFAULT": "No Group",
         "GROUP_PROJECT": "Project",
         "GROUP_SCHEDULED_DATE": "Scheduled Date",
@@ -1718,6 +1793,7 @@
         "SCHEDULED_TOMORROW": "Tomorrow",
         "SORT": "Sort",
         "SORT_CREATION_DATE": "Creation Date",
+        "SORT_DEADLINE": "Deadline",
         "SORT_DEFAULT": "Default",
         "SORT_NAME": "Name",
         "SORT_SCHEDULED_DATE": "Scheduled Date",
@@ -1891,6 +1967,7 @@
     "NO_CON": "You are currently offline. Please reconnect to the internet.",
     "NONE": "None",
     "OK": "Ok",
+    "OPEN_IN_BROWSER": "Open in browser",
     "OVERDUE": "Overdue",
     "PASSWORD_STRENGTH_FAIR": "Fair",
     "PASSWORD_STRENGTH_STRONG": "Strong",
@@ -1911,6 +1988,7 @@
     "APP_FEATURES": {
       "BOARDS": "Boards",
       "DONATE_PAGE": "Donate page",
+      "FINISH_DAY": "Finish day",
       "FOCUS_MODE": "Focus mode",
       "HABITS": "Habits",
       "HELP": "Enable or disable specific app features across the UI.",
@@ -1925,7 +2003,9 @@
       "TITLE": "App Features",
       "USER_PROFILES": "User profiles (experimental — might be removed)",
       "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data. (Experimental feature. No guarantees. Make sure to have a backup!)",
-      "USER_PROFILES_WARNING": "<strong>Experimental feature:</strong> This feature is still in development and may be removed or significantly changed in a future update. Use at your own risk and make sure to keep backups of your data."
+      "USER_PROFILES_WARNING": "<strong>Experimental feature:</strong> This feature is still in development and may be removed or significantly changed in a future update. Use at your own risk and make sure to keep backups of your data.",
+      "EXPERIMENTAL_WARNING_TITLE": "Experimental Feature",
+      "EXPERIMENTAL_WARNING_MSG": "This feature is experimental. It may have bugs, change significantly, or be removed in a future update. Make sure to keep backups of your data.<br/><br/>Do you want to enable it?"
     },
     "AUTO_BACKUPS": {
       "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
@@ -1984,11 +2064,11 @@
       "L_SYNC_SESSION_WITH_TRACKING": "Sync focus sessions with time tracking",
       "TITLE": "Focus Mode"
     },
-    "OVERLAY_INDICATOR": {
-      "TITLE": "Overlay Indicator",
-      "IS_ENABLED": "Enable overlay indicator window",
-      "IS_ALWAYS_SHOW": "Always show overlay (even when main window is visible)",
-      "OPACITY": "Overlay indicator opacity"
+    "TASK_WIDGET": {
+      "TITLE": "Task Widget",
+      "IS_ENABLED": "Enable task widget",
+      "IS_ALWAYS_SHOW": "Always show task widget (even when main window is visible)",
+      "OPACITY": "Task widget opacity"
     },
     "IDLE": {
       "HELP": "<div><p>When idle time handling is enabled, a dialog will open after a specified amount of time to check if - and on which - task you want to track your time when you have been idle.</p></div>",
@@ -2095,6 +2175,7 @@
       "TIME_LOCALE_IT_IT": "Italian: 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_JA_JP": "Japanese: 24-hour, YYYY/MM/DD",
       "TIME_LOCALE_KO_KR": "Korean: 12-hour AM/PM, YYYY. MM. DD",
+      "TIME_LOCALE_PL_PL": "Polish: 24-hour, DD.MM.YYYY",
       "TIME_LOCALE_PT_BR": "Portuguese (Brazil): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_RO_MD": "Romanian (Moldova): 24-hour, DD.MM.YYYY",
       "TIME_LOCALE_RO_RO": "Romanian: 24-hour, DD.MM.YYYY",
@@ -2123,6 +2204,8 @@
       "IS_DARK_MODE": "Dark Mode",
       "IS_DISABLE_ANIMATIONS": "Disable all animations",
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
+      "IS_LOCAL_REST_API_ENABLED": "Enable local REST API (desktop only)",
+      "IS_LOCAL_REST_API_ENABLED_HINT": "Allows local scripts to control the running app via http://127.0.0.1:3876. Any application running on this computer will be able to read and modify your tasks.",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
       "IS_SHOW_TIP_LONGER": "Show productivity tip on app start a little longer",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",
@@ -2362,6 +2445,36 @@
     "TASK_ALREADY_COMPLETED": "Task already completed",
     "TASK_MARKED_DONE": "Task marked as done"
   },
+  "ONBOARDING": {
+    "TITLE": "How do you want to use Super Productivity?",
+    "SUBTITLE": "Pick a setup that matches your workflow. You can always change this later in Settings.",
+    "PRIVACY_HINT": "Your data stays securely on your device. Nothing is sent to a server.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Simple Todo List",
+        "DESCRIPTION": "A clean task manager with projects, tags, and notes. No extras."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Time Tracker",
+        "DESCRIPTION": "Track how long tasks take. Great for billing hours or understanding where your time goes."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Productivity Suite",
+        "DESCRIPTION": "Plan your day, build habits, focus deeply, and track your time. All in one place."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Click + to add your first task",
+      "CREATE_TASK_TOUCH": "Tap + to add your first task",
+      "EXPLORE": "Feel free to click around and explore! You can find help in the sidebar.",
+      "EXPLORE_TOUCH": "Feel free to explore. You can find help in the sidebar.",
+      "TASK_TAP_TOUCH": "Tap a task to open its details.",
+      "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
+      "TASK_SWIPE_RIGHT_TOUCH": "Swipe task right to mark it as done",
+      "OR_PRESS": "or press",
+      "SKIP_ARIA": "Dismiss hint"
+    }
+  },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Add tasks from today",
     "ARCHIVED_TASKS": {
@@ -2522,8 +2635,10 @@
     "LAST": "Last:",
     "NEXT": "Next",
     "NO_DEADLINES": "There are currently no tasks with deadlines. You can set a deadline via the task's context menu or detail panel.",
-    "NO_REPEATABLE_TASKS": "There are currently no recurring tasks. You can schedule a task by choosing \"Recur\" in the task's side panel. To open the side panel, click on the rightmost icon that appears when hovering over a task (or just tap on the task on mobile).",
+    "NO_REPEATABLE_TASKS": "No recurring tasks yet. To create one, open a task's side panel and choose \"Recur\".",
     "NO_SCHEDULED": "There are currently no scheduled tasks of this type. You can schedule a task by choosing \"Schedule Task\" in the task's context menu. To open it, right-click (long press on mobile) on a task.",
+    "NO_SCHEDULED_FOR_DAY": "No tasks planned for specific days yet. Right-click a task and choose \"Schedule\" to plan it for a day.",
+    "NO_SCHEDULED_WITH_TIME": "No tasks scheduled with a start time yet. Right-click a task and choose \"Schedule\" to set a specific time.",
     "NO_SCHEDULED_TITLE": "Scheduled Tasks for Day",
     "REPEATED_TASKS": "Recurring Tasks",
     "SCHEDULED_TASKS": "Scheduled Tasks",
@@ -2558,6 +2673,7 @@
     "CREATE_NEW_PROFILE": "Create New Profile",
     "CREATED": "Created:",
     "DELETE_PROFILE": "Delete Profile",
+    "DEPRECATION_WARNING": "The experimental User Profiles feature will be removed in a future update. Please export your profile data as a backup.",
     "DIALOG_TITLE": "Manage User Profiles",
     "EXISTING_PROFILES": "Existing Profiles",
     "EXPORT_PROFILE": "Export Profile",
@@ -2579,7 +2695,6 @@
   "WW": {
     "ADD_MORE": "Add more",
     "ADD_SCHEDULED_FOR_TOMORROW": "Add tasks planned for tomorrow ({{nr}})",
-    "ADD_SOME_TASKS": "Add some tasks to plan your day!",
     "DONE_TASKS": "Completed Tasks",
     "DONE_TASKS_IN_ARCHIVE": "There are currently no completed tasks here, but there are some already archived.",
     "ESTIMATE_REMAINING": "Estimate remaining:",
@@ -2590,7 +2705,6 @@
     "NO_DONE_TASKS": "There are currently no completed tasks",
     "NO_PLANNED_TASK_ALL_DONE": "all tasks completed",
     "NO_PLANNED_TASKS": "No tasks planned",
-    "READY_TO_WORK": "Ready to work!",
     "RECURRING_TASKS": "Recurring Tasks",
     "RESET_BREAK_TIMER": "Reset without break timer",
     "TIME_ESTIMATED": "Time estimated:",

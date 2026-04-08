@@ -31,6 +31,7 @@ import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { LongPressDirective } from '../../ui/longpress/longpress.directive';
 import { isOnline$ } from '../../util/is-online';
 import { Store } from '@ngrx/store';
+import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { showFocusOverlay } from '../../features/focus-mode/store/focus-mode.actions';
 import { SyncStatus } from '../../op-log/sync-exports';
 import { PluginHeaderBtnsComponent } from '../../plugins/ui/plugin-header-btns.component';
@@ -82,6 +83,11 @@ export class MainHeaderComponent implements OnDestroy {
   private readonly _configService = inject(GlobalConfigService);
   private readonly _metricService = inject(MetricService);
   private readonly _dateService = inject(DateService);
+  private readonly _dataInitStateService = inject(DataInitStateService);
+
+  readonly isDataLoaded = toSignal(this._dataInitStateService.isAllDataLoadedInitially$, {
+    initialValue: false,
+  });
 
   T: typeof T = T;
   isShowSimpleCounterBtnsDropdown = signal(false);

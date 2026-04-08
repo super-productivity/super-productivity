@@ -6,13 +6,17 @@ import {
   webUtils,
 } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
-import { IPCEventValue } from './shared-with-frontend/ipc-events.const';
+import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
   PluginManifest,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
 } from '../packages/plugin-api/src/types';
+import {
+  LocalRestApiRequestPayload,
+  LocalRestApiResponsePayload,
+} from './shared-with-frontend/local-rest-api.model';
 
 const _send: (channel: IPCEventValue, ...args: unknown[]) => void = (channel, ...args) =>
   ipcRenderer.send(channel, ...args);
@@ -220,6 +224,27 @@ const ea: ElectronAPI = {
       manifest,
       request,
     ) as Promise<PluginNodeScriptResult>,
+
+  // Plugin OAuth
+  pluginOAuthPrepare: () => _invoke('PLUGIN_OAUTH_PREPARE') as Promise<{ port: number }>,
+  pluginOAuthStart: (url: string) => _send('PLUGIN_OAUTH_START', { url }),
+  onPluginOAuthCb: (
+    listener: (data: { code?: string; error?: string; state?: string }) => void,
+  ) => {
+    ipcRenderer.on(
+      IPC.PLUGIN_OAUTH_CB,
+      (_: unknown, data: { code?: string; error?: string; state?: string }) =>
+        listener(data),
+    );
+  },
+
+  onLocalRestApiRequest: (listener: (payload: LocalRestApiRequestPayload) => void) => {
+    ipcRenderer.on(IPC.LOCAL_REST_API_REQUEST, (_event, payload) =>
+      listener(payload as LocalRestApiRequestPayload),
+    );
+  },
+  sendLocalRestApiResponse: (payload: LocalRestApiResponsePayload) =>
+    _send(IPC.LOCAL_REST_API_RESPONSE, payload),
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

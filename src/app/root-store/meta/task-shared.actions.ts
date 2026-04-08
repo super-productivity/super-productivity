@@ -57,6 +57,9 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
+    // Issue metadata for remote issue deletion is passed via
+    // DeletedTaskIssueSidecarService to avoid serializing full Task
+    // objects into the op-log. Only taskIds are persisted.
     deleteTasks: (taskProps: { taskIds: string[] }) => ({
       ...taskProps,
       meta: {
@@ -289,6 +292,15 @@ export const TaskSharedActions = createActionGroup({
         opType: OpType.Update,
         isBulk: true,
       } satisfies PersistentActionMeta,
+    }),
+
+    // Non-persistent variant for automated day-change overdue removal.
+    // Every device runs removeOverdueFormToday$ independently, so syncing this
+    // operation is redundant and causes LWW conflicts with user actions on other
+    // devices (see #6992). The meta-reducer handles it identically to
+    // removeTasksFromTodayTag but the operation log ignores it.
+    localRemoveOverdueFromToday: (taskProps: { taskIds: string[] }) => ({
+      ...taskProps,
     }),
 
     // Tag Management

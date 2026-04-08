@@ -6,12 +6,10 @@ import { of } from 'rxjs';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NavigationEnd, Router } from '@angular/router';
 import { WorkContextService } from '../../features/work-context/work-context.service';
-import { TaskService } from '../../features/tasks/task.service';
 
 describe('LayoutService', () => {
   let service: LayoutService;
   let mockStore: jasmine.SpyObj<Store>;
-  let mockTaskService: jasmine.SpyObj<TaskService>;
 
   beforeEach(() => {
     const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'pipe', 'select']);
@@ -24,10 +22,6 @@ describe('LayoutService', () => {
       onWorkContextChange$: of(null),
       activeWorkContext$: of(null),
     });
-    const taskServiceSpy = jasmine.createSpyObj('TaskService', [
-      'focusTaskIfPossible',
-      'focusFirstTaskIfVisible',
-    ]);
 
     // Setup default return values
     storeSpy.pipe.and.returnValue(of(false));
@@ -43,13 +37,11 @@ describe('LayoutService', () => {
         { provide: BreakpointObserver, useValue: breakpointObserverSpy },
         { provide: Router, useValue: routerSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
-        { provide: TaskService, useValue: taskServiceSpy },
       ],
     });
 
     service = TestBed.inject(LayoutService);
     mockStore = TestBed.inject(Store) as jasmine.SpyObj<Store>;
-    mockTaskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
   });
 
   describe('Focus restoration', () => {
@@ -83,29 +75,34 @@ describe('LayoutService', () => {
       expect(mockStore.dispatch).toHaveBeenCalledWith(showAddTaskBar());
     });
 
-    it('should focus newly created task when task id provided', (done) => {
+    it('should focus newly created task with preventScroll when task id provided', (done) => {
       const newTaskId = 'task-new';
       const newTaskElement = document.createElement('div');
       newTaskElement.id = `t-${newTaskId}`;
+      newTaskElement.tabIndex = 0;
       document.body.appendChild(newTaskElement);
+
+      spyOn(newTaskElement, 'focus');
 
       service.hideAddTaskBar(newTaskId);
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(hideAddTaskBar());
 
       setTimeout(() => {
-        expect(mockTaskService.focusTaskIfPossible).toHaveBeenCalledWith(newTaskId);
-        expect(mockTaskService.focusFirstTaskIfVisible).not.toHaveBeenCalled();
+        expect(newTaskElement.focus).toHaveBeenCalledWith({ preventScroll: true });
         document.body.removeChild(newTaskElement);
         done();
       }, 100);
     });
 
-    it('should focus pending task id when hide is called without parameter', (done) => {
+    it('should focus pending task id with preventScroll when hide is called without parameter', (done) => {
       const pendingTaskId = 'pending-task';
       const pendingTaskElement = document.createElement('div');
       pendingTaskElement.id = `t-${pendingTaskId}`;
+      pendingTaskElement.tabIndex = 0;
       document.body.appendChild(pendingTaskElement);
+
+      spyOn(pendingTaskElement, 'focus');
 
       service.setPendingFocusTaskId(pendingTaskId);
       service.hideAddTaskBar();
@@ -113,13 +110,13 @@ describe('LayoutService', () => {
       expect(mockStore.dispatch).toHaveBeenCalledWith(hideAddTaskBar());
 
       setTimeout(() => {
-        expect(mockTaskService.focusTaskIfPossible).toHaveBeenCalledWith(pendingTaskId);
+        expect(pendingTaskElement.focus).toHaveBeenCalledWith({ preventScroll: true });
         document.body.removeChild(pendingTaskElement);
         done();
       }, 100);
     });
 
-    it('should restore focus to task when hiding add task bar without new task id', (done) => {
+    it('should restore focus to task with preventScroll when hiding add task bar without new task id', (done) => {
       // Spy on focus method
       spyOn(mockTaskElement, 'focus');
 
@@ -137,9 +134,7 @@ describe('LayoutService', () => {
 
       // Wait for the timeout to restore focus
       setTimeout(() => {
-        expect(mockTaskElement.focus).toHaveBeenCalled();
-        expect(mockTaskService.focusTaskIfPossible).not.toHaveBeenCalled();
-        expect(mockTaskService.focusFirstTaskIfVisible).not.toHaveBeenCalled();
+        expect(mockTaskElement.focus).toHaveBeenCalledWith({ preventScroll: true });
         done();
       }, 100);
     });
@@ -195,7 +190,6 @@ describe('LayoutService', () => {
       // Wait for the timeout
       setTimeout(() => {
         expect(mockTaskElement.focus).not.toHaveBeenCalled();
-        expect(mockTaskService.focusFirstTaskIfVisible).toHaveBeenCalled();
         done();
       }, 100);
     });
@@ -213,9 +207,39 @@ describe('LayoutService', () => {
       service.hideAddTaskBar('missing-task');
 
       setTimeout(() => {
-        expect(mockTaskElement.focus).toHaveBeenCalled();
-        expect(mockTaskService.focusFirstTaskIfVisible).not.toHaveBeenCalled();
-        expect(mockTaskService.focusTaskIfPossible).not.toHaveBeenCalled();
+        expect(mockTaskElement.focus).toHaveBeenCalledWith({ preventScroll: true });
+        done();
+      }, 100);
+    });
+  });
+
+  describe('scrollToNewTask', () => {
+    it('should scroll an existing task into view after a short delay', (done) => {
+      const taskId = 'scroll-task';
+      const taskElement = document.createElement('div');
+      taskElement.id = `t-${taskId}`;
+      spyOn(taskElement, 'scrollIntoView');
+      document.body.appendChild(taskElement);
+
+      service.scrollToNewTask(taskId);
+
+      setTimeout(() => {
+        expect(taskElement.scrollIntoView).toHaveBeenCalledWith({
+          behavior: 'instant',
+          block: 'center',
+          inline: 'nearest',
+        });
+
+        document.body.removeChild(taskElement);
+        done();
+      }, 100);
+    });
+
+    it('should do nothing if the task element is missing', (done) => {
+      service.scrollToNewTask('missing-task');
+
+      setTimeout(() => {
+        expect().nothing();
         done();
       }, 100);
     });

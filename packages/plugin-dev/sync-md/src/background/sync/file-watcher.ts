@@ -18,17 +18,28 @@ export const startFileWatcher = (filePath: string, onChange: () => void): void =
     return;
   }
 
+  // Track whether initial mtime has been resolved to avoid
+  // race conditions between the initial fetch and the first poll
+  let initialMtimeResolved = false;
+
   // Get initial mtime
   getFileMtime(filePath)
     .then((mtime) => {
       lastMtime = mtime;
+      initialMtimeResolved = true;
     })
     .catch(() => {
       lastMtime = null;
+      initialMtimeResolved = true;
     });
 
   // Poll for changes
   clearIntervalFn = lazySetInterval(async () => {
+    // Skip polling until the initial mtime has been resolved
+    if (!initialMtimeResolved) {
+      return;
+    }
+
     try {
       const currentMtime = await getFileMtime(filePath);
       if (lastMtime && currentMtime && currentMtime.getTime() !== lastMtime.getTime()) {

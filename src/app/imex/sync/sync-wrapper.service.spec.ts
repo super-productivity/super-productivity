@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
@@ -15,6 +15,8 @@ import { ReminderService } from '../../features/reminder/reminder.service';
 import { DataInitService } from '../../core/data-init/data-init.service';
 import { UserInputWaitStateService } from './user-input-wait-state.service';
 import { SuperSyncStatusService } from '../../op-log/sync/super-sync-status.service';
+import { SuperSyncWebSocketService } from '../../op-log/sync/super-sync-websocket.service';
+import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-download.service';
 import {
   AuthFailSPError,
   MissingCredentialsSPError,
@@ -44,14 +46,23 @@ describe('SyncWrapperService', () => {
   let mockReminderService: jasmine.SpyObj<ReminderService>;
   let mockUserInputWaitState: jasmine.SpyObj<UserInputWaitStateService>;
   let mockSuperSyncStatusService: jasmine.SpyObj<SuperSyncStatusService>;
+  let mockSuperSyncWsService: jasmine.SpyObj<SuperSyncWebSocketService> & {
+    isConnected: ReturnType<typeof signal<boolean>>;
+  };
+  let mockWsDownloadService: jasmine.SpyObj<WsTriggeredDownloadService>;
 
   let configSubject: BehaviorSubject<any>;
   let mockSyncCapableProvider: any;
 
-  const createMockSyncConfig = (provider: SyncProviderId | null): { sync: any } => ({
+  const createMockSyncConfig = (
+    provider: SyncProviderId | null,
+    overrides: Record<string, unknown> = {},
+  ): { sync: any } => ({
     sync: {
       syncProvider: provider,
       syncInterval: 60000,
+      isManualSyncOnly: false,
+      ...overrides,
     },
   });
 
@@ -163,6 +174,19 @@ describe('SyncWrapperService', () => {
       },
     );
 
+    mockSuperSyncWsService = Object.assign(
+      jasmine.createSpyObj('SuperSyncWebSocketService', ['connect', 'disconnect']),
+      {
+        isConnected: signal(false),
+      },
+    );
+    mockSuperSyncWsService.connect.and.returnValue(Promise.resolve());
+
+    mockWsDownloadService = jasmine.createSpyObj('WsTriggeredDownloadService', [
+      'start',
+      'stop',
+    ]);
+
     TestBed.configureTestingModule({
       providers: [
         SyncWrapperService,
@@ -179,6 +203,8 @@ describe('SyncWrapperService', () => {
         { provide: ReminderService, useValue: mockReminderService },
         { provide: UserInputWaitStateService, useValue: mockUserInputWaitState },
         { provide: SuperSyncStatusService, useValue: mockSuperSyncStatusService },
+        { provide: SuperSyncWebSocketService, useValue: mockSuperSyncWsService },
+        { provide: WsTriggeredDownloadService, useValue: mockWsDownloadService },
       ],
     });
 
@@ -230,6 +256,109 @@ describe('SyncWrapperService', () => {
       const result = await service.sync();
 
       expect(result).toBe(SyncStatus.InSync);
+    });
+  });
+
+  describe('syncInterval$', () => {
+    it('should use 1 minute for SuperSync when websocket is disconnected', async () => {
+      expect(await firstValueFrom(service.syncInterval$)).toBe(60000);
+    });
+
+    it('should use 5 minutes for SuperSync when websocket is connected', async () => {
+      mockSuperSyncWsService.isConnected.set(true);
+      configSubject.next(createMockSyncConfig(SyncProviderId.SuperSync));
+
+      expect(await firstValueFrom(service.syncInterval$)).toBe(300000);
+    });
+
+    it('should return 0 for manual sync only', async () => {
+      configSubject.next(
+        createMockSyncConfig(SyncProviderId.SuperSync, { isManualSyncOnly: true }),
+      );
+
+      expect(await firstValueFrom(service.syncInterval$)).toBe(0);
+    });
+
+    it('should use configured interval for non-SuperSync providers', async () => {
+      configSubject.next(
+        createMockSyncConfig(SyncProviderId.WebDAV, { syncInterval: 120000 }),
+      );
+
+      expect(await firstValueFrom(service.syncInterval$)).toBe(120000);
+    });
+  });
+
+  describe('websocket integration', () => {
+    it('should disconnect websocket when provider changes away from SuperSync', async () => {
+      configSubject.next(createMockSyncConfig(SyncProviderId.WebDAV));
+      await Promise.resolve();
+
+      expect(mockWsDownloadService.stop).toHaveBeenCalled();
+      expect(mockSuperSyncWsService.disconnect).toHaveBeenCalled();
+    });
+
+    it('should connect websocket after successful SuperSync sync', async () => {
+      const mockProvider = {
+        getWebSocketParams: jasmine.createSpy().and.returnValue(
+          Promise.resolve({
+            baseUrl: 'https://sync.example.com',
+            accessToken: 'token-123',
+          }),
+        ),
+      };
+      mockProviderManager.getProviderById.and.returnValue(
+        Promise.resolve(mockProvider as any),
+      );
+
+      await service.sync();
+      // Flush microtasks: connectWebSocket() is fire-and-forget (not awaited in _sync).
+      // Two flushes needed: one for getProviderById, one for getWebSocketParams + connect.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockProviderManager.getProviderById).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+      );
+      expect(mockProvider.getWebSocketParams).toHaveBeenCalled();
+      expect(mockSuperSyncWsService.connect).toHaveBeenCalledWith(
+        'https://sync.example.com',
+        'token-123',
+      );
+      expect(mockWsDownloadService.start).toHaveBeenCalled();
+    });
+
+    it('should no-op connectWebSocket when provider is not SuperSync', async () => {
+      configSubject.next(createMockSyncConfig(SyncProviderId.WebDAV));
+      await service.connectWebSocket();
+      await Promise.resolve();
+
+      expect(mockProviderManager.getProviderById).not.toHaveBeenCalled();
+    });
+
+    it('should no-op connectWebSocket when getWebSocketParams returns null', async () => {
+      const mockProvider = {
+        getWebSocketParams: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
+      };
+      mockProviderManager.getProviderById.and.returnValue(
+        Promise.resolve(mockProvider as any),
+      );
+
+      await service.connectWebSocket();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockProvider.getWebSocketParams).toHaveBeenCalled();
+      expect(mockSuperSyncWsService.connect).not.toHaveBeenCalled();
+    });
+
+    it('should skip WS connection after sync if already connected', async () => {
+      mockSuperSyncWsService.isConnected.set(true);
+
+      await service.sync();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockSuperSyncWsService.connect).not.toHaveBeenCalled();
     });
   });
 

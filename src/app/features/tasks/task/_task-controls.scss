@@ -225,82 +225,12 @@
   z-index: var(--z-drag-over-msg);
 }
 
-.check-done {
-  opacity: 0.5;
-  @include center;
-  display: block;
-  z-index: var(--z-check-done);
-  transition: var(--transition-standard);
-  border-radius: 50%;
-
-  &:hover {
-    opacity: 1 !important;
-
-    mat-icon {
-      animation: var(--transition-duration-m) success-btn-ani linear;
-    }
-
-    .check {
-      display: none;
-    }
-
-    .undo {
-      display: block;
-    }
-  }
-
-  mat-icon {
-    font-size: var(--task-icon-size);
-    height: var(--task-icon-size);
-    width: var(--task-icon-size);
-    line-height: var(--task-icon-size);
-
-    &.undo {
-      display: none;
-    }
-  }
-}
-
-// SWIPE BLOCKS
-.block-left,
-.block-right {
-  pointer-events: none;
-  color: var(--palette-primary-contrast-500);
-  position: absolute;
-  bottom: 2px;
-  top: 1px;
-  width: 0;
-  z-index: var(--z-swipe-block);
-  transition: var(--transition-standard);
-  border-radius: var(--task-border-radius);
-  overflow: hidden;
-
-  &.isActive {
-    background-color: var(--c-accent);
-  }
-
-  mat-icon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scaleX(1);
-  }
-}
-
-.block-left {
-  left: 0;
-}
-
-.block-right {
-  right: 0;
-}
-
 progress-bar {
   z-index: var(--z-progress-bar);
 }
 
-// BUTTON STYLES AND DRAG HANDLE
-// -----------------------------
+// BUTTON STYLES
+// -------------
 .toggle-sub-tasks-btn,
 .first-line ::ng-deep .ico-btn,
 .first-line .ico-btn {
@@ -334,82 +264,14 @@ progress-bar {
   }
 }
 
-.drag-handle {
+done-toggle {
   margin-left: var(--s);
   margin-right: 0;
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  z-index: var(--z-drag-handle);
-  //display: flex;
-  //justify-content: center;
-  //align-items: center;
-  position: relative;
-  // fixes drag and drop on mobile
-  touch-action: none;
-  pointer-events: all;
-
-  @include grabCursor();
 
   @include verySmallMainContainer {
     width: 8px;
     min-width: 0;
     opacity: 0;
-  }
-
-  > * {
-    pointer-events: none;
-    @include center;
-  }
-
-  .type-ico-wrapper {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    opacity: var(--task-icon-default-opacity);
-    position: absolute;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    @include mq(xs, max) {
-      display: none;
-    }
-
-    :host.isCurrent &::ng-deep mat-icon {
-      transform: scale(1.4) !important;
-      transform-origin: center center;
-      opacity: 0.18;
-    }
-  }
-
-  .drag-handle-ico {
-    opacity: 0.15;
-
-    :host.isCurrent & {
-      opacity: 0;
-    }
-  }
-
-  &:active {
-    cursor: grabbing;
-  }
-
-  // hit area
-  &:after {
-    content: '';
-    position: absolute;
-    top: calc(-1 * var(--s-quarter));
-    bottom: calc(-1 * var(--s-quarter));
-    left: calc(-1 * var(--s-quarter));
-    right: calc(-1 * var(--s-quarter));
-
-    @include mq(xs) {
-      top: calc(-1 * var(--s));
-      bottom: calc(-1 * var(--s));
-      left: calc(-1 * var(--s));
-      right: calc(-1 * var(--s-half));
-    }
   }
 }
 
@@ -464,24 +326,19 @@ progress-bar {
 
 .toggle-sub-tasks-btn.toggle-sub-tasks-btn {
   position: absolute !important;
-  // overwrite any lower values set elsewhere
-  opacity: 1;
   transform: translateY(-50%);
-  left: -24px;
+  left: -20px;
   top: 50%;
   z-index: var(--z-toggle-sub-task-btn) !important;
   min-width: 0;
   min-height: 0;
-  width: 32px !important;
-  height: 32px !important;
+  width: 24px !important;
+  height: 24px !important;
   margin-top: -1px !important;
   transform-origin: left top;
   transition-property: all;
-  box-shadow: var(--whiteframe-shadow-1dp);
-
-  :host-context(.isNoTouchOnly) & {
-    //opacity: 0;
-  }
+  box-shadow: none;
+  background: var(--bg-lighter) !important;
 
   :host:hover & {
     opacity: 1;
@@ -489,7 +346,9 @@ progress-bar {
 
   mat-icon {
     transition: var(--transition-standard);
-    opacity: var(--task-icon-default-opacity);
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
 
     &.isHideDoneTasks {
       transform: rotate(-45deg);
@@ -508,40 +367,6 @@ progress-bar {
   :host-context(.isHidePlayBtn) & {
     display: none !important;
   }
-}
-
-// ANIMATIONS ETC
-// --------------
-@keyframes success-btn-ani {
-  0% {
-    transform: scale(0.5) rotate(-180deg);
-  }
-  50% {
-    transform: scale(1) rotate(-90deg);
-  }
-  100% {
-    transform: scale(1) rotate(0deg);
-  }
-}
-
-.isPreventPointerEventsWhilePanning {
-  * {
-    user-select: none !important;
-    pointer-events: none !important;
-    transition: none !important;
-  }
-}
-
-.mini-badge {
-  line-height: var(--mini-badge-size);
-  width: var(--mini-badge-size);
-  height: var(--mini-badge-size);
-  font-size: 12px;
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  border-radius: 50%;
-  text-align: center;
 }
 
 .parent-title {
@@ -587,7 +412,7 @@ progress-bar {
   white-space: nowrap;
   background: #fff;
 
-  // avoid affecting drag handle
+  // avoid affecting done toggle
   pointer-events: none;
 
   @include darkTheme() {

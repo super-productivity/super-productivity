@@ -64,7 +64,9 @@
     >
       <h2>{{ T.SCHEDULE.SCHEDULED_TASKS_WITH_TIME | translate }}</h2>
       @if (!allScheduledTasks?.length) {
-        <p class="no-scheduled-tasks">{{ T.SCHEDULE.NO_SCHEDULED | translate }}</p>
+        <p class="no-scheduled-tasks">
+          {{ T.SCHEDULE.NO_SCHEDULED_WITH_TIME | translate }}
+        </p>
       }
       <div
         [@standardList]="allScheduledTasks?.length"
@@ -108,7 +110,9 @@
     >
       <h2>{{ T.SCHEDULE.NO_SCHEDULED_TITLE | translate }}</h2>
       @if (!allScheduledTasks?.length) {
-        <p class="no-scheduled-tasks">{{ T.SCHEDULE.NO_SCHEDULED | translate }}</p>
+        <p class="no-scheduled-tasks">
+          {{ T.SCHEDULE.NO_SCHEDULED_FOR_DAY | translate }}
+        </p>
       }
       <div
         [@standardList]="allScheduledTasks?.length"

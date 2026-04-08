@@ -22,6 +22,8 @@
       <planner-task
         cdkDrag
         [cdkDragData]="task"
+        [cdkDragStartDelay]="dragDelayForTouch()"
+        [cdkDragLockAxis]="isXs() ? 'y' : ''"
         [task]="task"
         [day]=""
       ></planner-task>

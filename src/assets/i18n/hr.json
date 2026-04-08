@@ -25,6 +25,24 @@
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "Za spremanje ponovo pritisni tipku enter"
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Naučite tipkovničke prečace",
+      "NOTES": "Super Productivity je dizajniran za korištenje s tipkovnicom. Naučite prečace kako biste radili brže.\n\n**Kako početi:**\n1. Otvorite **bočni izbornik**\n2. Idite na **Pomoć**\n3. Kliknite na **Obilazak tipkovničke navigacije**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Stvorite svoj prvi projekt",
+      "NOTES": "Projekti vam pomažu organizirati zadatke prema područjima rada. Svaki projekt ima vlastiti popis zadataka i backlog.\n\n**Kako stvoriti projekt:**\n1. Kliknite gumb **+** pokraj **Projekti** u bočnoj traci\n2. Dajte mu ime i odaberite boju\n3. Počnite dodavati zadatke"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Postavite sinkronizaciju",
+      "NOTES": "Zaštitite svoje podatke i pristupajte im s različitih uređaja.\n\n**Kako postaviti:**\n1. Otvorite **Postavke** (ikona zupčanika u bočnoj traci)\n2. Idite na **Sinkronizacija**\n3. Odaberite pružatelja: Super Sync, Dropbox, WebDAV ili sinkronizaciju lokalnom datotekom\n4. Slijedite upute za postavljanje"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Otkrijte više",
+      "NOTES": "Ima još mnogo toga za otkriti!\n\n**Značajke aplikacije** (u Postavkama) — Omogućite integracije, navike i druge značajke. Idite na **Postavke → Značajke aplikacije** da vidite što je dostupno.\n\n**Ploče** — Vizualizirajte svoje zadatke na prilagodljivim Kanban pločama. Omogućite ih u **Značajkama aplikacije**, zatim ih pronađite u **bočnom izborniku**.\n\n**Raspored** — Planirajte svoj dan dodjeljivanjem zadataka na određena vremena. Povucite zadatke u prikaz **Raspored** na bočnoj traci.\n\n**Integracije** — Nakon omogućavanja u Značajkama aplikacije, uvezite zadatke iz Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV i mnogo više. Također možete integrirati svoj kalendar. Konfigurirajte ih u **Panelu pružatelja zadataka**.\n\n**Navike** — Pratite ponavljajuće navike i rutine. Pronađite ih u **bočnom izborniku** nakon omogućavanja.\n\n**Dodaci** — Dodajte značajke poput Uništavača prokrastinacije, Automatizacija ili Glasovnih podsjetnika. Idite na **Postavke → Dodaci**.\n\n**Prilagodba** — Teme, tamni način rada, tipkovnički prečaci, jezik i alati za produktivnost — sve se nalazi u **Postavkama**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2339,6 +2357,36 @@
     "STATUS_COMPLETE": "Migracija dovršena!",
     "STATUS_MIGRATING": "Migracija podataka...",
     "STATUS_PREPARING": "Priprema migracije..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Kako želite koristiti Super Productivity?",
+    "SUBTITLE": "Odaberite postavke koje odgovaraju vašem načinu rada. Uvijek to možete promijeniti kasnije u Postavkama.",
+    "PRIVACY_HINT": "Vaši podaci ostaju sigurni na vašem uređaju. Ništa se ne šalje na poslužitelj.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Jednostavan popis zadataka",
+        "DESCRIPTION": "Pregledni upravitelj zadataka s projektima, oznakama i bilješkama. Bez dodataka."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Praćenje vremena",
+        "DESCRIPTION": "Pratite koliko vremena zadaci oduzimaju. Idealno za fakturiranje sati ili razumijevanje na što trošite vrijeme."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Paket produktivnosti",
+        "DESCRIPTION": "Planirajte dan, izgradite navike, duboko se koncentrirajte i pratite vrijeme. Sve na jednom mjestu."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Kliknite + za dodavanje prvog zadatka",
+      "CREATE_TASK_TOUCH": "Dodirnite + za dodavanje prvog zadatka",
+      "EXPLORE": "Slobodno klikajte i istražujte! Pomoć možete pronaći u bočnoj traci.",
+      "EXPLORE_TOUCH": "Slobodno istražujte! Pomoć možete pronaći u izborniku.",
+      "TASK_TAP_TOUCH": "Dodirnite zadatak da otvorite njegove detalje.",
+      "TASK_SWIPE_LEFT_TOUCH": "Povucite zadatak ulijevo za više radnji",
+      "TASK_SWIPE_RIGHT_TOUCH": "Povucite zadatak udesno da ga označite dovršenim",
+      "OR_PRESS": "ili pritisnite",
+      "SKIP_ARIA": "Zatvori savjet"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Ajoute travay ki soti nan jodi a",

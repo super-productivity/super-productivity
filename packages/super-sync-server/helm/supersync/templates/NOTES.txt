@@ -1,0 +1,27 @@
+SuperSync has been deployed!
+{{- if not .Values.supersync.publicUrl }}
+
+WARNING: supersync.publicUrl is not set. Server will reject requests in production mode.
+{{- end }}
+{{- if and .Values.ingress.enabled .Values.ingress.tls (eq (len .Values.ingress.tls) 0) }}
+
+WARNING: Ingress is enabled without TLS. Consider enabling TLS for production use.
+{{- end }}
+{{- if and .Values.ingress.enabled (not .Values.ingress.tls) }}
+
+WARNING: Ingress is enabled without TLS. Consider enabling TLS for production use.
+{{- end }}
+
+Get the application URL:
+{{- if .Values.ingress.enabled }}
+  {{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+  {{- end }}
+{{- else if eq .Values.service.type "NodePort" }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "supersync.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else }}
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "supersync.fullname" . }} 8080:{{ .Values.service.port }}
+  echo http://localhost:8080
+{{- end }}

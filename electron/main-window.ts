@@ -18,11 +18,11 @@ import { readFileSync, stat } from 'fs';
 import { error, log } from 'electron-log/main';
 import { IS_MAC } from './common.const';
 import {
-  destroyOverlayWindow,
-  getIsOverlayAlwaysShow,
-  hideOverlayWindow,
-  showOverlayWindow,
-} from './overlay-indicator/overlay-indicator';
+  destroyTaskWidget,
+  getIsTaskWidgetAlwaysShow,
+  hideTaskWidget,
+  showTaskWidget,
+} from './task-widget/task-widget';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
@@ -121,7 +121,9 @@ export const createWindow = async ({
     webPreferences: {
       scrollBounce: true,
       backgroundThrottling: false,
-      webSecurity: false,
+      // CORS is handled at the session level via onBeforeSendHeaders (strips Origin)
+      // and onHeadersReceived (injects Access-Control-Allow-* headers)
+      webSecurity: true,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       // make remote module work with those two settings
@@ -173,9 +175,31 @@ export const createWindow = async ({
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Headers', ['*']);
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Methods', ['*']);
 
+    // CORS preflight must return 2xx to pass the browser check. Stripping
+    // the Origin header (above) can cause some servers to respond with a
+    // non-200 status for OPTIONS, which the browser rejects even with the
+    // injected CORS headers.
+    const statusLine =
+      details.method === 'OPTIONS' && details.statusCode >= 300
+        ? 'HTTP/1.1 200 OK'
+        : undefined;
+
     callback({
       responseHeaders,
+      statusLine,
     });
+  });
+
+  // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
+  // The app only needs notifications for desktop reminders
+  const allowedPermissions = ['notifications'];
+  mainWin.webContents.session.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      callback(allowedPermissions.includes(permission));
+    },
+  );
+  mainWin.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
+    return allowedPermissions.includes(permission);
   });
 
   mainWindowState.manage(mainWin);
@@ -330,28 +354,28 @@ function initWinEventListeners(app: Electron.App): void {
   appCloseHandler(app);
   appMinimizeHandler(app);
 
-  // Handle restore and show events to hide overlay
+  // Handle restore and show events to hide task widget
   mainWin.on('restore', () => {
-    if (!getIsOverlayAlwaysShow()) {
-      hideOverlayWindow();
+    if (!getIsTaskWidgetAlwaysShow()) {
+      hideTaskWidget();
     }
   });
 
   mainWin.on('show', () => {
-    if (!getIsOverlayAlwaysShow()) {
-      hideOverlayWindow();
+    if (!getIsTaskWidgetAlwaysShow()) {
+      hideTaskWidget();
     }
   });
 
   mainWin.on('focus', () => {
-    if (mainWin.isVisible() && !mainWin.isMinimized() && !getIsOverlayAlwaysShow()) {
-      hideOverlayWindow();
+    if (mainWin.isVisible() && !mainWin.isMinimized() && !getIsTaskWidgetAlwaysShow()) {
+      hideTaskWidget();
     }
   });
 
-  // Handle hide event to show overlay
+  // Handle hide event to show task widget
   mainWin.on('hide', () => {
-    showOverlayWindow();
+    showTaskWidget();
   });
 
   // Handle maximize and unmaximize events to change wasMaximizedBeforeHide flag accordingly
@@ -408,8 +432,8 @@ const appCloseHandler = (app: App): void => {
 
   const _quitApp = (): void => {
     setIsQuiting(true);
-    // Destroy overlay window before closing main window to ensure window-all-closed fires
-    destroyOverlayWindow();
+    // Destroy task widget before closing main window to ensure window-all-closed fires
+    destroyTaskWidget();
     mainWin.close();
   };
 
@@ -423,8 +447,8 @@ const appCloseHandler = (app: App): void => {
     ids = ids.filter((idIn) => idIn !== id);
     log(IPC.BEFORE_CLOSE_DONE, id, ids);
     if (ids.length === 0) {
-      // Destroy overlay window before closing main window
-      destroyOverlayWindow();
+      // Destroy task widget before closing main window
+      destroyTaskWidget();
       mainWin.close();
     }
   });
@@ -437,7 +461,7 @@ const appCloseHandler = (app: App): void => {
       if (getIsMinimizeToTray()) {
         setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();
-        showOverlayWindow();
+        showTaskWidget();
         return;
       }
 
@@ -476,10 +500,10 @@ const appMinimizeHandler = (app: App): void => {
         event.preventDefault();
         setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();
-        showOverlayWindow();
+        showTaskWidget();
       } else {
-        // For regular minimize (not to tray), also show overlay
-        showOverlayWindow();
+        // For regular minimize (not to tray), also show task widget
+        showTaskWidget();
         if (IS_MAC) {
           app.dock?.show();
         }

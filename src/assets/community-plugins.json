@@ -25,6 +25,11 @@
     "url": "https://codeberg.org/sinenomine/sp-asana"
   },
   {
+    "name": "Obsidian Integration",
+    "shortDescription": "Provides 2-way sync between SP tasks and Obsidian tasks.",
+    "url": "https://codeberg.org/sinenomine/sp-obsidian/"
+  },
+  {
     "name": "MCP",
     "shortDescription": "Bridge between the Super Productivity app and MCP (Model Context Protocol) servers for Claude Desktop integration.",
     "url": "https://github.com/organicmoron/SP-MCP"

@@ -45,6 +45,7 @@
     class="nav-children"
     role="list"
     draggable="false"
+    [@.disabled]="!shouldAnimateExpandCollapse()"
     [@expandCollapse]
   >
     <tree-dnd

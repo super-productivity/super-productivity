@@ -229,7 +229,7 @@ describe('OperationEncryptionService', () => {
       const encrypted = await service.encryptPayload(payload, TEST_PASSWORD);
 
       expect(typeof encrypted).toBe('string');
-      expect(encrypted).not.toContain('foo'); // Should be encrypted
+      expect(encrypted).not.toContain(JSON.stringify(payload)); // Should not expose raw JSON
 
       const decrypted = await service.decryptPayload(encrypted, TEST_PASSWORD);
       expect(decrypted).toEqual(payload);

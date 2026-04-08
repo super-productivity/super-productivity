@@ -11,7 +11,7 @@
       cdkScrollable
     >
       <header class="work-view-header">
-        @if (!isPlanningMode() && (estimateRemainingToday() || workingToday())) {
+        @if (estimateRemainingToday() || workingToday()) {
           <div
             @fade
             class="status-bar"
@@ -74,34 +74,10 @@
             }
           </div>
         }
-        @if (isPlanningMode()) {
-          <div class="planning-mode-header">
-            @if (!undoneTasks()?.length) {
-              <h3 class="planning-mode-header mat-h3">
-                {{ T.WW.ADD_SOME_TASKS | translate }}
-              </h3>
-            }
-            @if (undoneTasks()?.length) {
-              <div class="status-bar">
-                <div class="item">
-                  <span class="label">{{ T.WW.TIME_ESTIMATED | translate }}</span>
-                  <span class="no-wrap">
-                    <strong class="time-val"
-                      >~{{
-                        workContextService.estimateRemainingToday$ | async | msToString
-                      }}</strong
-                    >
-                    <mat-icon>timer</mat-icon>
-                  </span>
-                </div>
-              </div>
-            }
-          </div>
-        }
       </header>
 
       <div class="task-list-wrapper">
-        @if (!isPlanningMode() && !(workContextService.isHasTasksToWorkOn$ | async)) {
+        @if (!(workContextService.isHasTasksToWorkOn$ | async)) {
           <div
             @expandFade
             class="add-more-or-finish"
@@ -111,12 +87,12 @@
                 <img
                   class="show-light-only"
                   src="assets/illu/horizon.svg"
-                  alt="illu"
+                  alt=""
                 />
                 <img
                   class="show-dark-only"
                   src="assets/illu/horizon-dark.svg"
-                  alt="illu"
+                  alt=""
                 />
               </div>
               <h2 class="no-tasks-label">
@@ -131,7 +107,7 @@
             @if (!overdueTasks().length) {
               <div class="btn-wrapper">
                 <button
-                  (click)="planMore()"
+                  (click)="layoutService.showAddTaskBar()"
                   color=""
                   mat-stroked-button
                   tabindex="1"
@@ -141,30 +117,6 @@
                 </button>
               </div>
             }
-          </div>
-        }
-        @if (isPlanningMode()) {
-          <div
-            @expandFade
-            class="planning-mode-content"
-          >
-            <add-task-bar
-              (done)="startWork()"
-              [tabindex]="1"
-            ></add-task-bar>
-
-            <add-scheduled-today-or-tomorrow-btn></add-scheduled-today-or-tomorrow-btn>
-
-            <button
-              (click)="startWork()"
-              class="ready-to-work-btn"
-              color="primary"
-              mat-flat-button
-              tabindex="1"
-            >
-              <mat-icon>check</mat-icon>
-              {{ T.WW.READY_TO_WORK | translate }}
-            </button>
           </div>
         }
         @if (customizedUndoneTasks(); as customized) {
@@ -294,7 +246,7 @@
                 listModelId="DONE"
               ></task-list>
               <div class="finish-day-button-wrapper">
-                @if (!isOnTodayList() && hasDoneTasks()) {
+                @if (hasDoneTasks() && (!isOnTodayList() || !isFinishDayEnabled())) {
                   <button
                     class="e2e-move-done-to-archive"
                     mat-stroked-button
@@ -335,7 +287,7 @@
           </div>
         }
 
-        @if (!isPlanningMode() && isOnTodayList()) {
+        @if (isOnTodayList() && isFinishDayEnabled()) {
           <finish-day-btn [hasDoneTasks]="hasDoneTasks()"></finish-day-btn>
         }
       </div>

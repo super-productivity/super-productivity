@@ -1,9 +1,11 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   ElementRef,
   HostListener,
   inject,
+  input,
   Input,
   OnDestroy,
   OnInit,
@@ -25,10 +27,12 @@ import { map } from 'rxjs/operators';
 import { Mentions } from '../mentions/mention-config';
 import { MentionItem } from '../mentions/mention-types';
 import { CHRONO_SUGGESTIONS } from '../../features/tasks/add-task-bar/add-task-bar.const';
+import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
 
 /**
  * Inline-editable text field for task titles.
- * Click to edit, Enter/Escape to save. Applies short syntax on save.
+ * Click to edit, Enter/Escape to save. Removes newlines and short syntax.
+ * Renders URLs as clickable links when not editing.
  */
 @Component({
   selector: 'task-title',
@@ -39,6 +43,7 @@ import { CHRONO_SUGGESTIONS } from '../../features/tasks/add-task-bar/add-task-b
   host: {
     ['[class.is-focused]']: 'isFocused()',
     ['[class.is-editing]']: 'isEditing()',
+    ['[class.is-readonly]']: 'readonly()',
   },
 })
 export class TaskTitleComponent implements OnInit, OnDestroy {
@@ -52,6 +57,7 @@ export class TaskTitleComponent implements OnInit, OnDestroy {
   mentionCfg$!: Observable<MentionConfig>;
 
   private _isMentionListShown = false;
+  readonly readonly = input<boolean>(false); // When true, disables editing and only displays the value
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
   @Input() set resetToLastExternalValueTrigger(value: unknown) {
@@ -84,6 +90,12 @@ export class TaskTitleComponent implements OnInit, OnDestroy {
   lastExternalValue?: string; // Last value from parent, used to detect changes on blur
   readonly tmpValue = signal(''); // Current editing value
   readonly textarea = viewChild<ElementRef<HTMLTextAreaElement>>('textAreaElement');
+
+  /** Fast pre-check: does the title contain URL or markdown hints? */
+  readonly hasUrlsOrMarkdown = computed<boolean>(() => {
+    const text = this.tmpValue();
+    return !!text && hasLinkHints(text);
+  });
 
   readonly valueEdited = output<{
     newVal: string;
@@ -141,18 +153,32 @@ export class TaskTitleComponent implements OnInit, OnDestroy {
     });
   }
 
-  // Click anywhere to enter edit mode
-  @HostListener('mousedown', ['$event'])
-  onMouseDown(event: MouseEvent): void {
-    event.stopPropagation();
+  // Click to enter edit mode or follow links.
+  // Using click (not mousedown) allows CDK drag-and-drop to work from the title:
+  // mousedown propagates → CDK tracks pointer → drag (≥5px) prevents click; click (<5px) enters edit mode.
+  @HostListener('click', ['$event'])
+  onClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
-    if (event.button !== 0 || target?.tagName === 'TEXTAREA') {
+
+    // Let link clicks propagate to the browser but not to parent components
+    if (target?.tagName === 'A' || target?.closest('a')) {
+      event.stopPropagation();
       return;
     }
+
+    // Don't enter edit mode if readonly or clicking the textarea (already editing)
+    if (this.readonly() || target?.tagName === 'TEXTAREA') {
+      return;
+    }
+
+    event.stopPropagation();
     this.focusInput();
   }
 
   focusInput(): void {
+    if (this.readonly()) {
+      return; // Don't allow focusing in readonly mode
+    }
     this._isEditing.set(true);
     if (this._focusTimeoutId) {
       window.clearTimeout(this._focusTimeoutId);

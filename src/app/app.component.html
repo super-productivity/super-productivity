@@ -15,7 +15,6 @@
     (done)="layoutService.hideAddTaskBar()"
     (afterTaskAdd)="onTaskAdded($event)"
     [isGlobalBarVariant]="true"
-    [isDisableAutoFocus]="shepherdService.isActive"
     class="global"
   ></add-task-bar>
 }
@@ -34,7 +33,8 @@
 } @else {
   <div
     class="app-container"
-    [class.has-mobile-bottom-nav]="isShowMobileButtonNav"
+    [class.has-mobile-bottom-nav]="isShowMobileButtonNav()"
+    [class.app-entrance]="isAppEntrance()"
     [dir]="isRTL ? 'rtl' : 'ltr'"
   >
     <magic-side-nav
@@ -45,7 +45,7 @@
 
     <main class="main-content">
       <header
-        [class.isNotScrolled]="!layoutService.isScrolled()"
+        [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
         class="header-wrapper"
       >
         <main-header></main-header>
@@ -68,6 +68,7 @@
     <!-- Mobile Bottom Navigation -->
     @if (isShowMobileButtonNav()) {
       <mobile-bottom-nav
+        [isEntrance]="isAppEntrance()"
         (toggleMobileNavEvent)="magicSideNav.toggleMobileNav()"
       ></mobile-bottom-nav>
     }
@@ -75,8 +76,14 @@
 }
 <!-- -->
 
-@defer {
-  <shepherd></shepherd>
+@if (isShowOnboardingPresets()) {
+  <onboarding-preset-selection
+    (presetSelected)="onPresetSelected()"
+  ></onboarding-preset-selection>
+}
+
+@if (onboardingHintService.currentStep()) {
+  <onboarding-hint></onboarding-hint>
 }
 
 <!-- Background context menu -->
@@ -84,9 +91,7 @@
   <context-menu
     [contextMenu]="backgroundContextMenu"
     [rightClickTriggerEl]="routeWrapper.nativeElement"
-    [allowedSelectors]="
-      '.route-wrapper, .today, .task-list-wrapper, .page-wrapper, .route-wrapper > *, .search-results'
-    "
+    [allowedSelectors]="'.route-wrapper, .today, .task-list-wrapper, .page-wrapper, .route-wrapper > *, .search-results'"
   ></context-menu>
 }
 
@@ -94,12 +99,17 @@
   <div style="min-width: 200px; max-width: 300px">
     <button
       mat-menu-item
-      (click)="changeBackgroundFromUnsplash()"
+      (click)="openSettings()"
       class="background-menu-item"
       style="width: 100%; overflow: hidden"
     >
-      <mat-icon>image</mat-icon>
-      <span>{{ T.APP.CONTEXT_MENU.CHANGE_BACKGROUND | translate }}</span>
+      <mat-icon>settings</mat-icon>
+      <span>{{
+        (workContextService.activeWorkContextType === 'PROJECT'
+          ? T.APP.CONTEXT_MENU.CHANGE_PROJECT_SETTINGS
+          : T.APP.CONTEXT_MENU.CHANGE_TAG_SETTINGS
+        ) | translate
+      }}</span>
     </button>
   </div>
 </ng-template>

@@ -40,24 +40,6 @@ export class ImportPage extends BasePage {
     // Wait for page content to fully render
     await this.page.waitForTimeout(1000);
 
-    // Dismiss any tour/welcome dialogs that might be blocking interactions
-    // Look for Shepherd tour dialog or Material dialogs
-    const tourDialog = this.page.locator('[data-shepherd-step-id="Welcome"]');
-    if (await tourDialog.isVisible().catch(() => false)) {
-      // Close button is in the tour dialog
-      const closeBtn = tourDialog.locator(
-        '.shepherd-cancel-icon, button.shepherd-cancel-icon',
-      );
-      if (await closeBtn.isVisible().catch(() => false)) {
-        await closeBtn.click();
-        await this.page.waitForTimeout(300);
-      } else {
-        // Try pressing Escape to dismiss
-        await this.page.keyboard.press('Escape');
-        await this.page.waitForTimeout(300);
-      }
-    }
-
     // The file-imex component is now in the "Sync & Backup" tab (5th tab, index 4)
     // Step 1: Click on the "Sync & Backup" tab to navigate to it
     const syncBackupTab = this.page.locator(

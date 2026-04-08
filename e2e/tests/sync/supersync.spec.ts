@@ -797,7 +797,7 @@ test.describe('@supersync SuperSync E2E', () => {
 
       // Verify tracking started
       const taskLocatorA = getTaskElement(clientA, taskName);
-      const playIndicator = taskLocatorA.locator('.play-icon-indicator');
+      const playIndicator = taskLocatorA.locator('.play-indicator');
       await expect(playIndicator).toBeVisible({ timeout: 5000 });
       console.log('[TimeTrack Test] Time tracking active');
 

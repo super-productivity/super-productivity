@@ -65,3 +65,8 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+      softprops-action-gh-release-major:
+        patterns:
+          - 'softprops/action-gh-release'
+        update-types:
+          - 'major'

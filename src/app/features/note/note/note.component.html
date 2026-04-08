@@ -14,12 +14,21 @@
     }
     @if (!note.imgUrl) {
       <div class="content">
-        <div
-          (click)="editFullscreen($event)"
-          markdown
-          [data]="isLongNote ? resolvedShortenedContent() : resolvedContent()"
-          class="markdown-preview markdown"
-        ></div>
+        @if (note.isLock) {
+          <div
+            (click)="editFullscreen($event)"
+            class="markdown-preview"
+          >
+            {{ isLongNote ? resolvedShortenedContent() : resolvedContent() }}
+          </div>
+        } @else {
+          <div
+            (click)="editFullscreen($event)"
+            markdown
+            [data]="isLongNote ? resolvedShortenedContent() : resolvedContent()"
+            class="markdown-preview markdown"
+          ></div>
+        }
       </div>
     }
     <div

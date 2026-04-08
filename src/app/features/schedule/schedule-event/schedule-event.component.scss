@@ -212,6 +212,11 @@
   pointer-events: none;
 }
 
+.calendar-menu-anchor {
+  position: absolute;
+  pointer-events: auto;
+}
+
 .ico-wrapper {
   position: relative;
   margin: var(--s) 0 0 6px;
@@ -230,20 +235,6 @@
 
   mat-icon {
     display: block;
-
-    & + mat-icon {
-      display: none;
-    }
-  }
-
-  :host:hover & mat-icon {
-    &:first-of-type:not(:last-of-type) {
-      display: none;
-    }
-
-    &:nth-child(2) {
-      display: block;
-    }
   }
 }
 
@@ -320,6 +311,15 @@
   :host.SplitTaskContinuedLast &,
   :host.RepeatProjectionSplitContinuedLast & {
     line-clamp: 1;
+  }
+
+  // Override inherited pointer-events: none from :host > * so links are clickable.
+  // position: relative + z-index: 4 lifts links above the ::before overlay (z-index: 3).
+  a {
+    pointer-events: auto;
+    cursor: pointer;
+    position: relative;
+    z-index: 4;
   }
 }
 
@@ -447,4 +447,11 @@
       background: var(--c-accent);
     }
   }
+}
+
+.cal-menu-trigger {
+  position: absolute;
+  width: 0;
+  height: 0;
+  visibility: hidden;
 }

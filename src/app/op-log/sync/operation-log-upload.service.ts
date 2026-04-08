@@ -399,6 +399,9 @@ export class OperationLogUploadService {
       vectorClock: entry.op.vectorClock,
       timestamp: entry.op.timestamp,
       schemaVersion: entry.op.schemaVersion,
+      ...(entry.op.syncImportReason
+        ? { syncImportReason: entry.op.syncImportReason }
+        : {}),
     };
   }
 
@@ -461,6 +464,7 @@ export class OperationLogUploadService {
         op.id, // CRITICAL: Pass op.id to prevent ID mismatch bugs
         isCleanSlate,
         op.opType as RestorePointType,
+        op.syncImportReason,
       );
       return response;
     } catch (err) {

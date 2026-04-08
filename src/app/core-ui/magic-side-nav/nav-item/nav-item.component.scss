@@ -69,8 +69,10 @@
   font-weight: normal;
 }
 
-:host:hover .task-count {
-  display: none !important;
+@media (hover: hover) {
+  :host:hover .task-count {
+    display: none !important;
+  }
 }
 
 @media (hover: none) {
@@ -79,7 +81,8 @@
     visibility: visible;
   }
   .task-count {
-    display: none !important;
+    right: 48px !important;
+    display: flex !important;
   }
 }
 
@@ -96,10 +99,6 @@
   color: var(--text-color-muted);
   // avoid affecting drag handle
   pointer-events: none;
-
-  @include mq(xs, max) {
-    display: none;
-  }
 }
 
 // Active state visuals - ensure they override Angular Material styles

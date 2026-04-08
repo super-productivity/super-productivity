@@ -38,6 +38,7 @@ import { ConfigSectionComponent } from '../../features/config/config-section/con
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SYNC_FORM } from '../../features/config/form-cfgs/sync-form.const';
+import { EXPERIMENTAL_APP_FEATURE_KEYS } from '../../features/config/form-cfgs/app-features-form.const';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { map } from 'rxjs/operators';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
@@ -60,7 +61,6 @@ import { DialogDisableProfilesConfirmationComponent } from '../../features/user-
 import { DialogRestorePointComponent } from '../../imex/sync/dialog-restore-point/dialog-restore-point.component';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
-import { LS } from '../../core/persistence/storage-keys.const';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -323,45 +323,6 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
                           true,
                         );
                       }
-
-                      // Test conditional header support
-                      const testPath = `${webDavCfg.syncFolderPath || '/'}/.sp-header-test-${Date.now()}`;
-                      try {
-                        const supportsHeaders =
-                          await api.testConditionalHeaders(testPath);
-
-                        if (
-                          !supportsHeaders &&
-                          !localStorage.getItem(
-                            LS.WEBDAV_CONDITIONAL_HEADER_WARNING_DISMISSED,
-                          )
-                        ) {
-                          const dialogRef = this._matDialog.open(DialogConfirmComponent, {
-                            data: {
-                              title:
-                                T.F.SYNC.FORM.WEB_DAV.CONDITIONAL_HEADER_WARNING_TITLE,
-                              message:
-                                T.F.SYNC.FORM.WEB_DAV.CONDITIONAL_HEADER_WARNING_MSG,
-                              okTxt: T.G.OK,
-                              hideCancelButton: true,
-                              showDontShowAgain: true,
-                            },
-                          });
-                          const res = await firstValueFrom(dialogRef.afterClosed());
-                          if (res?.dontShowAgain) {
-                            localStorage.setItem(
-                              LS.WEBDAV_CONDITIONAL_HEADER_WARNING_DISMISSED,
-                              'true',
-                            );
-                          }
-                        }
-                      } catch (headerTestError) {
-                        // Ignore header test errors - connection test was successful
-                        Log.warn(
-                          'WebDAV conditional header test failed:',
-                          headerTestError,
-                        );
-                      }
                     } else {
                       this._snackService.open({
                         type: 'ERROR',
@@ -573,6 +534,21 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       throw new Error('Not enough data');
     }
 
+    // Check if user is trying to enable an experimental feature
+    const currentAppFeatures = this.globalCfg?.appFeatures;
+    if (
+      sectionKey === 'appFeatures' &&
+      currentAppFeatures &&
+      EXPERIMENTAL_APP_FEATURE_KEYS.some(
+        (key) => config[key] === true && currentAppFeatures[key] === false,
+      )
+    ) {
+      const confirmed = await this._showExperimentalWarningDialog();
+      if (!confirmed) {
+        return;
+      }
+    }
+
     // Check if user is trying to disable user profiles when multiple profiles exist
     if (
       sectionKey === 'appFeatures' &&
@@ -617,6 +593,20 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
         resolve(!!result);
       });
     });
+  }
+
+  private async _showExperimentalWarningDialog(): Promise<boolean> {
+    const dialogRef = this._matDialog.open(DialogConfirmComponent, {
+      restoreFocus: true,
+      data: {
+        title: T.GCF.APP_FEATURES.EXPERIMENTAL_WARNING_TITLE,
+        titleIcon: 'warning',
+        message: T.GCF.APP_FEATURES.EXPERIMENTAL_WARNING_MSG,
+        okTxt: T.G.CONFIRM,
+        cancelTxt: T.G.CANCEL,
+      },
+    });
+    return !!(await firstValueFrom(dialogRef.afterClosed()));
   }
 
   getGlobalCfgSection(

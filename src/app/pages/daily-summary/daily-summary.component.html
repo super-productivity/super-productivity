@@ -8,7 +8,10 @@
       <span>{{ T.PDS.SUMMARY_FOR | translate: { dayStr: dayStr } }}</span>
     }
   </h1>
-  <div class="daily-summary-summary">
+  <div
+    class="daily-summary-summary"
+    [class.is-loading-archive]="!isArchiveLoaded()"
+  >
     <div class="summary-point">
       <mat-icon>schedule</mat-icon>
       <div class="summary-text">
@@ -162,8 +165,10 @@
               [isForToday]="isForToday"
               [isShowYesterday]="isForToday && isIncludeYesterday"
             ></task-summary-tables>
-          } @else {
+          } @else if (isArchiveLoaded()) {
             <p>{{ T.PDS.NO_TASKS | translate }}</p>
+          } @else {
+            <mat-spinner style="margin: auto"></mat-spinner>
           }
           @if (tasks?.length) {
             <tasks-by-tag

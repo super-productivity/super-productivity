@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockStore } from '@ngrx/store/testing';
+import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/web';
 import { CapacitorReminderService } from './capacitor-reminder.service';
 import { CapacitorPlatformService } from './capacitor-platform.service';
 import { CapacitorNotificationService } from './capacitor-notification.service';
@@ -134,6 +135,7 @@ describe('CapacitorReminderService', () => {
   describe('with native platform', () => {
     let nativeService: CapacitorReminderService;
     let nativePlatformSpy: jasmine.SpyObj<CapacitorPlatformService>;
+    let scheduleSpy: jasmine.Spy;
 
     beforeEach(() => {
       nativePlatformSpy = jasmine.createSpyObj(
@@ -157,6 +159,10 @@ describe('CapacitorReminderService', () => {
         },
       );
       nativePlatformSpy.isIOS.and.returnValue(true);
+
+      scheduleSpy = spyOn(LocalNotificationsWeb.prototype, 'schedule').and.returnValue(
+        Promise.resolve({ notifications: [] }),
+      );
 
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
@@ -187,6 +193,27 @@ describe('CapacitorReminderService', () => {
     it('should call notificationService.ensurePermissions when ensuring permissions', async () => {
       await nativeService.ensurePermissions();
       expect(notificationServiceSpy.ensurePermissions).toHaveBeenCalled();
+    });
+
+    it('should include sound property when scheduling on iOS', async () => {
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'TASK',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [
+            jasmine.objectContaining({
+              sound: 'default',
+            }),
+          ],
+        }),
+      );
     });
   });
 });

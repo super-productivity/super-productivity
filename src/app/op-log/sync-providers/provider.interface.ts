@@ -148,7 +148,6 @@ export const isFileSyncProvider = (
 export interface FileRevResponse {
   /** The current revision identifier for the file */
   rev: string;
-  legacyRev?: string;
 }
 
 /**
@@ -178,6 +177,8 @@ export interface SyncOperation {
   schemaVersion: number;
   /** True if payload is an encrypted string (E2E encryption enabled) */
   isPayloadEncrypted?: boolean;
+  /** Reason for a SYNC_IMPORT operation (e.g. 'PASSWORD_CHANGED', 'FILE_IMPORT') */
+  syncImportReason?: string;
 }
 
 /**
@@ -325,6 +326,7 @@ export interface OperationSyncCapable {
     opId: string,
     isCleanSlate?: boolean,
     snapshotOpType?: RestorePointType,
+    syncImportReason?: string,
   ): Promise<SnapshotUploadResponse>;
 
   /**

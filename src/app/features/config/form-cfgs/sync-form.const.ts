@@ -132,7 +132,11 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
-          { label: 'WebDAV (experimental)', value: SyncProviderId.WebDAV },
+          { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
+          {
+            label: 'WebDAV (not recommended / no support)',
+            value: SyncProviderId.WebDAV,
+          },
           ...(IS_ELECTRON || IS_ANDROID_WEB_VIEW
             ? [
                 {
@@ -216,6 +220,75 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       ],
     },
 
+    // Nextcloud provider form fields
+    {
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider !== SyncProviderId.Nextcloud,
+      resetOnHide: false,
+      key: 'nextcloud',
+      fieldGroup: [
+        // CORS info (web only)
+        ...(!IS_ELECTRON && !IS_NATIVE_PLATFORM
+          ? [
+              {
+                type: 'tpl',
+                templateOptions: {
+                  tag: 'p',
+                  text: T.F.SYNC.FORM.WEB_DAV.CORS_INFO,
+                },
+              },
+            ]
+          : []),
+        {
+          key: 'serverUrl',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.NEXTCLOUD.L_SERVER_URL,
+            description: T.F.SYNC.FORM.NEXTCLOUD.SERVER_URL_DESCRIPTION,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              field?.parent?.parent?.model?.syncProvider === SyncProviderId.Nextcloud,
+          },
+        },
+        {
+          key: 'userName',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.WEB_DAV.L_USER_NAME,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              field?.parent?.parent?.model?.syncProvider === SyncProviderId.Nextcloud,
+          },
+        },
+        {
+          key: 'password',
+          type: 'input',
+          templateOptions: {
+            type: 'password',
+            label: T.F.SYNC.FORM.NEXTCLOUD.L_APP_PASSWORD,
+            description: T.F.SYNC.FORM.NEXTCLOUD.APP_PASSWORD_DESCRIPTION,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              field?.parent?.parent?.model?.syncProvider === SyncProviderId.Nextcloud,
+          },
+        },
+        {
+          key: 'syncFolderPath',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.WEB_DAV.L_SYNC_FOLDER_PATH,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              field?.parent?.parent?.model?.syncProvider === SyncProviderId.Nextcloud,
+          },
+        },
+      ],
+    },
+
     // WebDAV provider form fields
     {
       hideExpression: (m, v, field) =>
@@ -226,7 +299,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         infoText: T.F.SYNC.FORM.WEB_DAV.INFO,
         corsInfoText: T.F.SYNC.FORM.WEB_DAV.CORS_INFO,
         baseUrlDescription:
-          '* https://your-next-cloud/nextcloud/remote.php/dav/files/yourUserName/',
+          '* e.g. https://your-server/remote.php/dav/files/yourUserName/',
       }),
     },
 

@@ -3,6 +3,7 @@ import { BoardsActions } from './boards.actions';
 import { BoardCfg } from '../boards.model';
 import { DEFAULT_BOARDS } from '../boards.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { nanoid } from 'nanoid';
 
 export const BOARDS_FEATURE_NAME = 'boards';
 
@@ -14,11 +15,39 @@ export const initialBoardsState: BoardsState = {
   boardCfgs: DEFAULT_BOARDS,
 };
 
+/**
+ * Fix for #6983: Replace duplicate panel IDs across boards with unique ones.
+ * Boards duplicated before the fix in 99d9fac reused panel IDs from the original,
+ * causing updatePanelCfgTaskIds to always match the first board's panel.
+ */
+export const deduplicatePanelIds = (boardsState: BoardsState): BoardsState => {
+  const seenIds = new Set<string>();
+  let changed = false;
+
+  const boardCfgs = boardsState.boardCfgs.map((board) => {
+    let boardChanged = false;
+    const panels = board.panels.map((panel) => {
+      if (seenIds.has(panel.id)) {
+        changed = true;
+        boardChanged = true;
+        return { ...panel, id: nanoid() };
+      }
+      seenIds.add(panel.id);
+      return panel;
+    });
+    return boardChanged ? { ...board, panels } : board;
+  });
+
+  return changed ? { ...boardsState, boardCfgs } : boardsState;
+};
+
 export const boardsReducer = createReducer(
   initialBoardsState,
   // META ACTIONS
   // ------------
-  on(loadAllData, (state, { appDataComplete }) => appDataComplete.boards),
+  on(loadAllData, (state, { appDataComplete }) =>
+    appDataComplete.boards ? deduplicatePanelIds(appDataComplete.boards) : state,
+  ),
 
   on(BoardsActions.addBoard, (state, { board }) => {
     return {

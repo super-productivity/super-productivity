@@ -31,6 +31,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { Store } from '@ngrx/store';
 import { moveItemBeforeItem } from '../../../util/move-item-before-item';
 import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { IssueService } from '../../issue/issue.service';
 import { SearchResultItem } from '../../issue/issue.model';
 import { MatButton } from '@angular/material/button';
@@ -41,6 +42,7 @@ import { TaskViewCustomizerService } from '../../task-view-customizer/task-view-
 import { TaskLog } from '../../../core/log';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
+import { dragDelayForTouch } from '../../../util/input-intent';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
@@ -75,6 +77,11 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
   dropListService = inject(DropListService);
+  private _layoutService = inject(LayoutService);
+  protected readonly dragDelayForTouch = dragDelayForTouch;
+  // Lock Y-axis on small screens only — on wider screens the task list may sit
+  // beside a side-nav or other drop targets that require horizontal dragging.
+  protected readonly isXs = this._layoutService.isXs;
 
   tasks = input<TaskWithSubTasks[]>([]);
   isHideDone = input(false);
@@ -191,14 +198,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     const srcListData = ev.previousContainer.data;
     const targetListData = ev.container.data;
     const draggedTask = ev.item.data;
-    TaskLog.log({
-      ev,
-      srcListData,
-      targetListData,
-      draggedTask,
+    TaskLog.log('drop', {
       listId: this.listId(),
       listModelId: this.listModelId(),
-      filteredTasks: this.filteredTasks(),
+      taskCount: this.filteredTasks()?.length,
     });
 
     if (this._scheduleExternalDragService.isCancelNextDrop()) {

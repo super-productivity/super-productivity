@@ -534,6 +534,11 @@ export class ConflictResolutionService {
             window.location.reload();
           },
         });
+
+        // FIX #6571: Throw on apply failure (parity with applyNonConflictingOps).
+        // Previously, apply failures during LWW resolution were logged but not
+        // thrown, causing sync to report IN_SYNC despite lost operations.
+        throw applyResult.failedOp.error;
       }
     }
 

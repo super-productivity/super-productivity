@@ -90,12 +90,14 @@ export interface LocalFileSyncPrivateCfg extends SyncProviderPrivateCfgBase {
 import type { DropboxPrivateCfg } from '../../sync-providers/file-based/dropbox/dropbox';
 import type { WebdavPrivateCfg } from '../../sync-providers/file-based/webdav/webdav.model';
 import type { SuperSyncPrivateCfg } from '../../sync-providers/super-sync/super-sync.model';
+import type { NextcloudPrivateCfg } from '../../sync-providers/file-based/webdav/nextcloud.model';
 
 export type SyncProviderPrivateCfg =
   | DropboxPrivateCfg
   | WebdavPrivateCfg
   | SuperSyncPrivateCfg
-  | LocalFileSyncPrivateCfg;
+  | LocalFileSyncPrivateCfg
+  | NextcloudPrivateCfg;
 
 export type PrivateCfgByProviderId<T extends SyncProviderId> =
   T extends SyncProviderId.LocalFile
@@ -106,7 +108,9 @@ export type PrivateCfgByProviderId<T extends SyncProviderId> =
         ? DropboxPrivateCfg
         : T extends SyncProviderId.SuperSync
           ? SuperSyncPrivateCfg
-          : never;
+          : T extends SyncProviderId.Nextcloud
+            ? NextcloudPrivateCfg
+            : never;
 
 // ============================================================================
 // Current Provider Config (for observable emissions)

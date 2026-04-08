@@ -85,6 +85,7 @@
   --z-right-panel-resize-handle: 65;
   --z-right-panel-edge-handle: 66;
   --z-tour: 1001;
+  --z-onboarding-hint: 1100;
   --z-dragged-nav-item: 1002;
   --z-bg-overlay: 1;
 
@@ -281,7 +282,7 @@ body {
   --divider-color: rgba(0, 0, 0, 0.12);
 
   // Backdrop
-  --c-backdrop: var(--c-light-60);
+  --c-backdrop: var(--c-dark-60);
 
   // Note colors
   --standard-note-bg: #ffffff;
@@ -409,8 +410,8 @@ body.isDarkTheme {
 
   // Text colors
   --text-color: rgb(230, 230, 230);
-  --text-color-less-intense: rgba(235, 235, 235, 0.9);
-  --text-color-muted: rgba(235, 235, 235, 0.75);
+  --text-color-less-intense: rgba(235, 235, 235, 0.8);
+  --text-color-muted: rgba(235, 235, 235, 0.65);
   --text-color-more-intense: rgb(245, 245, 245);
   --text-color-most-intense: rgb(255, 255, 255);
 

@@ -1,5 +1,10 @@
 import { ConfigFormSection, AppFeaturesConfig } from '../global-config.model';
 import { T } from '../../../t.const';
+
+export const EXPERIMENTAL_APP_FEATURE_KEYS: ReadonlyArray<keyof AppFeaturesConfig> = [
+  'isEnableUserProfiles',
+];
+
 export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
   title: T.GCF.APP_FEATURES.TITLE,
   key: 'appFeatures',
@@ -58,7 +63,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.ISSUES_PANEL,
-        icon: 'dashboard_customize',
+        icon: 'webhook',
       },
     },
     {
@@ -91,6 +96,14 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       templateOptions: {
         label: T.GCF.APP_FEATURES.DONATE_PAGE,
         icon: 'favorite',
+      },
+    },
+    {
+      key: 'isFinishDayEnabled',
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.FINISH_DAY,
+        icon: 'done_all',
       },
     },
     {

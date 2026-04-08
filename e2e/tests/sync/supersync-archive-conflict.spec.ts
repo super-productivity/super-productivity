@@ -5,7 +5,7 @@ import {
   createSimulatedClient,
   closeClient,
   waitForTask,
-  markTaskDone,
+  markTaskDoneByKey,
   renameTask,
   archiveDoneTasks,
   expectTaskInWorklog,
@@ -82,6 +82,12 @@ test.describe('@supersync Archive Conflict Resolution', () => {
       await waitForTask(clientB.page, task2Name);
       console.log('[ArchConflict] Client B received both tasks');
 
+      // Block WS-triggered downloads on Client A so it doesn't auto-receive
+      // B's rename before Phase 4 (we want a true concurrent conflict scenario)
+      await clientA.page.evaluate(
+        () => ((globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = true),
+      );
+
       // ============ PHASE 3: Client B renames Task-1 and syncs ============
       // This creates a concurrent edit that will cause conflict when Client A
       // uploads the moveToArchive operation
@@ -94,14 +100,18 @@ test.describe('@supersync Archive Conflict Resolution', () => {
 
       // ============ PHASE 4: Client A marks tasks done and archives ============
       // Client A still has old task names (hasn't synced B's rename yet)
-      await markTaskDone(clientA, task1Name);
-      await markTaskDone(clientA, task2Name);
+      await markTaskDoneByKey(clientA, task1Name);
+      await markTaskDoneByKey(clientA, task2Name);
       console.log('[ArchConflict] Client A marked both tasks as done');
 
       await archiveDoneTasks(clientA);
       console.log('[ArchConflict] Client A archived done tasks');
 
       // ============ PHASE 5: Client A syncs (may trigger conflict) ============
+      // Unblock WS downloads before syncing so normal sync flow resumes
+      await clientA.page.evaluate(
+        () => ((globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = false),
+      );
       await clientA.sync.syncAndWait();
       console.log(
         '[ArchConflict] Client A synced (uploaded archive — may have conflict)',
@@ -203,7 +213,7 @@ test.describe('@supersync Archive Conflict Resolution', () => {
 
       // ============ PHASE 3: Client A marks task done and archives ============
       // Archive happens FIRST so its timestamp is OLDER than the rename below.
-      await markTaskDone(clientA, taskName);
+      await markTaskDoneByKey(clientA, taskName);
       console.log('[BugB] Client A marked task as done');
 
       await archiveDoneTasks(clientA);
@@ -214,6 +224,17 @@ test.describe('@supersync Archive Conflict Resolution', () => {
       // Without the fix, the rename would win LWW and create an LWW Update
       // that resurrects the archived task (Bug B).
       // With the fix, archive wins regardless of timestamps.
+
+      // Debug: check task state on Client B before rename
+      const bTaskEl = clientB.page.locator(`task:has-text("${taskName}")`).first();
+      const bTaskVisible = await bTaskEl.isVisible().catch(() => false);
+      const bTaskClasses = bTaskVisible
+        ? await bTaskEl.getAttribute('class').catch(() => 'N/A')
+        : 'not visible';
+      console.log(
+        `[BugB] Client B task state before rename: visible=${bTaskVisible}, classes=${bTaskClasses}`,
+      );
+
       const taskRenamed = `BugB-T1-renamed-${uniqueId}`;
       await renameTask(clientB, taskName, taskRenamed);
       console.log(`[BugB] Client B renamed ${taskName} → ${taskRenamed} (not synced)`);

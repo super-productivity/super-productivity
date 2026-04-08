@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Store } from '@ngrx/store';
 import { of, throwError } from 'rxjs';
 import { PluginIssueProviderAdapterService } from './plugin-issue-provider-adapter.service';
@@ -6,6 +7,7 @@ import { PluginIssueProviderRegistryService } from './plugin-issue-provider-regi
 import { PluginHttpService } from './plugin-http.service';
 import {
   IssueProviderPluginDefinition,
+  PluginFieldMapping,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
@@ -13,7 +15,9 @@ import {
 } from './plugin-issue-provider.model';
 import { IssueProviderPluginType } from '../../features/issue/issue.model';
 import { Task } from '../../features/tasks/task.model';
+import { TaskService } from '../../features/tasks/task.service';
 import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
 
 describe('PluginIssueProviderAdapterService', () => {
   let service: PluginIssueProviderAdapterService;
@@ -21,6 +25,7 @@ describe('PluginIssueProviderAdapterService', () => {
   let pluginHttpSpy: jasmine.SpyObj<PluginHttpService>;
   let storeSpy: jasmine.SpyObj<Store>;
   let snackSpy: jasmine.SpyObj<SnackService>;
+  let taskServiceSpy: jasmine.SpyObj<TaskService>;
 
   const PLUGIN_KEY = 'plugin:test-plugin';
   const PROVIDER_ID = 'provider-123';
@@ -41,6 +46,7 @@ describe('PluginIssueProviderAdapterService', () => {
     put: jasmine.createSpy('put'),
     patch: jasmine.createSpy('patch'),
     delete: jasmine.createSpy('delete'),
+    request: jasmine.createSpy('request'),
   };
 
   const createMockDefinition = (
@@ -67,6 +73,7 @@ describe('PluginIssueProviderAdapterService', () => {
     registeredKey: PLUGIN_KEY,
     definition: createMockDefinition(defOverrides),
     name: 'Test Plugin',
+    humanReadableName: 'Test Plugin',
     icon: 'bug_report',
     pollIntervalMs: 5000,
     issueStrings: { singular: 'Issue', plural: 'Issues' },
@@ -76,11 +83,13 @@ describe('PluginIssueProviderAdapterService', () => {
     registrySpy = jasmine.createSpyObj('PluginIssueProviderRegistryService', [
       'getProvider',
       'hasProvider',
+      'getAvailableProviders',
     ]);
     pluginHttpSpy = jasmine.createSpyObj('PluginHttpService', ['createHttpHelper']);
     storeSpy = jasmine.createSpyObj('Store', ['select']);
 
     snackSpy = jasmine.createSpyObj('SnackService', ['open']);
+    taskServiceSpy = jasmine.createSpyObj('TaskService', ['removeMultipleTasks']);
     pluginHttpSpy.createHttpHelper.and.returnValue(mockHttpHelper);
     storeSpy.select.and.returnValue(of(mockPluginCfg));
     registrySpy.hasProvider.and.returnValue(true);
@@ -92,6 +101,7 @@ describe('PluginIssueProviderAdapterService', () => {
         { provide: PluginHttpService, useValue: pluginHttpSpy },
         { provide: Store, useValue: storeSpy },
         { provide: SnackService, useValue: snackSpy },
+        { provide: TaskService, useValue: taskServiceSpy },
       ],
     });
 
@@ -281,16 +291,77 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result.issueTimeTracked).toBeUndefined();
     });
 
-    it('should set issueLastUpdated to approximately now', () => {
-      const before = Date.now();
+    it('should set issueLastUpdated to 0 when lastUpdated is missing so first poll applies field mappings', () => {
       const result = service.getAddTaskData({
         id: 'X-1',
         title: 'Test',
       } as PluginSearchResult);
-      const after = Date.now();
 
-      expect(result.issueLastUpdated).toBeGreaterThanOrEqual(before);
-      expect(result.issueLastUpdated).toBeLessThanOrEqual(after);
+      expect(result.issueLastUpdated).toBe(0);
+    });
+
+    it('should derive dueDay from start timestamp when start is a number', () => {
+      // 2026-03-19 12:00:00 UTC
+      const issueData = {
+        id: 'ISS-10',
+        title: 'Event',
+        start: 1774008000000,
+      } as any;
+
+      const result = service.getAddTaskData(issueData);
+
+      expect((result as any).dueDay).toBeDefined();
+      expect(typeof (result as any).dueDay).toBe('string');
+      // Should be a YYYY-MM-DD string
+      expect((result as any).dueDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('should not include dueDay when start is not a number', () => {
+      const issueData = {
+        id: 'ISS-10',
+        title: 'Event',
+        start: '2026-03-19',
+      } as any;
+
+      const result = service.getAddTaskData(issueData);
+
+      expect((result as any).dueDay).toBeUndefined();
+    });
+
+    it('should not include dueDay when start is absent', () => {
+      const issueData = { id: 'ISS-10', title: 'Event' } as any;
+
+      const result = service.getAddTaskData(issueData);
+
+      expect((result as any).dueDay).toBeUndefined();
+    });
+
+    it('should set dueWithTime when dueWithTime is a number (timed event)', () => {
+      const ts = new Date('2026-03-19T14:00:00Z').getTime();
+      const issueData = {
+        id: 'ISS-10',
+        title: 'Meeting',
+        start: ts,
+        dueWithTime: ts,
+      } as any;
+
+      const result = service.getAddTaskData(issueData);
+
+      expect((result as any).dueWithTime).toBe(ts);
+      expect((result as any).dueDay).toBeUndefined();
+    });
+
+    it('should set dueDay when start is present but dueWithTime is not (all-day event)', () => {
+      const issueData = {
+        id: 'ISS-10',
+        title: 'All-day',
+        start: new Date('2026-03-19').getTime(),
+      } as any;
+
+      const result = service.getAddTaskData(issueData);
+
+      expect((result as any).dueDay).toBeDefined();
+      expect((result as any).dueWithTime).toBeUndefined();
     });
   });
 
@@ -413,6 +484,571 @@ describe('PluginIssueProviderAdapterService', () => {
       const result = await service.getFreshDataForIssueTask(task);
 
       expect(result).toBeNull();
+    });
+
+    describe('pull-side field mapping', () => {
+      const FIELD_MAPPINGS: PluginFieldMapping[] = [
+        {
+          taskField: 'dueWithTime',
+          issueField: 'start_dateTime',
+          defaultDirection: 'both',
+          mutuallyExclusive: ['dueDay'],
+          toIssueValue: (v: unknown) => v,
+          toTaskValue: (v: unknown) => (v ? new Date(v as string).getTime() : undefined),
+        },
+        {
+          taskField: 'dueDay',
+          issueField: 'start_date',
+          defaultDirection: 'both',
+          mutuallyExclusive: ['dueWithTime'],
+          toIssueValue: (v: unknown) => v,
+          toTaskValue: (v: unknown) => v,
+        },
+        {
+          taskField: 'title',
+          issueField: 'summary',
+          defaultDirection: 'both',
+          toIssueValue: (v: unknown) => v,
+          toTaskValue: (v: unknown) => v,
+        },
+      ];
+
+      const createProviderWithMappings = (
+        issue: PluginIssue,
+        syncValues: Record<string, unknown>,
+      ): RegisteredPluginIssueProvider =>
+        createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(issue),
+          fieldMappings: FIELD_MAPPINGS,
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue(syncValues),
+        });
+
+      it('should pull changed field when direction is both', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Meeting',
+          lastUpdated: 2000,
+        };
+        const syncValues = {
+          summary: 'Meeting',
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          start_dateTime: '2026-03-20T10:00:00.000Z',
+        };
+        const provider = createProviderWithMappings(freshIssue, syncValues);
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { dueWithTime: 'both', title: 'both' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          issueLastSyncedValues: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            start_dateTime: '2026-03-19T10:00:00.000Z',
+            summary: 'Meeting',
+          },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['dueWithTime' as keyof Task]).toBe(
+          new Date('2026-03-20T10:00:00.000Z').getTime(),
+        );
+      });
+
+      it('should pull changed field when direction is pullOnly', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Updated',
+          lastUpdated: 2000,
+        };
+        const syncValues = { summary: 'Updated' };
+        const provider = createProviderWithMappings(freshIssue, syncValues);
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { title: 'pullOnly' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          issueLastSyncedValues: { summary: 'Original' },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['title' as keyof Task]).toBe('Updated');
+      });
+
+      it('should skip field when direction is pushOnly', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Unchanged',
+          lastUpdated: 2000,
+        };
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        const syncValues = { start_dateTime: '2026-03-20T10:00:00.000Z' };
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: FIELD_MAPPINGS,
+          // First call (from _extractTaskFieldsFromIssue) returns empty,
+          // second call (for _applyFieldMappingPull) returns actual values.
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValues({}, syncValues),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { dueWithTime: 'pushOnly' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          issueLastSyncedValues: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            start_dateTime: '2026-03-19T10:00:00.000Z',
+          },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
+      });
+
+      it('should skip field when direction is off', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Unchanged',
+          lastUpdated: 2000,
+        };
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        const syncValues = { start_dateTime: '2026-03-20T10:00:00.000Z' };
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: FIELD_MAPPINGS,
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValues({}, syncValues),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { dueWithTime: 'off' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          issueLastSyncedValues: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            start_dateTime: '2026-03-19T10:00:00.000Z',
+          },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
+      });
+
+      it('should skip pull when fresh value equals last synced value', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Unchanged',
+          lastUpdated: 2000,
+        };
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        const syncValues = { start_dateTime: '2026-03-20T10:00:00.000Z' };
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: FIELD_MAPPINGS,
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValues({}, syncValues),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { dueWithTime: 'both' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          issueLastSyncedValues: {
+            // Same value as fresh -> no change detected
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            start_dateTime: '2026-03-20T10:00:00.000Z',
+          },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
+      });
+
+      it('should clear mutually exclusive fields when pulling dueWithTime', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Event',
+          lastUpdated: 2000,
+        };
+        const syncValues = {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          start_dateTime: '2026-03-20T10:00:00.000Z',
+          summary: 'Event',
+        };
+        const provider = createProviderWithMappings(freshIssue, syncValues);
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { dueWithTime: 'both' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          dueDay: '2026-03-19',
+          issueLastSyncedValues: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            start_dateTime: '2026-03-19T10:00:00.000Z',
+          },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        // dueDay should be cleared because dueWithTime is mutually exclusive
+        expect(result!.taskChanges['dueDay' as keyof Task]).toBeNull();
+      });
+
+      it('should include issueLastSyncedValues in taskChanges', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Event',
+          lastUpdated: 2000,
+        };
+        const syncValues = {
+          summary: 'Event',
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          start_dateTime: '2026-03-20T10:00:00.000Z',
+        };
+        const provider = createProviderWithMappings(freshIssue, syncValues);
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+        } as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges.issueLastSyncedValues).toEqual(syncValues);
+      });
+    });
+
+    describe('remote deletion handling', () => {
+      it('should auto-delete local task when getById returns 404 and no time tracked', async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.rejectWith(new HttpErrorResponse({ status: 404 })),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        spyOn(console, 'log');
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          timeSpent: 0,
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledWith(['task-1']);
+        expect(snackSpy.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            type: 'CUSTOM',
+            ico: 'delete_forever',
+          }),
+        );
+      });
+
+      it('should auto-delete local task when getById returns 410 and no time tracked', async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.rejectWith(new HttpErrorResponse({ status: 410 })),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        spyOn(console, 'log');
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          timeSpent: 0,
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledWith(['task-1']);
+        expect(snackSpy.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            type: 'CUSTOM',
+            ico: 'delete_forever',
+          }),
+        );
+      });
+
+      it('should not auto-delete task with time tracking on 404 but offer action', async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.rejectWith(new HttpErrorResponse({ status: 404 })),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        spyOn(console, 'log');
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          timeSpent: 3600000,
+          title: 'Tracked Task',
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+        expect(snackSpy.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            type: 'WARNING',
+            actionStr: T.G.DELETE,
+          }),
+        );
+      });
+
+      it('should not delete task on non-404 errors', async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.rejectWith(new HttpErrorResponse({ status: 500 })),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        spyOn(console, 'error');
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+        } as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+      });
+
+      it('should auto-delete task when issue state matches deletedStates (no time tracked)', async () => {
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: 'ISS-5',
+            title: 'Cancelled Event',
+            state: 'cancelled',
+            lastUpdated: 2000,
+          } as PluginIssue),
+          deletedStates: ['cancelled'],
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          timeSpent: 0,
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledWith(['task-1']);
+        expect(snackSpy.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            type: 'CUSTOM',
+            ico: 'delete_forever',
+          }),
+        );
+      });
+
+      it('should offer delete action when issue state matches deletedStates with time tracked', async () => {
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: 'ISS-5',
+            title: 'Cancelled Event',
+            state: 'cancelled',
+            lastUpdated: 2000,
+          } as PluginIssue),
+          deletedStates: ['cancelled'],
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          timeSpent: 3600000,
+          title: 'Tracked Task',
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+        expect(snackSpy.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            type: 'WARNING',
+            actionStr: T.G.DELETE,
+          }),
+        );
+      });
+
+      it('should NOT treat state as deleted when deletedStates is not set on provider', async () => {
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: 'ISS-5',
+            title: 'Cancelled Event',
+            state: 'cancelled',
+            lastUpdated: 2000,
+          } as PluginIssue),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          timeSpent: 0,
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+      });
+
+      it('should match deletedStates case-insensitively and auto-delete (no time tracked)', async () => {
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: 'ISS-5',
+            title: 'Cancelled Event',
+            state: 'CANCELLED',
+            lastUpdated: 2000,
+          } as PluginIssue),
+          deletedStates: ['cancelled'],
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          timeSpent: 0,
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledWith(['task-1']);
+        expect(snackSpy.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            type: 'CUSTOM',
+            ico: 'delete_forever',
+          }),
+        );
+      });
+
+      it('should not delete task on non-HttpErrorResponse errors', async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.rejectWith(new Error('Network error')),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        spyOn(console, 'error');
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+        } as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).toBeNull();
+        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+      });
     });
   });
 

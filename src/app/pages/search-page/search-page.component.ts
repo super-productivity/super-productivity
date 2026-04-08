@@ -19,7 +19,7 @@ import { TagService } from '../../features/tag/tag.service';
 import { Task } from '../../features/tasks/task.model';
 import { SearchItem } from './search-page.model';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
-import { AsyncPipe, NgClass } from '@angular/common';
+import { AsyncPipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatInput } from '@angular/material/input';
@@ -52,7 +52,6 @@ const MAX_RESULTS = 50;
     MatListItem,
     MatFormField,
     MatLabel,
-    NgClass,
   ],
 })
 export class SearchPageComponent implements OnInit {
@@ -116,6 +115,7 @@ export class SearchPageComponent implements OnInit {
         searchText: `${task.title}\0${taskNotes}`.toLowerCase(),
         projectId: task.projectId || null,
         parentId: task.parentId || null,
+        parentTitle: parent?.title ?? null,
         tagId,
         timeSpentOnDay: task.timeSpentOnDay,
         created: task.created,
@@ -137,7 +137,7 @@ export class SearchPageComponent implements OnInit {
       : tagMap.get(tagId);
 
     if (!context) {
-      Log.err(`Could not find context for task: ${task.title}`);
+      Log.err(`Could not find context for task: ${task.id}`);
       context = { ...DEFAULT_TAG, icon: 'help_outline', color: 'black' };
     }
 

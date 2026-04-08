@@ -2372,4 +2372,94 @@ describe('lwwUpdateMetaReducer', () => {
       expect(parentA.subTaskIds).toEqual(['first', 'last']);
     });
   });
+
+  describe('dueDay/deadlineDay sanitization (#6908)', () => {
+    it('should clear invalid dueDay string from LWW task update', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        dueDay: '-/-/2026',
+        title: 'Updated Task',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      // Prevent devError from throwing (it calls alert + confirm -> throws if true)
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.dueDay).toBeUndefined();
+    });
+
+    it('should preserve valid dueDay string in LWW task update', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        dueDay: '2026-03-21',
+        title: 'Updated Task',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.dueDay).toBe('2026-03-21');
+    });
+
+    it('should clear invalid deadlineDay string from LWW task update', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        deadlineDay: '3/14/2026',
+        title: 'Updated Task',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      // Prevent devError from throwing (it calls alert + confirm -> throws if true)
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.deadlineDay).toBeUndefined();
+    });
+
+    it('should pass through null dueDay without validation', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        dueDay: null,
+        title: 'Updated Task',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.dueDay).toBeNull();
+    });
+  });
 });

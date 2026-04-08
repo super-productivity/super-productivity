@@ -50,6 +50,9 @@ export interface CompactOperation {
 
   /** schemaVersion */
   s: number;
+
+  /** syncImportReason (optional) */
+  r?: string;
 }
 
 /**

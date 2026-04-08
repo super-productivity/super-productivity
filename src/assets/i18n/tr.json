@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity tamamen topluluk tarafından finanse edilmektedir. Takip, reklam veya veri toplama yoktur — görevleriniz cihazınızda kalır.",
     "INTRO_2": "Bu yaklaşımı değerli buluyorsanız ve projenin sağlıklı ve gelişen kalmasını istiyorsanız, gönüllü bir bağış büyük takdirle karşılanır."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Klavye kısayollarını öğrenin",
+      "NOTES": "Super Productivity klavye ile kullanılmak üzere tasarlanmıştır. Daha hızlı çalışmak için kısayolları öğrenin.\n\n**Nasıl başlanır:**\n1. **Kenar çubuğu menüsünü** açın\n2. **Yardım** bölümüne gidin\n3. **Klavye Gezinti Turu**'na tıklayın"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "İlk projenizi oluşturun",
+      "NOTES": "Projeler görevlerinizi çalışma alanlarına göre düzenlemenize yardımcı olur. Her projenin kendi görev listesi ve biriktirme listesi vardır.\n\n**Proje nasıl oluşturulur:**\n1. Kenar çubuğundaki **Projeler** yanındaki **+** düğmesine tıklayın\n2. Bir ad verin ve renk seçin\n3. Görev eklemeye başlayın"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Senkronizasyonu ayarlayın",
+      "NOTES": "Verilerinizi güvende tutun ve cihazlar arasında erişilebilir kılın.\n\n**Nasıl ayarlanır:**\n1. **Ayarlar**'ı açın (kenar çubuğundaki dişli simgesi)\n2. **Senkronizasyon** bölümüne gidin\n3. Bir sağlayıcı seçin: Super Sync, Dropbox, WebDAV veya yerel dosya senkronizasyonu\n4. Kurulum talimatlarını izleyin"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Daha fazlasını keşfedin",
+      "NOTES": "Keşfedilecek çok daha fazlası var!\n\n**Uygulama Özellikleri** (Ayarlar'da) — Entegrasyonları, alışkanlıkları ve diğer özellikleri etkinleştirin. Nelerin mevcut olduğunu görmek için **Ayarlar → Uygulama Özellikleri**'ne gidin.\n\n**Panolar** — Görevlerinizi özelleştirilebilir Kanban panolarında görselleştirin. **Uygulama Özellikleri**'nde etkinleştirin, ardından **yan menüde** bulun.\n\n**Takvim** — Görevleri belirli saatlere atayarak gününüzü planlayın. Görevleri yan çubuktaki **Takvim** görünümüne sürükleyin.\n\n**Entegrasyonlar** — Uygulama Özellikleri'nde etkinleştirildikten sonra Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV ve daha birçoğundan görev aktarın. Takviminizi de entegre edebilirsiniz. Bunları **Sorun Sağlayıcı Paneli**'nden yapılandırın.\n\n**Alışkanlıklar** — Tekrarlayan alışkanlıkları ve rutinleri takip edin. Etkinleştirildikten sonra **kenar çubuğu menüsünde** bulabilirsiniz.\n\n**Eklentiler** — Erteleme Önleyici, Otomasyonlar veya Sesli Hatırlatıcılar gibi özellikler ekleyin. **Ayarlar → Eklentiler**'e gidin.\n\n**Özelleştirme** — Temalar, karanlık mod, klavye kısayolları, dil ve verimlilik yardımcıları hepsi **Ayarlar**'da."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2362,6 +2380,36 @@
   "PRE_MIGRATION": {
     "DIALOG_TITLE": "Sistem Güncellemesi",
     "DIALOG_MESSAGE": "Verilerinizin nasıl depolandığını geliştirilmiş senkronizasyon güvenilirliği için güncelliyoruz.<br><br>Verilerinizin bir yedeği otomatik olarak indirilecek. Gerekirse bu yedeği kullanarak verilerinizi geri yükleyebilirsiniz (Dosya > İçe Aktar)."
+  },
+  "ONBOARDING": {
+    "TITLE": "Super Productivity'yi nasıl kullanmak istiyorsunuz?",
+    "SUBTITLE": "Çalışma tarzınıza uygun bir kurulum seçin. Bunu daha sonra Ayarlar'dan istediğiniz zaman değiştirebilirsiniz.",
+    "PRIVACY_HINT": "Verileriniz cihazınızda güvenle kalır. Sunucuya hiçbir şey gönderilmez.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Basit yapılacaklar listesi",
+        "DESCRIPTION": "Projeler, etiketler ve notlarla temiz bir görev yöneticisi. Ekstra özellik yok."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Zaman takibi",
+        "DESCRIPTION": "Görevlerin ne kadar sürdüğünü izleyin. Saat faturalandırma veya zamanınızın nereye gittiğini anlamak için mükemmel."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Verimlilik Paketi",
+        "DESCRIPTION": "Gününüzü planlayın, alışkanlıklar edinin, derinden odaklanın ve zamanınızı takip edin. Hepsi tek bir yerde."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "İlk görevinizi eklemek için + işaretine tıklayın",
+      "CREATE_TASK_TOUCH": "İlk görevinizi eklemek için + işaretine dokunun",
+      "EXPLORE": "Tıklayarak keşfedin! Yardımı yan panelde bulabilirsiniz.",
+      "EXPLORE_TOUCH": "Dokunarak keşfedin! Yardımı menüde bulabilirsiniz.",
+      "TASK_TAP_TOUCH": "Ayrıntılarını açmak için bir göreve dokunun.",
+      "TASK_SWIPE_LEFT_TOUCH": "Daha fazla işlem için görevi sola kaydırın",
+      "TASK_SWIPE_RIGHT_TOUCH": "Tamamlandı olarak işaretlemek için görevi sağa kaydırın",
+      "OR_PRESS": "veya basın",
+      "SKIP_ARIA": "İpucunu kapat"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Bugünden itibaren görev ekleme",

@@ -190,6 +190,7 @@ describe('SearchPageComponent', () => {
     typeAndFlush('Child');
     expect(latestResults.length).toBe(1);
     expect(latestResults[0].tagId).toBe('tag-parent');
+    expect(latestResults[0].parentTitle).toBe('Parent');
   }));
 
   it('should use project context for tasks with projectId', fakeAsync(() => {
@@ -263,6 +264,7 @@ describe('SearchPageComponent', () => {
     expect(latestResults.length).toBe(1);
     // Should fall back to own tagIds instead of crashing
     expect(latestResults[0].tagId).toBe('tag-1');
+    expect(latestResults[0].parentTitle).toBeNull();
   }));
 
   it('should handle missing context gracefully with fallback icon', fakeAsync(() => {

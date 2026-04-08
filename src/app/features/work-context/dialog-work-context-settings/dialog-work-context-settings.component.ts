@@ -72,12 +72,16 @@ export class DialogWorkContextSettingsComponent {
 
   onModelChange(model: Project | Tag): void {
     this.entityData = model;
-    if (this.form.valid) {
+    if (this.form.valid && model.title?.trim()) {
       this._applyChanges(model);
     }
   }
 
   done(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
     this._matDialogRef.close();
   }
 

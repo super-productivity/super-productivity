@@ -37,6 +37,8 @@
       [isBacklog]="isBacklog()"
       [task]="task"
       cdkDrag
+      [cdkDragStartDelay]="dragDelayForTouch()"
+      [cdkDragLockAxis]="isXs() ? 'y' : ''"
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY'"
       [cdkDragData]="task"
       (cdkDragStarted)="onDragStarted(task, $event)"

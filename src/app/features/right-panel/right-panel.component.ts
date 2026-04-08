@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   inject,
   input,
@@ -11,11 +12,11 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { DomSanitizer, SafeStyle } from '@angular/platform-browser';
 import { LanguageService } from '../../core/language/language.service';
-import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { isTouchActive } from '../../util/input-intent';
 import { NavigationEnd, NavigationStart, Router } from '@angular/router';
 import { filter, map, startWith, switchMap } from 'rxjs/operators';
 import { of, Subscription, timer } from 'rxjs';
@@ -98,6 +99,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   private _store = inject(Store);
   private _bottomPanelState = inject(BottomPanelStateService);
   private _panelContentService = inject(PanelContentService);
+  private _destroyRef = inject(DestroyRef);
 
   readonly sideWidth = input<number>(40);
   readonly wasClosed = output<void>();
@@ -230,6 +232,18 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
                 panelClass: 'bottom-panel-sheet',
               },
             );
+
+            // Force-blur on backdrop click so pending edits (e.g. task title)
+            // are saved before the bottom sheet dismisses and destroys the component.
+            this._bottomSheetRef
+              .backdropClick()
+              .pipe(takeUntilDestroyed(this._destroyRef))
+              .subscribe(() => {
+                const el = document.activeElement as HTMLElement;
+                if (el && isInputElement(el)) {
+                  el.blur();
+                }
+              });
 
             // Handle bottom sheet dismissal
             this._bottomSheetSubscription = this._bottomSheetRef
@@ -567,5 +581,5 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly isTouchActive = isTouchActive;
 }

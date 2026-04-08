@@ -17,6 +17,7 @@ import { Task } from '../task.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { LS } from '../../../core/persistence/storage-keys.const';
 import { Action } from '@ngrx/store';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 
@@ -113,57 +114,11 @@ describe('TaskUiEffects', () => {
       effects = TestBed.inject(TaskUiEffects);
     });
 
-    it('should show snack with action button when task is visible on current page', (done) => {
+    it('should NOT show snack when task is visible on current page', (done) => {
       const task = createMockTask({ id: 'existing-task-1' });
 
       effects.taskCreatedSnack$.subscribe(() => {
-        expect(snackServiceMock.open).toHaveBeenCalled();
-        const snackParams = snackServiceMock.open.calls.mostRecent()
-          .args[0] as SnackParams;
-        expect(snackParams.actionStr).toBe(T.F.TASK.S.GO_TO_TASK);
-        expect(snackParams.actionFn).toBeDefined();
-        done();
-      });
-
-      actions$.next(createAddTaskAction(task));
-    });
-
-    it('should call taskService.setSelectedId when action clicked for visible task', (done) => {
-      const task = createMockTask({ id: 'existing-task-1' });
-
-      effects.taskCreatedSnack$.subscribe(() => {
-        const snackParams = snackServiceMock.open.calls.mostRecent()
-          .args[0] as SnackParams;
-        snackParams.actionFn!();
-        expect(taskServiceMock.setSelectedId).toHaveBeenCalledWith('existing-task-1');
-        expect(navigateToTaskServiceMock.navigate).not.toHaveBeenCalled();
-        done();
-      });
-
-      actions$.next(createAddTaskAction(task));
-    });
-
-    it('should show TASK_CREATED message for task visible on current page', (done) => {
-      const task = createMockTask({ id: 'existing-task-1' });
-
-      effects.taskCreatedSnack$.subscribe(() => {
-        const snackParams = snackServiceMock.open.calls.mostRecent()
-          .args[0] as SnackParams;
-        expect(snackParams.msg).toBe(T.F.TASK.S.TASK_CREATED);
-        done();
-      });
-
-      actions$.next(createAddTaskAction(task));
-    });
-
-    it('should close add task bar when Go to task action is clicked', (done) => {
-      const task = createMockTask({ id: 'existing-task-1' });
-
-      effects.taskCreatedSnack$.subscribe(() => {
-        const snackParams = snackServiceMock.open.calls.mostRecent()
-          .args[0] as SnackParams;
-        snackParams.actionFn!();
-        expect(layoutServiceMock.hideAddTaskBar).toHaveBeenCalled();
+        expect(snackServiceMock.open).not.toHaveBeenCalled();
         done();
       });
 
@@ -173,6 +128,7 @@ describe('TaskUiEffects', () => {
 
   describe('taskCreatedSnack$ with non-visible task', () => {
     beforeEach(() => {
+      localStorage.setItem(LS.ONBOARDING_HINTS_DONE, 'true');
       actions$ = new Subject<Action>();
       snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
       taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
@@ -280,6 +236,10 @@ describe('TaskUiEffects', () => {
       });
 
       actions$.next(createAddTaskAction(task));
+    });
+
+    afterEach(() => {
+      localStorage.removeItem(LS.ONBOARDING_HINTS_DONE);
     });
   });
 });

@@ -23,6 +23,7 @@ export const createBlockedBlocksByDayMap = (
   lunchBreakCfg?: ScheduleLunchBreakCfg,
   now?: number,
   nrOfDays: number = NR_OF_DAYS,
+  realNow?: number,
 ): BlockedBlockByDayMap => {
   const allBlockedBlocks = createSortedBlockerBlocks(
     scheduledTasks,
@@ -32,6 +33,7 @@ export const createBlockedBlocksByDayMap = (
     lunchBreakCfg,
     now,
     nrOfDays,
+    realNow,
   );
   // Log.log(allBlockedBlocks);
 

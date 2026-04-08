@@ -40,8 +40,8 @@
       <div class="header-spacer"></div>
       @for (day of days(); track day) {
         <div class="day-header">
-          <div class="day-name">{{ parseDateLocal(day) | date: 'EEE' }}</div>
-          <div class="day-date">{{ parseDateLocal(day) | date: 'dd' }}</div>
+          <div class="day-name">{{ parseDateLocal(day) | localeDate: 'EEE' }}</div>
+          <div class="day-date">{{ parseDateLocal(day) | localeDate: 'dd' }}</div>
         </div>
       }
     </div>
@@ -50,7 +50,7 @@
       <div
         class="habit-row"
         cdkDrag
-        [cdkDragStartDelay]="IS_TOUCH_PRIMARY ? DRAG_DELAY_FOR_TOUCH : 0"
+        [cdkDragStartDelay]="dragDelayForTouch()"
       >
         <div
           class="habit-title"

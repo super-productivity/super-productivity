@@ -23,7 +23,6 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslateModule } from '@ngx-translate/core';
 import { calcRepeatTaskSeriesTimeSpent } from '../calc-repeat-task-series-time-spent.util';
 import { msToString } from '../../../ui/duration/ms-to-string.pipe';
-
 @Component({
   selector: 'repeat-task-heatmap',
   templateUrl: './repeat-task-heatmap.component.html',

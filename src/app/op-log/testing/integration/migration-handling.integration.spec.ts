@@ -65,9 +65,13 @@ describe('Migration Handling Integration', () => {
         },
         {
           provide: ValidateStateService,
-          useValue: jasmine.createSpyObj('ValidateStateService', [
-            'validateAndRepairCurrentState',
-          ]),
+          useFactory: () => {
+            const spy = jasmine.createSpyObj('ValidateStateService', [
+              'validateAndRepairCurrentState',
+            ]);
+            spy.validateAndRepairCurrentState.and.resolveTo(true);
+            return spy;
+          },
         },
         {
           provide: LockService,
@@ -120,7 +124,7 @@ describe('Migration Handling Integration', () => {
     });
 
     it('should accept operation with current schema version', async () => {
-      const currentVersion = 1; // Assuming CURRENT_SCHEMA_VERSION is 1
+      const currentVersion = CURRENT_SCHEMA_VERSION;
       const op = createOp(currentVersion);
 
       await service.processRemoteOps([op]);
@@ -134,9 +138,9 @@ describe('Migration Handling Integration', () => {
 
     it('should accept operation with compatible future version (within skip limit)', async () => {
       // Logic: if opVersion <= current + MAX_VERSION_SKIP, it's accepted
-      // MAX_VERSION_SKIP is 3. So version 4 should be accepted if current is 1.
+      // MAX_VERSION_SKIP is 3. So current + 3 should still be accepted.
       // Note: A WARNING snackbar may be shown for newer versions, but no ERROR.
-      const compatibleVersion = 1 + MAX_VERSION_SKIP;
+      const compatibleVersion = CURRENT_SCHEMA_VERSION + MAX_VERSION_SKIP;
       const op = createOp(compatibleVersion);
 
       await service.processRemoteOps([op]);

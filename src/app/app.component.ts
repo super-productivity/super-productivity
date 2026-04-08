@@ -11,6 +11,7 @@ import {
   inject,
   NgZone,
   OnDestroy,
+  signal,
   ViewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -21,7 +22,7 @@ import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
-import { Subscription } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import { fadeAnimation } from './ui/animations/fade.ani';
 import { BannerService } from './core/banner/banner.service';
 import { LS } from './core/persistence/storage-keys.const';
@@ -32,7 +33,7 @@ import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
-import { filter, map, switchMap, take } from 'rxjs/operators';
+import { concatMap, first, take } from 'rxjs/operators';
 
 import { IS_MOBILE } from './util/is-mobile';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
@@ -43,8 +44,6 @@ import { MainHeaderComponent } from './core-ui/main-header/main-header.component
 import { BannerComponent } from './core/banner/banner/banner.component';
 import { GlobalProgressBarComponent } from './core-ui/global-progress-bar/global-progress-bar.component';
 import { FocusModeOverlayComponent } from './features/focus-mode/focus-mode-overlay/focus-mode-overlay.component';
-import { ShepherdComponent } from './features/shepherd/shepherd.component';
-import { ShepherdService } from './features/shepherd/shepherd.service';
 import { DOCUMENT } from '@angular/common';
 import { RightPanelComponent } from './features/right-panel/right-panel.component';
 import { selectIsOverlayShown } from './features/focus-mode/store/focus-mode.selectors';
@@ -55,17 +54,27 @@ import { MarkdownPasteService } from './features/tasks/markdown-paste.service';
 import { TaskService } from './features/tasks/task.service';
 import { MatMenuItem } from '@angular/material/menu';
 import { MatIcon } from '@angular/material/icon';
-import { DialogUnsplashPickerComponent } from './ui/dialog-unsplash-picker/dialog-unsplash-picker.component';
 import { NoteStartupBannerService } from './features/note/note-startup-banner.service';
 import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
-import { WorkContextThemeCfg } from './features/work-context/work-context.model';
+import { WorkContextType } from './features/work-context/work-context.model';
+import type { WorkContextSettingsDialogData } from './features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
+import { DataInitStateService } from './core/data-init/data-init-state.service';
+import { ExampleTasksService } from './core/example-tasks/example-tasks.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
+import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
+import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
+import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
+import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
+
+const ONBOARDING_PRESET_EXIT_DELAY = 1000;
+const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
+const ENTRANCE_ANIMATION_DURATION = 1500;
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -94,12 +103,13 @@ interface BeforeInstallPromptEvent extends Event {
     RouterOutlet,
     GlobalProgressBarComponent,
     FocusModeOverlayComponent,
-    ShepherdComponent,
     MatMenuItem,
     MatIcon,
     TranslatePipe,
     ContextMenuComponent,
     MobileBottomNavComponent,
+    OnboardingPresetSelectionComponent,
+    OnboardingHintComponent,
   ],
 })
 export class AppComponent implements OnDestroy, AfterViewInit {
@@ -120,18 +130,26 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _ngZone = inject(NgZone);
   private _document = inject(DOCUMENT, { optional: true });
   private _startupService = inject(StartupService);
+  // Injected for side-effect: creates example tasks on first run
+  private _exampleTasksService = inject(ExampleTasksService);
   private _keyboardLayoutService = inject(KeyboardLayoutService);
+  private _dataInitStateService = inject(DataInitStateService);
+  private _materialIconsLoaderService = inject(MaterialIconsLoaderService);
+  readonly onboardingHintService = inject(OnboardingHintService);
 
   private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalThemeService = inject(GlobalThemeService);
-  readonly shepherdService = inject(ShepherdService);
   readonly _store = inject(Store);
   readonly T = T;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
+
+  @HostBinding('class.isWorkViewScrolled') get isWorkViewScrolledClass(): boolean {
+    return this.layoutService.isWorkViewScrolled();
+  }
 
   @HostBinding('@.disabled') get isDisableAnimations(): boolean {
     return this._isDisableAnimations();
@@ -165,11 +183,39 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     { initialValue: null },
   );
 
+  isShowOnboardingPresets = signal(
+    !localStorage.getItem(LS.ONBOARDING_PRESET_DONE) &&
+      !localStorage.getItem(LS.IS_SKIP_TOUR),
+  );
+
   private _subs: Subscription = new Subscription();
   private _intervalTimer?: NodeJS.Timeout;
 
   constructor() {
     this._startupService.init();
+    void this._materialIconsLoaderService.ensureFontReady();
+
+    // Skip onboarding for existing users with data
+    if (this.isShowOnboardingPresets()) {
+      this._dataInitStateService.isAllDataLoadedInitially$
+        .pipe(
+          concatMap(() => this._projectService.list$),
+          first(),
+        )
+        .subscribe((projectList) => {
+          if (projectList.length > 2) {
+            localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
+            this.isShowOnboardingPresets.set(false);
+          }
+        });
+    }
+
+    // Clear app entrance animation after it completes
+    if (this.isAppEntrance()) {
+      setTimeout(() => {
+        this.isAppEntrance.set(false);
+      }, ENTRANCE_ANIMATION_DURATION);
+    }
 
     // Use effect to react to language RTL changes
     effect(() => {
@@ -262,7 +308,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   @HostListener('window:beforeinstallprompt', ['$event']) onBeforeInstallPrompt(
     e: BeforeInstallPromptEvent,
   ): void {
-    if (IS_ELECTRON || localStorage.getItem(LS.WEB_APP_INSTALL)) {
+    if (
+      IS_ELECTRON ||
+      localStorage.getItem(LS.WEB_APP_INSTALL) ||
+      OnboardingHintService.isOnboardingInProgress()
+    ) {
       return;
     }
 
@@ -302,6 +352,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   onTaskAdded({ taskId }: { taskId: string; isAddToBottom: boolean }): void {
     this.layoutService.setPendingFocusTaskId(taskId);
+    this.layoutService.scrollToNewTask(taskId);
   }
 
   readonly bgOverlayOpacity = computed((): number => {
@@ -311,56 +362,40 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return baseOpacity * 0.01;
   });
 
-  changeBackgroundFromUnsplash(): void {
-    const dialogRef = this._matDialog.open(DialogUnsplashPickerComponent, {
-      width: '900px',
-      maxWidth: '95vw',
+  async openSettings(): Promise<void> {
+    const isForProject =
+      this.workContextService.activeWorkContextType === WorkContextType.PROJECT;
+    const contextId = this.workContextService.activeWorkContextId;
+    if (!contextId) {
+      return;
+    }
+    const entity = isForProject
+      ? await firstValueFrom(this._projectService.getByIdOnce$(contextId))
+      : await firstValueFrom(this._tagService.getTagById$(contextId).pipe(first()));
+
+    const { DialogWorkContextSettingsComponent } =
+      await import('./features/work-context/dialog-work-context-settings/dialog-work-context-settings.component');
+    this._matDialog.open(DialogWorkContextSettingsComponent, {
+      restoreFocus: true,
+      backdropClass: 'cdk-overlay-transparent-backdrop',
+      data: {
+        isProject: isForProject,
+        entity,
+      } as WorkContextSettingsDialogData,
     });
+  }
 
-    dialogRef
-      .afterClosed()
-      .pipe(
-        filter((result) => !!result),
-        switchMap((result) =>
-          this.workContextService.activeWorkContext$.pipe(
-            take(1),
-            map((activeContext) => ({ result, activeContext })),
-          ),
-        ),
-      )
-      .subscribe(({ result, activeContext }) => {
-        if (!activeContext) {
-          this._snackService.open({
-            type: 'ERROR',
-            msg: 'No active work context',
-          });
-          return;
-        }
+  isAppEntrance = signal(!this.isShowOnboardingPresets());
 
-        // Extract the URL from the result object
-        const backgroundUrl = result.url || result;
-        const isDarkMode = this._globalThemeService.isDarkTheme();
-        const contextKey: keyof WorkContextThemeCfg = isDarkMode
-          ? 'backgroundImageDark'
-          : 'backgroundImageLight';
-
-        // Update the theme based on context type
-        if (activeContext.type === 'PROJECT') {
-          this._projectService.update(activeContext.id, {
-            theme: {
-              ...(activeContext.theme || {}),
-              [contextKey]: backgroundUrl,
-            },
-          });
-        } else if (activeContext.type === 'TAG') {
-          this._tagService.updateTag(activeContext.id, {
-            theme: {
-              ...(activeContext.theme || {}),
-              [contextKey]: backgroundUrl,
-            },
-          });
-        }
-      });
+  onPresetSelected(): void {
+    this.isAppEntrance.set(true);
+    setTimeout(() => {
+      this.isShowOnboardingPresets.set(false);
+    }, ONBOARDING_PRESET_EXIT_DELAY);
+    setTimeout(() => {
+      this.isAppEntrance.set(false);
+      this.onboardingHintService.startAfterPresetSelection();
+    }, ONBOARDING_ENTRANCE_COMPLETE_DELAY);
   }
 
   ngAfterViewInit(): void {

@@ -22,6 +22,7 @@ export class ShepherdService {
   isActive = false;
   tour?: any; // Will be Shepherd.Tour when loaded
   private _Shepherd?: typeof import('shepherd.js').default;
+  private _initPromise: Promise<void> | null = null;
 
   async init(): Promise<void> {
     // Lazy load Shepherd.js only when needed
@@ -39,23 +40,19 @@ export class ShepherdService {
         this.actions$,
         this.layoutService,
         this.taskService,
-        this._router,
         this.workContextService,
       ) as any,
     );
-    this.start();
-    // this.show('XXX' as TourId);
-    // this.show(TourId.Projects as TourId);
   }
 
   async show(id: TourId): Promise<void> {
-    if (!this.isActive) {
-      await this.init();
+    if (!this._initPromise) {
+      this._initPromise = this.init();
     }
-    if (id !== TourId.ProductivityHelper && id !== TourId.StartTourAgain) {
-      await this._router.navigateByUrl('/');
-    }
-
+    await this._initPromise;
+    await this._router.navigateByUrl('/');
+    this.isActive = true;
+    this.tour?.start();
     this.tour?.show(id);
   }
 
@@ -138,7 +135,7 @@ export class ShepherdService {
       },
       confirmCancel: false,
       keyboardNavigation: false,
-      tourName: 'Cool tour',
+      tourName: 'Keyboard Navigation',
       useModalOverlay: false,
       exitOnEsc: false,
     });
@@ -169,7 +166,9 @@ export class ShepherdService {
     };
   }
 
-  private _onTourFinish(completeOrCancel: string): void {
+  private _onTourFinish(_completeOrCancel: string): void {
     this.isActive = false;
+    this.tour = undefined;
+    this._initPromise = null;
   }
 }

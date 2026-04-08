@@ -238,6 +238,12 @@ mat-option.isDone {
 mat-icon,
 .mat-icon {
   vertical-align: middle;
+  visibility: hidden;
+}
+
+body.isMaterialSymbolsLoaded .mat-icon,
+body.isMaterialSymbolsLoaded mat-icon {
+  visibility: visible;
 }
 
 .mat-icon.mat-icon {
@@ -337,6 +343,10 @@ body .mat-mdc-button-base .mat-icon {
 }
 
 // MAT MENU
+.mat-mdc-menu-panel {
+  overflow-x: hidden !important;
+}
+
 .mat-mdc-menu-content {
   padding: 0 !important;
 }

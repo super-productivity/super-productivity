@@ -1705,6 +1705,28 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         expectObservable(effects.addRepeatCfgToTaskUpdateTask$).toBe('--');
       });
     });
+
+    it('should NOT schedule task when startTime is an invalid clock string (bug #7067)', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const todayStr = getDbDateStr();
+        const action = addTaskRepeatCfgToTask({
+          taskRepeatCfg: {
+            ...mockRepeatCfg,
+            startDate: todayStr,
+            repeatCycle: 'DAILY',
+            repeatEvery: 1,
+          },
+          taskId: 'parent-task-id',
+          startTime: 'INVALID_CLOCK_STRING',
+          remindAt: TaskReminderOptionId.AtStart,
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        // Effect should NOT emit because startTime fails isValidSplitTime
+        expectObservable(effects.addRepeatCfgToTaskUpdateTask$).toBe('--');
+      });
+    });
   });
 
   describe('rescheduleTaskOnRepeatCfgUpdate$', () => {

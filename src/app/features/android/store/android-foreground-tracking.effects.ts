@@ -90,7 +90,6 @@ export class AndroidForegroundTrackingEffects {
             if (currentTask) {
               DroidLog.log('Starting tracking service', {
                 taskId: currentTask.id,
-                title: currentTask.title,
                 timeSpent: currentTask.timeSpent,
               });
               this._safeNativeCall(

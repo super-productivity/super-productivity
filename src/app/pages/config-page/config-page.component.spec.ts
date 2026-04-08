@@ -84,9 +84,6 @@ describe('ConfigPageComponent', () => {
           fullUrl: 'https://webdav.example.com/sp-test',
         }),
       );
-      spyOn(WebdavApi.prototype, 'testConditionalHeaders').and.returnValue(
-        Promise.resolve(true),
-      );
 
       const webDavCfg = {
         baseUrl: 'https://webdav.example.com',

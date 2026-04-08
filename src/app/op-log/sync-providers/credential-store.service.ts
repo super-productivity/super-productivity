@@ -152,6 +152,8 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
     SyncLog.normal(`${SyncCredentialStore.L}.clear()`, this._providerId);
 
     this._privateCfgInMemory = undefined;
+    // Mark migration as attempted so a subsequent load() doesn't migrate old data in
+    this._migrationAttempted = true;
 
     try {
       const db = await this._ensureDb();
@@ -209,46 +211,52 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
 
   /**
    * Attempts to migrate credentials from the legacy 'pf' database.
+   * Does not create the legacy database if it doesn't exist.
    */
   private async _migrateFromLegacyDb(): Promise<PrivateCfgByProviderId<PID> | null> {
     this._migrationAttempted = true;
 
     try {
-      // Open legacy database (read-only, don't create if doesn't exist)
-      const legacyDb = await openDB(LEGACY_DB_NAME, 1, {
-        upgrade: (database) => {
-          // Create main store if it doesn't exist (needed to open the db)
-          if (!database.objectStoreNames.contains(LEGACY_DB_STORE_NAME)) {
-            database.createObjectStore(LEGACY_DB_STORE_NAME);
-          }
-        },
-      });
-
-      // Check if legacy store exists
-      if (!legacyDb.objectStoreNames.contains(LEGACY_DB_STORE_NAME)) {
-        legacyDb.close();
+      // Skip migration if legacy database doesn't exist
+      if (typeof indexedDB?.databases === 'function') {
+        const dbs = await indexedDB.databases();
+        if (!dbs.some((db) => db.name === LEGACY_DB_NAME)) {
+          return null;
+        }
+      } else {
+        // Cannot safely check existence without risking DB creation; skip migration
         return null;
       }
 
-      // Try to load from legacy database
-      const legacyConfig = (await legacyDb.get(
-        LEGACY_DB_STORE_NAME,
-        this._dbKey,
-      )) as PrivateCfgByProviderId<PID>;
+      // Open legacy database without an upgrade handler to avoid creating stores
+      const legacyDb = await openDB(LEGACY_DB_NAME);
 
-      legacyDb.close();
+      try {
+        // Check if legacy store exists
+        if (!legacyDb.objectStoreNames.contains(LEGACY_DB_STORE_NAME)) {
+          return null;
+        }
 
-      if (legacyConfig) {
-        SyncLog.normal(
-          `[${SyncCredentialStore.L}] Migrating credentials for ${this._providerId} from legacy database`,
-        );
+        // Try to load from legacy database
+        const legacyConfig = (await legacyDb.get(
+          LEGACY_DB_STORE_NAME,
+          this._dbKey,
+        )) as PrivateCfgByProviderId<PID>;
 
-        // Save to new database
-        await this._save(legacyConfig);
-        return legacyConfig;
+        if (legacyConfig) {
+          SyncLog.normal(
+            `[${SyncCredentialStore.L}] Migrating credentials for ${this._providerId} from legacy database`,
+          );
+
+          // Save to new database
+          await this._save(legacyConfig);
+          return legacyConfig;
+        }
+
+        return null;
+      } finally {
+        legacyDb.close();
       }
-
-      return null;
     } catch (error) {
       SyncLog.warn(
         `[${SyncCredentialStore.L}] Failed to migrate from legacy database (this is ok for new installs): ${error}`,

@@ -1,5 +1,6 @@
 import { initIpcInterfaces } from './ipc-handler';
-import electronLog, { info, log } from 'electron-log/main';
+import { initPluginOAuth } from './plugin-oauth';
+import electronLog, { info, log, warn } from 'electron-log/main';
 import {
   App,
   app,
@@ -22,7 +23,7 @@ import { initIndicator } from './indicator';
 import { quitApp, showOrFocus } from './various-shared';
 import { createWindow } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
-import { destroyOverlayWindow } from './overlay-indicator/overlay-indicator';
+import { destroyTaskWidget } from './task-widget/task-widget';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
@@ -133,9 +134,13 @@ export const startApp = (): void => {
     });
   }
 
-  // Allow invalid certificates for jira requests
+  // Allow invalid certificates for self-hosted services (Jira, GitLab, Redmine, etc.)
+  // WARNING: This bypasses certificate validation for ALL URLs. Many users rely on
+  // self-signed certificates for their self-hosted integrations, so removing this
+  // would be a breaking change. The trade-off is reduced TLS security in exchange
+  // for compatibility with self-hosted servers.
   appIN.on('certificate-error', (event, webContents, url, err, certificate, callback) => {
-    log(err);
+    warn(`Certificate error for ${url}: ${err}`);
     event.preventDefault();
     callback(true);
   });
@@ -171,8 +176,8 @@ export const startApp = (): void => {
     // check finished. Our idle detection on Wayland may spawn external commands
     // (gdbus/dbus-send/xprintidle/loginctl) which can take close to or longer than
     // the poll interval. Without this guard, multiple checks can run concurrently,
-    // causing timeouts and subsequent 0ms readings, which looks like “only one
-    // idle event was ever sent”. This ensures at most one check runs at a time.
+    // causing timeouts and subsequent 0ms readings, which looks like "only one
+    // idle event was ever sent". This ensures at most one check runs at a time.
     let isCheckingIdle = false;
     const sendIdleMsgIfOverMin = (
       idleTime: number,
@@ -299,8 +304,8 @@ export const startApp = (): void => {
   appIN.on('before-quit', () => {
     log('App before-quit: cleaning up resources');
 
-    // Clean up overlay window before quitting
-    destroyOverlayWindow();
+    // Clean up task widget before quitting
+    destroyTaskWidget();
 
     // Remove all IPC listeners to prevent memory leaks
     ipcMain.removeAllListeners();
@@ -370,6 +375,8 @@ export const startApp = (): void => {
       quitApp,
       customUrl,
     });
+
+    initPluginOAuth(mainWin);
 
     // Process any pending protocol URLs after window is created
     setTimeout(() => {

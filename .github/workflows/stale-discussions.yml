@@ -1,11 +1,9 @@
 ---
 name: Close Stale Discussions
 
-# Includes numerous modifications to the original workflow. See git commit body for details.
-
 'on':
   schedule:
-    - cron: '0 0 * * SUN'
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       days-before-close:
@@ -26,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: stalesweeper
-        uses: zenoprax/stalesweeper@init-fork
+        uses: zenoprax/stalesweeper@v1.0.0
         env:
           DAYS_BEFORE_CLOSE: ${{ github.event_name == 'schedule' && '180' || github.event.inputs.days-before-close }}
           DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || github.event.inputs.dry-run }}
@@ -38,14 +36,14 @@ jobs:
           dry-run: ${{ env.DRY_RUN }}
           exempt-labels: 'documentation gap'
           message: >-
-            This discussion was automatically closed because it has been inactive for ${{ env.DAYS_BEFORE_CLOSE}} days.
+            This discussion was automatically closed because it has been inactive for ${{ env.DAYS_BEFORE_CLOSE}} days without an accepted answer.
             If the topic is still relevant, please feel free to reopen the discussion and add some more context or detail.
 
   close-stale-answers:
     runs-on: ubuntu-latest
     steps:
       - name: stalesweeper
-        uses: zenoprax/stalesweeper@init-fork
+        uses: zenoprax/stalesweeper@v1.0.0
         env:
           DAYS_BEFORE_CLOSE: ${{ github.event_name == 'schedule' && '90' || github.event.inputs.days-before-close }}
           DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || github.event.inputs.dry-run }}
@@ -57,5 +55,5 @@ jobs:
           dry-run: ${{ env.DRY_RUN }}
           exempt-labels: 'documentation gap'
           message: >-
-            This discussion was automatically closed because it was answered.
+            This discussion was automatically closed because it was answered but has had no further activity in ${{ env.DAYS_BEFORE_CLOSE}} days.
             If the topic is still relevant, please feel free to reopen the discussion and add some more context or detail.

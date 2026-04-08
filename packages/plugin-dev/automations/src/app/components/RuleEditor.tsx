@@ -7,8 +7,8 @@ import { ActionDialog } from './ActionDialog';
 interface RuleEditorProps {
   isOpen: boolean;
   rule: AutomationRule;
-  projects?: any[];
-  tags?: any[];
+  projects?: { id: string; title: string }[];
+  tags?: { id: string; title: string }[];
   onSave: (rule: AutomationRule) => void;
   onDelete: (rule: AutomationRule) => void;
   onCancel: () => void;
@@ -18,7 +18,7 @@ export function RuleEditor(props: RuleEditorProps) {
   // We need local state for the rule being edited to allow cancelling changes
   // But for simplicity in this MVP, we'll edit the prop directly or assume parent handles cloning.
   // To properly support "Cancel", we should clone on open.
-  // Let's assume parent passes a clone or we clone it here.
+  // Let's assume parent passes a clone, or we clone it here.
   // Since we can't easily clone in a functional component body without effects, let's rely on the parent passing a fresh object or clone.
 
   // However, we need to manage the state of child dialogs.
@@ -27,17 +27,6 @@ export function RuleEditor(props: RuleEditorProps) {
 
   const [isActionDialogOpen, setIsActionDialogOpen] = createSignal(false);
   const [editingActionIndex, setEditingActionIndex] = createSignal<number>(-1);
-
-  const updateRule = (updates: Partial<AutomationRule>) => {
-    // This mutates the prop if it's a store or object, which is fine if parent passed a clone.
-    // If we want to be pure, we should emit an update, but here we are "editing" before "saving".
-    // We'll assume `props.rule` is the "draft" object.
-    Object.assign(props.rule, updates);
-    // Force update if needed? Solid's reactivity should handle it if `props.rule` is a store or signal.
-    // If it's a plain object, we might need a local signal.
-    // Let's assume `props.rule` is reactive or we use a local store.
-    // For this refactor, let's use a local signal initialized from props.
-  };
 
   // Actually, let's use a local signal for the rule to ensure reactivity and cancellation support
   const [localRule, setLocalRule] = createSignal<AutomationRule>(props.rule);
@@ -65,14 +54,29 @@ export function RuleEditor(props: RuleEditorProps) {
 
   const allowedConditionTypes = (): import('../../types').ConditionType[] => {
     if (isTimeBased()) return [];
-    return ['titleContains', 'projectIs', 'hasTag'];
+    return ['titleContains', 'titleStartsWith', 'projectIs', 'hasTag', 'weekdayIs'];
   };
 
   const allowedActionTypes = (): import('../../types').ActionType[] => {
     if (isTimeBased()) {
       return ['createTask', 'displaySnack', 'displayDialog', 'webhook'];
     }
-    return ['createTask', 'addTag', 'displaySnack', 'displayDialog', 'webhook'];
+    return [
+      'createTask',
+      'deleteTask',
+      'addTag',
+      'moveToProject',
+      'displaySnack',
+      'displayDialog',
+      'webhook',
+    ];
+  };
+
+  const formatActionLabel = (action: Action) => {
+    if (action.type === 'deleteTask') {
+      return 'deleteTask';
+    }
+    return `${action.type}: ${action.value}`;
   };
 
   // Condition handlers
@@ -111,6 +115,11 @@ export function RuleEditor(props: RuleEditorProps) {
     const currentRule = localRule();
     const newActions = currentRule.actions.filter((_, i) => i !== index);
     setLocalRule({ ...currentRule, actions: newActions });
+  };
+
+  const formatConditionLabel = (condition: Condition) => {
+    const regexSuffix = condition.isRegex ? ' (regex)' : '';
+    return `${condition.type}${regexSuffix}: ${condition.value}`;
   };
 
   return (
@@ -232,9 +241,7 @@ export function RuleEditor(props: RuleEditorProps) {
                     >
                       {(condition, i) => (
                         <tr>
-                          <td>
-                            {condition.type}: {condition.value}
-                          </td>
+                          <td>{formatConditionLabel(condition)}</td>
                           <td style={{ 'text-align': 'right' }}>
                             <button
                               class="btn-outline"
@@ -290,9 +297,7 @@ export function RuleEditor(props: RuleEditorProps) {
                 >
                   {(action, i) => (
                     <tr>
-                      <td>
-                        {action.type}: {action.value}
-                      </td>
+                      <td>{formatActionLabel(action)}</td>
                       <td style={{ 'text-align': 'right' }}>
                         <button
                           class="btn-outline"
@@ -334,6 +339,7 @@ export function RuleEditor(props: RuleEditorProps) {
         initialAction={
           editingActionIndex() >= 0 ? localRule().actions[editingActionIndex()] : undefined
         }
+        projects={props.projects}
         allowedTypes={allowedActionTypes()}
       />
     </>

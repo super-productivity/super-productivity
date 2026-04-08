@@ -42,6 +42,13 @@ export interface ScheduleNotificationOptions {
    * Action type ID for notification actions (iOS)
    */
   actionTypeId?: string;
+  /**
+   * Sound to play. Use 'default' for the system notification sound.
+   * On iOS, omitting this results in a silent notification.
+   *
+   * @default 'default'
+   */
+  sound?: string;
 }
 
 export interface NotificationActionEvent {
@@ -203,6 +210,8 @@ export class CapacitorNotificationService {
             title: options.title,
             body: options.body,
             extra: options.extra,
+            // Default to system sound — without this, iOS notifications are silent
+            sound: options.sound ?? 'default',
             // Include action type for iOS notification actions
             actionTypeId: options.actionTypeId,
             schedule: options.scheduleAt

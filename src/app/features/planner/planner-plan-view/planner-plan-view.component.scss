@@ -2,7 +2,7 @@
 
 :host {
   overflow: auto;
-  display: flex;
+  display: block;
   height: 100%;
 
   @include mq(xs, max) {

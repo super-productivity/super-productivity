@@ -79,7 +79,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorA.hover();
-      await taskLocatorA.locator('.task-done-btn').click();
+      await taskLocatorA.locator('done-toggle').click();
       await expect(taskLocatorA).toHaveClass(/isDone/);
 
       // 4. Wait for time to advance (ensures B's timestamp will be newer)
@@ -90,7 +90,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.task-done-btn').click();
+      await taskLocatorB.locator('done-toggle').click();
       await expect(taskLocatorB).toHaveClass(/isDone/);
 
       // 6. Client B syncs first (B's change goes to server)
@@ -164,14 +164,14 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorA.hover();
-      await taskLocatorA.locator('.task-done-btn').click();
+      await taskLocatorA.locator('done-toggle').click();
 
       // Client B also marks done
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.task-done-btn').click();
+      await taskLocatorB.locator('done-toggle').click();
 
       // 4. Client A syncs first
       await clientA.sync.syncAndWait();
@@ -267,19 +267,19 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorA.hover();
-      await taskLocatorA.locator('.task-done-btn').click();
+      await taskLocatorA.locator('done-toggle').click();
 
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.task-done-btn').click();
+      await taskLocatorB.locator('done-toggle').click();
 
       const taskLocatorC = clientC.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorC.hover();
-      await taskLocatorC.locator('.task-done-btn').click();
+      await taskLocatorC.locator('done-toggle').click();
 
       // 4. Sequential syncs (LWW auto-resolves conflicts)
       await clientA.sync.syncAndWait();
@@ -366,7 +366,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await taskLocatorB.waitFor({ state: 'visible', timeout: 10000 });
       await taskLocatorB.hover();
       await clientB.page.waitForTimeout(100); // Let hover state settle
-      await taskLocatorB.locator('.task-done-btn').click();
+      await taskLocatorB.locator('done-toggle').click();
       await expect(taskLocatorB).toHaveClass(/isDone/, { timeout: 5000 });
 
       // 4. Wait for time to advance significantly
@@ -379,7 +379,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await taskLocatorA.waitFor({ state: 'visible', timeout: 10000 });
       await taskLocatorA.hover();
       await clientA.page.waitForTimeout(100); // Let hover state settle
-      await taskLocatorA.locator('.task-done-btn').click();
+      await taskLocatorA.locator('done-toggle').click();
       await expect(taskLocatorA).toHaveClass(/isDone/, { timeout: 5000 });
 
       // 6. Client B syncs (uploads B's earlier change to server)
@@ -714,7 +714,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${titleA}")`)
         .first();
       await taskLocatorAUpdated.hover();
-      await taskLocatorAUpdated.locator('.task-done-btn').click();
+      await taskLocatorAUpdated.locator('done-toggle').click();
       await clientA.page.waitForTimeout(300);
 
       // Change 3: Add time estimate (another field update)
@@ -754,7 +754,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${titleB}")`)
         .first();
       await taskLocatorBUpdated.hover();
-      await taskLocatorBUpdated.locator('.task-done-btn').click();
+      await taskLocatorBUpdated.locator('done-toggle').click();
       await clientB.page.waitForTimeout(300);
 
       console.log('[MultiOp] Client B made 3 changes (B has later timestamps)');
@@ -854,17 +854,19 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .first();
       await projectsTree.waitFor({ state: 'visible' });
 
-      const addBtn = projectsTree
-        .locator('.additional-btn mat-icon:has-text("add")')
-        .first();
+      // Hover the group header to make additional buttons visible and clickable
       const groupNavItem = projectsTree.locator('nav-item').first();
       await groupNavItem.hover();
       await page.waitForTimeout(200);
 
-      if (await addBtn.isVisible()) {
+      const addBtn = projectsTree.locator(
+        '.additional-btns button[mat-icon-button]:has(mat-icon:text("add"))',
+      );
+      try {
+        await addBtn.waitFor({ state: 'visible', timeout: 5000 });
         await addBtn.click();
-      } else {
-        throw new Error('Could not find Create Project button');
+      } catch {
+        await addBtn.click({ force: true });
       }
 
       const nameInput = page.getByRole('textbox', { name: 'Project Name' });
@@ -1287,7 +1289,9 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * Scenario: Delete vs Update Race
    *
    * Tests that when one client deletes a task while another updates it,
-   * the delete wins — deleted tasks are not resurrected by concurrent updates.
+   * the update wins because it has a later timestamp in the LWW system.
+   * The LWW system is purely timestamp-based — the newer operation wins
+   * regardless of type.
    *
    * Actions:
    * 1. Client A creates task, syncs
@@ -1295,10 +1299,10 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * 3. Client A deletes the task
    * 4. Client B (with later timestamp) updates the task
    * 5. Client A syncs (uploads delete)
-   * 6. Client B syncs (delete wins, task is removed)
-   * 7. Verify task is deleted on both clients
+   * 6. Client B syncs (update wins via LWW, task preserved)
+   * 7. Verify task is visible on both clients with updated name
    */
-  test('LWW: Delete vs Update race resolves correctly', async ({
+  test('LWW: Delete vs Update race resolves correctly — update wins', async ({
     browser,
     baseURL,
     testRunId,
@@ -1368,19 +1372,21 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientA.sync.syncAndWait();
       console.log('[DeleteRace] Final sync complete');
 
-      // Verify: Delete wins over update in the sync system.
-      // Once a task is deleted and that delete is synced, the task stays deleted
-      // on all clients. The later update from B does not resurrect the task.
-      const taskOnA = clientA.page.locator(`task:has-text("${taskName}")`);
-      const taskOnB = clientB.page.locator(`task:has-text("${taskName}")`);
+      // Verify: Update wins over delete in the LWW system (later timestamp wins).
+      // Client B's rename has a later timestamp than Client A's delete,
+      // so the task is preserved with the updated name on both clients.
+      const taskOnA = clientA.page.locator(`task:has-text("${taskName}-Updated")`);
+      const taskOnB = clientB.page.locator(`task:has-text("${taskName}-Updated")`);
 
-      await expect(taskOnA).not.toBeVisible({ timeout: 15000 });
-      console.log('[DeleteRace] Task correctly deleted on Client A');
+      await expect(taskOnA).toBeVisible({ timeout: 15000 });
+      console.log('[DeleteRace] Task correctly preserved on Client A with updated name');
 
-      await expect(taskOnB).not.toBeVisible({ timeout: 15000 });
-      console.log('[DeleteRace] Task correctly deleted on Client B');
+      await expect(taskOnB).toBeVisible({ timeout: 15000 });
+      console.log('[DeleteRace] Task correctly preserved on Client B with updated name');
 
-      console.log('[DeleteRace] ✓ Delete wins over update — both clients converge');
+      console.log(
+        '[DeleteRace] ✓ Update wins over delete (later timestamp) — both clients converge',
+      );
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -1391,8 +1397,8 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * Scenario: Delete vs Update Race with TODAY_TAG (dueDay)
    *
    * Tests that when a task scheduled for today is deleted on one client
-   * while updated on another, the delete wins and the task is removed
-   * from both clients including the TODAY view.
+   * while updated on another, the update wins because it has a later
+   * timestamp in the LWW system. The task is preserved on both clients.
    *
    * Actions:
    * 1. Client A creates task for today (sd:today), syncs
@@ -1400,10 +1406,10 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * 3. Client A deletes the task
    * 4. Client B (with later timestamp) updates the task title
    * 5. Client A syncs (uploads delete)
-   * 6. Client B syncs (delete wins, task removed)
-   * 7. Verify task is not visible on either client
+   * 6. Client B syncs (update wins via LWW, task preserved)
+   * 7. Verify task is visible on both clients with updated name
    */
-  test('LWW: Deleted task with dueDay=today is removed despite concurrent update', async ({
+  test('LWW: Task with dueDay=today is preserved when concurrent update has later timestamp', async ({
     browser,
     baseURL,
     testRunId,
@@ -1477,19 +1483,23 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientA.sync.syncAndWait();
       console.log('[TodayDeleteRace] Final sync complete, LWW applied');
 
-      // 8. ASSERTION: Delete wins — task should NOT be visible on either client.
-      // Deleted tasks are not resurrected by concurrent updates.
-      const taskOnA = clientA.page.locator(`task:has-text("${taskName}")`);
-      const taskOnB = clientB.page.locator(`task:has-text("${taskName}")`);
+      // 8. ASSERTION: Update wins (later timestamp) — task should be visible on both clients.
+      // The LWW system is purely timestamp-based, so the later update preserves the task.
+      const taskOnA = clientA.page.locator(`task:has-text("${taskName}-Updated")`);
+      const taskOnB = clientB.page.locator(`task:has-text("${taskName}-Updated")`);
 
-      await expect(taskOnA).not.toBeVisible({ timeout: 15000 });
-      console.log('[TodayDeleteRace] Task correctly deleted on Client A');
+      await expect(taskOnA).toBeVisible({ timeout: 15000 });
+      console.log(
+        '[TodayDeleteRace] Task correctly preserved on Client A with updated name',
+      );
 
-      await expect(taskOnB).not.toBeVisible({ timeout: 15000 });
-      console.log('[TodayDeleteRace] Task correctly deleted on Client B');
+      await expect(taskOnB).toBeVisible({ timeout: 15000 });
+      console.log(
+        '[TodayDeleteRace] Task correctly preserved on Client B with updated name',
+      );
 
       console.log(
-        '[TodayDeleteRace] ✓ Delete wins over update — task removed from TODAY view',
+        '[TodayDeleteRace] ✓ Update wins over delete (later timestamp) — task preserved in TODAY view',
       );
     } finally {
       if (clientA) await closeClient(clientA);

@@ -73,6 +73,7 @@ export const DateTimeLocales = {
   uk_ua: `${LanguageCode.uk}-ua`,
   ro_ro: `${LanguageCode.ro}-ro`,
   ro_md: `${LanguageCode.ro}-md`,
+  pl_pl: `${LanguageCode.pl}-pl`,
 } as const;
 
 export type DateTimeLocale = (typeof DateTimeLocales)[keyof typeof DateTimeLocales];
@@ -113,6 +114,7 @@ export const LocaleImportFns: Record<
   fr: () => import('@angular/common/locales/fr'),
   id: () => import('@angular/common/locales/id'),
   it: () => import('@angular/common/locales/it'),
+  pl_pl: () => import('@angular/common/locales/pl'),
   pl: () => import('@angular/common/locales/pl'),
   pt: () => import('@angular/common/locales/pt'),
   nl: () => import('@angular/common/locales/nl'),

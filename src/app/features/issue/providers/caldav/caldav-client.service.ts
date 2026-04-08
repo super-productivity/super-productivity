@@ -128,7 +128,7 @@ export class CaldavClientService {
     const todo = comp.getFirstSubcomponent('vtodo');
 
     if (!todo) {
-      IssueLog.log(task);
+      IssueLog.log('No todo found for CalDAV task');
       throw new Error('No todo found for task');
     }
 
@@ -410,7 +410,7 @@ export class CaldavClientService {
     const todo = comp.getFirstSubcomponent('vtodo');
 
     if (!todo) {
-      IssueLog.err('No todo found for task', task);
+      IssueLog.err('No todo found for CalDAV task');
       return;
     }
 

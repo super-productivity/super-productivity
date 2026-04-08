@@ -1,0 +1,255 @@
+/**
+ * Zen Theme for Super Productivity
+ * Removes task backgrounds for a clean, borderless look.
+ * Tasks still get a background when dragged or selected/current.
+ * Works with both light and dark modes.
+ */
+
+body,
+body.isDarkTheme {
+  /* Task backgrounds: transparent */
+  --task-c-bg: transparent;
+  --task-c-bg-done: transparent;
+  --task-c-current-bg: transparent;
+  --sub-task-c-bg: transparent;
+  --sub-task-c-bg-done: transparent;
+  --sub-task-c-bg-in-selected: transparent;
+
+  /* Remove task shadows */
+  --task-shadow: none;
+  --task-shadow-sub-task: none;
+  --task-current-shadow: none;
+
+  /* Remove task border */
+  --task-border: none;
+
+  /* Remove side panel backgrounds and shadows */
+  --task-detail-bg: transparent;
+  --task-detail-bg-hover: transparent;
+  --task-detail-shadow: none;
+  --card-bg: transparent;
+  --card-shadow: none;
+  --banner-bg: transparent;
+  --banner-shadow: none;
+
+  /* Notes: transparent with border */
+  --standard-note-bg: transparent;
+  --standard-note-bg-hovered: transparent;
+
+  /* Use main bg instead of lighter grays */
+  --bg-lighter: var(--bg);
+  --bg-lightest: var(--bg);
+  --schedule-event-bg: transparent;
+  --schedule-event-bg-in-side-panel: transparent;
+
+  /* Selected task: flat with border */
+  --task-c-selected-bg: transparent;
+  --task-selected-shadow: none;
+}
+
+/* Light mode: use pure white for elevated surfaces instead of off-white (#f8f8f7) */
+body:not(.isDarkTheme) {
+  --bg-lighter: #fff;
+  --bg-lightest: #fff;
+}
+
+/* Schedule events: semi-transparent bg with bg image */
+body.hasBgImage {
+  --schedule-event-bg: rgba(255, 255, 255, 0.85);
+}
+
+body.isDarkTheme.hasBgImage {
+  --schedule-event-bg: rgba(19, 19, 20, 0.85);
+}
+
+/* Remove borders and shadows from planner tasks */
+body planner-task {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* Selected task: border instead of shadow/bg */
+body task.isSelected .box {
+  border: 1px solid rgba(128, 128, 128, 0.3) !important;
+  border-radius: var(--task-border-radius);
+}
+
+body.isDarkTheme task.isSelected .box {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Don't apply selected border to subtask boxes */
+body task.isSelected .sub-tasks .box {
+  border-color: transparent !important;
+  border-radius: 0;
+}
+
+/* Restore background when dragging */
+body task.isDragReady:not(.cdk-drag-placeholder) .box {
+  background: var(--bg) !important;
+}
+
+/* Task hover controls: semi-transparent bg with bg image, solid bg without */
+body .first-line:hover task-hover-controls,
+body .first-line:hover .all-controls-wrapper {
+  background: var(--bg) !important;
+  border-radius: var(--task-border-radius);
+}
+
+body.hasBgImage .first-line:hover task-hover-controls,
+body.hasBgImage .first-line:hover .all-controls-wrapper {
+  background: rgba(255, 255, 255, 0.85) !important;
+}
+
+body.isDarkTheme.hasBgImage .first-line:hover task-hover-controls,
+body.isDarkTheme.hasBgImage .first-line:hover .all-controls-wrapper {
+  background: rgba(19, 19, 20, 0.85) !important;
+}
+
+/* Flatten subtask toggle button */
+body .toggle-sub-tasks-btn.toggle-sub-tasks-btn {
+  background: transparent !important;
+}
+
+/* Remove borders from repeat projections, repeat config previews, and non-added calendar events */
+body planner-repeat-projection > div,
+body planner-calendar-event,
+body repeat-cfg-preview > div {
+  --extra-border-color: transparent;
+  --separator-color: transparent;
+}
+
+/* General notes: border instead of shadow */
+body note .note {
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  box-shadow: none !important;
+}
+
+body.isDarkTheme note .note {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Task notes: transparent with border, no shadow */
+body task-detail-item .markdown-unparsed,
+body task-detail-item .markdown-parsed {
+  background: transparent !important;
+  border: 1px solid rgba(128, 128, 128, 0.2) !important;
+  border-radius: var(--card-border-radius) !important;
+}
+
+body.isDarkTheme task-detail-item .markdown-unparsed,
+body.isDarkTheme task-detail-item .markdown-parsed {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body task-detail-item .markdown-wrapper {
+  box-shadow: none !important;
+}
+
+/* Material dialogs, cards, and context menus */
+body .mat-mdc-dialog-surface,
+body .mat-mdc-menu-panel {
+  background: var(--bg) !important;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+body:not(.isDarkTheme) .mat-mdc-dialog-surface,
+body:not(.isDarkTheme) .mat-mdc-menu-panel {
+  background: #fff !important;
+}
+
+body.isDarkTheme .mat-mdc-dialog-surface,
+body.isDarkTheme .mat-mdc-menu-panel {
+  background: color-mix(in srgb, var(--bg), #fff 5%) !important;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body .mat-mdc-card {
+  background: var(--bg) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+body:not(.isDarkTheme) .mat-mdc-card {
+  background: #fff !important;
+}
+
+body .mat-mdc-card.repeat-task-cfg {
+  background: transparent !important;
+  border: none;
+}
+
+body.isDarkTheme .mat-mdc-card {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Material form fields: use main bg with darker underline */
+body .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+  background: var(--bg) !important;
+}
+
+body .mdc-line-ripple::before {
+  border-bottom-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+body.isDarkTheme .mdc-line-ripple::before {
+  border-bottom-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Side panel edge close handle */
+body right-panel .edge-close-handle {
+  background: var(--bg) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+body.isDarkTheme right-panel .edge-close-handle {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Issue panel: transparent backgrounds */
+body issue-panel,
+body issue-provider-tab,
+body issue-preview-item,
+body issue-panel-calendar-agenda {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Schedule header, nav controls, and weekday bar */
+body schedule {
+  --bg-lighter: transparent !important;
+  --whiteframe-shadow-1dp: none !important;
+}
+
+body schedule-week {
+  --bg-lighter: var(--bg) !important;
+}
+
+body.hasBgImage schedule {
+  --bg-lighter: rgba(255, 255, 255, 0.85);
+}
+
+body.isDarkTheme.hasBgImage schedule {
+  --bg-lighter: rgba(19, 19, 20, 0.85);
+}
+
+/* Flatten week/month selector in main header */
+body .week-month-selector {
+  box-shadow: none !important;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+body.isDarkTheme .week-month-selector {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body .week-month-btn:not(.active) {
+  background: transparent !important;
+}
+
+/* Give current task a background when sticky (page scrolled) */
+app-root.isWorkViewScrolled task.isCurrent .box {
+  background: var(--bg) !important;
+}

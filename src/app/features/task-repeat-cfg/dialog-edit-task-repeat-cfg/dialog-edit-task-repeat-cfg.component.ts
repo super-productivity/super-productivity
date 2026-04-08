@@ -87,6 +87,7 @@ export class DialogEditTaskRepeatCfgComponent {
   }>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
+  isHeatmapExpanded = false;
 
   repeatCfgInitial = signal<TaskRepeatCfgCopy | undefined>(undefined);
   repeatCfg = signal<Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg>(
@@ -114,9 +115,9 @@ export class DialogEditTaskRepeatCfgComponent {
   formGroup2 = signal(new UntypedFormGroup({}));
   tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
   canRemoveInstance = signal<boolean>(false);
-  removeInstanceButtonText = computed(() => {
+  skipInstanceButtonText = computed(() => {
     if (!this._data.targetDate) {
-      return this._translateService.instant(T.F.TASK_REPEAT.F.REMOVE_INSTANCE);
+      return this._translateService.instant(T.F.TASK_REPEAT.F.SKIP_INSTANCE);
     }
 
     // Format date using same logic as ShortDate2Pipe
@@ -129,7 +130,7 @@ export class DialogEditTaskRepeatCfgComponent {
       this._dateTimeFormatService.currentLocale(),
     );
 
-    return this._translateService.instant(T.F.TASK_REPEAT.F.REMOVE_FOR_DATE, {
+    return this._translateService.instant(T.F.TASK_REPEAT.F.SKIP_FOR_DATE, {
       date: formattedDate,
     });
   });
@@ -320,12 +321,12 @@ export class DialogEditTaskRepeatCfgComponent {
       .open(DialogConfirmComponent, {
         restoreFocus: true,
         data: {
-          message: this._translateService.instant(T.F.TASK_REPEAT.D_DELETE_INSTANCE.MSG, {
+          message: this._translateService.instant(T.F.TASK_REPEAT.D_SKIP_INSTANCE.MSG, {
             date: new Date(targetDate).toLocaleDateString(
               this._dateTimeFormatService.currentLocale(),
             ),
           }),
-          okTxt: this._translateService.instant(T.F.TASK_REPEAT.D_DELETE_INSTANCE.OK),
+          okTxt: this._translateService.instant(T.F.TASK_REPEAT.D_SKIP_INSTANCE.OK),
         },
       })
       .afterClosed()

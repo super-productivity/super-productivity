@@ -13,6 +13,7 @@ import { selectTodayTaskIds } from '../../work-context/store/work-context.select
 import { DEFAULT_TASK, Task, TaskWithDueDay } from '../task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 // These tests are skipped because TaskDueEffects imports SyncTriggerService which
 // imports PfapiService which imports pfapi-config.ts. That file eagerly instantiates
@@ -182,7 +183,7 @@ xdescribe('TaskDueEffects', () => {
   });
 
   describe('removeOverdueFormToday$', () => {
-    it('should dispatch removeTasksFromTodayTag when there are overdue tasks', (done) => {
+    it('should dispatch localRemoveOverdueFromToday (non-persistent) when there are overdue tasks (#6992)', (done) => {
       const overdueTask = createTask('overdue-1', {
         dueDay: '2024-01-01', // Past date
       });
@@ -193,6 +194,7 @@ xdescribe('TaskDueEffects', () => {
 
       const subscription = effects.removeOverdueFormToday$.pipe(take(1)).subscribe({
         next: (action) => {
+          expect(action.type).toBe(TaskSharedActions.localRemoveOverdueFromToday.type);
           expect(action).toEqual(
             jasmine.objectContaining({
               taskIds: ['overdue-1'],

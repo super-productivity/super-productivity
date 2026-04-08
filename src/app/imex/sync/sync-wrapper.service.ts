@@ -1,5 +1,5 @@
-import { inject, Injectable } from '@angular/core';
-import { BehaviorSubject, firstValueFrom, Observable, of } from 'rxjs';
+import { DestroyRef, inject, Injectable } from '@angular/core';
+import { BehaviorSubject, combineLatest, firstValueFrom, Observable, of } from 'rxjs';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
   distinctUntilChanged,
@@ -8,10 +8,9 @@ import {
   map,
   shareReplay,
   switchMap,
-  take,
   timeout,
 } from 'rxjs/operators';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import {
   SyncAlreadyInProgressError,
   LockAcquisitionTimeoutError,
@@ -19,6 +18,7 @@ import {
   WebCryptoNotAvailableError,
   MissingRefreshTokenAPIError,
   HttpNotOkAPIError,
+  EmptyRemoteBodySPError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { SyncConfig } from '../../features/config/global-config.model';
@@ -64,10 +64,13 @@ import { alertDialog, confirmDialog } from '../../util/native-dialogs';
 import { UserInputWaitStateService } from './user-input-wait-state.service';
 import { SYNC_WAIT_TIMEOUT_MS } from './sync.const';
 import { SuperSyncStatusService } from '../../op-log/sync/super-sync-status.service';
+import { SuperSyncWebSocketService } from '../../op-log/sync/super-sync-websocket.service';
+import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-download.service';
 import { IS_ELECTRON } from '../../app.constants';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
+import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
 
 @Injectable({
   providedIn: 'root',
@@ -83,6 +86,8 @@ export class SyncWrapperService {
   private _reminderService = inject(ReminderService);
   private _userInputWaitState = inject(UserInputWaitStateService);
   private _superSyncStatusService = inject(SuperSyncStatusService);
+  private _superSyncWsService = inject(SuperSyncWebSocketService);
+  private _wsDownloadService = inject(WsTriggeredDownloadService);
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
   private _wrappedProvider = inject(WrappedProviderService);
@@ -96,13 +101,36 @@ export class SyncWrapperService {
     map((cfg) => toSyncProviderId(cfg.syncProvider)),
   );
 
-  // SuperSync always uses 1 minute interval; other providers use configured value
-  // Return 0 when manual sync only is enabled to disable automatic triggers
-  syncInterval$: Observable<number> = this.syncCfg$.pipe(
-    map((cfg) => {
+  private _destroyRef = inject(DestroyRef);
+
+  // Disconnect WebSocket when sync provider changes away from SuperSync or sync is disabled
+  private _wsProviderCleanup = this.syncProviderId$
+    .pipe(distinctUntilChanged(), takeUntilDestroyed(this._destroyRef))
+    .subscribe((providerId) => {
+      if (providerId !== SyncProviderId.SuperSync) {
+        this.disconnectWebSocket();
+      }
+    });
+
+  /**
+   * Sync interval in milliseconds.
+   * - When WebSocket is connected: 5 minutes (health check only)
+   * - When WebSocket is disconnected: 1 minute for SuperSync
+   * - Other providers: user-configured value
+   * - Return 0 when manual sync only is enabled to disable automatic triggers
+   */
+  syncInterval$: Observable<number> = combineLatest([
+    this.syncCfg$,
+    toObservable(this._superSyncWsService.isConnected),
+  ]).pipe(
+    map(([cfg, wsConnected]) => {
       if (cfg.isManualSyncOnly) return 0;
-      return cfg.syncProvider === SyncProviderId.SuperSync ? 60000 : cfg.syncInterval;
+      if (cfg.syncProvider === SyncProviderId.SuperSync) {
+        return wsConnected ? 300_000 : 60_000;
+      }
+      return cfg.syncInterval;
     }),
+    distinctUntilChanged(),
   );
 
   isEnabledAndReady$: Observable<boolean> = this._providerManager.isProviderReady$;
@@ -279,8 +307,49 @@ export class SyncWrapperService {
     }
   }
 
+  /**
+   * Connects the WebSocket for real-time sync notifications.
+   * Called after a successful SuperSync sync cycle.
+   */
+  async connectWebSocket(): Promise<void> {
+    const providerId = await firstValueFrom(this.syncProviderId$);
+    if (providerId !== SyncProviderId.SuperSync) {
+      return;
+    }
+
+    const provider = await this._providerManager.getProviderById(
+      SyncProviderId.SuperSync,
+    );
+    if (!provider) {
+      SyncLog.warn(
+        'SyncWrapperService: No SuperSync provider found for WebSocket connection',
+      );
+      return;
+    }
+
+    const superSyncProvider = provider as unknown as SuperSyncProvider;
+    const wsParams = await superSyncProvider.getWebSocketParams();
+    if (!wsParams) {
+      SyncLog.warn(
+        'SyncWrapperService: No WebSocket params available from SuperSync provider',
+      );
+      return;
+    }
+
+    await this._superSyncWsService.connect(wsParams.baseUrl, wsParams.accessToken);
+    this._wsDownloadService.start();
+  }
+
+  /**
+   * Disconnects the WebSocket and stops WS-triggered downloads.
+   */
+  disconnectWebSocket(): void {
+    this._wsDownloadService.stop();
+    this._superSyncWsService.disconnect();
+  }
+
   private async _sync(): Promise<SyncStatus | 'HANDLED_ERROR'> {
-    const providerId = await this.syncProviderId$.pipe(take(1)).toPromise();
+    const providerId = await firstValueFrom(this.syncProviderId$);
     if (!providerId) {
       throw new Error('No Sync Provider for sync()');
     }
@@ -414,6 +483,20 @@ export class SyncWrapperService {
       // Mark as in-sync for all providers after successful sync
       this._providerManager.setSyncStatus('IN_SYNC');
       SyncLog.log('SyncWrapperService: Sync complete, status=IN_SYNC');
+
+      // Connect WebSocket after first successful SuperSync sync (fire-and-forget)
+      if (
+        providerId === SyncProviderId.SuperSync &&
+        !this._superSyncWsService.isConnected()
+      ) {
+        this.connectWebSocket().catch((err) => {
+          SyncLog.warn(
+            'SyncWrapperService: WebSocket connection failed, will retry on next sync',
+            err,
+          );
+        });
+      }
+
       return SyncStatus.InSync;
     } catch (error) {
       SyncLog.err(error);
@@ -439,8 +522,7 @@ export class SyncWrapperService {
         // a "Configure" button so users can re-auth on genuine failures. Other providers
         // (Dropbox, WebDAV) must clear immediately so their OAuth/re-auth flows work.
         const skipClear =
-          error instanceof AuthFailSPError &&
-          providerId === SyncProviderId.SuperSync;
+          error instanceof AuthFailSPError && providerId === SyncProviderId.SuperSync;
         if (providerId && !skipClear) {
           try {
             await this._providerManager.clearAuthCredentials(providerId);
@@ -488,6 +570,28 @@ export class SyncWrapperService {
           type: 'ERROR',
           actionFn: async () => this.forceUpload(),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof EmptyRemoteBodySPError) {
+        // Remote file returned empty body (e.g. Koofr WebDAV corrupted file).
+        // Force overwrite is safe here: local data is intact, remote is empty.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.ERROR_REMOTE_FILE_EMPTY,
+          type: 'ERROR',
+          config: { duration: 12000 },
+          actionFn: async () => this.forceUpload(),
+          actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof HttpNotOkAPIError && error.response.status === 423) {
+        // HTTP 423 Locked: WebDAV server holds a file lock.
+        // Do NOT offer force overwrite — the PUT will also receive 423.
+        // The lock typically resolves on the next sync attempt.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.ERROR_REMOTE_FILE_LOCKED,
+          type: 'ERROR',
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof DecryptNoPasswordError) {
@@ -548,6 +652,7 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else {
+        this._providerManager.setSyncStatus('ERROR');
         const errStr = getSyncErrorStr(error);
         this._snackService.open({
           // msg: T.F.SYNC.S.UNKNOWN_ERROR,
@@ -720,7 +825,6 @@ export class SyncWrapperService {
     const dialogRef = this._matDialog.open(DialogSyncErrorComponent, {
       data,
       disableClose: true,
-      autoFocus: false,
     });
 
     firstValueFrom(dialogRef.afterClosed())
@@ -783,7 +887,6 @@ export class SyncWrapperService {
     this._passwordDialog = this._matDialog.open(DialogEnterEncryptionPasswordComponent, {
       width: '450px',
       disableClose: true,
-      autoFocus: false,
     });
 
     firstValueFrom(this._passwordDialog.afterClosed())
@@ -835,7 +938,6 @@ export class SyncWrapperService {
     // Open dialog for password correction
     this._passwordDialog = this._matDialog.open(DialogHandleDecryptErrorComponent, {
       disableClose: true,
-      autoFocus: false,
     });
 
     firstValueFrom(this._passwordDialog.afterClosed())
@@ -1114,7 +1216,6 @@ export class SyncWrapperService {
     }
     this.lastConflictDialog = this._matDialog.open(DialogSyncConflictComponent, {
       restoreFocus: true,
-      autoFocus: false,
       disableClose: true,
       data: conflictData,
     });
