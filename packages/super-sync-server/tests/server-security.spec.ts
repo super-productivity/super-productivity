@@ -201,16 +201,15 @@ describe('Password Reset Page', () => {
     expect(response.body).toBe('Token is required');
   });
 
-  it('should escape malicious token in JavaScript context', async () => {
+  it('should escape malicious token in data attribute', async () => {
     const { pageRoutes } = await import('../src/pages');
 
     app = Fastify();
     await app.register(pageRoutes, { prefix: '/' });
     await app.ready();
 
-    // Test JavaScript injection attempt - single quotes should be safe
-    // because safeJsonForScript wraps in double quotes
-    const maliciousToken = "';alert(1);//";
+    // Test attribute breakout attempt - double quotes should be escaped
+    const maliciousToken = '"><script>alert(1)</script>';
     const response = await app.inject({
       method: 'GET',
       url: `/reset-password?token=${encodeURIComponent(maliciousToken)}`,
@@ -219,11 +218,12 @@ describe('Password Reset Page', () => {
     expect(response.statusCode).toBe(200);
     const html = response.body;
 
-    // Token is wrapped in double quotes by JSON.stringify, so single quotes are safe
-    // The actual string content appears inside double quotes in the JS
-    expect(html).toContain('"');
-    // The raw attack string should not appear unquoted
-    expect(html).not.toMatch(/token:\s*'.*;alert/);
+    // Token is in data-token attribute, escapeHtml prevents attribute breakout
+    expect(html).toContain('data-token="');
+    // The raw attack string should not appear unescaped
+    expect(html).not.toContain('"><script>');
+    // Double quotes are escaped as &quot;
+    expect(html).toContain('&quot;');
   });
 
   it('should escape script tags in token to prevent XSS', async () => {
@@ -242,9 +242,9 @@ describe('Password Reset Page', () => {
     expect(response.statusCode).toBe(200);
     const html = response.body;
 
-    // safeJsonForScript escapes < as \u003c to prevent </script> injection
+    // escapeHtml escapes < as &lt; to prevent injection
     expect(html).not.toContain('</script><script>');
-    expect(html).toContain('\\u003c'); // < escaped as unicode
+    expect(html).toContain('&lt;'); // < escaped as HTML entity
   });
 });
 

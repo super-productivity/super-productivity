@@ -400,7 +400,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 30,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
