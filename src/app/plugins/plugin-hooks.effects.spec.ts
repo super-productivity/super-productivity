@@ -170,6 +170,27 @@ describe('PluginHooksEffects', () => {
       });
     });
 
+    it('should dispatch TASK_UPDATE hook on moveToOtherProject action', (done) => {
+      const targetProjectId = 'project-456';
+      actions$ = of(
+        TaskSharedActions.moveToOtherProject({
+          task: mockTask as TaskCopy,
+          targetProjectId,
+        }),
+      );
+
+      effects.taskUpdate$.subscribe(() => {
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.TASK_UPDATE,
+          jasmine.objectContaining({
+            taskId: mockTask.id,
+            changes: { projectId: targetProjectId },
+          }),
+        );
+        done();
+      });
+    });
+
     it('should dispatch TASK_UPDATE hook on planTaskForDay action', (done) => {
       const day = '2024-01-15';
       actions$ = of(
