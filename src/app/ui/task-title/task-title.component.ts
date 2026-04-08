@@ -23,7 +23,7 @@ import { TagService } from '../../features/tag/tag.service';
 import { ProjectService } from '../../features/project/project.service';
 import { Observable } from 'rxjs';
 import { buildMentionConfig$ } from '../../util/build-mention-config';
-import { hasLinkHints } from '../pipes/render-links.pipe';
+import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
 
 /**
  * Inline-editable text field for task titles.
@@ -32,7 +32,7 @@ import { hasLinkHints } from '../pipes/render-links.pipe';
  */
 @Component({
   selector: 'task-title',
-  imports: [TranslateModule, MentionModule, AsyncPipe],
+  imports: [TranslateModule, MentionModule, AsyncPipe, RenderLinksPipe],
   templateUrl: './task-title.component.html',
   styleUrl: './task-title.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
