@@ -8,7 +8,6 @@ import {
   input,
   Input,
   OnDestroy,
-  OnInit,
   output,
   signal,
   viewChild,
@@ -22,12 +21,9 @@ import { AsyncPipe } from '@angular/common';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { TagService } from '../../features/tag/tag.service';
 import { ProjectService } from '../../features/project/project.service';
-import { combineLatest, Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { Mentions } from '../mentions/mention-config';
-import { MentionItem } from '../mentions/mention-types';
-import { CHRONO_SUGGESTIONS } from '../../features/tasks/add-task-bar/add-task-bar.const';
-import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
+import { Observable } from 'rxjs';
+import { buildMentionConfig$ } from '../../util/build-mention-config';
+import { hasLinkHints } from '../pipes/render-links.pipe';
 
 /**
  * Inline-editable text field for task titles.
@@ -46,7 +42,7 @@ import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
     ['[class.is-readonly]']: 'readonly()',
   },
 })
-export class TaskTitleComponent implements OnInit, OnDestroy {
+export class TaskTitleComponent implements OnDestroy {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _tagService = inject(TagService);
   private readonly _projectService = inject(ProjectService);
@@ -54,9 +50,13 @@ export class TaskTitleComponent implements OnInit, OnDestroy {
   T: typeof T = T;
 
   // mention config observable for short syntax autocomplete in textarea
-  mentionCfg$!: Observable<MentionConfig>;
+  mentionCfg$: Observable<MentionConfig> = buildMentionConfig$(
+    this._globalConfigService,
+    this._tagService,
+    this._projectService,
+  );
 
-  private _isMentionListShown = false;
+  private readonly _isMentionListShown = signal(false);
   readonly readonly = input<boolean>(false); // When true, disables editing and only displays the value
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
@@ -107,49 +107,10 @@ export class TaskTitleComponent implements OnInit, OnDestroy {
   private readonly _isEditing = signal(false);
   private _focusTimeoutId: number | undefined;
 
-  constructor() {}
-
-  ngOnInit(): void {
-    this.mentionCfg$ = combineLatest([
-      this._globalConfigService.shortSyntax$,
-      this._tagService.tagsNoMyDayAndNoListSorted$,
-      this._projectService.listSortedForUI$,
-    ]).pipe(
-      map(([cfg, tagSuggestions, projectSuggestions]) => {
-        const mentions: Mentions[] = [];
-        if (cfg.isEnableTag) {
-          mentions.push({
-            items: (tagSuggestions as unknown as MentionItem[]) || [],
-            labelKey: 'title',
-            triggerChar: '#',
-          });
-        }
-        if (cfg.isEnableDue) {
-          mentions.push({
-            items: CHRONO_SUGGESTIONS,
-            labelKey: 'title',
-            triggerChar: '@',
-          });
-        }
-        if (cfg.isEnableProject) {
-          mentions.push({
-            items: (projectSuggestions as unknown as MentionItem[]) || [],
-            labelKey: 'title',
-            triggerChar: '+',
-          });
-        }
-        return {
-          mentions,
-          triggerChar: undefined,
-        } as MentionConfig;
-      }),
-    );
-  }
-
   updateMentionListShown(isShown: boolean): void {
     // use setTimeout to ensure blur event order doesn't interfere with mention selection
     window.setTimeout(() => {
-      this._isMentionListShown = isShown;
+      this._isMentionListShown.set(isShown);
     });
   }
 
@@ -236,12 +197,12 @@ export class TaskTitleComponent implements OnInit, OnDestroy {
     ev.stopPropagation();
     if (ev.key === 'Escape') {
       // if mention list is open, Escape is handled by MentionDirective - don't blur
-      if (!this._isMentionListShown) {
+      if (!this._isMentionListShown()) {
         this._forceBlur();
       }
     } else if (ev.key === 'Enter') {
       // if mention list is open, Enter selects from list - don't blur
-      if (!this._isMentionListShown) {
+      if (!this._isMentionListShown()) {
         this._forceBlur();
         ev.preventDefault();
       }
