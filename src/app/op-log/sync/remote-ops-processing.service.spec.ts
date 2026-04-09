@@ -14,6 +14,7 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { LockService } from './lock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from './sync-import-filter.service';
+import { OperationWriteFlushService } from './operation-write-flush.service';
 import {
   ActionType,
   EntityConflict,
@@ -219,8 +220,21 @@ describe('RemoteOpsProcessingService', () => {
         { provide: LockService, useValue: lockServiceSpy },
         { provide: OperationLogCompactionService, useValue: compactionServiceSpy },
         { provide: SyncImportFilterService, useValue: syncImportFilterServiceSpy },
+        {
+          provide: OperationWriteFlushService,
+          useValue: jasmine.createSpyObj('OperationWriteFlushService', [
+            'flushPendingWrites',
+          ]),
+        },
       ],
     });
+
+    // Default: flush resolves immediately
+    (
+      TestBed.inject(
+        OperationWriteFlushService,
+      ) as unknown as jasmine.SpyObj<OperationWriteFlushService>
+    ).flushPendingWrites.and.resolveTo();
 
     service = TestBed.inject(RemoteOpsProcessingService);
     schemaMigrationServiceSpy.getCurrentVersion.and.returnValue(1);
@@ -291,6 +305,12 @@ describe('RemoteOpsProcessingService', () => {
 
       // Track call order
       const callOrder: string[] = [];
+      const writeFlushService = TestBed.inject(
+        OperationWriteFlushService,
+      ) as unknown as jasmine.SpyObj<OperationWriteFlushService>;
+      writeFlushService.flushPendingWrites.and.callFake(async () => {
+        callOrder.push('flushPendingWrites');
+      });
       lockServiceSpy.request.and.callFake(
         async (_name: string, callback: () => Promise<void>) => {
           callOrder.push('lockAcquired');
@@ -310,8 +330,12 @@ describe('RemoteOpsProcessingService', () => {
         jasmine.any(Function),
       );
 
-      // Verify lock was acquired BEFORE detectConflicts
-      expect(callOrder).toEqual(['lockAcquired', 'detectConflicts']);
+      // Verify flush happened BEFORE lock, lock BEFORE detectConflicts
+      expect(callOrder).toEqual([
+        'flushPendingWrites',
+        'lockAcquired',
+        'detectConflicts',
+      ]);
     });
 
     it('should drop operations if migrateOperation returns null', async () => {
