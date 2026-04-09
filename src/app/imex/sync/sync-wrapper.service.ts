@@ -402,6 +402,10 @@ export class SyncWrapperService {
         syncCapableProvider,
         isProviderSwitch ? { forceFromSeq0: true } : undefined,
       );
+      // Auth is confirmed working if download didn't throw AuthFailSPError.
+      // Reset here rather than only at InSync so early returns (cancelled,
+      // LWW pending, payload rejected) also break the consecutive-failure chain.
+      this._consecutiveSuperSyncAuthFailures = 0;
       SyncLog.log(`SyncWrapperService: Download complete. kind=${downloadResult.kind}`);
 
       // If user cancelled the sync import conflict dialog, skip upload entirely.
@@ -505,7 +509,6 @@ export class SyncWrapperService {
         });
       }
 
-      this._consecutiveSuperSyncAuthFailures = 0;
       return SyncStatus.InSync;
     } catch (error) {
       SyncLog.err(error);
