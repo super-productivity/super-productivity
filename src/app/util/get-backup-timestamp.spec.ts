@@ -1,6 +1,10 @@
 import { getBackupTimestamp } from './get-backup-timestamp';
 
 describe('getBackupTimestamp', () => {
+  beforeEach(() => {
+    jasmine.clock().install();
+  });
+
   afterEach(() => {
     jasmine.clock().uninstall();
   });
@@ -14,7 +18,6 @@ describe('getBackupTimestamp', () => {
   });
 
   it('should generate correct timestamp for known date', () => {
-    jasmine.clock().install();
     jasmine.clock().mockDate(new Date('2025-04-05T14:30:22'));
 
     const timestamp = getBackupTimestamp();
@@ -23,7 +26,6 @@ describe('getBackupTimestamp', () => {
   });
 
   it('should pad all components with zeros', () => {
-    jasmine.clock().install();
     jasmine.clock().mockDate(new Date('2025-01-05T09:05:09'));
 
     const timestamp = getBackupTimestamp();
