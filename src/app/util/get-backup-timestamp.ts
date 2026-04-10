@@ -1,3 +1,7 @@
+export const BACKUP_FILENAME_PREFIX = 'sp-backup';
+export const BACKUP_FILENAME_PREFIX_ANONYMIZED = 'sp-backup-anonymized';
+export const MIGRATION_BACKUP_PREFIX = 'sp-pre-migration-backup';
+
 /**
  * Generates a timestamp string in format: YYYY-MM-DD_HHmmss
  * Used for backup file naming in both Electron (main process) and Angular (renderer).

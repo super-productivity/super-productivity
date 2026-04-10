@@ -19,8 +19,10 @@ import { uuidv7 } from '../../util/uuid-v7';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { AppDataComplete } from '../model/model-config';
-import { getBackupTimestamp } from '../../util/get-backup-timestamp';
-import { MIGRATION_BACKUP_PREFIX } from './migration.const';
+import {
+  MIGRATION_BACKUP_PREFIX,
+  getBackupTimestamp,
+} from '../../util/get-backup-timestamp';
 
 /**
  * Service to check for valid operation log state during startup and migrate

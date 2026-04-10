@@ -1,6 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import legacyData from '../../fixtures/legacy-full-migration-backup.json';
-import { MIGRATION_BACKUP_PREFIX } from '../../../src/app/op-log/persistence/migration.const';
+import { MIGRATION_BACKUP_PREFIX } from '../../../src/app/util/get-backup-timestamp';
 
 /**
  * Legacy Data Migration E2E Tests

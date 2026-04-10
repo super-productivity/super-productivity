@@ -7,6 +7,10 @@ import {
 } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { download } from '../../../util/download';
+import {
+  BACKUP_FILENAME_PREFIX,
+  getBackupTimestamp,
+} from '../../../util/get-backup-timestamp';
 
 import { IS_ELECTRON } from '../../../app.constants';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
@@ -51,7 +55,8 @@ export class DialogSyncErrorComponent {
   async downloadBackup(): Promise<void> {
     const data = await this._backupService.loadCompleteBackup(true);
     try {
-      await download('super-productivity-backup.json', JSON.stringify(data));
+      const fileName = `${BACKUP_FILENAME_PREFIX}_${getBackupTimestamp()}.json`;
+      await download(fileName, JSON.stringify(data));
     } catch (e) {
       Log.error(e);
     }
