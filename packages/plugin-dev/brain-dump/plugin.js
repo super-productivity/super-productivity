@@ -15,6 +15,123 @@ function countTasks(textarea) {
   }).length;
 }
 
+function parseTasksWithSubTasks(text) {
+  if (!text || typeof text !== 'string') {
+    return null;
+  }
+
+  var lines = text.split('\n').filter(function (line) {
+    return line.trim().length > 0;
+  });
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  var parsedLines = [];
+
+  // Parse all lines
+  for (var l = 0; l < lines.length; l++) {
+    var parsed = parseLineStructure(lines[l]);
+    if (parsed) {
+      parsedLines.push(parsed);
+    }
+  }
+
+  if (parsedLines.length === 0) {
+    return null;
+  }
+
+  // Find the minimum indentation level to normalize
+  var minIndentLevel = Math.min.apply(
+    Math,
+    parsedLines.map(function (line) {
+      return line.indentLevel;
+    }),
+  );
+
+  // Normalize indentation levels
+  parsedLines.forEach(function (line) {
+    line.indentLevel -= minIndentLevel;
+  });
+
+  var mainTasks = [];
+  var i = 0;
+
+  while (i < parsedLines.length) {
+    var currentLine = parsedLines[i];
+
+    // Only process top-level items as main tasks
+    if (currentLine.indentLevel === 0) {
+      var task = {
+        title: currentLine.content,
+        isCompleted: currentLine.isCompleted,
+        subTasks: [],
+      };
+
+      // Look ahead for sub-tasks
+      var j = i + 1;
+      while (j < parsedLines.length && parsedLines[j].indentLevel > 0) {
+        var subLine = parsedLines[j];
+        if (subLine.indentLevel === 1) {
+          // Direct sub-tasks
+          task.subTasks.push({
+            title: subLine.content,
+            isCompleted: subLine.isCompleted,
+          });
+        }
+        j++;
+      }
+
+      mainTasks.push(task);
+      i = j; // Skip processed sub-tasks
+    } else {
+      i++;
+    }
+  }
+
+  return mainTasks;
+}
+
+function parseLineStructure(line) {
+  // Calculate indentation level
+  var indentMatch = line.match(/^(\s*)/);
+  var indentLevel = 0;
+  if (indentMatch && indentMatch[1]) {
+    var whitespace = indentMatch[1];
+    var tabCount = (whitespace.match(/\t/g) || []).length;
+    var spaceCount = (whitespace.match(/ /g) || []).length;
+    indentLevel = tabCount + Math.floor(spaceCount / 2);
+  }
+
+  var trimmedLine = line.trim();
+  if (trimmedLine.length === 0) {
+    return null;
+  }
+
+  // Check for checkbox list items: - [ ] or - [x]
+  var checkboxMatch = trimmedLine.match(/^-\s*\[([ x])\]\s*(.+)$/);
+  if (checkboxMatch) {
+    return {
+      indentLevel: indentLevel,
+      content: checkboxMatch[2].trim(),
+      isCompleted: checkboxMatch[1] === 'x',
+    };
+  }
+
+  // Check for bullet list items: - or *
+  var bulletMatch = trimmedLine.match(/^[-*]\s+(.+)$/);
+  if (bulletMatch) {
+    return {
+      indentLevel: indentLevel,
+      content: bulletMatch[1].trim(),
+      isCompleted: false,
+    };
+  }
+
+  return null;
+}
+
 function todayStr() {
   var d = new Date();
   return (
@@ -197,11 +314,8 @@ async function submitTasks() {
   var dueInput = document.getElementById('bd-due');
   if (!textarea) return;
 
-  var lines = textarea.value.split('\n').filter(function (line) {
-    return line.trim();
-  });
-
-  if (lines.length === 0) {
+  var text = textarea.value.trim();
+  if (text.length === 0) {
     PluginAPI.showSnack({
       msg: 'Nothing to add — enter at least one task.',
       type: 'WARNING',
@@ -212,15 +326,78 @@ async function submitTasks() {
   var projectId = select ? select.value : null;
   var dueDay = dueInput ? dueInput.value : null;
 
-  for (var i = 0; i < lines.length; i++) {
-    var taskData = { title: lines[i].trim() };
-    if (projectId) {
-      taskData.projectId = projectId;
+  // Try to parse with structure first
+  var parsedTasks = parseTasksWithSubTasks(text);
+  if (parsedTasks && parsedTasks.length > 0) {
+    // Create structured tasks with sub-tasks
+    for (var i = 0; i < parsedTasks.length; i++) {
+      var mainTask = parsedTasks[i];
+      var taskData = {
+        title: mainTask.title,
+        isDone: mainTask.isCompleted,
+      };
+      if (projectId) {
+        taskData.projectId = projectId;
+      }
+      if (dueDay) {
+        taskData.dueDay = dueDay;
+      }
+
+      var parentTaskId = await PluginAPI.addTask(taskData);
+
+      // Create sub-tasks if any
+      if (mainTask.subTasks && mainTask.subTasks.length > 0) {
+        for (var j = 0; j < mainTask.subTasks.length; j++) {
+          var subTask = mainTask.subTasks[j];
+          var subTaskData = {
+            title: subTask.title,
+            parentId: parentTaskId,
+            isDone: subTask.isCompleted,
+          };
+          if (projectId) {
+            subTaskData.projectId = projectId;
+          }
+          if (dueDay) {
+            subTaskData.dueDay = dueDay;
+          }
+          await PluginAPI.addTask(subTaskData);
+        }
+      }
     }
-    if (dueDay) {
-      taskData.dueDay = dueDay;
+
+    var totalTasks =
+      parsedTasks.length +
+      parsedTasks.reduce(function (sum, task) {
+        return sum + (task.subTasks ? task.subTasks.length : 0);
+      }, 0);
+
+    PluginAPI.showSnack({
+      msg: totalTasks + ' task' + (totalTasks !== 1 ? 's' : '') + ' added',
+      type: 'SUCCESS',
+      ico: 'check',
+    });
+  } else {
+    // Fallback to simple line-by-line parsing
+    var lines = text.split('\n').filter(function (line) {
+      return line.trim();
+    });
+
+    for (var k = 0; k < lines.length; k++) {
+      var taskData = { title: lines[k].trim() };
+      if (projectId) {
+        taskData.projectId = projectId;
+      }
+      if (dueDay) {
+        taskData.dueDay = dueDay;
+      }
+      await PluginAPI.addTask(taskData);
     }
-    await PluginAPI.addTask(taskData);
+
+    PluginAPI.showSnack({
+      msg: lines.length + ' task' + (lines.length !== 1 ? 's' : '') + ' added',
+      type: 'SUCCESS',
+      ico: 'check',
+    });
   }
 
   // Clear textarea and draft
@@ -228,12 +405,6 @@ async function submitTasks() {
   await PluginAPI.persistDataSynced(
     JSON.stringify({ text: '', projectId: '', dueDay: '' }),
   );
-
-  PluginAPI.showSnack({
-    msg: lines.length + ' task' + (lines.length !== 1 ? 's' : '') + ' added',
-    type: 'SUCCESS',
-    ico: 'check',
-  });
 }
 
 // Register menu entry and shortcut
