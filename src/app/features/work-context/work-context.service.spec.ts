@@ -335,7 +335,6 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
             },
             task2: {
               id: 'task2',
-              // eslint-disable-next-line @typescript-eslint/naming-convention
               timeSpentOnDay: { [DAY]: 5000 },
               parentId: null,
               tagIds: ['test-context'],
@@ -357,7 +356,6 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
             task1: undefined,
             task2: {
               id: 'task2',
-              // eslint-disable-next-line @typescript-eslint/naming-convention
               timeSpentOnDay: { [DAY]: 3000 },
               parentId: null,
               tagIds: ['test-context'],
