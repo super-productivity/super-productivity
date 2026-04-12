@@ -510,7 +510,7 @@ export class WorkContextService {
     const { ids, entities } = taskArchiveState;
     const tasksWorkedOnToday: ArchiveTask[] = ids
       .map((id) => entities[id])
-      .filter((t) => t?.timeSpentOnDay[day]) as ArchiveTask[];
+      .filter((t) => t?.timeSpentOnDay?.[day]) as ArchiveTask[];
 
     let tasksToConsider: ArchiveTask[] = [];
     if (isToday) {

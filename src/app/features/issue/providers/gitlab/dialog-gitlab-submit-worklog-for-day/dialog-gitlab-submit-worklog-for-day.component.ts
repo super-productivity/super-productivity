@@ -106,18 +106,18 @@ export class DialogGitlabSubmitWorklogForDayComponent {
       issueTimeTracked: t.issueTimeTracked || null,
       timeSpentOnDay: t.timeSpentOnDay,
       timeTrackedAlreadyRemote: 0,
-      isPastTrackedData: !!Object.keys(t.timeSpentOnDay).find(
+      isPastTrackedData: !!Object.keys(t.timeSpentOnDay || {}).find(
         (dayStr) =>
           dayStr !== this.day &&
-          t.timeSpentOnDay[dayStr] >
+          (t.timeSpentOnDay?.[dayStr] ?? 0) >
             ((t.issueTimeTracked && t.issueTimeTracked[dayStr]) || 0),
       ),
-      timeToSubmit: Object.keys(t.timeSpentOnDay).reduce((acc, dayStr) => {
+      timeToSubmit: Object.keys(t.timeSpentOnDay || {}).reduce((acc, dayStr) => {
         if (t.issueTimeTracked && t.issueTimeTracked[dayStr]) {
-          const diff = t.timeSpentOnDay[dayStr] - t.issueTimeTracked[dayStr];
+          const diff = (t.timeSpentOnDay?.[dayStr] ?? 0) - t.issueTimeTracked[dayStr];
           return diff > 0 ? diff + acc : acc;
         } else {
-          return acc + t.timeSpentOnDay[dayStr];
+          return acc + (t.timeSpentOnDay?.[dayStr] ?? 0);
         }
       }, 0),
     })),

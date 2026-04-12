@@ -210,12 +210,12 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
             if (
               task.subTaskIds?.length ||
               !task.timeSpentOnDay ||
-              !(task.timeSpentOnDay[dayStr] > 0)
+              !(task.timeSpentOnDay?.[dayStr] > 0)
             ) {
               return acc;
             }
             const remainingEstimate =
-              task.timeEstimate + task.timeSpentOnDay[dayStr] - task.timeSpent;
+              task.timeEstimate + (task.timeSpentOnDay?.[dayStr] ?? 0) - task.timeSpent;
             return remainingEstimate > 0 ? acc + remainingEstimate : acc;
           }, 0),
       ),
@@ -232,8 +232,8 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           }
           return (
             acc +
-            (task.timeSpentOnDay && +task.timeSpentOnDay[dayStr]
-              ? +task.timeSpentOnDay[dayStr]
+            (task.timeSpentOnDay && +task.timeSpentOnDay?.[dayStr]
+              ? +task.timeSpentOnDay?.[dayStr]
               : 0)
           );
         }, 0),
@@ -509,11 +509,11 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
         return (t: Task) =>
           (t.timeSpentOnDay &&
-            t.timeSpentOnDay[dayStr] &&
-            t.timeSpentOnDay[dayStr] > 0) ||
+            t.timeSpentOnDay?.[dayStr] &&
+            t.timeSpentOnDay?.[dayStr] > 0) ||
           (t.timeSpentOnDay &&
-            t.timeSpentOnDay[yesterdayStr] &&
-            t.timeSpentOnDay[yesterdayStr] > 0) ||
+            t.timeSpentOnDay?.[yesterdayStr] &&
+            t.timeSpentOnDay?.[yesterdayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
           (t.isDone &&
             t.doneOn &&
@@ -522,8 +522,8 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       } else {
         return (t: Task) =>
           (t.timeSpentOnDay &&
-            t.timeSpentOnDay[dayStr] &&
-            t.timeSpentOnDay[dayStr] > 0) ||
+            t.timeSpentOnDay?.[dayStr] &&
+            t.timeSpentOnDay?.[dayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
           (t.isDone && t.doneOn && this._dateService.isToday(t.doneOn));
       }

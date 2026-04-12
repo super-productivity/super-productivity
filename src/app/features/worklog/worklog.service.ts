@@ -205,7 +205,7 @@ export class WorklogService {
         if (isFilterOutTimeSpentOnOtherDays) {
           tasks = tasks.map((task): WorklogTask => {
             const timeSpentOnDay: any = {};
-            Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
+            Object.keys(task.timeSpentOnDay || {}).forEach((dateStr) => {
               // Use date string comparison instead of Date object comparison
               // to avoid timezone issues
               if (dateStr >= rangeStartStr && dateStr <= rangeEndStr) {

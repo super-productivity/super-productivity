@@ -560,8 +560,8 @@ export const selectTasksWorkedOnOrDoneFlat = createSelector(
         !!t &&
         (t.isDone ||
           (t.timeSpentOnDay &&
-            t.timeSpentOnDay[todayStr] &&
-            t.timeSpentOnDay[todayStr] > 0)),
+            t.timeSpentOnDay?.[todayStr] &&
+            t.timeSpentOnDay?.[todayStr] > 0)),
     );
   },
 );

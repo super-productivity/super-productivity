@@ -201,7 +201,7 @@ export class SimpleCounterService implements OnDestroy {
     firstValueFrom(this._store$.pipe(select(selectSimpleCounterById, { id })))
       .then((counter) => {
         if (counter) {
-          const newVal = counter.countOnDay[date] || 0;
+          const newVal = counter.countOnDay?.[date] || 0;
           this._store$.dispatch(
             setSimpleCounterCounterToday({ id, newVal, today: date }),
           );
@@ -238,7 +238,7 @@ export class SimpleCounterService implements OnDestroy {
       this._store$.pipe(select(selectSimpleCounterById, { id })),
     );
     if (!counter) return null;
-    return counter.countOnDay[today] || 0;
+    return counter.countOnDay?.[today] || 0;
   }
 
   /**
