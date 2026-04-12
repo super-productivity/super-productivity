@@ -2055,8 +2055,11 @@
       "TITLE": "Evaluation & Metrics"
     },
     "FOCUS_MODE": {
+      "FOCUS_MODE_SOUND_OFF": "Off",
+      "FOCUS_MODE_SOUND_TICK": "Ticking",
+      "FOCUS_MODE_SOUND_WHITE_NOISE": "White Noise",
       "HELP": "Focus mode opens a distraction-free screen to help you focus on your current task.",
-      "L_IS_PLAY_TICK": "Play ticking sound during focus sessions",
+      "L_FOCUS_MODE_SOUND": "Ambient sound during focus sessions",
       "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
       "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",

@@ -663,6 +663,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   estimateTime(): void {
+    if (this.task().subTaskIds?.length > 0) {
+      return;
+    }
+
     this._matDialog
       .open(DialogTimeEstimateComponent, {
         data: { task: this.task() },

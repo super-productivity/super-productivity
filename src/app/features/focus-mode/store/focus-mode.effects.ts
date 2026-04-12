@@ -22,6 +22,7 @@ import { FocusModeStrategyFactory } from '../focus-mode-strategies';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
 import { playSound } from '../../../util/play-sound';
+import { startWhiteNoise, stopWhiteNoise } from '../../../util/white-noise';
 import { IS_ELECTRON } from '../../../app.constants';
 import { setCurrentTask, unsetCurrentTask } from '../../tasks/store/task.actions';
 import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
@@ -49,6 +50,8 @@ import { TakeABreakService } from '../../take-a-break/take-a-break.service';
 
 const SESSION_DONE_SOUND = 'positive.mp3';
 const TICK_SOUND = 'tick.mp3';
+/** Focus-mode ambient sounds play at 40% of the user's main volume to avoid being intrusive. */
+const FOCUS_SOUND_VOLUME_FACTOR = 0.4;
 
 @Injectable()
 export class FocusModeEffects {
@@ -1184,9 +1187,39 @@ export class FocusModeEffects {
         withLatestFrom(this.store.select(selectFocusModeConfig)),
         tap(([, focusModeConfig]) => {
           const soundVolume = this.globalConfigService.sound()?.volume || 0;
-          if (focusModeConfig?.isPlayTick && soundVolume > 0) {
-            // Play at reduced volume (40% of main volume) to not be too intrusive
-            playSound(TICK_SOUND, Math.round(soundVolume * 0.4));
+          if (focusModeConfig?.focusModeSound === 'tick' && soundVolume > 0) {
+            playSound(TICK_SOUND, Math.round(soundVolume * FOCUS_SOUND_VOLUME_FACTOR));
+          }
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  // Manage white noise loop during focus sessions
+  whiteNoiseSound$ = createEffect(
+    () =>
+      combineLatest([
+        this.store.select(selectors.selectTimer),
+        this.store.select(selectFocusModeConfig),
+      ]).pipe(
+        skipWhileApplyingRemoteOps(),
+        map(([timer, focusModeConfig]) => {
+          const soundVolume = this.globalConfigService.sound()?.volume || 0;
+          return (
+            focusModeConfig?.focusModeSound === 'whiteNoise' &&
+            timer.isRunning &&
+            timer.purpose === 'work' &&
+            timer.elapsed > 0 &&
+            soundVolume > 0
+          );
+        }),
+        distinctUntilChanged(),
+        tap((shouldPlay) => {
+          if (shouldPlay) {
+            const soundVolume = this.globalConfigService.sound()?.volume || 0;
+            startWhiteNoise(Math.round(soundVolume * FOCUS_SOUND_VOLUME_FACTOR));
+          } else {
+            stopWhiteNoise();
           }
         }),
       ),

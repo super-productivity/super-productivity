@@ -1,8 +1,9 @@
 import { Injectable, signal, inject, effect } from '@angular/core';
 import { Observable, animationFrameScheduler, combineLatest } from 'rxjs';
-import { map, observeOn, take } from 'rxjs/operators';
+import { map, observeOn, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { selectAllProjects } from '../project/store/project.selectors';
+import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { selectAllTags } from './../tag/store/tag.reducer';
 import { Store } from '@ngrx/store';
 import { Project } from '../project/project.model';
@@ -114,14 +115,24 @@ export class TaskViewCustomizerService {
     list: TaskWithSubTasks[];
     grouped?: Record<string, TaskWithSubTasks[]>;
   }> {
+    const group$ = toObservable(this.selectedGroup);
+    const tasks$ = group$.pipe(
+      switchMap((group) => {
+        const isCrossContext =
+          group.type === GROUP_OPTION_TYPE.project ||
+          group.type === GROUP_OPTION_TYPE.tag;
+        return isCrossContext ? this._allUndoneTasksWithSubTasks$() : undoneTasks$;
+      }),
+    );
+
     return combineLatest([
-      undoneTasks$,
+      tasks$,
       toObservable(this.selectedSort),
-      toObservable(this.selectedGroup),
+      group$,
       toObservable(this.selectedFilter),
     ]).pipe(
       observeOn(animationFrameScheduler),
-      map(([undone, sort, group, filter]) => {
+      map(([tasks, sort, group, filter]) => {
         const normalizedFilterVal = filter.preset?.trim();
         const filterValueToUse = normalizedFilterVal ?? '';
 
@@ -130,12 +141,12 @@ export class TaskViewCustomizerService {
         const isDefaultGroup = !group.type;
 
         if (isDefaultFilter && isDefaultSort && isDefaultGroup) {
-          return { list: undone };
+          return { list: tasks };
         }
 
         const filtered = isDefaultFilter
-          ? undone
-          : this.applyFilter(undone, filter.type, filterValueToUse);
+          ? tasks
+          : this.applyFilter(tasks, filter.type, filterValueToUse);
         const sorted = isDefaultSort
           ? filtered
           : this.applySort(filtered, sort.type, sort.order);
@@ -144,6 +155,27 @@ export class TaskViewCustomizerService {
           : undefined;
 
         return { list: sorted, grouped };
+      }),
+    );
+  }
+
+  private _allUndoneTasksWithSubTasks$(): Observable<TaskWithSubTasks[]> {
+    return this.store.select(selectAllTasksWithSubTasks).pipe(
+      map((tasks) => {
+        const hiddenProjectIds = new Set(
+          this._allProjects
+            .filter((p) => p.isHiddenFromMenu || p.isArchived)
+            .map((p) => p.id),
+        );
+        const backlogTaskIds = new Set(
+          this._allProjects.flatMap((p) => p.backlogTaskIds || []),
+        );
+        return tasks.filter(
+          (task) =>
+            !task.isDone &&
+            (!task.projectId || !hiddenProjectIds.has(task.projectId)) &&
+            !backlogTaskIds.has(task.id),
+        );
       }),
     );
   }

@@ -11,6 +11,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { Observable, of } from 'rxjs';
 import { WorkContextType } from '../work-context/work-context.model';
 import { WorkContextService } from '../work-context/work-context.service';
+import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { ProjectService } from '../project/project.service';
 import { TagService } from '../tag/tag.service';
 import {
@@ -1187,6 +1188,137 @@ describe('TaskViewCustomizerService', () => {
       expect(newService.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
       expect(newService.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
       expect(newService.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
+    });
+  });
+
+  describe('customizeUndoneTasks with group by project (issue #7050)', () => {
+    const inboxTask: TaskWithSubTasks = {
+      id: 'inbox-task',
+      title: 'Inbox Task',
+      tagIds: [],
+      projectId: 'INBOX_PROJECT',
+      timeEstimate: 0,
+      timeSpentOnDay: {},
+      created: 1,
+      subTasks: [],
+      subTaskIds: [],
+      timeSpent: 0,
+      isDone: false,
+      attachments: [],
+    } as TaskWithSubTasks;
+
+    const projectATask: TaskWithSubTasks = {
+      id: 'project-a-task',
+      title: 'Project A Task',
+      tagIds: [],
+      projectId: 'Project A',
+      timeEstimate: 0,
+      timeSpentOnDay: {},
+      created: 2,
+      subTasks: [],
+      subTaskIds: [],
+      timeSpent: 0,
+      isDone: false,
+      attachments: [],
+    } as TaskWithSubTasks;
+
+    const projectBTask: TaskWithSubTasks = {
+      id: 'project-b-task',
+      title: 'Project B Task',
+      tagIds: [],
+      projectId: 'Project B',
+      timeEstimate: 0,
+      timeSpentOnDay: {},
+      created: 3,
+      subTasks: [],
+      subTaskIds: [],
+      timeSpent: 0,
+      isDone: false,
+      attachments: [],
+    } as TaskWithSubTasks;
+
+    const allProjects: Project[] = [
+      { id: 'INBOX_PROJECT', title: 'Inbox', backlogTaskIds: [] } as unknown as Project,
+      { id: 'Project A', title: 'Project A', backlogTaskIds: [] } as unknown as Project,
+      { id: 'Project B', title: 'Project B', backlogTaskIds: [] } as unknown as Project,
+    ];
+
+    let testService: TaskViewCustomizerService;
+
+    beforeEach(() => {
+      localStorage.clear();
+
+      TestBed.resetTestingModule();
+      const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
+        getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
+      });
+
+      mockWorkContextService = {
+        activeWorkContextId: 'INBOX_PROJECT',
+        activeWorkContextType: WorkContextType.PROJECT,
+        mainListTasks$: of<TaskWithSubTasks[]>([inboxTask]),
+        undoneTasks$: of<TaskWithSubTasks[]>([inboxTask]),
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskViewCustomizerService,
+          {
+            provide: LanguageService,
+            useValue: mockLanguageService,
+          },
+          {
+            provide: TranslateService,
+            useValue: { instant: (k: string) => k },
+          },
+          { provide: DateAdapter, useValue: dateAdapter },
+          { provide: WorkContextService, useValue: mockWorkContextService },
+          { provide: ProjectService, useValue: { update: projectUpdateSpy } },
+          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          provideMockStore({
+            selectors: [
+              { selector: selectAllProjects, value: allProjects },
+              { selector: selectAllTags, value: mockTags },
+              {
+                selector: selectAllTasksWithSubTasks,
+                value: [inboxTask, projectATask, projectBTask],
+              },
+            ],
+          }),
+        ],
+      });
+      testService = TestBed.inject(TaskViewCustomizerService);
+      (testService as any)._allProjects = allProjects;
+      (testService as any)._allTags = mockTags;
+    });
+
+    it('should show tasks from ALL projects when group by project is selected, not just current context', (done) => {
+      // Simulate being on Inbox — undoneTasks$ only has the inbox task
+      const contextUndoneTasks$ = of<TaskWithSubTasks[]>([inboxTask]);
+
+      // Set group to project
+      testService.setGroup({ type: GROUP_OPTION_TYPE.project, label: 'Project' });
+
+      // customizeUndoneTasks uses toObservable which requires injection context
+      const result$ = TestBed.runInInjectionContext(() =>
+        testService.customizeUndoneTasks(contextUndoneTasks$),
+      );
+
+      // Use requestAnimationFrame since customizeUndoneTasks uses animationFrameScheduler
+      requestAnimationFrame(() => {
+        result$.subscribe((result) => {
+          expect(result.grouped).toBeDefined();
+          const groupKeys = Object.keys(result.grouped!);
+          // Should contain tasks from ALL projects, not just Inbox
+          expect(groupKeys).toContain('Inbox');
+          expect(groupKeys).toContain('Project A');
+          expect(groupKeys).toContain('Project B');
+          expect(result.grouped!['Inbox']?.length).toBe(1);
+          expect(result.grouped!['Project A']?.length).toBe(1);
+          expect(result.grouped!['Project B']?.length).toBe(1);
+          done();
+        });
+      });
     });
   });
 });
