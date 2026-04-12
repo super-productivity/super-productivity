@@ -12,7 +12,7 @@ import { CompleteBackup } from '../sync-exports';
 export const DB_NAME = 'SUP_OPS';
 
 /** Current database schema version */
-export const DB_VERSION = 7;
+export const DB_VERSION = 8;
 
 /** Object store names */
 export const STORE_NAMES = {
@@ -34,6 +34,14 @@ export const STORE_NAMES = {
   CLIENT_ID: 'client_id' as const,
   /** Small persistence metadata records derived from ops */
   META: 'meta' as const,
+  /** Trash - stores soft-deleted entities (tasks, notes, ...) pending restore or purge */
+  TRASH: 'trash' as const,
+} as const;
+
+/** Index names for trash object store */
+export const TRASH_INDEXES = {
+  BY_ENTITY_TYPE: 'entityType' as const,
+  BY_DELETED_AT: 'deletedAt' as const,
 } as const;
 
 /** Common key used for singleton entries */

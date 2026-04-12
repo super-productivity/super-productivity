@@ -1743,6 +1743,7 @@
         "CUSTOM_ESTIMATE": "Custom…",
         "DELETE": "Delete task",
         "DELETE_REPEAT_INSTANCE": "Delete recurring task instance",
+        "MOVE_TO_TRASH": "Move to Trash",
         "DROP_ATTACHMENT": "Drop here to attach to \"{{title}}\"",
         "DUPLICATE": "Duplicate",
         "EDIT_DEADLINE": "Edit deadline",
@@ -2276,6 +2277,7 @@
       "SYNC_BUTTON": "Sync button",
       "TIME_TRACKING": "Stopwatch time tracking",
       "TITLE": "App Features",
+      "TRASH": "Trash bin (experimental)",
       "USER_PROFILES": "User profiles (experimental — might be removed)",
       "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data. (Experimental feature. No guarantees. Make sure to have a backup!)",
       "USER_PROFILES_WARNING": "<strong>Experimental feature:</strong> This feature is still in development and may be removed or significantly changed in a future update. Use at your own risk and make sure to keep backups of your data.",
@@ -2602,6 +2604,12 @@
       "NOTES_TEMPLATE": "Task description template",
       "TITLE": "Tasks"
     },
+    "TRASH": {
+      "TITLE": "Trash Bin (experimental)",
+      "HELP": "When enabled, deleted items are moved to a trash bin where they can be restored or permanently deleted. Trash is local to this device.",
+      "IS_ENABLED": "Enable trash bin (experimental — deleted items can be restored)",
+      "RETENTION_DAYS": "Auto-purge trash after N days"
+    },
     "TIME_TRACKING": {
       "HELP": "The time tracking reminder is a banner that will appear if you forgot to start time tracking.",
       "L_DEFAULT_ESTIMATE": "Default time estimate for new tasks",
@@ -2733,6 +2741,7 @@
     "TOGGLE_SHOW_ISSUE_PANEL": "Show/hide issue provider panel",
     "TOGGLE_SHOW_NOTES": "Show/hide project notes",
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
+    "TRASH": "Trash",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
     "ARCHIVED_PROJECTS": "Archived Projects"
@@ -3031,6 +3040,20 @@
     "SELECT_THEME": "Select Theme",
     "teal": "teal",
     "yellow": "yellow"
+  },
+  "TRASH": {
+    "TITLE": "Trash",
+    "EMPTY_STATE": "Trash is empty",
+    "EMPTY_TRASH": "Empty Trash",
+    "EMPTY_TRASH_CONFIRM": "Permanently delete all items in the trash?",
+    "RESTORE": "Restore",
+    "DELETE_PERMANENTLY": "Delete permanently",
+    "DELETED_AT": "Deleted {{relativeTime}}",
+    "MOVED_TO_TRASH": "Moved to trash",
+    "RESTORED": "Task restored",
+    "UNDO": "Undo",
+    "TASKS_GROUP": "Tasks",
+    "AUTO_DELETE_INFO": "Items in the trash are automatically deleted after {{days}} days."
   },
   "USER_PROFILES": {
     "ACTIVE": "Active",

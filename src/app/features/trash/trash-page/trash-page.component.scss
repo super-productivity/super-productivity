@@ -1,0 +1,75 @@
+.trash-page {
+  padding: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.empty-trash-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.auto-delete-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 0 16px;
+  border-radius: 4px;
+  background: var(--color-surface-variant, rgba(0, 0, 0, 0.04));
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.auto-delete-info mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  opacity: 0.6;
+}
+
+.empty-state mat-icon {
+  font-size: 64px;
+  width: 64px;
+  height: 64px;
+}
+
+.trash-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.trash-table tr {
+  border-bottom: 1px solid var(--separator-color, rgba(0, 0, 0, 0.08));
+}
+
+.trash-table td {
+  padding: 8px;
+  vertical-align: middle;
+}
+
+.title-cell {
+  width: 100%;
+}
+
+.sub-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.date-cell {
+  white-space: nowrap;
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.actions-cell {
+  white-space: nowrap;
+}

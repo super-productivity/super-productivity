@@ -113,6 +113,9 @@ export class MagicNavConfigService {
   private readonly isSearchEnabled = computed(
     () => this._configService.appFeatures().isSearchEnabled,
   );
+  private readonly isTrashEnabled = computed(
+    () => this._configService.appFeatures().isTrashEnabled,
+  );
   readonly areInitialTreesReady = computed(() => {
     const visibleProjects = this._visibleProjects();
     const tags = this._tags();
@@ -250,6 +253,17 @@ export class MagicNavConfigService {
         icon: 'list',
         route: '/scheduled-list',
       },
+      ...(this.isTrashEnabled()
+        ? [
+            {
+              type: 'route',
+              id: 'trash',
+              label: T.MH.TRASH,
+              icon: 'delete',
+              route: '/trash',
+            } as NavItem,
+          ]
+        : []),
 
       // Help Menu (rendered as mat-menu)
       // Not allowed to display donation stuff on iOS per App Store guidelines

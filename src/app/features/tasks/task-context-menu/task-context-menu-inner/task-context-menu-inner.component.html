@@ -319,8 +319,12 @@
     <span class="menuItemLeft">
       <mat-icon class="color-warn-i">delete_forever</mat-icon>
       {{
-        (task.repeatCfgId ? T.F.TASK.CMP.DELETE_REPEAT_INSTANCE : T.F.TASK.CMP.DELETE)
-          | translate
+        (task.repeatCfgId
+          ? T.F.TASK.CMP.DELETE_REPEAT_INSTANCE
+          : isTrashEnabled()
+            ? T.F.TASK.CMP.MOVE_TO_TRASH
+            : T.F.TASK.CMP.DELETE
+        ) | translate
       }}
     </span>
     <span class="key-i">{{ kb.taskDelete }}</span>

@@ -115,6 +115,14 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       },
     },
     {
+      key: 'isTrashEnabled',
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.TRASH,
+        icon: 'delete',
+      },
+    },
+    {
       key: 'isEnableUserProfiles',
       type: 'slide-toggle',
       templateOptions: {

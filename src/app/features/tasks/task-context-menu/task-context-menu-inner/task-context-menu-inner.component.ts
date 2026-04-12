@@ -140,6 +140,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   readonly isFocusModeEnabled = computed(
     () => this._globalConfigService.appFeatures().isFocusModeEnabled,
   );
+  readonly isTrashEnabled = computed(
+    () => this._globalConfigService.appFeatures().isTrashEnabled,
+  );
 
   // eslint-disable-next-line @angular-eslint/no-output-native
   close = output();
@@ -396,6 +399,13 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   async deleteTask(): Promise<void> {
     // NOTE: prevents attempts to delete the same task multiple times
     if (this._isTaskDeleteTriggered) {
+      return;
+    }
+
+    // When trash is enabled, deletion is non-destructive (soft delete) so we
+    // skip the confirmation dialog — users can restore from the trash page.
+    if (this.isTrashEnabled()) {
+      await this._performDelete();
       return;
     }
 

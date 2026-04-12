@@ -21,6 +21,7 @@ export type AppFeaturesConfig = Readonly<{
   isEnableUserProfiles: boolean;
   isHabitsEnabled: boolean;
   isFinishDayEnabled: boolean;
+  isTrashEnabled: boolean;
 }>;
 
 export type MiscConfig = Readonly<{
@@ -294,6 +295,10 @@ export type ClipboardImagesConfig = Readonly<{
   imagePath?: string | null;
 }>;
 
+export type TrashConfig = Readonly<{
+  retentionDays: number;
+}>;
+
 export type DailySummaryNote = Readonly<{
   txt?: string;
   lastUpdateDayStr?: string;
@@ -326,6 +331,7 @@ export type GlobalConfigState = Readonly<{
   clipboardImages?: ClipboardImagesConfig;
 
   sync: SyncConfig;
+  trash: TrashConfig;
   dailySummaryNote?: DailySummaryNote;
 }>;
 

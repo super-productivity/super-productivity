@@ -34,6 +34,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isEnableUserProfiles: false,
     isHabitsEnabled: true,
     isFinishDayEnabled: true,
+    isTrashEnabled: false,
   },
   localization: {
     lng: undefined,
@@ -222,6 +223,10 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isLunchBreakEnabled: false,
     lunchBreakStart: '13:00',
     lunchBreakEnd: '14:00',
+  },
+
+  trash: {
+    retentionDays: 30,
   },
 
   sync: {

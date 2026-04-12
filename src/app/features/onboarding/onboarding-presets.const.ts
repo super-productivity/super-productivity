@@ -23,6 +23,7 @@ const BASE_FEATURES: AppFeaturesConfig = {
   isEnableUserProfiles: false,
   isHabitsEnabled: false,
   isFinishDayEnabled: false,
+  isTrashEnabled: false,
 };
 
 export const ONBOARDING_PRESETS: OnboardingPreset[] = [

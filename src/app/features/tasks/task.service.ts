@@ -99,6 +99,9 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
+import { TrashService } from '../trash/trash.service';
+import { buildTrashedTaskItems } from '../trash/task-trash.helper';
+import { selectProjectFeatureState } from '../project/store/project.selectors';
 import { TaskLog } from '../../core/log';
 import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
@@ -123,6 +126,7 @@ export class TaskService {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
+  private readonly _trashService = inject(TrashService);
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
@@ -457,7 +461,52 @@ export class TaskService {
   }
 
   remove(task: TaskWithSubTasks): void {
+    if (this._isTrashEnabled()) {
+      this._moveTaskToTrash(task);
+      return;
+    }
     this._store.dispatch(TaskSharedActions.deleteTask({ task }));
+  }
+
+  private _isTrashEnabled(): boolean {
+    return this._globalConfigService.appFeatures()?.isTrashEnabled;
+  }
+
+  private _moveTaskToTrash(task: TaskWithSubTasks): void {
+    // Read the project synchronously so we can capture backlog membership
+    // at the moment of deletion.
+    this._store
+      .select(selectProjectFeatureState)
+      .pipe(take(1))
+      .subscribe((projectState) => {
+        const project = task.projectId
+          ? projectState.entities[task.projectId]
+          : undefined;
+        const items = buildTrashedTaskItems(task, project);
+        this._trashService.moveToTrash(items);
+      });
+  }
+
+  private _moveTasksToTrashByIds(taskIds: string[]): void {
+    this._store
+      .select(selectProjectFeatureState)
+      .pipe(take(1))
+      .subscribe((projectState) => {
+        const entities = this._taskEntities();
+        const allItems: ReturnType<typeof buildTrashedTaskItems> = [];
+        const now = Date.now();
+        for (const id of taskIds) {
+          const t = entities[id];
+          if (!t) continue;
+          const subTasks = (t.subTaskIds || [])
+            .map((sid) => entities[sid])
+            .filter((s): s is Task => !!s);
+          const withSub: TaskWithSubTasks = { ...t, subTasks };
+          const project = t.projectId ? projectState.entities[t.projectId] : undefined;
+          allItems.push(...buildTrashedTaskItems(withSub, project, now));
+        }
+        this._trashService.moveToTrash(allItems);
+      });
   }
 
   removeMultipleTasks(taskIds: string[]): void {
@@ -480,6 +529,10 @@ export class TaskService {
     this._timeBlockDeleteSidecar.set(
       tasks.filter((t) => !!t.dueWithTime).map((t) => t.id),
     );
+    if (this._isTrashEnabled()) {
+      this._moveTasksToTrashByIds(taskIds);
+      return;
+    }
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds }));
   }
 

@@ -9,7 +9,7 @@
  */
 
 import { IDBPDatabase, IDBPTransaction, unwrap } from 'idb';
-import { FULL_STATE_OPS_META_KEY, STORE_NAMES, OPS_INDEXES } from './db-keys.const';
+import { FULL_STATE_OPS_META_KEY, STORE_NAMES, OPS_INDEXES, TRASH_INDEXES } from './db-keys.const';
 import { isFullStateOpType } from '../core/operation.types';
 import { buildFullStateOpsMeta, FullStateOpRef } from './full-state-ops-meta';
 
@@ -145,5 +145,18 @@ export const runDbUpgrade = (
   if (oldVersion < 7) {
     db.createObjectStore(STORE_NAMES.META);
     populateFullStateOpsMetaDuringUpgrade(transaction);
+  }
+
+  // Version 8: Add trash store for soft-deleted entities.
+  // Uses one record per item (keyed by id) with indexes on entityType and
+  // deletedAt so we can efficiently query by type and range-purge expired items.
+  if (oldVersion < 8) {
+    const trashStore = db.createObjectStore(STORE_NAMES.TRASH, { keyPath: 'id' });
+    trashStore.createIndex(TRASH_INDEXES.BY_ENTITY_TYPE, 'entityType', {
+      unique: false,
+    });
+    trashStore.createIndex(TRASH_INDEXES.BY_DELETED_AT, 'deletedAt', {
+      unique: false,
+    });
   }
 };

@@ -9,3 +9,4 @@ export { HabitPageComponent } from '../pages/habit-page/habit-page.component';
 export { DonatePageComponent } from '../pages/donate-page/donate-page.component';
 export { ContrastTestComponent } from '../pages/contrast-test/contrast-test.component';
 export { PluginIndexComponent } from '../plugins/ui/plugin-index/plugin-index.component';
+export { TrashPageComponent } from '../features/trash/trash-page/trash-page.component';

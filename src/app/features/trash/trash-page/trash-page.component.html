@@ -1,0 +1,61 @@
+<div class="trash-page">
+  @if (trashedTasks().length > 0) {
+    <p class="auto-delete-info">
+      <mat-icon>info</mat-icon>
+      {{ T.TRASH.AUTO_DELETE_INFO | translate: { days: retentionDays() } }}
+    </p>
+    <div class="empty-trash-wrapper">
+      <button
+        mat-stroked-button
+        color="warn"
+        (click)="emptyTrash()"
+      >
+        <mat-icon>delete_forever</mat-icon>
+        {{ T.TRASH.EMPTY_TRASH | translate }}
+      </button>
+    </div>
+  }
+
+  @if (trashedTasks().length === 0) {
+    <div class="empty-state">
+      <mat-icon>delete_outline</mat-icon>
+      <p>{{ T.TRASH.EMPTY_STATE | translate }}</p>
+    </div>
+  } @else {
+    <h2>{{ T.TRASH.TASKS_GROUP | translate }}</h2>
+    <table class="trash-table">
+      <tbody>
+        @for (item of trashedTasks(); track item.id) {
+          <tr>
+            <td class="title-cell">
+              {{ item.data.title }}
+              @if (item.restoreContext.parentId) {
+                <span class="sub-hint">↳ sub-task</span>
+              }
+            </td>
+            <td class="date-cell">
+              {{ item.deletedAt | date: 'short' }}
+            </td>
+            <td class="actions-cell">
+              <button
+                mat-icon-button
+                [matTooltip]="T.TRASH.RESTORE | translate"
+                (click)="restore(item)"
+              >
+                <mat-icon>restore</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                class="color-warn"
+                [matTooltip]="T.TRASH.DELETE_PERMANENTLY | translate"
+                (click)="deletePermanently(item)"
+              >
+                <mat-icon class="color-warn-i">delete_forever</mat-icon>
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
