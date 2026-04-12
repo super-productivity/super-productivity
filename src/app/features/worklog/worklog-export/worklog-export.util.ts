@@ -61,10 +61,6 @@ const handleDateGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
     if (!task.timeSpentOnDay) {
       continue;
     }
-
-    if (!task.timeSpentOnDay) {
-      continue;
-    }
     const taskFields = getTaskFields(task, data);
     const numDays = Object.keys(task.timeSpentOnDay).length;
     let timeEstimate = 0;
