@@ -79,6 +79,7 @@ import {
   upsertSimpleCounter,
 } from '../features/simple-counter/store/simple-counter.actions';
 import { getDbDateStr } from '../util/get-db-date-str';
+import { DataInitService } from '../core/data-init/data-init.service';
 
 /**
  * PluginBridge acts as an intermediary layer between plugins and the main application services.
@@ -113,6 +114,7 @@ export class PluginBridgeService implements OnDestroy {
   private _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
   private _pluginHttpService = inject(PluginHttpService);
   private _pluginOAuthBridge = inject(PluginOAuthBridgeService);
+  private _dataInitService = inject(DataInitService);
 
   // Track header buttons registered by plugins
   private readonly _headerButtons = signal<PluginHeaderBtnCfg[]>([]);
@@ -487,6 +489,10 @@ export class PluginBridgeService implements OnDestroy {
     return contextTasks || [];
   }
 
+  async reInitData(): Promise<void> {
+    PluginLog.log('PluginBridge: Re-initializing app data');
+    await this._dataInitService.reInit();
+  }
   /**
    * Update a task
    */

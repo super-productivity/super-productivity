@@ -395,6 +395,7 @@ export interface PluginAPI {
 
   getCurrentContextTasks(): Promise<Task[]>;
 
+  reInitData(): Promise<void>;
   updateTask(taskId: string, updates: Partial<Task>): Promise<void>;
 
   addTask(taskData: PluginCreateTaskData): Promise<string>;
