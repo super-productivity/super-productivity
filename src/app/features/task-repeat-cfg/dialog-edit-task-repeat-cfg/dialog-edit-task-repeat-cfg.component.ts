@@ -179,6 +179,7 @@ export class DialogEditTaskRepeatCfgComponent {
             this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
             DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!)
           : undefined,
+        shouldInheritSubtasks: this._data.task.subTaskIds.length > 0,
         title: this._data.task.title,
         notes: this._data.task.notes || undefined,
         tagIds: unique(this._data.task.tagIds),
