@@ -93,6 +93,21 @@ describe('SimpleCounterReducer', () => {
       expect(result.entities['counter1']!.countOnDay).toEqual({ '2024-01-01': 5 });
     });
 
+    it('should default countOnDay to {} when missing from loaded data (issue #7079)', () => {
+      const counter = createCounter('counter1', {
+        countOnDay: undefined as unknown as Record<string, number>,
+      });
+      const simpleCounterState = createStateWithCounters([counter]);
+      const appDataComplete = {
+        simpleCounter: simpleCounterState,
+      } as unknown as AppDataCompleteLegacy;
+
+      const action = loadAllData({ appDataComplete });
+      const result = simpleCounterReducer(initialSimpleCounterState, action);
+
+      expect(result.entities['counter1']!.countOnDay).toEqual({});
+    });
+
     it('should preserve state when simpleCounter is undefined', () => {
       const appDataComplete = {
         simpleCounter: undefined,

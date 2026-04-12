@@ -89,14 +89,24 @@ const disableIsOnForAll = (state: SimpleCounterState): SimpleCounterState => {
   };
 };
 
+const normalizeCountOnDay = (state: SimpleCounterState): SimpleCounterState => {
+  const entities: SimpleCounterState['entities'] = {};
+  for (const id of Object.keys(state.entities)) {
+    const entity = state.entities[id];
+    if (entity) {
+      entities[id] = entity.countOnDay ? entity : { ...entity, countOnDay: {} };
+    }
+  }
+  return { ...state, entities };
+};
+
 const _reducer = createReducer<SimpleCounterState>(
   initialSimpleCounterState,
 
   on(loadAllData, (oldState, { appDataComplete }) =>
     appDataComplete.simpleCounter
       ? {
-          // ...appDataComplete.simpleCounter,
-          ...disableIsOnForAll(appDataComplete.simpleCounter),
+          ...disableIsOnForAll(normalizeCountOnDay(appDataComplete.simpleCounter)),
         }
       : oldState,
   ),
