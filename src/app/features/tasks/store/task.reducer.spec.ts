@@ -103,6 +103,29 @@ describe('Task Reducer', () => {
       expect(state.entities['task1']!.subTaskIds).toContain('subTask3');
       expect(state.entities['subTask3']).toEqual({ ...newSubTask, parentId: 'task1' });
     });
+
+    it('should roll up the parent time estimate when adding a subtask with an estimate', () => {
+      const parent = createTask('parent');
+      const subTask = createTask('subTask', { timeEstimate: 2.5 * 60 * 60 * 1000 });
+      const state: TaskState = {
+        ...initialTaskState,
+        ids: ['parent'],
+        entities: {
+          parent,
+        },
+      };
+
+      const result = taskReducer(
+        state,
+        fromActions.addSubTask({
+          task: subTask,
+          parentId: 'parent',
+        }),
+      );
+
+      expect(result.entities['parent']!.subTaskIds).toEqual(['subTask']);
+      expect(result.entities['parent']!.timeEstimate).toBe(2.5 * 60 * 60 * 1000);
+    });
   });
 
   describe('moveSubTask (anchor-based)', () => {
