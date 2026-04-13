@@ -38,6 +38,7 @@ import { issueProvidersFeature } from '../features/issue/store/issue-provider.re
 import { selectIsDominaModeConfig } from '../features/config/store/global-config.reducer';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+import { getPluginAssetTooLargeTranslationKey } from './plugin-size-error.util';
 
 const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/yesterday-tasks-plugin',
@@ -1001,10 +1002,13 @@ export class PluginService implements OnDestroy {
       const manifestBytes = extractedFiles['manifest.json'];
       if (manifestBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
         throw new Error(
-          this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
-            maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-            fileSize: (manifestBytes.length / 1024).toFixed(1),
-          }),
+          this._translateService.instant(
+            getPluginAssetTooLargeTranslationKey('manifest'),
+            {
+              maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
+              fileSize: (manifestBytes.length / 1024).toFixed(1),
+            },
+          ),
         );
       }
 
@@ -1046,10 +1050,13 @@ export class PluginService implements OnDestroy {
         // Validate index.html size (same as manifest for now)
         if (indexHtmlBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
           throw new Error(
-            this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
-              maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-              fileSize: (indexHtmlBytes.length / 1024).toFixed(1),
-            }),
+            this._translateService.instant(
+              getPluginAssetTooLargeTranslationKey('indexHtml'),
+              {
+                maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
+                fileSize: (indexHtmlBytes.length / 1024).toFixed(1),
+              },
+            ),
           );
         }
         indexHtml = new TextDecoder().decode(indexHtmlBytes);
@@ -1062,7 +1069,7 @@ export class PluginService implements OnDestroy {
         // Validate icon size (same as manifest for now)
         if (iconBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
           throw new Error(
-            this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
+            this._translateService.instant(getPluginAssetTooLargeTranslationKey('icon'), {
               maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
               fileSize: (iconBytes.length / 1024).toFixed(1),
             }),
