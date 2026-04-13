@@ -1299,8 +1299,8 @@
         "WEB_DAV": {
 					"CORS_INFO": "<strong>Kako omogućiti rad u web pregledniku:</strong> Aplikaciji Super Productivity moraš dozvoliti slanje CORS zahtjeva prema tvom serveru. Za Nextcloud, jedan od načina je dozvoliti \"https://app.super-productivity.com\" putem aplikacije <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. Za više informacija pogledaj <a href='https://github.com/nextcloud/server/issues/3131'>ovu GitHub raspravu</a>.",
 					"D_SYNC_FOLDER_PATH": "Relativna putanja WebDAV servera gdje će se spremati datoteke za sinkronizaciju (npr. '/super-productivity' ili '/'). Ovo NIJE interna putanja direktorija na tvom serveru.",
-					"INFO": "<strong>Upozorenje:</strong> Generička WebDAV sinkronizacija dostupna je <strong>bez podrške i \"kakva jest\"</strong>. Ako koristiš Nextcloud, preporučuje se korištenje opcije za Nextcloud sinkronizaciju."
-          "L_BASE_URL": "Base URL",
+					"INFO": "<strong>Upozorenje:</strong> Generička WebDAV sinkronizacija dostupna je <strong>bez podrške i \"kakva jest\"</strong>. Ako koristiš Nextcloud, preporučuje se korištenje opcije za Nextcloud sinkronizaciju.",
+          "L_BASE_URL": "Osnovni URL",
           "L_PASSWORD": "Lozinka",
           "L_SYNC_FOLDER_PATH": "Mapa za sinkronizaciju",
           "L_TEST_CONNECTION": "Testiraj vezu",
