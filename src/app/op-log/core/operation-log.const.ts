@@ -268,12 +268,16 @@ export const POST_SYNC_COOLDOWN_MS = 2000;
  * Number of retry attempts when opening IndexedDB fails.
  * Total attempts = 1 initial + IDB_OPEN_RETRIES retries.
  * Transient failures (file locks, temporary I/O issues) may resolve on retry.
+ * On Linux desktop environments, session logout/login with autostart can leave
+ * stale LevelDB locks for 5-15+ seconds, so the total retry window must be long
+ * enough to outlast this.
  * @see https://github.com/johannesjo/super-productivity/issues/6255
+ * @see https://github.com/super-productivity/super-productivity/issues/7191
  */
-export const IDB_OPEN_RETRIES = 3;
+export const IDB_OPEN_RETRIES = 5;
 
 /**
  * Base delay for IndexedDB open retry exponential backoff (milliseconds).
- * With IDB_OPEN_RETRIES=3: delays are 500ms, 1000ms, 2000ms for retries 1, 2, 3.
+ * With IDB_OPEN_RETRIES=5: delays are 1s, 2s, 4s, 8s, 16s (~31s total window).
  */
-export const IDB_OPEN_RETRY_BASE_DELAY_MS = 500;
+export const IDB_OPEN_RETRY_BASE_DELAY_MS = 1000;
