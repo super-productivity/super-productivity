@@ -278,9 +278,10 @@ export class RemoteOpsProcessingService {
     // The user has explicitly chosen to accept server state — conflict detection
     // is semantically wrong because the NgRx store was just reset to empty state,
     // causing all entities to appear missing and CONCURRENT ops to be discarded.
-    // Flush is also skipped: SYNC_IMPORT semantics drop all local ops that are
-    // concurrent with or older than the import (see SyncImportFilterService), so
-    // any pending writes will be filtered on the next sync cycle.
+    // Flush is also skipped: any pending writes that slip through after
+    // forceDownloadRemoteState() clears the op-log will be uploaded on the next
+    // sync cycle with stale vector clocks, and the server will reject them as
+    // concurrent with or older than the SYNC_IMPORT that seeded the remote state.
     // ─────────────────────────────────────────────────────────────────────────
 
     if (options?.skipConflictDetection) {
