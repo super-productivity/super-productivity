@@ -188,8 +188,9 @@ export class AddTaskBarParserService {
     }
 
     if (
-      !this._previousParseResult ||
-      this._previousParseResult.timeEstimate !== currentResult.timeEstimate
+      (!this._previousParseResult && currentResult.timeEstimate !== null) ||
+      (this._previousParseResult &&
+        this._previousParseResult.timeEstimate !== currentResult.timeEstimate)
     ) {
       this._stateService.updateEstimate(currentResult.timeEstimate);
     }
