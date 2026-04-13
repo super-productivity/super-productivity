@@ -1,22 +1,29 @@
 .heatmap-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
+  gap: var(--s);
+  padding: var(--s2);
   background: var(--c-dark-10);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
+}
+
+.heatmap-label {
+  font-size: 12px;
+  text-align: center;
+  color: var(--text-color-muted);
+  margin-bottom: -8px;
 }
 
 .heatmap-grid {
   display: flex;
-  gap: 8px;
+  gap: var(--s);
   align-items: flex-start;
 }
 
 .scrollable-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--s);
   overflow-x: auto;
   overflow-y: hidden;
 
@@ -30,12 +37,12 @@
 
   &::-webkit-scrollbar-track {
     background: var(--c-dark-10);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
   }
 
   &::-webkit-scrollbar-thumb {
     background: var(--c-dark-20);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
 
     &:hover {
       background: var(--c-dark-30);
@@ -45,7 +52,7 @@
 
 .heatmap-months {
   display: flex;
-  gap: 2px;
+  gap: var(--s-quarter);
   font-size: 12px;
   line-height: 12px;
   height: 12px;
@@ -61,10 +68,10 @@
 .day-labels {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--s-quarter);
   font-size: 10px;
   color: var(--text-color-muted);
-  padding-right: 4px;
+  padding-right: var(--s-half);
   width: 40px;
   text-align: right;
   flex-shrink: 0;
@@ -83,7 +90,7 @@
 
 .weeks {
   display: flex;
-  gap: 2px;
+  gap: var(--s-quarter);
   flex-wrap: nowrap;
   flex-shrink: 0;
 }
@@ -91,7 +98,7 @@
 .week {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--s-quarter);
   flex-shrink: 0;
 }
 
@@ -138,14 +145,13 @@
 .heatmap-legend {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
+  gap: var(--s-half);
   font-size: 11px;
   color: var(--text-color-muted);
-  padding-right: 4px;
+  padding-right: var(--s-half);
 
   span {
-    margin: 0 4px;
+    margin: 0 var(--s-half);
   }
 
   .legend-item {

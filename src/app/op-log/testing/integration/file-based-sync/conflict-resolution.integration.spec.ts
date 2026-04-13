@@ -1,6 +1,7 @@
 import { FileBasedSyncTestHarness } from '../helpers/file-based-sync-test-harness';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../../sync-providers/file-based/file-based-sync.types';
 import { UploadRevToMatchMismatchAPIError } from '../../../core/errors/sync-errors';
+import { SyncOperation } from '../../../sync-providers/provider.interface';
 
 describe('File-Based Sync Integration - Conflict Resolution', () => {
   let harness: FileBasedSyncTestHarness;
@@ -54,16 +55,15 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
         },
       );
 
-      // This should succeed due to merging, but piggyback B's op
+      // This should succeed due to merging (no piggybacking — remote ops
+      // are discovered via downloadOps on the next sync cycle)
       const response = await clientA.uploadOps([opA2]);
 
       // Upload should succeed
       expect(response.results[0].accepted).toBe(true);
 
-      // Should have piggybacked B's op
-      expect(response.newOps).toBeDefined();
-      expect(response.newOps!.length).toBeGreaterThan(0);
-      expect(response.newOps!.some((o) => o.op.entityId === 'task-b')).toBe(true);
+      // Should NOT have piggybacked ops (piggybacking removed)
+      expect(response.newOps).toBeUndefined();
     });
 
     it('should handle rev mismatch and retry upload', async () => {
@@ -171,6 +171,85 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       // snapshotState should be available when re-downloading from 0
       const freshDownload = await clientB.downloadOps(0);
       expect(freshDownload.snapshotState).toBeDefined();
+    });
+  });
+
+  describe('Partial Trimming Gap Detection', () => {
+    it('should detect gap when slow client misses trimmed ops', async () => {
+      const clientA = harness.createClient('client-a-test');
+      const clientB = harness.createClient('client-b-test');
+
+      // Client B syncs initially to establish a baseline sinceSeq
+      const initialOp = clientA.createOp(
+        'Task',
+        'task-initial',
+        'CRT',
+        'TaskActionTypes.ADD_TASK',
+        { title: 'Initial' },
+      );
+      await clientA.uploadOps([initialOp]);
+      const initialDownload = await clientB.downloadOps(0);
+      const oldSinceSeq = initialDownload.latestSeq;
+      expect(oldSinceSeq).toBeGreaterThan(0);
+
+      // Client A uploads MAX_RECENT_OPS + 50 ops in batches to cause trimming
+      const totalOps = FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS + 50;
+      const batchSize = 50;
+      for (let i = 0; i < totalOps; i += batchSize) {
+        const batch: SyncOperation[] = [];
+        for (let j = i; j < Math.min(i + batchSize, totalOps); j++) {
+          batch.push(
+            clientA.createOp(
+              'Task',
+              `task-fill-${j}`,
+              'CRT',
+              'TaskActionTypes.ADD_TASK',
+              { title: `Fill ${j}` },
+            ),
+          );
+        }
+        await clientA.uploadOps(batch);
+      }
+
+      // Client B tries to download with its old sinceSeq (far behind, ops were trimmed)
+      const gapDownload = await clientB.downloadOps(oldSinceSeq);
+
+      // Gap should be detected because oldest ops were trimmed
+      expect(gapDownload.gapDetected).toBe(true);
+
+      // Client B re-downloads from 0 to get snapshot state
+      const freshDownload = await clientB.downloadOps(0);
+      expect(freshDownload.snapshotState).toBeDefined();
+    });
+
+    it('should NOT detect gap when client is up-to-date', async () => {
+      const clientA = harness.createClient('client-a-test');
+      const clientB = harness.createClient('client-b-test');
+
+      // Upload MAX_RECENT_OPS + 50 ops in batches, Client B syncs after each batch
+      const totalOps = FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS + 50;
+      const batchSize = 50;
+      for (let i = 0; i < totalOps; i += batchSize) {
+        const batch: SyncOperation[] = [];
+        for (let j = i; j < Math.min(i + batchSize, totalOps); j++) {
+          batch.push(
+            clientA.createOp(
+              'Task',
+              `task-keep-up-${j}`,
+              'CRT',
+              'TaskActionTypes.ADD_TASK',
+              { title: `Keep Up ${j}` },
+            ),
+          );
+        }
+        await clientA.uploadOps(batch);
+        // Client B stays current by downloading after each batch
+        await clientB.downloadOps();
+      }
+
+      // Final download — Client B should NOT detect a gap
+      const finalDownload = await clientB.downloadOps();
+      expect(finalDownload.gapDetected).toBeFalsy();
     });
   });
 
@@ -293,7 +372,7 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       expect(download.ops.every((o) => o.op.id.length > 0)).toBe(true);
     });
 
-    it('should prevent duplicate ops during piggybacking', async () => {
+    it('should not piggyback ops from file-based adapter (piggybacking removed)', async () => {
       const clientA = harness.createClient('client-a-test');
       const clientB = harness.createClient('client-b-test');
 
@@ -307,50 +386,26 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       );
       await clientA.uploadOps([initialOp]);
 
-      // Client B uploads without downloading first (should get A's op piggybacked)
+      // Client B uploads without downloading first
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'B',
       });
       const uploadResponse = await clientB.uploadOps([opB]);
 
-      // Should have piggybacked the initial op
-      expect(uploadResponse.newOps).toBeDefined();
-      const piggybackedIds = uploadResponse.newOps!.map((o) => o.op.id);
-      expect(piggybackedIds.length).toBeGreaterThan(0);
-
-      // Upload again with another op - should not re-piggyback same ops
-      const opB2 = clientB.createOp(
-        'Task',
-        'task-b2',
-        'CRT',
-        'TaskActionTypes.ADD_TASK',
-        {
-          title: 'B2',
-        },
-      );
-      const secondUpload = await clientB.uploadOps([opB2]);
-
-      // If there are piggybacked ops, they should NOT include the already-piggybacked ones
-      if (secondUpload.newOps && secondUpload.newOps.length > 0) {
-        const newPiggybackedIds = secondUpload.newOps.map((o) => o.op.id);
-        for (const id of piggybackedIds) {
-          expect(newPiggybackedIds).not.toContain(id);
-        }
-      }
+      // File-based adapter no longer piggybacks — remote ops are only
+      // discovered via downloadOps on the next sync cycle
+      expect(uploadResponse.newOps).toBeUndefined();
     });
 
-    it('should exclude own client ops from piggybacking', async () => {
+    it('should not return piggybacked ops on consecutive uploads from same client', async () => {
       const clientA = harness.createClient('client-a-test');
-      // Create client B to initialize shared provider state
-      harness.createClient('client-b-test');
 
-      // Client A uploads
+      // Client A uploads twice in a row
       const opA = clientA.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'A',
       });
       await clientA.uploadOps([opA]);
 
-      // Client A uploads again - should not get own op piggybacked
       const opA2 = clientA.createOp(
         'Task',
         'task-a2',
@@ -362,11 +417,9 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       );
       const response = await clientA.uploadOps([opA2]);
 
-      // newOps should not contain client A's ops
-      if (response.newOps) {
-        const clientIds = response.newOps.map((o) => o.op.clientId);
-        expect(clientIds).not.toContain('client-a-test');
-      }
+      // File-based adapter no longer piggybacks — remote ops are only
+      // discovered via downloadOps on the next sync cycle
+      expect(response.newOps).toBeUndefined();
     });
   });
 

@@ -15,9 +15,7 @@
 
   h2 {
     margin: var(--s3) 0 var(--s);
-    border-bottom: 1px solid var(--extra-border-color);
-
-    border-color: var(--extra-border-color);
+    @include extraBorder('-bottom');
   }
 }
 
@@ -64,7 +62,6 @@ $this-border-radius: 8px;
   justify-content: space-between;
   cursor: pointer;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
 
   .spacer {
     width: calc(var(--s) * 1.5);
@@ -197,7 +194,15 @@ $this-border-radius: 8px;
 
   mat-icon {
     font-size: 18px;
-    margin-right: 2px;
+    margin-right: var(--s-quarter);
+  }
+}
+
+.task-title-clickable {
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
   }
 }
 

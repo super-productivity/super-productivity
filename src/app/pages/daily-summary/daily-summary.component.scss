@@ -74,6 +74,11 @@ $summary-point-inner-margin: var(--s);
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  transition: opacity 0.2s ease;
+
+  &.is-loading-archive {
+    opacity: 0.6;
+  }
 
   p {
     margin: 5px;
@@ -157,7 +162,7 @@ $summary-point-inner-margin: var(--s);
 }
 
 .day-end-note {
-  margin-bottom: 48px;
+  margin-bottom: var(--s6);
   //margin-top: -8px;
 
   &::ng-deep inline-markdown {
@@ -176,7 +181,7 @@ $summary-point-inner-margin: var(--s);
 
       //background: var(--bg);
       //box-shadow: var(--whiteframe-shadow-1dp);
-      border: 1px solid var(--extra-border-color);
+      @include extraBorder();
 
       &,
       > * {

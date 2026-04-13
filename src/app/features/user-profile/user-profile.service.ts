@@ -3,13 +3,12 @@ import { DEFAULT_PROFILE_ID, ProfileMetadata, UserProfile } from './user-profile
 import { UserProfileStorageService } from './user-profile-storage.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { BackupService } from '../../op-log/backup/backup.service';
-import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { Log } from '../../core/log';
 import { nanoid } from 'nanoid';
 import { SnackService } from '../../core/snack/snack.service';
-import { Store } from '@ngrx/store';
-import { updateGlobalConfigSection } from '../config/store/global-config.actions';
+import { T } from '../../t.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { AppDataComplete, MODEL_CONFIGS } from '../../op-log/model/model-config';
 import type { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 
 /**
@@ -23,10 +22,8 @@ export class UserProfileService {
   private readonly _storageService = inject(UserProfileStorageService);
   private readonly _providerManager = inject(SyncProviderManager);
   private readonly _backupService = inject(BackupService);
-  private readonly _opLogStore = inject(OperationLogStoreService);
   private readonly _snackService = inject(SnackService);
   private readonly _injector = inject(Injector);
-  private readonly _store = inject(Store);
 
   // Lazy-loaded to avoid circular dependency:
   // UserProfileService → SyncWrapperService → DataInitService → UserProfileService
@@ -85,9 +82,7 @@ export class UserProfileService {
       );
       if (activeProfile) {
         this.activeProfile.set(activeProfile);
-        Log.log(
-          `UserProfileService: Active profile set to "${activeProfile.name}" (${activeProfile.id})`,
-        );
+        Log.log(`UserProfileService: Active profile set to ${activeProfile.id}`);
       } else {
         Log.warn(
           'UserProfileService: Active profile not found in metadata, using first profile',
@@ -105,6 +100,7 @@ export class UserProfileService {
       this.activeProfile.set(defaultMetadata.profiles[0]);
       this.isInitialized.set(true);
     }
+    this._showDeprecationWarning();
   }
 
   /**
@@ -147,7 +143,7 @@ export class UserProfileService {
     this._metadata.set(updatedMetadata);
     this.profiles.set(updatedProfiles);
 
-    Log.log(`UserProfileService: Created new profile "${name}" (${newProfile.id})`);
+    Log.log(`UserProfileService: Created new profile ${newProfile.id}`);
     this._snackService.open({
       type: 'SUCCESS',
       msg: `Profile "${name}" created successfully`,
@@ -200,7 +196,7 @@ export class UserProfileService {
       }
     }
 
-    Log.log(`UserProfileService: Renamed profile ${profileId} to "${newName}"`);
+    Log.log(`UserProfileService: Renamed profile ${profileId}`);
     this._snackService.open({
       type: 'SUCCESS',
       msg: `Profile renamed to "${newName}"`,
@@ -283,7 +279,7 @@ export class UserProfileService {
     }
 
     Log.log(
-      `UserProfileService: Switching from "${currentProfile.name}" to "${targetProfile.name}"`,
+      `UserProfileService: Switching from ${currentProfile.id} to ${targetProfile.id}`,
     );
 
     try {
@@ -354,47 +350,48 @@ export class UserProfileService {
 
       // Step 7: Handle target profile data
       if (targetData) {
-        // Profile has existing data - import it
-        // importCompleteBackup will reload the window automatically
-        Log.log('UserProfileService: Importing target profile data (will reload app)');
+        // Profile has existing data - import it.
+        // importCompleteBackup clears ops + state_cache and dispatches loadAllData.
+        Log.log('UserProfileService: Importing target profile data');
         await this._backupService.importCompleteBackup(
           targetData,
           false, // isSkipLegacyWarnings
-          false, // isSkipReload - let it reload automatically
+          true, // isSkipReload - we handle reload ourselves below
         );
-        // App will reload here, no code after this will execute
       } else {
-        // Profile is empty (newly created) - clear the database and set up with profiles enabled
+        // Profile is empty (newly created) - import a clean default state with profiles enabled
         Log.log(
-          'UserProfileService: Target profile has no data, clearing database for fresh start',
-        );
-        // Clear all operations to start fresh
-        await this._opLogStore.clearAllOperations();
-
-        // IMPORTANT: Enable user profiles in the new profile's config
-        // Otherwise the user won't see the profile button to switch back
-        // We dispatch to NgRx to update the config
-        Log.log('UserProfileService: Enabling user profiles in new profile config');
-        const defaultConfig = DEFAULT_GLOBAL_CONFIG;
-        this._store.dispatch(
-          updateGlobalConfigSection({
-            sectionKey: 'appFeatures',
-            sectionCfg: {
-              ...defaultConfig.appFeatures,
-              isEnableUserProfiles: true,
-            } as any, // Type cast needed for section-specific config
-          }),
+          'UserProfileService: Target profile has no data, importing default empty state',
         );
 
-        Log.log(
-          'UserProfileService: Database cleared and profiles enabled, reloading app',
-        );
+        // Build a complete empty AppDataComplete from model defaults, with user profiles enabled
+        const emptyData: AppDataComplete = {} as AppDataComplete;
+        for (const [key, config] of Object.entries(MODEL_CONFIGS)) {
+          (emptyData as Record<string, unknown>)[key] = config.defaultData;
+        }
+        // IMPORTANT: Enable user profiles so the user can switch back
+        emptyData.globalConfig = {
+          ...DEFAULT_GLOBAL_CONFIG,
+          appFeatures: {
+            ...DEFAULT_GLOBAL_CONFIG.appFeatures,
+            isEnableUserProfiles: true,
+          },
+        };
 
-        // Reload manually for empty profile case
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
+        Log.log('UserProfileService: Importing empty default state');
+        // importCompleteBackup clears ops + state_cache and dispatches loadAllData.
+        await this._backupService.importCompleteBackup(
+          emptyData,
+          true, // isSkipLegacyWarnings
+          true, // isSkipReload - we handle reload ourselves below
+        );
       }
+
+      // Reload the app to ensure all services and state are fully re-initialized
+      // with the new profile's data. A reload is required because some parts of the
+      // app (e.g. WorkContextService) only initialize once at startup via allDataWasLoaded,
+      // and cached state in services cannot be reliably reset in-place.
+      window.location.reload();
     } catch (error) {
       Log.err('UserProfileService: Failed to switch profile', error);
       this._snackService.open({
@@ -498,6 +495,7 @@ export class UserProfileService {
       this.profiles.set(metadata.profiles);
       this.activeProfile.set(metadata.profiles[0]);
       this.isInitialized.set(true);
+      this._showDeprecationWarning();
 
       Log.log('UserProfileService: Migration completed successfully');
     } catch (error) {
@@ -512,6 +510,14 @@ export class UserProfileService {
   hasMultipleProfiles(): boolean {
     const profiles = this.profiles();
     return profiles.length > 1;
+  }
+
+  private _showDeprecationWarning(): void {
+    this._snackService.open({
+      msg: T.USER_PROFILES.DEPRECATION_WARNING,
+      type: 'WARNING',
+      config: { duration: 10000 },
+    });
   }
 
   /**

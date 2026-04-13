@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -20,6 +20,7 @@ import {
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { T } from '../../t.const';
 import { WorkContextService } from '../../features/work-context/work-context.service';
+import { IS_ANDROID_NATIVE } from '../../util/is-native-platform';
 
 @Component({
   selector: 'mobile-bottom-nav',
@@ -43,6 +44,9 @@ export class MobileBottomNavComponent {
   private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _store = inject(Store);
   private readonly _workContextService = inject(WorkContextService);
+
+  isEntrance = input(false);
+  readonly isAndroid = IS_ANDROID_NATIVE;
 
   readonly T = T;
   readonly TODAY_TAG = TODAY_TAG;

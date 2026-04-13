@@ -10,10 +10,31 @@ import {
   EnableEncryptionDialogData,
   EnableEncryptionResult,
 } from './dialog-enable-encryption/dialog-enable-encryption.component';
+import { firstValueFrom } from 'rxjs';
+
+// Module-level reference, set by the service constructor
+let dialogOpenerInstance: EncryptionPasswordDialogOpenerService | null = null;
+
+const setInstance = (instance: EncryptionPasswordDialogOpenerService): void => {
+  dialogOpenerInstance = instance;
+};
+
+const callOpener = <T>(fn: (opener: EncryptionPasswordDialogOpenerService) => T): T => {
+  if (!dialogOpenerInstance) {
+    throw new Error(
+      'EncryptionPasswordDialogOpenerService not initialized. ' +
+        'Ensure the service is injected before calling dialog functions.',
+    );
+  }
+  return fn(dialogOpenerInstance);
+};
 
 /**
  * Singleton service to open the encryption password change dialog.
  * Used by the sync form config which doesn't have direct access to injector.
+ *
+ * The constructor self-registers the module-level reference so that
+ * exported functions work from static form config handlers.
  */
 @Injectable({
   providedIn: 'root',
@@ -21,10 +42,11 @@ import {
 export class EncryptionPasswordDialogOpenerService {
   private _matDialog = inject(MatDialog);
 
-  /**
-   * Closes all open dialogs. Useful after disabling encryption
-   * to close the parent settings dialog.
-   */
+  constructor() {
+    // Self-register so module-level functions can delegate to this instance
+    setInstance(this);
+  }
+
   closeAllDialogs(): void {
     this._matDialog.closeAll();
   }
@@ -39,160 +61,42 @@ export class EncryptionPasswordDialogOpenerService {
       data: { mode, providerType } as ChangeEncryptionPasswordDialogData,
     });
 
-    return dialogRef.afterClosed().toPromise();
+    return firstValueFrom(dialogRef.afterClosed());
   }
 
-  /**
-   * Opens the unified change password dialog in disable-only mode.
-   * @deprecated Use openChangePasswordDialog('disable-only') instead
-   */
-  openDisableEncryptionDialog(
+  openEnableEncryptionDialog(
     providerType: 'supersync' | 'file-based' = 'supersync',
-  ): Promise<ChangeEncryptionPasswordResult | undefined> {
-    return this.openChangePasswordDialog('disable-only', providerType);
-  }
-
-  /**
-   * Opens the disable encryption dialog for file-based providers.
-   */
-  openDisableEncryptionDialogForFileBased(): Promise<
-    ChangeEncryptionPasswordResult | undefined
-  > {
-    return this.openChangePasswordDialog('disable-only', 'file-based');
-  }
-
-  openChangePasswordDialogForFileBased(): Promise<
-    ChangeEncryptionPasswordResult | undefined
-  > {
-    return this.openChangePasswordDialog('full', 'file-based');
-  }
-
-  openEnableEncryptionDialog(): Promise<EnableEncryptionResult | undefined> {
+  ): Promise<EnableEncryptionResult | undefined> {
     const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
       width: '450px',
       disableClose: true,
-      data: { providerType: 'supersync' } as EnableEncryptionDialogData,
+      data: { providerType } as EnableEncryptionDialogData,
     });
 
-    return dialogRef.afterClosed().toPromise();
-  }
-
-  openEnableEncryptionDialogForFileBased(): Promise<EnableEncryptionResult | undefined> {
-    const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
-      width: '450px',
-      disableClose: true,
-      data: { providerType: 'file-based' } as EnableEncryptionDialogData,
-    });
-
-    return dialogRef.afterClosed().toPromise();
+    return firstValueFrom(dialogRef.afterClosed());
   }
 }
 
-/**
- * Module-level reference to the dialog opener service.
- * Initialized by EncryptionPasswordDialogOpenerInitService.
- */
-let dialogOpenerInstance: EncryptionPasswordDialogOpenerService | null = null;
-
-/**
- * Sets the dialog opener instance. Called during app initialization.
- */
-export const setDialogOpenerInstance = (
-  instance: EncryptionPasswordDialogOpenerService,
-): void => {
-  dialogOpenerInstance = instance;
-};
-
-/**
- * Opens the encryption password change dialog.
- * Can be called from form config onClick handlers.
- */
 export const openEncryptionPasswordChangeDialog = (): Promise<
   ChangeEncryptionPasswordResult | undefined
-> => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return Promise.resolve(undefined);
-  }
-  return dialogOpenerInstance.openChangePasswordDialog();
-};
+> => callOpener((o) => o.openChangePasswordDialog());
 
-/**
- * Opens the encryption password change dialog for file-based providers.
- */
 export const openEncryptionPasswordChangeDialogForFileBased = (): Promise<
   ChangeEncryptionPasswordResult | undefined
-> => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return Promise.resolve(undefined);
-  }
-  return dialogOpenerInstance.openChangePasswordDialogForFileBased();
-};
+> => callOpener((o) => o.openChangePasswordDialog('full', 'file-based'));
 
-/**
- * Opens the disable encryption confirmation dialog.
- * Can be called from form config onChange handlers.
- */
-export const openDisableEncryptionDialog = (): Promise<
-  ChangeEncryptionPasswordResult | undefined
-> => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return Promise.resolve(undefined);
-  }
-  return dialogOpenerInstance.openDisableEncryptionDialog();
-};
-
-/**
- * Opens the enable encryption confirmation dialog.
- * Can be called from form config onChange handlers.
- */
 export const openEnableEncryptionDialog = (): Promise<
   EnableEncryptionResult | undefined
-> => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return Promise.resolve(undefined);
-  }
-  return dialogOpenerInstance.openEnableEncryptionDialog();
-};
+> => callOpener((o) => o.openEnableEncryptionDialog());
 
-/**
- * Opens the enable encryption dialog for file-based providers.
- */
 export const openEnableEncryptionDialogForFileBased = (): Promise<
   EnableEncryptionResult | undefined
-> => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return Promise.resolve(undefined);
-  }
-  return dialogOpenerInstance.openEnableEncryptionDialogForFileBased();
-};
+> => callOpener((o) => o.openEnableEncryptionDialog('file-based'));
 
-/**
- * Opens the disable encryption dialog for file-based providers.
- * Can be called from form config onClick handlers.
- */
 export const openDisableEncryptionDialogForFileBased = (): Promise<
   ChangeEncryptionPasswordResult | undefined
-> => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return Promise.resolve(undefined);
-  }
-  return dialogOpenerInstance.openDisableEncryptionDialogForFileBased();
-};
+> => callOpener((o) => o.openChangePasswordDialog('disable-only', 'file-based'));
 
-/**
- * Closes all open dialogs. Useful after disabling encryption
- * to close the parent settings dialog.
- */
 export const closeAllDialogs = (): void => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return;
-  }
-  dialogOpenerInstance.closeAllDialogs();
+  callOpener((o) => o.closeAllDialogs());
 };

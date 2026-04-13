@@ -1,11 +1,11 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
 import {
   Operation,
   OperationLogEntry,
-  OpType,
   VectorClock,
   isFullStateOpType,
+  FULL_STATE_OP_TYPES,
 } from '../core/operation.types';
 import { StorageQuotaExceededError } from '../core/errors/sync-errors';
 import { toEntityKey } from '../util/entity-key.util';
@@ -23,6 +23,7 @@ import {
   BACKUP_KEY,
   OPS_INDEXES,
   ArchiveStoreEntry,
+  ProfileDataStoreEntry,
 } from './db-keys.const';
 import {
   DUPLICATE_OPERATION_ERROR_MSG,
@@ -35,7 +36,8 @@ import {
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
-import { vectorClockToString } from '../../core/util/vector-clock';
+import { limitVectorClockSize, vectorClockToString } from '../../core/util/vector-clock';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 
 /**
  * Vector clock entry stored in the vector_clock object store.
@@ -44,16 +46,6 @@ import { vectorClockToString } from '../../core/util/vector-clock';
 interface VectorClockEntry {
   clock: VectorClock;
   lastUpdate: number;
-  /**
-   * Client IDs that should never be pruned from vector clocks.
-   * Used to preserve the SYNC_IMPORT/BACKUP_IMPORT/REPAIR client's entry,
-   * which is needed for correct filtering of ops created after the import.
-   *
-   * Without this, pruning could remove low-counter entries (like an import's
-   * client with counter=1), causing new ops to have clocks that appear
-   * CONCURRENT with the import instead of GREATER_THAN.
-   */
-  protectedClientIds?: string[];
 }
 
 /**
@@ -106,7 +98,7 @@ interface OpLogDB extends DBSchema {
       [OPS_INDEXES.BY_ID]: string;
       [OPS_INDEXES.BY_SYNCED_AT]: number;
       // PERF: Compound index for efficient queries on remote ops by status
-      [OPS_INDEXES.BY_SOURCE_AND_STATUS]: string;
+      [OPS_INDEXES.BY_SOURCE_AND_STATUS]: [string, string];
     };
   };
   [STORE_NAMES.STATE_CACHE]: {
@@ -155,6 +147,14 @@ interface OpLogDB extends DBSchema {
     key: string; // SINGLETON_KEY ('current')
     value: ArchiveStoreEntry;
   };
+  /**
+   * Stores profile data (CompleteBackup) for user profile switching.
+   * Moved from localStorage to avoid 5-10 MB quota limits.
+   */
+  [STORE_NAMES.PROFILE_DATA]: {
+    key: string; // profile ID
+    value: ProfileDataStoreEntry;
+  };
 }
 
 /**
@@ -169,6 +169,7 @@ interface OpLogDB extends DBSchema {
   providedIn: 'root',
 })
 export class OperationLogStoreService {
+  private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
 
@@ -184,7 +185,15 @@ export class OperationLogStoreService {
   private _vectorClockCache: VectorClock | null = null;
 
   async init(): Promise<void> {
-    this._db = await this._openDbWithRetry();
+    const db = await this._openDbWithRetry();
+    db.addEventListener('close', () => {
+      Log.warn(
+        '[OpLogStore] IndexedDB connection closed by browser. Will re-open on next access.',
+      );
+      this._db = undefined;
+      this._initPromise = undefined;
+    });
+    this._db = db;
   }
 
   /**
@@ -444,7 +453,7 @@ export class OperationLogStoreService {
       storedEntries = await this.db.getAllFromIndex(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'pending'] as any,
+        ['remote', 'pending'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -880,7 +889,7 @@ export class OperationLogStoreService {
       storedEntries = await this.db.getAllFromIndex(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'failed'] as any,
+        ['remote', 'failed'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -1150,6 +1159,7 @@ export class OperationLogStoreService {
         STORE_NAMES.VECTOR_CLOCK,
         STORE_NAMES.ARCHIVE_YOUNG,
         STORE_NAMES.ARCHIVE_OLD,
+        STORE_NAMES.PROFILE_DATA,
       ],
       'readwrite',
     );
@@ -1159,6 +1169,7 @@ export class OperationLogStoreService {
     await tx.objectStore(STORE_NAMES.VECTOR_CLOCK).clear();
     await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
     await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
+    await tx.objectStore(STORE_NAMES.PROFILE_DATA).clear();
     await tx.done;
     // Invalidate all caches
     this._appliedOpIdsCache = null;
@@ -1253,15 +1264,9 @@ export class OperationLogStoreService {
    */
   async setVectorClock(clock: VectorClock): Promise<void> {
     await this._ensureInit();
-    // Preserve existing protectedClientIds when updating the clock
-    // This is important because setVectorClock is called during hydration,
-    // and we don't want to lose the protected IDs that were set by a previous
-    // SYNC_IMPORT/BACKUP_IMPORT/REPAIR operation.
-    const existingEntry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
-    const protectedClientIds = existingEntry?.protectedClientIds ?? [];
     await this.db.put(
       STORE_NAMES.VECTOR_CLOCK,
-      { clock, lastUpdate: Date.now(), protectedClientIds },
+      { clock, lastUpdate: Date.now() },
       SINGLETON_KEY,
     );
     this._vectorClockCache = clock;
@@ -1302,6 +1307,11 @@ export class OperationLogStoreService {
    * 5. These ops are compared as CONCURRENT with the import, not GREATER_THAN
    * 6. SyncImportFilterService incorrectly filters them as "invalidated by import"
    *
+   * NOTE: When a full-state op (SYNC_IMPORT/BACKUP_IMPORT/REPAIR) is present,
+   * its clock REPLACES (not merges with) the local clock. Callers must not mix
+   * pre-import and post-import ops in a single call — all ops in the batch
+   * should belong to the same "epoch" (post-import or no import).
+   *
    * @param ops Remote operations whose clocks should be merged into local clock
    */
   async mergeRemoteOpClocks(ops: Operation[]): Promise<void> {
@@ -1319,43 +1329,104 @@ export class OperationLogStoreService {
         `  Merging ${ops.length} remote ops`,
     );
 
-    // Merge all remote ops' clocks into the local clock
-    const mergedClock = { ...currentClock };
+    // Check if any op is a full-state operation (SYNC_IMPORT / BACKUP_IMPORT / REPAIR).
+    // Full-state ops represent a complete state reset — old clock entries are irrelevant.
+    // Using the import's clock as the base (REPLACE) instead of the current clock (MERGE)
+    // prevents clock bloat that causes server-side pruning to drop the import's entry,
+    // which would make subsequent ops appear CONCURRENT with the import.
+    const fullStateOp = ops.find((op) => FULL_STATE_OP_TYPES.has(op.opType));
+
+    const mergedClock = fullStateOp
+      ? { ...fullStateOp.vectorClock }
+      : { ...currentClock };
+
+    if (fullStateOp) {
+      Log.log(
+        `[OpLogStore] mergeRemoteOpClocks: REPLACING clock for FULL-STATE op ${fullStateOp.opType}\n` +
+          `  Op ID:         ${fullStateOp.id}\n` +
+          `  Op clientId:   ${fullStateOp.clientId}\n` +
+          `  Old clock (${Object.keys(currentClock).length} entries): ${vectorClockToString(currentClock)}\n` +
+          `  New base clock: ${vectorClockToString(fullStateOp.vectorClock)}`,
+      );
+    }
+
     for (const op of ops) {
-      // Log each op's clock being merged (especially important for SYNC_IMPORT)
-      if (op.opType === OpType.SyncImport || op.opType === OpType.BackupImport) {
-        Log.log(
-          `[OpLogStore] mergeRemoteOpClocks: Merging FULL-STATE op ${op.opType}\n` +
-            `  Op ID:         ${op.id}\n` +
-            `  Op clientId:   ${op.clientId}\n` +
-            `  Op clock:      ${vectorClockToString(op.vectorClock)}`,
-        );
-      }
       for (const [clientId, counter] of Object.entries(op.vectorClock)) {
         mergedClock[clientId] = Math.max(mergedClock[clientId] ?? 0, counter);
       }
     }
 
-    // Preserve existing protectedClientIds when updating the clock
-    // This is critical: without this, vector clock pruning will remove the SYNC_IMPORT
-    // client ID, causing new ops to appear CONCURRENT with the import instead of GREATER_THAN
-    const existingEntry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
-    const protectedClientIds = existingEntry?.protectedClientIds ?? [];
+    const currentClientId = await this.clientIdProvider.loadClientId();
+    if (!currentClientId) {
+      Log.warn(
+        '[OpLogStore] mergeRemoteOpClocks: Cannot prune clock - no client ID available. ' +
+          'This is unexpected during sync and may indicate data corruption.',
+      );
+    }
+
+    let clockToStore: Record<string, number>;
+
+    if (fullStateOp && currentClientId) {
+      // CLOCK RESET: After a full-state op (SYNC_IMPORT / BACKUP_IMPORT / REPAIR),
+      // reset the working clock to minimal — only the import client's entry and our
+      // own entry. This prevents dead client IDs from accumulating in the clock.
+      //
+      // The full import clock is preserved in the stored operation for
+      // SyncImportFilterService to use when filtering pre-import ops.
+      // Post-import ops are recognized by having the import client's counter
+      // (see SyncImportFilterService's import-client-counter exception).
+      clockToStore = {};
+      const importClientId = fullStateOp.clientId;
+      if (mergedClock[importClientId] !== undefined) {
+        clockToStore[importClientId] = mergedClock[importClientId];
+      }
+      if (currentClientId !== importClientId) {
+        // Preserve our own counter using the maximum of:
+        // - mergedClock[currentClientId]: from any of the incoming remote ops
+        // - currentClock[currentClientId]: our own counter BEFORE the merge
+        //
+        // This matters when our own ops (e.g. GLOBAL_CONFIG) created a counter
+        // that is NOT reflected in the incoming full-state op's clock (because the
+        // full-state op was created by another client and doesn't know about our ops).
+        // Without this, the reset would drop our own counter, causing subsequent ops
+        // to reuse the same counter value and appear as EQUAL (duplicate) to remote
+        // clients that have already seen our earlier op with that counter.
+        const myCounter = Math.max(
+          mergedClock[currentClientId] ?? 0,
+          currentClock[currentClientId] ?? 0,
+        );
+        if (myCounter > 0) {
+          clockToStore[currentClientId] = myCounter;
+        }
+      }
+      Log.log(
+        `[OpLogStore] mergeRemoteOpClocks: RESET clock to minimal after ${fullStateOp.opType}\n` +
+          `  Full merged clock (${Object.keys(mergedClock).length} entries): ${vectorClockToString(mergedClock)}\n` +
+          `  Minimal clock (${Object.keys(clockToStore).length} entries): ${vectorClockToString(clockToStore)}`,
+      );
+    } else {
+      // Normal case: prune the merged clock to MAX_VECTOR_CLOCK_SIZE to break the
+      // inflate/prune cycle: without this, the union of all downloaded ops'
+      // clocks re-introduces pruned client IDs, exceeding the limit again.
+      // The server already prunes with the same algorithm on upload.
+      clockToStore = currentClientId
+        ? limitVectorClockSize(mergedClock, currentClientId)
+        : mergedClock;
+    }
 
     // DIAGNOSTIC LOGGING: Log merged clock after merge
     Log.debug(
       `[OpLogStore] mergeRemoteOpClocks: AFTER merge\n` +
-        `  Merged clock:        ${vectorClockToString(mergedClock)}\n` +
-        `  Protected clientIds: ${JSON.stringify(protectedClientIds)}`,
+        `  Merged clock: ${vectorClockToString(clockToStore)}`,
     );
 
     // Update the vector clock store
     await this.db.put(
       STORE_NAMES.VECTOR_CLOCK,
-      { clock: mergedClock, lastUpdate: Date.now(), protectedClientIds },
+      { clock: clockToStore, lastUpdate: Date.now() },
       SINGLETON_KEY,
     );
-    this._vectorClockCache = mergedClock;
+    this._vectorClockCache = clockToStore;
   }
 
   /**
@@ -1366,44 +1437,6 @@ export class OperationLogStoreService {
     await this._ensureInit();
     const entry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
     return entry ?? null;
-  }
-
-  /**
-   * Gets the protected client IDs that should never be pruned from vector clocks.
-   * These are client IDs from the latest SYNC_IMPORT/BACKUP_IMPORT/REPAIR operation.
-   *
-   * @returns Array of protected client IDs, or empty array if none set
-   */
-  async getProtectedClientIds(): Promise<string[]> {
-    await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
-    return entry?.protectedClientIds ?? [];
-  }
-
-  /**
-   * Sets the protected client IDs that should never be pruned from vector clocks.
-   * Called after applying a full-state operation (SYNC_IMPORT/BACKUP_IMPORT/REPAIR)
-   * to ensure the import client's entry is preserved through future pruning.
-   *
-   * @param clientIds Client IDs to protect from pruning
-   */
-  async setProtectedClientIds(clientIds: string[]): Promise<void> {
-    await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
-    if (entry) {
-      await this.db.put(
-        STORE_NAMES.VECTOR_CLOCK,
-        { ...entry, protectedClientIds: clientIds },
-        SINGLETON_KEY,
-      );
-    } else {
-      // No vector clock entry yet - create one with just the protected IDs
-      await this.db.put(
-        STORE_NAMES.VECTOR_CLOCK,
-        { clock: {}, lastUpdate: Date.now(), protectedClientIds: clientIds },
-        SINGLETON_KEY,
-      );
-    }
   }
 
   /**
@@ -1457,12 +1490,9 @@ export class OperationLogStoreService {
       // 2. Update vector clock to match the operation's clock (only for local ops)
       // The op.vectorClock already contains the incremented value from the caller.
       // We store it as the current clock so subsequent operations can build on it.
-      // IMPORTANT: Preserve protectedClientIds when updating the clock
       if (source === 'local') {
-        const existingEntry = await vcStore.get(SINGLETON_KEY);
-        const protectedClientIds = existingEntry?.protectedClientIds ?? [];
         await vcStore.put(
-          { clock: op.vectorClock, lastUpdate: Date.now(), protectedClientIds },
+          { clock: op.vectorClock, lastUpdate: Date.now() },
           SINGLETON_KEY,
         );
         this._vectorClockCache = op.vectorClock;
@@ -1481,6 +1511,44 @@ export class OperationLogStoreService {
       }
       throw e;
     }
+  }
+  // ============================================================
+  // Profile Data Storage
+  // ============================================================
+
+  /**
+   * Saves profile data (CompleteBackup) for a specific profile.
+   */
+  async saveProfileData(
+    profileId: string,
+    data: ProfileDataStoreEntry['data'],
+  ): Promise<void> {
+    await this._ensureInit();
+    await this.db.put(STORE_NAMES.PROFILE_DATA, {
+      id: profileId,
+      data,
+      lastModified: Date.now(),
+    });
+  }
+
+  /**
+   * Loads profile data (CompleteBackup) for a specific profile.
+   * Returns null if no data exists for the given profile ID.
+   */
+  async loadProfileData(
+    profileId: string,
+  ): Promise<ProfileDataStoreEntry['data'] | null> {
+    await this._ensureInit();
+    const entry = await this.db.get(STORE_NAMES.PROFILE_DATA, profileId);
+    return entry?.data ?? null;
+  }
+
+  /**
+   * Deletes profile data for a specific profile.
+   */
+  async deleteProfileData(profileId: string): Promise<void> {
+    await this._ensureInit();
+    await this.db.delete(STORE_NAMES.PROFILE_DATA, profileId);
   }
 }
 

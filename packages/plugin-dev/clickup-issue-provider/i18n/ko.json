@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API 키",
+    "API_KEY_LINK": "개인 API 키 받기",
+    "TEAM_IDS": "워크스페이스/팀 ID (쉼표로 구분, 비워두면 전체)",
+    "USER_ID": "사용자 ID (담당자 기준 필터링)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "개요",
+    "STATUS": "상태",
+    "PRIORITY": "우선순위",
+    "ASSIGNEE": "담당자",
+    "LABELS": "레이블",
+    "DESCRIPTION": "기술"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: 알 수 없는 오류입니다. API 키를 확인하고 다시 시도하세요."
+  }
+}

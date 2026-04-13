@@ -200,6 +200,19 @@ vi.mock('../src/db', async () => {
         }
         return { count: deleted };
       }),
+      updateMany: vi.fn().mockImplementation(async (args: any) => {
+        let updated = 0;
+        for (const [key, syncState] of state.userSyncStates) {
+          if (
+            args.where?.userId !== undefined &&
+            syncState.userId === args.where.userId
+          ) {
+            Object.assign(syncState, args.data);
+            updated++;
+          }
+        }
+        return { count: updated };
+      }),
     },
     syncDevice: {
       upsert: vi.fn().mockImplementation(async (args: any) => {
@@ -380,6 +393,19 @@ vi.mock('../src/db', async () => {
             return true;
           });
         }),
+        updateMany: vi.fn().mockImplementation(async (args: any) => {
+          let updated = 0;
+          for (const [, syncState] of state.userSyncStates) {
+            if (
+              args.where?.userId !== undefined &&
+              syncState.userId === args.where.userId
+            ) {
+              Object.assign(syncState, args.data);
+              updated++;
+            }
+          }
+          return { count: updated };
+        }),
       },
       syncDevice: {
         upsert: vi.fn().mockImplementation(async (args: any) => {
@@ -432,7 +458,7 @@ vi.mock('../src/db', async () => {
 
 // Mock auth module
 vi.mock('../src/auth', () => ({
-  verifyToken: vi.fn().mockResolvedValue({ userId: 1, email: 'test@test.com' }),
+  verifyToken: vi.fn().mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
 }));
 
 // Import AFTER mocking

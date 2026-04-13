@@ -50,6 +50,7 @@ export class OperationDownloadService {
         schemaVersion: row.schemaVersion,
         timestamp: Number(row.clientTimestamp),
         isPayloadEncrypted: row.isPayloadEncrypted,
+        syncImportReason: row.syncImportReason ?? undefined,
       },
       receivedAt: Number(row.receivedAt),
     }));
@@ -106,39 +107,35 @@ export class OperationDownloadService {
 
           // Compute aggregated vector clock from all ops up to and including the snapshot.
           // This ensures clients know about all clock entries from skipped ops.
-          const skippedOps = await tx.operation.findMany({
-            where: {
-              userId,
-              serverSeq: { lte: latestSnapshotSeq },
-            },
-            select: { vectorClock: true },
-          });
+          // Uses a SQL aggregate to avoid loading all individual ops' clocks into memory —
+          // the aggregation happens in PostgreSQL, returning only the final per-client max.
+          const clockRows = await tx.$queryRaw<
+            Array<{ client_id: string; max_counter: bigint }>
+          >`
+            SELECT kv.key AS client_id, MAX(kv.value::bigint) AS max_counter
+            FROM operations, LATERAL jsonb_each_text(vector_clock) AS kv(key, value)
+            WHERE user_id = ${userId}
+              AND server_seq <= ${latestSnapshotSeq}
+              AND jsonb_typeof(vector_clock) = 'object'
+              AND kv.value ~ '^[0-9]+$'
+            GROUP BY kv.key
+          `;
 
           snapshotVectorClock = {};
-          for (const op of skippedOps) {
-            const clock = op.vectorClock as unknown as VectorClock;
-            if (clock && typeof clock === 'object') {
-              for (const [clientId, value] of Object.entries(clock)) {
-                if (typeof value === 'number') {
-                  snapshotVectorClock[clientId] = Math.max(
-                    snapshotVectorClock[clientId] ?? 0,
-                    value,
-                  );
-                }
-              }
-            }
+          for (const row of clockRows) {
+            snapshotVectorClock[row.client_id] = Number(row.max_counter);
           }
 
           // Limit snapshot clock to MAX_VECTOR_CLOCK_SIZE to prevent oversized
           // clocks from being sent to clients. Preserve the requesting client's ID
-          // and the snapshot author's ID to avoid false EQUAL in pruning-aware comparison.
+          // and the snapshot author's ID to avoid false EQUAL in comparison.
           const preserveIds: string[] = [];
           if (excludeClient) preserveIds.push(excludeClient);
           if (latestFullStateOp?.clientId) preserveIds.push(latestFullStateOp.clientId);
           snapshotVectorClock = limitVectorClockSize(snapshotVectorClock, preserveIds);
 
           Logger.info(
-            `[user:${userId}] Computed snapshotVectorClock from ${skippedOps.length} ops: ${JSON.stringify(snapshotVectorClock)}`,
+            `[user:${userId}] Computed snapshotVectorClock with ${Object.keys(snapshotVectorClock).length} entries: ${JSON.stringify(snapshotVectorClock)}`,
           );
         }
 
@@ -223,6 +220,7 @@ export class OperationDownloadService {
             schemaVersion: row.schemaVersion,
             timestamp: Number(row.clientTimestamp),
             isPayloadEncrypted: row.isPayloadEncrypted,
+            syncImportReason: row.syncImportReason ?? undefined,
           },
           receivedAt: Number(row.receivedAt),
         }));

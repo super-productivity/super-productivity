@@ -7,7 +7,7 @@ import * as jwt from 'jsonwebtoken';
 const JWT_SECRET = 'super-sync-dev-secret-do-not-use-in-production';
 
 const createToken = (userId: number, email: string, tokenVersion: number = 0): string => {
-  return jwt.sign({ userId, email, tokenVersion }, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ userId, email, tokenVersion }, JWT_SECRET, { expiresIn: '365d' });
 };
 
 describe('API Routes - Replace Token', () => {
@@ -149,7 +149,9 @@ describe('API Routes - Replace Token', () => {
     });
 
     expect(response.statusCode).toBe(401);
-    expect(response.json().error).toBe('Invalid token');
+    expect(response.json().error).toBe(
+      'Token was revoked. Please log in again to get a new token.',
+    );
   });
 });
 

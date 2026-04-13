@@ -1,6 +1,5 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { waitForAppReady } from './waits';
-import { dismissTourIfVisible } from './sync-helpers';
 
 /**
  * Legacy Migration E2E Test Helpers
@@ -141,7 +140,6 @@ export const createLegacyMigratedClient = async (
 
   // Wait for app to be fully ready
   await waitForAppReady(page);
-  await dismissTourIfVisible(page);
   console.log(`[Legacy Client ${clientName}] App ready after migration`);
 
   return { context, page };

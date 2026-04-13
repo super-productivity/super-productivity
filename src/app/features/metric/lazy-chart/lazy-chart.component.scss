@@ -21,7 +21,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--s);
 }
 
 .timeframe-label {
@@ -31,17 +31,17 @@
 
 .timeframe-radios {
   display: flex;
-  gap: 4px;
+  gap: var(--s-half);
   flex-wrap: wrap;
   align-items: center;
 }
 
 .timeframe-radios ::ng-deep .mdc-form-field {
-  margin-right: 8px;
+  margin-right: var(--s);
 }
 
 .timeframe-radios ::ng-deep .mdc-radio {
-  padding: 4px;
+  padding: var(--s-half);
 }
 
 .timeframe-radios ::ng-deep .mat-mdc-radio-button .mdc-label {

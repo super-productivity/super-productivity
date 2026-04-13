@@ -8,6 +8,8 @@ import {
 } from './schema-migration.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 
 describe('OperationLogSnapshotService', () => {
   let service: OperationLogSnapshotService;
@@ -15,6 +17,7 @@ describe('OperationLogSnapshotService', () => {
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockSchemaMigrationService: jasmine.SpyObj<SchemaMigrationService>;
+  let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -33,6 +36,8 @@ describe('OperationLogSnapshotService', () => {
     mockSchemaMigrationService = jasmine.createSpyObj('SchemaMigrationService', [
       'migrateStateIfNeeded',
     ]);
+    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
+    mockClientIdProvider.loadClientId.and.resolveTo('test-client');
 
     TestBed.configureTestingModule({
       providers: [
@@ -41,6 +46,7 @@ describe('OperationLogSnapshotService', () => {
         { provide: VectorClockService, useValue: mockVectorClockService },
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
         { provide: SchemaMigrationService, useValue: mockSchemaMigrationService },
+        { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
       ],
     });
     service = TestBed.inject(OperationLogSnapshotService);
@@ -171,6 +177,72 @@ describe('OperationLogSnapshotService', () => {
 
       // Should not throw - errors are caught internally
       await expectAsync(service.saveCurrentStateAsSnapshot()).toBeResolved();
+    });
+
+    it('should prune vector clock before saving when it exceeds MAX_VECTOR_CLOCK_SIZE', async () => {
+      // Create a bloated vector clock with more entries than MAX_VECTOR_CLOCK_SIZE
+      const bloatedClock: Record<string, number> = {};
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 10; i++) {
+        bloatedClock[`client-${i}`] = i + 1;
+      }
+      // Ensure the local client is in the clock
+      bloatedClock['test-client'] = 999;
+
+      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(bloatedClock);
+      mockOpLogStore.getLastSeq.and.resolveTo(1);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      const savedClockSize = Object.keys(savedCache.vectorClock).length;
+      expect(savedClockSize).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
+      // Local client ID must be preserved after pruning
+      expect(savedCache.vectorClock['test-client']).toBe(999);
+    });
+
+    it('should not prune vector clock when it is within MAX_VECTOR_CLOCK_SIZE', async () => {
+      const smallClock = { client1: 5, client2: 3 };
+      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(smallClock);
+      mockOpLogStore.getLastSeq.and.resolveTo(1);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(savedCache.vectorClock).toEqual(smallClock);
+    });
+
+    it('should not prune vector clock at exactly MAX_VECTOR_CLOCK_SIZE entries', async () => {
+      const exactClock: Record<string, number> = {};
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+        exactClock[`client-${i}`] = i + 1;
+      }
+      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(exactClock);
+      mockOpLogStore.getLastSeq.and.resolveTo(1);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(savedCache.vectorClock).toEqual(exactClock);
+    });
+
+    it('should save unpruned clock if clientId is null', async () => {
+      mockClientIdProvider.loadClientId.and.resolveTo(null);
+      const clock = { client1: 5 };
+      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(clock);
+      mockOpLogStore.getLastSeq.and.resolveTo(1);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(savedCache.vectorClock).toEqual(clock);
     });
 
     it('should include compactedAt timestamp', async () => {

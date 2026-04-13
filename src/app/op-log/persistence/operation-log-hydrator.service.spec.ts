@@ -26,6 +26,8 @@ import {
 } from '../core/operation.types';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { bulkApplyHydrationOperations } from '../apply/bulk-hydration.action';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -43,6 +45,7 @@ describe('OperationLogHydratorService', () => {
   let mockSnapshotService: jasmine.SpyObj<OperationLogSnapshotService>;
   let mockRecoveryService: jasmine.SpyObj<OperationLogRecoveryService>;
   let mockSyncHydrationService: jasmine.SpyObj<SyncHydrationService>;
+  let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
 
   const mockState = {
     task: { entities: {}, ids: [] },
@@ -105,8 +108,6 @@ describe('OperationLogHydratorService', () => {
       'getVectorClock',
       'setVectorClock',
       'mergeRemoteOpClocks',
-      'setProtectedClientIds',
-      'getProtectedClientIds',
       'getLatestFullStateOp',
     ]);
     mockMigrationService = jasmine.createSpyObj('OperationLogMigrationService', [
@@ -151,6 +152,8 @@ describe('OperationLogHydratorService', () => {
     mockSyncHydrationService = jasmine.createSpyObj('SyncHydrationService', [
       'hydrateFromRemoteSync',
     ]);
+    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
+    mockClientIdProvider.loadClientId.and.resolveTo('test-client');
 
     // Default mock implementations
     mockOpLogStore.getVectorClock.and.returnValue(Promise.resolve(null));
@@ -168,9 +171,6 @@ describe('OperationLogHydratorService', () => {
     mockOpLogStore.markApplied.and.returnValue(Promise.resolve());
     mockOpLogStore.markFailed.and.returnValue(Promise.resolve());
     mockOpLogStore.mergeRemoteOpClocks.and.returnValue(Promise.resolve());
-    mockOpLogStore.setProtectedClientIds.and.returnValue(Promise.resolve());
-    // Default: No protected client IDs and no full-state ops (fresh install or no imports yet)
-    mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
     mockOpLogStore.getLatestFullStateOp.and.returnValue(Promise.resolve(undefined));
     mockOperationApplierService.applyOperations.and.returnValue(
       Promise.resolve({ appliedOps: [] }),
@@ -179,7 +179,7 @@ describe('OperationLogHydratorService', () => {
     mockSchemaMigrationService.needsMigration.and.returnValue(false);
     mockSchemaMigrationService.operationNeedsMigration.and.returnValue(false);
     mockSchemaMigrationService.migrateOperations.and.callFake((ops) => ops);
-    mockValidateStateService.validateAndRepair.and.returnValue({
+    mockValidateStateService.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
     });
@@ -212,6 +212,7 @@ describe('OperationLogHydratorService', () => {
         { provide: OperationLogSnapshotService, useValue: mockSnapshotService },
         { provide: OperationLogRecoveryService, useValue: mockRecoveryService },
         { provide: SyncHydrationService, useValue: mockSyncHydrationService },
+        { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
       ],
     });
 
@@ -298,7 +299,7 @@ describe('OperationLogHydratorService', () => {
         const snapshot = createMockSnapshot({ schemaVersion: undefined });
         const repairedState = { ...mockState, repaired: true };
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockValidateStateService.validateAndRepair.and.returnValue({
+        mockValidateStateService.validateAndRepair.and.resolveTo({
           isValid: false,
           wasRepaired: true,
           repairedState,
@@ -319,7 +320,7 @@ describe('OperationLogHydratorService', () => {
         const repairedState = { ...mockState, repaired: true };
         const repairSummary = { entityStateFixed: 1 } as any;
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockValidateStateService.validateAndRepair.and.returnValue({
+        mockValidateStateService.validateAndRepair.and.resolveTo({
           isValid: false,
           wasRepaired: true,
           repairedState,
@@ -354,6 +355,61 @@ describe('OperationLogHydratorService', () => {
         await service.hydrateStore();
 
         expect(mockOpLogStore.setVectorClock).not.toHaveBeenCalled();
+      });
+
+      it('should prune bloated vector clock before restoring from snapshot', async () => {
+        // Create a bloated vector clock with more entries than MAX_VECTOR_CLOCK_SIZE
+        const bloatedClock: Record<string, number> = {};
+        for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 10; i++) {
+          bloatedClock[`client-${i}`] = i + 1;
+        }
+        bloatedClock['test-client'] = 999;
+
+        const snapshot = createMockSnapshot({ vectorClock: bloatedClock });
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+
+        await service.hydrateStore();
+
+        const restoredClock = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+        expect(Object.keys(restoredClock).length).toBeLessThanOrEqual(
+          MAX_VECTOR_CLOCK_SIZE,
+        );
+        // Local client ID must be preserved after pruning
+        expect(restoredClock['test-client']).toBe(999);
+      });
+
+      it('should not prune vector clock when within MAX_VECTOR_CLOCK_SIZE', async () => {
+        const smallClock = { clientA: 5, clientB: 3 };
+        const snapshot = createMockSnapshot({ vectorClock: smallClock });
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+
+        await service.hydrateStore();
+
+        expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(smallClock);
+      });
+
+      it('should not prune vector clock at exactly MAX_VECTOR_CLOCK_SIZE entries', async () => {
+        const exactClock: Record<string, number> = {};
+        for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+          exactClock[`client-${i}`] = i + 1;
+        }
+        const snapshot = createMockSnapshot({ vectorClock: exactClock });
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+
+        await service.hydrateStore();
+
+        expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(exactClock);
+      });
+
+      it('should restore unpruned clock if clientId is null', async () => {
+        mockClientIdProvider.loadClientId.and.resolveTo(null);
+        const clock = { clientA: 5 };
+        const snapshot = createMockSnapshot({ vectorClock: clock });
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+
+        await service.hydrateStore();
+
+        expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(clock);
       });
     });
 
@@ -450,7 +506,7 @@ describe('OperationLogHydratorService', () => {
 
         // Track order of operations
         const callOrder: string[] = [];
-        mockValidateStateService.validateAndRepair.and.callFake(() => {
+        mockValidateStateService.validateAndRepair.and.callFake(async () => {
           callOrder.push('validate');
           return { isValid: true, wasRepaired: false };
         });
@@ -708,543 +764,10 @@ describe('OperationLogHydratorService', () => {
       });
     });
 
-    describe('protected client IDs for vector clock pruning', () => {
-      // These tests verify the fix for the vector clock pruning bug where
-      // SYNC_IMPORT/BACKUP_IMPORT/REPAIR client IDs were not protected during
-      // hydration, causing them to be pruned from new operations' vector clocks.
-      // This resulted in new ops appearing CONCURRENT with the import instead of
-      // GREATER_THAN, causing sync to reject them.
-
-      it('should set protected client IDs from vectorClock when loading SYNC_IMPORT as last tail op', async () => {
-        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        const syncImportPayload = { task: {}, project: {} };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
-          payload: { appDataComplete: syncImportPayload },
-          entityType: 'ALL',
-          clientId: 'import-client-123',
-          // FIX: Include multiple clients in vectorClock to verify ALL are protected
-          vectorClock: { import_client_123: 1, other_client: 5 },
-        });
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([createMockEntry(6, syncImportOp)]),
-        );
-
-        await service.hydrateStore();
-
-        // Should protect ALL client IDs in the vectorClock, not just the import's clientId
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['import_client_123', 'other_client']),
-        );
-      });
-
-      it('should set protected client IDs from vectorClock when loading BACKUP_IMPORT as last tail op', async () => {
-        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        const backupImportPayload = { task: {}, project: {} };
-        const backupImportOp = createMockOperation('backup-op', OpType.BackupImport, {
-          payload: { appDataComplete: backupImportPayload },
-          entityType: 'ALL',
-          clientId: 'backup-client-456',
-          vectorClock: { backup_client_456: 1, previous_client: 10 },
-        });
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([createMockEntry(6, backupImportOp)]),
-        );
-
-        await service.hydrateStore();
-
-        // Should protect ALL client IDs in the vectorClock
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['backup_client_456', 'previous_client']),
-        );
-      });
-
-      it('should set protected client IDs from vectorClock when loading REPAIR as last tail op', async () => {
-        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        const repairPayload = { task: {}, project: {} };
-        const repairOp = createMockOperation('repair-op', OpType.Repair, {
-          payload: { appDataComplete: repairPayload },
-          entityType: 'ALL',
-          clientId: 'repair-client-789',
-          vectorClock: { repair_client_789: 1, synced_client: 20 },
-        });
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([createMockEntry(6, repairOp)]),
-        );
-
-        await service.hydrateStore();
-
-        // Should protect ALL client IDs in the vectorClock
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['repair_client_789', 'synced_client']),
-        );
-      });
-
-      it('should set protected client IDs from vectorClock when replaying tail ops containing SYNC_IMPORT', async () => {
-        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        // Mix of regular ops and a SYNC_IMPORT somewhere in the middle
-        const regularOp1 = createMockOperation('op-1', OpType.Update, {
-          clientId: 'regular-client',
-        });
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
-          payload: { appDataComplete: { task: {} } },
-          entityType: 'ALL',
-          clientId: 'import-client-middle',
-          vectorClock: { import_client_middle: 1, legacy_client: 100 },
-        });
-        const regularOp2 = createMockOperation('op-2', OpType.Update, {
-          clientId: 'regular-client',
-        });
-        // Make sure the last op is NOT a full-state op to trigger the replay path
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([
-            createMockEntry(6, regularOp1),
-            createMockEntry(7, syncImportOp),
-            createMockEntry(8, regularOp2),
-          ]),
-        );
-
-        await service.hydrateStore();
-
-        // Should protect ALL client IDs in the SYNC_IMPORT's vectorClock (found via reverse search)
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['import_client_middle', 'legacy_client']),
-        );
-      });
-
-      it('should set protected client IDs from LAST full-state op vectorClock when multiple exist in tail ops', async () => {
-        // When multiple full-state ops exist, only the LAST one matters
-        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        const syncImportOp1 = createMockOperation('sync-op-1', OpType.SyncImport, {
-          payload: { appDataComplete: { task: {} } },
-          entityType: 'ALL',
-          clientId: 'first-import-client',
-          vectorClock: { first_import_client: 1, old_client: 5 },
-        });
-        const syncImportOp2 = createMockOperation('sync-op-2', OpType.SyncImport, {
-          payload: { appDataComplete: { task: {} } },
-          entityType: 'ALL',
-          clientId: 'second-import-client',
-          vectorClock: { second_import_client: 1, another_client: 10 },
-        });
-        const regularOp = createMockOperation('op-1', OpType.Update, {
-          clientId: 'regular-client',
-        });
-
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        // Last op is regular, so we go through replay path
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([
-            createMockEntry(6, syncImportOp1), // First import
-            createMockEntry(7, syncImportOp2), // Second import (should be protected)
-            createMockEntry(8, regularOp), // Last is regular
-          ]),
-        );
-
-        await service.hydrateStore();
-
-        // Should protect ALL client IDs from the SECOND (last) import's vectorClock
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['second_import_client', 'another_client']),
-        );
-      });
-
-      it('should cap protected IDs when replayed SYNC_IMPORT has large vectorClock', async () => {
-        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        // SYNC_IMPORT with 15 entries in vectorClock (many device reinstalls)
-        const largeClock: Record<string, number> = {};
-        for (let i = 0; i < 15; i++) {
-          largeClock[`device_${i}`] = i + 1;
-        }
-        const syncImportOp = createMockOperation('sync-large', OpType.SyncImport, {
-          payload: { appDataComplete: { task: {} } },
-          entityType: 'ALL',
-          clientId: 'device_14',
-          vectorClock: largeClock,
-        });
-        const regularOp = createMockOperation('op-after', OpType.Update);
-
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        // Last op is regular → goes through replay path → _setProtectedClientIdFromOps
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([
-            createMockEntry(6, syncImportOp),
-            createMockEntry(7, regularOp),
-          ]),
-        );
-
-        await service.hydrateStore();
-
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
-        const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
-          .args[0] as string[];
-        // selectProtectedClientIds caps to MAX_VECTOR_CLOCK_SIZE - 1 (9)
-        expect(protectedIds.length).toBeLessThanOrEqual(9);
-        // Highest counter entries should be kept
-        expect(protectedIds).toContain('device_14'); // counter 15
-        expect(protectedIds).toContain('device_13'); // counter 14
-        // Lowest should be dropped
-        expect(protectedIds).not.toContain('device_0'); // counter 1
-      });
-
-      it('should cap protected IDs in no-snapshot full-state path with large vectorClock', async () => {
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
-        // SYNC_IMPORT with 20 entries
-        const largeClock: Record<string, number> = {};
-        for (let i = 0; i < 20; i++) {
-          largeClock[`device_${i}`] = i + 1;
-        }
-        const syncImportOp = createMockOperation(
-          'sync-large-no-snap',
-          OpType.SyncImport,
-          {
-            payload: { appDataComplete: { task: {}, project: {} } },
-            entityType: 'ALL',
-            clientId: 'device_19',
-            vectorClock: largeClock,
-          },
-        );
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([createMockEntry(1, syncImportOp)]),
-        );
-        // Migration also fires, so set it up
-        mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
-        mockOpLogStore.getLatestFullStateOp.and.returnValue(
-          Promise.resolve(syncImportOp),
-        );
-
-        await service.hydrateStore();
-
-        // Every setProtectedClientIds call should have at most 9 entries
-        const allCalls = mockOpLogStore.setProtectedClientIds.calls.allArgs();
-        expect(allCalls.length).toBeGreaterThan(0);
-        for (const callArgs of allCalls) {
-          const ids = callArgs[0] as string[];
-          expect(ids.length).toBeLessThanOrEqual(9);
-        }
-      });
-
-      it('should NOT call setProtectedClientIds when no full-state ops in tail ops', async () => {
-        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        const regularOp1 = createMockOperation('op-1', OpType.Update, {
-          clientId: 'client-a',
-        });
-        const regularOp2 = createMockOperation('op-2', OpType.Create, {
-          clientId: 'client-b',
-        });
-
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([
-            createMockEntry(6, regularOp1),
-            createMockEntry(7, regularOp2),
-          ]),
-        );
-
-        await service.hydrateStore();
-
-        // No full-state ops, so setProtectedClientIds should not be called
-        expect(mockOpLogStore.setProtectedClientIds).not.toHaveBeenCalled();
-      });
-
-      it('should set protected client IDs from vectorClock in no-snapshot full-state path (SYNC_IMPORT)', async () => {
-        // No snapshot - triggers the no-snapshot branch
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
-        const syncImportPayload = { task: {}, project: {} };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
-          payload: { appDataComplete: syncImportPayload },
-          entityType: 'ALL',
-          clientId: 'no-snapshot-import-client',
-          vectorClock: { no_snapshot_import_client: 1, migrated_client: 50 },
-        });
-
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([createMockEntry(1, syncImportOp)]),
-        );
-
-        await service.hydrateStore();
-
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['no_snapshot_import_client', 'migrated_client']),
-        );
-      });
-
-      it('should set protected client IDs from vectorClock in no-snapshot replay path containing SYNC_IMPORT', async () => {
-        // No snapshot - triggers the no-snapshot branch
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
-          payload: { appDataComplete: { task: {} } },
-          entityType: 'ALL',
-          clientId: 'replay-import-client',
-          vectorClock: { replay_import_client: 1, archived_client: 200 },
-        });
-        const regularOp = createMockOperation('op-1', OpType.Update, {
-          clientId: 'regular-client',
-        });
-
-        // Last op is regular, so we go through replay path
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([
-            createMockEntry(1, syncImportOp),
-            createMockEntry(2, regularOp),
-          ]),
-        );
-        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(2));
-
-        await service.hydrateStore();
-
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['replay_import_client', 'archived_client']),
-        );
-      });
-
-      it('should NOT call setProtectedClientIds in no-snapshot replay when no full-state ops', async () => {
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
-        const regularOp1 = createMockOperation('op-1', OpType.Update, {
-          clientId: 'client-a',
-        });
-        const regularOp2 = createMockOperation('op-2', OpType.Create, {
-          clientId: 'client-b',
-        });
-
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([
-            createMockEntry(1, regularOp1),
-            createMockEntry(2, regularOp2),
-          ]),
-        );
-        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(2));
-
-        await service.hydrateStore();
-
-        expect(mockOpLogStore.setProtectedClientIds).not.toHaveBeenCalled();
-      });
-
-      it('should call setProtectedClientIds AFTER mergeRemoteOpClocks (correct order)', async () => {
-        // The protected client ID must be set after merging clocks to ensure
-        // the local clock contains all necessary entries before protection takes effect
-        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        const syncImportPayload = { task: {}, project: {} };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
-          payload: { appDataComplete: syncImportPayload },
-          entityType: 'ALL',
-          clientId: 'import-client',
-        });
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([createMockEntry(6, syncImportOp)]),
-        );
-
-        let callSequence = 0;
-        let mergeClockSequence = -1;
-        let setProtectedSequence = -1;
-
-        mockOpLogStore.mergeRemoteOpClocks.and.callFake(async () => {
-          mergeClockSequence = callSequence++;
-        });
-        mockOpLogStore.setProtectedClientIds.and.callFake(async () => {
-          setProtectedSequence = callSequence++;
-        });
-
-        await service.hydrateStore();
-
-        expect(mergeClockSequence).toBeGreaterThanOrEqual(
-          0,
-          'mergeRemoteOpClocks should have been called',
-        );
-        expect(setProtectedSequence).toBeGreaterThanOrEqual(
-          0,
-          'setProtectedClientIds should have been called',
-        );
-        expect(mergeClockSequence).toBeLessThan(
-          setProtectedSequence,
-          `mergeRemoteOpClocks (seq ${mergeClockSequence}) should be called BEFORE ` +
-            `setProtectedClientIds (seq ${setProtectedSequence})`,
-        );
-      });
-    });
-
-    describe('protected client IDs migration', () => {
-      // Tests for the migration that handles old SYNC_IMPORT ops processed before
-      // the protectedClientIds fix was deployed
-
-      it('should migrate protectedClientIds from existing SYNC_IMPORT vectorClock when empty', async () => {
-        const snapshot = createMockSnapshot();
-        const syncImportOp = createMockOperation('old-import-op', OpType.SyncImport, {
-          clientId: 'legacy-import-client',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: { legacy_import_client: 1, old_device: 30 },
-        });
-
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
-        // Simulate: protectedClientIds is empty (old data, never set)
-        mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
-        // Simulate: there IS a SYNC_IMPORT in the ops log
-        mockOpLogStore.getLatestFullStateOp.and.returnValue(
-          Promise.resolve(syncImportOp),
-        );
-
-        await service.hydrateStore();
-
-        // Migration should protect ALL client IDs from the SYNC_IMPORT's vectorClock
-        expect(mockOpLogStore.getProtectedClientIds).toHaveBeenCalled();
-        expect(mockOpLogStore.getLatestFullStateOp).toHaveBeenCalled();
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['legacy_import_client', 'old_device']),
-        );
-      });
-
-      it('should NOT migrate when protectedClientIds already contains all vectorClock keys', async () => {
-        const snapshot = createMockSnapshot();
-        const syncImportOp = createMockOperation('existing-import', OpType.SyncImport, {
-          clientId: 'existing_protected_client',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: { existing_protected_client: 1, other_protected_client: 5 },
-        });
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
-        // Simulate: protectedClientIds already has ALL required keys
-        mockOpLogStore.getProtectedClientIds.and.returnValue(
-          Promise.resolve(['existing_protected_client', 'other_protected_client']),
-        );
-        mockOpLogStore.getLatestFullStateOp.and.returnValue(
-          Promise.resolve(syncImportOp),
-        );
-
-        await service.hydrateStore();
-
-        // Migration should check both but NOT call setProtectedClientIds since all keys are present
-        expect(mockOpLogStore.getLatestFullStateOp).toHaveBeenCalled();
-        expect(mockOpLogStore.getProtectedClientIds).toHaveBeenCalled();
-        // setProtectedClientIds should NOT be called since all required IDs are already protected
-        expect(mockOpLogStore.setProtectedClientIds).not.toHaveBeenCalled();
-      });
-
-      it('should NOT migrate when no full-state op exists in ops log', async () => {
-        const snapshot = createMockSnapshot();
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
-        // Simulate: no full-state op in the log (checked first)
-        mockOpLogStore.getLatestFullStateOp.and.returnValue(Promise.resolve(undefined));
-        // protectedClientIds won't be checked since there's no full-state op
-        mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
-
-        await service.hydrateStore();
-
-        // Migration should check for full-state op first, then bail out since there's none
-        expect(mockOpLogStore.getLatestFullStateOp).toHaveBeenCalled();
-        // getProtectedClientIds should NOT be called since we bail out early when no full-state op
-        expect(mockOpLogStore.getProtectedClientIds).not.toHaveBeenCalled();
-        // No setProtectedClientIds call should be made from migration
-        expect(mockOpLogStore.setProtectedClientIds).not.toHaveBeenCalled();
-      });
-
-      it('should trim oversized existing protected IDs during migration', async () => {
-        const snapshot = createMockSnapshot();
-        // SYNC_IMPORT with 15 entries in vectorClock
-        const largeClock: Record<string, number> = {};
-        for (let i = 0; i < 15; i++) {
-          largeClock[`device_${i}`] = i + 1;
-        }
-        const syncImportOp = createMockOperation('large-import', OpType.SyncImport, {
-          clientId: 'device_14',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: largeClock,
-        });
-
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
-        // Simulate: existing protected IDs is oversized (12 entries from old code)
-        const oversizedProtected = Array.from({ length: 12 }, (_, i) => `device_${i}`);
-        mockOpLogStore.getProtectedClientIds.and.returnValue(
-          Promise.resolve(oversizedProtected),
-        );
-        mockOpLogStore.getLatestFullStateOp.and.returnValue(
-          Promise.resolve(syncImportOp),
-        );
-
-        await service.hydrateStore();
-
-        // Migration should trim to MAX_VECTOR_CLOCK_SIZE - 1 (9)
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
-        const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
-          .args[0] as string[];
-        expect(protectedIds.length).toBeLessThanOrEqual(9);
-      });
-
-      it('should cap protected IDs when SYNC_IMPORT vectorClock has many entries', async () => {
-        const largeClock: Record<string, number> = {};
-        for (let i = 0; i < 15; i++) {
-          largeClock[`device_${i}`] = i + 1;
-        }
-        const syncImportOp = createMockOperation('large-import-2', OpType.SyncImport, {
-          clientId: 'device_14',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: largeClock,
-        });
-
-        const snapshot = createMockSnapshot();
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([createMockEntry(11, syncImportOp)]),
-        );
-        mockOpLogStore.getLatestFullStateOp.and.returnValue(
-          Promise.resolve(syncImportOp),
-        );
-        mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
-
-        await service.hydrateStore();
-
-        // Both the migration AND the tail-ops path should cap protected IDs
-        const allCalls = mockOpLogStore.setProtectedClientIds.calls.allArgs();
-        for (const callArgs of allCalls) {
-          const ids = callArgs[0] as string[];
-          expect(ids.length).toBeLessThanOrEqual(9);
-        }
-      });
-
-      it('should run migration in no-snapshot path too', async () => {
-        const syncImportOp = createMockOperation('old-import', OpType.SyncImport, {
-          clientId: 'no-snapshot-legacy-client',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: { no_snapshot_legacy_client: 1, mobile_client: 15 },
-        });
-        const regularOp = createMockOperation('regular-op', OpType.Update);
-
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
-        // Has ops (not fresh install)
-        mockOpLogStore.getOpsAfterSeq.and.returnValue(
-          Promise.resolve([
-            createMockEntry(1, syncImportOp),
-            createMockEntry(2, regularOp),
-          ]),
-        );
-        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(2));
-        // Simulate: no protectedClientIds (old data)
-        mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
-        // Simulate: the SYNC_IMPORT exists
-        mockOpLogStore.getLatestFullStateOp.and.returnValue(
-          Promise.resolve(syncImportOp),
-        );
-
-        await service.hydrateStore();
-
-        // Migration should protect ALL client IDs from the SYNC_IMPORT's vectorClock
-        expect(mockOpLogStore.getProtectedClientIds).toHaveBeenCalled();
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(
-          jasmine.arrayContaining(['no_snapshot_legacy_client', 'mobile_client']),
-        );
-      });
-    });
+    // NOTE: The 'protected client IDs for vector clock pruning' and
+    // 'protected client IDs migration' test blocks were removed because
+    // protectedClientIds has been removed from the codebase (MAX_VECTOR_CLOCK_SIZE
+    // increased to 20, making pruning protection unnecessary).
 
     describe('schema migration', () => {
       it('should call snapshotService.migrateSnapshotWithBackup if migration needed', async () => {
@@ -1573,7 +1096,7 @@ describe('OperationLogHydratorService', () => {
 
         // Track order of operations
         const callOrder: string[] = [];
-        mockValidateStateService.validateAndRepair.and.callFake(() => {
+        mockValidateStateService.validateAndRepair.and.callFake(async () => {
           callOrder.push('validate');
           return { isValid: true, wasRepaired: false };
         });

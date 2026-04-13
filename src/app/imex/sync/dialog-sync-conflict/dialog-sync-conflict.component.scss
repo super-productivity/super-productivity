@@ -1,3 +1,5 @@
+@use '../../../../styles/_globals.scss' as *;
+
 .isHighlight {
   font-weight: 600;
 }
@@ -23,7 +25,7 @@ td span.isHighlight {
 
 td,
 th {
-  padding: 2px 8px;
+  padding: var(--s-quarter) var(--s);
   text-align: center;
 
   &:first-child {
@@ -41,7 +43,7 @@ th {
 }
 
 // Mobile responsiveness
-@media (max-width: 600px) {
+@include mq(xs, max) {
   table {
     font-size: 0.875rem;
     width: 100%;
@@ -49,7 +51,7 @@ th {
 
   td,
   th {
-    padding: 4px 4px;
+    padding: var(--s-half) var(--s-half);
     word-break: break-word;
     min-width: auto;
 
@@ -72,15 +74,15 @@ th {
 // Dialog container mobile layout
 :host ::ng-deep {
   .mat-mdc-dialog-container {
-    @media (max-width: 600px) {
+    @include mq(xs, max) {
       max-width: calc(100vw - 32px);
-      margin: 16px;
+      margin: var(--s2);
     }
   }
 
   .mat-mdc-dialog-content {
-    @media (max-width: 600px) {
-      padding: 0 16px;
+    @include mq(xs, max) {
+      padding: 0 var(--s2);
       max-width: 100%;
       overflow-x: hidden;
     }

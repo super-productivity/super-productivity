@@ -17,7 +17,8 @@
     flex-grow: 1;
   }
 
-  > button:nth-of-type(n + 2) {
+  > button:nth-of-type(n + 2),
+  > .additional-btn {
     //>  button:last-of-type {
     border-radius: 0;
     align-self: stretch;
@@ -46,7 +47,8 @@
 
   &:focus,
   &:hover {
-    button:nth-of-type(n + 2) {
+    > button:nth-of-type(n + 2),
+    > .additional-btn {
       @include is-touch-device.mousePrimaryDevice(true) {
         opacity: 0.8;
         display: inline-flex;

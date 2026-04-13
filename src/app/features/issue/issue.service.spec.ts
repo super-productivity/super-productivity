@@ -19,7 +19,6 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { ICalIssueReduced } from './providers/calendar/calendar.model';
 import { SnackParams } from '../../core/snack/snack.model';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
-import { GithubCommonInterfacesService } from './providers/github/github-common-interfaces.service';
 import { TrelloCommonInterfacesService } from './providers/trello/trello-common-interfaces.service';
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
@@ -27,7 +26,6 @@ import { OpenProjectCommonInterfacesService } from './providers/open-project/ope
 import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
-import { ClickUpCommonInterfacesService } from './providers/clickup/clickup-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
 
 describe('IssueService', () => {
@@ -61,6 +59,7 @@ describe('IssueService', () => {
   ): ICalIssueReduced => ({
     id: 'cal-event-456',
     calProviderId: 'calendar-provider-1',
+    issueProviderKey: 'ICAL',
     title: 'Calendar Event',
     start: new Date('2025-01-20T14:00:00Z').getTime(),
     duration: 3600000,
@@ -139,7 +138,6 @@ describe('IssueService', () => {
         { provide: GlobalProgressBarService, useValue: globalProgressBarServiceSpy },
         { provide: NavigateToTaskService, useValue: navigateToTaskServiceSpy },
         { provide: JiraCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: GithubCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: TrelloCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: GitlabCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: CaldavCommonInterfacesService, useValue: mockCommonInterfaceService },
@@ -150,7 +148,6 @@ describe('IssueService', () => {
         { provide: GiteaCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: RedmineCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: LinearCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: ClickUpCommonInterfacesService, useValue: mockCommonInterfaceService },
         {
           provide: CalendarCommonInterfacesService,
           useValue: mockCommonInterfaceService,
@@ -302,6 +299,105 @@ describe('IssueService', () => {
 
       // For non-ICAL types, should still call moveToCurrentWorkContext
       expect(taskServiceSpy.moveToCurrentWorkContext).toHaveBeenCalled();
+    });
+  });
+
+  describe('addTaskFromIssue - getTaskDefaults', () => {
+    const jiraIssue = { id: 'JIRA-1', title: 'Test Jira Issue' };
+
+    const setupForNewTask = (): void => {
+      // No existing task found
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+
+      // Mock getAddTaskData
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+      });
+    };
+
+    it('should filter out TODAY_TAG.id from defaultTagIds', async () => {
+      setupForNewTask();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['tag-1', TODAY_TAG.id, 'tag-2'],
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['tag-1', 'tag-2']);
+    });
+
+    it('should set defaultNote when provider adapter does not set notes', async () => {
+      setupForNewTask();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: [],
+          defaultNote: 'Default note text',
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.notes).toBe('Default note text');
+    });
+
+    it('should NOT override notes when provider adapter already sets notes', async () => {
+      setupForNewTask();
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+        notes: 'Provider-set notes',
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: [],
+          defaultNote: 'Default note text',
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.notes).toBe('Provider-set notes');
     });
   });
 });

@@ -4,13 +4,12 @@ export enum SyncProviderId {
   'WebDAV' = 'WebDAV',
   'LocalFile' = 'LocalFile',
   'SuperSync' = 'SuperSync',
+  'Nextcloud' = 'Nextcloud',
 }
 
 /**
  * Type-safe conversion from string-based sync provider value to SyncProviderId.
- * LegacySyncProvider and SyncProviderId have identical string values but are
- * separate types for historical reasons. This provides safe conversion with
- * runtime validation.
+ * Validates that a persisted string value is a valid SyncProviderId at runtime.
  */
 export const toSyncProviderId = (
   value: string | null | undefined,

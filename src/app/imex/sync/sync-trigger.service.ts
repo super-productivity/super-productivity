@@ -36,7 +36,7 @@ import { SyncLog } from '../../core/log';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderId } from '../../op-log/sync-exports';
 
-const MAX_WAIT_FOR_INITIAL_SYNC = 25000;
+const MAX_WAIT_FOR_INITIAL_SYNC = 8000;
 /** 15 minutes in milliseconds - throttle time for user activity sync checks */
 const USER_ACTIVITY_SYNC_THROTTLE_TIME = 15 * 60 * 1000;
 
@@ -48,6 +48,16 @@ export class SyncTriggerService {
   private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _idleService = inject(IdleService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
+
+  constructor() {
+    // When sync is disabled, set initialSyncDone immediately so UI shows
+    // and day-change effects can run without waiting for a sync that will never happen.
+    this._isInitialSyncEnabled$.pipe(first()).subscribe((isActive) => {
+      if (!isActive) {
+        this.setInitialSyncDone(true);
+      }
+    });
+  }
 
   // Note: This was previously connected to PFAPI's onLocalMetaUpdate$, which was a no-op.
   // For file-based sync, this doesn't matter as sync is immediate-upload based.
@@ -137,6 +147,7 @@ export class SyncTriggerService {
     1,
   );
   private _isInitialSyncDoneSync = false;
+
   private _isInitialSyncDone$: Observable<boolean> = this._isInitialSyncEnabled$.pipe(
     switchMap((isActive) => {
       if (!isActive) {
@@ -165,13 +176,7 @@ export class SyncTriggerService {
   afterInitialSyncDoneAndDataLoadedInitially$: Observable<boolean> = merge(
     this._afterInitialSyncDoneAndDataLoadedInitially$,
     timer(MAX_WAIT_FOR_INITIAL_SYNC).pipe(
-      // When timeout fires, wait for conflict dialog to close if it's open
-      switchMap(() =>
-        this._syncWrapperService.isWaitingForUserInput$.pipe(
-          filter((isWaiting) => !isWaiting),
-          first(),
-        ),
-      ),
+      tap(() => this.setInitialSyncDone(true)),
       mapTo(true),
     ),
   ).pipe(first(), shareReplay(1));
@@ -191,13 +196,7 @@ export class SyncTriggerService {
       return merge(
         this._isInitialSyncDoneManual$.asObservable().pipe(filter((isDone) => isDone)),
         timer(MAX_WAIT_FOR_INITIAL_SYNC).pipe(
-          // When timeout fires, wait for conflict dialog to close if it's open
-          switchMap(() =>
-            this._syncWrapperService.isWaitingForUserInput$.pipe(
-              filter((isWaiting) => !isWaiting),
-              first(),
-            ),
-          ),
+          tap(() => this.setInitialSyncDone(true)),
           mapTo(true),
         ),
       ).pipe(first());

@@ -9,6 +9,8 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OpLog } from '../../core/log';
 import { extractEntityKeysFromState } from './extract-entity-keys';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { limitVectorClockSize } from '../../core/util/vector-clock';
 
 type StateCache = MigratableStateCache;
 
@@ -29,6 +31,7 @@ export class OperationLogSnapshotService {
   private vectorClockService = inject(VectorClockService);
   private stateSnapshotService = inject(StateSnapshotService);
   private schemaMigrationService = inject(SchemaMigrationService);
+  private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
 
   /**
    * Validates that a snapshot has the expected structure and data.
@@ -73,6 +76,14 @@ export class OperationLogSnapshotService {
       const vectorClock = await this.vectorClockService.getCurrentVectorClock();
       const lastSeq = await this.opLogStore.getLastSeq();
 
+      // Prune vector clock before persisting to prevent bloat (max 20 entries).
+      // Without this, clocks can grow unbounded across sync cycles and cause
+      // repeated conflict dialogs on every sync.
+      const clientId = await this.clientIdProvider.loadClientId();
+      const prunedClock = clientId
+        ? limitVectorClockSize(vectorClock, clientId)
+        : vectorClock;
+
       // Extract entity keys for conflict detection after compaction
       const snapshotEntityKeys = extractEntityKeysFromState(currentState);
 
@@ -80,7 +91,7 @@ export class OperationLogSnapshotService {
       await this.opLogStore.saveStateCache({
         state: currentState,
         lastAppliedOpSeq: lastSeq,
-        vectorClock,
+        vectorClock: prunedClock,
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
         snapshotEntityKeys,

@@ -1,0 +1,57 @@
+<div
+  class="month-label"
+  aria-live="polite"
+>
+  {{ monthLabel() }}
+</div>
+
+<div
+  class="day-labels"
+  role="row"
+  aria-hidden="true"
+>
+  @for (label of dayLabels(); track $index) {
+    <div>{{ label }}</div>
+  }
+</div>
+<div
+  class="weeks"
+  role="grid"
+  #weeksContainer
+  [style.max-height.px]="maxHeight()"
+>
+  <div
+    class="weeks-inner"
+    [style.transform]="'translateY(' + weekOffset() + 'px)'"
+  >
+    @for (week of weeks(); track $index) {
+      <div
+        class="week"
+        role="row"
+      >
+        @for (day of week; track day.dateStr) {
+          <button
+            role="gridcell"
+            [attr.aria-label]="day.dateStr"
+            [attr.aria-current]="day.isToday ? 'date' : null"
+            [attr.aria-pressed]="day.dateStr === visibleDayDate()"
+            [class.is-today]="day.isToday"
+            [class.is-active]="day.dateStr === visibleDayDate()"
+            [class.is-past]="day.isPast"
+            [disabled]="day.isPast && !day.isToday"
+            (click)="onDayTap(day.dateStr)"
+          >
+            {{ day.dayOfMonth }}
+            @if (day.hasTasks) {
+              <span
+                class="task-dot"
+                aria-hidden="true"
+              ></span>
+            }
+          </button>
+        }
+      </div>
+    }
+  </div>
+</div>
+<div class="handle"></div>

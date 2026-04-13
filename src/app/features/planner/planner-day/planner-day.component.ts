@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, Input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  HostBinding,
+  inject,
+  Input,
+} from '@angular/core';
 import { T } from '../../../t.const';
 import { PlannerDay, ScheduleItem, ScheduleItemType } from '../planner.model';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
@@ -15,6 +21,7 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { MatIcon } from '@angular/material/icon';
 import { PlannerTaskComponent } from '../planner-task/planner-task.component';
 import { PlannerRepeatProjectionComponent } from '../planner-repeat-projection/planner-repeat-projection.component';
+import { PlannerDeadlineTaskComponent } from '../planner-deadline-task/planner-deadline-task.component';
 import { AddTaskInlineComponent } from '../add-task-inline/add-task-inline.component';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { NgClass } from '@angular/common';
@@ -25,6 +32,8 @@ import { ShortTimeHtmlPipe } from '../../../ui/pipes/short-time-html.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { ShortDate2Pipe } from '../../../ui/pipes/short-date2.pipe';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
+import { dragDelayForTouch } from '../../../util/input-intent';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
   selector: 'planner-day',
@@ -37,6 +46,7 @@ import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.comp
     PlannerTaskComponent,
     CdkDrag,
     PlannerRepeatProjectionComponent,
+    PlannerDeadlineTaskComponent,
     AddTaskInlineComponent,
     NgClass,
     PlannerCalendarEventComponent,
@@ -54,14 +64,23 @@ export class PlannerDayComponent {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _dateService = inject(DateService);
+  private _layoutService = inject(LayoutService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
   //  and migrating would break narrowing currently.
   @Input() day!: PlannerDay;
 
+  @HostBinding('attr.data-day') get dataDayAttr(): string | undefined {
+    return this.day?.dayDate;
+  }
+
   protected readonly T = T;
   protected readonly SCHEDULE_ITEM_TYPE = ScheduleItemType;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
+  // Lock Y-axis on small screens only — on wider screens the planner uses a
+  // multi-column grid where cross-column dragging requires horizontal movement.
+  protected readonly isXs = this._layoutService.isXs;
 
   getProgressBarClass(percentage: number | undefined): string {
     if (!percentage) return 'bg-success';

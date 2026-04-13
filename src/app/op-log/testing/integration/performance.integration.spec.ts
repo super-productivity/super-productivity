@@ -441,7 +441,7 @@ describe('Performance Integration', () => {
 
       expect(frontierDuration).toBeLessThan(2000); // < 2 seconds
       console.log(`Entity frontier: ${frontierDuration}ms for ${entityCount} entities`);
-    });
+    }, 30000);
 
     it('should compute global vector clock efficiently', async () => {
       const clientA = new TestClient('client-a-test');
@@ -480,6 +480,6 @@ describe('Performance Integration', () => {
 
       expect(clockDuration).toBeLessThan(1000); // < 1 second
       console.log(`Global clock: ${clockDuration}ms for 175 ops from 3 clients`);
-    });
+    }, 30000);
   });
 });

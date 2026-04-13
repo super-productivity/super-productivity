@@ -15,6 +15,7 @@ import {
   expectTaskUpdate,
 } from './test-utils';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 
 describe('taskSharedSchedulingMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -230,6 +231,10 @@ describe('taskSharedSchedulingMetaReducer', () => {
   describe('planTasksForToday action', () => {
     it('should add new tasks to the top of Today tag', () => {
       const testState = createStateWithExistingTasks([], [], [], ['existing-task']);
+      // Add task entities that will be planned for today
+      testState[TASK_FEATURE_NAME].entities['task1'] = createMockTask({ id: 'task1' });
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({ id: 'task2' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task1', 'task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task1', 'task2'],
         parentTaskMap: {},
@@ -251,6 +256,9 @@ describe('taskSharedSchedulingMetaReducer', () => {
         [],
         ['task1', 'existing-task'],
       );
+      // Add task2 entity (task1 and existing-task already exist from createStateWithExistingTasks)
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({ id: 'task2' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task1', 'task2'],
         parentTaskMap: {},
@@ -267,6 +275,13 @@ describe('taskSharedSchedulingMetaReducer', () => {
 
     it('should handle parentTaskMap filtering', () => {
       const testState = createStateWithExistingTasks([], [], [], ['parent-task']);
+      // Add task entities for subtask1 and task2
+      testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
+        id: 'subtask1',
+        parentId: 'parent-task',
+      });
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({ id: 'task2' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('subtask1', 'task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['subtask1', 'task2'],
         parentTaskMap: { subtask1: 'parent-task' },
@@ -369,6 +384,27 @@ describe('taskSharedSchedulingMetaReducer', () => {
       );
     });
 
+    it('should skip non-existent task IDs (sync scenario)', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['existing-task']);
+      // Only add task1 as entity — task2 does NOT exist in the store
+      testState[TASK_FEATURE_NAME].entities['task1'] = createMockTask({ id: 'task1' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task1');
+
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['task1', 'non-existent-task'],
+        parentTaskMap: {},
+      });
+
+      metaReducer(testState, action);
+      // non-existent-task should be silently skipped, only task1 added
+      expectStateUpdate(
+        expectTagUpdate('TODAY', { taskIds: ['task1', 'existing-task'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should set dueDay on subtask when added to Today', () => {
       const testState = createStateWithExistingTasks([], [], [], []);
       testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
@@ -401,6 +437,10 @@ describe('taskSharedSchedulingMetaReducer', () => {
           },
         },
       };
+      // Add task entities that will be planned for today
+      testState[TASK_FEATURE_NAME].entities['task1'] = createMockTask({ id: 'task1' });
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({ id: 'task2' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task1', 'task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task1', 'task2'],
         parentTaskMap: {},
@@ -709,6 +749,217 @@ describe('taskSharedSchedulingMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+  });
+
+  describe('with startOfNextDayDiff offset', () => {
+    // Scenario: User has startOfNextDayDiffMs set to 4 hours.
+    // "Today" is Feb 15, so anything before 4 AM Feb 16 is still "today" (Feb 15).
+    // Anything at or after 4 AM Feb 16 is "tomorrow" (Feb 16).
+    const OFFSET_MS = 4 * 3600000; // 4 hours in ms
+    const TODAY_STR = '2026-02-15';
+
+    // Feb 16, 2026, 2:00 AM local time -- still "today" with 4h offset
+    const FEB_16_2AM = new Date(2026, 1, 16, 2, 0, 0, 0).getTime();
+    // Feb 16, 2026, 5:00 AM local time -- "tomorrow" with 4h offset
+    const FEB_16_5AM = new Date(2026, 1, 16, 5, 0, 0, 0).getTime();
+    // Feb 15, 2026, 10:00 AM local time -- clearly "today"
+    const FEB_15_10AM = new Date(2026, 1, 15, 10, 0, 0, 0).getTime();
+
+    const applyOffset = (state: RootState): RootState => ({
+      ...state,
+      [appStateFeatureKey]: {
+        ...state[appStateFeatureKey],
+        todayStr: TODAY_STR,
+        startOfNextDayDiffMs: OFFSET_MS,
+      },
+    });
+
+    describe('scheduleTaskWithTime', () => {
+      const createScheduleAction = (
+        taskOverrides: Partial<Task> = {},
+        dueWithTime: number,
+      ) =>
+        TaskSharedActions.scheduleTaskWithTime({
+          task: createMockTask(taskOverrides),
+          dueWithTime,
+          isMoveToBacklog: false,
+        });
+
+      it('should add task to TODAY tag when scheduled at 2 AM next calendar day (within offset)', () => {
+        const testState = applyOffset(
+          createStateWithExistingTasks(['task1'], [], ['task1'], []),
+        );
+        const action = createScheduleAction({}, FEB_16_2AM);
+
+        metaReducer(testState, action);
+        expectStateUpdate(
+          expectTagUpdate('TODAY', { taskIds: ['task1'] }),
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+
+      it('should NOT add task to TODAY tag when scheduled at 5 AM next calendar day (beyond offset)', () => {
+        const testState = applyOffset(
+          createStateWithExistingTasks(['task1'], [], ['task1'], []),
+        );
+        const action = createScheduleAction({}, FEB_16_5AM);
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const todayTag = updatedState[TAG_FEATURE_NAME].entities.TODAY;
+
+        expect(todayTag.taskIds).not.toContain('task1');
+      });
+
+      it('should remove task from TODAY tag when rescheduling from today to beyond offset', () => {
+        const testState = applyOffset(
+          createStateWithExistingTasks([], [], [], ['task1']),
+        );
+        const action = createScheduleAction({}, FEB_16_5AM);
+
+        metaReducer(testState, action);
+        expectStateUpdate(
+          expectTagUpdate('TODAY', { taskIds: [] }),
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+
+      it('should keep task in TODAY tag when rescheduling within offset window', () => {
+        const testState = applyOffset(
+          createStateWithExistingTasks([], [], [], ['task1']),
+        );
+        // Task already in today, reschedule to 2 AM (still within offset)
+        const task1 = testState[TASK_FEATURE_NAME].entities.task1 as Task;
+        testState[TASK_FEATURE_NAME].entities.task1 = {
+          ...task1,
+          dueWithTime: FEB_15_10AM,
+          dueDay: undefined,
+        } as Task;
+        const action = createScheduleAction({}, FEB_16_2AM);
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const todayTag = updatedState[TAG_FEATURE_NAME].entities.TODAY;
+
+        expect(todayTag.taskIds).toContain('task1');
+      });
+
+      it('should set dueDay to undefined when scheduling within offset (mutual exclusivity)', () => {
+        const testState = applyOffset(
+          createStateWithExistingTasks(['task1'], [], [], []),
+        );
+        const action = createScheduleAction({}, FEB_16_2AM);
+
+        metaReducer(testState, action);
+        expectStateUpdate(
+          expectTaskUpdate('task1', { dueWithTime: FEB_16_2AM, dueDay: undefined }),
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+    });
+
+    describe('planTasksForToday', () => {
+      it('should preserve dueWithTime when task time is within offset window', () => {
+        const testState = applyOffset(createStateWithExistingTasks([], [], [], []));
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          dueWithTime: FEB_16_2AM,
+        });
+        testState[TASK_FEATURE_NAME].ids.push('task1');
+
+        const action = TaskSharedActions.planTasksForToday({
+          taskIds: ['task1'],
+          parentTaskMap: {},
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1;
+
+        // 2 AM Feb 16 is still "today" with 4h offset, so dueWithTime should be preserved
+        expect(updatedTask.dueWithTime).toBe(FEB_16_2AM);
+        expect(updatedTask.dueDay).toBe(TODAY_STR);
+      });
+
+      it('should clear dueWithTime when task time is beyond offset window', () => {
+        const testState = applyOffset(createStateWithExistingTasks([], [], [], []));
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          dueWithTime: FEB_16_5AM,
+        });
+        testState[TASK_FEATURE_NAME].ids.push('task1');
+
+        const action = TaskSharedActions.planTasksForToday({
+          taskIds: ['task1'],
+          parentTaskMap: {},
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1;
+
+        // 5 AM Feb 16 is NOT "today" with 4h offset, so dueWithTime should be cleared
+        expect(updatedTask.dueWithTime).toBeUndefined();
+        expect(updatedTask.dueDay).toBe(TODAY_STR);
+      });
+
+      it('should set dueDay to offset-adjusted today string', () => {
+        const testState = applyOffset(createStateWithExistingTasks([], [], [], []));
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          dueDay: undefined,
+          dueWithTime: undefined,
+        });
+        testState[TASK_FEATURE_NAME].ids.push('task1');
+
+        const action = TaskSharedActions.planTasksForToday({
+          taskIds: ['task1'],
+          parentTaskMap: {},
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1;
+
+        // dueDay should be the offset-adjusted todayStr from state, not getDbDateStr()
+        expect(updatedTask.dueDay).toBe(TODAY_STR);
+      });
+    });
+
+    describe('unScheduleTask', () => {
+      it('should use offset-adjusted todayStr when leaving task in today', () => {
+        const testState = applyOffset(
+          createStateWithExistingTasks([], [], [], ['task1']),
+        );
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          dueWithTime: FEB_16_2AM,
+          dueDay: undefined,
+        });
+
+        const action = TaskSharedActions.unscheduleTask({
+          id: 'task1',
+          isLeaveInToday: true,
+        });
+
+        metaReducer(testState, action);
+        expectStateUpdate(
+          expectTaskUpdate('task1', {
+            dueDay: TODAY_STR,
+            dueWithTime: undefined,
+          }),
+          action,
+          mockReducer,
+          testState,
+        );
+      });
     });
   });
 

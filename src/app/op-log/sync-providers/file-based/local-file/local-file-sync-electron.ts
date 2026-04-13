@@ -38,9 +38,19 @@ export class LocalFileSyncElectron extends LocalFileSyncBase {
     );
 
     try {
-      const folderPath = await this._getFolderPath();
-      const isDirExists = await this._checkDirExists(folderPath);
+      // Read directly from config to avoid mutual recursion with _getFolderPath()
+      const privateCfg = await this.privateCfg.load();
+      const folderPath = privateCfg?.syncFolderPath;
 
+      if (!folderPath) {
+        SyncLog.critical(
+          `${LocalFileSyncElectron.L} - No sync folder configured, opening picker`,
+        );
+        await this.pickDirectory();
+        return;
+      }
+
+      const isDirExists = await this._checkDirExists(folderPath);
       if (!isDirExists) {
         SyncLog.critical(
           `${LocalFileSyncElectron.L} - No valid directory, opening picker`,
@@ -62,7 +72,11 @@ export class LocalFileSyncElectron extends LocalFileSyncBase {
     if (!folderPath) {
       await this._checkDirAndOpenPickerIfNotExists();
       const updatedCfg = await this.privateCfg.load();
-      return updatedCfg?.syncFolderPath as string;
+      const updatedPath = updatedCfg?.syncFolderPath;
+      if (!updatedPath) {
+        throw new Error('No sync folder path configured after directory picker');
+      }
+      return updatedPath;
     }
     return folderPath;
   }

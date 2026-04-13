@@ -10,6 +10,10 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { T } from '../../t.const';
 import { TaskService } from './task.service';
 import { addSubTask } from './store/task.actions';
+import { parseTimeSpentChanges } from './short-syntax';
+import { GlobalConfigService } from '../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { Task } from './task.model';
 
 @Injectable({
   providedIn: 'root',
@@ -18,6 +22,7 @@ export class MarkdownPasteService {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _store = inject(Store);
+  private _globalConfigService = inject(GlobalConfigService);
 
   async handleMarkdownPaste(
     pastedText: string,
@@ -103,12 +108,14 @@ export class MarkdownPasteService {
           // Create sub-tasks if any
           if (mainTask.subTasks && mainTask.subTasks.length > 0) {
             for (const subTask of mainTask.subTasks) {
+              const { title, timeProps } = this._parseTimeProps(subTask.title);
               const subTaskObj = this._taskService.createNewTaskWithDefaults({
-                title: subTask.title,
+                title,
                 additional: {
                   isDone: subTask.isCompleted,
                   parentId: parentTaskId,
                   notes: subTask.notes,
+                  ...timeProps,
                 },
               });
               this._store.dispatch(
@@ -150,12 +157,14 @@ export class MarkdownPasteService {
     if (selectedTaskId) {
       // Create as sub-tasks of the selected task
       for (const parsedTask of parsedTasks) {
+        const { title, timeProps } = this._parseTimeProps(parsedTask.title);
         const subTask = this._taskService.createNewTaskWithDefaults({
-          title: parsedTask.title,
+          title,
           additional: {
             isDone: parsedTask.isCompleted,
             parentId: selectedTaskId,
             notes: parsedTask.notes,
+            ...timeProps,
           },
         });
         this._store.dispatch(addSubTask({ task: subTask, parentId: selectedTaskId }));
@@ -179,5 +188,22 @@ export class MarkdownPasteService {
   isMarkdownTaskList(text: string): boolean {
     const parsedTasks = parseMarkdownTasks(text);
     return parsedTasks !== null && parsedTasks.length > 0;
+  }
+
+  // isEnableDue gates both due-date and time estimation parsing,
+  // matching the behavior in short-syntax.effects.ts
+  private _parseTimeProps(originalTitle: string): {
+    title: string;
+    timeProps: Partial<Task>;
+  } {
+    const shortSyntaxConfig =
+      this._globalConfigService.cfg()?.shortSyntax || DEFAULT_GLOBAL_CONFIG.shortSyntax;
+    if (!shortSyntaxConfig.isEnableDue) {
+      return { title: originalTitle, timeProps: {} };
+    }
+    const { title: cleanedTitle, ...timeProps } = parseTimeSpentChanges({
+      title: originalTitle,
+    });
+    return { title: cleanedTitle ?? originalTitle, timeProps };
   }
 }

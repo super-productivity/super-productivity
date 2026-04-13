@@ -10,7 +10,6 @@ import {
   createSyncFolder,
   waitForSyncComplete,
   generateSyncFolderName,
-  dismissTourIfVisible,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
 
@@ -435,7 +434,6 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Navigate to TODAY view to ensure UI reflects final state
     await pageB.goto(`${url}/#/tag/TODAY/tasks`);
     await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
     await workViewPageB.waitForTaskList();
 
     // Check final counts

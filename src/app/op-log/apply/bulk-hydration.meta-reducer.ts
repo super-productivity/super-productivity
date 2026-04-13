@@ -40,34 +40,38 @@ export const bulkOperationsMetaReducer = <T>(
     if (action.type === bulkApplyOperations.type) {
       const { operations } = action as ReturnType<typeof bulkApplyOperations>;
 
-      // Pre-scan: collect entity IDs being archived in this batch.
+      // Pre-scan: collect entity IDs being archived or deleted in this batch.
       // LWW Update ops for these entities must be skipped to prevent
-      // lwwUpdateMetaReducer.addOne() from resurrecting archived tasks.
-      const archivingEntityIds = new Set<string>();
+      // lwwUpdateMetaReducer.addOne() from resurrecting archived/deleted tasks.
+      const archivingOrDeletingEntityIds = new Set<string>();
       for (const op of operations) {
-        if (op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE) {
+        if (
+          op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
+          op.actionType === ActionType.TASK_SHARED_DELETE ||
+          op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE
+        ) {
           if (op.entityIds) {
             for (const id of op.entityIds) {
-              archivingEntityIds.add(id);
+              archivingOrDeletingEntityIds.add(id);
             }
           } else if (op.entityId) {
-            archivingEntityIds.add(op.entityId);
+            archivingOrDeletingEntityIds.add(op.entityId);
           }
         }
       }
 
       let currentState = state;
       for (const op of operations) {
-        // Skip LWW Updates for entities archived in this same batch
+        // Skip LWW Updates for entities archived/deleted in this same batch
         if (
-          archivingEntityIds.size > 0 &&
+          archivingOrDeletingEntityIds.size > 0 &&
           isLwwUpdateActionType(op.actionType) &&
           op.entityId &&
-          archivingEntityIds.has(op.entityId)
+          archivingOrDeletingEntityIds.has(op.entityId)
         ) {
           OpLog.normal(
             `bulkOperationsMetaReducer: Skipping LWW Update for ` +
-              `${op.entityType}:${op.entityId} — entity archived in same batch`,
+              `${op.entityType}:${op.entityId} — entity archived/deleted in same batch`,
           );
           continue;
         }

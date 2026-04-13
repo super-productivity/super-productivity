@@ -15,7 +15,7 @@
       (paste)="pasteHandler($event)"
       [@fadeIn]
       [ngModel]="modelCopy()"
-      [placeholder]="placeholderTxt()"
+      [placeholder]="placeholderTxt() ?? ''"
       class="mat-body-2 markdown-unparsed"
       rows="1"
     ></textarea>

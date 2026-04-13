@@ -1,9 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { SyncProviderId } from '../provider.const';
 import {
-  SyncProviderServiceInterface,
-  FileRevResponse,
-  FileDownloadResponse,
+  SyncProviderBase,
   OperationSyncCapable,
   SyncOperation,
   OpUploadResponse,
@@ -11,6 +9,7 @@ import {
   SnapshotUploadResponse,
   RestoreCapable,
   RestorePoint,
+  RestorePointType,
   RestoreSnapshotResponse,
 } from '../provider.interface';
 import { SyncCredentialStore } from '../credential-store.service';
@@ -55,7 +54,7 @@ const SUPERSYNC_REQUEST_TIMEOUT_MS = 75000;
  */
 export class SuperSyncProvider
   implements
-    SyncProviderServiceInterface<SyncProviderId.SuperSync>,
+    SyncProviderBase<SyncProviderId.SuperSync>,
     OperationSyncCapable,
     RestoreCapable
 {
@@ -65,6 +64,7 @@ export class SuperSyncProvider
   readonly supportsOperationSync = true;
 
   public privateCfg: SyncCredentialStore<SyncProviderId.SuperSync>;
+  private _cachedServerSeqKey: string | null = null;
 
   constructor(_basePath?: string) {
     // basePath is ignored - SuperSync uses operation-based sync only
@@ -87,6 +87,7 @@ export class SuperSyncProvider
   }
 
   async setPrivateCfg(cfg: SuperSyncPrivateCfg): Promise<void> {
+    this._cachedServerSeqKey = null;
     await this.privateCfg.setComplete(cfg);
   }
 
@@ -102,58 +103,16 @@ export class SuperSyncProvider
     }
   }
 
-  // === File Operations (Not supported - use operation sync instead) ===
-
-  async getFileRev(
-    _targetPath: string,
-    _localRev: string | null,
-  ): Promise<FileRevResponse> {
-    throw new Error(
-      'SuperSync uses operation-based sync only. File operations not supported.',
-    );
-  }
-
-  async downloadFile(_targetPath: string): Promise<FileDownloadResponse> {
-    throw new Error(
-      'SuperSync uses operation-based sync only. File operations not supported.',
-    );
-  }
-
-  async uploadFile(
-    _targetPath: string,
-    _dataStr: string,
-    _localRev: string | null,
-    _isForceOverwrite?: boolean,
-  ): Promise<FileRevResponse> {
-    throw new Error(
-      'SuperSync uses operation-based sync only. File operations not supported.',
-    );
-  }
-
-  async removeFile(_targetPath: string): Promise<void> {
-    throw new Error(
-      'SuperSync uses operation-based sync only. File operations not supported.',
-    );
-  }
-
-  async listFiles(_dirPath: string): Promise<string[]> {
-    throw new Error(
-      'SuperSync uses operation-based sync only. File operations not supported.',
-    );
-  }
-
   // === Operation Sync Implementation ===
 
   async uploadOps(
     ops: SyncOperation[],
     clientId: string,
     lastKnownServerSeq?: number,
-    isCleanSlate?: boolean,
   ): Promise<OpUploadResponse> {
     SyncLog.debug(this.logLabel, 'uploadOps', {
       opsCount: ops.length,
       clientId,
-      isCleanSlate,
     });
     const cfg = await this._cfgOrError();
 
@@ -162,7 +121,6 @@ export class SuperSyncProvider
       ops,
       clientId,
       lastKnownServerSeq,
-      isCleanSlate,
     });
 
     // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip
@@ -239,6 +197,8 @@ export class SuperSyncProvider
     isPayloadEncrypted: boolean | undefined,
     opId: string,
     isCleanSlate?: boolean,
+    snapshotOpType?: RestorePointType,
+    syncImportReason?: string,
   ): Promise<SnapshotUploadResponse> {
     SyncLog.normal(this.logLabel, 'uploadSnapshot: Starting...', {
       clientId,
@@ -247,6 +207,7 @@ export class SuperSyncProvider
       isPayloadEncrypted,
       opId,
       isCleanSlate,
+      snapshotOpType,
     });
     const cfg = await this._cfgOrError();
 
@@ -260,6 +221,8 @@ export class SuperSyncProvider
       isPayloadEncrypted,
       opId, // CRITICAL: Server must use this ID to prevent ID mismatch bugs
       isCleanSlate,
+      snapshotOpType,
+      ...(syncImportReason ? { syncImportReason } : {}),
     });
 
     // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip
@@ -348,6 +311,26 @@ export class SuperSyncProvider
     return validateRestoreSnapshotResponse(response);
   }
 
+  // === WebSocket Parameters ===
+
+  /**
+   * Returns the base URL and sanitized access token for WebSocket connection.
+   * Returns null if provider is not configured.
+   */
+  async getWebSocketParams(): Promise<{
+    baseUrl: string;
+    accessToken: string;
+  } | null> {
+    const cfg = await this.privateCfg.load();
+    if (!cfg?.accessToken) {
+      return null;
+    }
+    return {
+      baseUrl: this._resolveBaseUrl(cfg),
+      accessToken: this._sanitizeToken(cfg.accessToken),
+    };
+  }
+
   // === Data Management ===
 
   async deleteAllData(): Promise<{ success: boolean }> {
@@ -400,6 +383,9 @@ export class SuperSyncProvider
    * when switching between different accounts or servers.
    */
   private async _getServerSeqKey(): Promise<string> {
+    if (this._cachedServerSeqKey) {
+      return this._cachedServerSeqKey;
+    }
     // Note: SyncCredentialStore.load() has its own in-memory caching
     const cfg = await this.privateCfg.load();
     const baseUrl = cfg?.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
@@ -412,16 +398,35 @@ export class SuperSyncProvider
       .split('')
       .reduce((acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0, 0)
       .toString(16);
-    return `${LAST_SERVER_SEQ_KEY_PREFIX}${hash}`;
+    this._cachedServerSeqKey = `${LAST_SERVER_SEQ_KEY_PREFIX}${hash}`;
+    return this._cachedServerSeqKey;
   }
 
   /**
    * Check HTTP response status and throw AuthFailSPError for auth failures.
+   * Extracts the server's rejection reason from the response body if available.
    */
   private _checkHttpStatus(status: number, body?: string): void {
     if (status === 401 || status === 403) {
-      throw new AuthFailSPError(`Authentication failed (HTTP ${status})`, body);
+      const reason = this._extractServerErrorReason(body);
+      throw new AuthFailSPError(reason || `Authentication failed (HTTP ${status})`, body);
     }
+  }
+
+  /**
+   * Extracts the "error" field from a JSON response body, if present.
+   */
+  private _extractServerErrorReason(body?: string): string | undefined {
+    if (!body) return undefined;
+    try {
+      const parsed = JSON.parse(body);
+      if (typeof parsed?.error === 'string') {
+        return parsed.error;
+      }
+    } catch {
+      // Not JSON — ignore
+    }
+    return undefined;
   }
 
   /**
@@ -481,21 +486,89 @@ export class SuperSyncProvider
     path: string,
     options: RequestInit,
   ): Promise<T> {
-    const startTime = Date.now();
     const baseUrl = this._resolveBaseUrl(cfg);
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
     // On native platforms (Android/iOS), use CapacitorHttp for consistent behavior
     if (this.isNativePlatform) {
-      return this._fetchApiNative<T>(cfg, path, options.method || 'GET', startTime);
+      return this._doNativeFetch<T>(cfg, path, options.method || 'GET');
     }
 
     const headers = new Headers(options.headers as HeadersInit);
     headers.set('Content-Type', 'application/json');
     headers.set('Authorization', `Bearer ${sanitizedToken}`);
 
-    // Add timeout using AbortController
+    return this._doWebFetch<T>(url, path, headers, { method: options.method || 'GET' });
+  }
+
+  /**
+   * Sends a gzip-compressed request body.
+   * Used for large payloads like snapshot uploads.
+   */
+  private async _fetchApiCompressed<T>(
+    cfg: SuperSyncPrivateCfg,
+    path: string,
+    compressedBody: Uint8Array,
+  ): Promise<T> {
+    const baseUrl = this._resolveBaseUrl(cfg);
+    const url = `${baseUrl}${path}`;
+    const sanitizedToken = this._sanitizeToken(cfg.accessToken);
+
+    const headers = new Headers();
+    headers.set('Content-Type', 'application/json');
+    headers.set('Content-Encoding', 'gzip');
+    headers.set('Authorization', `Bearer ${sanitizedToken}`);
+
+    return this._doWebFetch<T>(url, path, headers, {
+      method: 'POST',
+      body: new Blob([compressedBody as BlobPart]),
+    });
+  }
+
+  /**
+   * Sends a gzip-compressed request body from native platforms (Android/iOS)
+   * with retry logic for transient network errors.
+   * Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
+   * may have similar issues in Capacitor context. We use CapacitorHttp with
+   * base64-encoded gzip data instead.
+   */
+  private async _fetchApiCompressedNative<T>(
+    cfg: SuperSyncPrivateCfg,
+    path: string,
+    jsonPayload: string,
+  ): Promise<T> {
+    const base64Gzip = await compressWithGzipToString(jsonPayload);
+
+    SyncLog.debug(this.logLabel, '_fetchApiCompressedNative', {
+      path,
+      originalSize: jsonPayload.length,
+      compressedBase64Size: base64Gzip.length,
+    });
+
+    const extraHeaders: Record<string, string> = {};
+    extraHeaders['Content-Encoding'] = 'gzip';
+    extraHeaders['Content-Transfer-Encoding'] = 'base64';
+
+    return this._doNativeFetch<T>(cfg, path, 'POST', {
+      data: base64Gzip,
+      extraHeaders,
+    });
+  }
+
+  // === Shared HTTP helpers ===
+
+  /**
+   * Shared web fetch with AbortController timeout, error handling,
+   * and slow-request logging.
+   */
+  private async _doWebFetch<T>(
+    url: string,
+    path: string,
+    headers: Headers,
+    options: { method: string; body?: BodyInit },
+  ): Promise<T> {
+    const startTime = Date.now();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), SUPERSYNC_REQUEST_TIMEOUT_MS);
 
@@ -557,21 +630,23 @@ export class SuperSyncProvider
   }
 
   /**
-   * Handles API requests on native platforms (Android/iOS) using CapacitorHttp
-   * with retry logic for transient network errors.
+   * Shared native fetch using CapacitorHttp with retry logic,
+   * error handling, and slow-request logging.
    */
-  private async _fetchApiNative<T>(
+  private async _doNativeFetch<T>(
     cfg: SuperSyncPrivateCfg,
     path: string,
     method: string,
-    startTime: number,
+    requestData?: { data: string; extraHeaders?: Record<string, string> },
   ): Promise<T> {
+    const startTime = Date.now();
     const baseUrl = this._resolveBaseUrl(cfg);
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${sanitizedToken}`,
+      ...requestData?.extraHeaders,
     };
     headers['Content-Type'] = 'application/json';
 
@@ -581,157 +656,7 @@ export class SuperSyncProvider
           url,
           method,
           headers,
-          connectTimeout: 10000,
-          readTimeout: SUPERSYNC_REQUEST_TIMEOUT_MS,
-        },
-        this.logLabel,
-      );
-
-      if (response.status < 200 || response.status >= 300) {
-        const errorData =
-          typeof response.data === 'string'
-            ? response.data
-            : JSON.stringify(response.data);
-        // Check for auth failure FIRST before throwing generic error
-        this._checkHttpStatus(response.status, errorData);
-        throw new Error(`SuperSync API error: ${response.status} - ${errorData}`);
-      }
-
-      // Log slow requests
-      const duration = Date.now() - startTime;
-      if (duration > 30000) {
-        SyncLog.warn(this.logLabel, `Slow SuperSync request detected (native)`, {
-          path,
-          durationMs: duration,
-          durationSec: (duration / 1000).toFixed(1),
-        });
-      }
-
-      return response.data as T;
-    } catch (error) {
-      this._handleNativeRequestError(error, path, startTime);
-    }
-  }
-
-  /**
-   * Sends a gzip-compressed request body.
-   * Used for large payloads like snapshot uploads.
-   */
-  private async _fetchApiCompressed<T>(
-    cfg: SuperSyncPrivateCfg,
-    path: string,
-    compressedBody: Uint8Array,
-  ): Promise<T> {
-    const startTime = Date.now();
-    const baseUrl = this._resolveBaseUrl(cfg);
-    const url = `${baseUrl}${path}`;
-    const sanitizedToken = this._sanitizeToken(cfg.accessToken);
-
-    const headers = new Headers();
-    headers.set('Content-Type', 'application/json');
-    headers.set('Content-Encoding', 'gzip');
-    headers.set('Authorization', `Bearer ${sanitizedToken}`);
-
-    // Add timeout using AbortController
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), SUPERSYNC_REQUEST_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: new Blob([compressedBody as BlobPart]),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        clearTimeout(timeoutId);
-        const errorText = await response.text().catch(() => 'Unknown error');
-        // Check for auth failure FIRST before throwing generic error
-        this._checkHttpStatus(response.status, errorText);
-        throw new Error(
-          `SuperSync API error: ${response.status} ${response.statusText} - ${errorText}`,
-        );
-      }
-
-      // CRITICAL: Read response body BEFORE clearing timeout
-      const data = (await response.json()) as T;
-      clearTimeout(timeoutId);
-
-      // Log slow requests
-      const duration = Date.now() - startTime;
-      if (duration > 30000) {
-        SyncLog.warn(this.logLabel, `Slow SuperSync request detected`, {
-          path,
-          durationMs: duration,
-          durationSec: (duration / 1000).toFixed(1),
-        });
-      }
-
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      const duration = Date.now() - startTime;
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        SyncLog.error(this.logLabel, `SuperSync request timeout`, {
-          path,
-          durationMs: duration,
-          timeoutMs: SUPERSYNC_REQUEST_TIMEOUT_MS,
-        });
-        throw new Error(
-          `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s: ${path}`,
-        );
-      }
-
-      SyncLog.error(this.logLabel, `SuperSync request failed`, {
-        path,
-        durationMs: duration,
-        error: (error as Error).message,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Sends a gzip-compressed request body from native platforms (Android/iOS)
-   * with retry logic for transient network errors.
-   * Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
-   * may have similar issues in Capacitor context. We use CapacitorHttp with
-   * base64-encoded gzip data instead.
-   */
-  private async _fetchApiCompressedNative<T>(
-    cfg: SuperSyncPrivateCfg,
-    path: string,
-    jsonPayload: string,
-  ): Promise<T> {
-    const startTime = Date.now();
-    const base64Gzip = await compressWithGzipToString(jsonPayload);
-    const baseUrl = this._resolveBaseUrl(cfg);
-    const url = `${baseUrl}${path}`;
-    const sanitizedToken = this._sanitizeToken(cfg.accessToken);
-
-    SyncLog.debug(this.logLabel, '_fetchApiCompressedNative', {
-      path,
-      originalSize: jsonPayload.length,
-      compressedBase64Size: base64Gzip.length,
-    });
-
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${sanitizedToken}`,
-    };
-    // HTTP headers with hyphens don't match naming convention - use bracket notation
-    headers['Content-Type'] = 'application/json';
-    headers['Content-Encoding'] = 'gzip';
-    headers['Content-Transfer-Encoding'] = 'base64';
-
-    try {
-      const response = await executeNativeRequestWithRetry(
-        {
-          url,
-          method: 'POST',
-          headers,
-          data: base64Gzip,
+          data: requestData?.data,
           connectTimeout: 10000,
           readTimeout: SUPERSYNC_REQUEST_TIMEOUT_MS,
         },

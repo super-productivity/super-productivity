@@ -4,7 +4,6 @@ import { first } from 'rxjs/operators';
 import { GITLAB_TYPE } from '../../issue.const';
 import { IssueProviderService } from '../../issue-provider.service';
 import { TaskCopy } from '../../../tasks/task.model';
-import { DialogGitlabSubmitWorklogForDayComponent } from './dialog-gitlab-submit-worklog-for-day/dialog-gitlab-submit-worklog-for-day.component';
 import { BeforeFinishDayService } from '../../../before-finish-day/before-finish-day.service';
 import { WorkContextService } from '../../../work-context/work-context.service';
 
@@ -47,6 +46,8 @@ export class GitlabIssueEffects {
               gitlabCfgForProvider.isEnabled &&
               gitlabCfgForProvider.isEnableTimeTracking
             ) {
+              const { DialogGitlabSubmitWorklogForDayComponent } =
+                await import('./dialog-gitlab-submit-worklog-for-day/dialog-gitlab-submit-worklog-for-day.component');
               await this._matDialog
                 .open(DialogGitlabSubmitWorklogForDayComponent, {
                   restoreFocus: true,

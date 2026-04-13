@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API-sleutel",
+    "API_KEY_LINK": "Verkrijg uw persoonlijke API-sleutel",
+    "TEAM_IDS": "Workspace-/team-ID's (kommagescheiden, leeg voor alle)",
+    "USER_ID": "Gebruikers-ID (om te filteren op toegewezen persoon)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Overzicht",
+    "STATUS": "Toestand",
+    "PRIORITY": "Prioriteit",
+    "ASSIGNEE": "Toegewezen aan",
+    "LABELS": "Etiketten",
+    "DESCRIPTION": "Omschrijving"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Onbekende fout. Controleer uw API-sleutel en probeer het opnieuw."
+  }
+}

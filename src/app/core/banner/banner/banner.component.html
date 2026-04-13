@@ -51,7 +51,7 @@
         @if (banner.action) {
           @if (banner.action.icon) {
             <button
-              (click)="action(banner.id, banner.action)"
+              (click)="action(banner, banner.action)"
               [attr.aria-label]="banner.action.label | translate: banner.translateParams"
               [title]="banner.action.label | translate: banner.translateParams"
               mat-icon-button
@@ -61,7 +61,7 @@
             </button>
           } @else {
             <button
-              (click)="action(banner.id, banner.action)"
+              (click)="action(banner, banner.action)"
               color="primary"
               mat-button
               tabindex="1"
@@ -73,7 +73,7 @@
         @if (banner.action2) {
           @if (banner.action2.icon) {
             <button
-              (click)="action(banner.id, banner.action2)"
+              (click)="action(banner, banner.action2)"
               [attr.aria-label]="banner.action2.label | translate: banner.translateParams"
               [title]="banner.action2.label | translate: banner.translateParams"
               mat-icon-button
@@ -83,7 +83,7 @@
             </button>
           } @else {
             <button
-              (click)="action(banner.id, banner.action2)"
+              (click)="action(banner, banner.action2)"
               color="primary"
               mat-button
               tabindex="1"
@@ -95,7 +95,7 @@
         @if (banner.action3) {
           @if (banner.action3.icon) {
             <button
-              (click)="action(banner.id, banner.action3)"
+              (click)="action(banner, banner.action3)"
               [attr.aria-label]="banner.action3.label | translate: banner.translateParams"
               [title]="banner.action3.label | translate: banner.translateParams"
               mat-icon-button
@@ -105,7 +105,7 @@
             </button>
           } @else {
             <button
-              (click)="action(banner.id, banner.action3)"
+              (click)="action(banner, banner.action3)"
               color="primary"
               mat-button
               tabindex="1"

@@ -141,8 +141,8 @@ export default defineConfig({
           ? 'npm run serveFrontend:e2e:prod'
           : 'npm run startFrontend:e2e',
         url: 'http://localhost:4242',
-        reuseExistingServer: !process.env.CI, // Don't reuse in CI to ensure clean state
-        timeout: process.env.CI ? 90000 : 3 * 60 * 1000,
+        reuseExistingServer: false,
+        timeout: 2 * 60 * 1000,
         stdout: 'ignore', // Reduce log noise
         stderr: 'pipe',
       },
@@ -150,8 +150,9 @@ export default defineConfig({
   /* Folder for test artifacts such as screenshots, videos, traces, etc. */
   outputDir: path.join(__dirname, '..', '.tmp', 'e2e-test-results', 'test-results'),
 
-  /* Global timeout for each test - increased for Angular app stability */
-  timeout: 90 * 1000,
+  /* Global timeout for each test - increased for Angular app stability
+   * and mandatory encryption handling overhead in SuperSync tests */
+  timeout: 180 * 1000,
 
   /* Global timeout for each assertion - increased for slow rendering */
   expect: {

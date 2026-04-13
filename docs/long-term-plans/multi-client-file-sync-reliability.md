@@ -1,5 +1,7 @@
 # Making File-Based Sync Reliable with Multiple Concurrent Clients
 
+> **Status: Planned**
+
 ## Current Vulnerabilities
 
 The single-file approach (`sync-data.json`) has these specific weaknesses when multiple clients sync simultaneously:
@@ -236,9 +238,9 @@ Level 3 needs `clients/<id>/ops/` directories to exist:
 
 ## Additional Findings
 
-### Pre-existing bug: Stale piggyback after retry
+### Resolved: Piggybacking removed (commit 6ec885cce2)
 
-In `_uploadOps()` (line 662), `_collectPiggybackedOps()` uses `existingOps` captured _before_ the retry in `_uploadWithRetry()`. If the retry downloads fresh data containing new remote ops from a third client, those ops are never piggybacked to the caller. This is a data loss vector that gets **worse with more retries** — should be fixed alongside Level 1.
+Piggybacking was removed from the file-based sync adapter. Remote ops are now discovered exclusively via `downloadOps()` on the next sync cycle, eliminating the stale piggyback bug and simplifying the upload path.
 
 ### Unused checksum field
 

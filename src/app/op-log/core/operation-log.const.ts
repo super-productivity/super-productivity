@@ -8,7 +8,7 @@ import { InjectionToken } from '@angular/core';
  *
  * | Limit | Value | Constant | Notes |
  * |-------|-------|----------|-------|
- * | Vector clock clients | 10 | MAX_VECTOR_CLOCK_SIZE | Pruning keeps most active clients |
+ * | Vector clock clients | 20 | MAX_VECTOR_CLOCK_SIZE | Pruning keeps most active clients |
  * | Client ID length | ≥5 chars | (vector-clock.ts) | Throws error if shorter |
  * | Vector clock counter | MAX_SAFE_INTEGER-1000 | (vector-clock.ts) | Requires SYNC_IMPORT on overflow |
  * | Ops per upload batch | 25 | MAX_OPS_PER_UPLOAD_REQUEST | Reduced from 100 to avoid 413 errors |
@@ -16,6 +16,7 @@ import { InjectionToken } from '@angular/core';
  * | Max download iterations | 1000 | MAX_DOWNLOAD_ITERATIONS | Server bug protection (500K ops max) |
  * | Max ops in memory | 50,000 | MAX_DOWNLOAD_OPS_IN_MEMORY | Prevents OOM during sync |
  * | Compaction threshold | 500 | COMPACTION_THRESHOLD | Triggers automatic compaction |
+ * | Lock acquisition timeout | 30s | LOCK_ACQUISITION_TIMEOUT_MS | Prevents infinite hang on stuck lock |
  * | Compaction timeout | 25s | COMPACTION_TIMEOUT_MS | Aborts to prevent lock expiration |
  * | Retention window | 7 days | COMPACTION_RETENTION_MS | Normal compaction |
  * | Emergency retention | 1 day | EMERGENCY_COMPACTION_RETENTION_MS | When quota exceeded |
@@ -71,6 +72,14 @@ export const LOCK_NAMES = {
    */
   DOWNLOAD: 'sp_op_log_download',
 } as const;
+
+/**
+ * Maximum time to wait for lock acquisition before throwing (milliseconds).
+ * If a lock holder crashes or stalls, waiters would hang indefinitely without this.
+ * Default: 30 seconds - long enough for legitimate operations (compaction can take ~5s),
+ * short enough that the user doesn't stare at a frozen spinner for minutes.
+ */
+export const LOCK_ACQUISITION_TIMEOUT_MS = 30000;
 
 /**
  * Number of operations before triggering automatic compaction.

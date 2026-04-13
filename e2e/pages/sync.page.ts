@@ -63,11 +63,21 @@ export class SyncPage extends BasePage {
         await this.page.waitForTimeout(500);
       }
 
+      // Wait for any pending navigation to complete before opening the dialog.
+      // Angular hash-based routing (e.g., from / to /#/tag/TODAY/tasks) can be in-flight,
+      // which causes Playwright to block element interactions with
+      // "waiting for navigation to finish" errors.
+      await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+      await this.page
+        .waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 })
+        .catch(() => {});
+
       // Ensure sync button is visible and clickable
       await this.syncBtn.waitFor({ state: 'visible', timeout: 10000 });
 
-      // Click sync button to open settings dialog - use force click if needed
-      await this.syncBtn.click({ timeout: 5000 });
+      // Click sync button to open settings dialog
+      // Use noWaitAfter to prevent blocking on Angular hash navigation
+      await this.syncBtn.click({ timeout: 5000, noWaitAfter: true });
 
       // Wait for dialog to appear
       const dialog = this.page.locator('mat-dialog-container, .mat-mdc-dialog-container');
@@ -79,7 +89,7 @@ export class SyncPage extends BasePage {
       // If dialog didn't open, try clicking again
       if (!dialogVisible) {
         await this.page.waitForTimeout(500);
-        await this.syncBtn.click({ force: true });
+        await this.syncBtn.click({ force: true, noWaitAfter: true });
         await dialog.waitFor({ state: 'visible', timeout: 5000 });
       }
 
@@ -229,7 +239,8 @@ export class SyncPage extends BasePage {
       }
     }
 
-    await this.syncBtn.click();
+    // Use noWaitAfter to prevent blocking on Angular hash navigation
+    await this.syncBtn.click({ noWaitAfter: true });
     // Wait for any sync operation to start (spinner appears or completes immediately)
     await Promise.race([
       this.syncSpinner.waitFor({ state: 'visible', timeout: 1000 }).catch(() => {}),
@@ -291,8 +302,15 @@ export class SyncPage extends BasePage {
    * 5. Confirms encryption
    */
   async enableEncryption(password: string): Promise<void> {
+    // Wait for any pending navigation to complete before opening the dialog.
+    await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+    await this.page
+      .waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 })
+      .catch(() => {});
+
     // Open sync settings dialog using right-click
-    await this.syncBtn.click({ button: 'right' });
+    // Use noWaitAfter to prevent blocking on Angular hash navigation
+    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
     const settingsDialog = this.page.locator(
       'mat-dialog-container, .mat-mdc-dialog-container',
     );
@@ -378,8 +396,15 @@ export class SyncPage extends BasePage {
    * NOT in the Advanced Config section.
    */
   async disableEncryptionForFileBased(): Promise<void> {
+    // Wait for any pending navigation to complete before opening the dialog.
+    await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+    await this.page
+      .waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 })
+      .catch(() => {});
+
     // Open sync settings dialog using right-click
-    await this.syncBtn.click({ button: 'right' });
+    // Use noWaitAfter to prevent blocking on Angular hash navigation
+    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
     const dialog = this.page.locator('mat-dialog-container, .mat-mdc-dialog-container');
     await dialog.waitFor({ state: 'visible', timeout: 5000 });
 

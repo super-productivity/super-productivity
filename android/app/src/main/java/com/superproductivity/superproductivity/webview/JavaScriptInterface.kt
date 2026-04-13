@@ -13,9 +13,15 @@ import com.superproductivity.superproductivity.App
 import com.superproductivity.superproductivity.BuildConfig
 import com.superproductivity.superproductivity.FullscreenActivity.Companion.WINDOW_INTERFACE_PROPERTY
 import com.superproductivity.superproductivity.app.LaunchDecider
+import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
+import com.superproductivity.superproductivity.widget.ReminderDoneQueue
+import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
+import com.superproductivity.superproductivity.widget.ReminderTapQueue
+import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.WidgetTaskQueue
 
 
@@ -197,7 +203,8 @@ class JavaScriptInterface(
         title: String,
         reminderType: String,
         triggerAtMs: Long,
-        useAlarmStyle: Boolean
+        useAlarmStyle: Boolean,
+        isOngoing: Boolean
     ) {
         safeCall("Failed to schedule native reminder") {
             ReminderNotificationHelper.scheduleReminder(
@@ -208,7 +215,8 @@ class JavaScriptInterface(
                 title,
                 reminderType,
                 triggerAtMs,
-                useAlarmStyle
+                useAlarmStyle,
+                isOngoing
             )
         }
     }
@@ -229,6 +237,104 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun getWidgetTaskQueue(): String? {
         return WidgetTaskQueue.getAndClearQueue(activity)
+    }
+
+    /**
+     * Pull-based retrieval of pending share data persisted in SharedPreferences.
+     * Clears both SharedPreferences and in-memory pendingShareIntent to prevent duplicates.
+     * @return JSON string of share data, or null if none pending
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getPendingShareData(): String? {
+        val data = ShareIntentQueue.getAndClear(activity)
+        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
+            activity.runOnUiThread {
+                activity.clearPendingShareIntent()
+            }
+        }
+        return data
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getReminderTapQueue(): String? {
+        return ReminderTapQueue.getAndClear(activity)
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getReminderDoneQueue(): String? {
+        return ReminderDoneQueue.getAndClear(activity)
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getReminderSnoozeQueue(): String? {
+        return ReminderSnoozeQueue.getAndClear(activity)
+    }
+
+    /**
+     * Phase 1: Get partial text from the startup overlay without hiding it.
+     * The native input stays visible so the user sees a seamless transition.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getStartupOverlayPartialText(): String? {
+        var partialText: String? = null
+        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
+            val latch = java.util.concurrent.CountDownLatch(1)
+            activity.runOnUiThread {
+                partialText = activity.getStartupOverlayPartialText()
+                latch.countDown()
+            }
+            latch.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        }
+        return partialText
+    }
+
+    /**
+     * Phase 2: Hide the startup overlay after the web input is ready.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun hideStartupOverlay() {
+        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
+            activity.runOnUiThread {
+                activity.hideStartupOverlay()
+            }
+        }
+    }
+
+    /**
+     * Dismiss startup overlay immediately (no partial text transfer).
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun dismissStartupOverlay() {
+        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
+            activity.runOnUiThread {
+                activity.dismissStartupOverlay()
+            }
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setSuperSyncCredentials(baseUrl: String, accessToken: String) {
+        safeCall("Failed to set SuperSync credentials") {
+            BackgroundSyncCredentialStore.save(activity, baseUrl, accessToken)
+            SyncReminderScheduler.ensureScheduled(activity)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun clearSuperSyncCredentials() {
+        safeCall("Failed to clear SuperSync credentials") {
+            BackgroundSyncCredentialStore.clear(activity)
+            SyncReminderScheduler.cancel(activity)
+        }
     }
 
     fun callJavaScriptFunction(script: String) {

@@ -11,6 +11,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SnackService } from '../../../core/snack/snack.service';
+import { IS_MOBILE } from 'src/app/util/is-mobile';
 
 @Component({
   // selector: 'dialog-add-note',
@@ -47,6 +48,9 @@ export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {
   }
 
   override close(isSkipSave: boolean = false, isEscapeClose: boolean = false): void {
+    if (IS_MOBILE) {
+      window.history.back();
+    }
     if (!isEscapeClose) {
       if (!isSkipSave && this.data?.content && this.data.content.trim().length > 0) {
         this._noteService.add({ content: this.data.content }, true);
@@ -66,6 +70,7 @@ export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {
   }
 
   override ngModelChange(val: string = this.data?.content || ''): void {
+    super.ngModelChange(val);
     sessionStorage.setItem(SS.NOTE_TMP, val);
   }
 

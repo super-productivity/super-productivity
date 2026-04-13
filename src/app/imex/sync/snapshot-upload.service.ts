@@ -17,15 +17,18 @@ import { SyncLog } from '../../core/log';
 import { uuidv7 } from '../../util/uuid-v7';
 import {
   OperationSyncCapable,
-  SyncProviderServiceInterface,
+  SyncProviderBase,
 } from '../../op-log/sync-providers/provider.interface';
 import { VectorClock } from '../../core/util/vector-clock';
+import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
+import { isCryptoSubtleAvailable } from '../../op-log/encryption/encryption';
+import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
 
 /**
  * Data gathered for a snapshot upload operation.
  */
 export interface SnapshotUploadData {
-  syncProvider: SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable;
+  syncProvider: SyncProviderBase<SyncProviderId> & OperationSyncCapable;
   existingCfg: SuperSyncPrivateCfg | null;
   state: AppStateSnapshot;
   vectorClock: VectorClock;
@@ -53,8 +56,7 @@ export interface SnapshotUploadResult {
  * Config orchestration (timing, error recovery, encryption settings)
  * remains the responsibility of calling services.
  *
- * @see EncryptionDisableService
- * @see EncryptionEnableService
+ * @see SuperSyncEncryptionToggleService
  * @see ImportEncryptionHandlerService
  */
 @Injectable({
@@ -65,13 +67,14 @@ export class SnapshotUploadService {
   private _stateSnapshotService = inject(StateSnapshotService);
   private _vectorClockService = inject(VectorClockService);
   private _clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private _encryptionService = inject(OperationEncryptionService);
 
   /**
    * Validates that the active provider is SuperSync and operation-sync capable.
    *
    * @throws Error if no active provider, not SuperSync, or not operation-sync capable
    */
-  getValidatedSuperSyncProvider(): SyncProviderServiceInterface<SyncProviderId> &
+  getValidatedSuperSyncProvider(): SyncProviderBase<SyncProviderId> &
     OperationSyncCapable {
     const syncProvider = this._providerManager.getActiveProvider();
 
@@ -89,8 +92,7 @@ export class SnapshotUploadService {
       throw new Error('Sync provider does not support operation sync');
     }
 
-    return syncProvider as SyncProviderServiceInterface<SyncProviderId> &
-      OperationSyncCapable;
+    return syncProvider as SyncProviderBase<SyncProviderId> & OperationSyncCapable;
   }
 
   /**
@@ -146,7 +148,7 @@ export class SnapshotUploadService {
    * @param isPayloadEncrypted - Whether the payload is encrypted
    */
   async uploadSnapshot(
-    syncProvider: SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable,
+    syncProvider: SyncProviderBase<SyncProviderId> & OperationSyncCapable,
     payload: unknown,
     clientId: string,
     vectorClock: VectorClock,
@@ -177,7 +179,7 @@ export class SnapshotUploadService {
    * @param logPrefix - Optional prefix for log messages
    */
   async updateLastServerSeq(
-    syncProvider: SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable,
+    syncProvider: SyncProviderBase<SyncProviderId> & OperationSyncCapable,
     serverSeq: number | undefined,
     logPrefix?: string,
   ): Promise<void> {
@@ -191,5 +193,150 @@ export class SnapshotUploadService {
           'Sync state may be inconsistent - consider using "Sync Now" to verify.',
       );
     }
+  }
+
+  /**
+   * Deletes all server data and uploads a fresh snapshot with new encryption settings.
+   *
+   * Common pattern used by both encryption toggle and import encryption handler.
+   * Validates crypto availability, gathers state, encrypts if needed, deletes
+   * server data, updates provider config, uploads snapshot, and updates lastServerSeq.
+   *
+   * Error handling (throw vs return result) remains the caller's responsibility.
+   *
+   * @throws WebCryptoNotAvailableError if encryption is enabled but WebCrypto is unavailable
+   */
+  async deleteAndReuploadWithNewEncryption(options: {
+    encryptKey: string | undefined;
+    isEncryptionEnabled: boolean;
+    logPrefix: string;
+  }): Promise<SnapshotUploadResult & { existingCfg: SuperSyncPrivateCfg | null }> {
+    const { encryptKey, isEncryptionEnabled, logPrefix } = options;
+
+    // Validate crypto availability before any destructive action
+    if (isEncryptionEnabled && !isCryptoSubtleAvailable()) {
+      throw new WebCryptoNotAvailableError(
+        'Cannot enable encryption: WebCrypto API is not available. ' +
+          'Encryption requires a secure context (HTTPS). ' +
+          'On Android, encryption is not supported.',
+      );
+    }
+
+    const { syncProvider, existingCfg, state, vectorClock, clientId } =
+      await this.gatherSnapshotData(logPrefix);
+
+    // Encrypt before delete (fail-early)
+    let payload: unknown = state;
+    if (isEncryptionEnabled && encryptKey) {
+      SyncLog.normal(`${logPrefix}: Encrypting snapshot...`);
+      payload = await this._encryptionService.encryptPayload(state, encryptKey);
+    }
+
+    // Delete all server data
+    SyncLog.normal(`${logPrefix}: Deleting server data...`);
+    await syncProvider.deleteAllData();
+
+    // Update config before upload
+    SyncLog.normal(`${logPrefix}: Updating provider config...`);
+    await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
+      ...existingCfg,
+      encryptKey: isEncryptionEnabled ? encryptKey : undefined,
+      isEncryptionEnabled,
+    } as SuperSyncPrivateCfg);
+
+    // Upload snapshot with retry for rate limiting
+    // Critical: server data is already deleted, so we must try hard to get the upload through
+    const result = await this._uploadWithRateLimitRetry({
+      syncProvider,
+      payload,
+      clientId,
+      vectorClock,
+      isPayloadEncrypted: isEncryptionEnabled && !!encryptKey,
+      logPrefix,
+    });
+
+    if (!result.accepted) {
+      throw new Error(`Snapshot upload failed: ${result.error}`);
+    }
+
+    await this.updateLastServerSeq(syncProvider, result.serverSeq, logPrefix);
+
+    return { ...result, existingCfg };
+  }
+
+  /**
+   * Uploads a snapshot with automatic retry on 429 rate limit errors.
+   * Used after destructive delete where upload failure leaves server in bad state.
+   */
+  private async _uploadWithRateLimitRetry(options: {
+    syncProvider: SyncProviderBase<SyncProviderId> & OperationSyncCapable;
+    payload: unknown;
+    clientId: string;
+    vectorClock: VectorClock;
+    isPayloadEncrypted: boolean;
+    logPrefix: string;
+  }): Promise<SnapshotUploadResult> {
+    const {
+      syncProvider,
+      payload,
+      clientId,
+      vectorClock,
+      isPayloadEncrypted,
+      logPrefix,
+    } = options;
+    const MAX_RETRIES = 2;
+    // Server rate limits are typically 5-10 minutes; honor the full delay since
+    // the dialog shows a spinner and server data is already deleted
+    const MAX_DELAY_MS = 10 * 60_000;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        SyncLog.normal(`${logPrefix}: Uploading snapshot (attempt ${attempt + 1})...`);
+        return await this.uploadSnapshot(
+          syncProvider,
+          payload,
+          clientId,
+          vectorClock,
+          isPayloadEncrypted,
+        );
+      } catch (error) {
+        const delayMs = this._parseRateLimitDelayMs(error);
+        if (delayMs !== null && attempt < MAX_RETRIES) {
+          const cappedDelay = Math.min(delayMs, MAX_DELAY_MS);
+          SyncLog.warn(
+            `${logPrefix}: Rate limited (429) on attempt ${attempt + 1}, ` +
+              `retrying in ${(cappedDelay / 1000).toFixed(0)}s...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, cappedDelay));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('Snapshot upload failed after retries');
+  }
+
+  /**
+   * Parses a rate limit (429) error and returns the suggested retry delay in ms.
+   * Returns null if the error is not a rate limit error.
+   */
+  private _parseRateLimitDelayMs(error: unknown): number | null {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/\b429\b/.test(message)) {
+      return null;
+    }
+
+    const minutesMatch = message.match(/retry in (\d+)\s*minute/i);
+    if (minutesMatch) {
+      return parseInt(minutesMatch[1], 10) * 60_000;
+    }
+
+    const secondsMatch = message.match(/retry in (\d+)\s*second/i);
+    if (secondsMatch) {
+      return parseInt(secondsMatch[1], 10) * 1000;
+    }
+
+    // Default retry delay for unspecified 429
+    return 60_000;
   }
 }

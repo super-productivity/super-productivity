@@ -21,6 +21,8 @@ export default defineConfig({
       'tests/snapshot-skip-optimization.spec.ts',
       'tests/integration/multi-client-sync.integration.spec.ts',
       'tests/integration/snapshot-skip-optimization.integration.spec.ts',
+      // Integration test that requires real PostgreSQL (run with vitest.integration.config.ts)
+      'tests/integration/snapshot-vector-clock-sql.integration.spec.ts',
       // Tests password reset routes that don't exist - server uses passkey/magic link auth
       'tests/password-reset-api.spec.ts',
     ],

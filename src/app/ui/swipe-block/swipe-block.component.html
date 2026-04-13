@@ -1,0 +1,26 @@
+@if (isTouchActive() && isPanHelperVisible()) {
+  <div
+    #strikethroughEl
+    class="strikethrough-line"
+  ></div>
+  <div
+    #blockRightEl
+    class="block-right bg-400"
+  >
+    <mat-icon>more_horiz</mat-icon>
+  </div>
+}
+
+<div
+  #innerWrapperEl
+  panGesture
+  (panstart)="onPanStart($event)"
+  (panleft)="handlePan($event)"
+  (panright)="handlePan($event)"
+  (panend)="onPanEnd()"
+  (pancancel)="onPanCancel()"
+  [class.isPreventPointerEventsWhilePanning]="isPreventPointerEventsWhilePanning()"
+  class="inner-wrapper"
+>
+  <ng-content></ng-content>
+</div>

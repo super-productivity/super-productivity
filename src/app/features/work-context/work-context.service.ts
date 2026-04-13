@@ -65,6 +65,7 @@ import { updateWorkContextData } from '../time-tracking/store/time-tracking.acti
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { INBOX_PROJECT } from '../project/project.const';
 import { selectProjectById } from '../project/store/project.selectors';
+import { Project } from '../project/project.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { Log } from '../../core/log';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
@@ -196,6 +197,7 @@ export class WorkContextService {
 
   inboxWorkContext$: Observable<WorkContext> = this._isAllDataLoaded$.pipe(
     concatMap(() => this._store$.select(selectProjectById, { id: INBOX_PROJECT.id })),
+    filter((p): p is Project => !!p),
     map(
       (inboxWorkContext) =>
         ({
@@ -280,7 +282,7 @@ export class WorkContextService {
   // See: docs/ai/today-tag-architecture.md
   mainListTasksInProject$: Observable<TaskWithSubTasks[]> = this.mainListTasks$.pipe(
     map((tasks) => {
-      const todayStr = getDbDateStr();
+      const todayStr = this._dateService.todayStr();
       return tasks
         .filter(
           (task) =>
@@ -508,7 +510,7 @@ export class WorkContextService {
     const { ids, entities } = taskArchiveState;
     const tasksWorkedOnToday: ArchiveTask[] = ids
       .map((id) => entities[id])
-      .filter((t) => t?.timeSpentOnDay[day]) as ArchiveTask[];
+      .filter((t) => t?.timeSpentOnDay?.[day]) as ArchiveTask[];
 
     let tasksToConsider: ArchiveTask[] = [];
     if (isToday) {

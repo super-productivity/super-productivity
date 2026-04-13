@@ -26,10 +26,9 @@ const CH_TSP = '/';
 // Due how this expression capture clusters of duration units, be mindful of
 // match boundary whitespace during processing
 export const SHORT_SYNTAX_TIME_REG_EX = new RegExp(
-  String.raw`(?:\s|^)t?((?:\d+(?:\.\d+)?[mhd]\s*)+)(?:\s*` +
+  String.raw`(?:\s|^)t?((?:\d+(?:\.\d+)?[mh]\s*)+)(?:\s*` +
     `\\${CH_TSP}` +
-    String.raw`((?:\s*\d+(?:\.\d+)?[mhd])+)?)?(?=\s|$)`,
-  'i',
+    String.raw`((?:\s*\d+(?:\.\d+)?[mh])+)?)?(?=\s|$)`,
 );
 
 const CH_PRO = '+';
@@ -89,8 +88,7 @@ const loadCustomDateParser = (): Promise<Chrono> => {
 // previous version by not immediately terminating upon encountering a short
 // syntax delimiting character and looks ahead to consider usage context
 const SHORT_SYNTAX_PROJECT_REG_EX = new RegExp(
-  `\\${CH_PRO}((?:(?!\\s+(?:\\${CH_TAG}|\\${CH_DUE}|t?\\d+[mh]\\b)).)+)`,
-  'i',
+  `\\${CH_PRO}(?!\\s)((?:(?!\\s+(?:\\${CH_TAG}|\\${CH_DUE}|t?\\d+[mh]\\b)).)+)`,
 );
 const SHORT_SYNTAX_TAGS_REG_EX = new RegExp(`\\${CH_TAG}[^${ALL_SPECIAL}|\\s]+`, 'gi');
 
@@ -105,6 +103,12 @@ const SHORT_SYNTAX_URL_REG_EX = new RegExp(
   String.raw`(?:(?:https?|file)://\S+|www\.\S+?)(?=\s|$)`,
   'gi',
 );
+
+// Markdown link regex: [title](url)
+// Allows one level of balanced parentheses inside the URL so that links like
+// [article](https://en.wikipedia.org/wiki/C_(programming_language)) work.
+const SHORT_SYNTAX_MARKDOWN_LINK_REG_EX =
+  /\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 
 export const shortSyntax = async (
   task: Task | Partial<Task>,
@@ -172,12 +176,17 @@ export const shortSyntax = async (
     };
   }
 
-  const urlChanges = parseUrlAttachments({
-    ...task,
-    title: taskChanges.title || task.title,
-  });
-  if (urlChanges.attachments.length > 0) {
-    attachments = urlChanges.attachments;
+  const urlChanges = parseUrlAttachments(
+    {
+      ...task,
+      title: taskChanges.title || task.title,
+    },
+    config,
+  );
+  if (urlChanges) {
+    if (urlChanges.attachments.length > 0) {
+      attachments = urlChanges.attachments;
+    }
     taskChanges = {
       ...taskChanges,
       title: urlChanges.title,
@@ -453,7 +462,7 @@ const parseScheduledDate = async (
   return {};
 };
 
-const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
+export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
   if (!task.title) {
     return {};
   }
@@ -483,81 +492,160 @@ const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
   };
 };
 
+/**
+ * Extracts markdown links [text](url) from title.
+ * Returns the URLs found and a title with markdown links replaced by their display text.
+ */
+const extractMarkdownLinks = (
+  title: string,
+): { urls: string[]; titleWithoutMarkdown: string } => {
+  if (!title.includes('](')) {
+    return { urls: [], titleWithoutMarkdown: title };
+  }
+  const urls: string[] = [];
+  const titleWithoutMarkdown = title.replace(
+    SHORT_SYNTAX_MARKDOWN_LINK_REG_EX,
+    (_match, text: string, url: string) => {
+      if (url) {
+        urls.push(url);
+      }
+      return text;
+    },
+  );
+  return { urls, titleWithoutMarkdown };
+};
+
 const parseUrlAttachments = (
   task: Partial<TaskCopy>,
-): {
-  attachments: TaskAttachment[];
-  title: string;
-} => {
+  config: ShortSyntaxConfig,
+):
+  | {
+      attachments: TaskAttachment[];
+      title: string;
+    }
+  | undefined => {
   if (!task.title || task.issueId) {
-    return { attachments: [], title: task.title || '' };
+    return undefined;
   }
 
-  const urlMatches = task.title.match(SHORT_SYNTAX_URL_REG_EX);
+  // 1. Extract markdown links first — they take priority over plain URL matching
+  // This prevents the plain URL regex from greedily including the closing ')' of
+  // markdown syntax like [text](https://example.com/)
+  const { urls: markdownUrls, titleWithoutMarkdown } = extractMarkdownLinks(task.title);
 
-  if (!urlMatches || urlMatches.length === 0) {
-    return { attachments: [], title: task.title };
+  // 2. Then match remaining plain URLs in the title (after markdown links are replaced)
+  const plainUrlMatches = titleWithoutMarkdown.match(SHORT_SYNTAX_URL_REG_EX) || [];
+
+  const allUrls = [...markdownUrls, ...plainUrlMatches];
+  if (allUrls.length === 0) {
+    return undefined;
   }
 
-  const attachments: TaskAttachment[] = urlMatches.map((url) => {
-    let path = url.trim();
+  // Handle 'keep' mode: no changes, URL stays in title, no attachment
+  // Default to 'keep' if urlBehavior is undefined
+  if (!config.urlBehavior || config.urlBehavior === 'keep') {
+    return undefined;
+  }
 
-    // Remove trailing punctuation that's not part of the URL
-    path = path.replace(/[.,;!?]+$/, '');
+  // Filter out attachments that already exist (prevent duplicates)
+  const newAttachments = filterDuplicateUrlAttachments(allUrls, task.attachments || []);
 
-    const isFileProtocol = path.startsWith('file://');
+  let cleanedTitle = task.title;
+  if (config.urlBehavior === 'extract') {
+    // In extract mode: replace markdown links with display text, remove plain URLs
+    cleanedTitle = markdownUrls.length > 0 ? titleWithoutMarkdown : task.title;
+    cleanedTitle = removeUrlsFromTitle(cleanedTitle, plainUrlMatches);
+  }
+
+  // Return undefined if nothing changed
+  const titleChanged = cleanedTitle !== task.title;
+  const hasNewAttachments = newAttachments.length > 0;
+
+  if (!titleChanged && !hasNewAttachments) {
+    return undefined;
+  }
+
+  return {
+    attachments: newAttachments,
+    title: cleanedTitle,
+  };
+};
+
+const createUrlAttachment = (url: string): TaskAttachment => {
+  let path = url.trim();
+
+  // Remove trailing punctuation that's not part of the URL
+  path = path.replace(/[.,;!?]+$/, '');
+
+  const isFileProtocol = path.startsWith('file://');
+
+  // Add protocol if missing (for www. URLs)
+  if (!path.match(/^(?:https?|file):\/\//)) {
+    path = '//' + path;
+  }
+
+  // Detect if it's an image
+  const isImage = isImageUrlSimple(path);
+
+  // Determine type and icon
+  let type: 'FILE' | 'LINK' | 'IMG';
+  let icon: string;
+
+  if (isImage) {
+    type = 'IMG';
+    icon = 'image';
+  } else if (isFileProtocol) {
+    type = 'FILE';
+    icon = 'insert_drive_file';
+  } else {
+    type = 'LINK';
+    icon = 'bookmark';
+  }
+
+  return {
+    id: nanoid(),
+    type,
+    path,
+    title: _baseNameForUrl(path),
+    icon,
+  };
+};
+
+const filterDuplicateUrlAttachments = (
+  urlMatches: string[],
+  existingAttachments: TaskAttachment[],
+): TaskAttachment[] => {
+  const existingPaths = new Set(
+    existingAttachments.map((a) => a.path).filter((p): p is string => !!p),
+  );
+
+  return urlMatches
+    .map((url) => createUrlAttachment(url))
+    .filter((attachment) => attachment.path && !existingPaths.has(attachment.path));
+};
+
+const removeUrlsFromTitle = (title: string, urlMatches: string[]): string => {
+  let cleanedTitle = title;
+
+  // Clean URLs from title - process all URL matches
+  // We need to remove URLs even if they already exist as attachments
+  urlMatches.forEach((url) => {
+    let path = url.trim().replace(/[.,;!?]+$/, '');
 
     // Add protocol if missing (for www. URLs)
     if (!path.match(/^(?:https?|file):\/\//)) {
       path = '//' + path;
     }
 
-    // Detect if it's an image
-    const isImage = isImageUrlSimple(path);
-
-    // Determine type and icon
-    let type: 'FILE' | 'LINK' | 'IMG';
-    let icon: string;
-
-    if (isImage) {
-      type = 'IMG';
-      icon = 'image';
-    } else if (isFileProtocol) {
-      type = 'FILE';
-      icon = 'insert_drive_file';
-    } else {
-      type = 'LINK';
-      icon = 'bookmark';
-    }
-
-    // Extract basename for title
-    const title = _baseNameForUrl(path);
-
-    return {
-      id: nanoid(),
-      type,
-      path,
-      title,
-      icon,
-    };
-  });
-
-  // Clean URLs from title - use trimmed URLs without trailing punctuation
-  let cleanedTitle = task.title;
-  attachments.forEach((attachment) => {
-    const attachmentPath = attachment.path;
-    if (!attachmentPath) return;
     // For www URLs, the path has '//' prepended, but the original doesn't
-    const originalUrl = attachmentPath.startsWith('//')
-      ? attachmentPath.substring(2)
-      : attachmentPath;
+    const originalUrl = path.startsWith('//') ? path.substring(2) : path;
+
     // Escape special regex characters for safe replacement
     const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), '');
   });
-  cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
 
-  return { attachments, title: cleanedTitle };
+  return cleanedTitle.trim().replace(/\s+/g, ' ');
 };
 
 const _baseNameForUrl = (passedStr: string): string => {

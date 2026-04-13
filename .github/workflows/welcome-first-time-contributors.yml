@@ -16,21 +16,45 @@ jobs:
   welcome:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/first-interaction@1c4688942c71f71d4f5502a26ea67c331730fa4d # v3
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          issue_message: |
-            Hello there ${{ github.actor }}! 👋
+      - name: Check and welcome first-time contributor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT_NAME" = "issues" ]; then
+            # Count all issues (excluding PRs) by this author
+            COUNT=$(gh api "search/issues?q=repo:${GH_REPO}+author:${ISSUE_AUTHOR}+type:issue" --jq '.total_count') || {
+              echo "::warning::Search API call failed; skipping welcome check"
+              exit 0
+            }
 
-            Thank you and congratulations 🎉 for opening your very first issue in this project! 💖
+            if [ "$COUNT" -le 1 ] 2>/dev/null; then
+              gh issue comment "$ISSUE_NUMBER" --body "Hello there ${ISSUE_AUTHOR}! 👋
 
-            In case you want to work on this issue, please comment down below! We will try to get back to you as soon as we can. 👀
+          Thank you and congratulations 🎉 for opening your very first issue in this project! 💖
 
-            For more open ended discussions and/or specific questions, please visit the [discussions page](https://github.com/super-productivity/super-productivity/discussions). 💖
+          In case you want to work on this issue, please comment down below! We will try to get back to you as soon as we can. 👀
 
-          pr_message: |
-            Hello there ${{ github.actor }}! 👋
+          For more open ended discussions and/or specific questions, please visit the [discussions page](https://github.com/${GH_REPO}/discussions). 💖"
+            fi
 
-            Thank you and congrats 🎉 for opening your first PR on this project! ✨ 💖
+          elif [ "$EVENT_NAME" = "pull_request_target" ]; then
+            # Count all PRs by this author
+            COUNT=$(gh api "search/issues?q=repo:${GH_REPO}+author:${PR_AUTHOR}+type:pr" --jq '.total_count') || {
+              echo "::warning::Search API call failed; skipping welcome check"
+              exit 0
+            }
 
-            We will try to review it soon!
+            if [ "$COUNT" -le 1 ] 2>/dev/null; then
+              gh pr comment "$PR_NUMBER" --body "Hello there ${PR_AUTHOR}! 👋
+
+          Thank you and congrats 🎉 for opening your first PR on this project! ✨ 💖
+
+          We will try to review it soon!"
+            fi
+          fi

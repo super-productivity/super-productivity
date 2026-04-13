@@ -37,6 +37,7 @@ export interface AndroidInterface {
   clearDbCallback(rId: string): void;
 
   triggerGetShareData?(): void;
+  getPendingShareData?(): string | null;
 
   // Foreground service methods for background time tracking
   startTrackingService?(taskId: string, taskTitle: string, timeSpentMs: number): void;
@@ -71,11 +72,23 @@ export interface AndroidInterface {
     reminderType: string,
     triggerAtMs: number,
     useAlarmStyle: boolean,
+    isOngoing: boolean,
   ): void;
   cancelNativeReminder?(notificationId: number): void;
 
+  // Reminder tap queue - get task ID from notification tap (cold start)
+  getReminderTapQueue?(): string | null;
+
+  // Reminder done queue - get task IDs marked done from notifications
+  getReminderDoneQueue?(): string | null;
+
   // Widget task queue - get queued tasks from home screen widget
   getWidgetTaskQueue?(): string | null;
+
+  // Startup overlay
+  getStartupOverlayPartialText?(): string | null;
+  hideStartupOverlay?(): void;
+  dismissStartupOverlay?(): void;
 
   // added here only
   onResume$: Subject<void>;
@@ -85,6 +98,7 @@ export interface AndroidInterface {
 
   onShareWithAttachment$: Subject<{
     title: string;
+    subject: string;
     type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
     path: string;
   }>;
@@ -101,6 +115,16 @@ export interface AndroidInterface {
 
   // Focus mode timer completion (native service detected timer reached 0)
   onFocusModeTimerComplete$: Subject<boolean>; // boolean indicates isBreak
+
+  // Reminder notification action callbacks
+  onReminderTap$: ReplaySubject<string>; // emits taskId
+  onReminderDone$: ReplaySubject<string>; // emits taskId
+  onReminderSnooze$: ReplaySubject<{ taskId: string; newRemindAt: number }>; // emits snooze events
+  getReminderSnoozeQueue?(): string | null;
+
+  // Background sync credential bridge (for WorkManager-based reminder cancellation)
+  setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
+  clearSuperSyncCredentials?(): void;
 }
 
 // setInterval(() => {
@@ -123,6 +147,9 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onFocusSkip$ = new Subject();
   androidInterface.onFocusComplete$ = new Subject();
   androidInterface.onFocusModeTimerComplete$ = new Subject();
+  androidInterface.onReminderTap$ = new ReplaySubject(5);
+  androidInterface.onReminderDone$ = new ReplaySubject(20);
+  androidInterface.onReminderSnooze$ = new ReplaySubject(20);
   androidInterface.onShareWithAttachment$ = new ReplaySubject(1);
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
 
@@ -186,5 +213,58 @@ if (IS_ANDROID_WEB_VIEW) {
   };
 
   DroidLog.log('Android Web View interfaces initialized', androidInterface);
+
+  // Pull-based: retrieve share data persisted in SharedPreferences (survives process death)
+  try {
+    const pendingShare = androidInterface.getPendingShareData?.();
+    if (pendingShare) {
+      const parsed = JSON.parse(pendingShare);
+      DroidLog.log('Pulled pending share data from SharedPreferences');
+      androidInterface.onShareWithAttachment$.next(parsed);
+    }
+  } catch (e) {
+    DroidLog.err('Failed to parse pending share data', e);
+  }
+
+  // Pull-based: retrieve queued tap task ID from notification tap (cold start)
+  try {
+    const tapTaskId = androidInterface.getReminderTapQueue?.();
+    if (tapTaskId) {
+      DroidLog.log('Pulled reminder tap queue from SharedPreferences', tapTaskId);
+      androidInterface.onReminderTap$.next(tapTaskId);
+    }
+  } catch (e) {
+    DroidLog.err('Failed to parse reminder tap queue', e);
+  }
+
+  // Pull-based: retrieve queued "Done" task IDs from notification actions
+  try {
+    const doneQueue = androidInterface.getReminderDoneQueue?.();
+    if (doneQueue) {
+      const taskIds: string[] = JSON.parse(doneQueue);
+      DroidLog.log('Pulled reminder done queue from SharedPreferences', taskIds);
+      for (const id of taskIds) {
+        androidInterface.onReminderDone$.next(id);
+      }
+    }
+  } catch (e) {
+    DroidLog.err('Failed to parse reminder done queue', e);
+  }
+
+  // Pull-based: retrieve queued snooze events from notification actions
+  try {
+    const snoozeQueue = androidInterface.getReminderSnoozeQueue?.();
+    if (snoozeQueue) {
+      const events: { taskId: string; newRemindAt: number }[] = JSON.parse(snoozeQueue);
+      DroidLog.log('Pulled reminder snooze queue from SharedPreferences', events);
+      for (const event of events) {
+        androidInterface.onReminderSnooze$.next(event);
+      }
+    }
+  } catch (e) {
+    DroidLog.err('Failed to parse reminder snooze queue', e);
+  }
+
+  // Push-based: sets isFrontendReady=true on native side for warm-start shares
   androidInterface.triggerGetShareData?.();
 }

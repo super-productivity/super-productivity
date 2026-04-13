@@ -2,16 +2,18 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SimpleCounterService } from '../../features/simple-counter/simple-counter.service';
 import { HabitTrackerComponent } from '../../features/simple-counter/habit-tracker/habit-tracker.component';
-import { T } from '../../t.const';
-import { TranslateModule } from '@ngx-translate/core';
+import { map } from 'rxjs/operators';
 
 @Component({
   selector: 'habit-page',
   standalone: true,
-  imports: [CommonModule, HabitTrackerComponent, TranslateModule],
+  imports: [CommonModule, HabitTrackerComponent],
   template: `
     <div class="page-wrapper">
-      <habit-tracker [simpleCounters]="(simpleCounters$ | async) || []"></habit-tracker>
+      <habit-tracker
+        [simpleCounters]="(simpleCounters$ | async) || []"
+        [disabledSimpleCounters]="(disabledSimpleCounters$ | async) || []"
+      ></habit-tracker>
     </div>
   `,
   styles: [
@@ -26,7 +28,9 @@ import { TranslateModule } from '@ngx-translate/core';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HabitPageComponent {
-  simpleCounterService = inject(SimpleCounterService);
-  simpleCounters$ = this.simpleCounterService.enabledSimpleCounters$;
-  T = T;
+  private _simpleCounterService = inject(SimpleCounterService);
+  simpleCounters$ = this._simpleCounterService.enabledSimpleCounters$;
+  disabledSimpleCounters$ = this._simpleCounterService.simpleCounters$.pipe(
+    map((counters) => counters.filter((c) => !c.isEnabled)),
+  );
 }

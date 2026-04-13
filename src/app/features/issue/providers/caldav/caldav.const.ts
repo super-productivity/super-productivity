@@ -8,8 +8,12 @@ export const DEFAULT_CALDAV_CFG: CaldavCfg = {
   resourceName: null,
   username: null,
   password: null,
-  isTransitionIssuesEnabled: false,
   categoryFilter: null,
+  twoWaySync: {
+    isDone: 'pullOnly',
+    title: 'pullOnly',
+    notes: 'off',
+  },
 };
 
 export const CALDAV_POLL_INTERVAL = 10 * 60 * 1000;

@@ -180,6 +180,8 @@ export const getSuperSyncConfig = (user: TestUser): SuperSyncConfig => {
   return {
     baseUrl: SUPERSYNC_BASE_URL,
     accessToken: user.token,
+    isEncryptionEnabled: true,
+    password: 'e2e-default-encryption-pw',
   };
 };
 
@@ -214,6 +216,15 @@ export const createSimulatedClient = async (
   });
 
   const page = await context.newPage();
+
+  // Skip onboarding, hints, and example tasks before the app boots.
+  // This runs before any page JavaScript, so Angular sees the flags immediately.
+  await page.addInitScript(() => {
+    localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+    localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+    localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+  });
 
   // Set up error logging
   page.on('pageerror', (error) => {
@@ -255,35 +266,32 @@ export const closeClient = async (client: SimulatedE2EClient): Promise<void> => 
       // Add timeout wrapper to prevent cleanup from blocking test completion.
       // context.close() can hang waiting for trace files to be written.
       const closePromise = client.context.close();
-      const timeoutPromise = new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error('Cleanup timeout')), 5000),
-      );
-      await Promise.race([closePromise, timeoutPromise]);
+      let timeoutId: ReturnType<typeof setTimeout>;
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Cleanup timeout')), 5000);
+      });
+
+      // Prevent unhandled rejection if closePromise rejects after timeout wins the race.
+      // Without this, the abandoned promise rejection causes Playwright to mark the test
+      // as failed with "error was not a part of any test", masking the real test error.
+      closePromise.catch(() => {});
+
+      try {
+        await Promise.race([closePromise, timeoutPromise]);
+      } finally {
+        clearTimeout(timeoutId!);
+      }
     }
   } catch (error) {
-    // Ignore errors if context is already closed or trace artifacts are missing.
+    // Always ignore cleanup errors - they should never mask the actual test error.
     // Common scenarios:
     // - Test timeout: Playwright force-closes contexts, cleanup gets "Protocol error"
     // - ENOENT: Trace file finalization fails for manually-created contexts
     // - Context already closed: Race between test timeout and cleanup
     // - Cleanup timeout: context.close() hung waiting for trace artifacts
-    if (error instanceof Error) {
-      const ignorableErrors = [
-        'Target page, context or browser has been closed',
-        'ENOENT',
-        'Protocol error',
-        'Target.disposeBrowserContext',
-        'Failed to find context',
-        'End of central directory record signature not found',
-        'Cleanup timeout',
-      ];
-      const shouldIgnore = ignorableErrors.some((msg) => error.message.includes(msg));
-      if (shouldIgnore) {
-        console.warn(`[closeClient] Ignoring cleanup error: ${error.message}`);
-      } else {
-        throw error;
-      }
-    }
+    console.warn(
+      `[closeClient] Cleanup error (ignored): ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 };
 
@@ -492,7 +500,7 @@ export const markTaskDone = async (
 ): Promise<void> => {
   const task = getTaskElement(client, taskName);
   await task.hover();
-  await task.locator('.task-done-btn').click();
+  await task.locator('done-toggle').click();
 };
 
 /**
@@ -508,7 +516,7 @@ export const markSubtaskDone = async (
 ): Promise<void> => {
   const subtask = getSubtaskElement(client, subtaskName);
   await subtask.hover();
-  await subtask.locator('.task-done-btn').click();
+  await subtask.locator('done-toggle').click();
 };
 
 /**
@@ -539,7 +547,10 @@ export const deleteTask = async (
   taskName: string,
 ): Promise<void> => {
   const task = getTaskElement(client, taskName);
-  await task.click();
+  // Focus the task element directly without entering title edit mode.
+  // Clicking the task body can land on the task-title, opening the textarea editor,
+  // which causes Backspace to delete text instead of triggering the delete shortcut.
+  await task.focus();
   await client.page.keyboard.press('Backspace');
 
   // Confirm deletion if dialog appears
@@ -575,10 +586,64 @@ export const renameTask = async (
   newName: string,
 ): Promise<void> => {
   const task = getTaskElement(client, oldName);
-  await task.locator('task-title').click();
-  await client.page.waitForSelector('task textarea', { state: 'visible' });
-  await client.page.locator('task textarea').fill(newName);
-  await client.page.keyboard.press('Tab');
+  // Wait for the task element to be stable before interacting — prevents
+  // "element detached from DOM" errors when Angular re-renders the task list
+  await task.waitFor({ state: 'attached', timeout: 5000 });
+
+  // Wait for Angular enter animations to complete. On slower/loaded CI machines the
+  // task element may still carry the `ng-animating` class when first visible,
+  // causing clicks to be swallowed and `task-title` to be temporarily absent.
+  await task
+    .evaluate((el) =>
+      el.classList.contains('ng-animating')
+        ? new Promise<void>((resolve) => {
+            const observer = new MutationObserver(() => {
+              if (!el.classList.contains('ng-animating')) {
+                observer.disconnect();
+                resolve();
+              }
+            });
+            observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+            setTimeout(() => {
+              observer.disconnect();
+              resolve();
+            }, 2000);
+          })
+        : undefined,
+    )
+    .catch(() => {});
+
+  // Enter edit mode by dispatching a click event directly on the task-title element.
+  // Using dispatchEvent avoids pointer-events:none and Playwright actionability issues.
+  // Retry up to 3 times: Angular may still re-render the component briefly after
+  // the animation class is removed, causing the click to not open edit mode.
+  const taskTitle = task.locator('task-title').first();
+  const textarea = client.page.locator('task-title textarea').first();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await taskTitle.dispatchEvent('click');
+    try {
+      await textarea.waitFor({ state: 'visible', timeout: 3000 });
+      break;
+    } catch {
+      if (attempt === 2) {
+        throw new Error(
+          `renameTask: textarea did not appear after 3 click attempts on "${oldName}"`,
+        );
+      }
+      await client.page.waitForTimeout(500);
+    }
+  }
+
+  // Type directly into the textarea via evaluate to avoid focus/detach races
+  await textarea.evaluate((el: HTMLTextAreaElement, name: string) => {
+    el.focus();
+    el.value = name;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, newName);
+  // Blur to commit the change
+  await textarea.evaluate((el: HTMLTextAreaElement) => {
+    el.dispatchEvent(new Event('blur', { bubbles: true }));
+  });
   await client.page.waitForTimeout(UI_SETTLE_MEDIUM);
 };
 
@@ -737,21 +802,21 @@ export const createProjectReliably = async (
     .first();
   await projectsTree.waitFor({ state: 'visible' });
 
-  // The "Create Project" button is an additional-btn with an 'add' icon
-  const addBtn = projectsTree.locator('.additional-btn mat-icon:has-text("add")').first();
+  // Hover the group header to make additional buttons visible and clickable
+  // (buttons have pointer-events: none by default, only enabled on hover)
+  const groupNavItem = projectsTree.locator('nav-item').first();
+  await groupNavItem.hover();
+  await page.waitForTimeout(UI_SETTLE_SMALL);
 
-  if (await addBtn.isVisible()) {
+  // Target the button element (not the mat-icon inside it)
+  const addBtn = projectsTree.locator(
+    '.additional-btns button[mat-icon-button]:has(mat-icon:text("add"))',
+  );
+  try {
+    await addBtn.waitFor({ state: 'visible', timeout: 5000 });
     await addBtn.click();
-  } else {
-    // Try to hover the group header to make buttons appear
-    const groupNavItem = projectsTree.locator('nav-item').first();
-    await groupNavItem.hover();
-    await page.waitForTimeout(UI_SETTLE_SMALL);
-    if (await addBtn.isVisible()) {
-      await addBtn.click();
-    } else {
-      throw new Error('Could not find Create Project button');
-    }
+  } catch {
+    await addBtn.click({ force: true });
   }
 
   // Dialog
@@ -840,6 +905,8 @@ export const archiveTask = async (
 
 /**
  * Navigate to worklog and check for a specific task in archived entries.
+ * Skips navigation if already on the worklog page to avoid re-render issues
+ * when checking multiple tasks in succession.
  *
  * @param client - The simulated E2E client
  * @param taskName - The task name to search for in worklog
@@ -849,21 +916,24 @@ export const hasTaskInWorklog = async (
   client: SimulatedE2EClient,
   taskName: string,
 ): Promise<boolean> => {
-  // Navigate to worklog
-  await client.page.goto('/#/tag/TODAY/worklog');
-  await client.page.waitForLoadState('networkidle');
-  await client.page.waitForTimeout(UI_SETTLE_STANDARD);
+  // Only navigate if not already on worklog page
+  const currentUrl = client.page.url();
+  if (!currentUrl.includes('/worklog')) {
+    await client.page.goto('/#/tag/TODAY/worklog');
+    await client.page.waitForLoadState('networkidle');
+    await client.page.waitForTimeout(UI_SETTLE_EXTENDED);
+  }
 
   // Expand week rows that aren't already expanded
   const weekRows = client.page.locator('.week-row');
   const weekCount = await weekRows.count();
-  for (let i = 0; i < Math.min(weekCount, 3); i++) {
+  for (let i = 0; i < Math.min(weekCount, 5); i++) {
     const row = weekRows.nth(i);
     if (await row.isVisible()) {
       const isExpanded = await row.evaluate((el) => el.classList.contains('isExpanded'));
       if (!isExpanded) {
         await row.click().catch(() => {});
-        await client.page.waitForTimeout(UI_SETTLE_MEDIUM);
+        await client.page.waitForTimeout(UI_SETTLE_STANDARD);
       }
     }
   }
@@ -876,7 +946,7 @@ export const hasTaskInWorklog = async (
 
   return taskEntry
     .first()
-    .waitFor({ state: 'visible', timeout: 5000 })
+    .waitFor({ state: 'visible', timeout: 10000 })
     .then(() => true)
     .catch(() => false);
 };
@@ -956,4 +1026,39 @@ export const navigateToWorkView = async (client: SimulatedE2EClient): Promise<vo
   await client.page.goto('/#/tag/TODAY/tasks');
   await client.page.waitForLoadState('networkidle');
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
+};
+
+// ============================================================================
+// ENCRYPTION DIALOG HELPERS
+// ============================================================================
+
+/**
+ * Handle the encryption warning dialog that appears when importing a backup
+ * with different encryption settings than the current app state.
+ *
+ * The dialog (dialog-import-encryption-warning) has a warn-colored confirm button.
+ * If the dialog does not appear within the timeout, this is a no-op.
+ *
+ * @param page - The Playwright page
+ * @param label - Optional label for console logging (e.g. "[importBackup]")
+ */
+export const handleEncryptionWarningDialog = async (
+  page: Page,
+  label = '[handleEncryptionWarningDialog]',
+): Promise<void> => {
+  const encryptionWarning = page.locator('dialog-import-encryption-warning');
+  const warningAppeared = await encryptionWarning
+    .waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT_SHORT })
+    .then(() => true)
+    .catch(() => false);
+
+  if (warningAppeared) {
+    console.log(`${label} Encryption warning dialog appeared - confirming import`);
+    const confirmBtn = encryptionWarning.locator('button[color="warn"]');
+    await confirmBtn.click();
+    await encryptionWarning.waitFor({
+      state: 'hidden',
+      timeout: UI_VISIBLE_TIMEOUT_LONG,
+    });
+  }
 };

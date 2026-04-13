@@ -1,0 +1,8 @@
+{
+  "name": "voice-reminder",
+  "version": "1.0.0",
+  "description": "Voice reminder plugin for Super Productivity",
+  "scripts": {
+    "build": "echo 'No build needed for simple plugin'"
+  }
+}

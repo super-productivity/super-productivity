@@ -1,7 +1,7 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 
 import { LanguageCode, DateTimeLocale } from '../../core/locale.constants';
-import { LegacySyncProvider } from '../../imex/sync/legacy-sync-provider.model';
+import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { ProjectCfgFormKey } from '../project/project.model';
 import { KeyboardConfig } from './keyboard-config.model';
 import { TaskReminderOptionId } from '../tasks/task.model';
@@ -16,22 +16,24 @@ export type AppFeaturesConfig = Readonly<{
   isIssuesPanelEnabled: boolean;
   isProjectNotesEnabled: boolean;
   isSyncIconEnabled: boolean;
+  isSearchEnabled: boolean;
   isDonatePageEnabled: boolean;
   isEnableUserProfiles: boolean;
   isHabitsEnabled: boolean;
+  isFinishDayEnabled: boolean;
 }>;
 
 export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  isLocalRestApiEnabled?: boolean;
   startOfNextDay: number;
   isDisableAnimations: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;
   isShowProductivityTipLonger?: boolean;
   isTrayShowCurrentCountdown?: boolean;
-  isOverlayIndicatorEnabled?: boolean;
   isUseCustomWindowTitleBar?: boolean;
   customTheme?: string;
   defaultStartPage?: number;
@@ -45,6 +47,8 @@ export type MiscConfig = Readonly<{
   isTurnOffMarkdown?: boolean; // Deprecated
   defaultProjectId?: string | null | false; // Deprecated
   taskNotesTpl?: string; // Deprecated
+  isOverlayIndicatorEnabled?: boolean; // Deprecated – moved to taskWidget.isEnabled
+  overlayIndicatorOpacity?: number; // Deprecated – moved to taskWidget.opacity
 }>;
 
 export type TasksConfig = Readonly<{
@@ -61,10 +65,10 @@ export type ShortSyntaxConfig = Readonly<{
   isEnableProject: boolean;
   isEnableDue: boolean;
   isEnableTag: boolean;
+  urlBehavior?: 'keep' | 'extract' | 'keep-and-attach';
 }>;
 
 export type TimeTrackingConfig = Readonly<{
-  trackingInterval?: number | null;
   defaultEstimate?: number | null;
   defaultEstimateSubTasks?: number | null;
   isAutoStartNextTask: boolean;
@@ -104,7 +108,7 @@ export type PomodoroConfig = Readonly<{
   duration?: number | null;
   breakDuration?: number | null;
   longerBreakDuration?: number | null;
-  cyclesBeforeLongerBreak: number;
+  cyclesBeforeLongerBreak?: number | null;
 }>;
 
 // NOTE: needs to be writable due to how we use it
@@ -125,6 +129,13 @@ export interface SuperSyncConfig extends WebDavConfig {
   isEncryptionEnabled?: boolean;
   /** Encryption password (SuperSync-specific, stored in private config) */
   encryptKey?: string | null;
+}
+
+export interface NextcloudConfig {
+  serverUrl?: string | null;
+  userName?: string | null;
+  password?: string | null;
+  syncFolderPath?: string | null;
 }
 
 export interface LocalFileSyncConfig {
@@ -162,8 +173,7 @@ export type SyncConfig = Readonly<{
   isEnabled: boolean;
   isEncryptionEnabled?: boolean;
   isCompressionEnabled?: boolean;
-  // TODO migrate to SyncProviderId
-  syncProvider: LegacySyncProvider | null;
+  syncProvider: SyncProviderId | null;
   syncInterval: number;
   isManualSyncOnly?: boolean;
 
@@ -175,6 +185,8 @@ export type SyncConfig = Readonly<{
   superSync?: SuperSyncConfig;
   /* NOTE: view model for form only*/
   localFileSync?: LocalFileSyncConfig;
+  /* NOTE: view model for form only*/
+  nextcloud?: NextcloudConfig;
 }>;
 
 export type ScheduleConfig = Readonly<{
@@ -194,6 +206,8 @@ export type ReminderConfig = Readonly<{
   isFocusWindow?: boolean;
   // Android only: use alarm-style notifications (louder, more intrusive)
   useAlarmStyleReminders?: boolean;
+  notifyOnDueDate?: boolean;
+  dueDateNotificationHour?: number;
 }>;
 
 export type TrackingReminderConfigOld = Readonly<{
@@ -202,9 +216,9 @@ export type TrackingReminderConfigOld = Readonly<{
   minTime: number;
 }>;
 
-// @todo - rename to VoiceReminderConfig
-// @todo - but save DominaModeConfig for backward compatibility
-// @todo - and make migration when loading old config
+/**
+ * @deprecated Exists only for migration to the voice-reminder plugin. Can be removed once migration is no longer needed.
+ */
 export type DominaModeConfig = Readonly<{
   isEnabled: boolean;
   text: string;
@@ -215,11 +229,19 @@ export type DominaModeConfig = Readonly<{
 
 export type FocusModeConfig = Readonly<{
   isSkipPreparation: boolean;
+  focusModeSound?: 'off' | 'tick' | 'whiteNoise';
+  /** @deprecated Use focusModeSound instead. Kept for backward-compat validation of old data. */
   isPlayTick?: boolean;
   isPauseTrackingDuringBreak?: boolean;
   isSyncSessionWithTracking?: boolean;
   isStartInBackground?: boolean;
   isManualBreakStart?: boolean;
+}>;
+
+export type TaskWidgetConfig = Readonly<{
+  isEnabled?: boolean;
+  isAlwaysShow?: boolean;
+  opacity?: number;
 }>;
 
 export type ClipboardImagesConfig = Readonly<{
@@ -250,6 +272,7 @@ export type GlobalConfigState = Readonly<{
   schedule: ScheduleConfig;
   dominaMode: DominaModeConfig;
   focusMode: FocusModeConfig;
+  taskWidget?: TaskWidgetConfig;
   clipboardImages?: ClipboardImagesConfig;
 
   sync: SyncConfig;
@@ -267,7 +290,8 @@ export type GlobalSectionConfig =
   | ReminderConfig
   | DailySummaryNote
   | SyncConfig
-  | ClipboardImagesConfig;
+  | ClipboardImagesConfig
+  | TaskWidgetConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export interface LimitedFormlyFieldConfig<FormModel> extends Omit<
@@ -280,9 +304,7 @@ export interface LimitedFormlyFieldConfig<FormModel> extends Omit<
 export type CustomCfgSection =
   | 'FILE_IMPORT_EXPORT'
   | 'JIRA_CFG'
-  | 'SIMPLE_COUNTER_CFG'
   | 'OPENPROJECT_CFG'
-  | 'CLICKUP_CFG'
   | 'CLIPBOARD_IMAGES_CFG';
 
 // Intermediate model

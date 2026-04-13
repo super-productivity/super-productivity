@@ -12,7 +12,7 @@ import { SyncProviderId } from '../../../sync-providers/provider.const';
 import { EncryptAndCompressCfg } from '../../../core/types/sync.types';
 import { TestClient } from './test-client.helper';
 import { VectorClock } from '../../../core/operation.types';
-import { v4 as uuidV4 } from 'uuid';
+import { uuidv7 } from 'uuidv7';
 import { ArchiveDbAdapter } from '../../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../../backup/state-snapshot.service';
 
@@ -252,8 +252,8 @@ export class FileBasedSyncTestHarness {
 
     // Create a fresh adapter service for this client
     // Each client needs its own adapter service instance because:
-    // - _processedOpIds tracks what THIS client has seen (not global)
     // - _expectedSyncVersions tracks what THIS client expects
+    // - _localSeqCounters tracks what THIS client has seen
     // In real usage, each app instance has its own adapter service
     const adapterService = this._createAdapterService();
 
@@ -301,7 +301,7 @@ export class FileBasedSyncTestHarness {
         testClient.setVectorClock(currentClock);
 
         return {
-          id: uuidV4(),
+          id: uuidv7(),
           clientId,
           actionType,
           opType,
@@ -436,7 +436,7 @@ export const createTestSyncOperation = (
   payload: unknown,
   vectorClock: VectorClock = {},
 ): SyncOperation => ({
-  id: uuidV4(),
+  id: uuidv7(),
   clientId,
   actionType: 'TestAction',
   opType,

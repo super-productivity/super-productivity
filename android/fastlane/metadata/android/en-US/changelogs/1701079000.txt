@@ -1,0 +1,64 @@
+
+### Bug Fixes
+
+* **android:** patch CDK viewport to respect safe area for connected overlays
+* **android:** persist share intent to SharedPreferences for cold-start reliability
+* **android:** set status bar icons to dark in light mode (#6462)
+* **android:** use native safe area insets for proper status bar padding (4c4a0a3), closes #f8f8f7
+* **bg-overlay:** fix bg overlay not rendering in focus mode overlay (#6512)
+* **ci:** replace buggy first-interaction action with custom first-time check (0b5d340), closes #6500
+* clear markdown preview when switching to task without notes (#6499) (9327ad0), closes #6490
+* cross-platform safe area handling and iPad sidenav layout
+* **electron:** skip singleton lock on macOS to fix App Store sandbox error (eced8f4), closes #6275
+* eliminate real retry delays in tests and fix type errors
+* **focus-mode:** keep tracking after Pomodoro auto-complete with manual break start (#6510)
+* **habit-tracker:** remove redundant title attribute from habit title tooltip
+* handle async voice loading in voice reminder settings (#6437) (#6450)
+* **inline-markdown:** add padding so control buttons don't cover text (803e303), closes #6514
+* **inline-markdown:** insert checklist item at cursor position, not end (d9fccde), closes #6513
+* **inline-markdown:** prevent "undefined" placeholder when no text is set
+* **issue-panel:** allow setup overview tab to scroll when window is short (#6483)
+* **issue:** fix HttpRequest constructor type error in OpenProject API service
+* **mobile:** account for safe area inset in mobile side navigation (#6461)
+* **mobile:** prevent CDK overlays from rendering behind status bar
+* **planner:** reset infinite scroll state on navigation
+* remove white borders from macOS icon (#6323)
+* **simple-counter:** allow saving habit settings dialog (#6374)
+* **sync:** break infinite loop in LocalFileSyncElectron when no folder configured
+* **sync:** clear processedOpIds on deleteAllData and preserve error objects
+* **sync:** clear sync cycle cache on deleteAllData and extract ConflictType
+* **sync:** deduplicate retry budget counting per entity per batch
+* **sync:** fix replaceToken expiry, locale-independent sort, and stale comments
+* **sync:** fix stale comments and string concatenation bug from vector clock simplification
+* **sync:** fix stale comments, doc refs, and preserve lastSeq on clean-slate
+* **sync:** fix vector clock comparison parity and validation consistency
+* **sync:** harden vector clock sanitization and improve E2E test robustness
+* **sync:** keep import client's own post-import ops despite pruned vector clocks
+* **sync:** normalize oversized import clock to prevent false CONCURRENT filtering
+* **sync:** pass isForceConflict=true on backup import to reset vector clock
+* **sync:** prevent vector clock bloat on import
+* **sync:** prune vector clock in RepairOperationService to prevent oversized clocks
+* **sync:** prune vector clock in ServerMigrationService and SyncHydrationService
+* **sync:** remove invalid statusText from WebDAV Response constructors (c595102), closes #6494
+* **sync:** replace vector clock on remote SYNC_IMPORT instead of merging
+* **sync:** revert lastSeq preservation in deleteAllUserData
+* **sync:** suppress false "Server sequence decreased" warning after gap reset
+* **sync:** sync time re-added after idle and tracking reminder
+* **tasks,plugins:** improve robustness of task-done effect and plugin hooks
+* **tasks:** avoid short syntax project parsing when space follows + (#6509) (3b35ca6), closes #6493
+* **tasks:** prevent double-submit on rapid Enter in add task bar
+* **tasks:** prevent stale notes showing when switching tasks in sidebar (679d2e7), closes #6458
+
+
+### Features
+
+* allow installation to custom location on windows (#6451)
+* **backup:** use timestamped filenames with smart retention policy
+* **ios:** extend bottom nav into home indicator safe area
+* **mobile:** handle back button navigation of bottom sheet (project notes) (#6492)
+* **settings:** add icons to app feature toggles (#6427)
+* **simple-counter:** add drag-and-drop reordering to habit tracker
+* **sync:** show persistent snackbar when vector clock limit is reached (#6505)
+### Performance Improvements
+
+* **search:** optimize search page filtering and mapping pipeline

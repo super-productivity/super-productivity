@@ -2,13 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  effect,
   inject,
   input,
   signal,
 } from '@angular/core';
-import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { SimpleCounter, SimpleCounterType } from '../simple-counter.model';
 import { SimpleCounterService } from '../simple-counter.service';
 import { DateService } from '../../../core/date/date.service';
@@ -19,10 +18,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogSimpleCounterEditComponent } from '../dialog-simple-counter-edit/dialog-simple-counter-edit.component';
 import { DialogSimpleCounterEditSettingsComponent } from '../dialog-simple-counter-edit-settings/dialog-simple-counter-edit-settings.component';
+import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { EMPTY_SIMPLE_COUNTER } from '../simple-counter.const';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { loadFromRealLs, saveToRealLs } from '../../../core/persistence/local-storage';
-import { LS } from '../../../core/persistence/storage-keys.const';
+import { moveItemInArray } from '../../../util/move-item-in-array';
+import { dragDelayForTouch } from '../../../util/input-intent';
+import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
+import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 
 @Component({
   selector: 'habit-tracker',
@@ -33,6 +35,9 @@ import { LS } from '../../../core/persistence/storage-keys.const';
     MatButtonModule,
     MatIconModule,
     MatTooltipModule,
+    CdkDropList,
+    CdkDrag,
+    LocaleDatePipe,
   ],
   templateUrl: './habit-tracker.component.html',
   styleUrl: './habit-tracker.component.scss',
@@ -40,39 +45,26 @@ import { LS } from '../../../core/persistence/storage-keys.const';
 })
 export class HabitTrackerComponent {
   simpleCounters = input.required<SimpleCounter[]>();
+  disabledSimpleCounters = input<SimpleCounter[]>([]);
 
   private _simpleCounterService = inject(SimpleCounterService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
   private _dateService = inject(DateService);
   private _matDialog = inject(MatDialog);
-  private _router = inject(Router);
+
+  showDisabled = signal(false);
 
   T = T;
   SimpleCounterType = SimpleCounterType;
+  dragDelayForTouch = dragDelayForTouch;
 
   dayOffset = signal(0);
-  isCompactView = signal(false);
-
-  constructor() {
-    // Load initial compact view state from localStorage
-    const savedCompactView = loadFromRealLs(LS.HABIT_TRACKER_COMPACT_VIEW) as
-      | { value: boolean }
-      | undefined;
-    if (savedCompactView && typeof savedCompactView.value === 'boolean') {
-      this.isCompactView.set(savedCompactView.value);
-    }
-
-    // Persist compact view state changes to localStorage
-    effect(() => {
-      saveToRealLs(LS.HABIT_TRACKER_COMPACT_VIEW, { value: this.isCompactView() });
-    });
-  }
 
   days = computed(() => {
     const days: string[] = [];
     const today = new Date();
     const offset = this.dayOffset();
-    const daysToShow = this.isCompactView() ? 3 : 6; // Show 4 days (0-3) or 7 days (0-6)
-    for (let i = daysToShow; i >= 0; i--) {
+    for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i + offset);
       days.push(this._dateService.todayStr(d));
@@ -81,21 +73,25 @@ export class HabitTrackerComponent {
   });
 
   prevWeek(): void {
-    const step = this.isCompactView() ? 4 : 7;
-    this.dayOffset.update((offset) => offset - step);
+    this.dayOffset.update((offset) => offset - 7);
   }
 
   nextWeek(): void {
-    const step = this.isCompactView() ? 4 : 7;
-    this.dayOffset.update((offset) => Math.min(0, offset + step));
+    this.dayOffset.update((offset) => Math.min(0, offset + 7));
   }
 
   resetToToday(): void {
     this.dayOffset.set(0);
   }
 
-  toggleCompactView(): void {
-    this.isCompactView.update((compact) => !compact);
+  drop(event: CdkDragDrop<SimpleCounter[]>): void {
+    if (event.previousIndex === event.currentIndex) {
+      return;
+    }
+    const counters = this.simpleCounters();
+    this._simpleCounterService.updateOrder(
+      moveItemInArray(counters, event.previousIndex, event.currentIndex).map((c) => c.id),
+    );
   }
 
   dateRangeLabel = computed(() => {
@@ -104,9 +100,10 @@ export class HabitTrackerComponent {
     const first = this.parseDateLocal(days[0]);
     const last = this.parseDateLocal(days[days.length - 1]);
 
+    const locale = this._dateTimeFormatService.currentLocale();
     const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    const firstStr = first.toLocaleDateString(undefined, formatOptions);
-    const lastStr = last.toLocaleDateString(undefined, formatOptions);
+    const firstStr = first.toLocaleDateString(locale, formatOptions);
+    const lastStr = last.toLocaleDateString(locale, formatOptions);
 
     return `${firstStr} - ${lastStr}`;
   });
@@ -190,7 +187,7 @@ export class HabitTrackerComponent {
   }
 
   getVal(counter: SimpleCounter, day: string): number {
-    return counter.countOnDay[day] || 0;
+    return counter.countOnDay?.[day] ?? 0;
   }
 
   getDisplayValue(counter: SimpleCounter, day: string): string {
@@ -253,9 +250,24 @@ export class HabitTrackerComponent {
     });
   }
 
-  openManageHabits(): void {
-    this._router.navigate(['/config'], {
-      queryParams: { tab: 3, section: 'SIMPLE_COUNTER_CFG' },
-    });
+  enableHabit(id: string): void {
+    this._simpleCounterService.updateSimpleCounter(id, { isEnabled: true });
+  }
+
+  deleteHabit(counter: SimpleCounter): void {
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          message: T.F.SIMPLE_COUNTER.D_CONFIRM_REMOVE.MSG,
+          okTxt: T.F.SIMPLE_COUNTER.D_CONFIRM_REMOVE.OK,
+        },
+      })
+      .afterClosed()
+      .subscribe((confirmed: boolean) => {
+        if (confirmed) {
+          this._simpleCounterService.deleteSimpleCounter(counter.id);
+        }
+      });
   }
 }

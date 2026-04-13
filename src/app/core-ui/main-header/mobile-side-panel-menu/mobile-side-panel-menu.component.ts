@@ -90,7 +90,7 @@ import { BreakpointObserver } from '@angular/cdk/layout';
           (click)="toggleIssuePanel()"
           [matTooltip]="T.MH.TOGGLE_SHOW_ISSUE_PANEL | translate"
         >
-          <mat-icon>dashboard_customize</mat-icon>
+          <mat-icon>webhook</mat-icon>
         </button>
 
         <!-- Notes -->

@@ -306,7 +306,7 @@ test.describe('@supersync SuperSync Error Handling', () => {
         .locator(`task:not(.ng-animating):has-text("${task1}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.task-done-btn').click();
+      await taskLocatorB.locator('done-toggle').click();
       await expect(taskLocatorB).toHaveClass(/isDone/);
 
       // 5. Client C just syncs (no modification, but will pick up B's change)
@@ -322,6 +322,19 @@ test.describe('@supersync SuperSync Error Handling', () => {
       await clientC.sync.syncAndWait();
 
       // 7. Verify all clients have both tasks
+      // Task 1 is done, so it may be in the "Completed Tasks" collapsible section
+      // which uses @if and removes elements from the DOM when collapsed.
+      // Expand it on all clients before checking.
+      for (const client of [clientA!, clientB!, clientC!]) {
+        const collapsedDoneSection = client.page.locator(
+          'collapsible:not(.isExpanded) .collapsible-header:has-text("Completed")',
+        );
+        if ((await collapsedDoneSection.count()) > 0) {
+          await collapsedDoneSection.click();
+          await client.page.waitForTimeout(500);
+        }
+      }
+
       await waitForTask(clientA.page, task1);
       await waitForTask(clientA.page, task2);
       await waitForTask(clientB.page, task1);

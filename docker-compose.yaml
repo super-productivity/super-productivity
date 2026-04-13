@@ -75,11 +75,11 @@ services:
 
   # WebDAV sync server
   webdav:
-    image: hacdias/webdav:latest
+    image: hacdias/webdav:v5
     ports:
       - '2345:2345'
     volumes:
-      - ./webdav.yaml:/config.yml:ro
+      - ./webdav.yaml:/etc/webdav/config.yaml:ro
       - webdav_data:/data
     healthcheck:
       test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:2345/']

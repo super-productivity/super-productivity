@@ -2,12 +2,11 @@
 @use '../../tasks/task/task.component.mixins' as *;
 
 :host {
+  position: relative;
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   flex-direction: row;
-  padding-top: var(--s-quarter);
-  padding-bottom: var(--s-quarter);
   border: 1px solid var(--separator-color);
   border-radius: var(--task-border-radius);
   opacity: 0.9;
@@ -24,15 +23,6 @@
   &:hover {
     border-color: var(--c-accent);
     color: var(--c-accent);
-    //outline: 1px solid var(--c-accent);
-
-    mat-icon.add {
-      display: block;
-    }
-
-    mat-icon.default {
-      display: none;
-    }
   }
 
   mat-icon {
@@ -44,18 +34,30 @@
     width: var(--planner-item-ico-size);
     min-width: var(--planner-item-ico-size);
     max-width: var(--planner-item-ico-size);
-
-    &.add {
-      display: none;
-    }
   }
+}
+
+.event-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--s-quarter);
+  padding-bottom: var(--s-quarter);
+}
+
+.menu-trigger {
+  position: absolute;
+  width: 0;
+  height: 0;
+  visibility: hidden;
 }
 
 .title {
   flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
   font-size: var(--planner-font-size-mobile);
 
   @include mq(xs) {

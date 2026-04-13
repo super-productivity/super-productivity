@@ -26,11 +26,13 @@ import { TaskDetailTargetPanel, TaskReminderOptionId } from './task.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { signal } from '@angular/core';
+import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 
 describe('TaskService', () => {
   let service: TaskService;
   let store: MockStore;
   let archiveService: jasmine.SpyObj<ArchiveService>;
+  let deletedTaskIssueSidecar: DeletedTaskIssueSidecarService;
   let tickSubject: Subject<{ duration: number; date: string }>;
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
@@ -159,6 +161,7 @@ describe('TaskService', () => {
     service = TestBed.inject(TaskService);
     store = TestBed.inject(MockStore);
     archiveService = TestBed.inject(ArchiveService) as jasmine.SpyObj<ArchiveService>;
+    deletedTaskIssueSidecar = TestBed.inject(DeletedTaskIssueSidecarService);
 
     spyOn(store, 'dispatch').and.callThrough();
   });
@@ -297,12 +300,19 @@ describe('TaskService', () => {
   });
 
   describe('removeMultipleTasks', () => {
-    it('should dispatch deleteTasks', () => {
+    it('should dispatch deleteTasks with only taskIds', () => {
       service.removeMultipleTasks(['task-1', 'task-2']);
 
       expect(store.dispatch).toHaveBeenCalledWith(
         TaskSharedActions.deleteTasks({ taskIds: ['task-1', 'task-2'] }),
       );
+    });
+
+    it('should populate sidecar with issue info before dispatch', () => {
+      spyOn(deletedTaskIssueSidecar, 'set');
+      service.removeMultipleTasks(['task-1', 'task-2']);
+
+      expect(deletedTaskIssueSidecar.set).toHaveBeenCalledWith([]);
     });
   });
 
@@ -646,6 +656,53 @@ describe('TaskService', () => {
 
       expect(task.projectId).toBe(INBOX_PROJECT.id);
     });
+
+    it('should clear invalid dueDay from additional fields', () => {
+      // Prevent devError from throwing (it calls alert + confirm -> throws if true)
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+
+      const task = service.createNewTaskWithDefaults({
+        title: 'Test',
+        additional: { dueDay: '-/-/2026' as any },
+      });
+
+      expect(task.dueDay).toBeUndefined();
+    });
+
+    it('should clear invalid deadlineDay from additional fields', () => {
+      // Prevent devError from throwing (it calls alert + confirm -> throws if true)
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+
+      const task = service.createNewTaskWithDefaults({
+        title: 'Test',
+        additional: { deadlineDay: '3/14/2026' as any },
+      });
+
+      expect(task.deadlineDay).toBeUndefined();
+    });
+
+    it('should preserve valid dueDay from additional fields', () => {
+      const task = service.createNewTaskWithDefaults({
+        title: 'Test',
+        additional: { dueDay: '2026-03-21' },
+      });
+
+      expect(task.dueDay).toBe('2026-03-21');
+    });
   });
 
   describe('getByIdOnce$', () => {
@@ -691,6 +748,67 @@ describe('TaskService', () => {
           date: '2026-01-01',
         }),
       );
+    });
+  });
+
+  describe('addTimeSpentAndSync', () => {
+    it('should dispatch both addTimeSpent and syncTimeSpent', () => {
+      const task = createMockTask('task-1');
+
+      service.addTimeSpentAndSync(task, 60000);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Add time spent',
+          task,
+          duration: 60000,
+          date: '2026-01-05',
+        }),
+      );
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Sync time spent',
+          taskId: 'task-1',
+          duration: 60000,
+          date: '2026-01-05',
+        }),
+      );
+    });
+
+    it('should use same date for both dispatches', () => {
+      const task = createMockTask('task-1');
+
+      service.addTimeSpentAndSync(task, 5000);
+
+      const calls = (store.dispatch as jasmine.Spy).calls.allArgs();
+      const addCall = calls.find(
+        ([a]: any) => a.type === '[TimeTracking] Add time spent',
+      );
+      const syncCall = calls.find(
+        ([a]: any) => a.type === '[TimeTracking] Sync time spent',
+      );
+
+      expect(addCall).toBeTruthy();
+      expect(syncCall).toBeTruthy();
+      expect(addCall![0].date).toBe(syncCall![0].date);
+    });
+
+    it('should not dispatch when duration is zero', () => {
+      const task = createMockTask('task-1');
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      service.addTimeSpentAndSync(task, 0);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not dispatch when duration is negative', () => {
+      const task = createMockTask('task-1');
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      service.addTimeSpentAndSync(task, -1000);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
 

@@ -18,6 +18,24 @@ type WaitForAppReadyOptions = {
 };
 
 /**
+ * Dismiss up to `maxAttempts` blocking confirmation dialogs.
+ * Some app flows show chained dialogs (e.g., pre-migration + data-repair)
+ * that must be dismissed before the app shell becomes interactive.
+ */
+const dismissBlockingDialogs = async (page: Page, maxAttempts = 3): Promise<void> => {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const dialogConfirmBtn = page.locator('dialog-confirm button[e2e="confirmBtn"]');
+      await dialogConfirmBtn.waitFor({ state: 'visible', timeout: 2000 });
+      await dialogConfirmBtn.click();
+      await page.waitForTimeout(500);
+    } catch {
+      break;
+    }
+  }
+};
+
+/**
  * Simplified wait that relies on Playwright's auto-waiting.
  * Previously used Angular testability API to check Zone.js stability.
  * Now just checks DOM readiness - Playwright handles element actionability.
@@ -34,6 +52,32 @@ export const waitForAngularStability = async (
       document.readyState === 'complete' && !!document.querySelector('.route-wrapper'),
     { timeout },
   );
+};
+
+/**
+ * Dismisses the onboarding preset selection screen if present.
+ * Sets the localStorage flag to skip it without altering app feature config.
+ */
+const dismissOnboardingPresets = async (page: Page): Promise<void> => {
+  try {
+    const isVisible = await page
+      .locator('onboarding-preset-selection')
+      .waitFor({ state: 'visible', timeout: 2000 })
+      .then(() => true)
+      .catch(() => false);
+    if (isVisible) {
+      await page.evaluate(() => {
+        localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+        localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+        localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+        localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(500);
+    }
+  } catch {
+    // Preset selection not present, ignore
+  }
 };
 
 /**
@@ -54,17 +98,10 @@ export const waitForAppReady = async (
 
   // Handle any blocking dialogs (pre-migration, confirmation, etc.)
   // These dialogs block app until dismissed
-  for (let i = 0; i < 3; i++) {
-    try {
-      const dialogConfirmBtn = page.locator('dialog-confirm button[e2e="confirmBtn"]');
-      await dialogConfirmBtn.waitFor({ state: 'visible', timeout: 2000 });
-      await dialogConfirmBtn.click();
-      await page.waitForTimeout(500);
-    } catch {
-      // No dialog visible, break out
-      break;
-    }
-  }
+  await dismissBlockingDialogs(page);
+
+  // Dismiss onboarding preset selection if present (blocks entire UI)
+  await dismissOnboardingPresets(page);
 
   // Wait for the loading screen to disappear (if visible).
   // The app shows `.loading-full-page-wrapper` while syncing/importing data.
@@ -92,11 +129,39 @@ export const waitForAppReady = async (
     }
   }
 
+  // Re-check loading screen (may appear after initial check during Angular bootstrap)
+  const loadingRecheck = page.locator('.loading-full-page-wrapper');
+  const isStillLoading = await loadingRecheck.isVisible().catch(() => false);
+  if (isStillLoading) {
+    await loadingRecheck.waitFor({ state: 'hidden', timeout: 30000 });
+  }
+
   // Wait for main route wrapper to be visible (indicates app shell loaded)
-  await page
-    .locator('.route-wrapper')
-    .first()
-    .waitFor({ state: 'visible', timeout: 15000 });
+  try {
+    await page
+      .locator('.route-wrapper')
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 });
+  } catch {
+    // Safety net: reload and retry if app got stuck
+    console.log(
+      '[waitForAppReady] .route-wrapper not visible after 15s, attempting reload...',
+    );
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await dismissBlockingDialogs(page);
+    const rl = page.locator('.loading-full-page-wrapper');
+    if (await rl.isVisible().catch(() => false)) {
+      await rl.waitFor({ state: 'hidden', timeout: 30000 });
+    }
+    if (ensureRoute) {
+      await page.waitForURL(routeRegex, { timeout: 15000 });
+    }
+    await page
+      .locator('.route-wrapper')
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 });
+  }
 
   // Wait for optional selector
   if (selector) {

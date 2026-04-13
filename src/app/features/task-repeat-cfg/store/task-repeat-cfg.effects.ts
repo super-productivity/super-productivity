@@ -25,9 +25,10 @@ import { T } from '../../../t.const';
 import { Update } from '@ngrx/entity';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { isToday } from '../../../util/is-today.util';
 import { TaskArchiveService } from '../../archive/task-archive.service';
+import { DateService } from '../../../core/date/date.service';
 import { Log } from '../../../core/log';
 import {
   addSubTask,
@@ -54,7 +55,6 @@ const SCHEDULE_AFFECTING_FIELDS: (keyof TaskRepeatCfgCopy)[] = [
   'friday',
   'saturday',
   'sunday',
-  'order', // controls top/bottom placement of created tasks, which affects rescheduling behavior
   'isPaused',
 ];
 
@@ -65,11 +65,15 @@ export class TaskRepeatCfgEffects {
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _taskArchiveService = inject(TaskArchiveService);
+  private _dateService = inject(DateService);
 
   addRepeatCfgToTaskUpdateTask$ = createEffect(() =>
     this._localActions$.pipe(
       ofType(addTaskRepeatCfgToTask),
-      filter(({ startTime, remindAt }) => !!startTime && !!remindAt),
+      filter(
+        ({ startTime, remindAt }) =>
+          !!startTime && !!remindAt && isValidSplitTime(startTime),
+      ),
       concatMap(({ taskId, startTime, remindAt, taskRepeatCfg }) =>
         this._taskService.getByIdOnce$(taskId).pipe(
           map((task) => {
@@ -96,7 +100,7 @@ export class TaskRepeatCfgEffects {
             );
 
             // Only skip auto-removal from today if the task is scheduled for today
-            const scheduledForToday = isToday(dateTime);
+            const scheduledForToday = this._dateService.isToday(dateTime);
 
             return TaskSharedActions.scheduleTaskWithTime({
               task,
@@ -143,7 +147,7 @@ export class TaskRepeatCfgEffects {
                 task: taskWithoutSubs,
                 taskRepeatCfg,
                 subTaskTemplates: [],
-                isTimedTask: !!(startTime && remindAt),
+                isTimedTask: !!(startTime && remindAt && isValidSplitTime(startTime)),
               };
             }
 
@@ -153,7 +157,7 @@ export class TaskRepeatCfgEffects {
               task: taskWithoutSubs,
               taskRepeatCfg,
               subTaskTemplates,
-              isTimedTask: !!(startTime && remindAt),
+              isTimedTask: !!(startTime && remindAt && isValidSplitTime(startTime)),
             };
           }),
         );
@@ -164,9 +168,11 @@ export class TaskRepeatCfgEffects {
           new Date(),
         );
         const firstOccurrenceStr = firstOccurrence
-          ? getDbDateStr(firstOccurrence)
-          : getDbDateStr(new Date());
-        const isFirstOccurrenceToday_ = firstOccurrence ? isToday(firstOccurrence) : true;
+          ? this._dateService.todayStr(firstOccurrence)
+          : this._dateService.todayStr();
+        const isFirstOccurrenceToday_ = firstOccurrence
+          ? this._dateService.isToday(firstOccurrence)
+          : true;
 
         // Update repeat config with subtask templates AND the correct lastTaskCreationDay
         this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfg.id, {
@@ -180,10 +186,14 @@ export class TaskRepeatCfgEffects {
           // Update created to match what the repeat processor would set (noon on
           // first occurrence day). This prevents duplicate creation via the
           // created-date check in _getActionsForTaskRepeatCfg (service.ts:217-219).
+          // Also set dueDay so the task is immediately scheduled for the start date
+          // and no longer appears in today's view (#6856).
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
+            dueDay: firstOccurrenceStr,
           });
-          // dueDay + planner + Today tag removal handled by planTaskForDay action
+          // planTaskForDay (below) also sets dueDay redundantly, plus handles
+          // planner days and TODAY_TAG removal
         } else {
           // TODAY FIRST OCCURRENCE:
           // Update dueDay if it differs
@@ -258,8 +268,8 @@ export class TaskRepeatCfgEffects {
 
                 const firstOccurrence = getFirstRepeatOccurrence(fullCfg, new Date());
                 const firstOccurrenceStr = firstOccurrence
-                  ? getDbDateStr(firstOccurrence)
-                  : getDbDateStr(new Date());
+                  ? this._dateService.todayStr(firstOccurrence)
+                  : this._dateService.todayStr();
 
                 // Update lastTaskCreationDay on the config
                 this._taskRepeatCfgService.updateTaskRepeatCfg(cfgId, {
@@ -267,9 +277,13 @@ export class TaskRepeatCfgEffects {
                   lastTaskCreation: firstOccurrence?.getTime() || Date.now(),
                 });
 
-                const isTimedTask = !!(fullCfg.startTime && fullCfg.remindAt);
+                const isTimedTask = !!(
+                  fullCfg.startTime &&
+                  fullCfg.remindAt &&
+                  isValidSplitTime(fullCfg.startTime)
+                );
                 const isFirstOccurrenceToday_ = firstOccurrence
-                  ? isToday(firstOccurrence)
+                  ? this._dateService.isToday(firstOccurrence)
                   : true;
 
                 if (isTimedTask) {
@@ -280,7 +294,7 @@ export class TaskRepeatCfgEffects {
                     fullCfg.startTime as string,
                     targetDayTimestamp,
                   );
-                  const scheduledForToday = isToday(dateTime);
+                  const scheduledForToday = this._dateService.isToday(dateTime);
 
                   return rxOf(
                     TaskSharedActions.scheduleTaskWithTime({
@@ -518,7 +532,7 @@ export class TaskRepeatCfgEffects {
       filter(({ cfg }) => !!cfg && cfg.repeatFromCompletionDate === true),
       filter(({ task, cfg }) => this._isLatestInstance(task, cfg)),
       map(({ cfg }) => {
-        const today = getDbDateStr();
+        const today = this._dateService.todayStr();
         return updateTaskRepeatCfg({
           taskRepeatCfg: {
             id: cfg.id as string,
@@ -640,7 +654,8 @@ export class TaskRepeatCfgEffects {
       (changes.startTime || changes.remindAt) &&
       completeCfg.remindAt &&
       completeCfg.startTime &&
-      isToday(task.created)
+      isValidSplitTime(completeCfg.startTime) &&
+      this._dateService.isToday(task.created)
     ) {
       const dateTime = getDateTimeFromClockString(
         completeCfg.startTime as string,

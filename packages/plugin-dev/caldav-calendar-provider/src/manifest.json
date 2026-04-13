@@ -1,0 +1,21 @@
+{
+  "id": "caldav-calendar-provider",
+  "name": "CalDAV Events",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "13.0.0",
+  "type": "issueProvider",
+  "icon": "icon.svg",
+  "iFrame": false,
+  "permissions": ["http"],
+  "hooks": [],
+  "issueProvider": {
+    "pollIntervalMs": 60000,
+    "icon": "calendar",
+    "humanReadableName": "CalDAV Events",
+    "issueStrings": { "singular": "Event", "plural": "Events" },
+    "useAgendaView": true,
+    "defaultAutoAddToBacklog": false,
+    "allowPrivateNetwork": true
+  }
+}

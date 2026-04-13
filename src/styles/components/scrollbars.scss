@@ -12,7 +12,7 @@
   /* Track */
   ::-webkit-scrollbar-track {
     background: var(--scrollbar-track);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
   }
 
   /* Handle */

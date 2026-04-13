@@ -27,5 +27,26 @@ export const SHORT_SYNTAX_FORM_CFG: ConfigFormSection<ShortSyntaxConfig> = {
         label: T.GCF.SHORT_SYNTAX.IS_ENABLE_DUE,
       },
     },
+    {
+      key: 'urlBehavior',
+      type: 'select',
+      templateOptions: {
+        label: T.GCF.SHORT_SYNTAX.URL_BEHAVIOR_LABEL,
+        options: [
+          {
+            label: T.GCF.SHORT_SYNTAX.URL_BEHAVIOR_KEEP,
+            value: 'keep',
+          },
+          {
+            label: T.GCF.SHORT_SYNTAX.URL_BEHAVIOR_EXTRACT,
+            value: 'extract',
+          },
+          {
+            label: T.GCF.SHORT_SYNTAX.URL_BEHAVIOR_KEEP_AND_ATTACH,
+            value: 'keep-and-attach',
+          },
+        ],
+      },
+    },
   ],
 };

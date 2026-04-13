@@ -3,7 +3,10 @@ import {
   BatchUpdateResult,
   DialogCfg,
   Hooks,
+  IssueProviderPluginDefinition,
   NotifyCfg,
+  OAuthFlowConfig,
+  OAuthTokenResult,
   PluginAPI as PluginAPIInterface,
   PluginBaseCfg,
   PluginCreateTaskData,
@@ -112,6 +115,11 @@ export class PluginAPI implements PluginAPIInterface {
     this._boundMethods.registerMenuEntry(menuEntryCfg);
   }
 
+  registerConfigHandler(handler: () => void): void {
+    PluginLog.log(`Plugin ${this._pluginId} registered config handler`);
+    this._boundMethods.registerConfigHandler(handler);
+  }
+
   registerShortcut(
     shortcutCfg: Omit<PluginShortcutCfg, 'pluginId'> & { id?: string },
   ): void {
@@ -143,6 +151,11 @@ export class PluginAPI implements PluginAPIInterface {
     this._boundMethods.registerSidePanelButton(sidePanelBtnCfg);
   }
 
+  registerIssueProvider(definition: IssueProviderPluginDefinition): void {
+    PluginLog.log(`Plugin ${this._pluginId} registering issue provider`);
+    this._boundMethods.registerIssueProvider(definition);
+  }
+
   showIndexHtmlAsView(): void {
     PluginLog.log(`Plugin ${this._pluginId} requested to show index.html`);
     return this._boundMethods.showIndexHtmlAsView();
@@ -167,16 +180,13 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
-    PluginLog.log(
-      `Plugin ${this._pluginId} requested to update task ${taskId}:`,
-      updates,
-    );
+    PluginLog.log(`Plugin ${this._pluginId} requested to update task ${taskId}`);
     const taskCopyUpdates = taskDataToPartialTaskCopy(updates);
     return this._pluginBridge.updateTask(taskId, taskCopyUpdates);
   }
 
   async addTask(taskData: PluginCreateTaskData): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add task:`, taskData);
+    PluginLog.log(`Plugin ${this._pluginId} requested to add task`);
     return this._pluginBridge.addTask(taskData);
   }
 
@@ -192,16 +202,13 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async addProject(projectData: Partial<Project>): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add project:`, projectData);
+    PluginLog.log(`Plugin ${this._pluginId} requested to add project`);
     const projectCopyData = projectDataToPartialProjectCopy(projectData);
     return this._pluginBridge.addProject(projectCopyData);
   }
 
   async updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
-    PluginLog.log(
-      `Plugin ${this._pluginId} requested to update project ${projectId}:`,
-      updates,
-    );
+    PluginLog.log(`Plugin ${this._pluginId} requested to update project ${projectId}`);
     const projectCopyUpdates = projectDataToPartialProjectCopy(updates);
     return this._pluginBridge.updateProject(projectId, projectCopyUpdates);
   }
@@ -213,13 +220,13 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async addTag(tagData: Partial<Tag>): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add tag:`, tagData);
+    PluginLog.log(`Plugin ${this._pluginId} requested to add tag`);
     const tagCopyData = tagDataToPartialTagCopy(tagData);
     return this._pluginBridge.addTag(tagCopyData);
   }
 
   async updateTag(tagId: string, updates: Partial<Tag>): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to update tag ${tagId}:`, updates);
+    PluginLog.log(`Plugin ${this._pluginId} requested to update tag ${tagId}`);
     const tagCopyUpdates = tagDataToPartialTagCopy(updates);
     return this._pluginBridge.updateTag(tagId, tagCopyUpdates);
   }
@@ -506,6 +513,20 @@ export class PluginAPI implements PluginAPIInterface {
     return this._pluginI18nService.getCurrentLanguage();
   }
 
+  async startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult> {
+    PluginLog.log(`Plugin ${this._pluginId} requested OAuth flow`);
+    return this._boundMethods.startOAuthFlow(config);
+  }
+
+  async getOAuthToken(): Promise<string | null> {
+    return this._boundMethods.getOAuthToken();
+  }
+
+  async clearOAuthToken(): Promise<void> {
+    PluginLog.log(`Plugin ${this._pluginId} requested OAuth token clear`);
+    return this._boundMethods.clearOAuthToken();
+  }
+
   /**
    * Clean up all resources associated with this plugin API instance
    * Called when the plugin is being unloaded
@@ -521,6 +542,9 @@ export class PluginAPI implements PluginAPIInterface {
     this._menuEntries.length = 0;
     this._shortcuts.length = 0;
     this._sidePanelButtons.length = 0;
+
+    // Unregister issue provider if one was registered
+    this._boundMethods.unregisterIssueProvider();
 
     // Notify bridge service to clean up its registrations
     // This is handled by the plugin runner calling unregisterPluginHooks

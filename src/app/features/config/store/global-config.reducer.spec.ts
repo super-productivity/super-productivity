@@ -19,7 +19,7 @@ import {
 } from './global-config.reducer';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { GlobalConfigState } from '../global-config.model';
-import { LegacySyncProvider } from '../../../imex/sync/legacy-sync-provider.model';
+import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { AppDataComplete } from '../../../op-log/model/model-config';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 
@@ -98,7 +98,7 @@ describe('GlobalConfigReducer', () => {
         ...initialGlobalConfigState,
         sync: {
           ...initialGlobalConfigState.sync,
-          syncProvider: LegacySyncProvider.SuperSync, // Snapshot has user's provider
+          syncProvider: SyncProviderId.SuperSync, // Snapshot has user's provider
         },
       };
 
@@ -110,7 +110,7 @@ describe('GlobalConfigReducer', () => {
       );
 
       // Should use snapshot's syncProvider since oldState has null
-      expect(result.sync.syncProvider).toBe(LegacySyncProvider.SuperSync);
+      expect(result.sync.syncProvider).toBe(SyncProviderId.SuperSync);
     });
 
     it('should preserve syncProvider from oldState when loading synced data', () => {
@@ -118,7 +118,7 @@ describe('GlobalConfigReducer', () => {
         ...initialGlobalConfigState,
         sync: {
           ...initialGlobalConfigState.sync,
-          syncProvider: LegacySyncProvider.SuperSync,
+          syncProvider: SyncProviderId.SuperSync,
         },
       };
 
@@ -142,7 +142,7 @@ describe('GlobalConfigReducer', () => {
       );
 
       // syncProvider should be preserved from oldState
-      expect(result.sync.syncProvider).toBe(LegacySyncProvider.SuperSync);
+      expect(result.sync.syncProvider).toBe(SyncProviderId.SuperSync);
       // Other config should be updated from synced data
       expect(result.misc.isDisableAnimations).toBe(true);
     });
@@ -152,7 +152,7 @@ describe('GlobalConfigReducer', () => {
         ...initialGlobalConfigState,
         sync: {
           ...initialGlobalConfigState.sync,
-          syncProvider: LegacySyncProvider.WebDAV,
+          syncProvider: SyncProviderId.WebDAV,
         },
       };
 
@@ -160,7 +160,7 @@ describe('GlobalConfigReducer', () => {
         ...initialGlobalConfigState,
         sync: {
           ...initialGlobalConfigState.sync,
-          syncProvider: LegacySyncProvider.LocalFile,
+          syncProvider: SyncProviderId.LocalFile,
         },
       };
 
@@ -172,7 +172,7 @@ describe('GlobalConfigReducer', () => {
       );
 
       // syncProvider should be preserved from oldState, not overwritten
-      expect(result.sync.syncProvider).toBe(LegacySyncProvider.WebDAV);
+      expect(result.sync.syncProvider).toBe(SyncProviderId.WebDAV);
     });
 
     it('should update other sync config properties while preserving syncProvider', () => {
@@ -180,7 +180,7 @@ describe('GlobalConfigReducer', () => {
         ...initialGlobalConfigState,
         sync: {
           ...initialGlobalConfigState.sync,
-          syncProvider: LegacySyncProvider.SuperSync,
+          syncProvider: SyncProviderId.SuperSync,
           syncInterval: 300000,
         },
       };
@@ -203,7 +203,7 @@ describe('GlobalConfigReducer', () => {
       );
 
       // syncProvider preserved
-      expect(result.sync.syncProvider).toBe(LegacySyncProvider.SuperSync);
+      expect(result.sync.syncProvider).toBe(SyncProviderId.SuperSync);
       // Other sync settings updated
       expect(result.sync.syncInterval).toBe(600000);
       expect(result.sync.isCompressionEnabled).toBe(true);
@@ -218,7 +218,7 @@ describe('GlobalConfigReducer', () => {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
-            syncProvider: LegacySyncProvider.SuperSync, // Not null = not sync hydration
+            syncProvider: SyncProviderId.SuperSync, // Not null = not sync hydration
             isEnabled: true, // User had sync enabled
           },
         };
@@ -240,7 +240,7 @@ describe('GlobalConfigReducer', () => {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
-            syncProvider: LegacySyncProvider.SuperSync,
+            syncProvider: SyncProviderId.SuperSync,
             isEnabled: true, // User has sync enabled
           },
         };
@@ -264,7 +264,7 @@ describe('GlobalConfigReducer', () => {
         // isEnabled should be preserved from oldState, not overwritten by remote's false
         expect(result.sync.isEnabled).toBe(true);
         // syncProvider should also be preserved
-        expect(result.sync.syncProvider).toBe(LegacySyncProvider.SuperSync);
+        expect(result.sync.syncProvider).toBe(SyncProviderId.SuperSync);
       });
 
       it('should preserve isEnabled=false from oldState during sync hydration', () => {
@@ -273,7 +273,7 @@ describe('GlobalConfigReducer', () => {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
-            syncProvider: LegacySyncProvider.SuperSync,
+            syncProvider: SyncProviderId.SuperSync,
             isEnabled: false, // User has sync disabled locally
           },
         };

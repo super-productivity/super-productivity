@@ -21,6 +21,8 @@ import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/
 import { TaskRepeatCfgState } from '../../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
 import { TimeTrackingState } from '../../../features/time-tracking/time-tracking.model';
+import { ISSUE_PROVIDER_FEATURE_KEY } from '../../../features/issue/store/issue-provider.reducer';
+import { IssueProviderState } from '../../../features/issue/issue.model';
 
 describe('tagSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -306,12 +308,7 @@ describe('tagSharedMetaReducer', () => {
   });
 
   describe('updateTag action handling', () => {
-    // Note: The reducer no longer filters taskIds - it just logs a warning.
-    // This is intentional: DependencyResolverService ensures proper ordering,
-    // and the UI handles missing task references gracefully.
-    // Filtering was causing data loss during sync when tasks arrived after tags.
-
-    it('should pass through updateTag with non-existent taskIds unchanged', () => {
+    it('should filter non-existent taskIds from updateTag action', () => {
       const testState = createStateWithExistingTasks(
         ['existing-task-1', 'existing-task-2'],
         [],
@@ -339,12 +336,11 @@ describe('tagSharedMetaReducer', () => {
 
       metaReducer(testState, action);
 
-      // The action should be passed through unchanged (no filtering)
+      // Non-existent taskIds should be filtered out
       expect(mockReducer).toHaveBeenCalled();
       const passedAction = mockReducer.calls.mostRecent().args[1];
       expect(passedAction.tag.changes.taskIds).toEqual([
         'existing-task-1',
-        'non-existent-task',
         'existing-task-2',
       ]);
     });
@@ -406,7 +402,7 @@ describe('tagSharedMetaReducer', () => {
       expect(passedAction.tag.changes.taskIds).toBeUndefined();
     });
 
-    it('should pass through updateTag with all non-existent taskIds unchanged', () => {
+    it('should filter all taskIds when none exist', () => {
       const testState = createBaseState();
 
       testState[TAG_FEATURE_NAME].entities[TODAY_TAG.id] = createMockTag({
@@ -427,16 +423,12 @@ describe('tagSharedMetaReducer', () => {
 
       metaReducer(testState, action);
 
-      // Action should be passed through unchanged
+      // All non-existent taskIds should be filtered out
       const passedAction = mockReducer.calls.mostRecent().args[1];
-      expect(passedAction.tag.changes.taskIds).toEqual([
-        'non-existent-1',
-        'non-existent-2',
-        'non-existent-3',
-      ]);
+      expect(passedAction.tag.changes.taskIds).toEqual([]);
     });
 
-    it('should preserve all changes when passing through action', () => {
+    it('should preserve other changes while filtering taskIds', () => {
       const testState = createStateWithExistingTasks(['existing-task'], [], [], []);
 
       testState[TAG_FEATURE_NAME].entities['my-tag'] = createMockTag({
@@ -463,14 +455,11 @@ describe('tagSharedMetaReducer', () => {
       const passedAction = mockReducer.calls.mostRecent().args[1];
       expect(passedAction.tag.changes.title).toBe('New Title');
       expect(passedAction.tag.changes.color).toBe('#ff0000');
-      // All taskIds are preserved (no filtering)
-      expect(passedAction.tag.changes.taskIds).toEqual([
-        'existing-task',
-        'non-existent-task',
-      ]);
+      // Non-existent taskIds are filtered
+      expect(passedAction.tag.changes.taskIds).toEqual(['existing-task']);
     });
 
-    it('should preserve meta property on action', () => {
+    it('should preserve meta property on filtered action', () => {
       const testState = createStateWithExistingTasks(['existing-task'], [], [], []);
 
       testState[TAG_FEATURE_NAME].entities[TODAY_TAG.id] = createMockTag({
@@ -496,6 +485,88 @@ describe('tagSharedMetaReducer', () => {
       expect(passedAction.meta.isPersistent).toBe(true);
       expect(passedAction.meta.entityType).toBe('TAG');
       expect(passedAction.meta.entityId).toBe(TODAY_TAG.id);
+    });
+
+    it('should preserve meta.isRemote on filtered action for remote sync ops', () => {
+      const testState = createStateWithExistingTasks(['existing-task'], [], [], []);
+
+      testState[TAG_FEATURE_NAME].entities[TODAY_TAG.id] = createMockTag({
+        id: TODAY_TAG.id,
+        title: 'Today',
+        taskIds: [],
+      });
+      (testState[TAG_FEATURE_NAME].ids as string[]).push(TODAY_TAG.id);
+
+      // Simulate a remote sync action with isRemote on meta
+      const action = updateTag({
+        tag: {
+          id: TODAY_TAG.id,
+          changes: {
+            taskIds: ['existing-task', 'non-existent-task'],
+          },
+        },
+      });
+      // Manually add isRemote like the sync system does
+      (action as any).meta.isRemote = true;
+
+      metaReducer(testState, action);
+
+      const passedAction = mockReducer.calls.mostRecent().args[1];
+      // meta.isRemote MUST be preserved — LOCAL_ACTIONS depends on it
+      expect(passedAction.meta.isRemote).toBe(true);
+      expect(passedAction.tag.changes.taskIds).toEqual(['existing-task']);
+    });
+
+    it('should pass through updateTag with empty taskIds array unchanged', () => {
+      const testState = createBaseState();
+
+      testState[TAG_FEATURE_NAME].entities['tag-1'] = createMockTag({
+        id: 'tag-1',
+        title: 'My Tag',
+        taskIds: ['task-1'],
+      });
+      (testState[TAG_FEATURE_NAME].ids as string[]).push('tag-1');
+
+      const action = updateTag({
+        tag: {
+          id: 'tag-1',
+          changes: {
+            taskIds: [],
+          },
+        },
+      });
+
+      metaReducer(testState, action);
+
+      const passedAction = mockReducer.calls.mostRecent().args[1];
+      expect(passedAction.tag.changes.taskIds).toEqual([]);
+    });
+
+    it('should preserve isSkipSnack on filtered action', () => {
+      const testState = createStateWithExistingTasks(['existing-task'], [], [], []);
+
+      testState[TAG_FEATURE_NAME].entities[TODAY_TAG.id] = createMockTag({
+        id: TODAY_TAG.id,
+        title: 'Today',
+        taskIds: [],
+      });
+      (testState[TAG_FEATURE_NAME].ids as string[]).push(TODAY_TAG.id);
+
+      const action = updateTag({
+        tag: {
+          id: TODAY_TAG.id,
+          changes: {
+            taskIds: ['existing-task', 'non-existent-task'],
+          },
+        },
+        isSkipSnack: true,
+      });
+
+      metaReducer(testState, action);
+
+      const passedAction = mockReducer.calls.mostRecent().args[1];
+      expect(passedAction.isSkipSnack).toBe(true);
+      expect(passedAction.tag.changes.taskIds).toEqual(['existing-task']);
     });
   });
 
@@ -711,6 +782,56 @@ describe('tagSharedMetaReducer', () => {
       const passedState = mockReducer.calls.mostRecent().args[0];
       expect(passedState[TIME_TRACKING_FEATURE_KEY].tag.tag1).toBeUndefined();
       expect(passedState[TIME_TRACKING_FEATURE_KEY].tag.tag2).toBeDefined();
+    });
+
+    it('should cleanup issue provider defaultTagIds that reference the deleted tag', () => {
+      const testState = createBaseState() as any;
+
+      testState[ISSUE_PROVIDER_FEATURE_KEY] = {
+        ids: ['provider1', 'provider2'],
+        entities: {
+          provider1: {
+            id: 'provider1',
+            defaultTagIds: ['tag1', 'tag2'],
+          },
+          provider2: {
+            id: 'provider2',
+            defaultTagIds: ['tag2'],
+          },
+        },
+      } as unknown as IssueProviderState;
+
+      const action = deleteTag({ id: 'tag1' });
+      metaReducer(testState, action);
+
+      const passedState = mockReducer.calls.mostRecent().args[0];
+      expect(
+        passedState[ISSUE_PROVIDER_FEATURE_KEY].entities.provider1.defaultTagIds,
+      ).toEqual(['tag2']);
+      expect(
+        passedState[ISSUE_PROVIDER_FEATURE_KEY].entities.provider2.defaultTagIds,
+      ).toEqual(['tag2']);
+    });
+
+    it('should not modify issue providers without defaultTagIds', () => {
+      const testState = createBaseState() as any;
+
+      testState[ISSUE_PROVIDER_FEATURE_KEY] = {
+        ids: ['provider1'],
+        entities: {
+          provider1: {
+            id: 'provider1',
+          },
+        },
+      } as unknown as IssueProviderState;
+
+      const action = deleteTag({ id: 'tag1' });
+      metaReducer(testState, action);
+
+      const passedState = mockReducer.calls.mostRecent().args[0];
+      expect(
+        passedState[ISSUE_PROVIDER_FEATURE_KEY].entities.provider1.defaultTagIds,
+      ).toBeUndefined();
     });
 
     it('should handle deleting non-existent tag gracefully', () => {

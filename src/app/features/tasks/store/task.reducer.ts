@@ -695,4 +695,13 @@ export const taskReducer = createReducer<TaskState>(
       ids: [...validTaskIds, ...state.ids.filter((id) => !taskIds.includes(id))],
     };
   }),
+
+  // Same reordering for the non-persistent variant (#6992)
+  on(TaskSharedActions.localRemoveOverdueFromToday, (state, { taskIds }) => {
+    const validTaskIds = taskIds.filter((id) => !!state.entities[id]);
+    return {
+      ...state,
+      ids: [...validTaskIds, ...state.ids.filter((id) => !taskIds.includes(id))],
+    };
+  }),
 );

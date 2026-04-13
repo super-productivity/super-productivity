@@ -12,7 +12,6 @@ import { FormlyFieldConfig } from '@ngx-formly/core';
 export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
   title: T.F.SIMPLE_COUNTER.FORM.TITLE,
   key: 'EMPTY',
-  customSection: 'SIMPLE_COUNTER_CFG',
   help: T.F.SIMPLE_COUNTER.FORM.HELP,
   items: [
     {

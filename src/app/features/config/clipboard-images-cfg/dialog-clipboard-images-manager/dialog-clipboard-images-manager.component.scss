@@ -1,6 +1,8 @@
+@use '../../../../../styles/_globals.scss' as *;
+
 ::ng-deep .mat-mdc-dialog-container {
   .mat-mdc-dialog-content {
-    padding: 20px 24px;
+    padding: 20px var(--s3);
   }
 }
 
@@ -9,8 +11,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
-  gap: 16px;
+  padding: var(--s5);
+  gap: var(--s2);
 }
 
 .empty-state {
@@ -18,14 +20,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: var(--s5);
   color: var(--text-color-muted);
 
   mat-icon {
     font-size: 64px;
     width: 64px;
     height: 64px;
-    margin-bottom: 16px;
+    margin-bottom: var(--s2);
   }
 
   p {
@@ -35,20 +37,20 @@
 }
 
 .summary {
-  padding: 16px;
+  padding: var(--s2);
   background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-  margin-bottom: 16px;
+  border-radius: var(--card-border-radius);
+  margin-bottom: var(--s2);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: var(--s2);
 
   .summary-info {
     flex: 1;
 
     p {
-      margin: 4px 0;
+      margin: var(--s-half) 0;
     }
   }
 
@@ -83,7 +85,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   overflow: hidden;
   background: rgba(0, 0, 0, 0.02);
 
@@ -94,7 +96,7 @@
   }
 
   mat-icon {
-    color: rgba(0, 0, 0, 0.3);
+    color: var(--c-dark-30);
   }
 }
 
@@ -106,17 +108,15 @@
 .image-id {
   font-size: 14px;
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateText();
 }
 
 .image-details {
   font-size: 12px;
   color: var(--text-color-muted);
-  margin-top: 4px;
+  margin-top: var(--s-half);
 
   span {
-    margin-right: 4px;
+    margin-right: var(--s-half);
   }
 }

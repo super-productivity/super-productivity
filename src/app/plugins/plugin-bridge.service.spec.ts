@@ -592,6 +592,10 @@ import { TaskArchiveService } from '../features/archive/task-archive.service';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { SyncWrapperService } from '../imex/sync/sync-wrapper.service';
+import { GlobalThemeService } from '../core/theme/global-theme.service';
+import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
+import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
 
 describe('PluginBridgeService - Counter Methods', () => {
@@ -631,6 +635,10 @@ describe('PluginBridgeService - Counter Methods', () => {
         { provide: Router, useValue: {} },
         { provide: TranslateService, useValue: {} },
         { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
       ],
     });
 
@@ -768,6 +776,38 @@ describe('PluginBridgeService - Counter Methods', () => {
       await expectAsync(service.decrementCounter('valid-key', -1)).toBeRejectedWithError(
         'Invalid decrement amount: must be a positive number',
       );
+    });
+  });
+
+  describe('config handler', () => {
+    it('should return false for hasConfigHandler when no handler is registered', () => {
+      expect(service.hasConfigHandler('unknown-plugin')).toBe(false);
+    });
+
+    it('should return true for hasConfigHandler after registering a handler', () => {
+      (service as any)._configHandlers.set('test-plugin', () => {});
+      expect(service.hasConfigHandler('test-plugin')).toBe(true);
+    });
+
+    it('should invoke the registered config handler', () => {
+      const handler = jasmine.createSpy('configHandler');
+      (service as any)._configHandlers.set('test-plugin', handler);
+
+      service.invokeConfigHandler('test-plugin');
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not throw when invoking handler for unregistered plugin', () => {
+      expect(() => service.invokeConfigHandler('unknown-plugin')).not.toThrow();
+    });
+
+    it('should remove config handler on cleanup', () => {
+      (service as any)._configHandlers.set('test-plugin', () => {});
+      expect(service.hasConfigHandler('test-plugin')).toBe(true);
+
+      (service as any)._configHandlers.delete('test-plugin');
+      expect(service.hasConfigHandler('test-plugin')).toBe(false);
     });
   });
 });

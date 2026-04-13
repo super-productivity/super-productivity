@@ -151,5 +151,49 @@ describe('TaskContextMenuInnerComponent', () => {
         }),
       );
     }));
+
+    it('should duplicate parent task with notes', fakeAsync(() => {
+      const mockTask = {
+        id: 'PARENT_ID',
+        title: 'Parent Task',
+        projectId: 'P1',
+        tagIds: [],
+        subTaskIds: [],
+        notes: 'My important notes',
+      } as any;
+
+      component.task = mockTask;
+      taskService.add.and.returnValue('NEW_PARENT_ID');
+
+      component.duplicate();
+      tick(50);
+
+      expect(taskService.add).toHaveBeenCalledWith(
+        'Parent Task (copy)',
+        false,
+        jasmine.objectContaining({ notes: 'My important notes' }),
+        false,
+      );
+    }));
+
+    it('should not include notes when parent task has no notes', fakeAsync(() => {
+      const mockTask = {
+        id: 'PARENT_ID',
+        title: 'Parent Task',
+        projectId: 'P1',
+        tagIds: [],
+        subTaskIds: [],
+        notes: '',
+      } as any;
+
+      component.task = mockTask;
+      taskService.add.and.returnValue('NEW_PARENT_ID');
+
+      component.duplicate();
+      tick(50);
+
+      const callArgs = taskService.add.calls.mostRecent().args[2] as any;
+      expect(callArgs.notes).toBeUndefined();
+    }));
   });
 });

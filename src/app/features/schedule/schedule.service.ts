@@ -40,7 +40,7 @@ export class ScheduleService {
   );
   private _timelineConfig = toSignal(this._store.select(selectTimelineConfig));
   private _plannerDayMap = toSignal(this._store.select(selectPlannerDayMap));
-  private _icalEvents = toSignal(this._calendarIntegrationService.icalEvents$, {
+  private _calendarEvents = toSignal(this._calendarIntegrationService.calendarEvents$, {
     initialValue: [],
   });
   scheduleRefreshTick = toSignal(interval(2 * 60 * 1000).pipe(startWith(0)), {
@@ -54,14 +54,14 @@ export class ScheduleService {
       const taskRepeatCfgs = this._taskRepeatCfgs();
       const timelineCfg = this._timelineConfig();
       const plannerDayMap = this._plannerDayMap();
-      const icalEvents = this._icalEvents();
+      const calendarEvents = this._calendarEvents();
       const currentTaskId = this._taskService.currentTaskId() ?? null;
 
       return this.buildScheduleDays({
         daysToShow: daysToShow(),
         timelineTasks,
         taskRepeatCfgs,
-        icalEvents,
+        calendarEvents,
         plannerDayMap,
         timelineCfg,
         currentTaskId,
@@ -76,7 +76,7 @@ export class ScheduleService {
       daysToShow,
       timelineTasks,
       taskRepeatCfgs,
-      icalEvents,
+      calendarEvents,
       plannerDayMap,
       timelineCfg,
       currentTaskId = null,
@@ -93,7 +93,7 @@ export class ScheduleService {
       timelineTasks.planned,
       taskRepeatCfgs.withStartTime,
       taskRepeatCfgs.withoutStartTime,
-      icalEvents ?? [],
+      calendarEvents ?? [],
       currentTaskId,
       plannerDayMap,
       timelineCfg?.isWorkStartEndEnabled ? createWorkStartEndCfg(timelineCfg) : undefined,
@@ -125,7 +125,7 @@ export class ScheduleService {
     const taskRepeatCfgs = this._taskRepeatCfgs();
     const timelineCfg = this._timelineConfig();
     const plannerDayMap = this._plannerDayMap();
-    const icalEvents = this._icalEvents();
+    const calendarEvents = this._calendarEvents();
 
     return this.buildScheduleDays({
       now: params.contextNow,
@@ -133,7 +133,7 @@ export class ScheduleService {
       daysToShow: params.daysToShow,
       timelineTasks,
       taskRepeatCfgs,
-      icalEvents,
+      calendarEvents,
       plannerDayMap,
       timelineCfg,
       currentTaskId: params.currentTaskId,
@@ -345,7 +345,7 @@ export interface BuildScheduleDaysParams {
   daysToShow: string[];
   timelineTasks: TimelineTasks | undefined | null;
   taskRepeatCfgs: TaskRepeatCfgBuckets | undefined | null;
-  icalEvents: ScheduleCalendarMapEntry[] | undefined | null;
+  calendarEvents: ScheduleCalendarMapEntry[] | undefined | null;
   plannerDayMap: PlannerDayMap | undefined | null;
   timelineCfg?: ScheduleConfig | null;
   currentTaskId?: string | null;

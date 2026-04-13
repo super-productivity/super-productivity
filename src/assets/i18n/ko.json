@@ -6,7 +6,11 @@
       "MSG": "PWA로 Super Productivity를 설치하시겠습니까?"
     },
     "B_OFFLINE": "인터넷 연결이 끊어졌습니다. 문제 제공자 데이터 동기화 및 요청이 작동하지 않습니다.",
-    "UPDATE_WEB_APP": "새 버전을 사용할 수 있습니다. 새 버전을 로드하시겠습니까?"
+    "UPDATE_WEB_APP": "새 버전을 사용할 수 있습니다. 새 버전을 로드하시겠습니까?",
+    "CONTEXT_MENU": {
+      "CHANGE_BACKGROUND": "배경 변경"
+    },
+    "SKIP_SYNC_WAIT": "동기화 대기 건너뛰기"
   },
   "BL": {
     "NO_TASKS": "현재 백 로그에 작업이 없습니다."
@@ -20,6 +24,24 @@
   },
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "Enter를 다시 눌러 저장하십시오."
+  },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "키보드 단축키 배우기",
+      "NOTES": "Super Productivity는 키보드로 사용하도록 설계되었습니다. 단축키를 배워 더 빠르게 작업하세요.\n\n**시작하는 방법:**\n1. **사이드바 메뉴**를 엽니다\n2. **도움말**로 이동합니다\n3. **키보드 내비게이션 투어**를 클릭합니다"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "첫 번째 프로젝트 만들기",
+      "NOTES": "프로젝트는 작업 영역별로 할 일을 정리하는 데 도움이 됩니다. 각 프로젝트에는 자체 작업 목록과 백로그가 있습니다.\n\n**프로젝트 만드는 방법:**\n1. 사이드바의 **프로젝트** 옆에 있는 **+** 버튼을 클릭합니다\n2. 이름을 지정하고 색상을 선택합니다\n3. 작업을 추가하기 시작합니다"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "동기화 설정하기",
+      "NOTES": "데이터를 안전하게 보관하고 여러 기기에서 접근할 수 있도록 하세요.\n\n**설정 방법:**\n1. **설정**을 엽니다 (사이드바의 톱니바퀴 아이콘)\n2. **동기화**로 이동합니다\n3. 제공자를 선택합니다: Super Sync, Dropbox, WebDAV 또는 로컬 파일 동기화\n4. 설정 안내를 따릅니다"
+    },
+    "GO_FURTHER": {
+      "TITLE": "더 많은 기능 탐색하기",
+      "NOTES": "아직 발견할 것이 많습니다!\n\n**앱 기능** (설정에서) — 연동, 습관 및 기타 기능을 활성화합니다. **설정 → 앱 기능**에서 사용 가능한 항목을 확인하세요.\n\n**보드** — 사용자 지정 가능한 칸반 보드에서 작업을 시각화하세요. **앱 기능**에서 활성화한 후 **사이드바 메뉴**에서 찾을 수 있습니다.\n\n**일정** — 특정 시간에 작업을 배정하여 하루를 계획하세요. 사이드바의 **일정** 보기로 작업을 드래그하세요.\n\n**연동** — 앱 기능에서 활성화한 후 Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV 등에서 작업을 가져올 수 있습니다. 캘린더도 통합할 수 있습니다. **이슈 제공자 패널**에서 설정하세요.\n\n**습관** — 반복되는 습관과 루틴을 추적합니다. 활성화하면 **사이드바 메뉴**에서 찾을 수 있습니다.\n\n**플러그인** — 미루기 방지, 자동화 또는 음성 알림 같은 기능을 추가합니다. **설정 → 플러그인**으로 이동하세요.\n\n**사용자 정의** — 테마, 다크 모드, 키보드 단축키, 언어, 생산성 도우미 모두 **설정**에 있습니다."
+    }
   },
   "F": {
     "ATTACHMENT": {
@@ -84,7 +106,14 @@
         "CALDAV_RESOURCE": "CalDav 리소스의 이름 (캘린더)",
         "CALDAV_URL": "CalDav URL (기본 URL)",
         "CALDAV_USER": "CalDav 사용자 이름",
-        "IS_TRANSITION_ISSUES_ENABLED": "작업 완료시 CalDav 할 일을 자동으로 완료"
+        "TWO_WAY_SYNC_BOTH": "양방향",
+        "TWO_WAY_SYNC_NOTES": "노트 / 설명 동기화 방향",
+        "TWO_WAY_SYNC_OFF": "끄기",
+        "TWO_WAY_SYNC_PULL_ONLY": "가져오기만 (CalDAV에서 읽기)",
+        "TWO_WAY_SYNC_PUSH_ONLY": "보내기만 (CalDAV에 쓰기)",
+        "TWO_WAY_SYNC_SECTION": "양방향 동기화 (실험적)",
+        "TWO_WAY_SYNC_STATUS": "상태 동기화 방향",
+        "TWO_WAY_SYNC_TITLE": "제목 동기화 방향"
       },
       "FORM_SECTION": {
         "HELP": "<p>여기에서 일일 계획 보기의 작업 생성 패널에서 특정 프로젝트에 대해 완료되지 않은 CalDav 할 일을 나열하도록 SuperProductivity를 구성할 수 있습니다. 제안 사항으로 나열되며 할 일에 대한 링크와 이에 대한 추가 정보를 제공합니다.</p> <p>또한 완료되지 않은 모든 할 일을 작업 백로그에 자동으로 추가하고 동기화할 수 있습니다.</p><p>모바일 및 웹의 nextcloud에서 작동하도록 하려면 nextcloud 앱 <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>를 통해 \"https://app.super-productivity.com\"을 허용 목록에 추가해야 할 수 있습니다.</p>"
@@ -93,18 +122,36 @@
         "CALENDAR_NOT_FOUND": "CalDav : 캘린더 \"{{calendarName}}\"을 (를) 찾을 수 없음",
         "CALENDAR_READ_ONLY": "CalDav : 캘린더 \"{{calendarName}}\"은 (는) 읽기 전용입니다.",
         "ISSUE_NOT_FOUND": "CalDav : 서버에서 할 일 \"{{issueId}}\"이 (가) 삭제 된 것 같습니다."
+      },
+      "ISSUE_CONTENT": {
+        "DESCRIPTION": "설명",
+        "LABELS": "레이블",
+        "MARK_AS_CHECKED": "완료로 표시",
+        "STATUS": "상태",
+        "SUMMARY": "요약"
       }
     },
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "작업으로 추가",
         "TXT": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!",
-        "TXT_MULTIPLE": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!<br> (및 {{nrOfOtherBanners}} 개의 다른 이벤트가 마감됨)",
+        "TXT_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!<br> (및 {{nrOfOtherBanners}} 개의 다른 이벤트가 마감됨)",
+          "ONE": "<strong>{{title}}</strong>이(가) <strong>{{start}}</strong>에 시작합니다!<br> (외 {{nrOfOtherBanners}}개의 이벤트가 예정됨)"
+        },
         "TXT_PAST": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!",
-        "TXT_PAST_MULTIPLE": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!<br> (및 {{nrOfOtherBanners}} 개의 다른 이벤트가 마감됨)"
+        "TXT_PAST_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!<br> (및 {{nrOfOtherBanners}} 개의 다른 이벤트가 마감됨)",
+          "ONE": "<strong>{{title}}</strong>이(가) <strong>{{start}}</strong>에 시작되었습니다!<br> (외 {{nrOfOtherBanners}}개의 이벤트가 예정됨)"
+        },
+        "SHOW_TASK": "작업 표시"
       },
       "S": {
         "CAL_PROVIDER_ERROR": "일정 공급자 오류입니다: {{errTxt}}"
+      },
+      "EVENT_STRINGS": {
+        "EVENT_STR": "이벤트",
+        "EVENTS_STR": "이벤트"
       }
     },
     "CONFIG": {
@@ -117,17 +164,6 @@
       "BTN_DONT_BOTHER": "다시는 나를 괴롭히지 마라",
       "TITLE": "🙈 부디 용서해 주세요만...",
       "TXT": "당신이 그것을 좋아한다면 <strong>좋은 평가를 주면 프로젝트에 엄청난 도움이 될 것입니다!</strong>"
-    },
-    "VOICE_REMINDER": {
-      "FORM": {
-        "HELP": "작업 시간을 추적할 때 구성된 문구를 X마다 반복합니다.",
-        "L_INTERVAL": "구문 반복 간격",
-        "L_TEXT": "텍스트",
-        "L_TEXT_DESCRIPTION": "예: \"{currentTaskTitle}달러 작업!\"",
-        "L_VOICE": "음색 선택",
-        "L_VOICE_DESCRIPTION": "음성 선택",
-        "TITLE": "음성 알림"
-      }
     },
     "DROPBOX": {
       "S": {
@@ -144,7 +180,15 @@
     "FOCUS_MODE": {
       "B": {
         "SESSION_RUNNING": "포커스 세션이 실행 중입니다.",
-        "TO_FOCUS_OVERLAY": "오버레이에 초점을 맞추려면"
+        "TO_FOCUS_OVERLAY": "오버레이에 초점을 맞추려면",
+        "BREAK_RUNNING": "휴식 중",
+        "END_FOCUS_SESSION": "집중 세션 종료",
+        "END_SESSION": "세션 종료",
+        "PAUSE": "일시정지",
+        "POMODORO_BREAK_RUNNING": "휴식 #{{cycleNr}} 진행 중",
+        "POMODORO_SESSION_RUNNING": "뽀모도로 세션 #{{cycleNr}} 진행 중",
+        "RESUME": "재개",
+        "START": "시작"
       },
       "BACK_TO_PLANNING": "계획으로 돌아가기",
       "COUNTDOWN": "카운트다운",
@@ -162,7 +206,38 @@
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "작업 노트 및 첨부 파일 표시/숨기기",
       "START_FOCUS_SESSION": "포커스 세션 시작",
       "START_NEXT_FOCUS_SESSION": "다음 포커스 세션 시작",
-      "WORKED_FOR": "근무처"
+      "WORKED_FOR": "근무처",
+      "ADD_TIME_MINUTE": "1분 추가",
+      "BREAK_RELAX_MSG": "잠시 쉬어가세요",
+      "CLICK_TO_EDIT_DURATION": "클릭하여 시간 편집",
+      "COMPLETE_FOCUS_SESSION": "집중 세션 완료",
+      "CONTINUE_TO_NEXT_SESSION": "다음 세션으로 계속",
+      "COUNTDOWN_HINT": "타이머가 0이 될 때까지 집중하세요",
+      "FLOWTIME_HINT": "타이머 없이 유연하게 진행",
+      "FOCUS_TIME_TOOLTIP": "집중 시간",
+      "GO_TO_PROCRASTINATION": "미루기 도움 받기",
+      "LONG_BREAK": "긴 휴식",
+      "LONG_BREAK_TITLE": "긴 휴식 - 사이클 {{cycle}}",
+      "PAUSE_BREAK": "휴식 일시정지",
+      "PAUSE_SESSION": "세션 일시정지",
+      "PAUSE_TRACKING": "추적 일시정지",
+      "PAUSE_TRACKING_FOR_CURRENT_TASK": "현재 작업 추적 일시정지",
+      "POMODORO": "뽀모도로",
+      "POMODORO_HINT": "계획된 휴식이 포함된 구조적 스프린트",
+      "POMODORO_SESSION_COMPLETED": "뽀모도로 세션이 완료되었습니다!",
+      "POMODORO_SETTINGS": "뽀모도로 설정",
+      "REMOVE_TIME_MINUTE": "1분 제거",
+      "RESET_CYCLES": "세션 카운터 초기화",
+      "RESUME_BREAK": "휴식 재개",
+      "RESUME_SESSION": "세션 재개",
+      "SELECT_MODE": "집중 모드 선택",
+      "SELECT_TASK_FIRST": "추적을 시작하려면 먼저 작업을 선택하세요",
+      "SELECT_TASK_TO_FOCUS": "집중할 작업 선택",
+      "SHORT_BREAK": "짧은 휴식",
+      "SHORT_BREAK_TITLE": "짧은 휴식 - 사이클 {{cycle}}",
+      "SKIP_BREAK": "휴식 건너뛰기",
+      "START_BREAK": "휴식 시작",
+      "SWITCH_TASK": "작업 전환"
     },
     "GITEA": {
       "FORM": {
@@ -187,35 +262,6 @@
         "STATUS": "상태",
         "SUMMARY": "요약",
         "WRITE_A_COMMENT": "댓글 작성"
-      }
-    },
-    "GITHUB": {
-      "FORM": {
-        "FILTER_USER": "사용자 이름 (예 : 혼자서 변경 사항을 필터링)",
-        "INVALID_TOKEN_MESSAGE": "유효한 GitHub 토큰이 아닙니다. \"ghp_\"로 시작해야 합니다.",
-        "IS_ASSIGNEE_FILTER": "나에게 할당된 이슈만 백로그에 가져오기",
-        "REPO": "추적하고자하는 git 저장소의 \"username / repositoryName\"",
-        "TOKEN": "액세스 토큰"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>여기서는 일일 계획 보기의 작업 만들기 패널에서 특정 리포지토리에 대한 열린 GitHub 문제를 나열하도록 SuperProductivity를 구성할 수 있습니다. 제안으로 나열 되며 문제에 대 한 링크 뿐만 아니라 그것에 대 한 자세한 정보를 제공 합니다.</p> <p>또한 자동으로 추가하고 작업 백로그에 열려있는 모든 문제를 동기화 할 수 있습니다.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "담당자",
-        "AT": "...에서",
-        "DESCRIPTION": "기술",
-        "LABELS": "레이블",
-        "LAST_COMMENT": "마지막 댓글",
-        "LOAD_ALL_COMMENTS": "모든 {{nr}} 개의 댓글을 불러오기",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "설명 및 모든 댓글 로드",
-        "MARK_AS_CHECKED": "체크 된대로 업데이트 표시",
-        "STATUS": "상태",
-        "SUMMARY": "개요",
-        "WRITE_A_COMMENT": "의견 쓰기"
-      },
-      "S": {
-        "CONFIG_ERROR": "GitHub: 데이터를 매핑하는 동안 오류가 발생했습니다. 리포지토리 이름이 맞나요?",
-        "ERR_UNKNOWN": "GitHub : 알 수없는 오류 {{statusCode}} {{errorMsg}}"
       }
     },
     "GITLAB": {
@@ -309,7 +355,28 @@
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: {{nr}} {{issuesStr}}에 대한 업데이트된 데이터",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: \"{{issueTitle}}\"에 대한 업데이트된 데이터",
         "POLLING_BACKLOG": "{{issueProviderName}}: 새 {{issuesStr}}에 대한 폴링",
-        "POLLING_CHANGES": "{{issueProviderName}}: {{issuesStr}}에 대한 폴링 변경 사항"
+        "POLLING_CHANGES": "{{issueProviderName}}: {{issuesStr}}에 대한 폴링 변경 사항",
+        "AUTO_CREATE_FAILED": "이슈 자동 생성 실패: {{errorMsg}}",
+        "CONNECTION_FAILED": "연결 실패",
+        "CONNECTION_SUCCESS": "연결 성공!",
+        "PLUGIN_NOT_INSTALLED": "필수 플러그인 \"{{pluginName}}\"이(가) 설치되어 있지 않습니다.",
+        "TWO_WAY_SYNC_PUSH_FAILED": "양방향 동기화 푸시 실패: {{errorMsg}}"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "고급 설정",
+        "DELETE_CONFIRM": "이 이슈 제공자를 삭제하시겠습니까? 삭제하면 <strong>이전에 가져온 모든 이슈 작업의 참조가 해제됩니다</strong>. 이 작업은 취소할 수 없습니다!"
+      },
+      "TWO_WAY_SYNC": {
+        "AUTO_CREATE_ISSUES": "새 작업에 대해 이슈 자동 생성",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "기본 프로젝트에 새 최상위 작업을 추가할 때 자동으로 이슈를 생성합니다. 기본 프로젝트 설정이 필요합니다.",
+        "BOTH": "양방향",
+        "NOTES": "노트 / 설명 동기화 방향",
+        "OFF": "끄기",
+        "PULL_ONLY": "가져오기만",
+        "PUSH_ONLY": "보내기만",
+        "SECTION": "양방향 동기화 (실험적)",
+        "STATUS": "상태 동기화 방향",
+        "TITLE": "제목 동기화 방향"
       }
     },
     "JIRA": {
@@ -379,7 +446,8 @@
         "HOST": "호스트 (예 : http://my-host.de:1234)",
         "PASSWORD": "토큰 / 비밀번호",
         "USE_PAT": "비밀번호 대신 개인 액세스 토큰 사용",
-        "USER_NAME": "이메일 / 사용자 이름"
+        "USER_NAME": "이메일 / 사용자 이름",
+        "WONKY_COOKIE_MODE": "불안정한 쿠키 대체 인증 (데스크톱 앱 전용)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "고급 구성",
@@ -426,7 +494,15 @@
         "TIMED_OUT": "Jira : 요청 시간이 초과되었습니다.",
         "TRANSITION": "Jira : \"{{issueKey}}\"문제를 \"{{name}}\"(으)로 설정하십시오.",
         "TRANSITION_SUCCESS": "Jira : {{issueKey}} 문제를 <strong>{{chosenTransition}}</strong>(으)로 설정하십시오.",
-        "TRANSITIONS_LOADED": "Jira : 전환이로드되었습니다. 아래 선택을 사용하여 지정하십시오"
+        "TRANSITIONS_LOADED": "Jira : 전환이로드되었습니다. 아래 선택을 사용하여 지정하십시오",
+        "UNABLE_TO_REASSIGN": "Jira: 사용자명을 지정하지 않아 티켓을 본인에게 재할당할 수 없습니다. 설정을 확인해 주세요."
+      },
+      "STEPPER": {
+        "CREDENTIALS": "자격 증명",
+        "DONE": "설정이 완료되었습니다.",
+        "LOGIN_SUCCESS": "로그인 성공!",
+        "TEST_CREDENTIALS": "자격 증명 테스트",
+        "WELCOME_USER": "환영합니다 {{user}}!"
       }
     },
     "MARKDOWN_PASTE": {
@@ -453,21 +529,94 @@
         "SIMPLE_STOPWATCH_COUNTERS_OVER_TIME": "시간 경과에 따른 스톱워치 카운터",
         "TASKS_DONE_CREATED": "할 일 목록 (완료 / 생성)",
         "TIME_ESTIMATED": "예상 시간",
-        "TIME_SPENT": "지출 된 시간"
-      },
-      "EVAL_FORM": {
-        "NOTES": "내일위한주의 사항",
-        "PRODUCTIVITY": "얼마나 효율적으로 일 했습니까?"
+        "TIME_SPENT": "지출 된 시간",
+        "ACTIVITY_HEATMAP": "활동 히트맵",
+        "FOCUS_SESSION_TRENDS": "시간별 집중 세션 추이",
+        "PRODUCTIVITY_BREAKDOWN_OVER_TIME": "시간별 생산성 및 지속가능성 추이",
+        "TIME_FRAME_1_MONTH": "1개월",
+        "TIME_FRAME_2_WEEKS": "2주",
+        "TIME_FRAME_LABEL": "기간",
+        "TIME_FRAME_MAX": "최대",
+        "YEAR": "연도"
       },
       "FOCUS_SESSION_DIALOG": {
-        "ADD_BTN": "더하다"
+        "ADD_BTN": "더하다",
+        "ADD_SESSION": "세션 추가",
+        "CHART_LABEL": "집중 시간 (분)",
+        "NEW_SESSION_DURATION": "시간",
+        "NO_SESSIONS": "이 날의 집중 세션이 없습니다",
+        "SESSIONS_LIST": "세션",
+        "TITLE": "집중 세션",
+        "TOTAL_SESSIONS": "총 세션",
+        "TOTAL_TIME": "총 시간"
+      },
+      "EVAL_FORM": {
+        "DAILY_STATE": "일일 상태",
+        "DAILY_STATE_TOOLTIP": "두 점수 기반 사분면 시스템 (≥50이 높음): 딥 플로우 (높음/높음), 오버드라이브 (높음/낮음), 회복 (낮음/높음), 표류 (낮음/낮음)",
+        "ENERGY_LEVEL": "에너지 상태는 어떠신가요?",
+        "ENERGY_LEVEL_HINT": "😫 지침 – 😐 보통 – 😊 좋음",
+        "FOCUS_WORK_TIME": "집중 작업 시간",
+        "IMPACT_OF_WORK": "오늘 작업의 영향력을 어떻게 평가하시나요?",
+        "IMPACT_OF_WORK_HINT": "1: 의미 있는 진전 없음 – 4: 상당한 영향",
+        "PRODUCTIVITY_SCORE": "생산성 점수",
+        "PRODUCTIVITY_SCORE_TOOLTIP": "65% 영향력 (1-4 척도) • 30% 4시간 목표 대비 집중도 • 5% 총 작업 시간 (10시간 상한)",
+        "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "7일 생산성 분석",
+        "SCORE_BREAKDOWN_TITLE_SUSTAINABILITY": "7일 지속가능성 분석",
+        "STATE_DEEP_FLOW_HEADLINE": "딥 플로우: 뛰어난 집중과 지속 가능한 속도.",
+        "STATE_DEEP_FLOW_HINT": "최적의 상태입니다 — 이 조합을 가능하게 한 요인을 되돌아보세요.",
+        "STATE_DRIFT_HEADLINE": "표류: 낮은 집중과 낮은 에너지.",
+        "STATE_DRIFT_HINT": "괜찮습니다. 무엇이 방해가 되었는지 되돌아보고 부드럽게 조정하세요 — 매번 새로 시작할 기회입니다.",
+        "STATE_IMPACT_MISMATCH_HEADLINE": "낮은 영향: 충분한 집중, 적은 성과.",
+        "STATE_IMPACT_MISMATCH_HINT": "충실하게 집중했습니다 — 이제 더 영향력 있는 작업에 집중하여 차이를 느껴보세요.",
+        "STATE_OVERDRIVE_HEADLINE": "오버드라이브: 생산적이지만 대가가 따름.",
+        "STATE_OVERDRIVE_HINT": "많은 것을 해냈습니다 — 번아웃이 오기 전에 충전하세요.",
+        "STATE_RECOVERY_HEADLINE": "회복: 휴식과 재충전 중.",
+        "STATE_RECOVERY_HINT": "마음에 회복 시간을 주고 있습니다. 내일은 더 깊이 몰입할 에너지가 생길 것입니다.",
+        "STATE_STEADY_HEADLINE": "꾸준한 리듬: 일관되고 지속 가능한 진전.",
+        "STATE_STEADY_HINT": "좋은 균형입니다. 무리하지 않으면서 동력을 유지하고 있습니다 — 이 속도를 유지하는 요인을 계속 가꾸세요.",
+        "SUSTAINABILITY_SCORE": "지속가능성 점수",
+        "SUSTAINABILITY_SCORE_TOOLTIP": "45% 에너지 수준 • 40% 적정 근무 시간 (10시간에서 0) • 15% 집중 균형 (4시간에서 최적)",
+        "TOTAL_WORK_TIME": "오늘 총 작업 시간"
+      },
+      "REFLECTION": {
+        "HISTORY_BTN": "과거 회고 보기",
+        "HISTORY_EMPTY": "아직 저장된 회고가 없습니다. 오늘의 메모를 기록하여 시작하세요.",
+        "HISTORY_TITLE": "회고 기록",
+        "PLACEHOLDER_1": "오늘 잘된 것은? 내일 바꿔야 할 것은?",
+        "PLACEHOLDER_2": "내일을 위한 작은 개선점은?",
+        "PLACEHOLDER_3": "어디서 집중이 흐트러졌나요 - 어떻게 보호할 수 있나요?",
+        "PLACEHOLDER_4": "어떤 작업이 에너지를 주었나요? 어떤 작업이 에너지를 빼앗았나요?",
+        "PLACEHOLDER_5": "반복할 것 하나. 바꿀 것 하나.",
+        "REMIND_LABEL": "내일 이것에 대해 알려주세요",
+        "REMINDER_CREATED": "내일 회고 알림이 예약되었습니다",
+        "REMINDER_ERROR": "알림을 예약할 수 없습니다",
+        "REMINDER_NEEDS_TEXT": "알림을 요청하기 전에 회고를 작성하세요",
+        "REMINDER_TASK_TITLE": "회고 노트 다시 보기",
+        "TITLE": "회고 노트"
       }
     },
     "NOTE": {
       "D_FULLSCREEN": {
         "VIEW_PARSED": "구문 분석된(편집 불가) 마크다운으로 보기",
         "VIEW_SPLIT": "분할 보기에서 구문 분석된 마크다운과 구문 분석되지 않은 마크다운 보기",
-        "VIEW_TEXT_ONLY": "구문 분석되지 않은 텍스트로 보기"
+        "VIEW_TEXT_ONLY": "구문 분석되지 않은 텍스트로 보기",
+        "TOOLBAR": {
+          "BOLD": "굵게",
+          "BULLET_LIST": "글머리 기호 목록",
+          "CODE_BLOCK": "코드 블록",
+          "HEADING_1": "제목 1",
+          "HEADING_2": "제목 2",
+          "HEADING_3": "제목 3",
+          "INLINE_CODE": "인라인 코드",
+          "INSERT_IMAGE": "이미지 삽입",
+          "INSERT_LINK": "링크 삽입",
+          "INSERT_TABLE": "표 삽입",
+          "ITALIC": "기울임꼴",
+          "NUMBERED_LIST": "번호 목록",
+          "QUOTE": "인용",
+          "STRIKETHROUGH": "취소선",
+          "TASK_LIST": "작업 목록"
+        }
       },
       "NOTE_CMP": {
         "DISABLE_PARSE": "마크 다운 구문 분석 사용 중지",
@@ -562,7 +711,8 @@
       "EDIT_REPEATED_TASK": "반복 작업 편집 '{{taskName}}'",
       "NO_TASKS": "작업 없음",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "예약된 항목 없음"
+        "NO_SCHEDULED_ITEMS": "예약된 항목 없음",
+        "NO_DEADLINES": "마감일 없음"
       },
       "S": {
         "REMOVED_PLAN_DATE": "작업 '{{taskTitle}}' 의 계획 날짜를 제거했습니다.",
@@ -600,7 +750,9 @@
         "L_IS_AUTO_CONTRAST": "최고의 가독성을위한 자동 텍스트 색상 설정",
         "L_IS_DISABLE_BACKGROUND_TINT": "컬러 배경 그라디언트 비활성화",
         "L_THEME_COLOR": "테마 색",
-        "TITLE": "테마"
+        "TITLE": "테마",
+        "D_BACKGROUND_OVERLAY_OPACITY": "이 값을 조정하여 배경을 더 투명하게 또는 덜 투명하게 만드세요. 기본값은 20%입니다.",
+        "L_BACKGROUND_OVERLAY_OPACITY": "더 나은 대비를 위해 배경 이미지 어둡게/밝게 조정"
       },
       "S": {
         "ARCHIVED": "보관 된 프로젝트",
@@ -608,12 +760,32 @@
         "DELETED": "삭제 된 프로젝트",
         "UNARCHIVED": "아카이브되지 않은 프로젝트",
         "UPDATED": "프로젝트 설정 업데이트"
+      },
+      "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
+        "CANCEL": "취소",
+        "MSG": "이 프로젝트는 규모가 크며 복제하는 데 시간이 걸릴 수 있습니다. 계속하시겠습니까?",
+        "OK": "그래도 복제",
+        "TITLE": "프로젝트 복제?"
       }
     },
     "PROJECT_FOLDER": {
       "SELECT": {
-        "LABEL": "폴더"
-      }
+        "LABEL": "폴더",
+        "NO_PARENT": "폴더 없음 (최상위)",
+        "PLACEHOLDER": "폴더 선택"
+      },
+      "CONFIRM_DELETE": "폴더 \"{{title}}\"을(를) 삭제하시겠습니까? 이 폴더의 모든 프로젝트가 최상위 수준으로 이동됩니다.",
+      "DIALOG": {
+        "CREATE_TITLE": "폴더 만들기",
+        "EDIT_TITLE": "폴더 편집",
+        "NAME_LABEL": "폴더 이름",
+        "NAME_PLACEHOLDER": "폴더 이름 입력",
+        "NAME_REQUIRED": "폴더 이름은 필수입니다",
+        "NO_PARENT": "상위 없음 (최상위)",
+        "PARENT_LABEL": "상위 폴더"
+      },
+      "TOOLTIP_CREATE": "프로젝트 폴더 만들기",
+      "TOOLTIP_VISIBILITY": "프로젝트 표시/숨기기"
     },
     "QUICK_HISTORY": {
       "NO_DATA": "현재 연도에 대한 데이터가 없습니다.",
@@ -629,7 +801,10 @@
         "SCOPE": "범위",
         "SCOPE_ALL": "모두",
         "SCOPE_ASSIGNED": "나에게 할당됨",
-        "SCOPE_CREATED": "내가 만든"
+        "SCOPE_CREATED": "내가 만든",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Redmine에 보고하기 위한 시간 추적 대화상자 표시",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Redmine 프로젝트에서 시간 추적 모듈이 활성화되어 있어야 합니다",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "하위 작업 완료 시 시간 추적 대화상자 표시"
       },
       "FORM_SECTION": {
         "HELP": "<p>여기에서 일일 계획 보기의 작업 만들기 패널에서 특정 프로젝트에 대해 열려 있는 Redmine(온라인 버전 또는 자체 호스팅 인스턴스) 이슈를 나열하도록 SuperProductivity를 구성할 수 있습니다. 이슈는 제안 사항으로 나열되며 이슈에 대한 링크와 자세한 정보를 제공합니다.</p><p>또한 열려 있는 모든 이슈를 자동으로 가져올 수 있습니다.</p>",
@@ -641,13 +816,28 @@
         "MARK_AS_CHECKED": "업데이트를 체크된 것으로 표시",
         "PRIORITY": "우선순위",
         "STATUS": "상태"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "활동",
+        "INVALID_DATE": "입력한 값이 날짜가 아닙니다!",
+        "POST_TIME": "시간 전송",
+        "STARTED": "시작됨",
+        "SUBMIT_TIME_FOR": "Redmine에 시간 제출",
+        "TIME_SPENT": "소요 시간",
+        "TITLE": "Redmine: 작업 로그 제출"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "Redmine: {{issueTitle}}에 대한 시간 기록이 생성되었습니다"
       }
     },
     "REMINDER": {
       "COUNTDOWN_BANNER": {
         "START_NOW": "지금 시작하기",
         "TXT": "<strong>{{title}}</strong> 가 <strong>{{start}}</strong>에서 시작합니다!",
-        "TXT_MULTIPLE": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!<br> (및 {{nrOfOtherBanners}} 개의 다른 작업 마감일)"
+        "TXT_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!<br> (및 {{nrOfOtherBanners}} 개의 다른 작업 마감일)",
+          "ONE": "<strong>{{title}}</strong>이(가) <strong>{{start}}</strong>에 시작합니다!<br> (외 {{nrOfOtherBanners}}개의 작업이 예정됨)"
+        }
       },
       "S_ACTIVE_TASK_DUE": "현재 작업 중인 작업의 마감일이 되었습니다!<br/> ({{title}})",
       "S_REMINDER_ERR": "알림 인터페이스 오류"
@@ -660,7 +850,13 @@
       "END": "작업 종료",
       "PLAN_END_DAY": "하루 일과 종료 시 계획",
       "PLAN_START_DAY": "하루 시작 시 계획 세우기",
-      "START": "작업 시작"
+      "START": "작업 시작",
+      "INSERT_BEFORE": "이전에",
+      "LUNCH_BREAK": "점심 휴식",
+      "MONTH": "월",
+      "NO_TASKS": "현재 작업이 없습니다. 상단 바의 더하기(+) 버튼으로 작업을 추가해 주세요.",
+      "NOW": "지금",
+      "SHIFT_KEY_INFO": "Shift 키를 눌러 일일 계획 모드를 전환하세요"
     },
     "SEARCH_BAR": {
       "INFO": "보관된 작업을 검색하려면 목록 아이콘을 클릭하십시오.",
@@ -692,11 +888,24 @@
         "TITLE": "간단한 카운터",
         "TYPE_CLICK_COUNTER": "카운터 클릭",
         "TYPE_REPEATED_COUNTDOWN": "반복 카운트다운",
-        "TYPE_STOPWATCH": "스톱워치"
+        "TYPE_STOPWATCH": "스톱워치",
+        "L_ICON_ON": "켜졌을 때 아이콘",
+        "L_IS_HIDE_BUTTON": "도구 모음 버튼 숨기기",
+        "L_STREAK_MODE": "연속 달성 추적 모드",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "특정 요일",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "주간 빈도 (예: 주 3회)",
+        "L_WEEKLY_FREQUENCY": "주당 완료 횟수"
       },
       "S": {
         "GOAL_REACHED_1": "오늘의 목표를 달성했습니다!",
         "GOAL_REACHED_2": "현재 연속 기간입니다:"
+      },
+      "HABIT_TRACKER": {
+        "ADD_HABIT": "새 습관 추가",
+        "DISABLED_HABITS": "비활성화된 습관",
+        "NEXT_WEEK": "다음 주",
+        "PREV_WEEK": "지난 주",
+        "TODAY": "오늘"
       }
     },
     "SYNC": {
@@ -710,7 +919,9 @@
         "FOLLOW_LINK": "다음 링크를 열고 제공된 인증 코드를 아래 입력 필드에 복사하십시오.",
         "GET_AUTH_CODE": "인증 코드 받기",
         "L_AUTH_CODE": "인증 코드를 입력",
-        "TITLE": "로그인 : {{provider}}"
+        "TITLE": "로그인 : {{provider}}",
+        "FOLLOW_LINK_MOBILE": "아래 버튼을 눌러 인증해 주세요. 앱으로 자동 리디렉션됩니다.",
+        "WAITING_FOR_AUTH": "인증 대기 중..."
       },
       "D_CONFLICT": {
         "LAST_SYNC": "마지막 동기화 :",
@@ -722,14 +933,32 @@
         "TIMESTAMP": "타임 스탬프",
         "TITLE": "동기화: 데이터 충돌",
         "USE_LOCAL": "로컬 사용",
-        "USE_REMOTE": "원격 사용"
+        "USE_REMOTE": "원격 사용",
+        "ADDITIONAL_INFO": "추가 정보",
+        "CHANGES": "변경 사항",
+        "CHANGES_SINCE_LAST_SYNC": "마지막 동기화 이후 변경 사항",
+        "COMPARISON_RESULT": "비교 결과",
+        "DATE": "날짜",
+        "LAST_SYNCED": "마지막 동기화",
+        "LAST_WRITE": "마지막 쓰기",
+        "OVERWRITE_WARNING": "경고: {{targetName}} 데이터에는 약 {{targetChanges}}개의 변경 사항이 있지만 {{sourceName}} 데이터에는 {{sourceChanges}}개의 변경 사항만 있습니다. {{targetName}} 데이터를 {{sourceName}} 버전으로 덮어쓰시겠습니까? 이 작업은 취소할 수 없습니다.",
+        "RESULT": "결과",
+        "TIME": "시간",
+        "VECTOR_CLOCK": "벡터 시계",
+        "VECTOR_CLOCK_HEADING": "벡터 시계",
+        "VECTOR_COMPARISON_CONCURRENT": "동시 (실제 충돌)",
+        "VECTOR_COMPARISON_EQUAL": "동일",
+        "VECTOR_COMPARISON_LOCAL_GREATER": "로컬 > 원격",
+        "VECTOR_COMPARISON_LOCAL_LESS": "로컬 < 원격"
       },
       "D_DECRYPT_ERROR": {
         "BTN_OVER_WRITE_REMOTE": "원격 변경 및 덮어쓰기",
         "CHANGE_PW_AND_DECRYPT": "Change & Attempt Decrypt",
         "P1": "데이터가 암호화되어 암호 해독에 실패했습니다. 올바른 비밀번호를 입력하세요!",
-        "P2": "모든 원격 데이터를 덮어쓰는 비밀번호를 변경할 수도 있습니다.",
-        "PASSWORD": "암호"
+        "PASSWORD": "암호",
+        "P2_FORGOT_PW": "<strong>비밀번호를 잊으셨다면</strong>, 올바른 비밀번호를 입력하고 \"복호화 재시도\"를 클릭하세요.",
+        "P3_PW_CHANGED": "<strong>다른 기기에서 비밀번호를 변경하셨다면</strong>, 새 비밀번호를 입력하고 \"원격 덮어쓰기\"를 클릭하세요. 이렇게 하면 로컬 데이터가 서버에 업로드됩니다.",
+        "TITLE": "복호화 실패"
       },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "앱 닫기",
@@ -737,12 +966,13 @@
         "BTN_FORCE_UPLOAD": "로컬 업로드 강제",
         "P1": "원격 동기화 데이터가 일관성이 없습니다!",
         "P2": "영향을 받는 모델:",
-        "T1": "마지막 동기화가 완료되지 않았습니다!",
-        "T2": "마지막 동기화 중에 아카이브 데이터가 제대로 업로드되지 않았습니다:",
         "T3": "두 가지 옵션이 있습니다:",
         "T4": "1. 다른 디바이스로 이동하여 동기화를 완료합니다.",
         "T5": "2. 또는 원격 데이터를 로컬 데이터로 덮어쓸 수도 있습니다. 모든 원격 변경 사항은\n    손실됩니다!",
-        "T6": "덮어쓴 데이터의 백업을 생성하는 것이 좋습니다!!!"
+        "T6": "덮어쓴 데이터의 백업을 생성하는 것이 좋습니다!!!",
+        "BTN_FORCE_DOWNLOAD": "원격 강제 다운로드",
+        "INCOHERENT_P1": "원격 데이터의 날짜가 미래입니다",
+        "INCOHERENT_P2": "시스템에 설정된 시간을 확인해 주세요!"
       },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Save & Enable Sync",
@@ -757,7 +987,9 @@
         "L_SYNC_INTERVAL": "동기화 간격",
         "L_SYNC_PROVIDER": "동기화 제공자",
         "LOCAL_FILE": {
-          "L_SYNC_FOLDER_PATH": "폴더 경로 동기화"
+          "L_SYNC_FOLDER_PATH": "폴더 경로 동기화",
+          "INFO_TEXT": "<strong>경고:</strong> Syncthing, Resilio 등의 파일 동기화 도구를 사용하여 이 폴더를 기기 간에 동기화하지 <strong>마세요</strong> — 데이터 손상과 충돌을 <strong>초래합니다</strong>. 다중 기기 동기화에는 WebDAV, Dropbox 또는 SuperSync를 사용하세요.",
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "파일 접근 권한이 필요합니다"
         },
         "TITLE": "동기화",
         "WEB_DAV": {
@@ -765,7 +997,138 @@
           "L_BASE_URL": "기본 URL",
           "L_PASSWORD": "암호",
           "L_SYNC_FOLDER_PATH": "폴더 경로 동기화",
-          "L_USER_NAME": "사용자 이름"
+          "L_USER_NAME": "사용자 이름",
+          "CONDITIONAL_HEADER_WARNING_MSG": "WebDAV 서버가 조건부 헤더(If-Unmodified-Since)를 지원하지 않습니다. 이는 업로드 시 Super Productivity가 다른 기기의 동시 변경을 감지할 수 없음을 의미합니다.<br><br>동기화는 작동하지만 여러 기기에서 동시에 변경할 경우 데이터 충돌 위험이 있습니다.",
+          "CONDITIONAL_HEADER_WARNING_TITLE": "감소된 동기화 안전성",
+          "D_SYNC_FOLDER_PATH": "동기화 파일이 저장될 WebDAV 서버 루트 기준 경로 (예: '/super-productivity' 또는 '/'). 서버의 내부 디렉토리 경로가 아닙니다.",
+          "INFO": "<strong>경고:</strong> WebDAV 구현은 매우 다양합니다. Super Productivity는 Nextcloud에서 잘 작동하는 것으로 알려져 있지만, <strong>다른 제공자에서는 작동하지 않을 수 있습니다</strong>. 의존하기 전에 철저히 테스트하세요.",
+          "L_TEST_CONNECTION": "연결 테스트",
+          "S_FILL_ALL_FIELDS": "먼저 모든 WebDAV 필드를 입력하세요",
+          "S_TEST_FAIL": "연결 테스트 실패: {{error}} - 대상 URL: {{url}}",
+          "S_TEST_SUCCESS": "연결 테스트 성공! 대상 URL: {{url}}"
+        },
+        "BTN_CHANGE_PASSWORD": "비밀번호 변경",
+        "BTN_DISABLE_ENCRYPTION": "암호화 비활성화",
+        "DROPBOX": {
+          "AUTH_SUCCESS": "Dropbox 인증 성공! 자격 증명이 저장되었습니다.",
+          "BTN_AUTHENTICATE": "Dropbox로 인증",
+          "BTN_REAUTHENTICATE": "Dropbox 재인증",
+          "INFO_TEXT": "Dropbox 인증은 OAuth를 사용합니다. 아래 버튼을 클릭하여 Dropbox 계정으로 인증하세요.",
+          "L_ACCESS_TOKEN": "액세스 토큰 (인증 코드에서 생성됨)",
+          "REAUTH_SUCCESS": "Dropbox 재인증 성공! 자격 증명이 업데이트되었습니다.",
+          "STATUS_CONFIGURED": "Dropbox가 설정되어 동기화할 준비가 되었습니다",
+          "STATUS_NOT_CONFIGURED": "설정되지 않음 - 동기화를 활성화하려면 인증하세요"
+        },
+        "FILE_BASED": {
+          "BTN_CHANGE_PASSWORD": "비밀번호 변경",
+          "BTN_DISABLE_ENCRYPTION": "암호화 비활성화",
+          "BTN_ENABLE_ENCRYPTION": "암호화 활성화",
+          "BTN_REMOVE_ENCRYPTION": "암호화 제거",
+          "CHANGE_PASSWORD_SUCCESS": "암호화 비밀번호가 변경되었습니다",
+          "CHANGE_PASSWORD_WARNING": "경고: 새 비밀번호로 데이터가 다시 업로드됩니다. 다른 모든 기기에서 동기화하기 전에 새 비밀번호가 필요합니다.",
+          "DISABLE_ENCRYPTION_ITEM_1": "현재 데이터가 암호화 없이 다시 업로드됩니다",
+          "DISABLE_ENCRYPTION_ITEM_2": "다른 모든 기기에서 비암호화된 데이터를 동기화합니다",
+          "DISABLE_ENCRYPTION_ITEM_3": "언제든지 암호화를 다시 활성화할 수 있습니다",
+          "DISABLE_ENCRYPTION_NOTE": "로컬 데이터는 삭제되지 않습니다.",
+          "DISABLE_ENCRYPTION_SUCCESS": "암호화가 비활성화되었습니다",
+          "DISABLE_ENCRYPTION_TITLE": "암호화를 비활성화하시겠습니까?",
+          "DISABLE_ENCRYPTION_WARNING": "경고: 데이터가 암호화 없이 다시 업로드됩니다.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "어떤 일이 발생합니다:",
+          "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "이 기능은 파일 기반 동기화 제공자에서만 사용할 수 있습니다.",
+          "ENABLE_ENCRYPTION_ITEM_1": "현재 데이터가 암호화되어 다시 업로드됩니다",
+          "ENABLE_ENCRYPTION_ITEM_2": "다른 모든 기기에서 이 암호화 비밀번호가 필요합니다",
+          "ENABLE_ENCRYPTION_ITEM_3": "언제든지 암호화를 비활성화할 수 있습니다",
+          "ENABLE_ENCRYPTION_NOT_READY": "동기화가 활성화되어 있지 않거나 설정되지 않았습니다.",
+          "ENABLE_ENCRYPTION_NOTE": "로컬 데이터는 삭제되지 않습니다.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "먼저 암호화 비밀번호를 입력하세요.",
+          "ENABLE_ENCRYPTION_SUCCESS": "암호화가 활성화되었습니다",
+          "ENABLE_ENCRYPTION_TITLE": "암호화를 활성화하시겠습니까?",
+          "ENABLE_ENCRYPTION_WARNING": "경고: 데이터가 암호화되어 다시 업로드됩니다. 암호화 비밀번호를 잊으면 데이터를 복구할 수 없습니다.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "어떤 일이 발생합니다:",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "암호화 비밀번호 변경",
+          "L_CONFIRM_PASSWORD": "비밀번호 확인",
+          "L_NEW_PASSWORD": "새 암호화 비밀번호",
+          "L_REMOVE_ENCRYPTION": "또는 암호화 제거",
+          "PASSWORD_MIN_LENGTH": "비밀번호는 최소 8자 이상이어야 합니다",
+          "PASSWORDS_DONT_MATCH": "비밀번호가 일치하지 않습니다",
+          "REMOVE_ENCRYPTION_WARNING": "암호화를 제거하면 데이터가 암호화 없이 다시 업로드됩니다. 모든 기기에서 재설정이 필요합니다."
+        },
+        "GOOGLE": {
+          "L_SYNC_FILE_NAME": "동기화 파일명"
+        },
+        "IMPORT_ENCRYPTION_WARNING": {
+          "BTN_CONTINUE": "가져오기 및 암호화 변경",
+          "CURRENT_STATE": "현재 설정",
+          "ENCRYPTION_DISABLED": "암호화 안 됨",
+          "ENCRYPTION_ENABLED": "암호화됨",
+          "IMPORTED_STATE": "가져오기 후",
+          "ITEM_1": "서버의 모든 동기화 기록과 백업이 영구적으로 삭제됩니다",
+          "ITEM_2": "가져온 데이터가 새 암호화 설정으로 업로드됩니다",
+          "ITEM_3": "다른 모든 기기에서 암호화 설정을 맞춰야 합니다",
+          "NOTE": "이 선택에 관계없이 로컬 데이터는 가져온 데이터로 대체됩니다.",
+          "NOTE_DISABLING": "중요: 암호화 없이는 동기화 서버에 접근할 수 있는 누구나 데이터를 읽을 수 있습니다.",
+          "NOTE_ENABLING": "중요: 암호화에는 비밀번호가 필요합니다. 비밀번호를 잊으면 데이터를 복구할 수 없습니다!",
+          "TITLE": "암호화 설정이 변경됩니다",
+          "WARNING_TEXT": "가져오는 백업의 암호화 설정이 다릅니다. 암호화된 데이터와 비암호화된 데이터는 서버에서 공존할 수 없으므로 모든 서버 데이터가 삭제되어야 합니다.",
+          "WHAT_HAPPENS": "어떤 일이 발생합니다:"
+        },
+        "L_MANUAL_SYNC_ONLY": "수동으로만 동기화 (자동 동기화 비활성화)",
+        "PASSWORD_SET_INFO": "?? 암호화 비밀번호가 설정되었습니다.",
+        "SUPER_SYNC": {
+          "ACCESS_TOKEN_DESCRIPTION": "서버 로그인 페이지에서 복사한 토큰을 붙여넣으세요",
+          "BTN_CHANGE_PASSWORD": "비밀번호 변경",
+          "BTN_DISABLE_ENCRYPTION": "암호화 비활성화",
+          "BTN_ENABLE_ENCRYPTION": "암호화 활성화",
+          "BTN_FORCE_OVERWRITE": "서버 강제 덮어쓰기",
+          "BTN_GET_TOKEN": "서버 열기 및 토큰 가져오기",
+          "CHANGE_PASSWORD_SUCCESS": "암호화 비밀번호가 변경되었습니다",
+          "CHANGE_PASSWORD_WARNING": "경고: 서버의 모든 동기화 기록과 백업이 영구적으로 삭제됩니다. 이전 버전은 복구할 수 없습니다. 현재 데이터가 새 비밀번호로 다시 업로드됩니다. 다른 모든 기기에서 새 비밀번호가 필요합니다.",
+          "DISABLE_ENCRYPTION_ENABLE_FIRST": "먼저 동기화를 활성화하고 SuperSync 설정을 저장한 후 다시 시도하세요.",
+          "DISABLE_ENCRYPTION_ITEM_1": "서버의 모든 동기화 기록과 백업이 삭제됩니다",
+          "DISABLE_ENCRYPTION_ITEM_2": "현재 데이터가 암호화 없이 다시 업로드됩니다",
+          "DISABLE_ENCRYPTION_ITEM_3": "다른 모든 기기에서 비암호화된 데이터를 동기화합니다",
+          "DISABLE_ENCRYPTION_NOT_READY": "동기화가 활성화되어 있지 않거나 설정되지 않았습니다.",
+          "DISABLE_ENCRYPTION_NOTE": "로컬 데이터는 삭제되지 않습니다. 언제든지 암호화를 다시 활성화할 수 있습니다.",
+          "DISABLE_ENCRYPTION_SUCCESS": "암호화가 비활성화되었습니다",
+          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "이 기능은 SuperSync에서만 사용할 수 있습니다.",
+          "DISABLE_ENCRYPTION_TITLE": "암호화를 비활성화하시겠습니까?",
+          "DISABLE_ENCRYPTION_WARNING": "경고: 서버의 모든 암호화된 동기화 데이터가 영구적으로 삭제됩니다. 암호화된 작업과 비암호화된 작업을 혼합할 수 없기 때문입니다.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "어떤 일이 발생합니다:",
+          "E2E_ENCRYPTION_DESCRIPTION": "더 느리지만 더 안전합니다",
+          "ENABLE_ENCRYPTION_ITEM_1": "서버의 모든 동기화 기록과 백업이 삭제됩니다",
+          "ENABLE_ENCRYPTION_ITEM_2": "현재 데이터가 암호화되어 다시 업로드됩니다",
+          "ENABLE_ENCRYPTION_ITEM_3": "다른 모든 기기에서 이 암호화 비밀번호가 필요합니다",
+          "ENABLE_ENCRYPTION_NOT_READY": "동기화가 활성화되어 있지 않거나 설정되지 않았습니다.",
+          "ENABLE_ENCRYPTION_NOTE": "로컬 데이터는 삭제되지 않습니다. 언제든지 암호화를 비활성화할 수 있습니다.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "먼저 암호화 비밀번호를 입력하세요.",
+          "ENABLE_ENCRYPTION_SUCCESS": "암호화가 활성화되었습니다",
+          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "이 기능은 SuperSync에서만 사용할 수 있습니다.",
+          "ENABLE_ENCRYPTION_TITLE": "암호화를 활성화하시겠습니까?",
+          "ENABLE_ENCRYPTION_WARNING": "경고: 서버의 모든 비암호화된 동기화 데이터가 영구적으로 삭제됩니다. 암호화된 작업과 비암호화된 작업을 혼합할 수 없기 때문입니다. 암호화 비밀번호를 잊으면 데이터를 복구할 수 없습니다.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "어떤 일이 발생합니다:",
+          "ENCRYPTION_ENCOURAGED": "SuperSync에는 암호화가 필요합니다. 데이터를 보호하려면 암호화를 활성화하세요.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync는 데이터가 기기를 떠나기 전에 비밀번호로 암호화</strong>하여 개인 데이터의 오용이나 유출을 거의 불가능하게 합니다.",
+          "ENCRYPTION_WARNING": "경고: 암호화 비밀번호를 잊으면 데이터를 복구할 수 없습니다. 이 비밀번호는 로그인 비밀번호와 별개입니다. 모든 기기에서 동일한 비밀번호를 사용해야 합니다.",
+          "FORCE_OVERWRITE_CONFIRM": "이렇게 하면 <strong>서버의 모든 데이터가 삭제</strong>되고 새 비밀번호로 로컬 데이터가 업로드됩니다. 동기화되지 않은 로컬 변경 사항이 손실될 수 있습니다. 계속하시겠습니까?",
+          "FORCE_OVERWRITE_INFO": "현재 암호화 비밀번호를 모르기 때문에 동기화할 수 없는 경우 서버를 로컬 데이터와 새 비밀번호로 덮어쓸 수 있습니다.",
+          "FORCE_OVERWRITE_TITLE": "서버 데이터를 덮어쓰시겠습니까?",
+          "INFO_TEXT": "SuperSync는 모든 기기에서 작업을 실시간으로 동기화합니다. 데이터는 동기화 서버에 안전하게 저장됩니다. 참고: SuperSync는 현재 베타 버전입니다.",
+          "L_ACCESS_TOKEN": "액세스 토큰",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "암호화 비밀번호 변경",
+          "L_CONFIRM_PASSWORD": "비밀번호 확인",
+          "L_ENABLE_E2E_ENCRYPTION": "종단간 암호화 활성화",
+          "L_NEW_PASSWORD": "새 암호화 비밀번호",
+          "L_REMOVE_ENCRYPTION": "또는 암호화 제거",
+          "L_SERVER_URL": "서버 URL",
+          "LOGIN_INSTRUCTIONS": "아래 버튼을 클릭하여 서버 로그인 페이지를 열어주세요. 로그인 후 액세스 토큰을 복사하여 여기에 붙여넣으세요.",
+          "PASSWORD_MIN_LENGTH": "비밀번호는 최소 8자 이상이어야 합니다",
+          "PASSWORDS_DONT_MATCH": "비밀번호가 일치하지 않습니다",
+          "REMOVE_ENCRYPTION_WARNING": "암호화를 제거하면 모든 서버 데이터가 삭제되고 데이터가 암호화 없이 다시 업로드됩니다. 모든 기기에서 재설정이 필요합니다.",
+          "SERVER_URL_DESCRIPTION": "공식 서버를 사용하려면 그대로 두거나 사용자 지정 서버 URL을 입력하세요",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "SuperSync 비활성화",
+          "SETUP_ENCRYPTION_BTN": "비밀번호 설정",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "모든 기기에서 동일한 비밀번호를 사용하세요. 잊어버린 비밀번호는 원격 데이터를 덮어써서 재설정할 수 있습니다.",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: 비밀번호 설정"
         }
       },
       "S": {
@@ -776,10 +1139,168 @@
         "INCOMPLETE_CFG": "동기화 인증에 실패했습니다. 구성을 확인하십시오!",
         "SUCCESS_DOWNLOAD": "원격에서 동기화된 데이터",
         "SUCCESS_VIA_BUTTON": "데이터가 성공적으로 동기화되었습니다.",
-        "UNKNOWN_ERROR": "동기화하는 동안 알 수없는 오류가 발생했습니다. 콘솔을 확인하십시오."
+        "UNKNOWN_ERROR": "동기화하는 동안 알 수없는 오류가 발생했습니다. 콘솔을 확인하십시오.",
+        "ARCHIVE_OPERATION_FAILED": "아카이브 작업 실패. 일부 정리가 완료되지 않았을 수 있습니다.",
+        "AUTH_SETUP_FAILED": "인증 설정에 실패했습니다. 웹 앱을 사용 중이라면 HTTPS로 접속하고 있는지 확인하세요. 그렇지 않으면 안정 버전을 사용하거나 버그로 보고해 주세요.",
+        "AUTH_TOKEN_REJECTED": "동기화 토큰이 서버에 의해 거부되었습니다: {{reason}}. 새 토큰을 발급받으세요.",
+        "CHANGE_PASSWORD_FAILED": "비밀번호 변경 실패: {{message}}",
+        "CLOCK_DRIFT_WARNING": "기기 시계가 약 {{minutes}}분 차이가 납니다. 동기화 문제가 발생할 수 있습니다.",
+        "COMPACTION_FAILED": "데이터베이스 정리 실패. 앱이 느려질 수 있습니다.",
+        "CONFLICT_DIALOG_TIMEOUT": "동기화 충돌 대화상자가 시간 초과되어 취소되었습니다. 다음 트리거 시 동기화가 재시도됩니다.",
+        "CONFLICT_RESOLUTION_FAILED": "동기화 충돌 해결 실패. 다시 로드해 주세요.",
+        "DATA_REPAIRED": "데이터 자동 복구 완료 ({{count}}개 문제 수정)",
+        "DECRYPTION_FAILED": "동기화된 데이터를 복호화하지 못했습니다. 암호화 비밀번호를 확인하세요.",
+        "DEFERRED_ACTION_FAILED": "동기화 중 일부 변경 사항을 저장할 수 없습니다. 복구하려면 다시 로드하세요.",
+        "DIALOG_RESULT_ERROR": "동기화 대화상자를 처리하는 중 오류가 발생했습니다. 다시 시도하세요.",
+        "DISABLE_ENCRYPTION_FAILED": "암호화 비활성화 실패: {{message}}",
+        "ENABLE_ENCRYPTION_FAILED": "암호화 활성화 실패: {{message}}",
+        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "다른 기기에서 암호화가 비활성화되었습니다. 동기화 설정이 업데이트되었습니다.",
+        "ENCRYPTION_PASSWORD_REQUIRED": "암호화된 데이터를 수신했지만 암호화 비밀번호가 설정되어 있지 않습니다. 동기화 설정에서 암호화 비밀번호를 설정하세요.",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "SuperSync에는 암호화가 필요합니다. 동기화를 계속하려면 암호화 비밀번호를 설정하세요.",
+        "ERROR_CORS": "WebDAV 동기화 오류: 네트워크 요청 실패.\n\nCORS 문제일 수 있습니다. 다음을 확인하세요:\n• WebDAV 서버가 교차 출처 요청을 허용하는지\n• 서버 URL이 올바르고 접근 가능한지\n• 인터넷 연결이 작동하는지",
+        "ERROR_PAYLOAD_TOO_LARGE": "동기화 오류: 데이터가 너무 커서 업로드할 수 없습니다.\n\n아카이브된 작업이 많을 때 발생합니다. 데이터가 동기화되지 않았습니다!\n\n도움이 필요하면 지원팀에 문의하세요.",
+        "ERROR_PERMISSION": "파일 접근 거부. 파일 시스템 권한을 확인하세요.",
+        "ERROR_PERMISSION_FLATPAK": "파일 접근 거부. Flatseal을 통해 파일 시스템 권한을 부여하거나 ~/.var/app/ 내의 경로를 사용하세요",
+        "ERROR_PERMISSION_SNAP": "파일 접근 거부. 'snap connect super-productivity:home'을 실행하거나 ~/snap/super-productivity/common/ 내의 경로를 사용하세요",
+        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "동기화 중 오류. 원격 데이터를 읽을 수 없습니다. 암호화를 활성화했는데 로컬 비밀번호가 원격 데이터를 암호화하는 데 사용된 비밀번호와 일치하지 않을 수 있습니다.",
+        "FINISH_DAY_SYNC_ERROR": "하루 마감 중 동기화 오류. 다시 시도하세요.",
+        "FRESH_CLIENT_SYNC_CANCELLED": "초기 동기화가 취소되었습니다. 원격 데이터가 적용되지 않았습니다.",
+        "HYDRATION_FAILED": "데이터를 로드하지 못했습니다. 앱을 다시 로드하세요.",
+        "IMPORTING": "데이터 가져오는 중",
+        "INCOMPLETE_OP_SYNC": "동기화 미완료: {{count}}개의 작업 파일을 다운로드하지 못했습니다",
+        "INITIAL_SYNC_ERROR": "초기 동기화 실패",
+        "INTEGRITY_CHECK_FAILED": "데이터 무결성 문제가 감지되었습니다. 자동 복구를 시도했습니다. 문제가 발생하면 앱을 다시 로드하세요.",
+        "INVALID_AUTH_CODE": "인증 코드가 거부되었습니다. 다시 인증하고 코드를 정확하게 복사했는지 확인하세요.",
+        "INVALID_OPERATION_PAYLOAD": "잘못된 작업이 감지되었습니다. 변경 사항이 저장되지 않을 수 있습니다 - 다시 로드하세요.",
+        "LOCAL_CHANGES_DISCARDED": "{{count}}개의 로컬 변경 사항이 삭제됨 - 다른 기기에서 항목이 삭제됨",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}}개의 저장되지 않은 로컬 변경 사항이 삭제됨 - 동기화가 최신 데이터를 다운로드함",
+        "LOCAL_DATA_REPLACE_CANCELLED": "동기화가 취소되었습니다. 로컬 데이터가 보존되었습니다.",
+        "LOCK_TIMEOUT_ERROR": "이전 작업이 완료되기를 기다리다 동기화 시간이 초과되었습니다. 다시 시도하세요.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "동기화 충돌 자동 해결: 로컬 승리 {{localWins}}건, 원격 승리 {{remoteWins}}건",
+        "MIGRATION_FAILED": "일부 동기화 데이터를 마이그레이션할 수 없어 건너뛰었습니다. 데이터 손상이나 버그일 수 있습니다.",
+        "NEWER_VERSION_AVAILABLE": "일부 변경 사항이 최신 앱 버전에서 발생했습니다. 완벽한 호환성을 위해 업데이트를 고려하세요.",
+        "OPERATION_PERMANENTLY_FAILED": "일부 동기화 작업이 실패하여 적용할 수 없습니다. 데이터가 불완전할 수 있습니다.",
+        "OVERWRITE_SERVER_FAILED": "서버 데이터 덮어쓰기 실패: {{message}}",
+        "PARTIAL_APPLY_FAILURE": "일부 동기화 작업을 적용하지 못했습니다. 데이터가 검증되었습니다.",
+        "PERSIST_FAILED": "변경 사항을 저장하지 못했습니다. 상태가 일관되지 않을 수 있습니다 - 다시 로드하세요.",
+        "REMOTE_DATA_TOO_OLD": "원격 데이터가 너무 오래되어 처리할 수 없습니다. 원격 앱을 업데이트하세요.",
+        "REPLAY_LOCAL_OPS_FAILED": "가져오기 후 로컬 작업을 재생하지 못했습니다. 최근 변경 사항 중 일부가 손실되었을 수 있습니다. 데이터가 검증되었습니다.",
+        "RESTORE_ERROR": "데이터를 복원하지 못했습니다",
+        "RESTORE_SUCCESS": "데이터가 복원되었습니다",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "서버로 데이터를 마이그레이션할 수 없습니다 - 로컬 데이터 검증 실패. 백업을 가져와 보세요.",
+        "STORAGE_QUOTA_EXCEEDED": "동기화 서버 저장 공간이 가득 찼습니다. 변경 사항이 동기화되지 않습니다! 오래된 작업을 아카이브하거나 플랜을 업그레이드하세요.",
+        "STORAGE_RECOVERED_AFTER_COMPACTION": "저장 공간이 부족했습니다. 오래된 데이터가 정리되었습니다.",
+        "TIMEOUT_ERROR": "동기화 작업 시간 초과. {{suggestion}}",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "다운로드할 동기화 작업이 너무 많습니다. 일부 변경 사항이 누락될 수 있습니다.",
+        "UPLOAD_ERROR": "알 수 없는 업로드 오류 (설정이 올바른가요?): {{err}}",
+        "UPLOAD_OPS_REJECTED": "{{count}}개의 작업이 서버에 의해 영구적으로 거부되어 동기화되지 않습니다.",
+        "VECTOR_CLOCK_LIMIT_REACHED": "동기화가 {{originalSize}}개의 기기/브라우저를 추적했으며 {{maxSize}}의 한도를 초과했습니다. 비활성 기기 항목이 정리되었습니다. 문제가 발생하면 동기화 재설정을 고려하세요.",
+        "VERSION_TOO_OLD": "앱 버전이 동기화된 데이터에 비해 너무 오래되었습니다. 업데이트하세요!",
+        "VERSION_UNSUPPORTED": "동기화 불가: 데이터가 최신 앱 버전을 필요로 합니다. 업데이트하세요.",
+        "WEB_CRYPTO_NOT_AVAILABLE": "이 기기에서 암호화를 사용할 수 없습니다. Android에서 암호화에는 보안 컨텍스트(HTTPS)가 필요하며 이는 사용할 수 없습니다. 동기화 설정에서 암호화를 비활성화하거나 데스크톱 웹 브라우저에서 동기화하세요."
       },
       "SAFETY_BACKUP": {
-        "BTN_DELETE": "삭제하다"
+        "BTN_DELETE": "삭제하다",
+        "BTN_CLEAR_ALL": "모두 삭제",
+        "BTN_CREATE_MANUAL": "수동 백업 만들기",
+        "BTN_REFRESH": "새로고침",
+        "BTN_RESTORE": "복원",
+        "CLEAR_FAILED": "백업 삭제 실패",
+        "CLEARED_SUCCESS": "모든 백업이 삭제되었습니다",
+        "CREATE_FAILED": "백업 생성 실패",
+        "CREATED_SUCCESS": "수동 백업이 생성되었습니다",
+        "DELETE_FAILED": "백업 삭제 실패",
+        "DELETED_SUCCESS": "백업이 삭제되었습니다",
+        "DESCRIPTION": "자동 백업은 동기화 작업 중 원격에서 데이터를 다운로드하기 전에 생성됩니다. 백업은 4개의 스마트 슬롯으로 구성됩니다: 최근 2개, 오늘 첫 번째 1개, 어제 이전 첫 번째 1개.",
+        "LAST_CHANGE_PREFIX": "마지막 변경:",
+        "LOADING": "로드 중...",
+        "NO_BACKUPS": "아직 안전 백업이 없습니다. 백업은 동기화 작업 전에 자동으로 생성됩니다.",
+        "REASON_BEFORE_UPDATE": "동기화 전 자동 백업",
+        "REASON_MANUAL": "수동 백업",
+        "RESTORED_SUCCESS": "백업이 복원되었습니다",
+        "SLOT_BEFORE_TODAY": "오늘 이전 첫 백업",
+        "SLOT_RECENT": "최근 백업",
+        "SLOT_TODAY": "오늘의 첫 백업",
+        "TOOLTIP_CLEAR_ALL": "모든 안전 백업 삭제",
+        "TOOLTIP_CREATE_MANUAL": "모든 데이터의 수동 백업 만들기",
+        "TOOLTIP_DELETE": "이 백업 삭제",
+        "TOOLTIP_REFRESH": "백업 목록 새로고침",
+        "TOOLTIP_RESTORE": "이 백업 복원 (현재 모든 데이터가 대체됩니다)"
+      },
+      "BTN_RESTORE_FROM_HISTORY": "기록에서 복원",
+      "BTN_SYNC_NOW": "지금 동기화",
+      "D_DATA_REPAIR_CONFIRM": {
+        "MSG": "데이터가 손상된 것으로 보입니다. 자동 복구를 시도하시겠습니까? 약간의 데이터 손실이 있을 수 있습니다.",
+        "TITLE": "데이터 손상 감지됨"
+      },
+      "D_DATA_REPAIRED": {
+        "MSG": "데이터 자동 복구가 필요했습니다 ({{count}}개 문제 수정). 이는 일반적으로 발생해서는 안 됩니다. 반복적으로 발생하면 보고해 주세요.",
+        "TITLE": "데이터 복구 완료",
+        "UNKNOWN_ERROR": "알 수 없는 동기화 오류: {{err}}"
+      },
+      "D_ENTER_PASSWORD": {
+        "BTN_FORCE_OVERWRITE": "로컬 데이터 사용",
+        "BTN_SAVE_AND_SYNC": "저장 후 동기화",
+        "FORCE_OVERWRITE_CONFIRM": "이렇게 하면 <strong>서버의 모든 데이터가 삭제</strong>되고 이 비밀번호로 암호화된 로컬 데이터가 업로드됩니다. 계속하시겠습니까?",
+        "FORCE_OVERWRITE_INFO": "로컬 데이터를 유지하고 싶다면 대신 서버를 덮어쓸 수 있습니다.",
+        "FORCE_OVERWRITE_TITLE": "서버 데이터를 덮어쓰시겠습니까?",
+        "MESSAGE": "동기화 서버에 암호화된 데이터가 있지만 이 기기에 암호화 비밀번호가 설정되어 있지 않습니다. 데이터를 복호화하고 동기화하려면 암호화 비밀번호를 입력하세요.",
+        "PASSWORD_LABEL": "암호화 비밀번호",
+        "TITLE": "암호화 비밀번호 필요"
+      },
+      "D_FRESH_CLIENT_CONFIRM": {
+        "MESSAGE": "새 설치로 보입니다. {{count}}개의 변경 사항이 있는 원격 데이터가 발견되었습니다. 원격 데이터를 다운로드하여 로컬 데이터를 덮어쓰시겠습니까?",
+        "OK": "원격 데이터 다운로드",
+        "TITLE": "초기 동기화"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "동기화되지 않은 로컬 변경 사항 {{count}}개가 원격 데이터로 대체됩니다. 계속하시겠습니까?",
+        "TITLE": "로컬 데이터를 대체하시겠습니까?"
+      },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "동기화 비활성화",
+        "PERM_FILE": "권한 부여",
+        "TEXT": "<p>로컬 동기화를 위한 파일 권한이 취소되었습니다.</p>",
+        "TITLE": "동기화: 로컬 파일 권한 거부됨"
+      },
+      "D_RESTORE": {
+        "BTN_RESTORE": "복원",
+        "CONFIRM_MSG": "<strong>{{timestamp}}</strong>으로 복원하시겠습니까?<br><br>이렇게 하면 현재 모든 데이터가 <strong>완전히 대체</strong>되며 <strong>취소할 수 없습니다</strong>.",
+        "CONFIRM_TITLE": "복원 확인",
+        "ERROR_LOADING": "복원 지점을 로드하지 못했습니다",
+        "ERROR_RESTORE": "데이터를 복원하지 못했습니다",
+        "INTRO": "데이터를 복원할 시점을 선택하세요:",
+        "LOADING": "복원 지점 로드 중...",
+        "NO_POINTS": "사용 가능한 복원 지점이 없습니다. 복원 지점은 동기화하거나 데이터를 가져올 때 생성됩니다.",
+        "TITLE": "기록에서 복원",
+        "TYPE_BACKUP_IMPORT": "백업 복원",
+        "TYPE_REPAIR": "자동 복구",
+        "TYPE_SYNC_IMPORT": "전체 동기화 가져오기",
+        "WARNING": "선택한 백업으로 현재 모든 데이터가 대체됩니다. 이 작업은 취소할 수 없습니다!"
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "CONFIRM": "로컬 데이터 업로드",
+        "MESSAGE": "이 동기화 서버에 이미 데이터가 있습니다. 로컬 데이터를 업로드하여 병합하시겠습니까? 건너뛰면 일부 로컬 변경 사항이 동기화되지 않을 수 있습니다.",
+        "SKIP": "건너뛰기",
+        "TITLE": "서버에 이미 데이터가 있습니다"
+      },
+      "D_SYNC_IMPORT_CONFLICT": {
+        "FILTERED_CHANGES": "영향을 받는 변경 사항",
+        "IMPORT_DATE": "가져오기 날짜",
+        "MSG_INCOMING": "다른 기기에서 데이터가 전체 대체되었습니다. {{filteredOpCount}}개의 로컬 변경 사항이 적용되지 않을 수 있습니다.",
+        "MSG_INCOMING_NO_OPS": "다른 기기에서 데이터가 전체 대체되었습니다. 이 기기는 새 상태로 동기화됩니다.",
+        "MSG_LOCAL_FILTERS": "로컬 데이터를 가져오기/복원했지만 서버에 자동으로 병합할 수 없는 다른 기기의 변경 사항 {{filteredOpCount}}개가 있습니다.",
+        "REASON_BACKUP_RESTORE": "이유: 다른 기기에서 백업이 복원되었습니다.",
+        "REASON_FILE_IMPORT": "이유: 다른 기기에서 데이터 파일이 가져와졌습니다.",
+        "REASON_FORCE_UPLOAD": "이유: 다른 기기에서 로컬 데이터를 강제 업로드했습니다.",
+        "REASON_PASSWORD_CHANGED": "이유: 다른 기기에서 암호화 비밀번호가 변경되었습니다.",
+        "REASON_REPAIR": "이유: 자동 데이터 복구가 수행되었습니다.",
+        "REASON_SERVER_MIGRATION": "이유: 데이터가 새 동기화 서버로 마이그레이션되었습니다.",
+        "REASON_UNKNOWN": "이유: 전체 상태 대체가 수행되었습니다.",
+        "RECOMMEND_SERVER": "권장: 다른 기기와 동기화를 유지하려면 서버 데이터를 수락하세요.",
+        "TITLE": "동기화 충돌 감지됨",
+        "USE_LOCAL": "내 데이터 사용",
+        "USE_REMOTE": "서버 데이터 사용"
       }
     },
     "TAG": {
@@ -801,7 +1322,8 @@
         "TITLE": "기본 설정"
       },
       "S": {
-        "UPDATED": "태그 설정이 업데이트되었습니다"
+        "UPDATED": "태그 설정이 업데이트되었습니다",
+        "ARCHIVE_CLEANUP_FAILED": "삭제된 태그의 아카이브 데이터 정리 실패"
       },
       "TTL": {
         "ADD_NEW_TAG": "새 태그 추가"
@@ -809,14 +1331,48 @@
     },
     "TAG_FOLDER": {
       "SELECT": {
-        "LABEL": "폴더"
-      }
+        "LABEL": "폴더",
+        "NO_PARENT": "폴더 없음 (최상위)",
+        "PLACEHOLDER": "폴더 선택"
+      },
+      "CONFIRM_DELETE": "폴더 \"{{title}}\"을(를) 삭제하시겠습니까? 이 폴더의 모든 태그가 최상위 수준으로 이동됩니다.",
+      "DIALOG": {
+        "CREATE_TITLE": "폴더 만들기",
+        "EDIT_TITLE": "폴더 편집",
+        "NAME_LABEL": "폴더 이름",
+        "NAME_PLACEHOLDER": "폴더 이름 입력",
+        "NAME_REQUIRED": "폴더 이름은 필수입니다",
+        "NO_PARENT": "상위 없음 (최상위)",
+        "PARENT_LABEL": "상위 폴더"
+      },
+      "TOOLTIP_CREATE": "태그 폴더 만들기"
     },
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "기존 작업 \"{{taskTitle}}\"추가",
         "TODAY": "오늘",
-        "TOMORROW": "내일"
+        "TOMORROW": "내일",
+        "CREATE_NEW_TAGS": "새 태그 만들기",
+        "DUE_BUTTON": "일정",
+        "ESTIMATE_BUTTON": "예상 시간",
+        "PLACEHOLDER_CREATE": "작업 제목 #태그 @16:00",
+        "PLACEHOLDER_SEARCH": "기존 작업이나 이슈 추가...",
+        "REPEAT_BUTTON": "반복",
+        "SEARCH_INFO_TEXT": "아카이브 및 다른 프로젝트에서 이슈와 작업 검색 및 추가",
+        "TAGS_BUTTON": "태그",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "백로그 / 오늘 목록에 추가 전환",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "목록 맨 위 / 맨 아래에 추가 전환",
+        "TOOLTIP_ADD_TASK": "작업 추가",
+        "TOOLTIP_ADD_TO_BACKLOG": "백로그에 추가",
+        "TOOLTIP_ADD_TO_BOTTOM": "맨 아래에 추가 (Ctrl+1)",
+        "TOOLTIP_ADD_TO_TODAY": "오늘에 추가",
+        "TOOLTIP_ADD_TO_TOP": "맨 위에 추가 (Ctrl+1)",
+        "TOOLTIP_CLEAR_DATE": "날짜 지우기",
+        "TOOLTIP_CLEAR_ESTIMATE": "예상 시간 지우기",
+        "TOOLTIP_CLEAR_REPEAT": "반복 설정 지우기",
+        "TOOLTIP_CLEAR_TAGS": "태그 지우기",
+        "TOOLTIP_DISABLE_SEARCH": "이슈 검색 비활성화 (Ctrl+2)",
+        "TOOLTIP_ENABLE_SEARCH": "이슈 검색 활성화 (Ctrl+2)"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "첨부 파일 추가",
@@ -830,11 +1386,21 @@
         "SCHEDULE_TASK": "작업 예약",
         "SUB_TASKS": "하위 작업 ({{nr}})",
         "TIME": "시각",
-        "TITLE_PLACEHOLDER": "제목 입력"
+        "TITLE_PLACEHOLDER": "제목 입력",
+        "COMPLETED_ON": "완료 날짜",
+        "CREATED_ON": "생성 날짜",
+        "DEADLINE": "마감일",
+        "DEADLINE_DUE_BY": "기한",
+        "DEADLINE_OVERDUE": "기한 초과!",
+        "FROM_PARENT": "(상위에서)",
+        "ISSUE": "이슈 링크",
+        "REMINDER": "알림"
       },
       "B": {
         "ADD_HALF_HOUR": "1/2hou 추가",
-        "ESTIMATE_EXCEEDED": "\"{{title}}\"에 대한 예상 시간을 초과했습니다."
+        "ESTIMATE_EXCEEDED": "\"{{title}}\"에 대한 예상 시간을 초과했습니다.",
+        "ADD_ALL_TO_TODAY": "모두 오늘에 추가",
+        "DEADLINES_TODAY": "오늘 마감인 작업 {{count}}개가 아직 계획되지 않음"
       },
       "CMP": {
         "ADD_SUB_TASK": "하위 작업 추가",
@@ -864,7 +1430,11 @@
         "TRACK_TIME": "추적 시작 시간",
         "TRACK_TIME_STOP": "추적 시간 일시 중지",
         "UNSCHEDULE_TASK": "작업 일정 취소하기",
-        "UPDATE_ISSUE_DATA": "문제 데이터 업데이트"
+        "UPDATE_ISSUE_DATA": "문제 데이터 업데이트",
+        "DUPLICATE": "복제",
+        "EDIT_DEADLINE": "마감일 편집",
+        "REMOVE_DEADLINE": "마감일 제거",
+        "SET_DEADLINE": "마감일 설정"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "새 태그 {{tagsTxt}}을 만들시겠습니까?",
@@ -888,7 +1458,15 @@
         "SNOOZE_ALL": "모두 다시 알림",
         "START": "작업 시작",
         "UNSCHEDULE": "비정기",
-        "UNSCHEDULE_ALL": "모두 일정 해제"
+        "UNSCHEDULE_ALL": "모두 일정 해제",
+        "CLEAR_ALL_REMINDERS": "모든 알림 지우기",
+        "CLEAR_REMINDER": "알림 지우기",
+        "DEADLINE_REMINDER": "마감일 알림",
+        "DEADLINE_SECTION": "마감일",
+        "DISMISS_ALL_REMINDERS_KEEP_TODAY": "모든 알림 해제 (오늘에 유지)",
+        "DISMISS_REMINDER_KEEP_TODAY": "알림 해제 (오늘에 유지)",
+        "DUE_SECTION": "예정",
+        "TASK_REMINDERS": "작업 알림"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "다음 달 일정",
@@ -937,7 +1515,11 @@
         "REMINDER_ADDED": "예약 된 작업 \"{{title}}\"",
         "REMINDER_DELETED": "할 일 목록 삭제",
         "REMINDER_UPDATED": "\"{{title}}\"작업에 대한 알림이 업데이트되었습니다.",
-        "TASK_CREATED": "\"{{taskTitle}}\"작업 생성"
+        "TASK_CREATED": "\"{{taskTitle}}\"작업 생성",
+        "DEADLINE_REMOVED": "마감일이 제거되었습니다",
+        "DEADLINE_SET": "{{date}}로 마감일이 설정되었습니다",
+        "GO_TO_TASK": "작업으로 이동",
+        "TASK_ALREADY_EXISTS": "작업 <strong>{{title}}</strong>이(가) 이미 존재합니다"
       },
       "SELECT_OR_CREATE": "작업 선택 또는 생성",
       "SUMMARY_TABLE": {
@@ -946,6 +1528,32 @@
         "SPENT_TOTAL": "사용한 총액",
         "TASK": "태스크",
         "TOGGLE_DONE": "완료로 표시 취소 / 표시"
+      },
+      "D_CONFIRM_DELETE": {
+        "MSG": "작업 \"{{title}}\"을(를) 삭제하시겠습니까?",
+        "OK": "삭제"
+      },
+      "D_DEADLINE": {
+        "ADD_TIME": "시간 추가",
+        "QA_NEXT_MONTH": "다음 달",
+        "QA_NEXT_WEEK": "다음 주",
+        "QA_TODAY": "오늘",
+        "QA_TOMORROW": "내일",
+        "REMIND_AT": "알림 시간",
+        "REMOVE_DEADLINE": "마감일 제거",
+        "RO_1H": "1시간 전",
+        "RO_5M": "5분 전",
+        "RO_10M": "10분 전",
+        "RO_15M": "15분 전",
+        "RO_30M": "30분 전",
+        "RO_AT_DEADLINE": "마감 시",
+        "RO_NEVER": "안 함",
+        "SET_DEADLINE": "마감일 설정"
+      },
+      "D_SELECT_DATE_AND_TIME": {
+        "DATE": "날짜",
+        "TIME": "시간",
+        "TITLE": "날짜 및 시간 선택"
       }
     },
     "TASK_REPEAT": {
@@ -988,11 +1596,11 @@
         "ADD": "반복 작업 구성 추가",
         "ADVANCED_CFG": "고급 구성",
         "EDIT": "반복 작업 구성 편집",
-        "HELP1": "반복 작업은 일별 잡일을 의미합니다 (예 : \"조직\", \"일일 모임\", \"코드 검토\", \"이메일 확인\"또는 여러 번 반복 될 수있는 유사한 작업).",
-        "HELP2": "일단 구성되면 반복 작업은 프로젝트를 여는 즉시 아래에서 선택한 매일에 다시 작성되며 하루가 끝날 때 자동 완성으로 표시됩니다. 그들은 다른 인스턴스로 처리됩니다. 따라서 하위 작업 등을 자유롭게 추가 할 수 있습니다.",
-        "HELP3": "Jira 또는 Git Issues에서 가져온 작업은 반복 할 수 없습니다. 모든 미리 알림은 반복 작업에서 삭제됩니다.",
-        "HELP4": "주문 필드에 대한 참고 사항: 생성 주문 반복 가능한 작업 참조. 동시에 생성되는 반복 가능한 작업에만 적용됩니다. 값이 낮을수록 작업이 목록의 위쪽에 있고 숫자가 낮을수록 아래쪽에 있음을 의미합니다. 0보다 큰 값은 항목이 일반 작업의 맨 아래에 생성됨을 의미합니다.",
-        "TAG_LABEL": "추가 할 태그"
+        "TAG_LABEL": "추가 할 태그",
+        "HEATMAP_LABEL": "활동",
+        "TIME_SPENT_THIS_MONTH": "이번 달",
+        "TIME_SPENT_THIS_WEEK": "이번 주",
+        "TIME_SPENT_TOTAL": "전체"
       },
       "F": {
         "C_DAY": "일",
@@ -1003,8 +1611,6 @@
         "FRIDAY": "금요일",
         "MONDAY": "월요일",
         "NOTES": "기본 노트",
-        "ORDER": "주문",
-        "ORDER_DESCRIPTION": "반복 가능한 작업의 생성 순서. 동시에 생성된 반복 가능한 작업에만 영향을 줍니다. 값이 낮을수록 작업이 목록 위쪽에 생성되고 숫자가 낮을수록 아래쪽에 생성됨을 의미합니다. 0보다 큰 값은 항목이 일반 작업의 맨 아래에 생성됨을 의미합니다.",
         "Q_CUSTOM": "사용자 정의 반복 구성",
         "Q_DAILY": "매일",
         "Q_MONDAY_TO_FRIDAY": "매주 월요일부터 금요일까지",
@@ -1024,8 +1630,24 @@
         "THURSDAY": "목요일",
         "TITLE": "작업 제목",
         "TUESDAY": "화요일",
-        "WEDNESDAY": "수요일"
-      }
+        "WEDNESDAY": "수요일",
+        "DISABLE_AUTO_UPDATE_SUBTASKS": "하위 작업 자동 업데이트 비활성화",
+        "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "최신 인스턴스가 변경될 때 상속된 하위 작업을 자동으로 업데이트하지 않습니다",
+        "INHERIT_SUBTASKS": "하위 작업 상속",
+        "INHERIT_SUBTASKS_DESCRIPTION": "활성화하면 가장 최근 작업 인스턴스의 하위 작업이 반복 작업과 함께 다시 생성됩니다",
+        "Q_MONTHLY_FIRST_DAY": "매월 첫째 날",
+        "Q_MONTHLY_LAST_DAY": "매월 마지막 날",
+        "REMOVE_FOR_DATE": "{{date}} 제거",
+        "REMOVE_INSTANCE": "오늘 제거",
+        "SCHEDULE_TYPE_LABEL": "일정 유형",
+        "SKIP_OVERDUE": "지연된 인스턴스 건너뛰기",
+        "SKIP_OVERDUE_DESCRIPTION": "활성화하면 예정된 날짜를 놓친 경우(예: 주간 작업에서 오늘이 예정일이 아닌 경우) 놓친 인스턴스가 지연 작업으로 생성되지 않고 건너뛰어집니다"
+      },
+      "D_DELETE_INSTANCE": {
+        "MSG": "{{date}}의 반복 작업 인스턴스를 제거하시겠습니까? 이 날짜에만 작업 생성이 방지됩니다.",
+        "OK": "인스턴스 제거"
+      },
+      "SNACK_REPEAT_DIALOG_FAIL": "반복 설정 대화상자를 열 수 없습니다. 작업 메뉴에서 설정할 수 있습니다."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1060,7 +1682,9 @@
         "TIME_2HOUR": "> 2 시간",
         "TIME_10MIN": "> 10분",
         "TIME_30MIN": "> 30분",
-        "TIME_SPENT": "소요 시간"
+        "TIME_SPENT": "소요 시간",
+        "SAVE_SORT": "기본값으로 저장",
+        "SORT": "정렬"
       }
     },
     "TIME_TRACKING": {
@@ -1070,7 +1694,8 @@
       },
       "B_TTR": {
         "ADD_TO_TASK": "작업에 추가",
-        "MSG": " {{time}}에 대한 시간을 추적하지 않았습니다."
+        "MSG": " {{time}}에 대한 시간을 추적하지 않았습니다.",
+        "MSG_WITHOUT_TIME": "시간을 추적하지 않았습니다"
       },
       "D_IDLE": {
         "ADD_ENTRY": "추적할 항목 추가",
@@ -1086,7 +1711,9 @@
         "SKIP": "버킷",
         "SPLIT_TIME": "여러 작업과 휴식 시간으로 시간 나누기",
         "TASK": "태스크",
-        "TRACK_TO": "추적 대상 :"
+        "TRACK_TO": "추적 대상 :",
+        "WARN_SIMPLE_COUNTER": "시간이 활성화된 간단 카운터 버튼에 계산됩니다.",
+        "WARN_SIMPLE_COUNTER_BREAK": "시간이 여전히 활성화된 간단 카운터 버튼에 계산됩니다."
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em></em> 생성 및 추적",
@@ -1094,6 +1721,31 @@
         "TASK": "태스크",
         "TRACK_TO": "추적 대상 :",
         "UNTRACKED_TIME": "추적되지 않은 시간 :"
+      },
+      "D_ARCHIVE_COMPRESS": {
+        "BTN_COMPRESS": "아카이브 압축",
+        "CONFIRM_MSG": "아카이브를 압축하시겠습니까? 위에 나열된 데이터가 영구적으로 삭제됩니다!",
+        "CONFIRM_TITLE": "아카이브 압축 확인",
+        "ESTIMATED_SAVINGS": "예상 절약 공간",
+        "INTRO": "오래된 데이터를 제거하여 아카이브된 작업을 압축합니다. 이 작업은 모든 기기에 동기화됩니다.",
+        "ISSUE_FIELDS_TO_CLEAR": "정리할 이슈 필드",
+        "LOADING": "아카이브 분석 중...",
+        "NO_DATA": "압축할 데이터가 없습니다. 아카이브가 이미 최적화되어 있습니다.",
+        "NOTES_TO_CLEAR": "정리할 작업 노트 (1년 이상)",
+        "SUBTASKS_TO_DELETE": "삭제할 하위 작업 (시간이 상위에 병합됨)",
+        "TITLE": "아카이브 압축",
+        "WARNING": "이 작업은 취소할 수 없습니다. 진행하기 전에 백업이 있는지 확인하세요!"
+      }
+    },
+    "VOICE_REMINDER": {
+      "FORM": {
+        "HELP": "작업 시간을 추적할 때 구성된 문구를 X마다 반복합니다.",
+        "L_INTERVAL": "구문 반복 간격",
+        "L_TEXT": "텍스트",
+        "L_TEXT_DESCRIPTION": "예: \"{currentTaskTitle}달러 작업!\"",
+        "L_VOICE": "음색 선택",
+        "L_VOICE_DESCRIPTION": "음성 선택",
+        "TITLE": "음성 알림"
       }
     },
     "WORKLOG": {
@@ -1104,7 +1756,9 @@
         "TASKS": "할 일 목록",
         "TOTAL_TIME": "총 소요 시간 :",
         "WEEK_NR": "주 {{nr}}",
-        "WORKED": "근무한"
+        "WORKED": "근무한",
+        "RESTORE_TASK_FROM_ARCHIVE": "아카이브에서 작업 복원",
+        "VIEW_TASK_DETAILS": "작업 상세 보기"
       },
       "D_CONFIRM_RESTORE": " <strong>\"{{title}}\"</strong> 작업을 현재 작업 목록으로 이동 하시겠습니까?",
       "D_EXPORT_TITLE": "작업 로그 내보내기 {{start}}-{{end}}",
@@ -1148,8 +1802,50 @@
       "WEEK": {
         "EXPORT": "주 데이터 내보내기",
         "NO_DATA": "이번 주에는 아직 할 일이 없습니다.",
-        "TITLE": "제목"
+        "TITLE": "제목",
+        "FOCUS_SUMMARY": "집중 세션 (횟수 / 시간)"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "이미지가 붙여넣기되었습니다",
+      "SIZE_EXCEEDED": "이미지 크기({{actualSize}})가 최대 허용 크기({{maxSize}})를 초과합니다",
+      "STORAGE_QUOTA_EXCEEDED": "저장 공간 한도를 초과했습니다. 공간을 확보하거나 이미지 크기를 줄여주세요."
+    },
+    "ISSUE_PANEL": {
+      "CALENDAR_AGENDA": {
+        "OFFLINE_BANNER_MSG": "캐시된 캘린더 결과를 표시 중입니다. 데이터가 오래되었을 수 있습니다."
+      }
+    },
+    "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "Nextcloud 기본 URL",
+        "FILTER_BY_ASSIGNEE": "나에게 할당된 카드만 가져오기",
+        "IS_TRANSITION_ISSUES_ENABLED": "완료 상태와 제목을 Nextcloud Deck에 다시 동기화",
+        "PASSWORD": "Nextcloud 앱 비밀번호",
+        "POLL_INTERVAL_MINUTES": "폴링 간격 (분)",
+        "TITLE_TEMPLATE": "작업 제목 템플릿",
+        "TITLE_TEMPLATE_DESCRIPTION": "변수: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. 예: [{BOARD}: {COLUMN}] {CARD_TITLE}. 카드 제목만 사용하려면 비워두세요.",
+        "USERNAME": "Nextcloud 사용자명"
+      },
+      "FORM_SECTION": {
+        "HELP": "카드를 작업으로 가져오기 위해 Nextcloud Deck 통합을 설정하세요. 인증에는 앱 비밀번호를 사용하세요."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNED_USERS": "할당된 사용자",
+        "DECK_DESCRIPTION": "Deck 설명",
+        "LABELS": "레이블",
+        "STACK": "스택"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: 보드를 찾을 수 없습니다",
+        "CARD_NOT_FOUND": "Nextcloud Deck: 카드 \"{{issueId}}\"이(가) 서버에서 삭제된 것 같습니다.",
+        "ERR_CREDENTIALS_MISSING": "먼저 Nextcloud URL, 사용자명, 비밀번호를 입력하세요.",
+        "ERR_LOAD_BOARDS": "Deck 보드를 로드하지 못했습니다. 자격 증명을 확인하세요."
+      }
+    },
+    "REFLECTION_NOTE": {
+      "ACTION_DISMISS": "닫기",
+      "MSG": "회고 노트: ({{date}}): {{content}}"
     }
   },
   "FILE_IMEX": {
@@ -1173,7 +1869,8 @@
     "S_ERR_INVALID_URL": "가져오기 실패: 제공된 URL이 유효하지 않습니다",
     "S_ERR_NETWORK": "가져오기 실패: URL에서 데이터를 가져오는 중 네트워크 오류 발생",
     "S_IMPORT_FROM_URL_ERR_DECODE": "오류: 가져오기를 위한 URL 매개변수를 디코딩할 수 없습니다. 올바르게 형식화되었는지 확인하십시오.",
-    "URL_PLACEHOLDER": "가져올 URL을 입력하세요"
+    "URL_PLACEHOLDER": "가져올 URL을 입력하세요",
+    "BTN_COMPRESS_ARCHIVE": "아카이브 압축"
   },
   "G": {
     "ADD": "추가",
@@ -1204,10 +1901,21 @@
     "SUBMIT": "제출하기",
     "TITLE": "제목",
     "TODAY_TAG_TITLE": "오늘",
-    "TRACKING_INTERVAL_DESCRIPTION": "이 간격을 밀리초 단위로 사용하여 시간을 추적합니다. 디스크 쓰기를 줄이려면 이 값을 변경할 수 있습니다. 이슈 #2355를 참조하세요.",
     "UNDO": "취소",
     "WITHOUT_PROJECT": "프로젝트없이",
-    "YESTERDAY": "어제"
+    "YESTERDAY": "어제",
+    "APPLY": "적용",
+    "COMPLETE": "완료",
+    "CONTINUE": "계속",
+    "DONT_SHOW_AGAIN": "다시 표시하지 않기",
+    "DUPLICATE": "복제",
+    "NEXT": "다음",
+    "PASSWORD_STRENGTH_FAIR": "보통",
+    "PASSWORD_STRENGTH_STRONG": "강함",
+    "PASSWORD_STRENGTH_WEAK": "약함",
+    "PROCESSING": "처리 중",
+    "SHARE": "공유",
+    "TOGGLE_PASSWORD_VISIBILITY": "비밀번호 표시 전환"
   },
   "GCF": {
     "AUTO_BACKUPS": {
@@ -1230,7 +1938,12 @@
     "FOCUS_MODE": {
       "HELP": "집중 모드에서는 방해 요소가 없는 화면을 열어 현재 작업에 집중할 수 있도록 도와줍니다.",
       "L_SKIP_PREPARATION_SCREEN": "준비 화면 건너뛰기(스트레칭 등)",
-      "TITLE": "초점 모드"
+      "TITLE": "초점 모드",
+      "L_IS_PLAY_TICK": "집중 세션 중 틱 소리 재생",
+      "L_MANUAL_BREAK_START": "휴식 수동 시작 (뽀모도로)",
+      "L_PAUSE_TRACKING_DURING_BREAK": "휴식 중 작업 추적 일시정지",
+      "L_START_IN_BACKGROUND": "배너만으로 집중 세션 시작 (오버레이 없음)",
+      "L_SYNC_SESSION_WITH_TRACKING": "집중 세션과 시간 추적 동기화"
     },
     "IDLE": {
       "HELP": "<div><p>유휴 시간 처리가 활성화되면 유휴 상태 일 때 지정된 시간 후에 대화 상자가 열리고 시간을 추적하려는 작업이 있는지 여부를 확인합니다.</p></div>",
@@ -1294,7 +2007,10 @@
       "TRIGGER_SYNC": "동기화 트리거(구성된 경우)",
       "ZOOM_DEFAULT": "확대 / 축소 기본값 (데스크톱 만 해당)",
       "ZOOM_IN": "확대 (데스크톱에만 해당)",
-      "ZOOM_OUT": "축소 (데스크톱에만 해당)"
+      "ZOOM_OUT": "축소 (데스크톱에만 해당)",
+      "ADD_NEW_PROJECT": "새 프로젝트 추가",
+      "PLUGIN_SHORTCUTS": "플러그인 단축키",
+      "TASK_UNSCHEDULE": "작업 일정 해제"
     },
     "LANG": {
       "AR": "عربى",
@@ -1320,7 +2036,32 @@
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文(简体)",
-      "ZH_TW": "中文(繁體)"
+      "ZH_TW": "中文(繁體)",
+      "FI": "Suomi",
+      "PT_BR": "Português (Brazil)",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
+      "SV": "Svenska",
+      "TIME_LOCALE": "날짜/시간 형식 로캘",
+      "TIME_LOCALE_AUTO": "시스템 기본값",
+      "TIME_LOCALE_CS_CZ": "체코어: 24시간, DD. MM. YYYY",
+      "TIME_LOCALE_DE_DE": "독일어: 24시간, DD.MM.YYYY",
+      "TIME_LOCALE_DESCRIPTION": "참고: 이 옵션은 시간 입력 형식(12/24시간)을 변경할 수 없습니다. OS에서 제어됩니다.",
+      "TIME_LOCALE_EN_GB": "영어 (영국): 24시간, DD/MM/YYYY",
+      "TIME_LOCALE_EN_US": "영어 (미국): 12시간 AM/PM, MM/DD/YYYY",
+      "TIME_LOCALE_ES_ES": "스페인어: 24시간, DD/MM/YYYY",
+      "TIME_LOCALE_FR_FR": "프랑스어: 24시간, DD/MM/YYYY",
+      "TIME_LOCALE_IT_IT": "이탈리아어: 24시간, DD/MM/YYYY",
+      "TIME_LOCALE_JA_JP": "일본어: 24시간, YYYY/MM/DD",
+      "TIME_LOCALE_KO_KR": "한국어: 12시간 AM/PM, YYYY. MM. DD",
+      "TIME_LOCALE_PT_BR": "포르투갈어 (브라질): 24시간, DD/MM/YYYY",
+      "TIME_LOCALE_RO_MD": "루마니아어 (몰도바): 24시간, DD.MM.YYYY",
+      "TIME_LOCALE_RO_RO": "루마니아어: 24시간, DD.MM.YYYY",
+      "TIME_LOCALE_RU_RU": "러시아어: 24시간, DD.MM.YYYY",
+      "TIME_LOCALE_SK_SK": "슬로바키아어: 24시간, DD. MM. YYYY",
+      "TIME_LOCALE_TR_TR": "터키어: 24시간, DD.MM.YYYY",
+      "TIME_LOCALE_UK_UA": "우크라이나어: 24시간, DD.MM.YYYY",
+      "TIME_LOCALE_ZH_CN": "중국어 (간체): 24시간, YYYY/MM/DD"
     },
     "MISC": {
       "DARK_MODE": "다크 모드",
@@ -1337,17 +2078,17 @@
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "트레이/상태 메뉴에 현재 카운트다운 표시(데스크톱 Mac만 해당)",
       "START_OF_NEXT_DAY": "다음 날 시작 시간",
       "START_OF_NEXT_DAY_HINT": "다음 날을 계산하려는 시점(시간 단위)부터 시작됩니다. 기본값은 0인 자정입니다.",
-      "TITLE": "기타 설정"
-    },
-    "TASKS": {
-      "DEFAULT_PROJECT": "지정되지 않은 경우 작업에 사용할 기본 프로젝트",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "자동으로 오늘 작업 중인 태스크를 추가합니다.",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "모든 하위 작업이 완료되면 부모 작업을 완료로 표시합니다.",
-      "IS_CONFIRM_BEFORE_DELETE": "작업 삭제 전에 확인합니다.",
-      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "작업 노트에서 Markdown 형식을 사용하도록 설정합니다.",
-      "IS_TRAY_SHOW_CURRENT": "트레이/상태 메뉴에 현재 작업을 표시합니다(데스크톱 Mac/Windows 전용).",
-      "NOTES_TEMPLATE": "작업 설명 템플릿",
-      "TITLE": "작업"
+      "TITLE": "기타 설정",
+      "DARK_MODE_ARIA_LABEL": "다크 모드 선택",
+      "DARK_MODE_LIGHT": "라이트",
+      "DARK_MODE_SYSTEM": "시스템",
+      "DEFAULT_START_PAGE": "기본 시작 페이지",
+      "IS_OVERLAY_INDICATOR_ENABLED": "오버레이 인디케이터 창 활성화 (Linux/GNOME 전용)",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "사용자 지정 제목 표시줄 사용 (Windows/Linux 전용)",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "적용하려면 재시작이 필요합니다.",
+      "THEME": "테마",
+      "THEME_EXPERIMENTAL": "테마 (실험적)",
+      "THEME_SELECT_LABEL": "테마 선택"
     },
     "POMODORO": {
       "BREAK_DURATION": "짧은 휴식 시간",
@@ -1358,7 +2099,15 @@
     "REMINDER": {
       "COUNTDOWN_DURATION": "실제 알림 앞에 배너 X 표시",
       "IS_COUNTDOWN_BANNER_ENABLED": "미리 알림 기한 전에 카운트다운 배너 표시하기",
-      "TITLE": "리마인더"
+      "TITLE": "리마인더",
+      "DEFAULT_TASK_REMIND_OPTION": "작업 생성 시 기본 알림 옵션 선택",
+      "DISABLE_REMINDERS": "모든 알림 비활성화",
+      "DUE_DATE_NOTIFICATION_HOUR": "마감일 알림 표시 시간 (0-23)",
+      "HELP": "<p><strong>중요:</strong> 알림은 푸시 알림이 아닌 <strong>로컬 알림</strong>을 사용합니다. 알림이 예약되려면 기기에서 앱이 한 번 이상 열려 있어야 합니다. 다른 기기에서 설정한 알림은 대상 기기에서 앱이 동기화된 후에만 표시됩니다.</p><p><strong>iOS</strong>에서는 기기 설정 > '알림'에서 Super Productivity에 대한 알림이 활성화되어 있는지 확인하세요.</p>",
+      "IS_FOCUS_WINDOW": "알림 트리거 시 앱 창 포커스",
+      "NOTIFY_ON_DUE_DATE": "오늘 마감인 작업에 대한 알림 표시",
+      "USE_ALARM_STYLE_REMINDERS": "알람 스타일 알림 사용 (Android 전용)",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "활성화하면 알림이 더 큰 알람 소리와 더 눈에 띄는 알림을 사용합니다. 중요한 알림에 권장됩니다."
     },
     "SCHEDULE": {
       "HELP": "타임 라인 기능은 계획된 작업이 시간에 따라 어떻게 진행되는지에 대한 빠른 개요를 제공해야합니다. <a href='#/schedule'>'타임 라인'</a>아래의 왼쪽 메뉴에서 찾을 수 있습니다.",
@@ -1370,14 +2119,19 @@
       "L_WORK_START": "근무일 시작",
       "LUNCH_BREAK_START_END_DESCRIPTION": "예: 13:00",
       "TITLE": "타임 라인",
-      "WORK_START_END_DESCRIPTION": "예 : 17:00"
+      "WORK_START_END_DESCRIPTION": "예 : 17:00",
+      "MONTH": "월"
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>작업</p>을 만들 때 짧은 구문 옵션을 제어할 수 있습니다.",
       "IS_ENABLE_DUE": "만기 짧은 구문 사용(@<Due time>)",
       "IS_ENABLE_PROJECT": "프로젝트 짧은 구문 사용(+<Project name>)",
       "IS_ENABLE_TAG": "태그 짧은 구문 사용(#<Tag>)",
-      "TITLE": "짧은 구문"
+      "TITLE": "짧은 구문",
+      "URL_BEHAVIOR_EXTRACT": "URL을 첨부 파일로 추출",
+      "URL_BEHAVIOR_KEEP": "작업 제목에 URL 유지",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "작업 제목에 URL 유지 및 첨부 파일에 추가",
+      "URL_BEHAVIOR_LABEL": "작업 추가 시 URL 동작"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "휴식 시간 알림음",
@@ -1402,6 +2156,16 @@
       "SNOOZE_TIME": "휴식을 취하라는 메시지가 표시되면 일시 중지 시간",
       "TITLE": "휴식 알림"
     },
+    "TASKS": {
+      "DEFAULT_PROJECT": "지정되지 않은 경우 작업에 사용할 기본 프로젝트",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "자동으로 오늘 작업 중인 태스크를 추가합니다.",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "모든 하위 작업이 완료되면 부모 작업을 완료로 표시합니다.",
+      "IS_CONFIRM_BEFORE_DELETE": "작업 삭제 전에 확인합니다.",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "작업 노트에서 Markdown 형식을 사용하도록 설정합니다.",
+      "IS_TRAY_SHOW_CURRENT": "트레이/상태 메뉴에 현재 작업을 표시합니다(데스크톱 Mac/Windows 전용).",
+      "NOTES_TEMPLATE": "작업 설명 템플릿",
+      "TITLE": "작업"
+    },
     "TIME_TRACKING": {
       "HELP": "시간 추적 알림은 시간 추적 시작을 잊어버렸을 때 표시되는 배너입니다.",
       "L_DEFAULT_ESTIMATE": "새 작업에 대한 기본 예상 시간",
@@ -1412,9 +2176,57 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "미리 알림이 활성 상태일 때 포커스 앱 창(데스크톱 전용)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "시간 추적 알림이 표시되면 알림",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "모바일 앱에 추적 알림 표시",
-      "L_TRACKING_INTERVAL": "시간 추적 간격(실험적)",
       "L_TRACKING_REMINDER_MIN_TIME": "추적 알림 배너가 표시되기까지 기다릴 시간",
       "TITLE": "시간 추적"
+    },
+    "APP_FEATURES": {
+      "BOARDS": "보드",
+      "DONATE_PAGE": "후원 페이지",
+      "FOCUS_MODE": "집중 모드",
+      "HABITS": "습관",
+      "HELP": "UI 전체에서 특정 앱 기능을 활성화하거나 비활성화합니다.",
+      "ISSUES_PANEL": "이슈 패널",
+      "PLANNER": "플래너",
+      "PROJECT_NOTES": "프로젝트 노트",
+      "SCHEDULE": "일정",
+      "SCHEDULE_DAY_PANEL": "일정 일별 패널",
+      "SEARCH": "검색",
+      "SYNC_BUTTON": "동기화 버튼",
+      "TIME_TRACKING": "스톱워치 시간 추적",
+      "TITLE": "앱 기능",
+      "USER_PROFILES": "사용자 프로필 (실험적 — 제거될 수 있음)",
+      "USER_PROFILES_HINT": "각각 별도의 설정, 작업 및 동기화 구성을 가진 다른 사용자 프로필을 만들고 전환할 수 있습니다. 활성화하면 프로필 관리 버튼이 우측 상단에 나타납니다. 참고: 이 기능을 비활성화하면 UI가 숨겨지지만 프로필 데이터는 보존됩니다. (실험적 기능. 보증 없음. 백업을 만들어 두세요!)",
+      "USER_PROFILES_WARNING": "<strong>실험적 기능:</strong> 이 기능은 아직 개발 중이며 향후 업데이트에서 제거되거나 크게 변경될 수 있습니다. 자기 책임하에 사용하고 데이터 백업을 유지하세요."
+    },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "이미지 삭제",
+      "DELETE_ALL": "모두 삭제",
+      "DELETE_ALL_SUCCESS": "모든 클립보드 이미지가 삭제되었습니다",
+      "DELETE_SUCCESS": "클립보드 이미지가 삭제되었습니다",
+      "ERROR_DELETING": "클립보드 이미지 삭제 실패",
+      "ERROR_DELETING_ALL": "모든 클립보드 이미지 삭제 실패",
+      "ERROR_LOADING": "클립보드 이미지 로드 실패",
+      "HELP": "클립보드에서 붙여넣은 이미지를 관리합니다. 브라우저 버전에서는 이미지가 IndexedDB에 저장됩니다. 데스크톱 버전에서는 저장 경로를 설정하세요.",
+      "LOADING": "이미지 로드 중...",
+      "MANAGE_DESCRIPTION": "마크다운 필드에 붙여넣기로 저장된 이미지를 보고 삭제합니다",
+      "MANAGE_TITLE": "저장된 이미지 관리",
+      "MANAGER_TITLE": "클립보드 이미지",
+      "NO_IMAGES": "저장된 클립보드 이미지가 없습니다",
+      "OPEN_MANAGER": "이미지 관리",
+      "PATH_DESCRIPTION": "파일 시스템에서 클립보드 이미지가 저장되는 위치를 설정합니다 (기본 위치를 사용하려면 비워두세요)",
+      "PATH_LABEL": "이미지 저장 경로",
+      "PATH_PLACEHOLDER": "기본 위치 사용 시 비워두세요",
+      "PATH_TITLE": "저장 위치",
+      "SELECT_PATH": "폴더 선택",
+      "SELECT_PATH_TITLE": "클립보드 이미지 폴더 선택",
+      "SORT_BY": "정렬 기준",
+      "SORT_LARGEST": "큰 순서",
+      "SORT_NEWEST": "최신순",
+      "SORT_OLDEST": "오래된 순서",
+      "SORT_SMALLEST": "작은 순서",
+      "TITLE": "클립보드 이미지",
+      "TOTAL_IMAGES": "총 이미지",
+      "TOTAL_SIZE": "총 크기"
     }
   },
   "GLOBAL_RELATIVE_TIME": {
@@ -1452,7 +2264,17 @@
     "NAVIGATE_TO_TASK_ERR": "작업에 집중할 수 없습니다. 삭제하셨나요?",
     "PERSISTENCE_DISALLOWED": "데이터는 영구적으로 유지되지 않습니다. 이로 인해 데이터가 손실 될 수 있습니다 !!",
     "PERSISTENCE_ERROR": "데이터 유지 요청 시 오류: {{err}}",
-    "RUNNING_X": "\"{{str}}\"실행 중."
+    "RUNNING_X": "\"{{str}}\"실행 중.",
+    "DUPLICATE_PROJECT_ERROR": "프로젝트를 복제할 수 없습니다",
+    "DUPLICATE_PROJECT_SUCCESS": "프로젝트가 복제되었습니다",
+    "NO_TASKS_TO_COPY": "복사할 작업이 없습니다",
+    "NO_TASKS_TO_UNPLAN": "일정 해제할 작업이 없습니다",
+    "OPEN_SETTINGS_ERROR": "설정을 열 수 없습니다",
+    "SAVE_BLOCKED_DURING_SYNC": "동기화 진행 중 - 일부 변경 사항을 다시 저장해야 할 수 있습니다",
+    "SHARE_FAILED": "공유 실패. 수동으로 복사하세요.",
+    "SHARE_FAILED_FALLBACK": "공유 실패. 대신 클립보드에 복사되었습니다.",
+    "SHARE_UNAVAILABLE_FALLBACK": "클립보드에 복사되었습니다.",
+    "UNPLANNED_TODAY_TASKS": "오늘의 모든 작업 일정이 해제되었습니다"
   },
   "GPB": {
     "ASSETS": "자산로드 중 ...",
@@ -1460,7 +2282,6 @@
     "DBX_GEN_TOKEN": "보관 용 계정 : 토큰 생성 ...",
     "DBX_META": "Dropbox : 파일 메타 가져 오기 ...",
     "DBX_UPLOAD": "Dropbox : 파일 업로드 ...",
-    "GITHUB_LOAD_ISSUE": "GitHub : 이슈 데이터로드 ...",
     "JIRA_LOAD_ISSUE": "Jira : 이슈 데이터로드 중 ...",
     "SYNC": "데이터 동기화...",
     "UNKNOWN": "원격 데이터 로드",
@@ -1501,14 +2322,71 @@
     "TOGGLE_SHOW_NOTES": "프로젝트 노트 표시 / 숨기기",
     "TOGGLE_TRACK_TIME": "추적 시작 / 중지 시간",
     "TRIGGER_SYNC": "수동으로 동기화 트리거",
-    "WORKLOG": "작업 로그"
+    "WORKLOG": "작업 로그",
+    "COPY_TASK_LIST_MARKDOWN": "클립보드에 복사",
+    "DISABLE_FEATURE": "기능 비활성화",
+    "DONATE": "후원하기",
+    "DUPLICATE_PROJECT": "복제",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\"이(가) 비활성화되었습니다. 앱 기능 설정에서 다시 활성화할 수 있습니다.",
+    "HABITS": "습관",
+    "NO_PROJECT_INFO": "사용 가능한 프로젝트가 없습니다. '프로젝트 만들기' 버튼을 클릭하여 새 프로젝트를 만들 수 있습니다.",
+    "NO_TAG_INFO": "현재 태그가 없습니다. 작업을 추가하거나 편집할 때 `#태그이름`을 입력하여 태그를 추가할 수 있습니다.",
+    "NO_TASKS_TO_TRACK": "시간 추적을 시작하려면 먼저 작업을 추가하세요",
+    "NOTES": "노트",
+    "NOTES_PANEL_INFO": "노트는 일정 및 일반 작업 목록 보기에서만 표시할 수 있습니다.",
+    "OPEN_APP_FEATURES": "설정 열기",
+    "PROCRASTINATE": "미루기",
+    "PROJECT_SETTINGS": "프로젝트 설정",
+    "SHARE_TASK_LIST_MARKDOWN": "작업 목록 공유",
+    "SHOW_TRACKED_TASK": "추적 중인 작업 표시",
+    "SIDE_PANEL_MENU": "사이드 패널 메뉴",
+    "TASK_LIST": "작업 목록",
+    "TASKS": "작업",
+    "TOGGLE_SHOW_BOOKMARKS": "북마크 표시/숨기기",
+    "UNPLAN_ALL_TASKS": "모든 작업 일정 해제"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "레거시 데이터의 백업을 다운로드하시겠습니까(이전 버전의 Super Productivity와 함께 사용할 수 있음)?",
     "DETECTED_LEGACY": "레거시 데이터가 검색되었습니다. 우리는 당신을 위해 그것을 마이그레이션 할 것입니다!",
     "E_MIGRATION_FAILED": "마이그레이션에 실패했습니다! 오류 있음:",
     "E_RESTART_FAILED": "자동 다시 시작에 실패했습니다. 앱을 수동으로 다시 시작해주세요!",
-    "SUCCESS": "마이그레이션이 모두 완료되었습니다! 지금 앱을 다시 시작하는 중..."
+    "SUCCESS": "마이그레이션이 모두 완료되었습니다! 지금 앱을 다시 시작하는 중...",
+    "DIALOG_MESSAGE": "동기화 안정성 향상을 위해 데이터 저장 방식을 업데이트하고 있습니다. 백업이 자동으로 다운로드됩니다.",
+    "DIALOG_TITLE": "데이터 마이그레이션 중",
+    "STATUS_BACKUP": "데이터 백업 생성 중...",
+    "STATUS_COMPLETE": "마이그레이션 완료!",
+    "STATUS_MIGRATING": "데이터 마이그레이션 중...",
+    "STATUS_PREPARING": "마이그레이션 준비 중..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Super Productivity를 어떻게 사용하시겠어요?",
+    "SUBTITLE": "작업 방식에 맞는 설정을 선택하세요. 나중에 설정에서 언제든지 변경할 수 있습니다.",
+    "PRIVACY_HINT": "데이터는 기기에 안전하게 저장됩니다. 서버로 전송되는 것은 없습니다.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "간단한 할 일 목록",
+        "DESCRIPTION": "프로젝트, 태그, 메모가 있는 깔끔한 작업 관리자. 부가 기능 없음."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "시간 추적",
+        "DESCRIPTION": "작업에 걸리는 시간을 기록하세요. 근무 시간 청구나 시간 사용 파악에 적합합니다."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "생산성 스위트",
+        "DESCRIPTION": "하루를 계획하고, 습관을 만들고, 깊이 집중하고, 시간을 추적하세요. 모두 한 곳에서."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "+를 클릭하여 첫 번째 작업을 추가하세요",
+      "CREATE_TASK_TOUCH": "+를 탭하여 첫 번째 작업을 추가하세요",
+      "EXPLORE": "자유롭게 클릭하며 둘러보세요! 사이드바에서 도움말을 찾을 수 있습니다.",
+      "EXPLORE_TOUCH": "자유롭게 탭하며 둘러보세요! 메뉴에서 도움말을 찾을 수 있습니다.",
+      "TASK_TAP_TOUCH": "작업을 탭해 세부 정보를 여세요.",
+      "TASK_SWIPE_LEFT_TOUCH": "추가 작업을 보려면 작업을 왼쪽으로 스와이프하세요",
+      "TASK_SWIPE_RIGHT_TOUCH": "완료로 표시하려면 작업을 오른쪽으로 스와이프하세요",
+      "OR_PRESS": "또는",
+      "SKIP_ARIA": "힌트 닫기"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "오늘부터 할 일 추가",
@@ -1543,17 +2421,102 @@
     "TIME_SPENT_AND_ESTIMATE_LABEL": "소요 시간 / 예상",
     "TIME_SPENT_ESTIMATE_TITLE": "소요 시간 : 오늘 보낸 총 시간. 아카이브 된 태스크는 포함되지 않습니다. - 예상 시간 : 오늘 작업 한 작업에 대한 예상 시간에서 다른 날에 이미 소비 한 시간을 뺀 시간입니다.",
     "TIME_SPENT_TODAY_BY_TAG": "태그별로 오늘 보낸 시간",
-    "WEEK": "주"
+    "WEEK": "주",
+    "ARCHIVED_TASKS": {
+      "ONE": "완료된 상위 작업 {{count}}개가 아카이브되었습니다",
+      "OTHER": "완료된 상위 작업 {{count}}개가 아카이브되었습니다"
+    },
+    "END_OF_DAYS_RITUALS_PLACEHOLDER": "이 공간에 알림을 받고 싶은 개인적인 하루 마감 의식을 기록할 수 있습니다.",
+    "FOCUS_SUMMARY": "집중 세션"
   },
   "PLUGINS": {
     "CANCEL": "취소",
     "CONFIGURE": "구성",
     "ERROR": "오류",
     "OK": "그래",
-    "REMOVE": "제거하다"
+    "REMOVE": "제거하다",
+    "ACTION_TYPE_NOT_ALLOWED": "액션 유형 \"{{type}}\"은(는) 허용되지 않습니다",
+    "ALREADY_INITIALIZED": "플러그인이 이미 초기화되었습니다",
+    "CAPABILITIES": {
+      "ACCESS_FILES": "시스템의 파일 접근 및 수정",
+      "RUN_COMMANDS": "시스템 명령 실행",
+      "USE_NODE_APIS": "Node.js API 및 모듈 사용"
+    },
+    "CHOOSE_PLUGIN_FILE": "플러그인 파일 선택",
+    "CLEAR_PLUGIN_CACHE": "플러그인 캐시 삭제",
+    "CODE_TOO_LARGE": "플러그인 코드가 너무 큽니다 (최대 {{maxSize}}MB)",
+    "CONFIGURATION": "설정",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "이 플러그인은 현재 사용 중인 이슈 통합을 제공합니다 (이슈 제공자 {{count}}개). 비활성화하면 플러그인이 다시 활성화될 때까지 해당 제공자의 이슈 동기화가 일시적으로 중단됩니다. \"{{name}}\"을(를) 비활성화하시겠습니까?",
+    "CONFIRM_REMOVE": "플러그인 \"{{name}}\"을(를) 제거하시겠습니까?",
+    "ELECTRON_API_NOT_AVAILABLE": "Electron API를 사용할 수 없습니다",
+    "ERROR_LOADING_PLUGIN": "플러그인 로드 오류",
+    "EXPERIMENTAL_WARNING": "플러그인 시스템은 실험 단계이며 매우 신중하게 사용해야 합니다!",
+    "FAILED_TO_CLEAR_CACHE": "플러그인 캐시 삭제 실패",
+    "FAILED_TO_EXECUTE_SCRIPT": "Node.js 스크립트 실행 실패",
+    "FAILED_TO_EXTRACT_ZIP": "플러그인 ZIP 파일 추출 실패",
+    "FAILED_TO_INSTALL": "플러그인 설치 실패",
+    "FAILED_TO_LOAD": "플러그인 로드 실패",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "커뮤니티 플러그인 목록 로드 실패",
+    "FAILED_TO_LOAD_CONFIG": "플러그인 설정 로드 실패",
+    "FAILED_TO_REMOVE": "플러그인 제거 실패",
+    "FAILED_TO_SAVE_CONFIG": "플러그인 설정 저장 실패",
+    "FILE_TOO_LARGE": "파일이 너무 큽니다 ({{fileSize}}MB). 최대 크기는 {{maxSize}}MB입니다",
+    "GO_BACK": "돌아가기",
+    "GRANT_PERMISSION": "권한 부여",
+    "HOOKS": "훅",
+    "ID": "ID:",
+    "INDEX_HTML_NOT_LOADED": "플러그인 index.html이 로드되지 않았습니다",
+    "INSTALL_PLUGIN": "플러그인 설치",
+    "INSTALL_WARNING": "플러그인을 설치하기 전에 출처를 신뢰하고 요청하는 권한을 이해했는지 확인하세요.",
+    "INSTALLING": "설치 중...",
+    "LANGUAGES": "언어:",
+    "LOADING_INTERFACE": "플러그인 인터페이스 로드 중...",
+    "LOADING_PLUGIN": "로드 중...",
+    "MANIFEST_NOT_FOUND": "ZIP 파일에서 플러그인 매니페스트(manifest.json)를 찾을 수 없습니다",
+    "MANIFEST_TOO_LARGE": "플러그인 매니페스트가 너무 큽니다 (최대 {{maxSize}}KB)",
+    "MENU_ENTRY_ICON_STRING": "메뉴 항목 아이콘은 문자열이어야 합니다",
+    "MENU_ENTRY_LABEL_REQUIRED": "메뉴 항목 레이블은 필수입니다",
+    "MENU_ENTRY_ONCLICK_REQUIRED": "메뉴 항목 onClick 핸들러는 필수입니다",
+    "MIN_VERSION": "최소 버전:",
+    "NO_ADDITIONAL_INFO": "추가 정보가 없습니다",
+    "NO_CONTENT_PROVIDED": "콘텐츠가 제공되지 않았습니다",
+    "NO_PLUGIN_MANIFEST_NODE": "플러그인 매니페스트에 Node.js 모듈이 포함되어 있지 않습니다",
+    "NODE_EXECUTION_REQUIRED": "이 플러그인은 데스크톱 앱에서만 사용할 수 있는 Node.js 실행이 필요합니다.",
+    "NODE_ONLY_DESKTOP": "Node.js 실행은 데스크톱 앱에서만 사용할 수 있습니다",
+    "PARENT_TASK_DOES_NOT_EXIST": "상위 작업이 존재하지 않습니다",
+    "PARENT_TASK_NOT_FOUND": "컨텍스트 \"{{contextId}}\"에서 상위 작업을 찾을 수 없습니다",
+    "PERMISSIONS": "권한",
+    "PLEASE_SELECT_ZIP_FILE": "ZIP 파일을 선택하세요",
+    "PLUGIN_DIALOG_TITLE": "플러그인 메시지",
+    "PLUGIN_JS_NOT_FOUND": "ZIP 파일에서 플러그인 JavaScript 파일(plugin.js)을 찾을 수 없습니다",
+    "PROJECT_DOES_NOT_EXIST": "프로젝트가 존재하지 않습니다",
+    "PROJECT_NOT_FOUND": "프로젝트 \"{{contextId}}\"을(를) 찾을 수 없습니다",
+    "RECOMMENDATION": "신뢰할 수 있는 출처의 플러그인만 설치하고 가능하면 코드를 검토하세요. 새 플러그인을 설치하기 전에 항상 데이터를 백업하세요!",
+    "REMEMBER_CHOICE": "이 플러그인에 대한 선택 기억",
+    "RISK_DATA_ACCESS": "플러그인은 모든 작업, 프로젝트 및 개인 데이터를 읽고, 수정하고, 삭제할 수 있습니다",
+    "RISK_MALICIOUS_CODE": "악성 플러그인은 중요한 정보를 도용하거나 데이터를 손상시킬 수 있습니다",
+    "RISK_PERFORMANCE": "잘못 작성된 플러그인은 성능 문제나 충돌을 일으킬 수 있습니다",
+    "RISK_SYSTEM_ACCESS": "Node.js 권한이 있는 데스크톱 플러그인은 시스템 명령을 실행할 수 있습니다",
+    "SECURITY_WARNING": "플러그인은 데이터와 시스템에 상당한 접근 권한을 가집니다. 신뢰할 수 없는 플러그인을 설치하면 심각한 보안 위험이 있습니다:",
+    "SIDE_PANEL_LABEL_REQUIRED": "사이드 패널 버튼 레이블은 필수입니다",
+    "SIDE_PANEL_ONCLICK_REQUIRED": "사이드 패널 버튼 onClick 핸들러는 필수입니다",
+    "SYSTEM_ACCESS_REQUEST_DESC": "이 플러그인이 시스템에서 Node.js 코드를 실행할 수 있는 권한을 요청하고 있습니다. 이를 통해 다음을 수행할 수 있습니다:",
+    "SYSTEM_ACCESS_REQUEST_TITLE": "시스템 접근 요청",
+    "TAGS_DO_NOT_EXIST": "하나 이상의 태그가 존재하지 않습니다",
+    "TASK_NOT_FOUND": "ID가 \"{{taskId}}\"인 작업을 찾을 수 없습니다",
+    "TASKS_NOT_IN_PROJECT": "하나 이상의 작업이 프로젝트 \"{{contextId}}\"에 없습니다",
+    "TASKS_NOT_SUBTASKS": "하나 이상의 작업이 \"{{contextId}}\"의 하위 작업이 아닙니다",
+    "TOGGLE_PLUGIN": "{{pluginName}} 전환",
+    "TRUST_WARNING": "이 플러그인을 신뢰하는 경우에만 권한을 부여하세요",
+    "TYPE": "유형: {{type}}",
+    "UNABLE_TO_PERSIST_DATA": "플러그인 저장소에 데이터를 저장할 수 없습니다",
+    "UNKNOWN_ERROR": "알 수 없는 오류가 발생했습니다",
+    "UPLOAD_PLUGIN_INSTRUCTION": "플러그인 ZIP 파일을 업로드하여 설치합니다:",
+    "VALIDATION_FAILED": "유효성 검사 실패"
   },
   "PM": {
-    "TITLE": "프로젝트 측정 항목"
+    "TITLE": "프로젝트 측정 항목",
+    "ALL_TASKS_TITLE": "측정항목 (모든 작업)"
   },
   "PS": {
     "GLOBAL_SETTINGS": "전체 설정",
@@ -1561,7 +2524,21 @@
     "PROJECT_SETTINGS": "프로젝트 별 설정",
     "PROVIDE_FEEDBACK": "피드백을 제공하다",
     "SYNC_EXPORT": "동기화 및 내보내기",
-    "TAG_SETTINGS": "태그 별 설정"
+    "TAG_SETTINGS": "태그 별 설정",
+    "FAILED_TO_COPY_TO_CLIPBOARD": "클립보드에 복사 실패",
+    "NO_PLUGINS_INSTALLED": "현재 설치된 플러그인이 없습니다",
+    "PLUGINS": "플러그인",
+    "RELOAD": "새로고침",
+    "TABS": {
+      "GENERAL": "일반",
+      "PLUGINS": "플러그인",
+      "PRODUCTIVITY": "생산성",
+      "SYNC_BACKUP": "동기화 및 백업",
+      "TASKS": "작업",
+      "TIME_TRACKING": "시간 및 추적"
+    },
+    "TOGGLE_DARK_MODE": "다크 모드 전환",
+    "UPDATE_APP": "앱 업데이트"
   },
   "SCHEDULE": {
     "NEXT": "다음",
@@ -1570,7 +2547,11 @@
     "NO_SCHEDULED_TITLE": "하루 동안 예약된 작업",
     "REPEATED_TASKS": "반복 작업",
     "SCHEDULED_TASKS": "예약된 작업",
-    "SCHEDULED_TASKS_WITH_TIME": "미리 알림이 있는 예약된 작업"
+    "SCHEDULED_TASKS_WITH_TIME": "미리 알림이 있는 예약된 작업",
+    "LAST": "마지막:",
+    "NO_DEADLINES": "현재 마감일이 있는 작업이 없습니다. 작업의 컨텍스트 메뉴나 상세 패널에서 마감일을 설정할 수 있습니다.",
+    "START_TASK": "작업 시작 및 알림 제거",
+    "TASKS_WITH_DEADLINES": "마감일이 있는 작업"
   },
   "USER_PROFILES": {
     "ACTIVE": "활성",
@@ -1617,6 +2598,55 @@
     "TODAY_REMAINING": "오늘이 남았습니다:",
     "WITHOUT_BREAK": "휴식없이 :",
     "WORKING_TODAY": "오늘은 일한다:",
-    "WORKING_TODAY_ARCHIVED": "보관된 작업에서 오늘 작업한 시간"
+    "WORKING_TODAY_ARCHIVED": "보관된 작업에서 오늘 작업한 시간",
+    "LATER_TODAY": "오늘 나중에",
+    "RECURRING_TASKS": "반복 작업"
+  },
+  "BN": {
+    "SHOW_ISSUE_PANEL": "이슈 제공자 패널",
+    "SHOW_NOTES": "프로젝트 노트"
+  },
+  "DIALOG_UNSPLASH_PICKER": {
+    "BY": "작성자",
+    "NO_RESULTS": "이미지를 찾을 수 없습니다. 다른 검색어를 시도해 주세요.",
+    "SEARCH_LABEL": "이미지 검색",
+    "SEARCH_PLACEHOLDER": "예: 자연, 산, 추상",
+    "TITLE": "Unsplash에서 배경 이미지 선택"
+  },
+  "DONATE_PAGE": {
+    "BUTTON_TEXT": "GitHub Sponsors로 후원하기",
+    "INTRO_1": "Super Productivity는 전적으로 커뮤니티의 지원으로 운영됩니다. 추적, 광고, 데이터 수집이 없으며 — 작업 데이터는 기기에 보관됩니다.",
+    "INTRO_2": "이러한 접근 방식을 중요하게 생각하시고 프로젝트가 건강하게 발전하기를 원하신다면, 자발적인 후원을 크게 감사드립니다."
+  },
+  "GLOBAL": {
+    "COPY_SUFFIX": " (복사)"
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "정확한 알람 권한이 거부되었습니다. 알림이 최대 15분까지 지연될 수 있습니다.",
+    "TASK_ALREADY_COMPLETED": "작업이 이미 완료되었습니다",
+    "TASK_MARKED_DONE": "작업이 완료로 표시되었습니다"
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_MESSAGE": "동기화 안정성 향상을 위해 데이터 저장 방식을 업데이트하고 있습니다.<br><br>데이터 백업이 자동으로 다운로드됩니다. 필요 시 이 백업으로 데이터를 복원할 수 있습니다 (파일 > 가져오기).",
+    "DIALOG_TITLE": "시스템 업데이트"
+  },
+  "THEMES": {
+    "amber": "호박색",
+    "blue": "파란색",
+    "blue-grey": "청회색",
+    "cyan": "청록색",
+    "deep-orange": "짙은 주황색",
+    "deep-purple": "짙은 보라색",
+    "green": "초록색",
+    "indigo": "남색",
+    "light-blue": "하늘색",
+    "light-green": "연두색",
+    "lime": "라임색",
+    "pink": "분홍색",
+    "purple": "보라색",
+    "SCHEDULED_TASKS_WITH_TIME": "시작 시간이 있는 예정된 작업",
+    "SELECT_THEME": "테마 선택",
+    "teal": "청록색",
+    "yellow": "노란색"
   }
 }

@@ -64,13 +64,17 @@ test.describe('@supersync @encryption Password Preservation', () => {
       const syncConfig = getSuperSyncConfig(user);
       const encryptionPassword = `preserve-test-${testRunId}`;
 
-      // ============ PHASE 1: Setup Client A without encryption ============
-      console.log('[PasswordRace] Phase 1: Setting up Client A without encryption');
+      // ============ PHASE 1: Setup Client A with encryption ============
+      // SuperSync has mandatory encryption, so we set up directly with the test password.
+      // The race condition we're testing is whether the password survives after
+      // Angular form model updates that could overwrite it with stale values.
+      console.log('[PasswordRace] Phase 1: Setting up Client A with encryption');
 
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync({
         ...syncConfig,
-        isEncryptionEnabled: false,
+        isEncryptionEnabled: true,
+        password: encryptionPassword,
       });
 
       // Create initial task
@@ -79,16 +83,23 @@ test.describe('@supersync @encryption Password Preservation', () => {
       await clientA.sync.syncAndWait();
       console.log(`[PasswordRace] Client A created: ${task1}`);
 
-      // ============ PHASE 2: Enable encryption ============
-      console.log('[PasswordRace] Phase 2: Enabling encryption');
+      // ============ PHASE 2: Open and close settings to trigger form model race ============
+      // Opening the settings dialog triggers Angular form model initialization
+      // which could overwrite the encryption password with stale values
+      console.log('[PasswordRace] Phase 2: Opening settings to trigger form model race');
 
-      await clientA.sync.enableEncryption(encryptionPassword);
-      console.log('[PasswordRace] Encryption enabled');
+      await clientA.sync.syncBtn.click({ button: 'right' });
+      const dialog = clientA.page.locator('mat-dialog-container');
+      await dialog.waitFor({ state: 'visible', timeout: 5000 });
+      await clientA.page.waitForTimeout(1000);
+      await clientA.page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden', timeout: 5000 });
+      console.log('[PasswordRace] Settings dialog opened and closed');
 
       // ============ PHASE 3: Wait for race condition window ============
       console.log('[PasswordRace] Phase 3: Waiting 6 seconds (race condition window)');
 
-      // The race condition typically occurred within 2-3 seconds after enabling
+      // The race condition typically occurred within 2-3 seconds after form model init
       // We wait longer to ensure any delayed updates have fired
       await clientA.page.waitForTimeout(6000);
       console.log('[PasswordRace] Wait complete');

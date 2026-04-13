@@ -79,12 +79,39 @@ async function getPlugins() {
         const hasRealBuildScript =
           buildScript && !buildScript.includes("echo 'No build needed");
 
+        // Read manifest.json to check for additional files (e.g., config schema)
+        const files = ['manifest.json', 'plugin.js', 'icon.svg'];
+        // manifest.json may live at the root or inside src/
+        const manifestCandidates = [
+          path.join(pluginPath, 'manifest.json'),
+          path.join(pluginPath, 'src', 'manifest.json'),
+        ];
+        let manifestRead = false;
+        for (const manifestPath of manifestCandidates) {
+          try {
+            const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+            manifestRead = true;
+            if (manifest.iFrame !== false) {
+              files.push('index.html');
+            }
+            if (manifest.jsonSchemaCfg) {
+              files.push(manifest.jsonSchemaCfg);
+            }
+            break;
+          } catch {
+            // Try next candidate
+          }
+        }
+        if (!manifestRead) {
+          // No manifest.json found — assume index.html is needed
+          files.push('index.html');
+        }
+
         plugins.push({
           name: entry.name,
           path: `packages/plugin-dev/${entry.name}`,
           buildCommand: hasRealBuildScript ? 'npm run build' : undefined,
-          // Standard files to copy for bundled plugins
-          files: ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'],
+          files,
           sourcePath: hasRealBuildScript ? 'dist' : undefined,
         });
       } catch (e) {
@@ -199,6 +226,13 @@ async function buildPlugin(plugin) {
           } catch (e) {
             throw e;
           }
+        }
+
+        // Copy i18n directory if it exists
+        const i18nSrc = path.join(sourcePath, 'i18n');
+        if (await pathExists(i18nSrc)) {
+          const i18nDest = path.join(targetDir, 'i18n');
+          await fs.cp(i18nSrc, i18nDest, { recursive: true });
         }
       }
 

@@ -397,3 +397,132 @@ describe('File-Based Sync Integration - Edge Cases', () => {
     });
   });
 });
+
+describe('File-Based Sync Integration - Encryption Round-Trip', () => {
+  let harness: FileBasedSyncTestHarness;
+
+  beforeEach(() => {
+    harness = FileBasedSyncTestHarness.create({
+      encryptAndCompressCfg: { isEncrypt: true, isCompress: false },
+      encryptKey: 'test-encryption-key-12345',
+    });
+  });
+
+  afterEach(() => {
+    harness.reset();
+  });
+
+  // Encryption tests need longer timeout due to Web Crypto key derivation
+  const ENCRYPT_TIMEOUT = 10000;
+
+  it(
+    'should upload and download ops with encryption enabled',
+    async () => {
+      const clientA = harness.createClient('client-a');
+      const clientB = harness.createClient('client-b');
+
+      // Client A uploads encrypted ops
+      const ops = [
+        clientA.createOp('Task', 'task-1', 'CRT', 'TaskActionTypes.ADD_TASK', {
+          title: 'Encrypted Task 1',
+        }),
+        clientA.createOp('Task', 'task-2', 'CRT', 'TaskActionTypes.ADD_TASK', {
+          title: 'Encrypted Task 2',
+        }),
+      ];
+      const uploadResponse = await clientA.uploadOps(ops);
+      expect(uploadResponse.results.length).toBe(2);
+      expect(uploadResponse.results[0].accepted).toBe(true);
+
+      // Client B downloads and decrypts
+      const download = await clientB.downloadOps(0);
+      expect(download.ops.length).toBe(2);
+
+      // Verify fields are preserved through encrypt/decrypt cycle
+      const entityIds = download.ops.map((o) => o.op.entityId);
+      expect(entityIds).toContain('task-1');
+      expect(entityIds).toContain('task-2');
+
+      const payloads = download.ops.map((o) => o.op.payload as { title: string });
+      expect(payloads).toContain(jasmine.objectContaining({ title: 'Encrypted Task 1' }));
+      expect(payloads).toContain(jasmine.objectContaining({ title: 'Encrypted Task 2' }));
+    },
+    ENCRYPT_TIMEOUT,
+  );
+
+  it(
+    'should upload and download snapshot with encryption enabled',
+    async () => {
+      const clientA = harness.createClient('client-a');
+      const clientB = harness.createClient('client-b');
+
+      // Client A uploads a snapshot (simulates USE_LOCAL conflict resolution)
+      // Note: uploadSnapshot uses getStateSnapshot() internally (double-encryption fix),
+      // so we must set the mock state BEFORE calling uploadSnapshot.
+      const taskId = 'snapTask1';
+      const snapshotState = {
+        task: {
+          ids: [taskId],
+          entities: { [taskId]: { id: taskId, title: 'Snapshot Task' } },
+        },
+      };
+      harness.setMockState(snapshotState);
+      await clientA.adapter.uploadSnapshot(
+        snapshotState,
+        'client-a',
+        'recovery',
+        {},
+        1,
+        undefined,
+        'test-snapshot-op-id',
+      );
+
+      // Client B downloads from 0 — should get decrypted snapshot
+      const download = await clientB.downloadOps(0);
+      expect(download.snapshotState).toBeDefined();
+      expect((download.snapshotState as any).task.ids).toContain(taskId);
+    },
+    ENCRYPT_TIMEOUT,
+  );
+
+  it(
+    'should handle encrypted concurrent uploads without corruption',
+    async () => {
+      const clientA = harness.createClient('client-a');
+      const clientB = harness.createClient('client-b');
+      const observer = harness.createClient('observer');
+
+      // Both clients start from the same state
+      const initialOp = clientA.createOp(
+        'Task',
+        'task-init',
+        'CRT',
+        'TaskActionTypes.ADD_TASK',
+        { title: 'Initial' },
+      );
+      await clientA.uploadOps([initialOp]);
+      await clientB.downloadOps(0);
+
+      // Client A uploads
+      const opA = clientA.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', {
+        title: 'From A',
+      });
+      await clientA.uploadOps([opA]);
+
+      // Client B uploads (merges with A's data)
+      const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
+        title: 'From B',
+      });
+      const responseB = await clientB.uploadOps([opB]);
+      expect(responseB.results[0].accepted).toBe(true);
+
+      // Observer downloads — should see all ops decrypted correctly
+      const download = await observer.downloadOps(0);
+      const entityIds = download.ops.map((o) => o.op.entityId);
+      expect(entityIds).toContain('task-init');
+      expect(entityIds).toContain('task-a');
+      expect(entityIds).toContain('task-b');
+    },
+    ENCRYPT_TIMEOUT,
+  );
+});

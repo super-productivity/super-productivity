@@ -33,7 +33,7 @@
   #projectMenu {
     .mat-mdc-menu-content {
       // Add padding to prevent edge touches
-      padding: 8px 0;
+      padding: var(--s) 0;
 
       .mat-mdc-menu-item {
         // Add delay to touch responsiveness
@@ -41,11 +41,18 @@
 
         &:first-child {
           // Extra padding on first item to prevent accidental selection
-          margin-top: 8px;
+          margin-top: var(--s);
         }
       }
     }
   }
+}
+
+// Highlight the source task when context menu is open
+.context-menu-highlight {
+  box-shadow: inset 0 0 0 2px var(--primary);
+  z-index: 1;
+  transition: box-shadow 200ms ease-out;
 }
 
 // Animation to re-enable pointer events after delay
@@ -58,38 +65,5 @@
   }
   100% {
     pointer-events: auto;
-  }
-}
-
-// Additional fix for menu positioning near edges
-.cdk-overlay-pane {
-  // Ensure menus have some distance from screen edges on mobile
-  @media (hover: none) and (pointer: coarse) {
-    // Add margins to prevent menus from touching screen edges
-    margin: 16px !important;
-
-    &.mat-mdc-menu-panel-below {
-      margin-top: 8px !important;
-    }
-
-    &.mat-mdc-menu-panel-above {
-      margin-bottom: 8px !important;
-    }
-
-    // Add safe area insets for devices with notches/rounded corners
-    padding: env(safe-area-inset-top) env(safe-area-inset-right)
-      env(safe-area-inset-bottom) env(safe-area-inset-left);
-  }
-}
-
-// Ensure the overlay container respects screen boundaries
-.cdk-overlay-container {
-  @media (hover: none) and (pointer: coarse) {
-    .cdk-overlay-connected-position-bounding-box {
-      // Prevent menus from going off-screen
-      max-width: calc(100vw - 32px) !important;
-      max-height: calc(100vh - 32px) !important;
-      margin: 0 16px !important;
-    }
   }
 }

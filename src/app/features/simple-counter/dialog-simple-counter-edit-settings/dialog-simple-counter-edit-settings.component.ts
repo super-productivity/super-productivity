@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
+  MatDialog,
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
@@ -15,13 +16,14 @@ import {
 import { T } from '../../../t.const';
 import { FormlyFieldConfig, FormlyFormOptions, FormlyModule } from '@ngx-formly/core';
 import { FormsModule, ReactiveFormsModule, UntypedFormGroup } from '@angular/forms';
-import { adjustToLiveFormlyForm } from '../../../util/adjust-to-live-formly-form';
+import { adjustToDialogFormlyForm } from '../../../util/adjust-to-dialog-formly-form';
 import { SIMPLE_COUNTER_FORM } from '../../config/form-cfgs/simple-counter-form.const';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { EMPTY_SIMPLE_COUNTER } from '../simple-counter.const';
 import { SimpleCounterService } from '../simple-counter.service';
+import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 
 @Component({
   selector: 'dialog-simple-counter-edit-settings',
@@ -44,6 +46,7 @@ export class DialogSimpleCounterEditSettingsComponent {
     MatDialogRef<DialogSimpleCounterEditSettingsComponent>,
   );
   private readonly _simpleCounterService = inject(SimpleCounterService);
+  private readonly _matDialog = inject(MatDialog);
   readonly dialogData = inject<{ simpleCounter: SimpleCounterCopy }>(MAT_DIALOG_DATA);
 
   readonly T = T;
@@ -54,7 +57,7 @@ export class DialogSimpleCounterEditSettingsComponent {
   private readonly _fieldArray = SIMPLE_COUNTER_FORM.items?.[0]?.fieldArray as
     | { fieldGroup?: FormlyFieldConfig[] }
     | undefined;
-  readonly fields: FormlyFieldConfig[] = adjustToLiveFormlyForm([
+  readonly fields: FormlyFieldConfig[] = adjustToDialogFormlyForm([
     ...(this._fieldArray?.fieldGroup ?? []),
   ]);
 
@@ -85,6 +88,26 @@ export class DialogSimpleCounterEditSettingsComponent {
 
   close(): void {
     this._dialogRef.close();
+  }
+
+  delete(): void {
+    const id = this.dialogData.simpleCounter.id;
+    if (!id) return;
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          message: T.F.SIMPLE_COUNTER.D_CONFIRM_REMOVE.MSG,
+          okTxt: T.F.SIMPLE_COUNTER.D_CONFIRM_REMOVE.OK,
+        },
+      })
+      .afterClosed()
+      .subscribe((confirmed: boolean) => {
+        if (confirmed) {
+          this._simpleCounterService.deleteSimpleCounter(id);
+          this._dialogRef.close();
+        }
+      });
   }
 
   isDirty(): boolean {

@@ -136,7 +136,7 @@ describe('File-Based Sync Integration - Basic Flows', () => {
       expect(response.ops.length).toBe(2);
     });
 
-    it('should piggyback remote ops during upload response', async () => {
+    it('should NOT piggyback remote ops during upload response (piggybacking removed)', async () => {
       // Client A has the initial op
       // Client B uploads without having downloaded first
       const opFromB = clientB.createOp(
@@ -151,14 +151,9 @@ describe('File-Based Sync Integration - Basic Flows', () => {
 
       const response = await clientB.uploadOps([opFromB]);
 
-      // Response should include piggybacked ops from Client A (the initial op)
-      // Note: piggybacked ops exclude the uploading client's own ops
-      expect(response.newOps).toBeDefined();
-      if (response.newOps) {
-        expect(response.newOps.length).toBeGreaterThan(0);
-        // The piggybacked op should be from client A, not client B
-        expect(response.newOps[0].op.clientId).toBe('client-a-test');
-      }
+      // File-based adapter no longer piggybacks — remote ops are only
+      // discovered via downloadOps on the next sync cycle
+      expect(response.newOps).toBeUndefined();
     });
 
     it('should not return already-processed ops on subsequent downloads', async () => {

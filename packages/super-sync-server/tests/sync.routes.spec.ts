@@ -11,7 +11,7 @@ const JWT_SECRET = 'super-sync-dev-secret-do-not-use-in-production';
 
 // Helper to create valid JWT token
 const createToken = (userId: number, email: string): string => {
-  return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: '365d' });
 };
 
 // Helper to create operation

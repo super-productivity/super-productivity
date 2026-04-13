@@ -10,7 +10,7 @@
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--s2);
 }
 
 .history-entry {
@@ -25,12 +25,12 @@
 }
 
 .history-entry__day {
-  margin-left: 8px;
+  margin-left: var(--s);
   font-size: 0.9rem;
   opacity: 0.7;
 }
 
 .history-entry__text {
-  margin: 8px 0 0;
+  margin: var(--s) 0 0;
   white-space: pre-wrap;
 }

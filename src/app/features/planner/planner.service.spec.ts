@@ -27,6 +27,7 @@ describe('PlannerService', () => {
     timeLimit: 0,
     itemsTotal: 0,
     tasks: [],
+    deadlineTasks: [],
     noStartTimeRepeatProjections: [],
     allDayEvents: [],
     scheduledIItems: [],
@@ -49,7 +50,7 @@ describe('PlannerService', () => {
         }),
         {
           provide: CalendarIntegrationService,
-          useValue: { icalEvents$: of([]) },
+          useValue: { calendarEvents$: of([]) },
         },
         {
           provide: GlobalTrackingIntervalService,

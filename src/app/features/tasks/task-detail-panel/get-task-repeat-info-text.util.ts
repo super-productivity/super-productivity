@@ -4,6 +4,7 @@ import {
 } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { T } from '../../../t.const';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getWeekdaysMin } from '../../../util/get-weekdays-min';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
@@ -14,18 +15,19 @@ export const getTaskRepeatInfoText = (
   locale: string | undefined,
   dateTimeFormatService?: DateTimeFormatService,
 ): [string, { [key: string]: string | number }] => {
-  const timeStr = repeatCfg.startTime
-    ? dateTimeFormatService
-      ? dateTimeFormatService.formatTime(
-          getDateTimeFromClockString(repeatCfg.startTime, new Date()),
-        )
-      : new Date(
-          getDateTimeFromClockString(repeatCfg.startTime, new Date()),
-        ).toLocaleTimeString(locale, {
-          hour: 'numeric',
-          minute: 'numeric',
-        })
-    : '';
+  const timeStr =
+    repeatCfg.startTime && isValidSplitTime(repeatCfg.startTime)
+      ? dateTimeFormatService
+        ? dateTimeFormatService.formatTime(
+            getDateTimeFromClockString(repeatCfg.startTime, new Date()),
+          )
+        : new Date(
+            getDateTimeFromClockString(repeatCfg.startTime, new Date()),
+          ).toLocaleTimeString(locale, {
+            hour: 'numeric',
+            minute: 'numeric',
+          })
+      : '';
 
   if (repeatCfg.repeatEvery !== 1) {
     switch (repeatCfg.repeatCycle) {

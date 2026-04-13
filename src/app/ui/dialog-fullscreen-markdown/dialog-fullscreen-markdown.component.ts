@@ -27,10 +27,28 @@ import { debounceTime } from 'rxjs/operators';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { T } from '../../t.const';
 import { isSmallScreen } from '../../util/is-small-screen';
-import * as MarkdownToolbar from '../inline-markdown/markdown-toolbar.util';
+import {
+  handleListKeydown,
+  TextTransformResult,
+  applyBold,
+  applyItalic,
+  applyStrikethrough,
+  applyHeading,
+  applyQuote,
+  applyBulletList,
+  applyNumberedList,
+  applyTaskList,
+  applyInlineCode,
+  applyCodeBlock,
+  insertLink,
+  insertImage,
+  insertTable,
+} from '../inline-markdown/markdown-toolbar.util';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { HISTORY_STATE } from 'src/app/app.constants';
+import { IS_MOBILE } from 'src/app/util/is-mobile';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -130,6 +148,16 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   async ngOnInit(): Promise<void> {
+    // Push a fake state for our dialog in the history when it's displayed in fullscreen
+    if (IS_MOBILE) {
+      if (!window.history.state?.[HISTORY_STATE.DIALOG_FULLSCREEN_MARKDOWN]) {
+        window.history.pushState(
+          { [HISTORY_STATE.DIALOG_FULLSCREEN_MARKDOWN]: true },
+          '',
+        );
+      }
+    }
+
     // Update resolved content asynchronously for image processing
     if (this.data.content) {
       await this._updateResolvedContent(this.data.content);
@@ -144,6 +172,28 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   keydownHandler(ev: KeyboardEvent): void {
     if (ev.key === 'Enter' && ev.ctrlKey) {
       this.close();
+      return;
+    }
+
+    const textarea = this.textareaEl()?.nativeElement;
+    if (!textarea) {
+      return;
+    }
+    const result = handleListKeydown(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+      ev.key,
+      ev.shiftKey,
+      ev.ctrlKey,
+      ev.metaKey,
+    );
+    if (result) {
+      ev.preventDefault();
+      textarea.value = result.text;
+      textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+      this.data.content = result.text;
+      this._contentChanges$.next(result.text);
     }
   }
 
@@ -167,8 +217,17 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     this._contentChanges$.next(content);
   }
 
-  close(): void {
-    this._matDialogRef.close(this.data?.content);
+  close(isSkipSave: boolean = false): void {
+    // When the "Close" button is hit by the user, the note is closed without saving.
+    if (isSkipSave) {
+      this._matDialogRef.close();
+      // When the note is made empty manually by the user and the "Save" button is hit, the note is automatically deleted instead of being left blank.
+    } else if (!this.data?.content && this.data.content.trim().length < 1) {
+      this._matDialogRef.close({ action: 'DELETE' });
+      // When the "Save" button is clicked by the user and the note has content, it will save.
+    } else {
+      this._matDialogRef.close(this.data?.content);
+    }
   }
 
   onViewModeChange(): void {
@@ -222,65 +281,61 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   // =========================================================================
 
   onApplyBold(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyBold);
+    this._applyTransformWithArgs(applyBold);
   }
 
   onApplyItalic(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyItalic);
+    this._applyTransformWithArgs(applyItalic);
   }
 
   onApplyStrikethrough(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyStrikethrough);
+    this._applyTransformWithArgs(applyStrikethrough);
   }
 
   onApplyHeading(level: 1 | 2 | 3): void {
     this._applyTransformWithArgs((text, start, end) =>
-      MarkdownToolbar.applyHeading(text, start, end, level),
+      applyHeading(text, start, end, level),
     );
   }
 
   onApplyQuote(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyQuote);
+    this._applyTransformWithArgs(applyQuote);
   }
 
   onApplyBulletList(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyBulletList);
+    this._applyTransformWithArgs(applyBulletList);
   }
 
   onApplyNumberedList(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyNumberedList);
+    this._applyTransformWithArgs(applyNumberedList);
   }
 
   onApplyTaskList(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyTaskList);
+    this._applyTransformWithArgs(applyTaskList);
   }
 
   onApplyInlineCode(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyInlineCode);
+    this._applyTransformWithArgs(applyInlineCode);
   }
 
   onApplyCodeBlock(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.applyCodeBlock);
+    this._applyTransformWithArgs(applyCodeBlock);
   }
 
   onInsertLink(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.insertLink);
+    this._applyTransformWithArgs(insertLink);
   }
 
   onInsertImage(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.insertImage);
+    this._applyTransformWithArgs(insertImage);
   }
 
   onInsertTable(): void {
-    this._applyTransformWithArgs(MarkdownToolbar.insertTable);
+    this._applyTransformWithArgs(insertTable);
   }
 
   private _applyTransformWithArgs(
-    transformFn: (
-      text: string,
-      start: number,
-      end: number,
-    ) => MarkdownToolbar.TextTransformResult,
+    transformFn: (text: string, start: number, end: number) => TextTransformResult,
   ): void {
     const textarea = this.textareaEl()?.nativeElement;
     if (!textarea) {

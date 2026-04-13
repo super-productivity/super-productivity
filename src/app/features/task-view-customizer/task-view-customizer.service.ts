@@ -1,8 +1,9 @@
 import { Injectable, signal, inject, effect } from '@angular/core';
 import { Observable, animationFrameScheduler, combineLatest } from 'rxjs';
-import { map, observeOn, take } from 'rxjs/operators';
+import { map, observeOn, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { selectAllProjects } from '../project/store/project.selectors';
+import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { selectAllTags } from './../tag/store/tag.reducer';
 import { Store } from '@ngrx/store';
 import { Project } from '../project/project.model';
@@ -31,6 +32,8 @@ import { DateAdapter } from '@angular/material/core';
 import { lsGetJSON, lsSetJSON } from '../../util/ls-util';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
+import { TranslateService } from '@ngx-translate/core';
+import { T } from '../../t.const';
 
 @Injectable({ providedIn: 'root' })
 export class TaskViewCustomizerService {
@@ -40,20 +43,18 @@ export class TaskViewCustomizerService {
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _languageService = inject(LanguageService);
+  private _translateService = inject(TranslateService);
   private _collator: Intl.Collator | null = null;
   private _collatorLocale: string | null = null;
 
   public selectedSort = signal<SortOption>(
-    lsGetJSON<SortOption>(LS.TASK_VIEW_CUSTOMIZER_SORT, DEFAULT_OPTIONS.sort) ??
-      DEFAULT_OPTIONS.sort,
+    lsGetJSON<SortOption>(LS.TASK_VIEW_CUSTOMIZER_SORT, DEFAULT_OPTIONS.sort),
   );
   public selectedGroup = signal<GroupOption>(
-    lsGetJSON<GroupOption>(LS.TASK_VIEW_CUSTOMIZER_GROUP, DEFAULT_OPTIONS.group) ??
-      DEFAULT_OPTIONS.group,
+    lsGetJSON<GroupOption>(LS.TASK_VIEW_CUSTOMIZER_GROUP, DEFAULT_OPTIONS.group),
   );
   public selectedFilter = signal<FilterOption>(
-    lsGetJSON<FilterOption>(LS.TASK_VIEW_CUSTOMIZER_FILTER, DEFAULT_OPTIONS.filter) ??
-      DEFAULT_OPTIONS.filter,
+    lsGetJSON<FilterOption>(LS.TASK_VIEW_CUSTOMIZER_FILTER, DEFAULT_OPTIONS.filter),
   );
 
   isCustomized = computed(() => {
@@ -110,33 +111,42 @@ export class TaskViewCustomizerService {
     }
   }
 
-  customizeUndoneTasks(
-    undoneTasks$: Observable<TaskWithSubTasks[]>,
-  ): Observable<{ list: TaskWithSubTasks[]; grouped?: any }> {
+  customizeUndoneTasks(undoneTasks$: Observable<TaskWithSubTasks[]>): Observable<{
+    list: TaskWithSubTasks[];
+    grouped?: Record<string, TaskWithSubTasks[]>;
+  }> {
+    const group$ = toObservable(this.selectedGroup);
+    const tasks$ = group$.pipe(
+      switchMap((group) => {
+        const isCrossContext =
+          group.type === GROUP_OPTION_TYPE.project ||
+          group.type === GROUP_OPTION_TYPE.tag;
+        return isCrossContext ? this._allUndoneTasksWithSubTasks$() : undoneTasks$;
+      }),
+    );
+
     return combineLatest([
-      undoneTasks$,
+      tasks$,
       toObservable(this.selectedSort),
-      toObservable(this.selectedGroup),
+      group$,
       toObservable(this.selectedFilter),
     ]).pipe(
       observeOn(animationFrameScheduler),
-      map(([undone, sort, group, filter]) => {
-        const normalizedFilterVal =
-          typeof filter.preset === 'string' ? filter.preset.trim() : filter.preset;
-        const filterValueToUse =
-          typeof normalizedFilterVal === 'string' ? normalizedFilterVal : '';
+      map(([tasks, sort, group, filter]) => {
+        const normalizedFilterVal = filter.preset?.trim();
+        const filterValueToUse = normalizedFilterVal ?? '';
 
         const isDefaultFilter = !filter.type || !filterValueToUse;
         const isDefaultSort = !sort.type;
         const isDefaultGroup = !group.type;
 
         if (isDefaultFilter && isDefaultSort && isDefaultGroup) {
-          return { list: undone };
+          return { list: tasks };
         }
 
         const filtered = isDefaultFilter
-          ? undone
-          : this.applyFilter(undone, filter.type, filterValueToUse);
+          ? tasks
+          : this.applyFilter(tasks, filter.type, filterValueToUse);
         const sorted = isDefaultSort
           ? filtered
           : this.applySort(filtered, sort.type, sort.order);
@@ -145,6 +155,27 @@ export class TaskViewCustomizerService {
           : undefined;
 
         return { list: sorted, grouped };
+      }),
+    );
+  }
+
+  private _allUndoneTasksWithSubTasks$(): Observable<TaskWithSubTasks[]> {
+    return this.store.select(selectAllTasksWithSubTasks).pipe(
+      map((tasks) => {
+        const hiddenProjectIds = new Set(
+          this._allProjects
+            .filter((p) => p.isHiddenFromMenu || p.isArchived)
+            .map((p) => p.id),
+        );
+        const backlogTaskIds = new Set(
+          this._allProjects.flatMap((p) => p.backlogTaskIds || []),
+        );
+        return tasks.filter(
+          (task) =>
+            !task.isDone &&
+            (!task.projectId || !hiddenProjectIds.has(task.projectId)) &&
+            !backlogTaskIds.has(task.id),
+        );
       }),
     );
   }
@@ -174,73 +205,12 @@ export class TaskViewCustomizerService {
         if (!project) return [];
         return tasks.filter((task) => task.projectId === project.id);
       case FILTER_OPTION_TYPE.scheduledDate:
-        if (value === FILTER_COMMON.NOT_SPECIFIED) {
-          return tasks.filter((task) => !task.dueDay && !task.dueWithTime);
-        }
-
-        const _today = new Date(); // ! Don't modify this date
-        const _firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
-
-        const todayStr = getDbDateStr(_today);
-        const tomorrowStr = getDbDateStr(
-          new Date(new Date().setDate(_today.getDate() + 1)),
-        );
-
-        return tasks.filter((task) => {
-          const dueStr = task.dueDay
-            ? task.dueDay
-            : task.dueWithTime
-              ? getDbDateStr(task.dueWithTime)
-              : null;
-
-          if (!dueStr) return false;
-
-          switch (value) {
-            case FILTER_SCHEDULE.today:
-              return dueStr.startsWith(todayStr);
-
-            case FILTER_SCHEDULE.tomorrow:
-              return dueStr.startsWith(tomorrowStr);
-
-            // From today to end of week
-            case FILTER_SCHEDULE.thisWeek: {
-              const weekRange = getWeekRange(_today, _firstDayOfWeek);
-              // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
-              // which is lexicographically sortable. This avoids timezone conversion issues.
-              return (
-                dueStr >= getDbDateStr(weekRange.start) &&
-                dueStr <= getDbDateStr(weekRange.end)
-              );
-            }
-
-            case FILTER_SCHEDULE.nextWeek: {
-              const nextWeekStartDate = new Date(
-                new Date().setDate(_today.getDate() + 7),
-              );
-              const weekRange = getWeekRange(nextWeekStartDate, _firstDayOfWeek);
-              // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
-              // which is lexicographically sortable. This avoids timezone conversion issues.
-              return (
-                dueStr >= getDbDateStr(weekRange.start) &&
-                dueStr <= getDbDateStr(weekRange.end)
-              );
-            }
-
-            case FILTER_SCHEDULE.thisMonth: {
-              const yearMonth = getDbDateStr(_today).substring(0, 7); // YYYY-MM
-              return dueStr.startsWith(yearMonth);
-            }
-
-            case FILTER_SCHEDULE.nextMonth: {
-              const nextMonth = new Date(new Date().setMonth(_today.getMonth() + 1));
-              const yearMonth = getDbDateStr(nextMonth).substring(0, 7); // YYYY-MM
-              return dueStr.startsWith(yearMonth);
-            }
-
-            default:
-              return true;
-          }
-        });
+        return this._filterByDateFields(tasks, value, (t) => [t.dueDay, t.dueWithTime]);
+      case FILTER_OPTION_TYPE.deadline:
+        return this._filterByDateFields(tasks, value, (t) => [
+          t.deadlineDay,
+          t.deadlineWithTime,
+        ]);
       case FILTER_OPTION_TYPE.estimatedTime:
         if (value === FILTER_COMMON.NOT_SPECIFIED) {
           return tasks.filter((task) => task.timeEstimate === 0);
@@ -326,24 +296,16 @@ export class TaskViewCustomizerService {
         return tasksCopy.sort((a, b) => (a.created - b.created) * factor);
 
       case SORT_OPTION_TYPE.scheduledDate:
-        return tasksCopy.sort((a, b) => {
-          const dateA = a.dueDay
-            ? new Date(a.dueDay)
-            : a.dueWithTime
-              ? new Date(a.dueWithTime)
-              : null;
-          const dateB = b.dueDay
-            ? new Date(b.dueDay)
-            : b.dueWithTime
-              ? new Date(b.dueWithTime)
-              : null;
+        return this._sortByDateFields(tasksCopy, factor, (t) => [
+          t.dueDay,
+          t.dueWithTime,
+        ]);
 
-          if (dateA === null && dateB === null) return 0;
-          if (dateA === null) return 1 * factor;
-          if (dateB === null) return -1 * factor;
-
-          return (dateA.getTime() - dateB.getTime()) * factor;
-        });
+      case SORT_OPTION_TYPE.deadline:
+        return this._sortByDateFields(tasksCopy, factor, (t) => [
+          t.deadlineDay,
+          t.deadlineWithTime,
+        ]);
 
       case SORT_OPTION_TYPE.estimatedTime:
         return tasksCopy.sort(
@@ -395,11 +357,102 @@ export class TaskViewCustomizerService {
             (task.dueWithTime ? getDbDateStr(task.dueWithTime) : 'No date');
           acc[key] = acc[key] || [];
           acc[key].push(task);
+        } else if (groupType === GROUP_OPTION_TYPE.deadline) {
+          const key =
+            task.deadlineDay ||
+            (task.deadlineWithTime
+              ? getDbDateStr(task.deadlineWithTime)
+              : this._translateService.instant(
+                  T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE,
+                ));
+          acc[key] = acc[key] || [];
+          acc[key].push(task);
         }
         return acc;
       },
       {} as Record<string, TaskWithSubTasks[]>,
     );
+  }
+
+  private _filterByDateFields(
+    tasks: TaskWithSubTasks[],
+    value: string,
+    getFields: (
+      t: TaskWithSubTasks,
+    ) => [string | undefined | null, number | undefined | null],
+  ): TaskWithSubTasks[] {
+    if (value === FILTER_COMMON.NOT_SPECIFIED) {
+      return tasks.filter((t) => {
+        const [day, withTime] = getFields(t);
+        return !day && !withTime;
+      });
+    }
+
+    const today = new Date();
+    const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
+    const todayStr = getDbDateStr(today);
+    const tomorrowStr = getDbDateStr(new Date(new Date().setDate(today.getDate() + 1)));
+
+    return tasks.filter((task) => {
+      const [day, withTime] = getFields(task);
+      const dateStr = day ? day : withTime ? getDbDateStr(withTime) : null;
+      if (!dateStr) return false;
+
+      switch (value) {
+        case FILTER_SCHEDULE.today:
+          return dateStr.startsWith(todayStr);
+        case FILTER_SCHEDULE.tomorrow:
+          return dateStr.startsWith(tomorrowStr);
+        case FILTER_SCHEDULE.thisWeek: {
+          const weekRange = getWeekRange(today, firstDayOfWeek);
+          return (
+            dateStr >= getDbDateStr(weekRange.start) &&
+            dateStr <= getDbDateStr(weekRange.end)
+          );
+        }
+        case FILTER_SCHEDULE.nextWeek: {
+          const nextWeekStart = new Date(new Date().setDate(today.getDate() + 7));
+          const weekRange = getWeekRange(nextWeekStart, firstDayOfWeek);
+          return (
+            dateStr >= getDbDateStr(weekRange.start) &&
+            dateStr <= getDbDateStr(weekRange.end)
+          );
+        }
+        case FILTER_SCHEDULE.thisMonth: {
+          const yearMonth = getDbDateStr(today).substring(0, 7);
+          return dateStr.startsWith(yearMonth);
+        }
+        case FILTER_SCHEDULE.nextMonth: {
+          const nextMonth = new Date(new Date().setDate(1));
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
+          const yearMonth = getDbDateStr(nextMonth).substring(0, 7);
+          return dateStr.startsWith(yearMonth);
+        }
+        default:
+          return true;
+      }
+    });
+  }
+
+  private _sortByDateFields(
+    tasks: TaskWithSubTasks[],
+    factor: number,
+    getFields: (
+      t: TaskWithSubTasks,
+    ) => [string | undefined | null, number | undefined | null],
+  ): TaskWithSubTasks[] {
+    return tasks.sort((a, b) => {
+      const [dayA, withTimeA] = getFields(a);
+      const [dayB, withTimeB] = getFields(b);
+      const dateA = dayA ? new Date(dayA) : withTimeA ? new Date(withTimeA) : null;
+      const dateB = dayB ? new Date(dayB) : withTimeB ? new Date(withTimeB) : null;
+
+      if (dateA === null && dateB === null) return 0;
+      if (dateA === null) return 1 * factor;
+      if (dateB === null) return -1 * factor;
+
+      return (dateA.getTime() - dateB.getTime()) * factor;
+    });
   }
 
   setSort(val: SortOption): void {
@@ -425,59 +478,51 @@ export class TaskViewCustomizerService {
     this.setFilter(DEFAULT_OPTIONS.filter);
   }
 
-  async sortPermanent(sort: SortOption | null): Promise<void> {
-    if (!sort) {
-      this.resetAll();
-      return;
-    }
+  /**
+   * Instantly save sort changes by reordering tasks in the current work context
+   * ! Saved sorting will be default
+   */
+  async saveSort(): Promise<void> {
+    const selectedSort = { ...this.selectedSort() };
+
+    // Saved sorting will be default
+    this.setSort(DEFAULT_OPTIONS.sort);
 
     const workContextId = this._workContextService.activeWorkContextId;
     const workContextType = this._workContextService.activeWorkContextType;
-    if (!workContextId || !workContextType) {
-      this.resetAll();
-      return;
-    }
+    if (!workContextId || !workContextType) return;
 
-    const [todaysTasks, undoneTasks] = await Promise.all([
+    // Tasks in the current work context
+    const [allTasks, undoneTasks] = await Promise.all([
       this._workContextService.mainListTasks$.pipe(take(1)).toPromise(),
       this._workContextService.undoneTasks$.pipe(take(1)).toPromise(),
     ]);
 
-    if (!todaysTasks?.length || !undoneTasks?.length) {
-      this.resetAll();
-      return;
-    }
+    if (!allTasks?.length || !undoneTasks?.length) return;
 
-    const sortedTasks = this.applySort(undoneTasks, sort.type, sort.order);
-    if (!sortedTasks.length) {
-      this.resetAll();
-      return;
-    }
+    const sortedTasks = this.applySort(
+      undoneTasks,
+      selectedSort.type,
+      selectedSort.order,
+    );
+    if (!sortedTasks.length) return;
 
     const sortedIdQueue = sortedTasks.map((task) => task.id);
     const sortedIdSet = new Set(sortedIdQueue);
-    const newOrderedIds = todaysTasks.map((task) => {
-      if (!sortedIdSet.has(task.id)) {
-        return task.id;
-      }
+    const newOrderedIds = allTasks.map((task) => {
+      if (!sortedIdSet.has(task.id)) return task.id;
+
       const nextId = sortedIdQueue.shift();
       return nextId ?? task.id;
     });
 
-    const isOrderChanged = todaysTasks.some(
-      (task, idx) => task.id !== newOrderedIds[idx],
-    );
-    if (!isOrderChanged) {
-      this.resetAll();
-      return;
-    }
+    const isOrderChanged = allTasks.some((task, idx) => task.id !== newOrderedIds[idx]);
+    if (!isOrderChanged) return;
 
     if (workContextType === WorkContextType.PROJECT) {
       this._projectService.update(workContextId, { taskIds: newOrderedIds });
     } else if (workContextType === WorkContextType.TAG) {
       this._tagService.updateTag(workContextId, { taskIds: newOrderedIds });
     }
-
-    this.resetAll();
   }
 }

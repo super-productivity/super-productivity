@@ -1,0 +1,25 @@
+{
+  "CFG": {
+    "REPO": "Repository (owner/repo)",
+    "TOKEN": "Personal Access Token (required for private repos/optional for public repos)",
+    "FILTER_USERNAME": "Filter username (ignore own comments for update detection)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATE": "Status",
+    "ASSIGNEE": "Assignee",
+    "LABELS": "Labels",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p>Here you can configure Super Productivity to list open GitHub issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition, you can automatically import all open issues.</p><p>To get by usage limits and to access you can provide a an access token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>More info about its scopes can be found here</a>.",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: Error while mapping data. Is your repository name correct?",
+    "ERR_UNKNOWN": "GitHub: Unknown error {{statusCode}} {{errorMsg}}. API rate limit exceeded?",
+    "TOKEN_REQUIRED": "GitHub: A personal access token is required to create or update issues. Please add a token in the issue provider settings.",
+    "INSUFFICIENT_PERMISSIONS": "GitHub: Your token likely lacks sufficient permissions. Classic tokens need the \"repo\" scope; fine-grained tokens need \"Issues: Read and write\". It can also mean the repository does not exist or has issues disabled."
+  }
+}

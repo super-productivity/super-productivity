@@ -74,7 +74,7 @@
     justify-content: center;
     align-items: center;
     background: transparent;
-    margin-top: 2px;
+    margin-top: var(--s-quarter);
     border: none !important;
     box-shadow: none !important;
     z-index: 1;
@@ -82,8 +82,7 @@
     .title {
       flex: 0 1 auto;
       column-width: auto;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      @include truncateText();
     }
 
     .ico-wrapper {
@@ -120,7 +119,7 @@
   }
 
   &.CalendarEvent {
-    border-left: 1px solid var(--extra-border-color);
+    @include extraBorder('-left');
   }
 
   &.ScheduledRepeatProjection .ico {
@@ -141,7 +140,7 @@
     }
 
     .ico-wrapper {
-      margin: 4px 4px 0 6px;
+      margin: var(--s-half) var(--s-half) 0 6px;
       opacity: 1;
 
       @include mq(xs, max) {
@@ -194,7 +193,7 @@
   height: 13px;
   text-align: center;
   padding: 1px;
-  border: 1px solid var(--extra-border-color);
+  @include extraBorder();
   border-radius: var(--card-border-radius);
   color: var(--text-color);
   background: var(--bg-lighter);
@@ -213,12 +212,17 @@
   pointer-events: none;
 }
 
+.calendar-menu-anchor {
+  position: absolute;
+  pointer-events: auto;
+}
+
 .ico-wrapper {
   position: relative;
-  margin: 8px 0 0 6px;
+  margin: var(--s) 0 0 6px;
 
   @include mq(xs, max) {
-    margin-top: 4px;
+    margin-top: var(--s-half);
   }
 
   :host.very-short-event & {
@@ -226,25 +230,11 @@
   }
 
   :host.ScheduledRepeatProjection & {
-    margin-right: 2px;
+    margin-right: var(--s-quarter);
   }
 
   mat-icon {
     display: block;
-
-    & + mat-icon {
-      display: none;
-    }
-  }
-
-  :host:hover & mat-icon {
-    &:first-of-type:not(:last-of-type) {
-      display: none;
-    }
-
-    &:nth-child(2) {
-      display: block;
-    }
   }
 }
 
@@ -292,8 +282,7 @@
 
 .title {
   font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include truncateText();
   flex: 1 1 auto;
   padding: 6px;
   font-weight: 400;
@@ -306,7 +295,7 @@
     column-width: 120px;
     font-size: 11px;
     line-height: 1.3;
-    padding: 4px;
+    padding: var(--s-half);
   }
 
   @include mq(xxs, max) {
@@ -314,7 +303,7 @@
   }
 
   :host.very-short-event & {
-    padding: 1px 6px 2px;
+    padding: 1px 6px var(--s-quarter);
   }
 
   :host.SplitTaskContinued &,
@@ -322,6 +311,15 @@
   :host.SplitTaskContinuedLast &,
   :host.RepeatProjectionSplitContinuedLast & {
     line-clamp: 1;
+  }
+
+  // Override inherited pointer-events: none from :host > * so links are clickable.
+  // position: relative + z-index: 4 lifts links above the ::before overlay (z-index: 3).
+  a {
+    pointer-events: auto;
+    cursor: pointer;
+    position: relative;
+    z-index: 4;
   }
 }
 
@@ -449,4 +447,11 @@
       background: var(--c-accent);
     }
   }
+}
+
+.cal-menu-trigger {
+  position: absolute;
+  width: 0;
+  height: 0;
+  visibility: hidden;
 }

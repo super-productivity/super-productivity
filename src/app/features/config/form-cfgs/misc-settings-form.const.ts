@@ -37,6 +37,18 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.IS_MINIMIZE_TO_TRAY,
       },
     },
+    ...((IS_ELECTRON
+      ? [
+          {
+            key: 'isLocalRestApiEnabled',
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED,
+              description: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED_HINT,
+            },
+          },
+        ]
+      : []) as LimitedFormlyFieldConfig<MiscConfig>[]),
     {
       key: 'startOfNextDay',
       type: 'input',
@@ -76,13 +88,6 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
       type: 'checkbox',
       templateOptions: {
         label: T.GCF.MISC.IS_TRAY_SHOW_CURRENT_COUNTDOWN,
-      },
-    },
-    {
-      key: 'isOverlayIndicatorEnabled',
-      type: 'checkbox',
-      templateOptions: {
-        label: T.GCF.MISC.IS_OVERLAY_INDICATOR_ENABLED,
       },
     },
     ...((IS_ELECTRON

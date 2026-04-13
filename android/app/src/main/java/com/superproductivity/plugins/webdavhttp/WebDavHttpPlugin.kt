@@ -13,6 +13,7 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import android.util.Log
 import javax.net.ssl.SSLHandshakeException
 
 @CapacitorPlugin(name = "WebDavHttp")
@@ -91,6 +92,19 @@ class WebDavHttpPlugin : Plugin() {
             }
         }
 
+        // Log payload info for PUT requests to help diagnose bridge data loss
+        if (method.uppercase() == "PUT") {
+            val dataLen = data?.length ?: -1
+            Log.d("WebDavHttp", "PUT to $urlString (data: ${if (dataLen >= 0) "$dataLen bytes" else "null"})")
+
+            if (data.isNullOrEmpty()) {
+                throw IllegalArgumentException(
+                    "PUT request received with null/empty body for $urlString. " +
+                        "The Capacitor bridge likely dropped the payload."
+                )
+            }
+        }
+
         // Handle request body
         val requestBody: RequestBody? = when {
             data.isNullOrEmpty() && methodRequiresBody(method) -> {
@@ -145,14 +159,14 @@ class WebDavHttpPlugin : Plugin() {
             val responseBody = try {
                 response.body?.string() ?: ""
             } catch (e: Exception) {
-                // If body reading fails, return empty string
+                Log.w("WebDavHttp", "Failed to read response body for $urlString: ${e.message}")
                 ""
             }
 
             // Handle non-success status codes by including error info
             if (!response.isSuccessful) {
                 // Log the error for debugging
-                println("WebDavHttp: HTTP ${response.code} for $urlString")
+                Log.d("WebDavHttp", "HTTP ${response.code} for $urlString")
             }
 
             // Return response matching the expected format

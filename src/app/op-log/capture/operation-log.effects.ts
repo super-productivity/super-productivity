@@ -26,7 +26,7 @@ import {
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { OperationCaptureService } from './operation-capture.service';
 import { ImmediateUploadService } from '../sync/immediate-upload.service';
-import { getDeferredActions } from './operation-capture.meta-reducer';
+import { getDeferredActions, isDeferredAction } from './operation-capture.meta-reducer';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { SuperSyncStatusService } from '../sync/super-sync-status.service';
 
@@ -40,7 +40,6 @@ import { SuperSyncStatusService } from '../sync/super-sync-status.service';
  */
 @Injectable()
 export class OperationLogEffects {
-  private clientId?: string;
   private compactionFailures = 0;
   /** Circuit breaker: prevents recursive quota exceeded handling */
   private isHandlingQuotaExceeded = false;
@@ -70,40 +69,43 @@ export class OperationLogEffects {
    * Filters out:
    * 1. Non-persistent actions (actions without PersistentActionMeta)
    * 2. Remote actions (actions replayed from sync, marked with isRemote: true)
+   * 3. Deferred actions (buffered during sync, processed later by processDeferredActions)
    *
-   * Note: We intentionally do NOT filter by `isApplyingRemoteOps()` here.
-   * The meta-reducer handles sync timing by BUFFERING actions during sync
-   * (not enqueueing them). If an action reaches this effect and was enqueued,
-   * it means the meta-reducer determined it should be processed.
-   *
-   * Previously there was a filter here that caused a race condition:
-   * 1. Meta-reducer enqueues action (isApplyingRemoteOps = false)
-   * 2. Before effect runs, sync starts (isApplyingRemoteOps = true)
-   * 3. Effect filters out action, but it's already in queue
-   * 4. flushPendingWrites() times out waiting for queue to drain
+   * Note: We do NOT filter by `isApplyingRemoteOps()` here because of a race
+   * condition: the meta-reducer may enqueue an action before sync starts, but
+   * the effect processes it after sync starts. Filtering by isApplyingRemoteOps
+   * would skip the action while its queue entry remains, causing flushPendingWrites
+   * to time out. Instead, we use isDeferredAction() which precisely identifies
+   * actions that were buffered (not enqueued) by the meta-reducer.
    */
   persistOperation$ = createEffect(
     () =>
       this.actions$.pipe(
-        filter((action) => isPersistentAction(action)),
-        filter((action) => !(action as PersistentAction).meta.isRemote),
+        filter(
+          (action): action is PersistentAction =>
+            isPersistentAction(action) &&
+            !action.meta.isRemote &&
+            !isDeferredAction(action),
+        ),
         // Use concatMap for sequential processing to maintain FIFO queue order
-        concatMap((action) => this.writeOperation(action as PersistentAction)),
+        concatMap((action) => this.writeOperation(action)),
       ),
     { dispatch: false },
   );
 
-  private async writeOperation(action: PersistentAction): Promise<void> {
-    if (!this.clientId) {
-      // Load existing client ID, or generate a new one if this is first use
-      this.clientId =
-        (await this.clientIdService.loadClientId()) ??
-        (await this.clientIdService.generateNewClientId());
-    }
-    if (!this.clientId) {
+  private async writeOperation(
+    action: PersistentAction,
+    skipDequeue = false,
+  ): Promise<void> {
+    // Always read from ClientIdService (which has its own in-memory cache).
+    // Do NOT cache locally — BackupService.generateNewClientId() updates the
+    // service cache, and a local cache here would go stale after backup import.
+    const clientId =
+      (await this.clientIdService.loadClientId()) ??
+      (await this.clientIdService.generateNewClientId());
+    if (!clientId) {
       throw new Error('Failed to load or generate clientId - cannot persist operation');
     }
-    const clientId = this.clientId;
 
     // Validate that at least one entity identifier exists for non-bulk operations
     // Bulk operations with entityType 'ALL' don't need specific entity IDs
@@ -121,7 +123,9 @@ export class OperationLogEffects {
       );
     if (!isBulkAllOperation && !hasValidEntityId && !hasValidEntityIds) {
       // IMPORTANT: Dequeue first to prevent queue from getting stuck
-      this.operationCaptureService.dequeue();
+      if (!skipDequeue) {
+        this.operationCaptureService.dequeue();
+      }
       devError(
         `[OperationLogEffects] Action ${action.type} has invalid entityId/entityIds (${action.meta.entityId}) - skipping persistence`,
       );
@@ -165,7 +169,9 @@ export class OperationLogEffects {
         // Get entity changes from the FIFO queue (for TIME_TRACKING and TASK time sync)
         // For most actions, this returns empty array since action payloads are sufficient.
         // IMPORTANT: This MUST happen inside the lock to prevent race with flushPendingWrites.
-        const entityChanges = this.operationCaptureService.dequeue();
+        // Deferred actions skip dequeue because the meta-reducer buffers them without
+        // enqueueing — there's no matching queue entry to dequeue.
+        const entityChanges = skipDequeue ? [] : this.operationCaptureService.dequeue();
 
         // Create multi-entity payload with action payload and computed changes
         const multiEntityPayload: MultiEntityPayload = {
@@ -276,7 +282,7 @@ export class OperationLogEffects {
           );
           this.notifyUserAndTriggerRollback();
         } else {
-          await this.handleQuotaExceeded(action);
+          await this.handleQuotaExceeded(action, skipDequeue);
         }
       } else {
         this.notifyUserAndTriggerRollback();
@@ -360,7 +366,10 @@ export class OperationLogEffects {
    * handles quota exceeded at a time. Uses instance flag to prevent
    * recursive calls within the same tab.
    */
-  private async handleQuotaExceeded(action: PersistentAction): Promise<void> {
+  private async handleQuotaExceeded(
+    action: PersistentAction,
+    skipDequeue = false,
+  ): Promise<void> {
     OpLog.err(
       'OperationLogEffects: Storage quota exceeded, attempting emergency compaction',
     );
@@ -374,7 +383,7 @@ export class OperationLogEffects {
           // Set circuit breaker before retry to prevent recursive handling
           this.isHandlingQuotaExceeded = true;
           // Retry the failed operation after compaction freed space
-          await this.writeOperation(action);
+          await this.writeOperation(action, skipDequeue);
           this.snackService.open({
             type: 'SUCCESS',
             msg: T.F.SYNC.S.STORAGE_RECOVERED_AFTER_COMPACTION,
@@ -443,7 +452,8 @@ export class OperationLogEffects {
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-          await this.writeOperation(action);
+          // skipDequeue=true: deferred actions were buffered, not enqueued
+          await this.writeOperation(action, true);
           success = true;
           break;
         } catch (e) {

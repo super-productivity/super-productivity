@@ -29,6 +29,7 @@ describe('TaskElectronEffects', () => {
       on: jasmine.createSpy('on'),
       updateCurrentTask: jasmine.createSpy('updateCurrentTask'),
       setProgressBar: jasmine.createSpy('setProgressBar'),
+      onSwitchTask: jasmine.createSpy('onSwitchTask'),
     };
 
     actions$ = new Subject<any>();

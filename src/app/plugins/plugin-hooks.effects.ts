@@ -13,6 +13,7 @@ import {
 import { EMPTY } from 'rxjs';
 
 import {
+  selectCurrentTask,
   selectTaskById,
   selectTaskFeatureState,
 } from '../features/tasks/store/task.selectors';
@@ -81,12 +82,9 @@ export class PluginHooksEffects {
     () =>
       this.actions$.pipe(
         ofType(setCurrentTask, unsetCurrentTask),
-        withLatestFrom(this.store.pipe(select(selectTaskFeatureState))),
-        map(([action, taskState]) => {
-          this.pluginService.dispatchHook(
-            PluginHooks.CURRENT_TASK_CHANGE,
-            taskState.currentTaskId,
-          );
+        withLatestFrom(this.store.pipe(select(selectCurrentTask))),
+        map(([action, currentTask]) => {
+          this.pluginService.dispatchHook(PluginHooks.CURRENT_TASK_CHANGE, currentTask);
         }),
       ),
     { dispatch: false },

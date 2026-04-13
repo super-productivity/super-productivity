@@ -12,7 +12,6 @@ import {
   createSyncFolder,
   waitForSyncComplete,
   generateSyncFolderName,
-  dismissTourIfVisible,
   waitForArchivePersistence,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
@@ -168,7 +167,6 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     // Reload Client B and verify no errors (archive should be cleaned)
     await pageB.reload();
     await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
     await workViewPageB.waitForTaskList();
 
     // Check for no global errors
@@ -437,7 +435,6 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     // Reload Client B and verify no errors
     await pageB.reload();
     await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
     await workViewPageB.waitForTaskList();
 
     const globalError = pageB.locator('.global-error-alert');

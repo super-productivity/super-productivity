@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
+/* eslint-disable @typescript-eslint/explicit-function-return-type,@typescript-eslint/naming-convention */
 import { plannerSharedMetaReducer } from './planner-shared.reducer';
 import { RootState } from '../../root-state';
 import { Task } from '../../../features/tasks/task.model';
@@ -285,13 +285,85 @@ describe('plannerSharedMetaReducer', () => {
       );
     });
 
-    it('should not change state when task is not in Today and not planned for today', () => {
+    it('should update planner days when planning for future day', () => {
       const testState = createStateWithExistingTasks([], [], [], ['other-task']);
       const task = createMockTask({ id: 'task1' });
       const action = createPlanTaskForDayAction(task, 'tomorrow', false);
 
       metaReducer(testState, action);
-      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0];
+      expect(resultState.planner.days['tomorrow']).toEqual(['task1']);
+    });
+
+    it('should not add task to planner days when planning for today', () => {
+      const todayStr = getDbDateStr();
+      const testState = createStateWithExistingTasks([], [], [], []);
+      testState.planner = {
+        ...testState.planner,
+        days: { '2024-01-16': ['task2'] },
+      };
+      const task = createMockTask({ id: 'task1' });
+      const action = createPlanTaskForDayAction(task, todayStr, false);
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0];
+      expect(resultState.planner.days[todayStr]).toBeUndefined();
+      expect(resultState.planner.days['2024-01-16']).toEqual(['task2']);
+    });
+
+    it('should remove task from all planner days when planning for today', () => {
+      const todayStr = getDbDateStr();
+      const testState = createStateWithExistingTasks([], [], [], []);
+      testState.planner = {
+        ...testState.planner,
+        days: {
+          '2024-01-16': ['task1', 'task2'],
+          '2024-01-17': ['task3'],
+        },
+      };
+      const task = createMockTask({ id: 'task1' });
+      const action = createPlanTaskForDayAction(task, todayStr, false);
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0];
+      expect(resultState.planner.days[todayStr]).toBeUndefined();
+      expect(resultState.planner.days['2024-01-16']).toEqual(['task2']);
+      expect(resultState.planner.days['2024-01-17']).toEqual(['task3']);
+    });
+
+    it('should add task to top of planner day when isAddToTop is true', () => {
+      const testState = createStateWithExistingTasks([], [], [], []);
+      testState.planner = {
+        ...testState.planner,
+        days: { '2024-01-16': ['task2'] },
+      };
+      const task = createMockTask({ id: 'task1' });
+      const action = createPlanTaskForDayAction(task, '2024-01-16', true);
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0];
+      expect(resultState.planner.days['2024-01-16']).toEqual(['task1', 'task2']);
+    });
+
+    it('should remove subtasks when moving parent task to planner day', () => {
+      const testState = createStateWithExistingTasks([], [], [], []);
+      testState.planner = {
+        ...testState.planner,
+        days: { '2024-01-16': ['task1', 'sub1', 'task2', 'sub2'] },
+      };
+      const task = createMockTask({
+        id: 'parent',
+        subTaskIds: ['sub1', 'sub2'],
+      });
+      const action = createPlanTaskForDayAction(task, '2024-01-16', false);
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0];
+      expect(resultState.planner.days['2024-01-16']).toEqual([
+        'task1',
+        'task2',
+        'parent',
+      ]);
     });
 
     // Virtual tag pattern tests: TODAY_TAG membership is determined by task.dueDay,

@@ -1,0 +1,17 @@
+{
+  "name": "Voice Reminder",
+  "id": "voice-reminder",
+  "manifestVersion": 1,
+  "version": "1.0.0",
+  "minSupVersion": "13.0.0",
+  "description": "Periodically speaks the current task title via the Web Speech API.",
+  "author": "Super Productivity",
+  "permissions": ["showSnack", "openDialog", "persistDataSynced", "loadSyncedData"],
+  "hooks": ["currentTaskChange"],
+  "iFrame": false,
+  "isSkipMenuEntry": true,
+  "icon": "icon.svg",
+  "i18n": {
+    "languages": ["en"]
+  }
+}

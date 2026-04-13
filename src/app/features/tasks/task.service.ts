@@ -50,6 +50,7 @@ import {
   selectTaskById,
   selectTaskByIdWithSubTaskData,
   selectTaskDetailTargetPanel,
+  selectTaskEntities,
   selectTaskFeatureState,
   selectTasksById,
   selectTasksByRepeatConfigId,
@@ -94,13 +95,15 @@ import { ArchiveService } from '../archive/archive.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
 import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
+import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
+import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
 
 @Injectable({
   providedIn: 'root',
@@ -116,10 +119,12 @@ export class TaskService {
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
+  private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
-    // NOTE: we can't use share here, as we need the last emitted value
+    distinctUntilChanged(),
   );
   currentTaskId = toSignal(this.currentTaskId$, { initialValue: null });
 
@@ -134,10 +139,7 @@ export class TaskService {
   );
 
   selectedTaskId = toSignal(
-    this._store.pipe(
-      select(selectSelectedTaskId),
-      // NOTE: we can't use share here, as we need the last emitted value
-    ),
+    this._store.pipe(select(selectSelectedTaskId), distinctUntilChanged()),
     { initialValue: null },
   );
 
@@ -160,10 +162,7 @@ export class TaskService {
   );
 
   taskDetailPanelTargetPanel$: Observable<TaskDetailTargetPanel | null | undefined> =
-    this._store.pipe(
-      select(selectTaskDetailTargetPanel),
-      // NOTE: we can't use share here, as we need the last emitted value
-    );
+    this._store.pipe(select(selectTaskDetailTargetPanel), distinctUntilChanged());
 
   isTaskDataLoaded$: Observable<boolean> = this._store.pipe(
     select(selectIsTaskDataLoaded),
@@ -191,6 +190,7 @@ export class TaskService {
 
   private _lastFocusedTaskEl: HTMLElement | null = null;
   private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
+  private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
   // Batch sync for time tracking: accumulates duration per task, syncs every 5 minutes
   private static readonly SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -243,8 +243,7 @@ export class TaskService {
       });
 
     // Flush accumulated time when task stops (currentTaskId becomes null or changes)
-    this.currentTaskId$.pipe(distinctUntilChanged()).subscribe((newTaskId) => {
-      // When task changes or stops, flush any accumulated time
+    this.currentTaskId$.subscribe(() => {
       this._flushAccumulatedTimeSpent();
     });
 
@@ -403,7 +402,7 @@ export class TaskService {
       workContextId,
     });
 
-    TaskLog.log(task, additional);
+    TaskLog.log('addTask', { taskId: task.id, workContextId, workContextType });
 
     this._store.dispatch(
       TaskSharedActions.addTask({
@@ -444,6 +443,25 @@ export class TaskService {
   }
 
   removeMultipleTasks(taskIds: string[]): void {
+    // Store issue metadata in the sidecar *before* dispatching, so the
+    // deleteIssueOnBulkTaskDelete$ effect can pick it up. This keeps
+    // full Task objects out of the action payload and the op-log.
+    const entities = this._taskEntities();
+    const tasks = taskIds
+      .map((id) => entities[id])
+      .filter((task): task is Task => !!task);
+    this._deletedTaskIssueSidecar.set(
+      tasks
+        .filter((t) => !!t.issueId && !!t.issueType && !!t.issueProviderId)
+        .map((t) => ({
+          issueId: t.issueId!,
+          issueType: t.issueType!,
+          issueProviderId: t.issueProviderId!,
+        })),
+    );
+    this._timeBlockDeleteSidecar.set(
+      tasks.filter((t) => !!t.dueWithTime).map((t) => t.id),
+    );
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds }));
   }
 
@@ -730,7 +748,7 @@ export class TaskService {
       title: additional.title || '',
       additional: { dueDay: additional.dueDay || undefined, ...additional },
     });
-    console.log(task);
+    TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
 
     this._store.dispatch(
       addSubTask({
@@ -777,6 +795,20 @@ export class TaskService {
     this._store.dispatch(
       TimeTrackingActions.addTimeSpent({ task, date, duration, isFromTrackingReminder }),
     );
+  }
+
+  /**
+   * Adds time spent to a task AND dispatches the persistent syncTimeSpent action.
+   * Use this instead of addTimeSpent when the caller is NOT using BatchedTimeSyncAccumulator
+   * (e.g. idle dialog, tracking reminder). The tick path uses the accumulator instead.
+   */
+  addTimeSpentAndSync(task: Task, duration: number): void {
+    if (duration <= 0) {
+      return;
+    }
+    const date = this._dateService.todayStr();
+    this.addTimeSpent(task, duration, date);
+    this._store.dispatch(syncTimeSpent({ taskId: task.id, date, duration }));
   }
 
   removeTimeSpent(
@@ -1046,6 +1078,25 @@ export class TaskService {
     this.update(id, { isDone: false });
   }
 
+  /**
+   * Toggle done state with checkmark animation.
+   * Returns the timeout handle so callers can clear it on destroy.
+   */
+  toggleDoneWithAnimation(
+    taskId: string,
+    isDone: boolean,
+    setAnimation: (animate: boolean) => void,
+  ): number | undefined {
+    if (isDone) {
+      setAnimation(false);
+      this.setUnDone(taskId);
+      return undefined;
+    } else {
+      setAnimation(true);
+      return window.setTimeout(() => this.setDone(taskId), 200);
+    }
+  }
+
   showSubTasks(id: string): void {
     this.updateUi(id, { _hideSubTasksMode: undefined });
   }
@@ -1265,6 +1316,20 @@ export class TaskService {
 
       ...additional,
     };
+
+    // Guard against corrupted date strings (#6908)
+    if (d1.dueDay && typeof d1.dueDay === 'string' && !isDBDateStr(d1.dueDay)) {
+      d1.dueDay = undefined;
+      devError('createNewTaskWithDefaults: Invalid dueDay, clearing');
+    }
+    if (
+      d1.deadlineDay &&
+      typeof d1.deadlineDay === 'string' &&
+      !isDBDateStr(d1.deadlineDay)
+    ) {
+      d1.deadlineDay = undefined;
+      devError('createNewTaskWithDefaults: Invalid deadlineDay, clearing');
+    }
 
     if (!d1.projectId) {
       d1.projectId =

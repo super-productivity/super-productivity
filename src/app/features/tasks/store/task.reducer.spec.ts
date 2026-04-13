@@ -4,7 +4,10 @@ import { initialTaskState, taskReducer } from './task.reducer';
 import * as fromActions from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { INBOX_PROJECT } from '../../project/project.const';
-import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
+import {
+  TimeTrackingActions,
+  syncTimeSpent,
+} from '../../time-tracking/store/time-tracking.actions';
 import { _resetDevErrorState } from '../../../util/dev-error';
 import { PlannerActions } from '../../planner/store/planner.actions';
 
@@ -822,6 +825,56 @@ describe('Task Reducer', () => {
 
       // Current task should be cleared since orphan subtask was removed
       expect(state.currentTaskId).toBeNull();
+    });
+  });
+
+  describe('syncTimeSpent', () => {
+    it('should be a no-op for local dispatch', () => {
+      const action = syncTimeSpent({
+        taskId: 'task1',
+        date: '2024-01-01',
+        duration: 5000,
+      });
+
+      const state = taskReducer(stateWithTasks, action);
+
+      expect(state).toBe(stateWithTasks);
+    });
+
+    it('should apply duration for remote dispatch', () => {
+      const taskWithTime = createTask('task-r', {
+        timeSpentOnDay: { '2024-01-01': 3000 },
+        timeSpent: 3000,
+      });
+      const stateWithTime: TaskState = {
+        ...initialTaskState,
+        ids: ['task-r'],
+        entities: { 'task-r': taskWithTime },
+      };
+
+      const action = syncTimeSpent({
+        taskId: 'task-r',
+        date: '2024-01-01',
+        duration: 5000,
+      });
+      // Simulate remote by adding isRemote flag
+      const remoteAction = { ...action, meta: { ...action.meta, isRemote: true } };
+      const state = taskReducer(stateWithTime, remoteAction);
+
+      expect(state.entities['task-r']!.timeSpentOnDay['2024-01-01']).toBe(8000);
+      expect(state.entities['task-r']!.timeSpent).toBe(8000);
+    });
+
+    it('should handle remote dispatch for missing task gracefully', () => {
+      const action = syncTimeSpent({
+        taskId: 'nonexistent',
+        date: '2024-01-01',
+        duration: 5000,
+      });
+      const remoteAction = { ...action, meta: { ...action.meta, isRemote: true } };
+      const state = taskReducer(stateWithTasks, remoteAction);
+
+      expect(state).toBe(stateWithTasks);
     });
   });
 

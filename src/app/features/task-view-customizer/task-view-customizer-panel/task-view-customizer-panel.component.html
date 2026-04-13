@@ -9,21 +9,12 @@
     [matMenuTriggerFor]="sortMenu"
   >
     <mat-icon>sort</mat-icon>
-    <span>{{ T.F.TASK_VIEW.CUSTOMIZER.SORT_TEMPORARY | translate }}</span>
+    <span>{{ T.F.TASK_VIEW.CUSTOMIZER.SORT | translate }}</span>
     @if (customizerService.selectedSort().type) {
       <span class="current-value">
         {{ customizerService.selectedSort().label | translate }}
       </span>
     }
-  </button>
-
-  <!-- Sort Permanently -->
-  <button
-    mat-menu-item
-    [matMenuTriggerFor]="sortPermanentMenu"
-  >
-    <mat-icon>sort</mat-icon>
-    <span>{{ T.F.TASK_VIEW.CUSTOMIZER.SORT_PERMANENT | translate }}</span>
   </button>
 
   <!-- Group By -->
@@ -90,22 +81,20 @@
       </span>
     </button>
   }
-</mat-menu>
 
-<!-- Sort Permanent submenu -->
-<mat-menu #sortPermanentMenu="matMenu">
-  @for (opt of OPTIONS.sort.list; track opt.type) {
-    @if (opt.type) {
-      <button
-        mat-menu-item
-        (click)="customizerService.sortPermanent(opt)"
-      >
-        <span class="menu-item-content">
-          <span>{{ opt.label | translate }}</span>
-        </span>
-      </button>
-    }
-  }
+  <mat-divider></mat-divider>
+
+  <button
+    mat-menu-item
+    (click)="customizerService.saveSort()"
+    [disabled]="customizerService.selectedSort().type === DEFAULT.sort.type"
+  >
+    <span class="menu-item-content">
+      <mat-icon class="check-icon">save</mat-icon>
+
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.SAVE_SORT | translate }}</span>
+    </span>
+  </button>
 </mat-menu>
 
 <!-- Group submenu -->
@@ -181,6 +170,21 @@
       @if (
         customizerService.selectedFilter().type === OPTIONS.filter.types.scheduledDate
       ) {
+        <mat-icon class="check-icon">check</mat-icon>
+      }
+    </span>
+  </button>
+
+  <button
+    mat-menu-item
+    [matMenuTriggerFor]="filterDeadlineMenu"
+    [class.active]="
+      customizerService.selectedFilter().type === OPTIONS.filter.types.deadline
+    "
+  >
+    <span class="menu-item-content">
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE | translate }}</span>
+      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.deadline) {
         <mat-icon class="check-icon">check</mat-icon>
       }
     </span>
@@ -289,6 +293,16 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.scheduledDate"
     [options]="PRESETS.schedule"
+    [selectedFilter]="customizerService.selectedFilter()"
+    (byClick)="onFilterWithValue($event)"
+  />
+</mat-menu>
+
+<!-- Filter: Deadline submenu -->
+<mat-menu #filterDeadlineMenu>
+  <task-view-customizer-menu-item
+    [type]="OPTIONS.filter.types.deadline"
+    [options]="PRESETS.deadline"
     [selectedFilter]="customizerService.selectedFilter()"
     (byClick)="onFilterWithValue($event)"
   />

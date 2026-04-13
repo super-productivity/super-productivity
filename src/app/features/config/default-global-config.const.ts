@@ -1,12 +1,9 @@
 import { environment } from '../../../environments/environment';
-import { TRACKING_INTERVAL } from '../../app.constants';
-import { getDefaultVoice } from '../voice-reminder/getAvailableVoices';
+
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { GlobalConfigState } from './global-config.model';
 
 const minute = 60 * 1000;
-const defaultVoice = getDefaultVoice();
-
 const defaultTaskNotesTemplate = `**How can I best achieve it now?**
 
 **What do I want?**
@@ -26,9 +23,11 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isIssuesPanelEnabled: true,
     isProjectNotesEnabled: true,
     isSyncIconEnabled: true,
+    isSearchEnabled: true,
     isDonatePageEnabled: true,
     isEnableUserProfiles: false,
     isHabitsEnabled: true,
+    isFinishDayEnabled: true,
   },
   localization: {
     lng: undefined,
@@ -48,12 +47,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
     isMinimizeToTray: false,
+    isLocalRestApiEnabled: false,
     isTrayShowCurrentCountdown: true,
     startOfNextDay: 0,
     isDisableAnimations: false,
     isDisableCelebration: false,
     isShowProductivityTipLonger: false,
-    isOverlayIndicatorEnabled: false,
     customTheme: 'default',
     defaultStartPage: 0,
   },
@@ -61,6 +60,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isEnableProject: true,
     isEnableDue: true,
     isEnableTag: true,
+    urlBehavior: 'keep',
   },
   evaluation: {
     isHideEvaluationSheet: false,
@@ -88,14 +88,20 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     interval: 5 * minute,
     volume: 75,
     text: 'Your current task is: ${currentTaskTitle}',
-    voice: defaultVoice,
+    voice: '',
   },
   focusMode: {
     isSkipPreparation: false,
     isPlayTick: false,
+    focusModeSound: 'off',
     isPauseTrackingDuringBreak: false,
     isSyncSessionWithTracking: false,
     isStartInBackground: false,
+  },
+  taskWidget: {
+    isEnabled: false,
+    isAlwaysShow: false,
+    opacity: 95,
   },
   clipboardImages: {
     imagePath: null,
@@ -135,6 +141,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     triggerSync: 'Ctrl+S',
     taskEditTitle: null,
     taskToggleDetailPanelOpen: 'I',
+    taskOpenNotesFullscreen: null,
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
     taskUnschedule: 'U',
@@ -168,7 +175,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     trackTimeSound: null,
   },
   timeTracking: {
-    trackingInterval: TRACKING_INTERVAL,
     defaultEstimate: 0,
     defaultEstimateSubTasks: 0,
     isNotifyWhenTimeEstimateExceeded: true,
@@ -185,6 +191,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     defaultTaskRemindOption: TaskReminderOptionId.AtStart, // The hard-coded default prior to this changeable setting
     isFocusWindow: false,
     useAlarmStyleReminders: false,
+    notifyOnDueDate: true,
+    dueDateNotificationHour: 9,
   },
   schedule: {
     isWorkStartEndEnabled: true,
@@ -224,6 +232,13 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
 
     localFileSync: {
       syncFolderPath: '',
+    },
+
+    nextcloud: {
+      serverUrl: null,
+      userName: null,
+      password: null,
+      syncFolderPath: 'super-productivity',
     },
   },
 } as const;

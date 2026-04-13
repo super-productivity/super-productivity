@@ -22,8 +22,6 @@ This document tracks significant architectural decisions and patterns in the Sup
 - **Reading**: Check `dueWithTime` first; only check `dueDay` if `dueWithTime` is not set (in selectors)
 - **Legacy Data**: Old data with both fields works via priority pattern (no migration needed)
 
-**Documentation**: [`docs/ai/dueDay-dueWithTime-mutual-exclusivity.md`](docs/ai/dueDay-dueWithTime-mutual-exclusivity.md)
-
 **Key Files**:
 
 - [`task.model.ts`](src/app/features/tasks/task.model.ts) - Field definitions with JSDoc
@@ -54,8 +52,6 @@ This document tracks significant architectural decisions and patterns in the Sup
 - Single source of truth for "today" membership (date fields, not tagIds)
 - Self-healing ordering (stale entries automatically filtered)
 - Natural integration with planner (which uses date fields)
-
-**Documentation**: [`docs/ai/today-tag-architecture.md`](docs/ai/today-tag-architecture.md)
 
 **Related**: Uses the dueDay/dueWithTime mutual exclusivity pattern (Decision #1)
 
@@ -123,7 +119,6 @@ Add a new decision record when:
 
 ## Related Documentation
 
-- [`docs/ai/`](docs/ai/) - AI/Developer architecture docs (detailed patterns)
 - [`docs/sync-and-op-log/`](docs/sync-and-op-log/) - Operation log architecture
 - [`docs/long-term-plans/`](docs/long-term-plans/) - Future architectural plans
 
@@ -137,5 +132,4 @@ When committing changes related to these patterns, reference this document and t
 feat(tasks): implement feature X
 
 Uses dueDay/dueWithTime mutual exclusivity pattern (ARCHITECTURE-DECISIONS.md #1)
-See: docs/ai/dueDay-dueWithTime-mutual-exclusivity.md
 ```

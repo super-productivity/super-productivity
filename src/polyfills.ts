@@ -20,7 +20,8 @@
 
 /* IE9, IE10 and IE11 requires all of the following polyfills. **/
 //import 'core-js/es/symbol';
-import 'core-js/es/object'; // Support for Chrome mobile <= 69, which is the default browser for Android <= 9, especially the following error: TypeError: Object.fromEntries is not a function
+// core-js/es/object removed: Object.fromEntries is supported since Chrome 73+ (2019).
+// Android 9 (Chrome 69) is EOL and no longer targeted.
 /*import 'core-js/es/function';
 import 'core-js/es/parse-int';
 import 'core-js/es/parse-float';

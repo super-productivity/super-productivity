@@ -15,5 +15,11 @@ export const getDbDateStr = (date: Date | number | string = new Date()): string 
 };
 
 export const isDBDateStr = (str: string): boolean => {
-  return /^\d{4}-\d{2}-\d{2}$/.test(str);
+  if (str.length !== 10 || str[4] !== '-' || str[7] !== '-') return false;
+  for (let i = 0; i < 10; i++) {
+    if (i === 4 || i === 7) continue;
+    const c = str.charCodeAt(i);
+    if (c < 48 || c > 57) return false;
+  }
+  return true;
 };

@@ -387,9 +387,9 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       });
     });
 
-    it('should dispatch unsetCurrentTask when Pomodoro session ends automatically with isManualBreakStart', (done) => {
-      // Setup: Pomodoro mode with manual break start, session completes automatically
-      // Break won't auto-start due to isManualBreakStart, so this effect should fire
+    it('should NOT dispatch unsetCurrentTask when Pomodoro session ends automatically with isManualBreakStart (Bug #6510)', (done) => {
+      // Bug #6510: When isManualBreakStart=true, tracking should continue until the user
+      // manually starts a break. The break-start logic handles pausing tracking.
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
         isSkipPreparation: false,
@@ -400,7 +400,7 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       currentTaskId$.next('task-123');
       store.refreshState();
 
-      // Pomodoro strategy has shouldStartBreakAfterSession: true but config has isManualBreakStart
+      // Pomodoro strategy has shouldStartBreakAfterSession: true
       strategyFactoryMock.getStrategy.and.returnValue({
         shouldStartBreakAfterSession: true,
         shouldAutoStartNextSession: true,
@@ -409,10 +409,79 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
 
       actions$ = of(actions.completeFocusSession({ isManual: false }));
 
-      // Effect emits setPausedTaskId first (Bug #5737 fix), then unsetCurrentTask
-      effects.stopTrackingOnSessionEnd$.pipe(skip(1), take(1)).subscribe((action) => {
-        expect(action.type).toEqual(unsetCurrentTask.type);
+      effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
+        expect(actionsArr.length).toBe(0);
         done();
+      });
+    });
+  });
+
+  describe('Bug #6510: Full flow — session auto-completes then manual break start pauses tracking', () => {
+    it('should keep tracking after auto-complete, then pause when user manually starts break via banner', (done) => {
+      // Step 1: Setup Pomodoro with manual break + pause tracking + sync
+      const focusModeConfig = {
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+        isPauseTrackingDuringBreak: true,
+        isManualBreakStart: true,
+      };
+      store.overrideSelector(selectFocusModeConfig, focusModeConfig);
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectCurrentCycle, 1);
+      store.overrideSelector(selectors.selectPausedTaskId, null);
+      currentTaskId$.next('task-123');
+      store.refreshState();
+
+      strategyFactoryMock.getStrategy.and.returnValue({
+        initialSessionDuration: 25 * 60 * 1000,
+        shouldStartBreakAfterSession: true,
+        shouldAutoStartNextSession: true,
+        getBreakDuration: () => ({ duration: 5 * 60 * 1000, isLong: false }),
+      });
+
+      // Mock TaskService.currentTaskId() (synchronous signal used by banner path)
+      taskServiceMock.currentTaskId = jasmine
+        .createSpy('currentTaskId')
+        .and.returnValue('task-123');
+
+      // Step 2: Session auto-completes → stopTrackingOnSessionEnd$ should NOT fire
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+
+      effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
+        expect(actionsArr.length).toBe(0);
+
+        // Step 3: User clicks "Start Break" on the banner
+        const dispatchSpy: jasmine.Spy = spyOn(store, 'dispatch').and.callThrough();
+        const timer = createMockTimer({
+          purpose: 'work',
+          duration: 25 * 60 * 1000,
+          elapsed: 25 * 60 * 1000,
+        });
+
+        const buttonActions = (effects as any)._getBannerActions(
+          timer,
+          false, // isOnBreak
+          true, // isSessionCompleted
+          false, // isBreakTimeUp
+          focusModeConfig,
+        );
+
+        buttonActions.action.fn();
+
+        // Step 4: Verify tracking was paused and break was started
+        setTimeout(() => {
+          const unsetTaskCall = dispatchSpy.calls
+            .all()
+            .find((call) => call.args[0]?.type === '[Task] UnsetCurrentTask');
+          expect(unsetTaskCall).toBeDefined();
+
+          const startBreakCall = dispatchSpy.calls
+            .all()
+            .find((call) => call.args[0]?.type === actions.startBreak.type);
+          expect(startBreakCall).toBeDefined();
+          expect(startBreakCall?.args[0].pausedTaskId).toBe('task-123');
+          done();
+        }, 50);
       });
     });
   });

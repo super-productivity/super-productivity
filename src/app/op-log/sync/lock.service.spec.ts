@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { LockService } from './lock.service';
+import { LockAcquisitionTimeoutError } from '../core/errors/sync-errors';
 
 describe('LockService', () => {
   let service: LockService;
@@ -585,12 +586,14 @@ describe('LockService', () => {
 
     it('should pass callback to navigator.locks.request', async () => {
       let callbackExecutedInLock = false;
-      const locksSpy = spyOn(navigator.locks, 'request').and.callFake(
-        async (_name: string, callback: any) => {
-          callbackExecutedInLock = true;
-          return callback(null);
-        },
-      );
+      const locksSpy = spyOn(navigator.locks, 'request').and.callFake((async (
+        ...args: unknown[]
+      ) => {
+        callbackExecutedInLock = true;
+        // callback is the last argument (after name and options)
+        const callback = args[args.length - 1] as (lock: unknown) => Promise<void>;
+        return callback(null);
+      }) as any);
 
       let callbackRan = false;
       await service.request('callback_test_lock', async () => {
@@ -648,6 +651,163 @@ describe('LockService', () => {
       expect(executionOrder.indexOf('req1-end')).toBeLessThan(
         executionOrder.indexOf('req2-start'),
       );
+    });
+  });
+
+  describe('lock acquisition timeout', () => {
+    it('should throw LockAcquisitionTimeoutError when fallback lock is held too long', async () => {
+      // Mock navigator.locks as undefined to force fallback path
+      const originalLocks = navigator.locks;
+      Object.defineProperty(navigator, 'locks', {
+        value: undefined,
+        configurable: true,
+      });
+
+      const fallbackService = new LockService();
+      const SHORT_TIMEOUT = 100;
+
+      try {
+        // Hold the lock indefinitely
+        const neverResolves = fallbackService.request(
+          'timeout_lock',
+          async () => {
+            await new Promise(() => {}); // Never resolves
+          },
+          SHORT_TIMEOUT,
+        );
+
+        // Second request should timeout waiting for the first
+        await expectAsync(
+          fallbackService.request('timeout_lock', async () => {}, SHORT_TIMEOUT),
+        ).toBeRejectedWithError(/Timed out waiting.*to acquire lock "timeout_lock"/);
+
+        // Clean up: the first request is still hanging, but that's OK for the test
+        neverResolves.catch(() => {});
+      } finally {
+        Object.defineProperty(navigator, 'locks', {
+          value: originalLocks,
+          configurable: true,
+        });
+      }
+    });
+
+    it('should throw LockAcquisitionTimeoutError instance with correct properties', async () => {
+      const originalLocks = navigator.locks;
+      Object.defineProperty(navigator, 'locks', {
+        value: undefined,
+        configurable: true,
+      });
+
+      const fallbackService = new LockService();
+      const SHORT_TIMEOUT = 100;
+
+      try {
+        const neverResolves = fallbackService.request(
+          'timeout_lock_2',
+          async () => {
+            await new Promise(() => {});
+          },
+          SHORT_TIMEOUT,
+        );
+
+        let caughtError: unknown;
+        try {
+          await fallbackService.request('timeout_lock_2', async () => {}, SHORT_TIMEOUT);
+        } catch (e) {
+          caughtError = e;
+        }
+
+        expect(caughtError).toBeInstanceOf(LockAcquisitionTimeoutError);
+        expect((caughtError as LockAcquisitionTimeoutError).lockName).toBe(
+          'timeout_lock_2',
+        );
+        expect((caughtError as LockAcquisitionTimeoutError).timeoutMs).toBe(
+          SHORT_TIMEOUT,
+        );
+
+        neverResolves.catch(() => {});
+      } finally {
+        Object.defineProperty(navigator, 'locks', {
+          value: originalLocks,
+          configurable: true,
+        });
+      }
+    });
+
+    it('should not timeout when lock is acquired promptly', async () => {
+      let executed = false;
+      // Use a generous timeout — this should complete instantly
+      await service.request(
+        'no_timeout_lock',
+        async () => {
+          executed = true;
+        },
+        5000,
+      );
+      expect(executed).toBe(true);
+    });
+
+    it('should preserve mutex invariant after timeout (no concurrent execution)', async () => {
+      // Regression test: when B times out waiting for A, C must NOT run
+      // concurrently with A. The lock chain must remain intact.
+      const originalLocks = navigator.locks;
+      Object.defineProperty(navigator, 'locks', {
+        value: undefined,
+        configurable: true,
+      });
+
+      const fallbackService = new LockService();
+      const SHORT_TIMEOUT = 50;
+      const executed: string[] = [];
+
+      try {
+        // A holds the lock for longer than the timeout
+        const aFinished = new Promise<void>((resolve) => {
+          fallbackService
+            .request(
+              'mutex_lock',
+              async () => {
+                executed.push('a-start');
+                await new Promise((r) => setTimeout(r, 200));
+                executed.push('a-end');
+              },
+              SHORT_TIMEOUT,
+            )
+            .then(resolve);
+        });
+
+        // B arrives and should timeout
+        await expectAsync(
+          fallbackService.request('mutex_lock', async () => {}, SHORT_TIMEOUT),
+        ).toBeRejected();
+
+        // C arrives after B timed out — must NOT run concurrently with A
+        const cPromise = fallbackService
+          .request(
+            'mutex_lock',
+            async () => {
+              executed.push('c-start');
+            },
+            SHORT_TIMEOUT,
+          )
+          .catch(() => {
+            executed.push('c-timed-out');
+          });
+
+        await Promise.all([aFinished, cPromise]);
+
+        // A must complete without C running concurrently
+        expect(executed).toContain('a-start');
+        expect(executed).toContain('a-end');
+        // C should have timed out (not run concurrently with A)
+        expect(executed).not.toContain('c-start');
+        expect(executed).toContain('c-timed-out');
+      } finally {
+        Object.defineProperty(navigator, 'locks', {
+          value: originalLocks,
+          configurable: true,
+        });
+      }
     });
   });
 });

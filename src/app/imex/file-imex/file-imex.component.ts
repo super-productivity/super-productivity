@@ -220,7 +220,7 @@ export class FileImexComponent implements OnInit {
       }
 
       // Import first, then navigate (no page reload, state updates inline)
-      // isForceConflict=true resets vector clock to prevent accumulation of old client IDs
+      // isForceConflict=true only gates page reload; fresh clock is always generated
       await this._backupService.importCompleteBackup(
         data as AppDataComplete,
         false,

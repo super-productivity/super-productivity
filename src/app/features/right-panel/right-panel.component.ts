@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   inject,
   input,
@@ -11,11 +12,11 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { DomSanitizer, SafeStyle } from '@angular/platform-browser';
 import { LanguageService } from '../../core/language/language.service';
-import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { isTouchActive } from '../../util/input-intent';
 import { NavigationEnd, NavigationStart, Router } from '@angular/router';
 import { filter, map, startWith, switchMap } from 'rxjs/operators';
 import { of, Subscription, timer } from 'rxjs';
@@ -37,7 +38,6 @@ import {
 import { isInputElement } from '../../util/dom-element';
 import { BottomPanelStateService } from '../../core-ui/bottom-panel-state.service';
 import { slideRightPanelAni } from './slide-right-panel-out.ani';
-import { BottomPanelContainerComponent } from '../bottom-panel/bottom-panel-container.component';
 import { MatBottomSheet, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { PanelContentService } from '../panels/panel-content.service';
 // Right panel resize constants
@@ -99,6 +99,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   private _store = inject(Store);
   private _bottomPanelState = inject(BottomPanelStateService);
   private _panelContentService = inject(PanelContentService);
+  private _destroyRef = inject(DestroyRef);
 
   readonly sideWidth = input<number>(40);
   readonly wasClosed = output<void>();
@@ -155,7 +156,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   private readonly _boundOnPointerUp = this._handlePointerUp.bind(this);
   private readonly _boundOnWindowResize = this._throttledWindowResize.bind(this);
   private _bottomSheet = inject(MatBottomSheet);
-  private _bottomSheetRef: MatBottomSheetRef<BottomPanelContainerComponent> | null = null;
+  private _bottomSheetRef: MatBottomSheetRef | null = null;
   private _bottomSheetSubscription: Subscription | null = null;
 
   // Track listener state to prevent double attachment/removal
@@ -218,21 +219,41 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
         if (hasContent && !this._bottomSheetRef) {
           // Open bottom sheet
 
-          this._bottomSheetRef = this._bottomSheet.open(BottomPanelContainerComponent, {
-            hasBackdrop: true,
-            closeOnNavigation: true,
-            panelClass: 'bottom-panel-sheet',
-            // Let CSS handle positioning and height
-          });
+          import('../bottom-panel/bottom-panel-container.component').then((m) => {
+            // Re-check: conditions may have changed while chunk was loading
+            if (this._bottomSheetRef) {
+              return;
+            }
+            this._bottomSheetRef = this._bottomSheet.open(
+              m.BottomPanelContainerComponent,
+              {
+                hasBackdrop: true,
+                closeOnNavigation: false,
+                panelClass: 'bottom-panel-sheet',
+              },
+            );
 
-          // Handle bottom sheet dismissal
-          this._bottomSheetSubscription = this._bottomSheetRef
-            .afterDismissed()
-            .subscribe(() => {
-              this._bottomSheetRef = null;
-              this._bottomSheetSubscription = null;
-              this.close();
-            });
+            // Force-blur on backdrop click so pending edits (e.g. task title)
+            // are saved before the bottom sheet dismisses and destroys the component.
+            this._bottomSheetRef
+              .backdropClick()
+              .pipe(takeUntilDestroyed(this._destroyRef))
+              .subscribe(() => {
+                const el = document.activeElement as HTMLElement;
+                if (el && isInputElement(el)) {
+                  el.blur();
+                }
+              });
+
+            // Handle bottom sheet dismissal
+            this._bottomSheetSubscription = this._bottomSheetRef
+              .afterDismissed()
+              .subscribe(() => {
+                this._bottomSheetRef = null;
+                this._bottomSheetSubscription = null;
+                this.close();
+              });
+          });
         } else if (!hasContent && this._bottomSheetRef) {
           // Close bottom sheet
           this._bottomSheetRef.dismiss();
@@ -330,12 +351,12 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   }
 
   close(): void {
-    // FORCE blur because otherwise task notes won't save
-    if (IS_TOUCH_PRIMARY) {
-      const activeElement = document.activeElement as HTMLElement;
-      if (activeElement && isInputElement(activeElement)) {
-        activeElement.blur();
-      }
+    // FORCE blur because otherwise task notes won't save.
+    // On mobile, tapping close doesn't blur the textarea naturally.
+    // On desktop, pointerdown preventDefault() (for drag handling) suppresses the natural blur.
+    const activeElement = document.activeElement as HTMLElement;
+    if (activeElement && isInputElement(activeElement)) {
+      activeElement.blur();
     }
 
     // Delegate to task service and layout service to close the panel
@@ -560,5 +581,5 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly isTouchActive = isTouchActive;
 }

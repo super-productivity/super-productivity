@@ -1,12 +1,9 @@
 # ---- Builder stage ----
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /repo
 
 RUN apk add --no-cache openssl libc6-compat
-
-# Upgrade npm to match lockfile version (npm 11)
-RUN npm install -g npm@11
 
 # Root package + lock (for workspace install)
 COPY package.json package-lock.json ./
@@ -14,6 +11,7 @@ COPY packages/shared-schema/package.json ./packages/shared-schema/
 COPY packages/super-sync-server/package.json ./packages/super-sync-server/
 
 # Install ALL dependencies for the monorepo
+# Use npm ci for reproducible builds; requires compatible lockfile
 RUN npm ci --ignore-scripts
 
 # Copy source code
@@ -32,7 +30,7 @@ RUN npx prisma generate
 RUN rm -rf dist && npm run build
 
 # ---- Runtime stage ----
-FROM node:22-alpine AS production
+FROM node:24-alpine AS production
 
 # System deps for Prisma & healthcheck + create user BEFORE copying files
 RUN apk add --no-cache openssl libc6-compat wget && \
@@ -52,9 +50,12 @@ COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/pa
 COPY --from=builder --chown=supersync:nodejs /repo/packages/shared-schema/sp-shared-schema-*.tgz ./shared-schema.tgz
 
 # Install dependencies and generate Prisma client in single layer
+# Note: prisma CLI installed explicitly for runtime migrate deploy
+# IMPORTANT: prisma version must match @prisma/client in package.json
 RUN npm install ./shared-schema.tgz --ignore-scripts && \
     npm install --ignore-scripts --omit=dev && \
-    npx prisma@5.22.0 generate && \
+    npm install prisma@5.22.0 --ignore-scripts && \
+    npx prisma generate && \
     rm -f shared-schema.tgz && \
     npm cache clean --force
 
@@ -66,7 +67,7 @@ ENV NODE_ENV=production
 ENV PORT=1900
 ENV DATA_DIR=/app/data
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/health || exit 1
 
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/src/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/index.js"]

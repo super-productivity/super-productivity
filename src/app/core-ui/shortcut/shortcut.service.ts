@@ -9,7 +9,6 @@ import { LayoutService } from '../layout/layout.service';
 import { TaskService } from '../../features/tasks/task.service';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogAddNoteComponent } from '../../features/note/dialog-add-note/dialog-add-note.component';
-import { DialogCreateProjectComponent } from '../../features/project/dialogs/create-project/dialog-create-project.component';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -63,6 +62,8 @@ export class ShortcutService {
     this._activatedRoute.queryParams.subscribe((params) => {
       if (params && params.backlogPos) {
         this.backlogPos = +params.backlogPos;
+      } else {
+        this.backlogPos = undefined;
       }
     });
 
@@ -156,15 +157,19 @@ export class ShortcutService {
       ev.preventDefault();
     } else if (checkKeyCombo(ev, keys.addNewProject)) {
       if (this._matDialog.openDialogs.length === 0) {
-        this._matDialog
-          .open(DialogCreateProjectComponent, { restoreFocus: true })
-          .afterClosed()
-          .subscribe((newProjectId: string | undefined) => {
-            if (newProjectId) {
-              this._router.navigate([`project/${newProjectId}/tasks`]);
-            }
-          });
         ev.preventDefault();
+        const { DialogCreateProjectComponent } =
+          await import('../../features/project/dialogs/create-project/dialog-create-project.component');
+        if (this._matDialog.openDialogs.length === 0) {
+          this._matDialog
+            .open(DialogCreateProjectComponent, { restoreFocus: true })
+            .afterClosed()
+            .subscribe((newProjectId: string | undefined) => {
+              if (newProjectId) {
+                this._router.navigate([`project/${newProjectId}/tasks`]);
+              }
+            });
+        }
       }
     } else if (checkKeyCombo(ev, keys.addNewNote)) {
       if (this._matDialog.openDialogs.length === 0) {

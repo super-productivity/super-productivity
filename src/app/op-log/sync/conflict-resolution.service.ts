@@ -534,6 +534,11 @@ export class ConflictResolutionService {
             window.location.reload();
           },
         });
+
+        // FIX #6571: Throw on apply failure (parity with applyNonConflictingOps).
+        // Previously, apply failures during LWW resolution were logged but not
+        // thrown, causing sync to report IN_SYNC despite lost operations.
+        throw applyResult.failedOp.error;
       }
     }
 
@@ -738,8 +743,8 @@ export class ConflictResolutionService {
       ...conflict.remoteOps.map((op) => op.vectorClock),
     ];
     // No client-side pruning — server prunes AFTER conflict detection, BEFORE storage.
-    // Client-side pruning can drop entity clock IDs, causing the server's pruning-aware
-    // comparison to return CONCURRENT instead of GREATER_THAN (infinite rejection loop).
+    // Client-side pruning can drop entity clock IDs, causing the comparison to return
+    // CONCURRENT instead of GREATER_THAN (infinite rejection loop).
     const newClock = this.mergeAndIncrementClocks(allClocks, clientId);
 
     // Preserve the maximum timestamp from local ops.

@@ -5,13 +5,33 @@
 }
 
 .tasks {
-  margin-bottom: var(--s2);
+  margin-bottom: var(--s);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  margin: 0;
+
+  & + .tasks + & {
+    margin-top: var(--s3);
+  }
+  font-size: 14px;
+  font-weight: bold;
+  opacity: 0.85;
+
+  mat-icon {
+    font-size: 14px;
+    height: 14px;
+    width: 14px;
+  }
 }
 
 .task {
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
   padding: var(--s);
   padding-left: 0;
 
@@ -28,7 +48,7 @@
     margin-left: var(--s);
     font-size: 11px;
     line-height: 1.4;
-    padding-bottom: 4px;
+    padding-bottom: var(--s-half);
 
     &.emphasized {
       //font-weight: bold;

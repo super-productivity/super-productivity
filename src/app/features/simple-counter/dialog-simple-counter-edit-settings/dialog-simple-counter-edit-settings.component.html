@@ -13,7 +13,19 @@
     </formly-form>
   </mat-dialog-content>
 
-  <mat-dialog-actions align="end">
+  <mat-dialog-actions>
+    @if (dialogData.simpleCounter.id) {
+      <button
+        mat-button
+        color="warn"
+        type="button"
+        (click)="delete()"
+      >
+        <mat-icon>delete</mat-icon>
+        {{ T.G.DELETE | translate }}
+      </button>
+    }
+    <span style="flex: 1"></span>
     <button
       mat-button
       type="button"
@@ -25,7 +37,7 @@
       mat-stroked-button
       color="primary"
       type="submit"
-      [disabled]="form.invalid || !isDirty()"
+      [disabled]="!isDirty()"
     >
       <mat-icon>save</mat-icon>
       {{ T.G.SAVE | translate }}

@@ -4,7 +4,7 @@
   "manifestVersion": 1,
   "version": "1.0.0",
   "minSupVersion": "13.0.0",
-  "description": "AI-powered productivity prompts to help you plan your day, week, and overcome challenges",
+  "description": "Productivity prompts to use with the AI of your choice to help you plan your day, week, and overcome challenges",
   "author": "Super Productivity Community",
   "homepage": "https://github.com/super-productivity/super-productivity",
   "repository": {

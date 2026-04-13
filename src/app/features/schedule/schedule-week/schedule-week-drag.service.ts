@@ -14,7 +14,7 @@ import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { calculateTimeFromYPosition } from '../schedule-utils';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { isTouchActive } from '../../../util/input-intent';
 import type { DragPreviewContext } from './schedule-week-drag.types';
 import type { ScheduleEvent } from '../schedule.model';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
@@ -127,7 +127,7 @@ export class ScheduleWeekDragService {
 
     // Show shift key tooltip on non-touch devices to educate users about the feature,
     // then auto-hide after 3 seconds to avoid cluttering the interface.
-    if (!IS_TOUCH_PRIMARY) {
+    if (!isTouchActive()) {
       this._showShiftKeyInfo.set(true);
       this._shiftInfoTimeoutId = window.setTimeout(() => {
         this._showShiftKeyInfo.set(false);

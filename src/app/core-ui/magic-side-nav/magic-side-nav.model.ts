@@ -6,6 +6,7 @@ import {
   MenuTreeKind,
   MenuTreeViewNode,
 } from '../../features/menu-tree/store/menu-tree.model';
+import { AppFeaturesConfig } from '../../features/config/global-config.model';
 
 export type NavItem =
   | NavSeparatorItem
@@ -23,6 +24,7 @@ export interface NavBaseItem {
   icon?: string;
   svgIcon?: string;
   tourClass?: string;
+  featureConfigKey?: keyof AppFeaturesConfig;
 }
 
 export interface NavSeparatorItem extends NavBaseItem {

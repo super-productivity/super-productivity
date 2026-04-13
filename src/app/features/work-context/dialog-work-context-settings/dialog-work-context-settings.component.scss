@@ -1,0 +1,6 @@
+h1,
+mat-dialog-actions {
+  :host-context([dir='rtl']) & {
+    direction: rtl;
+  }
+}

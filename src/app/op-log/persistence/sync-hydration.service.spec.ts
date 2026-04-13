@@ -9,7 +9,7 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { ActionType, OpType } from '../core/operation.types';
-import { LegacySyncProvider } from '../../imex/sync/legacy-sync-provider.model';
+import { SyncProviderId } from '../sync-providers/provider.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SnackService } from '../../core/snack/snack.service';
 
@@ -27,7 +27,7 @@ describe('SyncHydrationService', () => {
   const defaultLocalSyncConfig = {
     ...DEFAULT_GLOBAL_CONFIG.sync,
     isEnabled: true,
-    syncProvider: LegacySyncProvider.WebDAV,
+    syncProvider: SyncProviderId.WebDAV,
   };
 
   beforeEach(() => {
@@ -39,7 +39,6 @@ describe('SyncHydrationService', () => {
       'getLastSeq',
       'saveStateCache',
       'setVectorClock',
-      'setProtectedClientIds',
       'loadStateCache',
       'getUnsynced',
       'markRejected',
@@ -84,8 +83,7 @@ describe('SyncHydrationService', () => {
     mockOpLogStore.getLastSeq.and.resolveTo(10);
     mockOpLogStore.saveStateCache.and.resolveTo(undefined);
     mockOpLogStore.setVectorClock.and.resolveTo(undefined);
-    mockOpLogStore.setProtectedClientIds.and.resolveTo(undefined);
-    mockValidateStateService.validateAndRepair.and.returnValue({
+    mockValidateStateService.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
     });
@@ -285,18 +283,22 @@ describe('SyncHydrationService', () => {
       );
     });
 
-    it('should update vector clock store after sync', async () => {
+    it('should update vector clock store after sync with minimal clock', async () => {
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
       mockOpLogStore.loadStateCache.and.resolveTo({ vectorClock: { remote: 3 } } as any);
 
       await service.hydrateFromRemoteSync({});
 
+      // After SYNC_IMPORT, the working clock is reset to minimal (only own entry).
+      // The full merged clock is stored in the SYNC_IMPORT operation for filtering.
       expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(
         jasmine.objectContaining({
           localClient: 6,
-          remote: 3,
         }),
       );
+      // Remote entries should NOT be in the minimal working clock
+      const setClockArg = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+      expect(setClockArg['remote']).toBeUndefined();
     });
 
     it('should dispatch loadAllData with synced data', async () => {
@@ -317,7 +319,7 @@ describe('SyncHydrationService', () => {
     it('should use repaired state when validation detects issues', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
       const repairedState = { task: { ids: ['t1'], repaired: true } } as any;
-      mockValidateStateService.validateAndRepair.and.returnValue({
+      mockValidateStateService.validateAndRepair.and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState,
@@ -337,7 +339,7 @@ describe('SyncHydrationService', () => {
 
     it('should use original data when no repair needed', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
-      mockValidateStateService.validateAndRepair.and.returnValue({
+      mockValidateStateService.validateAndRepair.and.resolveTo({
         isValid: true,
         wasRepaired: false,
       });
@@ -375,102 +377,6 @@ describe('SyncHydrationService', () => {
       await expectAsync(service.hydrateFromRemoteSync({})).toBeRejectedWithError(
         'Save failed',
       );
-    });
-
-    describe('protected client IDs for vector clock pruning', () => {
-      // These tests verify that SYNC_IMPORT client IDs are protected during
-      // hydrateFromRemoteSync to prevent vector clock pruning from removing them.
-
-      it('should set protected client ID when creating SYNC_IMPORT', async () => {
-        await service.hydrateFromRemoteSync({ task: {} });
-
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith([
-          'localClient',
-        ]);
-      });
-
-      it('should call setProtectedClientIds AFTER setVectorClock', async () => {
-        let callSequence = 0;
-        let setVectorClockSequence = -1;
-        let setProtectedSequence = -1;
-
-        mockOpLogStore.setVectorClock.and.callFake(async () => {
-          setVectorClockSequence = callSequence++;
-        });
-        mockOpLogStore.setProtectedClientIds.and.callFake(async () => {
-          setProtectedSequence = callSequence++;
-        });
-
-        await service.hydrateFromRemoteSync({ task: {} });
-
-        expect(setVectorClockSequence).toBeGreaterThanOrEqual(
-          0,
-          'setVectorClock should have been called',
-        );
-        expect(setProtectedSequence).toBeGreaterThanOrEqual(
-          0,
-          'setProtectedClientIds should have been called',
-        );
-        expect(setVectorClockSequence).toBeLessThan(
-          setProtectedSequence,
-          `setVectorClock (seq ${setVectorClockSequence}) should be called BEFORE ` +
-            `setProtectedClientIds (seq ${setProtectedSequence})`,
-        );
-      });
-
-      it('should NOT call setProtectedClientIds when createSyncImportOp is false', async () => {
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
-
-        expect(mockOpLogStore.setProtectedClientIds).not.toHaveBeenCalled();
-      });
-
-      it('should call setProtectedClientIds when createSyncImportOp is explicitly true', async () => {
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, true);
-
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith([
-          'localClient',
-        ]);
-      });
-
-      it('should cap protected client IDs to MAX_VECTOR_CLOCK_SIZE - 1 when merged clock is large', async () => {
-        // Simulate: remote clock has many entries from multiple devices
-        const remoteVectorClock: Record<string, number> = {};
-        for (let i = 0; i < 14; i++) {
-          remoteVectorClock[`remote_device_${i}`] = i + 1;
-        }
-
-        await service.hydrateFromRemoteSync({ task: {} }, remoteVectorClock);
-
-        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
-        const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
-          .args[0] as string[];
-        // newClock merges local ({localClient: 5}) + remote (14 entries) + increment
-        // = 15 entries, selectProtectedClientIds caps to 9
-        expect(protectedIds.length).toBeLessThanOrEqual(9);
-        // The localClient should be included since it has the highest counter after increment
-        expect(protectedIds).toContain('localClient');
-      });
-
-      it('should keep highest-counter entries when capping with large remote clock', async () => {
-        // 12 remote devices with ascending counters
-        const remoteVectorClock: Record<string, number> = {};
-        for (let i = 0; i < 12; i++) {
-          remoteVectorClock[`device_${i}`] = (i + 1) * 100;
-        }
-
-        await service.hydrateFromRemoteSync({ task: {} }, remoteVectorClock);
-
-        const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
-          .args[0] as string[];
-        expect(protectedIds.length).toBeLessThanOrEqual(9);
-        // Highest counters should be kept: device_11 (1200), device_10 (1100), etc.
-        expect(protectedIds).toContain('device_11');
-        expect(protectedIds).toContain('device_10');
-        // Lowest counters should be dropped: device_0 (100), device_1 (200), etc.
-        expect(protectedIds).not.toContain('device_0');
-        expect(protectedIds).not.toContain('device_1');
-        expect(protectedIds).not.toContain('device_2');
-      });
     });
 
     describe('createSyncImportOp parameter', () => {
@@ -552,7 +458,7 @@ describe('SyncHydrationService', () => {
 
       it('should still validate and repair when createSyncImportOp is false', async () => {
         const repairedState = { task: { repaired: true } } as any;
-        mockValidateStateService.validateAndRepair.and.returnValue({
+        mockValidateStateService.validateAndRepair.and.resolveTo({
           isValid: true,
           wasRepaired: true,
           repairedState,
@@ -635,7 +541,7 @@ describe('SyncHydrationService', () => {
       const localSyncConfig = {
         ...DEFAULT_GLOBAL_CONFIG.sync,
         isEnabled: true,
-        syncProvider: LegacySyncProvider.WebDAV,
+        syncProvider: SyncProviderId.WebDAV,
       };
       mockStore.select.and.returnValue(of(localSyncConfig));
 
@@ -646,7 +552,7 @@ describe('SyncHydrationService', () => {
           sync: {
             ...DEFAULT_GLOBAL_CONFIG.sync,
             isEnabled: false, // Another client had sync disabled!
-            syncProvider: LegacySyncProvider.Dropbox, // Different provider too
+            syncProvider: SyncProviderId.Dropbox, // Different provider too
           },
         },
         task: { ids: [], entities: {} },
@@ -666,7 +572,7 @@ describe('SyncHydrationService', () => {
 
       // Step 4: Verify the snapshot has PRESERVED local settings (not remote's false)
       expect(snapshotSync['isEnabled']).toBe(true); // Local value preserved!
-      expect(snapshotSync['syncProvider']).toBe(LegacySyncProvider.WebDAV); // Local provider preserved!
+      expect(snapshotSync['syncProvider']).toBe(SyncProviderId.WebDAV); // Local provider preserved!
 
       // Step 5: Simulate what happens on reload
       // The hydrator will call store.dispatch(loadAllData({ appDataComplete: snapshotState }))
@@ -679,7 +585,7 @@ describe('SyncHydrationService', () => {
 
       // Final verification: The data dispatched to NgRx has correct local settings
       expect(dispatchedSync['isEnabled']).toBe(true);
-      expect(dispatchedSync['syncProvider']).toBe(LegacySyncProvider.WebDAV);
+      expect(dispatchedSync['syncProvider']).toBe(SyncProviderId.WebDAV);
     });
 
     it('should preserve local isEnabled when remote has it disabled', async () => {
@@ -688,7 +594,7 @@ describe('SyncHydrationService', () => {
         of({
           ...DEFAULT_GLOBAL_CONFIG.sync,
           isEnabled: true,
-          syncProvider: LegacySyncProvider.WebDAV,
+          syncProvider: SyncProviderId.WebDAV,
         }),
       );
 
@@ -710,7 +616,7 @@ describe('SyncHydrationService', () => {
       const globalConfig = savedState['globalConfig'] as Record<string, unknown>;
       const sync = globalConfig['sync'] as Record<string, unknown>;
       expect(sync['isEnabled']).toBe(true);
-      expect(sync['syncProvider']).toBe(LegacySyncProvider.WebDAV);
+      expect(sync['syncProvider']).toBe(SyncProviderId.WebDAV);
     });
 
     it('should preserve local isEnabled when remote has it enabled', async () => {
@@ -719,7 +625,7 @@ describe('SyncHydrationService', () => {
         of({
           ...DEFAULT_GLOBAL_CONFIG.sync,
           isEnabled: false,
-          syncProvider: LegacySyncProvider.WebDAV,
+          syncProvider: SyncProviderId.WebDAV,
         }),
       );
 
@@ -749,7 +655,7 @@ describe('SyncHydrationService', () => {
         of({
           ...DEFAULT_GLOBAL_CONFIG.sync,
           isEnabled: true,
-          syncProvider: LegacySyncProvider.WebDAV,
+          syncProvider: SyncProviderId.WebDAV,
         }),
       );
 
@@ -758,7 +664,7 @@ describe('SyncHydrationService', () => {
         globalConfig: {
           sync: {
             isEnabled: false,
-            syncProvider: LegacySyncProvider.Dropbox,
+            syncProvider: SyncProviderId.Dropbox,
           },
         },
       };
@@ -775,7 +681,7 @@ describe('SyncHydrationService', () => {
         unknown
       >;
       const sync = globalConfig['sync'] as Record<string, unknown>;
-      expect(sync['syncProvider']).toBe(LegacySyncProvider.WebDAV);
+      expect(sync['syncProvider']).toBe(SyncProviderId.WebDAV);
       expect(sync['isEnabled']).toBe(true);
     });
 
@@ -784,7 +690,7 @@ describe('SyncHydrationService', () => {
         of({
           ...DEFAULT_GLOBAL_CONFIG.sync,
           isEnabled: true,
-          syncProvider: LegacySyncProvider.SuperSync,
+          syncProvider: SyncProviderId.SuperSync,
         }),
       );
 
@@ -792,7 +698,7 @@ describe('SyncHydrationService', () => {
         globalConfig: {
           sync: {
             isEnabled: false,
-            syncProvider: LegacySyncProvider.LocalFile,
+            syncProvider: SyncProviderId.LocalFile,
           },
         },
       };
@@ -805,7 +711,7 @@ describe('SyncHydrationService', () => {
       const savedGlobalConfig = savedState['globalConfig'] as Record<string, unknown>;
       const savedSync = savedGlobalConfig['sync'] as Record<string, unknown>;
       expect(savedSync['isEnabled']).toBe(true);
-      expect(savedSync['syncProvider']).toBe(LegacySyncProvider.SuperSync);
+      expect(savedSync['syncProvider']).toBe(SyncProviderId.SuperSync);
 
       // Check dispatch
       const dispatchCall = mockStore.dispatch.calls.mostRecent();
@@ -816,7 +722,7 @@ describe('SyncHydrationService', () => {
         .globalConfig as Record<string, unknown>;
       const dispatchedSync = dispatchedGlobalConfig['sync'] as Record<string, unknown>;
       expect(dispatchedSync['isEnabled']).toBe(true);
-      expect(dispatchedSync['syncProvider']).toBe(LegacySyncProvider.SuperSync);
+      expect(dispatchedSync['syncProvider']).toBe(SyncProviderId.SuperSync);
     });
   });
 });

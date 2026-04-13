@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import { uuidv7 } from 'uuidv7';
 import { authenticate, getAuthUser } from '../middleware';
 import { getSyncService } from './sync.service';
+import { getWsConnectionService } from './services/websocket-connection.service';
 import { Logger } from '../logger';
 import { prisma } from '../db';
 import {
@@ -34,8 +35,7 @@ const createValidationErrorResponse = (
 };
 
 // Validation constants
-const CLIENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
-const MAX_CLIENT_ID_LENGTH = 255;
+import { CLIENT_ID_REGEX, MAX_CLIENT_ID_LENGTH } from './sync.const';
 
 // Two-stage protection against zip bombs:
 // 1. Pre-check: Reject compressed data > limit (typical ratio ~10:1)
@@ -68,6 +68,16 @@ const OperationSchema = z.object({
   timestamp: z.number(),
   schemaVersion: z.number(),
   isPayloadEncrypted: z.boolean().optional(), // True if payload is E2E encrypted
+  syncImportReason: z
+    .enum([
+      'PASSWORD_CHANGED',
+      'FILE_IMPORT',
+      'BACKUP_RESTORE',
+      'FORCE_UPLOAD',
+      'SERVER_MIGRATION',
+      'REPAIR',
+    ])
+    .optional(),
 });
 
 const UploadOpsSchema = z.object({
@@ -91,9 +101,21 @@ const UploadSnapshotSchema = z.object({
   vectorClock: z.record(z.string(), z.number()),
   schemaVersion: z.number().optional(),
   isPayloadEncrypted: z.boolean().optional(),
+  syncImportReason: z
+    .enum([
+      'PASSWORD_CHANGED',
+      'FILE_IMPORT',
+      'BACKUP_RESTORE',
+      'FORCE_UPLOAD',
+      'SERVER_MIGRATION',
+      'REPAIR',
+    ])
+    .optional(),
   // Client's operation ID - server MUST use this to prevent ID mismatch bugs
   opId: z.string().uuid().optional(),
   isCleanSlate: z.boolean().optional(),
+  // Client-provided opType for correct operation typing (optional for backward compat)
+  snapshotOpType: z.enum(['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR']).optional(),
 });
 
 // Error helper
@@ -120,6 +142,68 @@ const decompressBody = async (
   // Standard binary gzip body
   return gunzipAsync(rawBody);
 };
+
+/**
+ * Check storage quota, recalculate if stale, and auto-cleanup if needed.
+ * @returns `true` if quota is OK (caller can proceed), `false` if reply was sent with 413 error.
+ */
+async function enforceStorageQuota(
+  userId: number,
+  payloadSize: number,
+  reply: FastifyReply,
+): Promise<boolean> {
+  const syncService = getSyncService();
+  let quotaCheck = await syncService.checkStorageQuota(userId, payloadSize);
+  if (quotaCheck.allowed) return true;
+
+  // Cache might be stale - recalculate actual storage before taking action
+  Logger.info(
+    `[user:${userId}] Quota check failed (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). Recalculating actual storage...`,
+  );
+  await syncService.updateStorageUsage(userId);
+  quotaCheck = await syncService.checkStorageQuota(userId, payloadSize);
+
+  if (quotaCheck.allowed) {
+    Logger.info(
+      `[user:${userId}] Quota OK after recalculation: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes`,
+    );
+    return true;
+  }
+
+  Logger.warn(
+    `[user:${userId}] Storage quota exceeded: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes. Attempting auto-cleanup...`,
+  );
+
+  // Iteratively delete old data until we have enough space
+  const cleanupResult = await syncService.freeStorageForUpload(userId, payloadSize);
+
+  if (cleanupResult.success) {
+    Logger.info(
+      `[user:${userId}] Auto-cleanup freed ${Math.round(cleanupResult.freedBytes / 1024)}KB ` +
+        `(${cleanupResult.deletedRestorePoints} restore points, ${cleanupResult.deletedOps} ops)`,
+    );
+    return true;
+  }
+
+  // Truly out of space - return error
+  const finalQuota = await syncService.checkStorageQuota(userId, payloadSize);
+  Logger.warn(
+    `[user:${userId}] Storage quota still exceeded after cleanup: ${finalQuota.currentUsage}/${finalQuota.quota} bytes`,
+  );
+  reply.status(413).send({
+    error: 'Storage quota exceeded',
+    errorCode: SYNC_ERROR_CODES.STORAGE_QUOTA_EXCEEDED,
+    storageUsedBytes: finalQuota.currentUsage,
+    storageQuotaBytes: finalQuota.quota,
+    autoCleanupAttempted: true,
+    cleanupStats: {
+      freedBytes: cleanupResult.freedBytes,
+      deletedRestorePoints: cleanupResult.deletedRestorePoints,
+      deletedOps: cleanupResult.deletedOps,
+    },
+  });
+  return false;
+}
 
 export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
   // Add content type parser for gzip-encoded JSON
@@ -313,56 +397,8 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         // Check storage quota before processing (after dedup to allow retries)
         const payloadSize = JSON.stringify(body).length;
-        let quotaCheck = await syncService.checkStorageQuota(userId, payloadSize);
-        if (!quotaCheck.allowed) {
-          // Cache might be stale - recalculate actual storage before taking action
-          Logger.info(
-            `[user:${userId}] Quota check failed (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). Recalculating actual storage...`,
-          );
-          await syncService.updateStorageUsage(userId);
-          quotaCheck = await syncService.checkStorageQuota(userId, payloadSize);
-
-          if (!quotaCheck.allowed) {
-            Logger.warn(
-              `[user:${userId}] Storage quota exceeded: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes. Attempting auto-cleanup...`,
-            );
-
-            // Iteratively delete old data until we have enough space
-            const cleanupResult = await syncService.freeStorageForUpload(
-              userId,
-              payloadSize,
-            );
-
-            if (cleanupResult.success) {
-              Logger.info(
-                `[user:${userId}] Auto-cleanup freed ${Math.round(cleanupResult.freedBytes / 1024)}KB ` +
-                  `(${cleanupResult.deletedRestorePoints} restore points, ${cleanupResult.deletedOps} ops)`,
-              );
-            } else {
-              // Truly out of space - return error
-              const finalQuota = await syncService.checkStorageQuota(userId, payloadSize);
-              Logger.warn(
-                `[user:${userId}] Storage quota still exceeded after cleanup: ${finalQuota.currentUsage}/${finalQuota.quota} bytes`,
-              );
-              return reply.status(413).send({
-                error: 'Storage quota exceeded',
-                errorCode: SYNC_ERROR_CODES.STORAGE_QUOTA_EXCEEDED,
-                storageUsedBytes: finalQuota.currentUsage,
-                storageQuotaBytes: finalQuota.quota,
-                autoCleanupAttempted: true,
-                cleanupStats: {
-                  freedBytes: cleanupResult.freedBytes,
-                  deletedRestorePoints: cleanupResult.deletedRestorePoints,
-                  deletedOps: cleanupResult.deletedOps,
-                },
-              });
-            }
-          } else {
-            Logger.info(
-              `[user:${userId}] Quota OK after recalculation: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes`,
-            );
-          }
-        }
+        const quotaOk = await enforceStorageQuota(userId, payloadSize, reply);
+        if (!quotaOk) return;
 
         // Process operations - cast to Operation[] since Zod validates the structure
         const results = await syncService.uploadOps(
@@ -440,6 +476,11 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           latestSeq,
           ...(hasMorePiggyback ? { hasMorePiggyback: true } : {}),
         };
+
+        // Notify other connected clients about new ops (fire-and-forget)
+        if (accepted > 0) {
+          getWsConnectionService().notifyNewOps(userId, clientId, latestSeq);
+        }
 
         return reply.send(response);
       } catch (err) {
@@ -651,62 +692,15 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           isPayloadEncrypted,
           opId,
           isCleanSlate,
+          snapshotOpType,
+          syncImportReason,
         } = parseResult.data;
         const syncService = getSyncService();
 
         // Check storage quota before processing
         const payloadSize = JSON.stringify(body).length;
-        let quotaCheck = await syncService.checkStorageQuota(userId, payloadSize);
-        if (!quotaCheck.allowed) {
-          // Cache might be stale - recalculate actual storage before taking action
-          Logger.info(
-            `[user:${userId}] Snapshot quota check failed (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). Recalculating actual storage...`,
-          );
-          await syncService.updateStorageUsage(userId);
-          quotaCheck = await syncService.checkStorageQuota(userId, payloadSize);
-
-          if (!quotaCheck.allowed) {
-            Logger.warn(
-              `[user:${userId}] Storage quota exceeded for snapshot: ` +
-                `${quotaCheck.currentUsage}/${quotaCheck.quota} bytes. Attempting auto-cleanup...`,
-            );
-
-            // Iteratively delete old data until we have enough space
-            const cleanupResult = await syncService.freeStorageForUpload(
-              userId,
-              payloadSize,
-            );
-
-            if (cleanupResult.success) {
-              Logger.info(
-                `[user:${userId}] Auto-cleanup freed ${Math.round(cleanupResult.freedBytes / 1024)}KB ` +
-                  `(${cleanupResult.deletedRestorePoints} restore points, ${cleanupResult.deletedOps} ops)`,
-              );
-            } else {
-              // Truly out of space - return error
-              const finalQuota = await syncService.checkStorageQuota(userId, payloadSize);
-              Logger.warn(
-                `[user:${userId}] Storage quota still exceeded for snapshot after cleanup: ${finalQuota.currentUsage}/${finalQuota.quota} bytes`,
-              );
-              return reply.status(413).send({
-                error: 'Storage quota exceeded',
-                errorCode: SYNC_ERROR_CODES.STORAGE_QUOTA_EXCEEDED,
-                storageUsedBytes: finalQuota.currentUsage,
-                storageQuotaBytes: finalQuota.quota,
-                autoCleanupAttempted: true,
-                cleanupStats: {
-                  freedBytes: cleanupResult.freedBytes,
-                  deletedRestorePoints: cleanupResult.deletedRestorePoints,
-                  deletedOps: cleanupResult.deletedOps,
-                },
-              });
-            }
-          } else {
-            Logger.info(
-              `[user:${userId}] Snapshot quota OK after recalculation: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes`,
-            );
-          }
-        }
+        const quotaOk = await enforceStorageQuota(userId, payloadSize, reply);
+        if (!quotaOk) return;
 
         // FIX: Reject duplicate SYNC_IMPORT to prevent data loss
         // Only the FIRST client to sync with an empty server should create SYNC_IMPORT.
@@ -749,13 +743,17 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           id: opId ?? uuidv7(),
           clientId,
           actionType: '[SP_ALL] Load(import) all data',
-          opType: 'SYNC_IMPORT' as const,
+          opType: (snapshotOpType ?? 'SYNC_IMPORT') as
+            | 'SYNC_IMPORT'
+            | 'BACKUP_IMPORT'
+            | 'REPAIR',
           entityType: 'ALL',
           payload: state,
           vectorClock,
           timestamp: Date.now(),
           schemaVersion: schemaVersion ?? 1,
           isPayloadEncrypted: isPayloadEncrypted ?? false,
+          syncImportReason,
         };
 
         const results = await syncService.uploadOps(userId, clientId, [op], isCleanSlate);
@@ -770,6 +768,11 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         Logger.info(`Snapshot uploaded for user ${userId}, reason: ${reason}`);
 
+        // Notify other connected clients about snapshot upload (fire-and-forget)
+        if (result.accepted && result.serverSeq !== undefined) {
+          getWsConnectionService().notifyNewOps(userId, clientId, result.serverSeq);
+        }
+
         return reply.send({
           accepted: result.accepted,
           serverSeq: result.serverSeq,
@@ -783,132 +786,179 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
   );
 
   // GET /api/sync/status - Get sync status
-  fastify.get('/status', async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const userId = getAuthUser(req).userId;
-      const syncService = getSyncService();
+  fastify.get(
+    '/status',
+    {
+      config: {
+        rateLimit: {
+          max: 60,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
 
-      const latestSeq = await syncService.getLatestSeq(userId);
-      const devicesOnline = await syncService.getOnlineDeviceCount(userId);
+        const latestSeq = await syncService.getLatestSeq(userId);
+        const devicesOnline = await syncService.getOnlineDeviceCount(userId);
 
-      const cached = await syncService.getCachedSnapshot(userId);
-      const snapshotAge = cached ? Date.now() - cached.generatedAt : undefined;
+        const cached = await syncService.getCachedSnapshot(userId);
+        const snapshotAge = cached ? Date.now() - cached.generatedAt : undefined;
 
-      const storageInfo = await syncService.getStorageInfo(userId);
+        const storageInfo = await syncService.getStorageInfo(userId);
 
-      Logger.debug(`[user:${userId}] Status: seq=${latestSeq}, devices=${devicesOnline}`);
+        Logger.debug(
+          `[user:${userId}] Status: seq=${latestSeq}, devices=${devicesOnline}`,
+        );
 
-      const response: SyncStatusResponse = {
-        latestSeq,
-        devicesOnline,
-        snapshotAge,
-        storageUsedBytes: storageInfo.storageUsedBytes,
-        storageQuotaBytes: storageInfo.storageQuotaBytes,
-      };
+        const response: SyncStatusResponse = {
+          latestSeq,
+          devicesOnline,
+          snapshotAge,
+          storageUsedBytes: storageInfo.storageUsedBytes,
+          storageQuotaBytes: storageInfo.storageQuotaBytes,
+        };
 
-      return reply.send(response);
-    } catch (err) {
-      Logger.error(`Get status error: ${errorMessage(err)}`);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+        return reply.send(response);
+      } catch (err) {
+        Logger.error(`Get status error: ${errorMessage(err)}`);
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
+    },
+  );
 
   // DELETE /api/sync/data - Delete all sync data for user
   // Used for encryption password changes
-  fastify.delete('/data', async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const userId = getAuthUser(req).userId;
-      const syncService = getSyncService();
+  fastify.delete(
+    '/data',
+    {
+      config: {
+        rateLimit: {
+          max: 3,
+          timeWindow: '15 minutes',
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
 
-      Logger.info(`[user:${userId}] DELETE ALL DATA requested`);
+        Logger.info(`[user:${userId}] DELETE ALL DATA requested`);
 
-      await syncService.deleteAllUserData(userId);
+        await syncService.deleteAllUserData(userId);
 
-      Logger.audit({
-        event: 'USER_DATA_DELETED',
-        userId,
-      });
+        Logger.audit({
+          event: 'USER_DATA_DELETED',
+          userId,
+        });
 
-      return reply.send({ success: true });
-    } catch (err) {
-      Logger.error(`Delete user data error: ${errorMessage(err)}`);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+        return reply.send({ success: true });
+      } catch (err) {
+        Logger.error(`Delete user data error: ${errorMessage(err)}`);
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
+    },
+  );
 
   // GET /api/sync/restore-points - List available restore points
   fastify.get<{
     Querystring: { limit?: string };
-  }>('/restore-points', async (req, reply) => {
-    try {
-      const userId = getAuthUser(req).userId;
-      const syncService = getSyncService();
-      const limit = req.query.limit ? parseInt(req.query.limit, 10) : 30;
+  }>(
+    '/restore-points',
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (req, reply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
+        const limit = req.query.limit ? parseInt(req.query.limit, 10) : 30;
 
-      if (isNaN(limit) || limit < 1 || limit > 100) {
-        return reply.status(400).send({
-          error: 'Invalid limit parameter (must be 1-100)',
-        });
+        if (isNaN(limit) || limit < 1 || limit > 100) {
+          return reply.status(400).send({
+            error: 'Invalid limit parameter (must be 1-100)',
+          });
+        }
+
+        Logger.debug(`[user:${userId}] Restore points requested (limit=${limit})`);
+
+        const restorePoints = await syncService.getRestorePoints(userId, limit);
+
+        Logger.info(`[user:${userId}] Returning ${restorePoints.length} restore points`);
+
+        return reply.send({ restorePoints });
+      } catch (err) {
+        Logger.error(`Get restore points error: ${errorMessage(err)}`);
+        return reply.status(500).send({ error: 'Internal server error' });
       }
-
-      Logger.debug(`[user:${userId}] Restore points requested (limit=${limit})`);
-
-      const restorePoints = await syncService.getRestorePoints(userId, limit);
-
-      Logger.info(`[user:${userId}] Returning ${restorePoints.length} restore points`);
-
-      return reply.send({ restorePoints });
-    } catch (err) {
-      Logger.error(`Get restore points error: ${errorMessage(err)}`);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+    },
+  );
 
   // GET /api/sync/restore/:serverSeq - Get state snapshot at specific serverSeq
+  // Rate limited: Snapshot generation is CPU-intensive
   fastify.get<{
     Params: { serverSeq: string };
-  }>('/restore/:serverSeq', async (req, reply) => {
-    try {
-      const userId = getAuthUser(req).userId;
-      const syncService = getSyncService();
-      const targetSeq = parseInt(req.params.serverSeq, 10);
+  }>(
+    '/restore/:serverSeq',
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '5 minutes',
+        },
+      },
+    },
+    async (req, reply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
+        const targetSeq = parseInt(req.params.serverSeq, 10);
 
-      if (isNaN(targetSeq) || targetSeq < 1) {
-        return reply.status(400).send({
-          error: 'Invalid serverSeq parameter (must be a positive integer)',
-        });
+        if (isNaN(targetSeq) || targetSeq < 1) {
+          return reply.status(400).send({
+            error: 'Invalid serverSeq parameter (must be a positive integer)',
+          });
+        }
+
+        Logger.info(`[user:${userId}] Restore snapshot requested at seq=${targetSeq}`);
+
+        const snapshot = await syncService.generateSnapshotAtSeq(userId, targetSeq);
+
+        Logger.info(`[user:${userId}] Restore snapshot generated at seq=${targetSeq}`);
+
+        return reply.send(snapshot);
+      } catch (err) {
+        const message = errorMessage(err);
+        if (
+          message.includes('exceeds latest sequence') ||
+          message.includes('must be at least')
+        ) {
+          Logger.warn(
+            `[user:${getAuthUser(req).userId}] Invalid restore request: ${message}`,
+          );
+          return reply.status(400).send({ error: message });
+        }
+        // Handle encrypted ops error - this is a known limitation, not a server error
+        if (message.includes('ENCRYPTED_OPS_NOT_SUPPORTED')) {
+          Logger.info(
+            `[user:${getAuthUser(req).userId}] Restore blocked due to encrypted ops`,
+          );
+          return reply.status(400).send({
+            error: message,
+            errorCode: SYNC_ERROR_CODES.ENCRYPTED_OPS_NOT_SUPPORTED,
+          });
+        }
+        Logger.error(`Get restore snapshot error: ${message}`);
+        return reply.status(500).send({ error: 'Internal server error' });
       }
-
-      Logger.info(`[user:${userId}] Restore snapshot requested at seq=${targetSeq}`);
-
-      const snapshot = await syncService.generateSnapshotAtSeq(userId, targetSeq);
-
-      Logger.info(`[user:${userId}] Restore snapshot generated at seq=${targetSeq}`);
-
-      return reply.send(snapshot);
-    } catch (err) {
-      const message = errorMessage(err);
-      if (
-        message.includes('exceeds latest sequence') ||
-        message.includes('must be at least')
-      ) {
-        Logger.warn(
-          `[user:${getAuthUser(req).userId}] Invalid restore request: ${message}`,
-        );
-        return reply.status(400).send({ error: message });
-      }
-      // Handle encrypted ops error - this is a known limitation, not a server error
-      if (message.includes('ENCRYPTED_OPS_NOT_SUPPORTED')) {
-        Logger.info(
-          `[user:${getAuthUser(req).userId}] Restore blocked due to encrypted ops`,
-        );
-        return reply.status(400).send({
-          error: message,
-          errorCode: SYNC_ERROR_CODES.ENCRYPTED_OPS_NOT_SUPPORTED,
-        });
-      }
-      Logger.error(`Get restore snapshot error: ${message}`);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+    },
+  );
 };

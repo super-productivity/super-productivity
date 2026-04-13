@@ -1,5 +1,9 @@
 # Mac App Store Code Signing Guide
 
+> **Related macOS docs:**
+> - [build-and-publish-notes.md](./build-and-publish-notes.md) -- Build/publish workflow (screenshots, iOS, Windows signing)
+> - [update-mac-certificates.md](./update-mac-certificates.md) -- Annual certificate renewal
+
 This document explains the Mac App Store (MAS) code signing setup and troubleshooting for Super Productivity. It covers the complete solution to certificate/provisioning profile mismatches.
 
 ## Overview

@@ -21,7 +21,7 @@ describe('ScheduleMonthComponent', () => {
     mockScheduleService.getEventDayStr.and.returnValue(null);
 
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', ['-'], {
-      currentLocale: 'en-US',
+      currentLocale: () => 'en-US',
     });
 
     await TestBed.configureTestingModule({

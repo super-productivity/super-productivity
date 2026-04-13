@@ -3,7 +3,8 @@ import { createEffect, ofType } from '@ngrx/effects';
 import { setCurrentTask, unsetCurrentTask } from './task.actions';
 import { select, Store } from '@ngrx/store';
 import { filter, startWith, take, tap, withLatestFrom } from 'rxjs/operators';
-import { selectCurrentTask } from './task.selectors';
+import { selectCurrentTask, selectTaskEntities } from './task.selectors';
+import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { selectIsOverlayShown } from '../../focus-mode/store/focus-mode.selectors';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
@@ -45,7 +46,7 @@ export class TaskElectronEffects {
      * - Responds to explicit IPC request, not store-change driven
      * - take(1) ensures single response per request
      */
-    window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_OVERLAY, () => {
+    window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET, () => {
       this._store$
         .pipe(
           select(selectCurrentTask),
@@ -67,7 +68,32 @@ export class TaskElectronEffects {
           );
         });
     });
+
+    window.ea.onSwitchTask((taskId) => {
+      this._taskService.setCurrentId(taskId);
+    });
   }
+
+  syncTodayTasksToElectron$ = createEffect(
+    () =>
+      this._store$.pipe(
+        select(selectTodayTaskIds),
+        withLatestFrom(this._store$.pipe(select(selectTaskEntities))),
+        tap(([todayTaskIds, taskEntities]) => {
+          const tasks = todayTaskIds
+            .map((id) => taskEntities[id])
+            .filter((t) => !!t && !t.isDone)
+            .map((t) => ({
+              id: t!.id,
+              title: t!.title,
+              timeEstimate: t!.timeEstimate,
+              timeSpent: t!.timeSpent,
+            }));
+          window.ea.updateTodayTasks(tasks);
+        }),
+      ),
+    { dispatch: false },
+  );
 
   taskChangeElectron$ = createEffect(
     () =>

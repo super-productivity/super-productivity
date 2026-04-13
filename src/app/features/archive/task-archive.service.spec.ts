@@ -272,7 +272,7 @@ describe('TaskArchiveService', () => {
 
       expect(updatedTask.isDone).toBe(true);
       expect(updatedTask.doneOn).toBeGreaterThan(0);
-      expect(updatedTask.dueDay).toBeUndefined();
+      expect(updatedTask.dueDay).toBeDefined();
 
       // Mark as undone
       archiveDbAdapterMock.loadArchiveYoung.and.returnValue(

@@ -5,7 +5,7 @@ import { OpLog } from '../../core/log';
  * Reason for creating a pre-migration backup.
  * Used to track why a clean slate operation was triggered.
  */
-export type PreMigrationReason = 'ENCRYPTION_CHANGE' | 'FULL_IMPORT' | 'MANUAL';
+export type PreMigrationReason = 'ENCRYPTION_CHANGE' | 'MANUAL';
 
 /**
  * PLACEHOLDER: Service for creating pre-migration backups before clean slate operations.

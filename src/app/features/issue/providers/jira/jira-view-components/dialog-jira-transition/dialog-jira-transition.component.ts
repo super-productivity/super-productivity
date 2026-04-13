@@ -31,7 +31,6 @@ import { TranslatePipe } from '@ngx-translate/core';
 @Component({
   selector: 'dialog-jira-transition',
   templateUrl: './dialog-jira-transition.component.html',
-  styleUrls: ['./dialog-jira-transition.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatDialogTitle,

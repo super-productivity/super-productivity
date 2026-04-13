@@ -10,7 +10,6 @@ import { TagPage } from '../pages/tag.page';
 import { NotePage } from '../pages/note.page';
 import { SideNavPage } from '../pages/side-nav.page';
 import { waitForAppReady } from '../utils/waits';
-import { dismissTourIfVisible } from '../utils/tour-helpers';
 
 type TestFixtures = {
   workViewPage: WorkViewPage;
@@ -50,29 +49,28 @@ export const test = base.extend<TestFixtures>({
   // Override page to use isolated context
   page: async ({ isolatedContext }, use) => {
     const page = await isolatedContext.newPage();
-    // Temporary diagnostic: Track 404 responses
-    const notFoundUrls = new Map<string, number>();
+
+    // Skip onboarding, hints, and example tasks before the app boots.
+    // This runs before any page JavaScript, so Angular sees the flags immediately.
+    await page.addInitScript(() => {
+      localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+      localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+      localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+    });
 
     try {
-      // Set up error handling
+      // Always log uncaught page errors — they are almost always test-relevant
       page.on('pageerror', (error) => {
         console.error('Page error:', error.message);
       });
 
-      page.on('console', (msg) => {
-        if (msg.type() === 'error') {
-          console.error('Console error:', msg.text());
-        } else if (process.env.E2E_VERBOSE) {
+      // Only log verbose console messages when E2E_VERBOSE is set
+      if (process.env.E2E_VERBOSE) {
+        page.on('console', (msg) => {
           console.log(`Console ${msg.type()}:`, msg.text());
-        }
-      });
-
-      page.on('response', async (response) => {
-        if (response.status() === 404) {
-          const url = response.url();
-          notFoundUrls.set(url, (notFoundUrls.get(url) || 0) + 1);
-        }
-      });
+        });
+      }
 
       // Navigate to the app with retry logic
       let navigationSuccess = false;
@@ -92,22 +90,8 @@ export const test = base.extend<TestFixtures>({
 
       await waitForAppReady(page);
 
-      // Dismiss Shepherd tour if it appears
-      await dismissTourIfVisible(page);
-
       await use(page);
     } finally {
-      // Log 404 summary if any were found
-      if (notFoundUrls.size > 0) {
-        console.log('\n=== 404 Resources ===');
-        const sorted = Array.from(notFoundUrls.entries()).sort((a, b) => b[1] - a[1]); // Sort by count descending
-        sorted.forEach(([url, count]) => {
-          console.log(`[${count}x] ${url}`);
-        });
-        console.log(`Total unique 404s: ${notFoundUrls.size}`);
-        console.log('=====================\n');
-      }
-
       // Cleanup - make sure context is still available
       if (!page.isClosed()) {
         await page.close();

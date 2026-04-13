@@ -60,7 +60,10 @@ export class WebDavHttpAdapter {
         // This bypasses CapacitorHttp which has issues with WebDAV responses
         // (empty bodies on Android/Koofr, broken JSON auto-parsing on iOS).
         SyncLog.log(
-          `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
+          `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}` +
+            (options.body != null
+              ? ` (body: ${options.body.length} chars)`
+              : ' (no body)'),
         );
         const webdavResponse = await WebDavHttp.request({
           url: options.url,
@@ -71,6 +74,12 @@ export class WebDavHttpAdapter {
         response = this._convertWebDavResponse(webdavResponse);
       } else {
         // Use fetch for other platforms
+        SyncLog.log(
+          `${WebDavHttpAdapter.L}.request() using fetch for ${options.method}` +
+            (options.body != null
+              ? ` (body: ${options.body.length} chars)`
+              : ' (no body)'),
+        );
         try {
           const fetchResponse = await fetch(options.url, {
             method: options.method,
@@ -111,9 +120,8 @@ export class WebDavHttpAdapter {
         error: e,
       });
       // Create a fake Response object for the error
-      const errorResponse = new Response('Network error', {
+      const errorResponse = new Response(`Network error: ${e}`, {
         status: WebDavHttpStatus.INTERNAL_SERVER_ERROR,
-        statusText: `Network error: ${e}`,
       });
       throw new HttpNotOkAPIError(errorResponse);
     }
@@ -162,9 +170,8 @@ export class WebDavHttpAdapter {
       // Create a fake Response object for the error
       // Ensure status is valid (200-599) for Response constructor
       const safeStatus = status >= 200 && status <= 599 ? status : 500;
-      const errorResponse = new Response('', {
+      const errorResponse = new Response(`HTTP ${status} for ${url}`, {
         status: safeStatus,
-        statusText: `HTTP ${status} for ${url}`,
       });
       throw new HttpNotOkAPIError(errorResponse, body);
     }

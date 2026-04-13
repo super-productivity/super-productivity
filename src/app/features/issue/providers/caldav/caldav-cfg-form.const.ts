@@ -6,6 +6,46 @@ import {
 import { IssueProviderCaldav } from '../../issue.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
 
+const SYNC_DIRECTION_OPTIONS = [
+  { value: 'off', label: T.F.CALDAV.FORM.TWO_WAY_SYNC_OFF },
+  { value: 'pullOnly', label: T.F.CALDAV.FORM.TWO_WAY_SYNC_PULL_ONLY },
+  { value: 'pushOnly', label: T.F.CALDAV.FORM.TWO_WAY_SYNC_PUSH_ONLY },
+  { value: 'both', label: T.F.CALDAV.FORM.TWO_WAY_SYNC_BOTH },
+];
+
+const TWO_WAY_SYNC_FORM_FIELDS: LimitedFormlyFieldConfig<IssueProviderCaldav>[] = [
+  {
+    type: 'collapsible',
+    props: { label: T.F.CALDAV.FORM.TWO_WAY_SYNC_SECTION },
+    fieldGroup: [
+      {
+        key: 'twoWaySync.isDone',
+        type: 'select',
+        props: {
+          label: T.F.CALDAV.FORM.TWO_WAY_SYNC_STATUS,
+          options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
+      {
+        key: 'twoWaySync.title',
+        type: 'select',
+        props: {
+          label: T.F.CALDAV.FORM.TWO_WAY_SYNC_TITLE,
+          options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
+      {
+        key: 'twoWaySync.notes',
+        type: 'select',
+        props: {
+          label: T.F.CALDAV.FORM.TWO_WAY_SYNC_NOTES,
+          options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
+    ],
+  },
+];
+
 export const CALDAV_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderCaldav>[] = [
   {
     key: 'caldavUrl',
@@ -52,13 +92,6 @@ export const CALDAV_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderCaldav>[]
     fieldGroup: [
       ...ISSUE_PROVIDER_COMMON_FORM_FIELDS,
       {
-        key: 'isTransitionIssuesEnabled',
-        type: 'checkbox',
-        templateOptions: {
-          label: T.F.CALDAV.FORM.IS_TRANSITION_ISSUES_ENABLED,
-        },
-      },
-      {
         key: 'categoryFilter',
         type: 'input',
         templateOptions: {
@@ -68,6 +101,7 @@ export const CALDAV_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderCaldav>[]
       },
     ],
   },
+  ...TWO_WAY_SYNC_FORM_FIELDS,
 ];
 
 export const CALDAV_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderCaldav> = {

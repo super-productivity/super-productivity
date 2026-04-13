@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
 import { Task } from '../task.model';
 import { TaskService } from '../task.service';
 import { T } from '../../../t.const';
 import { DateService } from 'src/app/core/date/date.service';
+import { DialogViewArchivedTaskComponent } from '../dialog-view-archived-task/dialog-view-archived-task.component';
 import {
   MatCell,
   MatCellDef,
@@ -47,6 +49,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 export class TaskSummaryTableComponent {
   private _taskService = inject(TaskService);
   private _dateService = inject(DateService);
+  private _matDialog = inject(MatDialog);
 
   readonly flatTasks = input<Task[]>([]);
   readonly day = input<string>(this._dateService.todayStr());
@@ -69,6 +72,13 @@ export class TaskSummaryTableComponent {
       title: newVal,
     });
     this.updated.emit();
+  }
+
+  viewTaskDetails(task: Task): void {
+    this._matDialog.open(DialogViewArchivedTaskComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
   }
 
   toggleTaskDone(task: Task): void {

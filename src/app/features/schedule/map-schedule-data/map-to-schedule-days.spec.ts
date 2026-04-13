@@ -1078,6 +1078,35 @@ describe('mapToScheduleDays()', () => {
     } as any);
   });
 
+  it('should show recurring tasks for future weeks even if they match current day of week', () => {
+    if (maybeSkipTimezoneDependent('should show recurring tasks for future weeks')) {
+      pending('Skipping timezone-dependent test');
+      return;
+    }
+    const oneWeekInMs = 7 * 24 * 60 * 60 * 1000;
+    const futureThursdayTs = N + oneWeekInMs;
+    const futureThursdayStr = getDbDateStr(futureThursdayTs);
+
+    const r = mapToScheduleDays(
+      futureThursdayTs,
+      [futureThursdayStr],
+      [],
+      [],
+      [fakeRepeatCfg('R1', '10:00', { defaultEstimate: h(1) })], // A recurring task
+      [],
+      [],
+      null,
+      {},
+      undefined,
+      undefined,
+      N,
+    );
+
+    expect(r[0].entries.length).toBe(1);
+    expect(r[0].entries[0].id).toBe('R1_1970-01-08');
+    expect(r[0].dayDate).toBe(futureThursdayStr);
+  });
+
   // TODO we can use this for testing the beyond budget tasks mode
   //
   // it('UNTESTED SO CHECK IF FAILING  should work for an example with all the stuff', () => {

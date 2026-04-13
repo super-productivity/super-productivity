@@ -79,7 +79,9 @@ export class TrackingReminderService {
   ]).pipe(
     map(
       ([isEnabled, timer, screen]) =>
-        isEnabled && (timer.purpose !== null || screen === FocusScreen.SessionDone),
+        isEnabled &&
+        ((timer.isRunning && timer.purpose !== null) ||
+          screen === FocusScreen.SessionDone),
     ),
     distinctUntilChanged(),
   );
@@ -213,7 +215,7 @@ export class TrackingReminderService {
               });
               this._taskService.setCurrentId(currId);
             } else {
-              this._taskService.addTimeSpent(task, timeSpent, undefined, true);
+              this._taskService.addTimeSpentAndSync(task, timeSpent);
               this._taskService.setCurrentId(task.id);
             }
           }

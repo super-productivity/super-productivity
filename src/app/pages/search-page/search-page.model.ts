@@ -11,6 +11,8 @@ export interface SearchItem {
   // for the navigation
   projectId: string | null;
   parentId: string | null;
+  /** Parent task title when this is a sub-task (for breadcrumb display) */
+  parentTitle: string | null;
   timeSpentOnDay: TimeSpentOnDay;
   created: number;
   tagId: string;
@@ -20,6 +22,8 @@ export interface SearchItem {
   // for the icons
   issueType: IssueProviderKey | null;
   ctx: Tag | Project;
+  // Pre-computed lowercase of title + notes for efficient filtering
+  searchText: string;
   // jira only
   titleHighlighted?: string;
 }

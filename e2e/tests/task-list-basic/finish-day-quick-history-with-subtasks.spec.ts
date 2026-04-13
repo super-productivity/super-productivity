@@ -2,12 +2,13 @@ import { test, expect } from '../../fixtures/test.fixture';
 
 const TASK_SEL = 'task';
 const TASK_TITLE = 'task task-title';
-const TASK_DONE_BTN = '.task-done-btn';
+const TASK_DONE_BTN = 'done-toggle';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const FIRST_TASK = 'task:nth-child(1)';
 const SECOND_TASK = 'task:nth-child(2)';
 const THIRD_TASK = 'task:nth-child(3)';
-const SAVE_AND_GO_HOME_BTN = 'button[mat-flat-button][color="primary"]:last-of-type';
+const SAVE_AND_GO_HOME_BTN =
+  'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
 const TABLE_CAPTION = 'quick-history  h3';
 const TABLE_ROWS = 'table tr';
 
@@ -45,21 +46,16 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     );
 
     // Step 2: Mark all tasks as done
-    // Mark all three tasks as done - always mark the first visible task
-    // as done tasks might be hidden or moved
-    await page.hover(FIRST_TASK);
-    await page.waitForSelector(`${FIRST_TASK} ${TASK_DONE_BTN}`, { state: 'visible' });
-    await page.click(`${FIRST_TASK} ${TASK_DONE_BTN}`);
-
-    // Mark the (new) first task
-    await page.hover(FIRST_TASK);
-    await page.waitForSelector(`${FIRST_TASK} ${TASK_DONE_BTN}`, { state: 'visible' });
-    await page.click(`${FIRST_TASK} ${TASK_DONE_BTN}`);
-
-    // Mark the (new) first task again
-    await page.hover(FIRST_TASK);
-    await page.waitForSelector(`${FIRST_TASK} ${TASK_DONE_BTN}`, { state: 'visible' });
-    await page.click(`${FIRST_TASK} ${TASK_DONE_BTN}`);
+    // Mark all three tasks as done - always mark the first undone task
+    for (let i = 0; i < 3; i++) {
+      const undoneTask = page.locator('task:not(.isDone)').first();
+      await undoneTask.hover();
+      const doneBtn = undoneTask.locator(TASK_DONE_BTN);
+      await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
+      await doneBtn.click();
+      // Wait for Angular to process the done state change
+      await page.waitForTimeout(300);
+    }
 
     // Verify no undone tasks remain
     await expect(page.locator('task:not(.isDone)')).toHaveCount(0);
@@ -74,10 +70,14 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     await page.click(SAVE_AND_GO_HOME_BTN);
 
     // Wait for navigation back to work view
-    await page.waitForSelector('task-list', { state: 'visible' });
+    await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
 
     // Step 5: Navigate to quick history via left-hand menu
     // Right-click on work view in magic-side-nav (first main nav item)
+    const navItemBtn = page
+      .locator('magic-side-nav .nav-list > li.nav-item:first-child nav-item button')
+      .first();
+    await navItemBtn.waitFor({ state: 'visible', timeout: 5000 });
     await page.click(
       'magic-side-nav .nav-list > li.nav-item:first-child nav-item button',
       {

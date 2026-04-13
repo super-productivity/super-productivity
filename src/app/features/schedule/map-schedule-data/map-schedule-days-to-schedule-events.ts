@@ -69,10 +69,10 @@ export const mapScheduleDaysToScheduleEvents = (
           if (!activeEntries[i]) {
             continue;
           }
-          if (
-            entry.start + entry.duration <= activeEntries[i].start ||
-            activeEntries[i].start + activeEntries[i].duration <= entry.start
-          ) {
+          const entryEnd = entry.start + Math.max(entry.duration, 1);
+          const activeEnd =
+            activeEntries[i].start + Math.max(activeEntries[i].duration, 1);
+          if (entryEnd <= activeEntries[i].start || activeEnd <= entry.start) {
             delete activeEntries[i];
           } else {
             overlapCount += 1;

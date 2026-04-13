@@ -7,7 +7,7 @@
 //   }
 // }
 // export const IS_TOUCH = isTouch();
-import { primaryInput } from 'detect-it';
+import { deviceType, primaryInput } from 'detect-it';
 import { IS_TOUCH_ONLY } from './is-touch-only';
 import { environment } from '../../environments/environment';
 import { Log } from '../core/log';
@@ -16,6 +16,7 @@ import { Log } from '../core/log';
 
 export const IS_MOUSE_PRIMARY = primaryInput === 'mouse';
 export const IS_TOUCH_PRIMARY = IS_TOUCH_ONLY || primaryInput === 'touch';
+export const IS_HYBRID_DEVICE = deviceType === 'hybrid';
 
 if (environment.production) {
   Log.log({ IS_MOUSE_PRIMARY, IS_TOUCH_PRIMARY });

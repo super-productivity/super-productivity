@@ -16,12 +16,10 @@ import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { SYNC_FORM } from '../../../features/config/form-cfgs/sync-form.const';
-import { FormGroup } from '@angular/forms';
-import { FormlyConfigModule } from '../../../ui/formly-config.module';
-import { FormlyModule } from '@ngx-formly/core';
-import { FormlyFieldConfig } from '@ngx-formly/core';
+import { FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { SyncConfig } from '../../../features/config/global-config.model';
-import { LegacySyncProvider } from '../legacy-sync-provider.model';
+import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfigService } from '../sync-config.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
 import { Subscription } from 'rxjs';
@@ -29,6 +27,7 @@ import { first, skip } from 'rxjs/operators';
 import { toSyncProviderId } from '../../../op-log/sync-exports';
 import { SyncLog } from '../../../core/log';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { isOnline } from '../../../util/is-online';
 
@@ -44,7 +43,7 @@ import { isOnline } from '../../../util/is-online';
     MatButton,
     MatIcon,
     TranslatePipe,
-    FormlyConfigModule,
+    ReactiveFormsModule,
     FormlyModule,
   ],
 })
@@ -62,15 +61,19 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
   private _getFields(includeEnabledToggle: boolean): FormlyFieldConfig[] {
     return SYNC_FORM.items!.filter((f) => includeEnabledToggle || f.key !== 'isEnabled');
   }
-  _tmpUpdatedCfg: SyncConfig = {
+  // Note: _isInitialSetup flag is checked by sync-form.const.ts hideExpressions
+  // to hide the encryption button/warning (encryption is handled by _promptSuperSyncEncryptionIfNeeded after sync)
+  _tmpUpdatedCfg: SyncConfig & { _isInitialSetup?: boolean } = {
     isEnabled: true,
-    syncProvider: null,
+    syncProvider: SyncProviderId.SuperSync,
     syncInterval: 300000,
     encryptKey: '',
     isEncryptionEnabled: false,
     localFileSync: {},
     webDav: {},
+    nextcloud: {},
     superSync: {},
+    _isInitialSetup: true,
   };
 
   private _matDialogRef =
@@ -107,7 +110,7 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
       this._subs.add(
         syncProviderControl.valueChanges
           .pipe(skip(1))
-          .subscribe(async (newProvider: LegacySyncProvider | null) => {
+          .subscribe(async (newProvider: SyncProviderId | null) => {
             if (!newProvider) {
               return;
             }
@@ -119,7 +122,7 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
             }
 
             // Load the provider's stored configuration
-            const provider = this._providerManager.getProviderById(providerId);
+            const provider = await this._providerManager.getProviderById(providerId);
             if (!provider) {
               // Provider not yet configured, keep current form state
               return;
@@ -133,24 +136,29 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
             // Create provider-specific config based on provider type
             let providerSpecificUpdate: Partial<SyncConfig> = {};
 
-            if (newProvider === LegacySyncProvider.SuperSync && privateCfg) {
+            if (newProvider === SyncProviderId.SuperSync && privateCfg) {
               providerSpecificUpdate = {
                 superSync: privateCfg as any,
                 encryptKey: privateCfg.encryptKey || '',
                 // SuperSync stores isEncryptionEnabled in privateCfg, not globalCfg
                 isEncryptionEnabled: (privateCfg as any).isEncryptionEnabled || false,
               };
-            } else if (newProvider === LegacySyncProvider.WebDAV && privateCfg) {
+            } else if (newProvider === SyncProviderId.WebDAV && privateCfg) {
               providerSpecificUpdate = {
                 webDav: privateCfg as any,
                 encryptKey: privateCfg.encryptKey || '',
               };
-            } else if (newProvider === LegacySyncProvider.LocalFile && privateCfg) {
+            } else if (newProvider === SyncProviderId.LocalFile && privateCfg) {
               providerSpecificUpdate = {
                 localFileSync: privateCfg as any,
                 encryptKey: privateCfg.encryptKey || '',
               };
-            } else if (newProvider === LegacySyncProvider.Dropbox && privateCfg) {
+            } else if (newProvider === SyncProviderId.Nextcloud && privateCfg) {
+              providerSpecificUpdate = {
+                nextcloud: privateCfg as any,
+                encryptKey: privateCfg.encryptKey || '',
+              };
+            } else if (newProvider === SyncProviderId.Dropbox && privateCfg) {
               providerSpecificUpdate = {
                 encryptKey: privateCfg.encryptKey || '',
               };
@@ -172,7 +180,7 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
             };
 
             // For non-SuperSync providers, update encryption from global config
-            if (newProvider !== LegacySyncProvider.SuperSync) {
+            if (newProvider !== SyncProviderId.SuperSync) {
               this._tmpUpdatedCfg = {
                 ...this._tmpUpdatedCfg,
                 isEncryptionEnabled: globalCfg?.isEncryptionEnabled || false,
@@ -203,12 +211,15 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
       ...this.form.value,
     };
 
+    // Strip _isInitialSetup before saving — it's only for form hideExpressions
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _isInitialSetup, ...cfgWithoutFlag } = this._tmpUpdatedCfg;
     const configToSave = {
-      ...this._tmpUpdatedCfg,
+      ...cfgWithoutFlag,
       isEnabled: this._tmpUpdatedCfg.isEnabled || !this.isWasEnabled(),
     };
 
-    await this.syncConfigService.updateSettingsFromForm(configToSave, true);
+    await this.syncConfigService.updateSettingsFromForm(configToSave as SyncConfig, true);
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
       await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);

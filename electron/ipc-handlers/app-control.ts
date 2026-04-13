@@ -13,6 +13,7 @@ import { errorHandlerWithFrontendInform } from '../error-handler-with-frontend-i
 import { GlobalConfigState } from '../../src/app/features/config/global-config.model';
 import { saveSimpleStore } from '../simple-store';
 import { SimpleStoreKey } from '../shared-with-frontend/simple-store.const';
+import { updateLocalRestApiConfig } from '../local-rest-api';
 
 export const initAppControlIpc = (): void => {
   ipcMain.on(IPC.SHUTDOWN_NOW, quitApp);
@@ -23,8 +24,9 @@ export const initAppControlIpc = (): void => {
 
   const updateSettings = async (ev: any, cfg: GlobalConfigState): Promise<void> => {
     setIsMinimizeToTray(cfg.misc.isMinimizeToTray);
-    setIsTrayShowCurrentTask(cfg.misc.isTrayShowCurrentTask);
-    setIsTrayShowCurrentCountdown(cfg.misc.isTrayShowCurrentCountdown);
+    setIsTrayShowCurrentTask(!!cfg.misc.isTrayShowCurrentTask);
+    setIsTrayShowCurrentCountdown(!!cfg.misc.isTrayShowCurrentCountdown);
+    updateLocalRestApiConfig(cfg);
 
     if (cfg.misc.isUseCustomWindowTitleBar !== undefined) {
       await saveSimpleStore(

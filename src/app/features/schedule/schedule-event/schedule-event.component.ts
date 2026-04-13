@@ -8,9 +8,11 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { CdkDrag } from '@angular/cdk/drag-drop';
 import { ScheduleEvent, ScheduleFromCalendarEvent } from '../schedule.model';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { delay, first } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { selectProjectById } from '../../project/store/project.selectors';
@@ -31,17 +33,24 @@ import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors'
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { TaskService } from '../../tasks/task.service';
 import { DialogTimeEstimateComponent } from '../../tasks/dialog-time-estimate/dialog-time-estimate.component';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-context-menu.component';
-import { IssueService } from '../../issue/issue.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { FH } from '../schedule.const';
+import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
 @Component({
   selector: 'schedule-event',
-  imports: [MatIcon, TranslateModule, TaskContextMenuComponent],
+  imports: [
+    MatIcon,
+    TranslateModule,
+    TaskContextMenuComponent,
+    RenderLinksPipe,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
+  ],
   templateUrl: './schedule-event.component.html',
   styleUrl: './schedule-event.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -53,7 +62,7 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[style]': 'style()',
     '[style.--project-color]': 'projectColor()',
     '[style.height]': '_resizeHeight()',
-    '(click)': 'clickHandler()',
+    '(click)': 'clickHandler($event)',
     '(contextmenu)': 'onContextMenu($event)',
   },
   /* eslint-enable @typescript-eslint/naming-convention */
@@ -69,9 +78,19 @@ export class ScheduleEventComponent {
   private _store = inject(Store);
   private _elRef = inject(ElementRef);
   private _matDialog = inject(MatDialog);
-  private _issueService = inject(IssueService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _taskService = inject(TaskService);
+  private _calEventActions = inject(CalendarEventActionsService);
+  readonly titleHasLinks = computed(() => {
+    const t = this.title();
+    return !!t && hasLinkHints(t);
+  });
+
+  readonly hasCalendarEventUrl = computed<boolean>(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return this._calEventActions.hasEventUrl(evt.data as ScheduleFromCalendarEvent);
+  });
 
   readonly T: typeof T = T;
   readonly isDragPreview = input<boolean>(false);
@@ -81,6 +100,8 @@ export class ScheduleEventComponent {
   readonly taskContextMenu = viewChild('taskContextMenu', {
     read: TaskContextMenuComponent,
   });
+
+  readonly calMenuTrigger = viewChild('calMenuTrigger', { read: MatMenuTrigger });
 
   protected readonly SVEType = SVEType;
   private _isBeingSubmitted = false;
@@ -257,7 +278,11 @@ export class ScheduleEventComponent {
     return 'SPLIT_CONTINUE';
   });
 
-  async clickHandler(): Promise<void> {
+  async clickHandler(event: MouseEvent): Promise<void> {
+    const target = event.target as HTMLElement | null;
+    if (target?.tagName === 'A' || target?.closest('a')) {
+      return; // Let link clicks propagate without opening the schedule event panel
+    }
     // Prevent opening dialog when resizing or just finished resizing
     if (this._isResizing() || this._justFinishedResizing()) {
       return;
@@ -282,19 +307,46 @@ export class ScheduleEventComponent {
         },
       });
     } else if (evt.type === SVEType.CalendarEvent) {
-      if (this._isBeingSubmitted) {
-        return;
-      }
-      this._isBeingSubmitted = true;
-
-      const data = evt.data as ScheduleFromCalendarEvent;
-      this._issueService.addTaskFromIssue({
-        issueDataReduced: data,
-        issueProviderId: data.calProviderId,
-        issueProviderKey: 'ICAL',
-        isForceDefaultProject: true,
-      });
+      this.calMenuTrigger()?.openMenu();
     }
+  }
+
+  readonly isCalendarEventFromPlugin = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return this._calEventActions.isPluginEvent(evt.data as ScheduleFromCalendarEvent);
+  });
+
+  async openCalendarEventLink(): Promise<void> {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    await this._calEventActions.openEventLink(evt.data as ScheduleFromCalendarEvent);
+  }
+
+  createCalendarEventAsTask(): void {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent || this._isBeingSubmitted) return;
+    this._isBeingSubmitted = true;
+    const data = this.se().data as ScheduleFromCalendarEvent;
+    this._calEventActions.createAsTask(data);
+  }
+
+  async rescheduleCalendarEvent(): Promise<void> {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    await this._calEventActions.reschedule(evt.data as ScheduleFromCalendarEvent);
+  }
+
+  async deleteCalendarEvent(): Promise<void> {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    await this._calEventActions.deleteEvent(evt.data as ScheduleFromCalendarEvent);
+  }
+
+  hideCalendarEvent(): void {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    this._calEventActions.hideForever(evt.data as ScheduleFromCalendarEvent);
   }
 
   onContextMenu(ev: MouseEvent | TouchEvent): void {
@@ -330,7 +382,6 @@ export class ScheduleEventComponent {
 
     this._matDialog.open(DialogTimeEstimateComponent, {
       data: { task: t, isFocusEstimateOnMousePrimaryDevice: true },
-      autoFocus: !IS_TOUCH_PRIMARY,
     });
   }
 

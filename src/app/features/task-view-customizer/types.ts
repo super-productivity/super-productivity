@@ -14,6 +14,7 @@ export interface SortOption extends BaseOption<SORT_OPTION_TYPE> {
 export enum SORT_OPTION_TYPE {
   name = 'name',
   scheduledDate = 'scheduledDate',
+  deadline = 'deadline',
   creationDate = 'creationDate',
   estimatedTime = 'estimatedTime',
   timeSpent = 'timeSpent',
@@ -33,6 +34,7 @@ export enum GROUP_OPTION_TYPE {
   tag = 'tag',
   project = 'project',
   scheduledDate = 'scheduledDate',
+  deadline = 'deadline',
 }
 
 // === FILTER ===
@@ -45,6 +47,7 @@ export enum FILTER_OPTION_TYPE {
   tag = 'tag',
   project = 'project',
   scheduledDate = 'scheduledDate',
+  deadline = 'deadline',
   estimatedTime = 'estimatedTime',
   timeSpent = 'timeSpent',
 }
@@ -102,6 +105,11 @@ const sortOptions: SortOption[] = [
     label: T.F.TASK_VIEW.CUSTOMIZER.SORT_SCHEDULED_DATE,
   },
   {
+    type: SORT_OPTION_TYPE.deadline,
+    order: SORT_ORDER.ASC,
+    label: T.F.TASK_VIEW.CUSTOMIZER.SORT_DEADLINE,
+  },
+  {
     type: SORT_OPTION_TYPE.creationDate,
     order: SORT_ORDER.ASC,
     label: T.F.TASK_VIEW.CUSTOMIZER.SORT_CREATION_DATE,
@@ -137,6 +145,10 @@ const groupOptions: GroupOption[] = [
     type: GROUP_OPTION_TYPE.scheduledDate,
     label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_SCHEDULED_DATE,
   },
+  {
+    type: GROUP_OPTION_TYPE.deadline,
+    label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE,
+  },
 ];
 
 const filterOptions: FilterOption[] = [
@@ -155,6 +167,11 @@ const filterOptions: FilterOption[] = [
     type: FILTER_OPTION_TYPE.scheduledDate,
     preset: null,
     label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_SCHEDULED_DATE,
+  },
+  {
+    type: FILTER_OPTION_TYPE.deadline,
+    preset: null,
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE,
   },
   {
     type: FILTER_OPTION_TYPE.estimatedTime,
@@ -199,6 +216,37 @@ const scheduledPresets: BaseOption<FILTER_COMMON | FILTER_SCHEDULE>[] = [
   },
 ];
 
+const deadlinePresets: BaseOption<FILTER_COMMON | FILTER_SCHEDULE>[] = [
+  {
+    type: FILTER_COMMON.NOT_SPECIFIED,
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED,
+  },
+  {
+    type: FILTER_SCHEDULE.today,
+    label: T.F.TASK_VIEW.CUSTOMIZER.DEADLINE_TODAY,
+  },
+  {
+    type: FILTER_SCHEDULE.tomorrow,
+    label: T.F.TASK_VIEW.CUSTOMIZER.DEADLINE_TOMORROW,
+  },
+  {
+    type: FILTER_SCHEDULE.thisWeek,
+    label: T.F.TASK_VIEW.CUSTOMIZER.DEADLINE_THIS_WEEK,
+  },
+  {
+    type: FILTER_SCHEDULE.nextWeek,
+    label: T.F.TASK_VIEW.CUSTOMIZER.DEADLINE_NEXT_WEEK,
+  },
+  {
+    type: FILTER_SCHEDULE.thisMonth,
+    label: T.F.TASK_VIEW.CUSTOMIZER.DEADLINE_THIS_MONTH,
+  },
+  {
+    type: FILTER_SCHEDULE.nextMonth,
+    label: T.F.TASK_VIEW.CUSTOMIZER.DEADLINE_NEXT_MONTH,
+  },
+];
+
 const timePresets: BaseOption<FILTER_COMMON | FILTER_TIME>[] = [
   {
     type: FILTER_COMMON.NOT_SPECIFIED,
@@ -236,5 +284,6 @@ export const OPTIONS = {
 export const PRESETS = {
   tag: tagPresets,
   schedule: scheduledPresets,
+  deadline: deadlinePresets,
   time: timePresets,
 };

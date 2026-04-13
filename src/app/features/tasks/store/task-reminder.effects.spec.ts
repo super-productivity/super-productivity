@@ -7,6 +7,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { TaskService } from '../task.service';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { PlannerActions } from '../../planner/store/planner.actions';
 import { DEFAULT_TASK, Task } from '../task.model';
 import { TestScheduler } from 'rxjs/testing';
 import { T } from '../../../t.const';
@@ -433,6 +434,152 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
         },
         complete: () => {
           // Filter should block the action, so nothing should emit
+          expect(emitted).toBe(false);
+          done();
+        },
+      });
+    });
+  });
+});
+
+describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () => {
+  let actions$: Observable<Action>;
+  let effects: TaskReminderEffects;
+
+  const mockTask: Task = {
+    ...DEFAULT_TASK,
+    id: 'task-1',
+    title: 'Test Task',
+    projectId: 'project-1',
+    created: Date.now(),
+  };
+
+  describe('when IS_ANDROID_WEB_VIEW_TOKEN is true', () => {
+    beforeEach(() => {
+      TestBed.configureTestingModule({
+        providers: [
+          TaskReminderEffects,
+          provideMockActions(() => actions$),
+          {
+            provide: SnackService,
+            useValue: jasmine.createSpyObj('SnackService', ['open']),
+          },
+          {
+            provide: TaskService,
+            useValue: jasmine.createSpyObj('TaskService', ['getByIdOnce$']),
+          },
+          { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
+          {
+            provide: LocaleDatePipe,
+            useValue: jasmine.createSpyObj('LocaleDatePipe', ['transform']),
+          },
+          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
+        ],
+      });
+
+      effects = TestBed.inject(TaskReminderEffects);
+    });
+
+    it('should pass through reScheduleTaskWithTime action when on Android', (done) => {
+      const action = TaskSharedActions.reScheduleTaskWithTime({
+        task: mockTask,
+        dueWithTime: Date.now() + 86400000,
+        remindAt: Date.now() + 86000000,
+        isMoveToBacklog: false,
+      });
+      actions$ = of(action);
+
+      effects.cancelNativeReminderOnDialogAction$.subscribe({
+        next: () => {
+          expect(true).toBe(true);
+          done();
+        },
+        error: () => {
+          expect(true).toBe(true);
+          done();
+        },
+      });
+    });
+
+    it('should pass through planTasksForToday action when on Android', (done) => {
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['task-1', 'task-2'],
+      });
+      actions$ = of(action);
+
+      effects.cancelNativeReminderOnDialogAction$.subscribe({
+        next: () => {
+          expect(true).toBe(true);
+          done();
+        },
+        error: () => {
+          expect(true).toBe(true);
+          done();
+        },
+      });
+    });
+
+    it('should pass through planTaskForDay action when on Android', (done) => {
+      const action = PlannerActions.planTaskForDay({
+        task: mockTask,
+        day: '2026-03-10',
+      });
+      actions$ = of(action);
+
+      effects.cancelNativeReminderOnDialogAction$.subscribe({
+        next: () => {
+          expect(true).toBe(true);
+          done();
+        },
+        error: () => {
+          expect(true).toBe(true);
+          done();
+        },
+      });
+    });
+  });
+
+  describe('when IS_ANDROID_WEB_VIEW_TOKEN is false', () => {
+    beforeEach(() => {
+      TestBed.configureTestingModule({
+        providers: [
+          TaskReminderEffects,
+          provideMockActions(() => actions$),
+          {
+            provide: SnackService,
+            useValue: jasmine.createSpyObj('SnackService', ['open']),
+          },
+          {
+            provide: TaskService,
+            useValue: jasmine.createSpyObj('TaskService', ['getByIdOnce$']),
+          },
+          { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
+          {
+            provide: LocaleDatePipe,
+            useValue: jasmine.createSpyObj('LocaleDatePipe', ['transform']),
+          },
+          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: false },
+        ],
+      });
+
+      effects = TestBed.inject(TaskReminderEffects);
+    });
+
+    it('should filter out actions when not on Android', (done) => {
+      const action = TaskSharedActions.reScheduleTaskWithTime({
+        task: mockTask,
+        dueWithTime: Date.now() + 86400000,
+        remindAt: Date.now() + 86000000,
+        isMoveToBacklog: false,
+      });
+      actions$ = of(action);
+
+      let emitted = false;
+      effects.cancelNativeReminderOnDialogAction$.subscribe({
+        next: () => {
+          emitted = true;
+        },
+        complete: () => {
           expect(emitted).toBe(false);
           done();
         },

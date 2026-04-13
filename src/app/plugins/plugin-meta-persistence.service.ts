@@ -46,6 +46,16 @@ export class PluginMetaPersistenceService {
   }
 
   /**
+   * Check if plugin has any persisted metadata (i.e., user has interacted with it before)
+   */
+  async hasPluginMetadata(pluginId: string): Promise<boolean> {
+    const currentState = await firstValueFrom(
+      this._store.select(selectPluginMetadataFeatureState),
+    );
+    return currentState.some((item) => item.id === pluginId);
+  }
+
+  /**
    * Get all plugin metadata
    */
   async getAllPluginMetadata(): Promise<PluginMetadata[]> {

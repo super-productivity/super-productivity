@@ -154,7 +154,7 @@ ngAfterViewInit(): void {
     this._subs.add(
       syncProviderControl.valueChanges
         .pipe(skip(1))
-        .subscribe(async (newProvider: LegacySyncProvider | null) => {
+        .subscribe(async (newProvider: SyncProviderId | null) => {
           if (!newProvider) {
             return;
           }
@@ -178,22 +178,22 @@ ngAfterViewInit(): void {
           // Create provider-specific config based on provider type
           let providerSpecificUpdate: Partial<SyncConfig> = {};
 
-          if (newProvider === LegacySyncProvider.SuperSync && privateCfg) {
+          if (newProvider === SyncProviderId.SuperSync && privateCfg) {
             providerSpecificUpdate = {
               superSync: privateCfg as any,
               encryptKey: privateCfg.encryptKey || '',
             };
-          } else if (newProvider === LegacySyncProvider.WebDAV && privateCfg) {
+          } else if (newProvider === SyncProviderId.WebDAV && privateCfg) {
             providerSpecificUpdate = {
               webDav: privateCfg as any,
               encryptKey: privateCfg.encryptKey || '',
             };
-          } else if (newProvider === LegacySyncProvider.LocalFile && privateCfg) {
+          } else if (newProvider === SyncProviderId.LocalFile && privateCfg) {
             providerSpecificUpdate = {
               localFileSync: privateCfg as any,
               encryptKey: privateCfg.encryptKey || '',
             };
-          } else if (newProvider === LegacySyncProvider.Dropbox && privateCfg) {
+          } else if (newProvider === SyncProviderId.Dropbox && privateCfg) {
             providerSpecificUpdate = {
               encryptKey: privateCfg.encryptKey || '',
             };
@@ -214,7 +214,7 @@ ngAfterViewInit(): void {
           };
 
           // For non-SuperSync providers, update encryption from global config
-          if (newProvider !== LegacySyncProvider.SuperSync) {
+          if (newProvider !== SyncProviderId.SuperSync) {
             this._tmpUpdatedCfg = {
               ...this._tmpUpdatedCfg,
               isEncryptionEnabled: globalCfg?.isEncryptionEnabled || false,

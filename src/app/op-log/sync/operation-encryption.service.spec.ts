@@ -9,12 +9,6 @@ import {
   mockEncryptBatch,
   mockDecryptBatch,
 } from '../testing/helpers/mock-encryption.helper';
-import {
-  ENCRYPT_FN,
-  DECRYPT_FN,
-  ENCRYPT_BATCH_FN,
-  DECRYPT_BATCH_FN,
-} from '../encryption/encryption.token';
 
 describe('OperationEncryptionService', () => {
   let service: OperationEncryptionService;
@@ -36,16 +30,16 @@ describe('OperationEncryptionService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [
-        OperationEncryptionService,
-        // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
-        { provide: ENCRYPT_FN, useValue: mockEncrypt },
-        { provide: DECRYPT_FN, useValue: mockDecrypt },
-        { provide: ENCRYPT_BATCH_FN, useValue: mockEncryptBatch },
-        { provide: DECRYPT_BATCH_FN, useValue: mockDecryptBatch },
-      ],
+      providers: [OperationEncryptionService],
     });
     service = TestBed.inject(OperationEncryptionService);
+
+    // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
+    // Spy on private properties via type cast to avoid slow real encryption
+    spyOn(service as any, '_encrypt').and.callFake(mockEncrypt);
+    spyOn(service as any, '_decrypt').and.callFake(mockDecrypt);
+    spyOn(service as any, '_encryptBatch').and.callFake(mockEncryptBatch);
+    spyOn(service as any, '_decryptBatch').and.callFake(mockDecryptBatch);
   });
 
   describe('encryptOperation', () => {
@@ -235,7 +229,7 @@ describe('OperationEncryptionService', () => {
       const encrypted = await service.encryptPayload(payload, TEST_PASSWORD);
 
       expect(typeof encrypted).toBe('string');
-      expect(encrypted).not.toContain('foo'); // Should be encrypted
+      expect(encrypted).not.toContain(JSON.stringify(payload)); // Should not expose raw JSON
 
       const decrypted = await service.decryptPayload(encrypted, TEST_PASSWORD);
       expect(decrypted).toEqual(payload);

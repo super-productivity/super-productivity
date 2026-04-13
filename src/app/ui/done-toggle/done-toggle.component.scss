@@ -1,0 +1,141 @@
+@use '../../../styles/_globals.scss' as *;
+
+// approximate length of checkmark polyline
+$check-len: 18;
+
+@keyframes draw-check {
+  from {
+    stroke-dashoffset: $check-len;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+:host {
+  --done-toggle-size: 36px;
+
+  width: var(--done-toggle-size);
+  height: var(--done-toggle-size);
+  min-width: var(--done-toggle-size);
+  z-index: var(--z-done-toggle, var(--z-drag-handle));
+  position: relative;
+  touch-action: none;
+  pointer-events: all;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  > * {
+    pointer-events: none;
+  }
+
+  .done-toggle-svg {
+    width: 22px;
+    height: 22px;
+    transition: transform 150ms ease;
+  }
+
+  &.is-scale-up .done-toggle-svg {
+    transform: scale(1.15);
+  }
+
+  .done-circle {
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    opacity: 0.3;
+    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
+  }
+
+  .done-check {
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: $check-len;
+    stroke-dashoffset: $check-len;
+    opacity: 0.3;
+    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
+  }
+
+  .play-indicator {
+    fill: var(--c-accent);
+    transform-origin: center;
+    animation: pop-in var(--transition-duration-m) var(--ani-enter-timing) both;
+    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
+  }
+
+  &.is-done {
+    .done-circle {
+      opacity: 0.5;
+    }
+
+    .done-check {
+      opacity: 0.5;
+      animation: draw-check 150ms ease-out forwards;
+    }
+  }
+
+  &.is-current:not(.is-done) {
+    &:hover {
+      .done-circle {
+        opacity: 0.6;
+      }
+
+      .play-indicator {
+        opacity: 0;
+      }
+    }
+  }
+
+  &:hover {
+    .done-circle {
+      opacity: 0.6;
+    }
+
+    .done-check {
+      opacity: 0.6;
+    }
+
+    &.is-done {
+      .done-circle {
+        opacity: 0.8;
+      }
+
+      .done-check {
+        opacity: 0.8;
+      }
+    }
+  }
+
+  // hit area
+  &:after {
+    content: '';
+    position: absolute;
+    top: calc(-1 * var(--s-quarter));
+    bottom: calc(-1 * var(--s-quarter));
+    left: calc(-1 * var(--s-quarter));
+    right: calc(-1 * var(--s-quarter));
+
+    @include mq(xs) {
+      top: calc(-1 * var(--s));
+      bottom: calc(-1 * var(--s));
+      left: calc(-1 * var(--s));
+      right: calc(-1 * var(--s-half));
+    }
+  }
+}

@@ -41,7 +41,7 @@
   flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
 
   @include mq(xs) {
     font-size: var(--planner-font-size);

@@ -61,7 +61,6 @@ const handleDateGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
     if (!task.timeSpentOnDay) {
       continue;
     }
-
     const taskFields = getTaskFields(task, data);
     const numDays = Object.keys(task.timeSpentOnDay).length;
     let timeEstimate = 0;
@@ -142,6 +141,9 @@ const handleTaskGroup = (
     if (skipTask(task, groupBy)) {
       continue;
     }
+    if (!task.timeSpentOnDay) {
+      continue;
+    }
     const taskFields = getTaskFields(task, data);
     const dates = sortDateStrings(Object.keys(task.timeSpentOnDay));
     taskGroups[task.id] = {
@@ -163,6 +165,9 @@ const handleTaskGroup = (
 const handleWorklogGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
   const taskGroups: ItemsByKey<RowItem> = {};
   for (const task of data.tasks) {
+    if (!task.timeSpentOnDay) {
+      continue;
+    }
     Object.keys(task.timeSpentOnDay).forEach((day) => {
       const groupKey = day + '_' + task.id;
       const taskFields = getTaskFields(task, data);

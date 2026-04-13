@@ -1,11 +1,5 @@
-<mat-form-field>
-  <mat-label>{{ to.label }}</mat-label>
-  <input
-    type="color"
-    class="color-input"
-    [formControl]="formControl"
-    [formlyAttributes]="field"
-    (focus)="onFocus($event)"
-    matInput
-  />
-</mat-form-field>
+<input-color-picker
+  [label]="to.label"
+  [value]="formControl.value"
+  (valueChange)="onColorChange($event)"
+/>

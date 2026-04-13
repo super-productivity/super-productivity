@@ -89,7 +89,7 @@ describe('InputDurationFormlyComponent', () => {
       }, 0);
     });
 
-    it('should handle "1d" input', (done) => {
+    it('should handle "1d" input as no longer recognized', (done) => {
       const event = {
         target: {
           value: '1d',
@@ -99,7 +99,7 @@ describe('InputDurationFormlyComponent', () => {
       component.onInputValueChange(event);
 
       setTimeout(() => {
-        expect(setValueSpy).toHaveBeenCalledWith(86400000);
+        expect(setValueSpy).toHaveBeenCalledWith(0);
         done();
       }, 0);
     });

@@ -5,7 +5,7 @@
     (click)="openSetupDialog('ICAL', 'GOOGLE')"
   >
     <mat-icon>calendar_month</mat-icon>
-    <span>Google Calendar</span>
+    <span>Google Calendar (iCal)</span>
   </button>
   <button
     mat-raised-button
@@ -19,8 +19,34 @@
     (click)="openSetupDialog('ICAL', 'OTHER')"
   >
     <mat-icon>calendar_month</mat-icon>
-    <span>iCal Other</span>
+    <span>Other (iCal)</span>
   </button>
+  @for (provider of pluginCalendarProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="openSetupDialog(provider.registeredKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>calendar_month</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
+  @for (provider of disabledPluginCalendarProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="enablePluginAndOpenSetup(provider.pluginId, provider.issueProviderKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>calendar_month</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
 </div>
 
 <h4>Setup Issue Provider</h4>
@@ -42,13 +68,6 @@
   </button>
   <button
     mat-raised-button
-    (click)="openSetupDialog('GITHUB')"
-  >
-    <mat-icon svgIcon="github"></mat-icon>
-    <span>GitHub</span>
-  </button>
-  <button
-    mat-raised-button
     (click)="openSetupDialog('REDMINE')"
   >
     <mat-icon svgIcon="redmine"></mat-icon>
@@ -66,7 +85,7 @@
     (click)="openSetupDialog('CALDAV')"
   >
     <mat-icon svgIcon="caldav"></mat-icon>
-    <span>CalDAV</span>
+    <span>CalDAV Todo</span>
   </button>
   <button
     mat-raised-button
@@ -91,9 +110,42 @@
   </button>
   <button
     mat-raised-button
-    (click)="openSetupDialog('CLICKUP')"
+    (click)="openSetupDialog('AZURE_DEVOPS')"
   >
-    <mat-icon svgIcon="clickup"></mat-icon>
-    <span>ClickUp</span>
+    <mat-icon svgIcon="azure_devops"></mat-icon>
+    <span>Azure DevOps</span>
   </button>
+  <button
+    mat-raised-button
+    (click)="openSetupDialog('NEXTCLOUD_DECK')"
+  >
+    <mat-icon svgIcon="nextcloud_deck"></mat-icon>
+    <span>Nextcloud Deck</span>
+  </button>
+  @for (provider of pluginProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="openSetupDialog(provider.registeredKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>extension</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
+  @for (provider of disabledPluginProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="enablePluginAndOpenSetup(provider.pluginId, provider.issueProviderKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>extension</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
 </div>

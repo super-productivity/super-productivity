@@ -43,6 +43,8 @@
       <planner-task
         cdkDrag
         [cdkDragData]="task"
+        [cdkDragStartDelay]="dragDelayForTouch()"
+        [cdkDragLockAxis]="isXs() ? 'y' : ''"
         [task]="task"
         [day]="day.dayDate"
       ></planner-task>
@@ -126,6 +128,8 @@
               [task]="scheduledItem.task"
               [day]="day.dayDate"
               [cdkDragData]="scheduledItem.task"
+              [cdkDragStartDelay]="dragDelayForTouch()"
+              [cdkDragLockAxis]="isXs() ? 'y' : ''"
             ></planner-task>
           }
           @case (SCHEDULE_ITEM_TYPE.CalEvent) {
@@ -149,3 +153,17 @@
     }
   </div>
 </div>
+
+@if (day.deadlineTasks.length > 0) {
+  <div class="deadlines">
+    <div class="section-title">
+      <mat-icon>flag</mat-icon>
+    </div>
+
+    <div class="deadline-items">
+      @for (task of day.deadlineTasks; track task.id) {
+        <planner-deadline-task [task]="task"></planner-deadline-task>
+      }
+    </div>
+  </div>
+}

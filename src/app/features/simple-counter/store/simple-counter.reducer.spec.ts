@@ -93,6 +93,21 @@ describe('SimpleCounterReducer', () => {
       expect(result.entities['counter1']!.countOnDay).toEqual({ '2024-01-01': 5 });
     });
 
+    it('should default countOnDay to {} when missing from loaded data (issue #7079)', () => {
+      const counter = createCounter('counter1', {
+        countOnDay: undefined as unknown as Record<string, number>,
+      });
+      const simpleCounterState = createStateWithCounters([counter]);
+      const appDataComplete = {
+        simpleCounter: simpleCounterState,
+      } as unknown as AppDataCompleteLegacy;
+
+      const action = loadAllData({ appDataComplete });
+      const result = simpleCounterReducer(initialSimpleCounterState, action);
+
+      expect(result.entities['counter1']!.countOnDay).toEqual({});
+    });
+
     it('should preserve state when simpleCounter is undefined', () => {
       const appDataComplete = {
         simpleCounter: undefined,
@@ -508,6 +523,97 @@ describe('SimpleCounterReducer', () => {
     });
   });
 
+  describe('updateSimpleCounterOrder', () => {
+    it('should reorder enabled counters', () => {
+      const counter1 = createCounter('c1');
+      const counter2 = createCounter('c2');
+      const counter3 = createCounter('c3');
+      const existingState = createStateWithCounters([counter1, counter2, counter3]);
+
+      const action = SimpleCounterActions.updateSimpleCounterOrder({
+        ids: ['c3', 'c1', 'c2'],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      expect(result.ids).toEqual(['c3', 'c1', 'c2']);
+    });
+
+    it('should preserve disabled counter positions when reordering enabled ones', () => {
+      const enabled1 = createCounter('e1', { isEnabled: true });
+      const disabled1 = createCounter('d1', { isEnabled: false });
+      const enabled2 = createCounter('e2', { isEnabled: true });
+      const disabled2 = createCounter('d2', { isEnabled: false });
+      const enabled3 = createCounter('e3', { isEnabled: true });
+      const existingState = createStateWithCounters([
+        enabled1,
+        disabled1,
+        enabled2,
+        disabled2,
+        enabled3,
+      ]);
+
+      // Reorder only enabled: e3, e2, e1 (reversed)
+      const action = SimpleCounterActions.updateSimpleCounterOrder({
+        ids: ['e3', 'e2', 'e1'],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      // Disabled stay at indices 1 and 3; enabled slots get new order
+      expect(result.ids).toEqual(['e3', 'd1', 'e2', 'd2', 'e1']);
+    });
+
+    it('should not change entities', () => {
+      const counter1 = createCounter('c1', { title: 'First' });
+      const counter2 = createCounter('c2', { title: 'Second' });
+      const existingState = createStateWithCounters([counter1, counter2]);
+
+      const action = SimpleCounterActions.updateSimpleCounterOrder({
+        ids: ['c2', 'c1'],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      expect(result.entities['c1']!.title).toBe('First');
+      expect(result.entities['c2']!.title).toBe('Second');
+    });
+
+    it('should handle single item', () => {
+      const counter = createCounter('c1');
+      const existingState = createStateWithCounters([counter]);
+
+      const action = SimpleCounterActions.updateSimpleCounterOrder({ ids: ['c1'] });
+      const result = simpleCounterReducer(existingState, action);
+
+      expect(result.ids).toEqual(['c1']);
+    });
+
+    it('should filter out stale IDs not present in current state', () => {
+      const counter1 = createCounter('c1');
+      const counter2 = createCounter('c2');
+      const existingState = createStateWithCounters([counter1, counter2]);
+
+      // 'deleted' is not in state — simulate stale remote sync payload
+      const action = SimpleCounterActions.updateSimpleCounterOrder({
+        ids: ['c2', 'deleted', 'c1'],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      // Stale ID filtered out; valid IDs reordered
+      expect(result.ids).toEqual(['c2', 'c1']);
+    });
+
+    it('should return unchanged state when all IDs are stale', () => {
+      const counter1 = createCounter('c1');
+      const existingState = createStateWithCounters([counter1]);
+
+      const action = SimpleCounterActions.updateSimpleCounterOrder({
+        ids: ['nonexistent1', 'nonexistent2'],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      expect(result).toBe(existingState);
+    });
+  });
+
   describe('turnOffAllSimpleCounterCounters', () => {
     it('should turn off all StopWatch counters that are isOn', () => {
       const stopWatch1 = createCounter('sw1', {
@@ -658,6 +764,20 @@ describe('SimpleCounterReducer', () => {
         expect(action.meta.entityType).toBe('SIMPLE_COUNTER');
         expect(action.meta.entityIds).toEqual(['counter1', 'counter2']);
         expect(action.meta.opType).toBe(OpType.Delete);
+        expect(action.meta.isBulk).toBe(true);
+      });
+    });
+
+    describe('updateSimpleCounterOrder', () => {
+      it('should have isPersistent: true with Move opType and bulk flag', () => {
+        const action = SimpleCounterActions.updateSimpleCounterOrder({
+          ids: ['c1', 'c2'],
+        });
+
+        expect(action.meta.isPersistent).toBe(true);
+        expect(action.meta.entityType).toBe('SIMPLE_COUNTER');
+        expect(action.meta.entityIds).toEqual(['c1', 'c2']);
+        expect(action.meta.opType).toBe(OpType.Move);
         expect(action.meta.isBulk).toBe(true);
       });
     });

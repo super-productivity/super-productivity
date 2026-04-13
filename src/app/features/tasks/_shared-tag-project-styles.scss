@@ -4,14 +4,14 @@
 // This ensures consistent styling for tags and projects throughout the task UI
 
 .tag-ico {
-  margin-right: 4px;
+  margin-right: var(--s-half);
 
   @include mq(xs, max) {
     font-size: 16px;
     width: 16px;
     height: 16px;
     line-height: 16px;
-    margin-right: 4px;
+    margin-right: var(--s-half);
   }
 }
 
@@ -25,13 +25,13 @@
   vertical-align: middle;
   width: 24px;
   height: 24px;
-  margin-right: 4px;
+  margin-right: var(--s-half);
   overflow: hidden;
   flex-shrink: 0;
 }
 
 .check-ico {
-  margin-right: 16px;
+  margin-right: var(--s2);
 
   @include mq(xs, max) {
     margin-right: 12px;

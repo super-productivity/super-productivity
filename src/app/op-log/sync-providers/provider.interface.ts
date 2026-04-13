@@ -24,23 +24,56 @@ export interface SyncProviderAuthHelper {
 }
 
 /**
- * Core sync provider service interface
+ * Base sync provider properties shared by all provider types.
+ * Both file-based providers and operation-based providers (SuperSync) implement this.
  */
-export interface SyncProviderServiceInterface<PID extends SyncProviderId> {
+export interface SyncProviderBase<PID extends SyncProviderId> {
   /** Unique identifier for this sync provider */
   id: PID;
 
   /** Whether this provider supports force upload (overwriting conflicts) */
   isUploadForcePossible?: boolean;
 
-  /** Whether this provider is limited to syncing a single file */
-  isLimitedToSingleFileSync?: boolean;
-
   /** Maximum number of concurrent requests allowed */
   maxConcurrentRequests: number;
 
   /** Store for provider-specific private configuration */
   privateCfg: SyncCredentialStore<PID>;
+
+  /**
+   * Checks if the provider is ready to perform sync operations
+   * @returns True if the provider is authenticated and ready
+   */
+  isReady(): Promise<boolean>;
+
+  /**
+   * Gets authentication helper for initiating auth flows
+   * @returns Auth helper object or undefined if not supported
+   */
+  getAuthHelper?(): Promise<SyncProviderAuthHelper>;
+
+  /**
+   * Updates the provider's private configuration
+   * @param privateCfg New configuration to store
+   */
+  setPrivateCfg(privateCfg: PrivateCfgByProviderId<PID>): Promise<void>;
+
+  /**
+   * Clears authentication credentials while preserving non-auth config (e.g., encryptKey).
+   * Called when auth errors occur to ensure re-auth flow can proceed.
+   */
+  clearAuthCredentials?(): Promise<void>;
+}
+
+/**
+ * File-based sync provider (Dropbox, WebDAV, LocalFile).
+ * Extends the base with file operations for reading/writing sync data.
+ */
+export interface FileSyncProvider<
+  PID extends SyncProviderId,
+> extends SyncProviderBase<PID> {
+  /** Whether this provider is limited to syncing a single file */
+  isLimitedToSingleFileSync?: boolean;
 
   /**
    * Gets the current revision for a file
@@ -88,31 +121,26 @@ export interface SyncProviderServiceInterface<PID extends SyncProviderId> {
    * @returns List of file names/paths
    */
   listFiles?(targetPath: string): Promise<string[]>;
-
-  /**
-   * Checks if the provider is ready to perform sync operations
-   * @returns True if the provider is authenticated and ready
-   */
-  isReady(): Promise<boolean>;
-
-  /**
-   * Gets authentication helper for initiating auth flows
-   * @returns Auth helper object or undefined if not supported
-   */
-  getAuthHelper?(): Promise<SyncProviderAuthHelper>;
-
-  /**
-   * Updates the provider's private configuration
-   * @param privateCfg New configuration to store
-   */
-  setPrivateCfg(privateCfg: PrivateCfgByProviderId<PID>): Promise<void>;
-
-  /**
-   * Clears authentication credentials while preserving non-auth config (e.g., encryptKey).
-   * Called when auth errors occur to ensure re-auth flow can proceed.
-   */
-  clearAuthCredentials?(): Promise<void>;
 }
+
+/**
+ * @deprecated Use `SyncProviderBase` for generic provider references
+ * or `FileSyncProvider` for file-based providers. Kept as alias for backward compatibility.
+ */
+export type SyncProviderServiceInterface<PID extends SyncProviderId> =
+  FileSyncProvider<PID>;
+
+/**
+ * Type guard to check if a provider supports file-based sync operations.
+ */
+export const isFileSyncProvider = (
+  provider: SyncProviderBase<SyncProviderId>,
+): provider is FileSyncProvider<SyncProviderId> => {
+  return (
+    'getFileRev' in provider &&
+    typeof (provider as Record<string, unknown>).getFileRev === 'function'
+  );
+};
 
 /**
  * Response for file revision operations
@@ -120,7 +148,6 @@ export interface SyncProviderServiceInterface<PID extends SyncProviderId> {
 export interface FileRevResponse {
   /** The current revision identifier for the file */
   rev: string;
-  legacyRev?: string;
 }
 
 /**
@@ -150,6 +177,8 @@ export interface SyncOperation {
   schemaVersion: number;
   /** True if payload is an encrypted string (E2E encryption enabled) */
   isPayloadEncrypted?: boolean;
+  /** Reason for a SYNC_IMPORT operation (e.g. 'PASSWORD_CHANGED', 'FILE_IMPORT') */
+  syncImportReason?: string;
 }
 
 /**
@@ -245,14 +274,12 @@ export interface OperationSyncCapable {
    * Upload operations to the server
    * @param ops Operations to upload
    * @param clientId Client identifier
-   * @param lastKnownServerSeq Last known server sequence (for piggyback download)
-   * @param isCleanSlate If true, server deletes all user data before accepting ops
+   * @param lastKnownServerSeq Last known server sequence
    */
   uploadOps(
     ops: SyncOperation[],
     clientId: string,
     lastKnownServerSeq?: number,
-    isCleanSlate?: boolean,
   ): Promise<OpUploadResponse>;
 
   /**
@@ -299,6 +326,7 @@ export interface OperationSyncCapable {
     opId: string,
     isCleanSlate?: boolean,
     snapshotOpType?: RestorePointType,
+    syncImportReason?: string,
   ): Promise<SnapshotUploadResponse>;
 
   /**

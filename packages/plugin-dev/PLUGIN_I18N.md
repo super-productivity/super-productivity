@@ -288,6 +288,8 @@ Super Productivity supports these language codes:
 | `hr`    | Croatian              |
 | `uk`    | Ukrainian             |
 | `id`    | Indonesian            |
+| `ro`    | Romanian              |
+| `ro-md` | Romanian (Moldova)    |
 
 ## Complete Example
 

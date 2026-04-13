@@ -147,6 +147,20 @@ export const tickSimpleCounterLocal = createAction(
   props<{ id: string; increaseBy: number; today: string }>(),
 );
 
+export const updateSimpleCounterOrder = createAction(
+  '[SimpleCounter] Update SimpleCounter Order',
+  (counterProps: { ids: string[] }) => ({
+    ...counterProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'SIMPLE_COUNTER',
+      entityIds: counterProps.ids,
+      opType: OpType.Move,
+      isBulk: true,
+    } satisfies PersistentActionMeta,
+  }),
+);
+
 // Persistent sync action for batched StopWatch time updates
 // Dispatched every 5 minutes and when counter stops
 // Local dispatch: no-op (state already updated by tickSimpleCounterLocal)

@@ -72,7 +72,6 @@ describe('MentionDirective', () => {
       expect(result).toBe('');
       expect(logWarnSpy).toHaveBeenCalledWith(
         "MentionDirective: item missing required property 'label'",
-        itemWithoutLabel,
       );
     });
 
@@ -83,7 +82,6 @@ describe('MentionDirective', () => {
       expect(result).toBe('');
       expect(logWarnSpy).toHaveBeenCalledWith(
         "MentionDirective: item missing required property 'label'",
-        itemWithNullLabel,
       );
     });
 
@@ -127,7 +125,6 @@ describe('MentionDirective', () => {
       expect(result).toBe('#');
       expect(logWarnSpy).toHaveBeenCalledWith(
         "MentionDirective: item missing required property 'title'",
-        itemWithoutTitle,
       );
     });
   });

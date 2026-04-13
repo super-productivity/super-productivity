@@ -101,7 +101,7 @@
         (cdkDragMoved)="dragMoved($event)"
         (cdkDragStarted)="dragStarted($event)"
         (cdkDragReleased)="dragReleased($event)"
-        [cdkDragStartDelay]="IS_TOUCH_PRIMARY ? 75 : 0"
+        [cdkDragStartDelay]="isTouchActive() ? 75 : 0"
         [event]="ev"
       ></schedule-event>
     } @else {
@@ -122,9 +122,7 @@
         <div
           class="excess-entries-header"
           [matTooltipPosition]="'above'"
-          [matTooltip]="
-            'Tasks planned for day, but that are beyond the available time budget'
-          "
+          [matTooltip]="'Tasks planned for day, but that are beyond the available time budget'"
         >
           <mat-icon>hourglass_disabled</mat-icon>
           {{ beyondBudgetDay.length }}
@@ -138,7 +136,7 @@
               (cdkDragMoved)="dragMoved($event)"
               (cdkDragStarted)="dragStarted($event)"
               (cdkDragReleased)="dragReleased($event)"
-              [cdkDragStartDelay]="IS_TOUCH_PRIMARY ? DRAG_DELAY_FOR_TOUCH : 0"
+              [cdkDragStartDelay]="dragDelayForTouch()"
             ></schedule-event>
           } @else {
             <schedule-event

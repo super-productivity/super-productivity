@@ -283,6 +283,64 @@ describe('SimpleCounterService', () => {
     }));
   });
 
+  describe('countdown remaining cache', () => {
+    it('should return undefined for unknown counter', () => {
+      expect(service.getCountdownRemaining('unknown')).toBeUndefined();
+    });
+
+    it('should store and retrieve countdown remaining time', () => {
+      service.setCountdownRemaining('counter1', 5000);
+      expect(service.getCountdownRemaining('counter1')).toBe(5000);
+    });
+
+    it('should clear countdown remaining time', () => {
+      service.setCountdownRemaining('counter1', 5000);
+      service.clearCountdownRemaining('counter1');
+      expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+    });
+
+    it('should clear countdown cache when deleting a counter', fakeAsync(() => {
+      service.setCountdownRemaining('counter1', 5000);
+      service.deleteSimpleCounter('counter1');
+      tick();
+      expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+    }));
+
+    it('should clear countdown cache when deleting multiple counters', fakeAsync(() => {
+      service.setCountdownRemaining('counter1', 5000);
+      service.setCountdownRemaining('counter2', 3000);
+      service.deleteSimpleCounters(['counter1', 'counter2']);
+      tick();
+      expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+      expect(service.getCountdownRemaining('counter2')).toBeUndefined();
+    }));
+
+    it('should allow storing zero as remaining time', () => {
+      service.setCountdownRemaining('counter1', 0);
+      expect(service.getCountdownRemaining('counter1')).toBe(0);
+    });
+
+    it('should handle overwriting an existing cached value', () => {
+      service.setCountdownRemaining('counter1', 5000);
+      service.setCountdownRemaining('counter1', 3000);
+      expect(service.getCountdownRemaining('counter1')).toBe(3000);
+    });
+
+    it('should clear countdown cache when countdownDuration changes', fakeAsync(() => {
+      service.setCountdownRemaining('counter1', 5000);
+      service.updateSimpleCounter('counter1', { countdownDuration: 60000 });
+      tick();
+      expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+    }));
+
+    it('should clear countdown cache when counter type changes', fakeAsync(() => {
+      service.setCountdownRemaining('counter1', 5000);
+      service.updateSimpleCounter('counter1', { type: SimpleCounterType.StopWatch });
+      tick();
+      expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+    }));
+  });
+
   describe('stopwatch sync with absolute values', () => {
     beforeEach(() => {
       mockCounters([

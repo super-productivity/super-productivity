@@ -1,0 +1,4 @@
+- add shell: bash to npm cache step on Windows runners
+- use consistent type narrowing for Linear in isIssueDone
+- migrate ClickUp issue provider from built-in to plugin
+- replace hardcoded colors, spacing, and inline styles with CSS variables

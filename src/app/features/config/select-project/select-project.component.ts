@@ -12,7 +12,6 @@ import { MatOption, MatSelect } from '@angular/material/select';
 @Component({
   selector: 'select-project',
   templateUrl: './select-project.component.html',
-  styleUrls: ['./select-project.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [

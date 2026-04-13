@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep WorkManager worker classes (used for background sync reminder cancellation)
+-keepnames class * extends androidx.work.CoroutineWorker

@@ -23,8 +23,7 @@ import { ScheduleEventComponent } from '../schedule-event/schedule-event.compone
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../../t.const';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
+import { dragDelayForTouch, isTouchActive } from '../../../util/input-intent';
 import { MatTooltip } from '@angular/material/tooltip';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
@@ -32,6 +31,7 @@ import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { formatMonthDay } from '../../../util/format-month-day.util';
 import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { calculatePlaceholderForGridMove } from './schedule-week-placeholder.util';
+import { formatScheduleDragPreviewLabel } from './format-schedule-drag-preview-label.util';
 import { truncate } from '../../../util/truncate';
 
 const D_HOURS = 24;
@@ -82,8 +82,8 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly isShiftNoScheduleMode = this._service.isShiftMode;
 
   FH = FH;
-  IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
-  DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
+  protected readonly isTouchActive = isTouchActive;
+  dragDelayForTouch = dragDelayForTouch;
   SVEType: typeof SVEType = SVEType;
   T: typeof T = T;
   protected readonly isDraggableSE = isDraggableSE;
@@ -94,11 +94,14 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
 
   times = computed(() => {
     const uses24Hour = this._dateTimeFormatService.is24HourFormat();
-    const formatter = new Intl.DateTimeFormat(this._dateTimeFormatService.currentLocale, {
-      hour: uses24Hour ? '2-digit' : 'numeric',
-      minute: '2-digit',
-      hour12: !uses24Hour,
-    });
+    const formatter = new Intl.DateTimeFormat(
+      this._dateTimeFormatService.currentLocale(),
+      {
+        hour: uses24Hour ? '2-digit' : 'numeric',
+        minute: '2-digit',
+        hour12: !uses24Hour,
+      },
+    );
 
     return this.rowsByNr.map((_, hourIndex) => {
       const date = new Date(2000, 0, 1, hourIndex, 0, 0);
@@ -168,7 +171,11 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
       return null;
     }
     if (ctx.kind === 'time') {
-      return this._dateTimeFormatService.formatTime(ctx.timestamp);
+      return formatScheduleDragPreviewLabel({
+        startTimestamp: ctx.timestamp,
+        durationInHours: currentDraggedEvent?.timeLeftInHours,
+        formatTime: (timestamp) => this._dateTimeFormatService.formatTime(timestamp),
+      });
     }
     if (ctx.kind === 'shift-column') {
       const dateLabel = this._formatDateLabel(ctx.day);
@@ -260,7 +267,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
       event: ev,
       gridElement,
       days: this.daysToShow() || [],
-      isTouchPrimary: IS_TOUCH_PRIMARY,
+      isTouchPrimary: isTouchActive(),
     });
 
     this.newTaskPlaceholder.set(placeholder);
@@ -338,7 +345,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     if (Number.isNaN(date.getTime())) {
       return dayStr;
     }
-    return formatMonthDay(date, this._dateTimeFormatService.currentLocale);
+    return formatMonthDay(date, this._dateTimeFormatService.currentLocale());
   }
 
   // Public methods for external preview control (used by schedule-day-panel)

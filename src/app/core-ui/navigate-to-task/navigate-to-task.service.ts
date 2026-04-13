@@ -7,7 +7,7 @@ import { ProjectService } from '../../features/project/project.service';
 import { Router } from '@angular/router';
 import { Task } from '../../features/tasks/task.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import { isToday } from '../../util/is-today.util';
+import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -21,6 +21,7 @@ export class NavigateToTaskService {
   private _projectService = inject(ProjectService);
   private _router = inject(Router);
   private _snackService = inject(SnackService);
+  private _dateService = inject(DateService);
 
   async navigate(taskId: string, isArchiveTask: boolean = false): Promise<void> {
     try {
@@ -81,9 +82,9 @@ export class NavigateToTaskService {
 
   private _isDueToday(task: Task): boolean {
     if (task.dueWithTime) {
-      return isToday(task.dueWithTime);
+      return this._dateService.isToday(task.dueWithTime);
     }
-    return task.dueDay === getDbDateStr();
+    return task.dueDay === this._dateService.todayStr();
   }
 
   private _focusTaskElement(taskId: string): void {

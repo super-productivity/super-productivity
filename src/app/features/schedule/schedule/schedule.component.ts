@@ -25,10 +25,11 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
 import { ScheduleMonthComponent } from '../schedule-month/schedule-month.component';
 import { ScheduleService } from '../schedule.service';
-import { DateAdapter } from '@angular/material/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
 
 @Component({
   selector: 'schedule',
@@ -57,7 +58,7 @@ export class ScheduleComponent {
   scheduleService = inject(ScheduleService);
   private _store = inject(Store);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
-  private _dateAdapter = inject(DateAdapter);
+  private _globalConfigService = inject(GlobalConfigService);
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
@@ -134,7 +135,7 @@ export class ScheduleComponent {
     if (selectedView === 'month') {
       return this.scheduleService.getMonthDaysToShow(
         count,
-        this.firstDayOfWeek,
+        this.firstDayOfWeek(),
         selectedDate,
       );
     }
@@ -143,7 +144,10 @@ export class ScheduleComponent {
 
   weeksToShow = computed(() => Math.ceil(this.daysToShow().length / 7));
 
-  firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
+  firstDayOfWeek = computed(() => {
+    const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
+    return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
+  });
 
   // Calculate context-aware "now" based on selected date
   // When viewing a future week, use the start of that week as reference time

@@ -22,85 +22,47 @@ const createSimpleCounter = async (
   title: string,
   type: 'click' | 'stopwatch',
 ): Promise<void> => {
-  // Navigate to settings using the correct selector
-  const settingsBtn = client.page.locator(
-    'magic-side-nav .tour-settingsMenuBtn, magic-side-nav nav-item:has([icon="settings"]) button',
-  );
-  await settingsBtn.waitFor({ state: 'visible', timeout: 15000 });
-  await settingsBtn.click();
-  await client.page.waitForURL(/config/);
+  // Navigate to the habits page
+  await client.page.goto('/#/habits');
+  await client.page.waitForURL(/habits/);
   await client.page.waitForTimeout(500);
 
-  // Navigate to Productivity tab where Simple Counters section is located
-  const productivityTab = client.page.locator(
-    'mat-tab-header .mat-mdc-tab:has-text("Productivity"), mat-tab-header .mat-tab-label:has-text("Productivity")',
-  );
-  await productivityTab.waitFor({ state: 'visible', timeout: 10000 });
-  await productivityTab.click();
-  await client.page.waitForTimeout(500);
-
-  // Click on Simple Counters section (it's inside a collapsible component)
-  // The translated title is "Simple Counters & Habit Tracking"
-  const simpleCountersSection = client.page.locator(
-    '.collapsible-header:has-text("Simple Counters")',
-  );
-
-  // Scroll to section and wait for it
-  await simpleCountersSection.scrollIntoViewIfNeeded();
-  await simpleCountersSection.waitFor({ state: 'visible', timeout: 10000 });
-  await simpleCountersSection.click();
-
-  // Wait for collapsible to expand
-  await client.page.waitForTimeout(500);
-
-  // Click Add Counter button - text is "Add simple counter/ habit"
-  // This is a formly repeat type that adds fields inline (not a dialog)
-  // The repeat section type has a footer with the add button
-  const addBtn = client.page.locator(
-    'repeat-section-type .footer button, button:has-text("Add simple counter")',
-  );
-  await addBtn.scrollIntoViewIfNeeded();
-  await addBtn.waitFor({ state: 'visible', timeout: 5000 });
+  // Click "Add habit" button
+  const addBtn = client.page.locator('.add-habit-btn');
+  await addBtn.waitFor({ state: 'visible', timeout: 10000 });
   await addBtn.click();
 
-  // Wait for inline form fields to appear
-  await client.page.waitForTimeout(500);
+  // Wait for the edit dialog to appear
+  const dialog = client.page.locator('dialog-simple-counter-edit-settings');
+  await dialog.waitFor({ state: 'visible', timeout: 10000 });
 
-  // Find the newly added counter row (last one in the list)
-  // The repeat section type creates .row elements inside .list-wrapper
-  const counterRows = client.page.locator('repeat-section-type .row');
-  const lastCounterRow = counterRows.last();
-
-  // Fill title - find the title input in the last counter row
-  const titleInput = lastCounterRow.locator('input').first();
-  await titleInput.scrollIntoViewIfNeeded();
+  // Fill title input (first input in the formly form)
+  const titleInput = dialog.locator('formly-form input').first();
   await titleInput.waitFor({ state: 'visible', timeout: 5000 });
   await titleInput.fill(title);
 
-  // Select type - find the select in the last counter row
-  const typeSelect = lastCounterRow.locator('mat-select').first();
-  await typeSelect.scrollIntoViewIfNeeded();
+  // Select counter type from mat-select
+  const typeSelect = dialog.locator('mat-select').first();
+  await typeSelect.waitFor({ state: 'visible', timeout: 5000 });
+  // Wait for dialog animation to settle before interacting
+  await client.page.waitForTimeout(500);
   await typeSelect.click();
   await client.page.waitForTimeout(300);
   const typeOption = client.page.locator(
     `mat-option:has-text("${type === 'click' ? 'Click Counter' : 'Stopwatch'}")`,
   );
   await typeOption.click();
-
-  // Wait for dropdown to close
   await client.page.waitForTimeout(300);
 
-  // Save the form - the simple counter cfg has a Save button
-  const saveBtn = client.page.locator(
-    'simple-counter-cfg button:has-text("Save"), .submit-button:has-text("Save")',
-  );
-  await saveBtn.scrollIntoViewIfNeeded();
+  // Click Save button
+  const saveBtn = dialog.locator('button[type="submit"]');
   await saveBtn.click();
 
-  // Wait for save to complete
+  // Wait for dialog to close
+  await dialog.waitFor({ state: 'hidden', timeout: 10000 });
   await client.page.waitForTimeout(500);
 
-  // Navigate back to work view using home button or similar
+  // Navigate back to work view
   await client.page.goto('/#/tag/TODAY/tasks');
   await client.page.waitForURL(/(active\/tasks|tag\/TODAY\/tasks)/);
   await client.page.waitForTimeout(500);

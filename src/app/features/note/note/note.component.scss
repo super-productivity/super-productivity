@@ -108,6 +108,10 @@
   min-height: 40px;
   overflow: hidden;
   cursor: text;
+
+  &:not(.markdown) {
+    white-space: pre-wrap;
+  }
 }
 
 :host:hover .bottom-controls {

@@ -1,0 +1,9 @@
+- init hybrid devices from IS_TOUCH_PRIMARY to fix missing drag delay on first touch
+- change very small container to 356px
+- fix bug-7067 spec to work in production builds
+- fix TS2614 by using Shepherd.Step namespace for types
+- package-lock
+- fix prettier formatting errors in e2e tests and nav-item scss
+- handle empty/locked WebDAV remote file with recovery snack
+- handle invalid startTime from sync/import gracefully (#7067)
+- prevent saving empty project/tag title (#7081)

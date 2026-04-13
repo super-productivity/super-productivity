@@ -1,7 +1,11 @@
 <div class="days">
   @let overdue = overdue$ | async;
-  @if (overdue?.length) {
-    <planner-day-overdue [overdueTasks]="overdue"></planner-day-overdue>
+  @let overdueDeadlines = overdueDeadlines$ | async;
+  @if (overdue?.length || overdueDeadlines?.length) {
+    <planner-day-overdue
+      [overdueTasks]="overdue"
+      [overdueDeadlineTasks]="overdueDeadlines"
+    ></planner-day-overdue>
   }
   @for (day of days$ | async; track day.dayDate) {
     <planner-day [day]="day"></planner-day>

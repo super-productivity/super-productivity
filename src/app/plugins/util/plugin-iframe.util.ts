@@ -328,6 +328,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           registerHook: (hook, handler) => callApi('registerHook', [hook, handler]),
           registerHeaderButton: (cfg) => callApi('registerHeaderButton', [cfg]),
           registerMenuEntry: (cfg) => callApi('registerMenuEntry', [cfg]),
+          registerConfigHandler: (handler) => callApi('registerConfigHandler', [handler]),
           registerShortcut: (cfg) => callApi('registerShortcut', [cfg]),
           registerSidePanelButton: (cfg) => callApi('registerSidePanelButton', [cfg]),
 

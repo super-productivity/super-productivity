@@ -89,7 +89,14 @@ describe('ShortSyntaxEffects', () => {
         ...DEFAULT_GLOBAL_CONFIG.tasks,
         defaultProjectId: null,
       }),
-      cfg: jasmine.createSpy('cfg').and.returnValue(DEFAULT_GLOBAL_CONFIG),
+      cfg: jasmine.createSpy('cfg').and.returnValue({
+        ...DEFAULT_GLOBAL_CONFIG,
+        shortSyntax: {
+          ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
+          // Use 'keep-and-attach' for tests that expect URL attachments to be created
+          urlBehavior: 'keep-and-attach',
+        },
+      }),
     };
 
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);

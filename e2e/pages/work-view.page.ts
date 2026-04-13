@@ -47,18 +47,25 @@ export class WorkViewPage extends BasePage {
 
   async addSubTask(task: Locator, subTaskName: string): Promise<void> {
     await task.waitFor({ state: 'visible' });
+
+    // Focus the task element directly (avoids opening edit mode on task-title)
     await task.focus();
-    // Wait for focus to be established
-    await this.page.waitForFunction(
-      (el) => el === document.activeElement,
-      await task.elementHandle(),
-      { timeout: 1000 },
+    await this.page.waitForTimeout(200);
+
+    // Verify focus is on the task, retry with task.focus() if needed
+    const isFocused = await task.evaluate(
+      (el) => el === document.activeElement || el.contains(document.activeElement),
     );
+    if (!isFocused) {
+      await task.focus();
+      await this.page.waitForTimeout(200);
+    }
+
     await task.press('a');
 
-    // Wait for textarea to appear and be focused
+    // Wait for textarea to appear
     const textarea = this.page.locator('textarea:focus, input[type="text"]:focus');
-    await textarea.waitFor({ state: 'visible', timeout: 1000 });
+    await textarea.waitFor({ state: 'visible', timeout: 3000 });
 
     // Ensure the field is properly focused and cleared before filling
     await textarea.click();

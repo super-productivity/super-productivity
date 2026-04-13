@@ -16,14 +16,19 @@ import androidx.activity.addCallback
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
+import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
+import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
+import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.util.printWebViewVersion
 import com.superproductivity.superproductivity.webview.JavaScriptInterface
 import com.superproductivity.superproductivity.webview.WebHelper
 import com.superproductivity.superproductivity.webview.WebViewBlockActivity
 import com.superproductivity.superproductivity.webview.WebViewCompatibilityChecker
+import com.superproductivity.superproductivity.widget.ShareIntentQueue
+import com.superproductivity.superproductivity.widget.StartupOverlayManager
 import com.superproductivity.plugins.webdavhttp.WebDavHttpPlugin
 import org.json.JSONObject
 
@@ -36,6 +41,7 @@ class CapacitorMainActivity : BridgeActivity() {
     private var webViewBlocked = false
     private var pendingShareIntent: JSONObject? = null
     private var isFrontendReady = false
+    private var startupOverlayManager: StartupOverlayManager? = null
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -66,17 +72,37 @@ class CapacitorMainActivity : BridgeActivity() {
         // Register plugins before calling super.onCreate()
         registerPlugin(SafBridgePlugin::class.java)
         registerPlugin(WebDavHttpPlugin::class.java)
+        registerPlugin(NavigationBarPlugin::class.java)
 
         super.onCreate(savedInstanceState)
         if (webViewBlocked) {
             return
         }
 
-        printWebViewVersion(bridge.webView)
+        val webView = bridge?.webView
+        if (webView == null) {
+            Log.e("CapacitorMainActivity", "Bridge or WebView is null after onCreate — finishing activity")
+            val result = webViewCompatibility ?: WebViewCompatibilityChecker.Result(
+                status = WebViewCompatibilityChecker.Status.BLOCK,
+                majorVersion = null,
+                providerPackage = null,
+                providerVersionName = null,
+                source = WebViewCompatibilityChecker.VersionSource.UNKNOWN,
+            )
+            WebViewBlockActivity.present(this, result)
+            finish()
+            return
+        }
+
+        printWebViewVersion(webView)
 
         // DEBUG ONLY
         if (BuildConfig.DEBUG) {
-            Toast.makeText(this, "DEBUG: Offline Mode", Toast.LENGTH_SHORT).show()
+            Handler(Looper.getMainLooper()).postDelayed({
+                val debugToast = Toast.makeText(this, "DEBUG", Toast.LENGTH_SHORT)
+                debugToast.show()
+                Handler(Looper.getMainLooper()).postDelayed({ debugToast.cancel() }, 100)
+            }, 10_000)
             WebView.setWebContentsDebuggingEnabled(true)
         }
 
@@ -93,18 +119,18 @@ class CapacitorMainActivity : BridgeActivity() {
         supportActionBar?.hide()
 
         // Initialize JavaScriptInterface
-        javaScriptInterface = JavaScriptInterface(this, bridge.webView)
+        javaScriptInterface = JavaScriptInterface(this, webView)
 
         // Initialize WebView
-        WebHelper().setupView(bridge.webView, false)
+        WebHelper().setupView(webView, false)
 
         // Inject JavaScriptInterface into Capacitor's WebView
-        bridge.webView.addJavascriptInterface(
+        webView.addJavascriptInterface(
             javaScriptInterface,
             WINDOW_INTERFACE_PROPERTY
         )
         if (BuildConfig.FLAVOR.equals("fdroid")) {
-            bridge.webView.addJavascriptInterface(
+            webView.addJavascriptInterface(
                 javaScriptInterface,
                 WINDOW_PROPERTY_F_DROID
             )
@@ -113,9 +139,9 @@ class CapacitorMainActivity : BridgeActivity() {
 
         // Register OnBackPressedCallback to handle back button press
         onBackPressedDispatcher.addCallback(this) {
-            Log.v("TW", "onBackPressed ${bridge.webView.canGoBack()}")
-            if (bridge.webView.canGoBack()) {
-                bridge.webView.goBack()
+            Log.v("TW", "onBackPressed ${webView.canGoBack()}")
+            if (webView.canGoBack()) {
+                webView.goBack()
             } else {
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
@@ -145,6 +171,18 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(FocusModeForegroundService.ACTION_TIMER_COMPLETE)
         )
 
+        // Show startup overlay for quick task entry while Angular loads.
+        // Only on fresh cold start — not on config-change recreation.
+        if (savedInstanceState == null) {
+            startupOverlayManager = StartupOverlayManager(this)
+            startupOverlayManager?.show()
+        }
+
+        // Schedule background sync worker if credentials are configured
+        if (BackgroundSyncCredentialStore.get(this) != null) {
+            SyncReminderScheduler.ensureScheduled(this)
+        }
+
         // Handle initial intent (cold start)
         handleIntent(intent)
     }
@@ -154,17 +192,52 @@ class CapacitorMainActivity : BridgeActivity() {
         handleIntent(intent)
     }
 
+    fun getStartupOverlayPartialText(): String? {
+        return startupOverlayManager?.getPartialTextAndPrepare()
+    }
+
+    fun hideStartupOverlay() {
+        if (startupOverlayManager != null) {
+            startupOverlayManager?.hide()
+            startupOverlayManager = null
+        }
+    }
+
+    fun dismissStartupOverlay() {
+        startupOverlayManager?.dismiss()
+        startupOverlayManager = null
+    }
+
     fun flushPendingShareIntent() {
         isFrontendReady = true
         pendingShareIntent?.let {
             Log.d("SP_SHARE", "Flushing pending share intent: $it")
             callJSInterfaceFunctionIfExists("next", "onShareWithAttachment$", it.toString())
             pendingShareIntent = null
+            ShareIntentQueue.getAndClear(this)
         }
+    }
+
+    fun clearPendingShareIntent() {
+        pendingShareIntent = null
     }
 
     private fun handleIntent(intent: Intent) {
         Log.d("SP_SHARE", "handleIntent action: ${intent.action} type: ${intent.type}")
+
+        // Handle reminder notification tap
+        val reminderTaskId = intent.getStringExtra("REMINDER_TASK_ID")
+        if (reminderTaskId != null) {
+            // Sanitize to prevent JS injection (only allow alphanumeric, dash, underscore)
+            val sanitizedId = reminderTaskId.replace(Regex("[^a-zA-Z0-9_-]"), "")
+            Log.d("SP_REMINDER", "Reminder tap: taskId=$sanitizedId")
+            // Persist for pull-based retrieval (WebView may not be ready on cold start)
+            com.superproductivity.superproductivity.widget.ReminderTapQueue.setTaskId(this, sanitizedId)
+            // Also try push-based delivery (works on warm start)
+            callJSInterfaceFunctionIfExists("next", "onReminderTap$", "'$sanitizedId'")
+            intent.removeExtra("REMINDER_TASK_ID")
+            return
+        }
 
         // Handle tracking notification actions
         when (intent.action) {
@@ -216,13 +289,18 @@ class CapacitorMainActivity : BridgeActivity() {
                     json.put("type", type)
                     json.put("path", sharedText)
 
+                    // Always persist for crash safety
+                    ShareIntentQueue.setPending(this, json.toString())
+
                     if (isFrontendReady) {
                         Log.d("SP_SHARE", "Frontend ready, sending directly: $json")
                         callJSInterfaceFunctionIfExists("next", "onShareWithAttachment$", json.toString())
                         pendingShareIntent = null
+                        ShareIntentQueue.getAndClear(this)
                     } else {
                         Log.d("SP_SHARE", "Frontend NOT ready, queueing: $json")
                         pendingShareIntent = json
+                        Toast.makeText(this, R.string.share_received, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -233,14 +311,14 @@ class CapacitorMainActivity : BridgeActivity() {
         super.onSaveInstanceState(outState)
         // Save scoped storage permission on Android 10+
         storageHelper.onSaveInstanceState(outState)
-        bridge.webView.saveState(outState)
+        bridge?.webView?.saveState(outState)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         // Restore scoped storage permission on Android 10+
         storageHelper.onRestoreInstanceState(savedInstanceState)
-        bridge.webView.restoreState(savedInstanceState)
+        bridge?.webView?.restoreState(savedInstanceState)
     }
 
     override fun onPause() {
@@ -272,6 +350,8 @@ class CapacitorMainActivity : BridgeActivity() {
 
 
     override fun onDestroy() {
+        startupOverlayManager?.dismiss()
+        startupOverlayManager = null
         super.onDestroy()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(timerCompleteReceiver)
     }

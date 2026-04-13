@@ -7,6 +7,8 @@ import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { Action, ActionReducer } from '@ngrx/store';
+import { INBOX_PROJECT } from '../../../features/project/project.const';
+import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import {
   createBaseState,
   createMockProject,
@@ -17,6 +19,7 @@ import {
   expectStateUpdate,
   expectTagUpdate,
   expectTagUpdates,
+  expectTaskUpdate,
 } from './test-utils';
 
 describe('taskSharedLifecycleMetaReducer', () => {
@@ -659,6 +662,151 @@ describe('taskSharedLifecycleMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+
+    describe('stale reference normalization (issue #6270)', () => {
+      it('should reassign stale projectId to INBOX on restore', () => {
+        const testState = createBaseState();
+        // Add INBOX_PROJECT to state
+        testState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id] = createMockProject({
+          ...INBOX_PROJECT,
+        });
+        (testState[PROJECT_FEATURE_NAME].ids as string[]).push(INBOX_PROJECT.id);
+
+        const action = createRestoreAction({
+          id: 'archived-task',
+          projectId: 'DELETED_PROJECT',
+          tagIds: ['tag1'],
+        });
+
+        metaReducer(testState, action);
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('archived-task', { projectId: INBOX_PROJECT.id }),
+            ...expectProjectUpdate(INBOX_PROJECT.id, {
+              taskIds: ['archived-task'],
+            }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+
+      it('should strip stale tagIds on restore', () => {
+        const action = createRestoreAction({
+          id: 'archived-task',
+          projectId: 'project1',
+          tagIds: ['tag1', 'DELETED_TAG'],
+        });
+
+        metaReducer(baseState, action);
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('archived-task', { tagIds: ['tag1'] }),
+            ...expectTagUpdate('tag1', { taskIds: ['archived-task'] }),
+          },
+          action,
+          mockReducer,
+          baseState,
+        );
+      });
+
+      it('should strip TODAY_TAG from tagIds on restore', () => {
+        const action = createRestoreAction({
+          id: 'archived-task',
+          projectId: 'project1',
+          tagIds: ['tag1', 'TODAY'],
+        });
+
+        metaReducer(baseState, action);
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('archived-task', { tagIds: ['tag1'] }),
+          },
+          action,
+          mockReducer,
+          baseState,
+        );
+      });
+
+      it('should clear stale repeatCfgId on restore', () => {
+        const testState = createBaseState();
+        (testState as any)[TASK_REPEAT_CFG_FEATURE_NAME] = {
+          ids: [],
+          entities: {},
+        };
+
+        const action = createRestoreAction({
+          id: 'archived-task',
+          projectId: 'project1',
+          tagIds: ['tag1'],
+          repeatCfgId: 'DELETED_REPEAT_CFG',
+        });
+
+        metaReducer(testState, action);
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('archived-task', { repeatCfgId: undefined }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+
+      it('should preserve valid repeatCfgId on restore', () => {
+        const testState = createBaseState();
+        (testState as any)[TASK_REPEAT_CFG_FEATURE_NAME] = {
+          ids: ['validCfg'],
+          entities: { validCfg: { id: 'validCfg' } },
+        };
+
+        const action = createRestoreAction({
+          id: 'archived-task',
+          projectId: 'project1',
+          tagIds: ['tag1'],
+          repeatCfgId: 'validCfg',
+        });
+
+        metaReducer(testState, action);
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('archived-task', { repeatCfgId: 'validCfg' }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+
+      it('should normalize stale refs on subtasks during restore', () => {
+        const subTask = createMockTask({
+          id: 'sub1',
+          projectId: 'project1',
+          tagIds: ['tag1', 'DELETED_TAG'],
+          parentId: 'archived-task',
+        });
+        const action = createRestoreAction(
+          {
+            id: 'archived-task',
+            projectId: 'project1',
+            tagIds: ['tag1'],
+            subTaskIds: ['sub1'],
+          },
+          [subTask],
+        );
+
+        metaReducer(baseState, action);
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('sub1', { tagIds: ['tag1'] }),
+          },
+          action,
+          mockReducer,
+          baseState,
+        );
+      });
     });
   });
 

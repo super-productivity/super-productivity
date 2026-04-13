@@ -13,6 +13,20 @@ export const ActionCreateTask: IAutomationAction = {
   },
 };
 
+export const ActionDeleteTask: IAutomationAction = {
+  id: 'deleteTask',
+  name: 'Delete Task',
+  execute: async (ctx, event) => {
+    if (!event.task?.id) {
+      ctx.plugin.log.warn('[Automation] Cannot delete task without task context.');
+      return;
+    }
+
+    await ctx.plugin.deleteTask(event.task.id);
+    ctx.plugin.log.info(`[Automation] Action: Deleted task "${event.task.title}"`);
+  },
+};
+
 export const ActionAddTag: IAutomationAction = {
   id: 'addTag',
   name: 'Add Tag',
@@ -22,7 +36,7 @@ export const ActionAddTag: IAutomationAction = {
       return;
     }
     const tags = await ctx.dataCache.getTags();
-    let tagId = tags.find((t) => t.title === value)?.id;
+    let tagId = tags.find((t) => t.id === value || t.title === value)?.id;
 
     if (!tagId) {
       ctx.plugin.log.warn(`[Automation] Tag "${value}" not found.`);
@@ -34,6 +48,36 @@ export const ActionAddTag: IAutomationAction = {
       tagIds: [...event.task.tagIds, tagId],
     });
     ctx.plugin.log.info(`[Automation] Action: Added tag "${value}"`);
+  },
+};
+
+export const ActionMoveToProject: IAutomationAction = {
+  id: 'moveToProject',
+  name: 'Move to Project',
+  execute: async (ctx, event, value) => {
+    if (!event.task || !value) {
+      ctx.plugin.log.warn(
+        `[Automation] Cannot move task to project "${value}" without task context.`,
+      );
+      return;
+    }
+    const projects = await ctx.dataCache.getProjects();
+    const project = projects.find((p) => p.id === value || p.title === value);
+
+    if (!project) {
+      ctx.plugin.log.warn(
+        `[Automation] Project "${value}" not found in: ${projects.map((p) => p.title).join(', ')}`,
+      );
+      return;
+    }
+
+    if (event.task.projectId === project.id) {
+      ctx.plugin.log.info(`[Automation] Task already in project "${project.title}"`);
+      return;
+    }
+
+    await ctx.plugin.updateTask(event.task.id, { projectId: project.id });
+    ctx.plugin.log.info(`[Automation] Action: Moved task to project "${project.title}"`);
   },
 };
 

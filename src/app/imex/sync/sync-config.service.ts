@@ -11,9 +11,9 @@ import {
 } from '../../op-log/sync-exports';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncLog } from '../../core/log';
-import { DerivedKeyCacheService } from '../../op-log/encryption/derived-key-cache.service';
+import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
-import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
+import { SyncWrapperService } from './sync-wrapper.service';
 
 // Maps sync providers to their corresponding form field in SyncConfig
 // Dropbox is null because it doesn't store settings in the form (uses OAuth)
@@ -21,6 +21,7 @@ const PROP_MAP_TO_FORM: Record<SyncProviderId, keyof SyncConfig | null> = {
   [SyncProviderId.LocalFile]: 'localFileSync',
   [SyncProviderId.WebDAV]: 'webDav',
   [SyncProviderId.SuperSync]: 'superSync',
+  [SyncProviderId.Nextcloud]: 'nextcloud',
   [SyncProviderId.Dropbox]: null,
 };
 
@@ -75,6 +76,13 @@ const PROVIDER_FIELD_DEFAULTS: Record<
     encryptKey: '',
     isEncryptionEnabled: false,
   },
+  [SyncProviderId.Nextcloud]: {
+    serverUrl: '',
+    userName: '',
+    password: '',
+    syncFolderPath: '',
+    encryptKey: '',
+  },
   [SyncProviderId.LocalFile]: {
     syncFolderPath: '',
     encryptKey: '',
@@ -90,8 +98,7 @@ const PROVIDER_FIELD_DEFAULTS: Record<
 export class SyncConfigService {
   private _providerManager = inject(SyncProviderManager);
   private _globalConfigService = inject(GlobalConfigService);
-  private _derivedKeyCache = inject(DerivedKeyCacheService);
-  private _wrappedProvider = inject(WrappedProviderService);
+  private _syncWrapper = inject(SyncWrapperService);
 
   private _lastSettings: SyncConfig | null = null;
 
@@ -155,13 +162,22 @@ export class SyncConfigService {
           ...DEFAULT_GLOBAL_CONFIG.sync.localFileSync,
           ...syncCfg?.localFileSync,
         },
+        nextcloud: {
+          ...DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
+          ...syncCfg?.nextcloud,
+        },
       };
 
       // If no provider is active, return base config with empty encryption key
       if (!currentProviderCfg) {
         return from(
           fetch('/assets/sync-config-default-override.json')
-            .then((res) => res.json())
+            .then((res) => {
+              if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+              }
+              return res.json();
+            })
             .then((defaultOverride) => {
               return {
                 ...baseConfig,
@@ -202,6 +218,7 @@ export class SyncConfigService {
         localFileSync: DEFAULT_GLOBAL_CONFIG.sync.localFileSync,
         webDav: DEFAULT_GLOBAL_CONFIG.sync.webDav,
         superSync: DEFAULT_GLOBAL_CONFIG.sync.superSync,
+        nextcloud: DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
       };
 
       // Add current provider config if applicable
@@ -212,8 +229,11 @@ export class SyncConfigService {
 
       return of(result);
     }),
-    // Redact sensitive fields (passwords, encryption keys) in all environments
-    tap((v) => SyncLog.log('syncSettingsForm$', redactSensitiveFields(v))),
+    // Keep _lastSettings in sync so Formly modelChange doesn't trigger redundant saves
+    tap((v) => {
+      this._lastSettings = v;
+      SyncLog.log('syncSettingsForm$', redactSensitiveFields(v));
+    }),
   );
 
   async updateEncryptionPassword(
@@ -221,7 +241,7 @@ export class SyncConfigService {
     syncProviderId?: SyncProviderId,
   ): Promise<void> {
     const activeProvider = syncProviderId
-      ? this._providerManager.getProviderById(syncProviderId)
+      ? await this._providerManager.getProviderById(syncProviderId)
       : this._providerManager.getActiveProvider();
     if (!activeProvider) {
       // During initial sync setup, no provider exists yet to store the key.
@@ -246,13 +266,10 @@ export class SyncConfigService {
 
     await this._providerManager.setProviderConfig(activeProvider.id, newConfig);
 
-    // Ensure global config reflects encryption enabled when password is entered
-    this._globalConfigService.updateSection('sync', { isEncryptionEnabled: true });
-
     // Clear cached encryption keys to force re-derivation with new password
-    this._derivedKeyCache.clearCache();
-    // Clear cached adapters to force recreation with new encryption settings
-    this._wrappedProvider.clearCache();
+    clearSessionKeyCache();
+    // Allow encryption dialogs to appear again after password change
+    this._syncWrapper.clearEncryptionDialogSuppression();
   }
 
   async updateSettingsFromForm(newSettings: SyncConfig, isForce = false): Promise<void> {
@@ -269,7 +286,8 @@ export class SyncConfigService {
     // Split settings into public (global config) and private (credentials/secrets)
     // to maintain security boundaries - credentials never go to global config
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { encryptKey, webDav, localFileSync, superSync, ...globalConfig } = newSettings;
+    const { encryptKey, webDav, localFileSync, superSync, nextcloud, ...globalConfig } =
+      newSettings;
     // Provider-specific settings (URLs, credentials) must be stored securely
     if (providerId) {
       await this._updatePrivateConfig(providerId, newSettings);
@@ -279,7 +297,7 @@ export class SyncConfigService {
     // This ensures sync services see isEncryptionEnabled=true when SuperSync encryption is enabled
     // Note: We need to check the SAVED private config because Formly doesn't include hidden fields
     if (providerId === SyncProviderId.SuperSync) {
-      const activeProvider = this._providerManager.getProviderById(providerId);
+      const activeProvider = await this._providerManager.getProviderById(providerId);
       const savedPrivateCfg = activeProvider
         ? await activeProvider.privateCfg.load()
         : null;
@@ -288,9 +306,7 @@ export class SyncConfigService {
         (savedPrivateCfg as { isEncryptionEnabled?: boolean } | null)
           ?.isEncryptionEnabled ??
         false;
-      if (isEncryptionEnabled) {
-        globalConfig.isEncryptionEnabled = true;
-      }
+      globalConfig.isEncryptionEnabled = isEncryptionEnabled;
     }
 
     this._globalConfigService.updateSection('sync', globalConfig);
@@ -303,7 +319,7 @@ export class SyncConfigService {
     const prop = PROP_MAP_TO_FORM[providerId];
 
     // Load existing config to preserve OAuth tokens and other settings
-    const activeProvider = this._providerManager.getProviderById(providerId);
+    const activeProvider = await this._providerManager.getProviderById(providerId);
     const oldConfig = activeProvider ? await activeProvider.privateCfg.load() : {};
 
     // Form fields contain provider-specific settings, but Dropbox uses OAuth tokens
@@ -331,7 +347,7 @@ export class SyncConfigService {
       {} as Record<string, unknown>,
     );
 
-    // The provider's saved config is the source of truth after EncryptionDisableService runs
+    // The provider's saved config is the source of truth after SuperSyncEncryptionToggleService runs
     // oldConfig is loaded from activeProvider.privateCfg.load()
     // When encryption is explicitly disabled, we must clear encryptKey regardless of form state
     const isEncryptionDisabledInSavedConfig =
@@ -357,11 +373,22 @@ export class SyncConfigService {
         (nonEmptyFormValues?.encryptKey as string) || settings.encryptKey || '';
     }
 
+    // For SuperSync, isEncryptionEnabled is managed exclusively by dedicated dialogs
+    // (EnableEncryption, DisableEncryption, HandleDecryptError), NOT the form.
+    // Preserve the saved value to prevent accidental overwrites during config saves.
+    const savedIsEncryptionEnabled =
+      providerId === SyncProviderId.SuperSync
+        ? (oldConfig as { isEncryptionEnabled?: boolean })?.isEncryptionEnabled
+        : undefined;
+
     const configWithDefaults = {
       ...PROVIDER_FIELD_DEFAULTS[providerId],
       ...oldConfig,
       ...nonEmptyFormValues, // Only non-empty values overwrite saved config
       encryptKey: resolvedEncryptKey,
+      ...(savedIsEncryptionEnabled !== undefined
+        ? { isEncryptionEnabled: savedIsEncryptionEnabled }
+        : {}),
     };
 
     // Check if encryption settings changed to clear cached keys
@@ -379,9 +406,7 @@ export class SyncConfigService {
       SyncLog.normal(
         'SyncConfigService: Encryption settings changed, clearing cached keys',
       );
-      this._derivedKeyCache.clearCache();
-      // Clear cached adapters to force recreation with new encryption settings
-      this._wrappedProvider.clearCache();
+      clearSessionKeyCache();
     }
   }
 }

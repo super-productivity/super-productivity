@@ -1,16 +1,17 @@
-import { ActionType, OpType, Operation } from '../core/operation.types';
+import { ActionType, OpType, Operation, SyncImportReason } from '../core/operation.types';
 import {
-  SyncProviderServiceInterface,
+  SyncProviderBase,
   OperationSyncCapable,
   SyncOperation,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
 
-/** Provider IDs that use file-based operation sync (WebDAV, Dropbox, LocalFile) */
+/** Provider IDs that use file-based operation sync (WebDAV, Dropbox, LocalFile, Nextcloud) */
 const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
   SyncProviderId.WebDAV,
   SyncProviderId.Dropbox,
   SyncProviderId.LocalFile,
+  SyncProviderId.Nextcloud,
 ]);
 
 /**
@@ -18,8 +19,8 @@ const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
  * This is for providers like SuperSync that have a dedicated API endpoint.
  */
 export const isOperationSyncCapable = (
-  provider: SyncProviderServiceInterface<SyncProviderId>,
-): provider is SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable => {
+  provider: SyncProviderBase<SyncProviderId>,
+): provider is SyncProviderBase<SyncProviderId> & OperationSyncCapable => {
   return (
     'supportsOperationSync' in provider &&
     (provider as unknown as OperationSyncCapable).supportsOperationSync === true
@@ -28,10 +29,10 @@ export const isOperationSyncCapable = (
 
 /**
  * Type guard to check if a provider uses file-based operation sync.
- * File-based providers (WebDAV, Dropbox, LocalFile) use file storage for sync.
+ * File-based providers (WebDAV, Dropbox, LocalFile, Nextcloud) use file storage for sync.
  */
 export const isFileBasedProvider = (
-  provider: SyncProviderServiceInterface<SyncProviderId>,
+  provider: SyncProviderBase<SyncProviderId>,
 ): boolean => {
   return FILE_BASED_PROVIDER_IDS.has(provider.id);
 };
@@ -58,5 +59,8 @@ export const syncOpToOperation = (syncOp: SyncOperation): Operation => {
     vectorClock: syncOp.vectorClock,
     timestamp: syncOp.timestamp,
     schemaVersion: syncOp.schemaVersion,
+    ...(syncOp.syncImportReason
+      ? { syncImportReason: syncOp.syncImportReason as SyncImportReason }
+      : {}),
   };
 };

@@ -1,0 +1,57 @@
+@if (hintPosition(); as pos) {
+  <div
+    class="hint-container"
+    [class.floating]="isFloating()"
+    role="status"
+    aria-live="polite"
+    [style.top.px]="isFloating() ? null : pos.top"
+    [style.left.px]="isFloating() ? null : pos.left"
+  >
+    @if (!isFloating() && onboardingHintService.currentStep() !== 'explore') {
+      <div
+        class="hint-arrow"
+        [class.arrow-up]="pos.arrowDirection === 'up'"
+        [class.arrow-down]="pos.arrowDirection === 'down'"
+        [style.left.px]="pos.arrowOffset"
+      ></div>
+    }
+    <div
+      #hintChipEl
+      class="hint-chip"
+    >
+      <div class="hint-text">
+        @if (hintMessage()) {
+          <div class="hint-message">{{ hintMessage() | translate }}</div>
+        }
+        @if (hintActions().length) {
+          <div
+            class="hint-actions"
+            [class.has-message]="!!hintMessage()"
+            [class.hint-actions-enter]="
+              onboardingHintService.currentStep() === 'task-swipe-right'
+            "
+          >
+            @for (action of hintActions(); track action.text) {
+              <div class="hint-action">
+                <mat-icon>{{ action.icon }}</mat-icon>
+                <span>{{ action.text | translate }}</span>
+              </div>
+            }
+          </div>
+        }
+        @if (shortcutHint(); as shortcut) {
+          <span class="shortcut-hint">
+            {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
+          </span>
+        }
+      </div>
+      <button
+        class="close-btn"
+        [attr.aria-label]="T.ONBOARDING.HINTS.SKIP_ARIA | translate"
+        (click)="skip()"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
+  </div>
+}

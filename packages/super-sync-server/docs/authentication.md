@@ -25,7 +25,7 @@ JWTs are issued but never persisted to the database.
 **Trade-off:**
 
 - Cannot revoke individual tokens - only all tokens via version increment
-- Token remains valid until expiry (7 days) unless version bumped
+- Token remains valid until expiry (365 days) unless version bumped
 
 ### Why Token Versioning (Not Blacklisting)
 
@@ -91,7 +91,7 @@ Email verification tokens are stored as plain 64-character hex strings (32 rando
 | Password hashing         | bcrypt                | 12 rounds           |
 | Password minimum         | Zod validation        | 12 characters       |
 | JWT signing              | HMAC-SHA256           | Secret min 32 chars |
-| JWT expiry               | Configurable          | 7 days              |
+| JWT expiry               | Uniform               | 365 days            |
 | Verification token       | `crypto.randomBytes`  | 32 bytes (256 bits) |
 | Verification expiry      | Time-based            | 24 hours            |
 | Lockout threshold        | Failed attempts       | 5 attempts          |
@@ -126,7 +126,7 @@ await bcrypt.compare(password, hashToCompare);
                                                       │
                                                       ▼
                                              ┌─────────────────┐
-                                             │  JWT (7 days)   │
+                                             │  JWT (365d)     │
                                              │  contains:      │
                                              │  - userId       │
                                              │  - email        │
@@ -138,7 +138,7 @@ await bcrypt.compare(password, hashToCompare);
                               ▼                                                 ▼
                     ┌─────────────────┐                               ┌─────────────────┐
                     │ Token expires   │                               │ Password change │
-                    │ (after 7 days)  │                               │ tokenVersion++  │
+                    │ (after expiry)  │                               │ tokenVersion++  │
                     │                 │                               │                 │
                     │ User must       │                               │ ALL tokens      │
                     │ re-login        │                               │ invalidated     │
@@ -165,10 +165,8 @@ All auth-related constants are defined in `src/auth.ts`:
 ```typescript
 const MIN_JWT_SECRET_LENGTH = 32;
 const BCRYPT_ROUNDS = 12;
-const JWT_EXPIRY = '7d';
+const JWT_EXPIRY = '365d'; // All JWT tokens, regardless of auth method
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
-const MAX_FAILED_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 ```
 
 To modify these values, edit `src/auth.ts` and rebuild.

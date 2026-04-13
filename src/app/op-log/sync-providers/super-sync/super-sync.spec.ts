@@ -211,9 +211,7 @@ describe('SuperSyncProvider', () => {
       expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
     });
 
-    it('should call privateCfg.load for each server seq operation (relies on SyncCredentialStore caching)', async () => {
-      // Note: We removed redundant caching in SuperSyncProvider since SyncCredentialStore
-      // already has its own in-memory caching.
+    it('should call privateCfg.load only once for server seq operations (result is cached)', async () => {
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
       localStorageSpy.getItem.and.returnValue('10');
 
@@ -222,40 +220,43 @@ describe('SuperSyncProvider', () => {
       await provider.getLastServerSeq();
       await provider.getLastServerSeq();
 
-      // privateCfg.load is called for each operation, but SyncCredentialStore caches internally
-      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
+      // privateCfg.load is called only once because _getServerSeqKey caches the result
+      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('file operations (not supported)', () => {
-    it('should throw error for getFileRev', async () => {
-      await expectAsync(provider.getFileRev('/path', null)).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
+  describe('getWebSocketParams', () => {
+    it('should return null when access token is missing', async () => {
+      mockPrivateCfgStore.load.and.returnValue(
+        Promise.resolve({ baseUrl: 'https://sync.example.com' } as SuperSyncPrivateCfg),
       );
+
+      expect(await provider.getWebSocketParams()).toBeNull();
     });
 
-    it('should throw error for downloadFile', async () => {
-      await expectAsync(provider.downloadFile('/path')).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
+    it('should return sanitized params using the configured base URL', async () => {
+      mockPrivateCfgStore.load.and.returnValue(
+        Promise.resolve({
+          baseUrl: 'https://sync.example.com/',
+          accessToken: 'token\u200b123',
+        } as SuperSyncPrivateCfg),
       );
+
+      await expectAsync(provider.getWebSocketParams()).toBeResolvedTo({
+        baseUrl: 'https://sync.example.com',
+        accessToken: 'token123',
+      });
     });
 
-    it('should throw error for uploadFile', async () => {
-      await expectAsync(provider.uploadFile('/path', 'data', null)).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
+    it('should fall back to the default base URL when none is configured', async () => {
+      mockPrivateCfgStore.load.and.returnValue(
+        Promise.resolve({ accessToken: 'test-access-token' } as SuperSyncPrivateCfg),
       );
-    });
 
-    it('should throw error for removeFile', async () => {
-      await expectAsync(provider.removeFile('/path')).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
-      );
-    });
-
-    it('should throw error for listFiles', async () => {
-      await expectAsync(provider.listFiles('/path')).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
-      );
+      await expectAsync(provider.getWebSocketParams()).toBeResolvedTo({
+        baseUrl: SUPER_SYNC_DEFAULT_BASE_URL,
+        accessToken: 'test-access-token',
+      });
     });
   });
 

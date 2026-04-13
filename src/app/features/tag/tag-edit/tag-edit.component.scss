@@ -8,7 +8,7 @@
   ::ng-deep
     .mat-mdc-standard-chip.mdc-evolution-chip--with-trailing-action
     .mdc-evolution-chip__action--primary {
-    padding-left: 8px;
+    padding-left: var(--s);
   }
 
   input {
@@ -21,7 +21,7 @@
     border-top: 1px solid transparent;
     border-bottom: 1px solid transparent;
     height: 40px;
-    padding: 2px;
+    padding: var(--s-quarter);
     background: transparent;
 
     &:hover,

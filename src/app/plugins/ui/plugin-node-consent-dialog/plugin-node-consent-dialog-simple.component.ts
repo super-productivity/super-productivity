@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { PluginManifest } from '../../plugin-api.model';
 import { MatButton } from '@angular/material/button';
@@ -21,6 +21,7 @@ export interface PluginNodeConsentDialogData {
 @Component({
   selector: 'plugin-node-consent-dialog',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatDialogTitle,
     MatDialogContent,
@@ -59,7 +60,8 @@ export interface PluginNodeConsentDialogData {
         </p>
 
         <mat-checkbox
-          [(ngModel)]="rememberChoice"
+          [ngModel]="rememberChoice()"
+          (ngModelChange)="rememberChoice.set($event)"
           class="remember-checkbox"
         >
           {{ T.PLUGINS.REMEMBER_CHOICE | translate }}
@@ -157,17 +159,10 @@ export class PluginNodeConsentDialogComponent {
   private _translateService = inject(TranslateService);
 
   T = T;
-  rememberChoice = false;
-
-  constructor() {
-    // Pre-check the remember checkbox if provided in data
-    if (this.data.rememberChoice !== undefined) {
-      this.rememberChoice = this.data.rememberChoice;
-    }
-  }
+  rememberChoice = signal(this.data.rememberChoice ?? false);
 
   onConfirm(): void {
-    this.dialogRef.close({ granted: true, remember: this.rememberChoice });
+    this.dialogRef.close({ granted: true, remember: this.rememberChoice() });
   }
 
   onCancel(): void {

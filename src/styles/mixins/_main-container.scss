@@ -5,7 +5,7 @@
 }
 
 @mixin verySmallMainContainer() {
-  @container main-content (max-width: 360px) {
+  @container main-content (max-width: 356px) {
     @content;
   }
 }

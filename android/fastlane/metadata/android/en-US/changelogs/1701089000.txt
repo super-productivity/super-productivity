@@ -1,0 +1,23 @@
+
+### Bug Fixes
+
+* **ci:** prevent duplicate draft releases on tag push
+* **clipboard:** prioritize text content in paste handler (#6526)
+* **focusMode:** prevent break pause/resume from restarting time tracking (#6522)
+* **focusMode:** prevent settings changes from triggering focus overlay (#6521)
+* **inlineMarkdown:** emit post-insertion value in toggleChecklistMode (#6527)
+* parse time estimation short syntax for bulk-imported subtasks (#6525) (e666bcb), closes #6520
+* **rightPanel:** force blur on close for all devices to save task notes
+* **sync:** add vector clock pruning to compaction and update docs
+* **sync:** clean up file-based sync adapter after piggybacking removal
+* **sync:** prevent double-encryption of snapshot state in file-based adapter
+* **sync:** prune vector clock in snapshot save/restore to prevent bloat
+* **sync:** remove piggybacking from file-based adapter to prevent silent data loss
+* **sync:** replace timestamp-based partial trim gap detection with syncVersion-based check
+* **tasks:** copy notes when duplicating parent task (#6519)
+* **tasks:** make short syntax case-sensitive and remove days unit #6515
+* update ai prompts plugin description #5952
+### Features
+
+* **azure-devops:** add Azure DevOps issue provider integration (#6446) (2ca526d), closes #356 #2388
+* **dialog-fullscreen-markdown:** add close button to fullscreen (#6529)

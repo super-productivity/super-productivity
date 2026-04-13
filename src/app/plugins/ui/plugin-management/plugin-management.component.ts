@@ -34,10 +34,15 @@ import { PluginIconComponent } from '../plugin-icon/plugin-icon.component';
 import { PluginConfigDialogComponent } from '../plugin-config-dialog/plugin-config-dialog.component';
 import { IS_ELECTRON } from '../../../app.constants';
 import { PluginLog } from '../../../core/log';
+import { SnackService } from '../../../core/snack/snack.service';
+import { PluginBridgeService } from '../../plugin-bridge.service';
+import { catchError, of } from 'rxjs';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { LanguageCode } from '../../../core/locale.constants';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { confirmDialog } from '../../../util/native-dialogs';
+import { Store } from '@ngrx/store';
+import { selectAll as selectAllIssueProviders } from '../../../features/issue/store/issue-provider.selectors';
 
 interface CommunityPlugin {
   name: string;
@@ -79,6 +84,10 @@ export class PluginManagementComponent {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _dialog = inject(MatDialog);
   private readonly _http = inject(HttpClient);
+  private readonly _snackService = inject(SnackService);
+  private readonly _store = inject(Store);
+  private readonly _pluginBridge = inject(PluginBridgeService);
+  private readonly _allIssueProviders = this._store.selectSignal(selectAllIssueProviders);
 
   // Language code to human-readable name mapping
   /* eslint-disable @typescript-eslint/naming-convention */
@@ -108,11 +117,22 @@ export class PluginManagementComponent {
     uk: 'Ukrainian',
     zh: 'Chinese (Simplified)',
     'zh-tw': 'Chinese (Traditional)',
+    ro: 'Romanian',
+    'ro-md': 'Romanian (Moldova)',
   } as const;
   /* eslint-enable @typescript-eslint/naming-convention */
 
   readonly communityPlugins = toSignal(
-    this._http.get<CommunityPlugin[]>('assets/community-plugins.json'),
+    this._http.get<CommunityPlugin[]>('assets/community-plugins.json').pipe(
+      catchError((err) => {
+        PluginLog.err('Failed to load community plugins:', err);
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.PLUGINS.FAILED_TO_LOAD_COMMUNITY_PLUGINS,
+        });
+        return of([] as CommunityPlugin[]);
+      }),
+    ),
     { initialValue: [] },
   );
 
@@ -152,7 +172,7 @@ export class PluginManagementComponent {
     if (event.checked) {
       this.enablePlugin(plugin);
     } else {
-      this.disablePlugin(plugin);
+      this.disablePlugin(plugin, event);
     }
   }
 
@@ -189,8 +209,31 @@ export class PluginManagementComponent {
     }
   }
 
-  private async disablePlugin(plugin: PluginInstance): Promise<void> {
+  private async disablePlugin(
+    plugin: PluginInstance,
+    event: MatSlideToggleChange,
+  ): Promise<void> {
     PluginLog.log('Disabling plugin:', plugin.manifest.id);
+
+    // Check if this plugin has attached issue providers
+    const attachedProviders = this._allIssueProviders().filter(
+      (ip) =>
+        'pluginId' in ip && (ip as { pluginId: string }).pluginId === plugin.manifest.id,
+    );
+    if (attachedProviders.length > 0) {
+      if (
+        !confirmDialog(
+          this._translateService.instant(T.PLUGINS.CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS, {
+            count: attachedProviders.length,
+            name: plugin.manifest.name,
+          }),
+        )
+      ) {
+        // Reset toggle back to enabled since user cancelled
+        event.source.checked = true;
+        return;
+      }
+    }
 
     try {
       // Set plugin as disabled in persistence
@@ -279,6 +322,7 @@ export class PluginManagementComponent {
       this.uploadError.set(null);
 
       await this._pluginCacheService.clearCache();
+      this._pluginService.clearUploadedPluginsFromMemory();
 
       PluginLog.log('Plugin cache cleared successfully');
     } catch (error) {
@@ -383,6 +427,14 @@ export class PluginManagementComponent {
     }
 
     return parts.join(' / ');
+  }
+
+  hasConfigHandler(plugin: PluginInstance): boolean {
+    return this._pluginBridge.hasConfigHandler(plugin.manifest.id);
+  }
+
+  openPluginConfig(plugin: PluginInstance): void {
+    this._pluginBridge.invokeConfigHandler(plugin.manifest.id);
   }
 
   async openConfigDialog(plugin: PluginInstance): Promise<void> {

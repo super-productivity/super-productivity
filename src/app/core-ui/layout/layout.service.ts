@@ -24,7 +24,6 @@ import {
 import { map } from 'rxjs/operators';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { TaskService } from '../../features/tasks/task.service';
 
 const XS_BREAKPOINT = 600;
 const XXXS_BREAKPOINT = 398;
@@ -36,9 +35,10 @@ const initialXsMatch =
   providedIn: 'root',
 })
 export class LayoutService {
+  private static readonly _TASK_ACTION_DELAY = 50;
+
   private _store$ = inject<Store<LayoutState>>(Store);
   private _breakPointObserver = inject(BreakpointObserver);
-  private _taskService = inject(TaskService);
   private _previouslyFocusedElement: HTMLElement | null = null;
   private _pendingFocusTaskId: string | null = null; // store new task id until user closes the bar
 
@@ -55,7 +55,7 @@ export class LayoutService {
   );
 
   readonly selectedTimeView = signal<'week' | 'month'>('week');
-  readonly isScrolled = signal<boolean>(false);
+  readonly isWorkViewScrolled = signal<boolean>(false);
   readonly isShowAddTaskBar = toSignal(this.isShowAddTaskBar$, { initialValue: false });
 
   readonly isXs = toSignal(
@@ -119,32 +119,68 @@ export class LayoutService {
     this._store$.dispatch(hideAddTaskBar());
     const focusTaskId = newTaskId ?? this._pendingFocusTaskId ?? undefined;
     this._pendingFocusTaskId = null;
-    // Wait a moment so the DOM can render the new task before we try to focus anything.
-    window.setTimeout(() => {
-      if (focusTaskId) {
-        const newTaskElement = document.getElementById(`t-${focusTaskId}`);
-        if (newTaskElement) {
-          // Highest priority: focus the task that was just created (either passed explicitly
-          // or remembered via setPendingFocusTaskId).
-          this._taskService.focusTaskIfPossible(focusTaskId);
+
+    // Focus the last-created (or previously-focused) task with preventScroll
+    // so keyboard navigation works without causing a scroll jump.
+    // The actual scroll already happened when the task was added (see
+    // scrollToNewTask).
+    if (focusTaskId) {
+      this._runForTaskElement(
+        focusTaskId,
+        (newTaskElement) => {
+          newTaskElement.focus({ preventScroll: true });
           this._previouslyFocusedElement = null;
-          return;
-        }
-      }
+        },
+        () => this._focusPreviousTaskOrFallback(),
+      );
+      return;
+    }
 
-      if (
-        this._previouslyFocusedElement &&
-        document.body.contains(this._previouslyFocusedElement)
-      ) {
-        // Fallback: restore the element that had focus before opening the add-task bar.
-        this._previouslyFocusedElement.focus();
-        this._previouslyFocusedElement = null;
-        return;
-      }
+    window.setTimeout(() => {
+      this._focusPreviousTaskOrFallback();
+    }, LayoutService._TASK_ACTION_DELAY);
+  }
 
-      // Final fallback to keep keyboard navigation working even if nothing else is focusable.
-      this._taskService.focusFirstTaskIfVisible();
-    }, 50);
+  scrollToNewTask(taskId: string): void {
+    this._runForTaskElement(taskId, (el) => {
+      el.scrollIntoView({
+        behavior: 'instant',
+        block: 'center',
+        inline: 'nearest',
+      });
+    });
+  }
+
+  private _runForTaskElement(
+    taskId: string,
+    cb: (el: HTMLElement) => void,
+    onNotFound?: () => void,
+  ): void {
+    window.setTimeout(() => {
+      const el = document.getElementById(`t-${taskId}`);
+      if (el) {
+        cb(el);
+      } else {
+        onNotFound?.();
+      }
+    }, LayoutService._TASK_ACTION_DELAY);
+  }
+
+  private _focusPreviousTaskOrFallback(): void {
+    if (
+      this._previouslyFocusedElement &&
+      document.body.contains(this._previouslyFocusedElement)
+    ) {
+      this._previouslyFocusedElement.focus({ preventScroll: true });
+      this._previouslyFocusedElement = null;
+      return;
+    }
+
+    // Final fallback to keep keyboard navigation working.
+    const tEl = document.getElementsByTagName('task');
+    if (tEl && tEl[0]) {
+      (tEl[0] as HTMLElement).focus({ preventScroll: true });
+    }
   }
 
   toggleNotes(): void {

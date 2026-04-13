@@ -29,6 +29,7 @@ const backToLoginFromPasskeyBtn = document.getElementById('back-to-login-from-pa
 const loginPasskeyBtn = document.getElementById('login-passkey-btn');
 const loginMagicLinkBtn = document.getElementById('login-magic-link-btn');
 const registerPasskeyBtn = document.getElementById('register-passkey-btn');
+const registerMagicLinkBtn = document.getElementById('register-magic-link-btn');
 
 // Email inputs (synced across forms)
 const emailInputs = [
@@ -87,6 +88,9 @@ loginMagicLinkBtn.addEventListener('click', requestMagicLink);
 
 // Passkey register button
 registerPasskeyBtn.addEventListener('click', registerWithPasskey);
+
+// Magic link register button
+registerMagicLinkBtn.addEventListener('click', registerWithMagicLink);
 
 // Email input sync - when any email input changes, update all others
 emailInputs.forEach((input) => {
@@ -233,9 +237,11 @@ async function refreshToken() {
 
   // Show confirmation dialog
   const confirmed = confirm(
-    'Are you sure you want to refresh your token?\n\n' +
-      'This will invalidate your current token. You will need to update ' +
-      'the token in Super Productivity and any other devices using this account.',
+    'Are you sure you want to REVOKE your current token?\n\n' +
+      'This will disconnect ALL devices using this account. ' +
+      'You will need to copy the new token and paste it into Super Productivity on every device.\n\n' +
+      'Note: If you just need to see your token again, simply log in again — ' +
+      'this does NOT revoke existing tokens.',
   );
 
   if (!confirmed) return;
@@ -265,9 +271,13 @@ async function refreshToken() {
 
     // Visual feedback
     const originalText = refreshBtn.innerText;
-    refreshBtn.innerText = 'Refreshed!';
+    refreshBtn.innerText = 'Replaced!';
     refreshBtn.classList.add('success');
-    showMessage('Token refreshed! Old token is now invalid.', 'success');
+    showMessage(
+      'Token replaced! All previous tokens are now invalid. ' +
+        'Copy this new token and update it on all your devices.',
+      'success',
+    );
 
     setTimeout(() => {
       refreshBtn.innerText = originalText;
@@ -521,7 +531,11 @@ async function registerWithPasskey() {
     setTimeout(() => {
       switchTab('login');
       document.getElementById('login-email').value = email;
-      showMessage('Please verify your email, then login with your passkey.', 'success');
+      showMessage(
+        'Important: You must click the verification link in your email BEFORE logging in. ' +
+          'Login will NOT work until your email is verified.',
+        'success',
+      );
     }, 3000);
   } catch (err) {
     console.error('Passkey registration error:', err);
@@ -531,6 +545,59 @@ async function registerWithPasskey() {
     } else {
       showMessage(err.message || 'Passkey registration failed', 'error');
     }
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function registerWithMagicLink() {
+  const email = document.getElementById('register-email').value;
+  const termsAccepted = document.getElementById('register-terms').checked;
+
+  if (!email) {
+    showMessage('Please enter your email address', 'error');
+    return;
+  }
+
+  if (!termsAccepted) {
+    showMessage('You must accept the Terms of Service', 'error');
+    return;
+  }
+
+  setLoading(true);
+  hideMessage();
+
+  try {
+    const res = await fetch(`${API_BASE}/register/magic-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, termsAccepted }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Registration failed');
+    }
+
+    showMessage(
+      data.message ||
+        'Registration successful! Please check your email to verify your account.',
+      'success',
+    );
+
+    // Switch to login tab after delay
+    setTimeout(() => {
+      switchTab('login');
+      document.getElementById('login-email').value = email;
+      showMessage(
+        'Important: You must click the verification link in your email BEFORE using "Send Login Link". ' +
+          'The login link will NOT work until your email is verified.',
+        'success',
+      );
+    }, 3000);
+  } catch (err) {
+    showMessage(err.message || 'Registration failed. Please try again.', 'error');
   } finally {
     setLoading(false);
   }

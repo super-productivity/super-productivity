@@ -3,6 +3,7 @@
   class="dialog-help-wrapper"
 >
   <h1 mat-dialog-title>
+    <mat-icon>repeat</mat-icon>
     {{
       isEdit()
         ? (T.F.TASK_REPEAT.D_EDIT.EDIT | translate)
@@ -12,84 +13,95 @@
 
   <mat-dialog-content>
     @if (repeatCfgId(); as cfgId) {
-      <repeat-task-heatmap [repeatCfgId]="cfgId" />
+      <collapsible
+        [title]="T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate"
+        icon="bar_chart"
+        (isExpandedChange)="isHeatmapExpanded = $event"
+      >
+        @if (isHeatmapExpanded) {
+          <repeat-task-heatmap [repeatCfgId]="cfgId" />
+        }
+      </collapsible>
     }
-
-    <help-section>
-      <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP1 | translate }}</p>
-      <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP2 | translate }}</p>
-      <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP3 | translate }}</p>
-      <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP4 | translate }}</p>
-    </help-section>
 
     <div class="form-wrapper">
       <formly-form
         (modelChange)="repeatCfg.set($event)"
         [form]="formGroup1()"
-        [fields]="TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS()"
+        [fields]="essentialFormFields()"
         [model]="repeatCfg()"
       ></formly-form>
-      <chip-list-input
-        (addItem)="addTag($event)"
-        (addNewItem)="addNewTag($event)"
-        (removeItem)="removeTag($event)"
-        [label]="T.F.TASK_REPEAT.D_EDIT.TAG_LABEL | translate"
-        [model]="repeatCfg().tagIds"
-        [suggestions]="tagSuggestions()"
-      ></chip-list-input>
 
-      <!--      <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG|translate">-->
-      <formly-form
-        (modelChange)="repeatCfg.set($event)"
-        [form]="formGroup2()"
-        [fields]="TASK_REPEAT_CFG_ADVANCED_FORM_CFG()"
-        [model]="repeatCfg()"
-      ></formly-form>
-      <!--            </collapsible>-->
+      <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
+        <chip-list-input
+          (addItem)="addTag($event)"
+          (addNewItem)="addNewTag($event)"
+          (removeItem)="removeTag($event)"
+          [label]="T.F.TASK_REPEAT.D_EDIT.TAG_LABEL | translate"
+          [model]="repeatCfg().tagIds"
+          [suggestions]="tagSuggestions()"
+        ></chip-list-input>
+
+        <formly-form
+          (modelChange)="repeatCfg.set($event)"
+          [form]="formGroup2()"
+          [fields]="advancedFormFields()"
+          [model]="repeatCfg()"
+        ></formly-form>
+      </collapsible>
     </div>
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
     <button
       (click)="close()"
+      [attr.aria-label]="T.G.CANCEL | translate"
+      class="icon-on-small"
       color="primary"
       mat-button
       type="button"
     >
-      {{ T.G.CANCEL | translate }}
+      <mat-icon class="show-on-small">close</mat-icon>
+      <span class="hide-on-small">{{ T.G.CANCEL | translate }}</span>
     </button>
 
     @if (isEdit()) {
       @if (canRemoveInstance()) {
         <button
           (click)="deleteInstance()"
+          [attr.aria-label]="skipInstanceButtonText()"
+          class="icon-on-small"
           color="primary"
           mat-stroked-button
           type="button"
         >
           <mat-icon>event_busy</mat-icon>
-          {{ removeInstanceButtonText() }}
+          <span class="hide-on-small">{{ skipInstanceButtonText() }}</span>
         </button>
       }
       <button
         (click)="remove()"
-        color="primary"
+        [attr.aria-label]="T.G.REMOVE | translate"
+        class="icon-on-small"
+        color="warn"
         mat-stroked-button
         type="button"
       >
         <mat-icon>delete_forever</mat-icon>
-        {{ T.G.REMOVE | translate }}
+        <span class="hide-on-small">{{ T.G.REMOVE | translate }}</span>
       </button>
     }
 
     <button
       [disabled]="!formGroup1().valid || !formGroup2().valid || isLoading()"
+      [attr.aria-label]="T.G.SAVE | translate"
+      class="icon-on-small"
       color="primary"
-      mat-stroked-button
+      mat-raised-button
       type="submit"
     >
       <mat-icon>save</mat-icon>
-      {{ T.G.SAVE | translate }}
+      <span class="hide-on-small">{{ T.G.SAVE | translate }}</span>
     </button>
   </mat-dialog-actions>
 </form>

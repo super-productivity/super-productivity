@@ -1,6 +1,12 @@
 import { IPC } from './shared-with-frontend/ipc-events.const';
-import { SyncGetRevResult } from '../src/app/imex/sync/sync.model';
-import { readdirSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'fs';
+import {
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+  unlinkSync,
+} from 'fs';
 import { error, log } from 'electron-log/main';
 import { dialog, ipcMain } from 'electron';
 import { getWin } from './main-window';
@@ -24,43 +30,19 @@ export const initLocalFileSyncAdapter = (): void => {
         console.log(IPC.FILE_SYNC_SAVE, filePath);
         console.log('writeFileSync', filePath, !!dataStr);
 
-        writeFileSync(filePath, dataStr);
+        // Atomic write: write to temp file first, then rename.
+        // renameSync is atomic on ext4/APFS/NTFS, so a crash mid-write
+        // won't corrupt the original file.
+        const tempPath = filePath + '.tmp';
+        writeFileSync(tempPath, dataStr);
+        renameSync(tempPath, filePath);
 
         return getRev(filePath);
       } catch (e) {
         log('ERR: Sync error while writing to ' + filePath);
         error(e);
-        return new Error(e as string);
+        return e instanceof Error ? e : new Error(String(e));
       }
-    },
-  );
-
-  ipcMain.handle(
-    IPC.FILE_SYNC_GET_REV_AND_CLIENT_UPDATE,
-    (
-      ev,
-      {
-        filePath,
-        localRev,
-      }: {
-        filePath: string;
-        localRev: string | null;
-      },
-    ): { rev: string; clientUpdate?: number } | SyncGetRevResult => {
-      throw new Error('REMOVE AS IMPLEMENTED OTHERWISE');
-      // try {
-      //   console.log(IPC.FILE_SYNC_GET_REV_AND_CLIENT_UPDATE, filePath, localRev);
-      //   console.log('getRev and stuuff');
-      //   readFileSync(filePath);
-      //   return {
-      //     rev: getRev(filePath),
-      //   };
-      // } catch (e) {
-      //   log('ERR: Sync error while getting meta for ' + filePath);
-      //   error(e);
-      //   // TODO improve
-      //   return 'NO_REMOTE_DATA';
-      // }
     },
   );
 
@@ -87,7 +69,7 @@ export const initLocalFileSyncAdapter = (): void => {
       } catch (e) {
         log('ERR: Sync error while loading file from ' + filePath);
         error(e);
-        return new Error(e as string);
+        return e instanceof Error ? e : new Error(String(e));
       }
     },
   );
@@ -109,7 +91,7 @@ export const initLocalFileSyncAdapter = (): void => {
       } catch (e) {
         log('ERR: Sync error while loading file from ' + filePath);
         error(e);
-        return new Error(e as string);
+        return e instanceof Error ? e : new Error(String(e));
       }
     },
   );
@@ -131,7 +113,7 @@ export const initLocalFileSyncAdapter = (): void => {
       } catch (e) {
         log('ERR: error while checking dir ' + dirPath);
         error(e);
-        return new Error(e as string);
+        return e instanceof Error ? e : new Error(String(e));
       }
     },
   );

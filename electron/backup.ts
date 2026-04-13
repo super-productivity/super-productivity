@@ -91,8 +91,8 @@ function getDateStr(): string {
   return `${yyyy}-${MM}-${dd}_${HH}${mm}${ss}`;
 }
 
-const KEEP_RECENT = 14;
-const KEEP_DAILY_DAYS = 7;
+const KEEP_RECENT = 30;
+const KEEP_DAILY_DAYS = 21;
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function cleanupOldBackups(): void {

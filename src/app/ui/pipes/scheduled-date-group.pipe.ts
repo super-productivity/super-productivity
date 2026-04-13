@@ -43,7 +43,7 @@ export class ScheduledDateGroupPipe implements PipeTransform {
     }
 
     const date = dateStrToUtcDate(value);
-    const locale = this._dateTimeFormatService.currentLocale;
+    const locale = this._dateTimeFormatService.currentLocale();
 
     // Format with weekday and date: "Wed 1/15"
     const formatter = new Intl.DateTimeFormat(locale, {

@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   input,
+  OnDestroy,
   output,
   signal,
   viewChild,
@@ -33,6 +34,8 @@ import { WorkContextType } from '../../../features/work-context/work-context.mod
 import { DEFAULT_PROJECT_ICON } from '../../../features/project/project.const';
 import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
 
+const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
+
 @Component({
   selector: 'nav-list-tree',
   standalone: true,
@@ -52,9 +55,10 @@ import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [expandCollapseAni],
 })
-export class NavListTreeComponent {
+export class NavListTreeComponent implements OnDestroy {
   private readonly _navConfigService = inject(MagicNavConfigService);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private _expandAnimationTimeoutId: number | null = null;
 
   item = input.required<NavTreeItem>();
   showLabels = input<boolean>(true);
@@ -76,6 +80,7 @@ export class NavListTreeComponent {
 
   readonly treeNodes = signal<TreeNode<MenuTreeViewNode>[]>([]);
   readonly treeKind = computed<MenuTreeKind>(() => this.item().treeKind);
+  readonly shouldAnimateExpandCollapse = signal(false);
 
   constructor() {
     effect(() => {
@@ -85,7 +90,15 @@ export class NavListTreeComponent {
   }
 
   onHeaderClick(): void {
+    this._enableExpandAnimationTemporarily();
     this.itemClick.emit(this.item());
+  }
+
+  ngOnDestroy(): void {
+    if (this._expandAnimationTimeoutId != null) {
+      window.clearTimeout(this._expandAnimationTimeoutId);
+      this._expandAnimationTimeoutId = null;
+    }
   }
 
   onChildClick(node: TreeNode<MenuTreeViewNode>): void {
@@ -128,6 +141,18 @@ export class NavListTreeComponent {
     event.preventDefault();
     event.stopPropagation();
     this._openFolderContextMenu(event, node);
+  }
+
+  private _enableExpandAnimationTemporarily(): void {
+    if (this._expandAnimationTimeoutId != null) {
+      window.clearTimeout(this._expandAnimationTimeoutId);
+    }
+
+    this.shouldAnimateExpandCollapse.set(true);
+    this._expandAnimationTimeoutId = window.setTimeout(() => {
+      this.shouldAnimateExpandCollapse.set(false);
+      this._expandAnimationTimeoutId = null;
+    }, EXPAND_ANIMATION_RESET_DELAY_MS);
   }
 
   private _openFolderContextMenu(

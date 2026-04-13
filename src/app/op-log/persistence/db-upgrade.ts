@@ -61,4 +61,10 @@ export const runDbUpgrade = (
     db.createObjectStore(STORE_NAMES.ARCHIVE_YOUNG, { keyPath: 'id' });
     db.createObjectStore(STORE_NAMES.ARCHIVE_OLD, { keyPath: 'id' });
   }
+
+  // Version 5: Add profile_data store for user profile switching
+  // Moves profile backup blobs from localStorage (5-10 MB quota) to IndexedDB
+  if (oldVersion < 5) {
+    db.createObjectStore(STORE_NAMES.PROFILE_DATA, { keyPath: 'id' });
+  }
 };

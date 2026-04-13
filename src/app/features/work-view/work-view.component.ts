@@ -31,7 +31,6 @@ import {
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
-import { PlanningModeService } from '../planning-mode/planning-mode.service';
 import { T } from '../../t.const';
 import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-project-change.ani';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -43,8 +42,6 @@ import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatMiniFabButton } from '@angular/material/button';
-import { AddTaskBarComponent } from '../tasks/add-task-bar/add-task-bar.component';
-import { AddScheduledTodayOrTomorrowBtnComponent } from '../add-tasks-for-tomorrow/add-scheduled-for-tomorrow/add-scheduled-today-or-tomorrow-btn.component';
 import { TaskListComponent } from '../tasks/task-list/task-list.component';
 import { SplitComponent } from './split/split.component';
 import { BacklogComponent } from './backlog/backlog.component';
@@ -57,12 +54,19 @@ import {
 } from '../tasks/store/task.selectors';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { SnackService } from '../../core/snack/snack.service';
+import { GlobalConfigService } from '../config/global-config.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component';
 import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
+import {
+  selectTaskRepeatCfgsByProjectId,
+  selectTaskRepeatCfgsByTagId,
+} from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
+import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
 
 @Component({
   selector: 'work-view',
@@ -82,8 +86,6 @@ import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe
     MatIcon,
     MatMiniFabButton,
     MatButton,
-    AddTaskBarComponent,
-    AddScheduledTodayOrTomorrowBtnComponent,
     TaskListComponent,
     SplitComponent,
     BacklogComponent,
@@ -94,12 +96,12 @@ import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe
     CommonModule,
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
+    RepeatCfgPreviewComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
   taskService = inject(TaskService);
   takeABreakService = inject(TakeABreakService);
-  planningModeService = inject(PlanningModeService);
   layoutService = inject(LayoutService);
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
@@ -108,6 +110,11 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
   private _snackService = inject(SnackService);
+  private _globalConfigService = inject(GlobalConfigService);
+
+  isFinishDayEnabled = computed(
+    () => this._globalConfigService.appFeatures().isFinishDayEnabled,
+  );
 
   // TODO refactor all to signals
   overdueTasks = toSignal(this._store.select(selectOverdueTasksWithSubTasks), {
@@ -127,7 +134,6 @@ export class WorkViewComponent implements OnInit, OnDestroy {
 
   hasDoneTasks = computed(() => this.doneTasks().length > 0);
 
-  isPlanningMode = this.planningModeService.isPlanningMode;
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,
   });
@@ -140,6 +146,25 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
+  isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
+
+  repeatCfgsForContext = toSignal(
+    this.workContextService.activeWorkContextTypeAndId$.pipe(
+      switchMap(({ activeType, activeId }) =>
+        activeType === 'PROJECT'
+          ? this._store.select(selectTaskRepeatCfgsByProjectId, {
+              projectId: activeId,
+            })
+          : this._store.select(selectTaskRepeatCfgsByTagId, { tagId: activeId }),
+      ),
+    ),
+    { initialValue: [] as TaskRepeatCfg[] },
+  );
+
+  isShowRepeatCfgsPanel = computed(
+    () =>
+      !this.customizerService.isCustomized() && this.repeatCfgsForContext().length > 0,
+  );
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -164,7 +189,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       delay(50),
       switchMap(() => this.splitTopEl$),
       switchMap((el) =>
-        // Defer scroll reactions to the next frame so layoutService.isScrolled
+        // Defer scroll reactions to the next frame so layoutService.isWorkViewScrolled
         // toggles happen in sync with the browser repaint.
         fromEvent(el, 'scroll').pipe(observeOn(animationFrameScheduler)),
       ),
@@ -231,6 +256,15 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       }
     });
 
+    effect(() => {
+      const isHidden = this.isRepeatCfgsHidden();
+      if (isHidden) {
+        localStorage.setItem(LS.REPEAT_CFGS_HIDDEN, 'true');
+      } else {
+        localStorage.removeItem(LS.REPEAT_CFGS_HIDDEN);
+      }
+    });
+
     afterNextRender(() => this._initScrollTracking());
   }
 
@@ -257,15 +291,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       window.clearTimeout(this._switchListAnimationTimeout);
     }
     this._subs.unsubscribe();
-    this.layoutService.isScrolled.set(false);
-  }
-
-  planMore(): void {
-    this.planningModeService.enterPlanningMode();
-  }
-
-  startWork(): void {
-    this.planningModeService.leavePlanningMode();
+    this.layoutService.isWorkViewScrolled.set(false);
   }
 
   resetBreakTimer(): void {
@@ -275,22 +301,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   async moveDoneToArchive(): Promise<void> {
     const doneTasks = this.doneTasks();
 
-    // Add detailed logging for debugging
-    console.log('[WorkView] moveDoneToArchive called with:', {
-      doneTasks,
-      type: typeof doneTasks,
-      isArray: Array.isArray(doneTasks),
-      length: doneTasks?.length,
-      projectId: this.workContextService.activeWorkContextId,
-      contextType: this.workContextService.activeWorkContextType,
-    });
-
-    if (!doneTasks || !Array.isArray(doneTasks)) {
-      console.error('[WorkView] doneTasks is not an array:', doneTasks);
-      return;
-    }
-
-    if (doneTasks.length === 0) {
+    if (!doneTasks || doneTasks.length === 0) {
       return;
     }
 
@@ -318,9 +329,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this._subs.add(
       this.upperContainerScroll$.subscribe(({ target }) => {
         if ((target as HTMLElement).scrollTop !== 0) {
-          this.layoutService.isScrolled.set(true);
+          this.layoutService.isWorkViewScrolled.set(true);
         } else {
-          this.layoutService.isScrolled.set(false);
+          this.layoutService.isWorkViewScrolled.set(false);
         }
       }),
     );

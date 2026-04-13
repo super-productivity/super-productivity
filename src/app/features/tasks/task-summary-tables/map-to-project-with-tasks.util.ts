@@ -21,12 +21,12 @@ export const mapToProjectWithTasks = (
     task.projectId ? task.projectId === project.id : project.id === null,
   );
   const timeSpentToday = tasks.reduce((acc: number, task) => {
-    return acc + ((!task.parentId && task.timeSpentOnDay[todayStr]) || 0);
+    return acc + ((!task.parentId && task.timeSpentOnDay?.[todayStr]) || 0);
   }, 0);
 
   const timeSpentYesterday = yesterdayStr
     ? tasks.reduce((acc: number, task) => {
-        return acc + ((!task.parentId && task.timeSpentOnDay[yesterdayStr]) || 0);
+        return acc + ((!task.parentId && task.timeSpentOnDay?.[yesterdayStr]) || 0);
       }, 0)
     : undefined;
 

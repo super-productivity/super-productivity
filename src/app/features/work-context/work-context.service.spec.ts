@@ -317,4 +317,56 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       expect(filteredTasks.length).toBe(0);
     });
   });
+
+  describe('getTimeWorkedForDayForTasksInArchiveYoung', () => {
+    const DAY = '2023-06-13';
+
+    it('should not crash when archived task has undefined timeSpentOnDay', async () => {
+      taskArchiveServiceMock.loadYoung.and.returnValue(
+        Promise.resolve({
+          ids: ['task1', 'task2'],
+          entities: {
+            task1: {
+              id: 'task1',
+              timeSpentOnDay: undefined,
+              parentId: null,
+              tagIds: ['test-context'],
+              projectId: null,
+            },
+            task2: {
+              id: 'task2',
+              timeSpentOnDay: { [DAY]: 5000 },
+              parentId: null,
+              tagIds: ['test-context'],
+              projectId: null,
+            },
+          } as any,
+        }),
+      );
+
+      const result = await service.getTimeWorkedForDayForTasksInArchiveYoung(DAY);
+      expect(result).toBe(5000);
+    });
+
+    it('should not crash when archive entity is undefined', async () => {
+      taskArchiveServiceMock.loadYoung.and.returnValue(
+        Promise.resolve({
+          ids: ['task1', 'task2'],
+          entities: {
+            task1: undefined,
+            task2: {
+              id: 'task2',
+              timeSpentOnDay: { [DAY]: 3000 },
+              parentId: null,
+              tagIds: ['test-context'],
+              projectId: null,
+            },
+          } as any,
+        }),
+      );
+
+      const result = await service.getTimeWorkedForDayForTasksInArchiveYoung(DAY);
+      expect(result).toBe(3000);
+    });
+  });
 });

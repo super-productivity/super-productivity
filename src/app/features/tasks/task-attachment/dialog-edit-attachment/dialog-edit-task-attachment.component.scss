@@ -1,3 +1,5 @@
+@use '../../../../../styles/_globals.scss' as *;
+
 h1,
 mat-dialog-actions {
   :host-context([dir='rtl']) & {
@@ -15,7 +17,7 @@ mat-dialog-actions {
   display: flex;
   flex-direction: column;
 
-  @media (min-width: 600px) {
+  @include mq(xs) {
     min-width: 500px;
   }
 }

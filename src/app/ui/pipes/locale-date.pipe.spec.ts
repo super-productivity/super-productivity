@@ -7,7 +7,7 @@ describe('LocaleDatePipe', () => {
 
   beforeEach(() => {
     const spy = jasmine.createSpyObj('DateTimeFormatService', ['formatTime'], {
-      currentLocale: 'en-US',
+      currentLocale: () => 'en-US',
     });
 
     TestBed.configureTestingModule({
@@ -43,5 +43,13 @@ describe('LocaleDatePipe', () => {
     const date = new Date(2024, 0, 15, 14, 30);
     const result = pipe.transform(date, 'short');
     expect(result).toBeTruthy();
+  });
+
+  it('should return null for non-parseable string input instead of throwing', () => {
+    expect(pipe.transform('invalid-date-string' as any)).toBeNull();
+  });
+
+  it('should return null for empty string input instead of throwing', () => {
+    expect(pipe.transform('' as any)).toBeNull();
   });
 });

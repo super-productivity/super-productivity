@@ -1,151 +1,20 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
-import { switchMap, tap } from 'rxjs/operators';
-import { timer } from 'rxjs';
+import { tap } from 'rxjs/operators';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { DroidLog } from '../../../core/log';
-import { generateNotificationId } from '../android-notification-id.util';
 import { androidInterface } from '../android-interface';
 import { TaskService } from '../../tasks/task.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
-import { Store } from '@ngrx/store';
-import { selectAllTasksWithReminder } from '../../tasks/store/task.selectors';
-import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
-import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
 
 // TODO send message to electron when current task changes here
-
-const DELAY_PERMISSIONS = 2000;
-const DELAY_SCHEDULE = 5000;
 
 @Injectable()
 export class AndroidEffects {
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
   private _taskAttachmentService = inject(TaskAttachmentService);
-  private _store = inject(Store);
-  private _reminderService = inject(CapacitorReminderService);
-  private _platformService = inject(CapacitorPlatformService);
-  // Single-shot guard so we don't spam the user with duplicate warnings.
-  private _hasShownNotificationWarning = false;
-  // Track scheduled reminder IDs to cancel removed ones
-  private _scheduledReminderIds = new Set<string>();
-
-  /**
-   * Check notification permissions on startup for mobile platforms.
-   * Shows a warning if permissions are not granted.
-   */
-  askPermissionsIfNotGiven$ =
-    this._platformService.isNative &&
-    createEffect(
-      () =>
-        timer(DELAY_PERMISSIONS).pipe(
-          tap(async () => {
-            try {
-              const hasPermission = await this._reminderService.ensurePermissions();
-              DroidLog.log('MobileEffects: initial permission check', { hasPermission });
-              if (!hasPermission) {
-                this._notifyPermissionIssue();
-              }
-            } catch (error) {
-              DroidLog.err(error);
-              this._notifyPermissionIssue(error?.toString());
-            }
-          }),
-        ),
-      {
-        dispatch: false,
-      },
-    );
-
-  /**
-   * Schedule reminders for tasks with remindAt set.
-   * Works on both iOS and Android.
-   *
-   * SYNC-SAFE: This effect is intentionally safe during sync/hydration because:
-   * - dispatch: false - no store mutations, only native API calls
-   * - We WANT notifications scheduled for synced tasks (user-facing functionality)
-   * - Native scheduling calls are idempotent - rescheduling the same reminder is harmless
-   * - Cancellation of removed reminders correctly handles tasks deleted via sync
-   */
-  scheduleNotifications$ =
-    this._platformService.isNative &&
-    createEffect(
-      () =>
-        timer(DELAY_SCHEDULE).pipe(
-          switchMap(() => this._store.select(selectAllTasksWithReminder)),
-          tap(async (tasksWithReminders) => {
-            try {
-              const currentReminderIds = new Set(
-                (tasksWithReminders || []).map((t) => t.id),
-              );
-
-              // Cancel reminders that are no longer in the list
-              for (const previousId of this._scheduledReminderIds) {
-                if (!currentReminderIds.has(previousId)) {
-                  const notificationId = generateNotificationId(previousId);
-                  DroidLog.log('MobileEffects: cancelling removed reminder', {
-                    relatedId: previousId,
-                    notificationId,
-                  });
-                  await this._reminderService.cancelReminder(notificationId);
-                }
-              }
-
-              if (!tasksWithReminders || tasksWithReminders.length === 0) {
-                this._scheduledReminderIds.clear();
-                return;
-              }
-
-              DroidLog.log('MobileEffects: scheduling reminders', {
-                reminderCount: tasksWithReminders.length,
-                platform: this._platformService.platform,
-              });
-
-              // Ensure permissions are granted
-              const hasPermission = await this._reminderService.ensurePermissions();
-              if (!hasPermission) {
-                this._notifyPermissionIssue();
-                return;
-              }
-
-              // Schedule each reminder using the platform-appropriate method
-              for (const task of tasksWithReminders) {
-                // Skip reminders that are already in the past (already fired)
-                // These will be handled by the dialog when the user opens the app
-                if (task.remindAt! < Date.now()) {
-                  continue;
-                }
-
-                const id = generateNotificationId(task.id);
-                await this._reminderService.scheduleReminder({
-                  notificationId: id,
-                  reminderId: task.id,
-                  relatedId: task.id,
-                  title: task.title,
-                  reminderType: 'TASK',
-                  triggerAtMs: task.remindAt!,
-                });
-              }
-
-              // Update tracked IDs
-              this._scheduledReminderIds = currentReminderIds;
-
-              DroidLog.log('MobileEffects: scheduled reminders', {
-                reminderCount: tasksWithReminders.length,
-                platform: this._platformService.platform,
-              });
-            } catch (error) {
-              DroidLog.err(error);
-              this._notifyPermissionIssue(error?.toString());
-            }
-          }),
-        ),
-      {
-        dispatch: false,
-      },
-    );
 
   handleShare$ =
     IS_ANDROID_WEB_VIEW &&
@@ -153,15 +22,12 @@ export class AndroidEffects {
       () =>
         androidInterface.onShareWithAttachment$.pipe(
           tap((shareData) => {
-            const truncatedTitle =
-              shareData.title.length > 150
-                ? shareData.title.substring(0, 147) + '...'
-                : shareData.title;
-            const taskTitle = `Check: ${truncatedTitle}`;
+            const taskTitle = this._buildTaskTitle(shareData);
             const taskId = this._taskService.add(taskTitle);
             const icon = shareData.type === 'LINK' ? 'link' : 'file_present';
             this._taskAttachmentService.addAttachment(taskId, {
-              title: shareData.title,
+              title:
+                shareData.subject?.trim() || shareData.title?.trim() || shareData.path,
               type: shareData.type,
               path: shareData.path,
               icon,
@@ -213,15 +79,118 @@ export class AndroidEffects {
       { dispatch: false },
     );
 
-  private _notifyPermissionIssue(message?: string): void {
-    if (this._hasShownNotificationWarning) {
-      return;
+  // Drain reminder done/snooze/tap queues on resume (warm start)
+  checkReminderQueuesOnResume$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        androidInterface.onResume$.pipe(
+          tap(() => {
+            try {
+              const doneQueue = androidInterface.getReminderDoneQueue?.();
+              if (doneQueue) {
+                const taskIds: string[] = JSON.parse(doneQueue);
+                DroidLog.log('Resume: found reminder done queue', taskIds);
+                for (const id of taskIds) {
+                  androidInterface.onReminderDone$.next(id);
+                }
+              }
+            } catch (e) {
+              DroidLog.err('Failed to process reminder done queue on resume', e);
+            }
+
+            try {
+              const snoozeQueue = androidInterface.getReminderSnoozeQueue?.();
+              if (snoozeQueue) {
+                const events: { taskId: string; newRemindAt: number }[] =
+                  JSON.parse(snoozeQueue);
+                DroidLog.log('Resume: found reminder snooze queue', events);
+                for (const event of events) {
+                  androidInterface.onReminderSnooze$.next(event);
+                }
+              }
+            } catch (e) {
+              DroidLog.err('Failed to process reminder snooze queue on resume', e);
+            }
+
+            try {
+              const tapTaskId = androidInterface.getReminderTapQueue?.();
+              if (tapTaskId) {
+                DroidLog.log('Resume: found reminder tap queue', tapTaskId);
+                androidInterface.onReminderTap$.next(tapTaskId);
+              }
+            } catch (e) {
+              DroidLog.err('Failed to process reminder tap queue on resume', e);
+            }
+          }),
+        ),
+      { dispatch: false },
+    );
+
+  private _buildTaskTitle(shareData: {
+    title: string;
+    subject: string;
+    type: string;
+    path: string;
+  }): string {
+    const subject = shareData.subject?.trim() || '';
+    const title = shareData.title?.trim() || '';
+    const path = shareData.path?.trim() || '';
+
+    let taskTitle: string;
+
+    // Prefer subject (page title from browsers), then title, then type-specific fallback
+    if (subject) {
+      taskTitle = subject;
+    } else if (title) {
+      taskTitle = title;
+    } else if (shareData.type === 'LINK') {
+      taskTitle = this._readableUrl(path);
+    } else {
+      const firstLine = path.split('\n')[0].trim();
+      taskTitle = firstLine || 'Shared note';
     }
-    this._hasShownNotificationWarning = true;
-    // Fallback snackbar so the user gets feedback even when the native APIs throw.
-    this._snackService.open({
-      type: 'ERROR',
-      msg: message || 'Notifications not supported',
-    });
+
+    return taskTitle.length > 150 ? taskTitle.substring(0, 147) + '...' : taskTitle;
   }
+
+  private _readableUrl(url: string): string {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.replace(/^www\./, '');
+      const pathPart = parsed.pathname.replace(/\/$/, '');
+      if (pathPart && pathPart !== '/') {
+        const decoded = decodeURIComponent(pathPart)
+          .replace(/[/_-]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return decoded ? `${host}: ${decoded}` : host;
+      }
+      return host;
+    } catch {
+      return url;
+    }
+  }
+
+  // Check for pending share data on resume (catches app killed after receiving share)
+  checkPendingShareOnResume$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        androidInterface.onResume$.pipe(
+          tap(() => {
+            try {
+              const pendingShare = androidInterface.getPendingShareData?.();
+              if (pendingShare) {
+                const parsed = JSON.parse(pendingShare);
+                DroidLog.log('Resume: found pending share data');
+                androidInterface.onShareWithAttachment$.next(parsed);
+              }
+            } catch (e) {
+              DroidLog.err('Failed to process pending share on resume', e);
+            }
+          }),
+        ),
+      { dispatch: false },
+    );
 }

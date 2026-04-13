@@ -10,7 +10,6 @@ import { TagEditComponent } from '../../features/tag/tag-edit/tag-edit.component
   standalone: true,
   imports: [FormsModule, FormlyModule, ReactiveFormsModule, TagEditComponent],
   templateUrl: './formly-tag-selection.component.html',
-  styleUrl: './formly-tag-selection.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FormlyTagSelectionComponent extends FieldType<FormlyFieldConfig> {

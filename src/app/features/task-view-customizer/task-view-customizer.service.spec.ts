@@ -11,6 +11,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { Observable, of } from 'rxjs';
 import { WorkContextType } from '../work-context/work-context.model';
 import { WorkContextService } from '../work-context/work-context.service';
+import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { ProjectService } from '../project/project.service';
 import { TagService } from '../tag/tag.service';
 import {
@@ -29,6 +30,7 @@ import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK, DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
+import { TranslateService } from '@ngx-translate/core';
 
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
@@ -137,6 +139,10 @@ describe('TaskViewCustomizerService', () => {
         {
           provide: LanguageService,
           useValue: mockLanguageService,
+        },
+        {
+          provide: TranslateService,
+          useValue: { instant: (k: string) => k },
         },
         TaskViewCustomizerService,
         { provide: DateAdapter, useValue: dateAdapter },
@@ -490,6 +496,387 @@ describe('TaskViewCustomizerService', () => {
     expect(grouped['No date'][0].id).toBe('task-no-date');
   });
 
+  // === DEADLINE FILTER ===
+
+  it('should filter by deadline today using deadlineDay', () => {
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-today',
+        title: 'Due today',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: todayStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'dl-tomorrow',
+        title: 'Due tomorrow',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: tomorrowStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 2,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const filtered = service['applyFilter'](
+      deadlineTasks,
+      FILTER_OPTION_TYPE.deadline,
+      FILTER_SCHEDULE.today,
+    );
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].id).toBe('dl-today');
+  });
+
+  it('should filter by deadline using deadlineWithTime when deadlineDay is not set', () => {
+    const todayTimestamp = new Date().getTime();
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-with-time',
+        title: 'Due today with time',
+        tagIds: [],
+        projectId: '',
+        deadlineWithTime: todayTimestamp,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const filtered = service['applyFilter'](
+      deadlineTasks,
+      FILTER_OPTION_TYPE.deadline,
+      FILTER_SCHEDULE.today,
+    );
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].id).toBe('dl-with-time');
+  });
+
+  it('should filter by NOT_SPECIFIED deadline (no deadline)', () => {
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-set',
+        title: 'Has deadline',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: todayStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'dl-none',
+        title: 'No deadline',
+        tagIds: [],
+        projectId: '',
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 2,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const filtered = service['applyFilter'](
+      deadlineTasks,
+      FILTER_OPTION_TYPE.deadline,
+      FILTER_COMMON.NOT_SPECIFIED,
+    );
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].id).toBe('dl-none');
+  });
+
+  it('should filter by deadline tomorrow', () => {
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-today',
+        title: 'Due today',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: todayStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'dl-tomorrow',
+        title: 'Due tomorrow',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: tomorrowStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 2,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const filtered = service['applyFilter'](
+      deadlineTasks,
+      FILTER_OPTION_TYPE.deadline,
+      FILTER_SCHEDULE.tomorrow,
+    );
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].id).toBe('dl-tomorrow');
+  });
+
+  // === DEADLINE SORT ===
+
+  it('should sort by deadline ASC', () => {
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-tomorrow',
+        title: 'Due tomorrow',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: tomorrowStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'dl-today',
+        title: 'Due today',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: todayStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 2,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const sorted = service['applySort'](
+      deadlineTasks,
+      SORT_OPTION_TYPE.deadline,
+      SORT_ORDER.ASC,
+    );
+    expect(sorted[0].id).toBe('dl-today');
+    expect(sorted[1].id).toBe('dl-tomorrow');
+  });
+
+  it('should sort by deadline DESC', () => {
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-today',
+        title: 'Due today',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: todayStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'dl-tomorrow',
+        title: 'Due tomorrow',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: tomorrowStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 2,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const sorted = service['applySort'](
+      deadlineTasks,
+      SORT_OPTION_TYPE.deadline,
+      SORT_ORDER.DESC,
+    );
+    expect(sorted[0].id).toBe('dl-tomorrow');
+    expect(sorted[1].id).toBe('dl-today');
+  });
+
+  it('should sort tasks without deadline to the end when sorting by deadline', () => {
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-none',
+        title: 'No deadline',
+        tagIds: [],
+        projectId: '',
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'dl-today',
+        title: 'Due today',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: todayStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 2,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const sorted = service['applySort'](
+      deadlineTasks,
+      SORT_OPTION_TYPE.deadline,
+      SORT_ORDER.ASC,
+    );
+    expect(sorted[0].id).toBe('dl-today');
+    expect(sorted[1].id).toBe('dl-none');
+  });
+
+  // === DEADLINE GROUPING ===
+
+  it('should group by deadline using deadlineDay', () => {
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-today',
+        title: 'Due today',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: todayStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'dl-tomorrow',
+        title: 'Due tomorrow',
+        tagIds: [],
+        projectId: '',
+        deadlineDay: tomorrowStr,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 2,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const grouped = service['applyGrouping'](deadlineTasks, GROUP_OPTION_TYPE.deadline);
+    expect(Object.keys(grouped)).toContain(todayStr);
+    expect(Object.keys(grouped)).toContain(tomorrowStr);
+    expect(grouped[todayStr].length).toBe(1);
+    expect(grouped[tomorrowStr].length).toBe(1);
+  });
+
+  it('should group by deadline using deadlineWithTime when deadlineDay is not set', () => {
+    const tomorrowTimestamp = getTomorrow().getTime();
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-with-time',
+        title: 'Due tomorrow with time',
+        tagIds: [],
+        projectId: '',
+        deadlineWithTime: tomorrowTimestamp,
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const grouped = service['applyGrouping'](deadlineTasks, GROUP_OPTION_TYPE.deadline);
+    expect(Object.keys(grouped)).toContain(tomorrowStr);
+    expect(grouped[tomorrowStr].length).toBe(1);
+  });
+
+  it('should group tasks without deadline into translated fallback group', () => {
+    const deadlineTasks: TaskWithSubTasks[] = [
+      {
+        id: 'dl-none',
+        title: 'No deadline task',
+        tagIds: [],
+        projectId: '',
+        timeEstimate: 0,
+        timeSpentOnDay: {},
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeSpent: 0,
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const grouped = service['applyGrouping'](deadlineTasks, GROUP_OPTION_TYPE.deadline);
+    // The mock TranslateService returns the key as-is
+    expect(Object.keys(grouped)).toContain('F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE');
+    expect(grouped['F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE'].length).toBe(1);
+  });
+
   it('should reset all customizer values to default', () => {
     service.selectedSort.set({ type: SORT_OPTION_TYPE.name } as SortOption);
     service.selectedGroup.set({ type: GROUP_OPTION_TYPE.tag } as GroupOption);
@@ -505,7 +892,7 @@ describe('TaskViewCustomizerService', () => {
     expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
   });
 
-  describe('sortPermanent', () => {
+  describe('saveSort', () => {
     const createTask = (
       id: string,
       title: string,
@@ -532,51 +919,67 @@ describe('TaskViewCustomizerService', () => {
       service.resetAll();
     });
 
-    it('should persist the sorted order for a project context and reset customizer state', async () => {
+    it('should save the sorted order for a project context as default', async () => {
       const taskA = createTask('a', 'Alpha');
       const taskB = createTask('b', 'Bravo');
+
       mockWorkContextService.activeWorkContextId = 'project-sort';
       mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
       mockWorkContextService.undoneTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
 
-      service.setSort({ type: SORT_OPTION_TYPE.name } as SortOption);
-      service.setFilter({
+      service.setSort({
+        type: SORT_OPTION_TYPE.name,
+        order: SORT_ORDER.ASC,
+      } as SortOption);
+
+      const expectedFilter = {
         type: FILTER_OPTION_TYPE.tag,
         preset: 'Tag A',
-      } as FilterOption);
-      service.setGroup({ type: GROUP_OPTION_TYPE.project } as GroupOption);
+      } as FilterOption;
+      service.setFilter(expectedFilter);
 
-      await service.sortPermanent({ type: SORT_OPTION_TYPE.name } as SortOption);
+      const expectedGroup = { type: GROUP_OPTION_TYPE.project } as GroupOption;
+      service.setGroup(expectedGroup);
+
+      await service.saveSort();
 
       expect(projectUpdateSpy).toHaveBeenCalledTimes(1);
       expect(projectUpdateSpy).toHaveBeenCalledWith('project-sort', {
         taskIds: ['a', 'b'],
       });
       expect(tagUpdateSpy).not.toHaveBeenCalled();
+
+      // Sort should set to default after saving, as the order is now persisted in the project
       expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
-      expect(service.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
-      expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
+
+      // Filter and group should NOT be reset
+      expect(service.selectedFilter()).toEqual(expectedFilter);
+      expect(service.selectedGroup()).toEqual(expectedGroup);
     });
 
-    it('should persist the sorted order for a tag context', async () => {
+    it('should save the sorted order for a tag context as default', async () => {
       const taskA = createTask('a', 'Alpha', null);
       const taskB = createTask('b', 'Bravo', null);
+
       mockWorkContextService.activeWorkContextId = 'tag-sort';
       mockWorkContextService.activeWorkContextType = WorkContextType.TAG;
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
       mockWorkContextService.undoneTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
 
-      await service.sortPermanent({ type: SORT_OPTION_TYPE.name } as SortOption);
+      service.setSort({ type: SORT_OPTION_TYPE.name } as SortOption);
+
+      await service.saveSort();
 
       expect(tagUpdateSpy).toHaveBeenCalledTimes(1);
       expect(tagUpdateSpy).toHaveBeenCalledWith('tag-sort', {
         taskIds: ['a', 'b'],
       });
       expect(projectUpdateSpy).not.toHaveBeenCalled();
+      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
     });
 
-    it('should skip persistence when default sorting is requested but still reset', async () => {
+    it('should skip saving when no tasks available', async () => {
       mockWorkContextService.activeWorkContextId = 'project-sort';
       mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([]);
@@ -584,13 +987,11 @@ describe('TaskViewCustomizerService', () => {
 
       service.setSort({ type: SORT_OPTION_TYPE.name } as SortOption);
 
-      await service.sortPermanent(null);
+      await service.saveSort();
 
       expect(projectUpdateSpy).not.toHaveBeenCalled();
       expect(tagUpdateSpy).not.toHaveBeenCalled();
       expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
-      expect(service.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
-      expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
     });
   });
 
@@ -621,6 +1022,10 @@ describe('TaskViewCustomizerService', () => {
           {
             provide: LanguageService,
             useValue: mockLanguageService,
+          },
+          {
+            provide: TranslateService,
+            useValue: { instant: (k: string) => k },
           },
           { provide: DateAdapter, useValue: dateAdapter },
           { provide: WorkContextService, useValue: mockWorkContextService },
@@ -657,6 +1062,10 @@ describe('TaskViewCustomizerService', () => {
           {
             provide: LanguageService,
             useValue: mockLanguageService,
+          },
+          {
+            provide: TranslateService,
+            useValue: { instant: (k: string) => k },
           },
           { provide: DateAdapter, useValue: dateAdapter },
           { provide: WorkContextService, useValue: mockWorkContextService },
@@ -697,6 +1106,10 @@ describe('TaskViewCustomizerService', () => {
           {
             provide: LanguageService,
             useValue: mockLanguageService,
+          },
+          {
+            provide: TranslateService,
+            useValue: { instant: (k: string) => k },
           },
           { provide: DateAdapter, useValue: dateAdapter },
           { provide: WorkContextService, useValue: mockWorkContextService },
@@ -775,6 +1188,137 @@ describe('TaskViewCustomizerService', () => {
       expect(newService.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
       expect(newService.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
       expect(newService.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
+    });
+  });
+
+  describe('customizeUndoneTasks with group by project (issue #7050)', () => {
+    const inboxTask: TaskWithSubTasks = {
+      id: 'inbox-task',
+      title: 'Inbox Task',
+      tagIds: [],
+      projectId: 'INBOX_PROJECT',
+      timeEstimate: 0,
+      timeSpentOnDay: {},
+      created: 1,
+      subTasks: [],
+      subTaskIds: [],
+      timeSpent: 0,
+      isDone: false,
+      attachments: [],
+    } as TaskWithSubTasks;
+
+    const projectATask: TaskWithSubTasks = {
+      id: 'project-a-task',
+      title: 'Project A Task',
+      tagIds: [],
+      projectId: 'Project A',
+      timeEstimate: 0,
+      timeSpentOnDay: {},
+      created: 2,
+      subTasks: [],
+      subTaskIds: [],
+      timeSpent: 0,
+      isDone: false,
+      attachments: [],
+    } as TaskWithSubTasks;
+
+    const projectBTask: TaskWithSubTasks = {
+      id: 'project-b-task',
+      title: 'Project B Task',
+      tagIds: [],
+      projectId: 'Project B',
+      timeEstimate: 0,
+      timeSpentOnDay: {},
+      created: 3,
+      subTasks: [],
+      subTaskIds: [],
+      timeSpent: 0,
+      isDone: false,
+      attachments: [],
+    } as TaskWithSubTasks;
+
+    const allProjects: Project[] = [
+      { id: 'INBOX_PROJECT', title: 'Inbox', backlogTaskIds: [] } as unknown as Project,
+      { id: 'Project A', title: 'Project A', backlogTaskIds: [] } as unknown as Project,
+      { id: 'Project B', title: 'Project B', backlogTaskIds: [] } as unknown as Project,
+    ];
+
+    let testService: TaskViewCustomizerService;
+
+    beforeEach(() => {
+      localStorage.clear();
+
+      TestBed.resetTestingModule();
+      const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
+        getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
+      });
+
+      mockWorkContextService = {
+        activeWorkContextId: 'INBOX_PROJECT',
+        activeWorkContextType: WorkContextType.PROJECT,
+        mainListTasks$: of<TaskWithSubTasks[]>([inboxTask]),
+        undoneTasks$: of<TaskWithSubTasks[]>([inboxTask]),
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskViewCustomizerService,
+          {
+            provide: LanguageService,
+            useValue: mockLanguageService,
+          },
+          {
+            provide: TranslateService,
+            useValue: { instant: (k: string) => k },
+          },
+          { provide: DateAdapter, useValue: dateAdapter },
+          { provide: WorkContextService, useValue: mockWorkContextService },
+          { provide: ProjectService, useValue: { update: projectUpdateSpy } },
+          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          provideMockStore({
+            selectors: [
+              { selector: selectAllProjects, value: allProjects },
+              { selector: selectAllTags, value: mockTags },
+              {
+                selector: selectAllTasksWithSubTasks,
+                value: [inboxTask, projectATask, projectBTask],
+              },
+            ],
+          }),
+        ],
+      });
+      testService = TestBed.inject(TaskViewCustomizerService);
+      (testService as any)._allProjects = allProjects;
+      (testService as any)._allTags = mockTags;
+    });
+
+    it('should show tasks from ALL projects when group by project is selected, not just current context', (done) => {
+      // Simulate being on Inbox — undoneTasks$ only has the inbox task
+      const contextUndoneTasks$ = of<TaskWithSubTasks[]>([inboxTask]);
+
+      // Set group to project
+      testService.setGroup({ type: GROUP_OPTION_TYPE.project, label: 'Project' });
+
+      // customizeUndoneTasks uses toObservable which requires injection context
+      const result$ = TestBed.runInInjectionContext(() =>
+        testService.customizeUndoneTasks(contextUndoneTasks$),
+      );
+
+      // Use requestAnimationFrame since customizeUndoneTasks uses animationFrameScheduler
+      requestAnimationFrame(() => {
+        result$.subscribe((result) => {
+          expect(result.grouped).toBeDefined();
+          const groupKeys = Object.keys(result.grouped!);
+          // Should contain tasks from ALL projects, not just Inbox
+          expect(groupKeys).toContain('Inbox');
+          expect(groupKeys).toContain('Project A');
+          expect(groupKeys).toContain('Project B');
+          expect(result.grouped!['Inbox']?.length).toBe(1);
+          expect(result.grouped!['Project A']?.length).toBe(1);
+          expect(result.grouped!['Project B']?.length).toBe(1);
+          done();
+        });
+      });
     });
   });
 });

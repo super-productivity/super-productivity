@@ -37,6 +37,7 @@ import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/
 import { MatDialog } from '@angular/material/dialog';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { first, take } from 'rxjs/operators';
+import { dragDelayForTouch } from '../../../util/input-intent';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { selectUnarchivedProjects } from '../../project/store/project.selectors';
@@ -66,6 +67,7 @@ import {
 })
 export class BoardPanelComponent {
   T = T;
+  dragDelayForTouch = dragDelayForTouch;
 
   panelCfg = input.required<BoardPanelCfg>();
   editBoard = output<void>();
@@ -129,13 +131,13 @@ export class BoardPanelComponent {
       let isTaskIncluded = true;
       if (panelCfg.includedTagIds?.length) {
         isTaskIncluded = panelCfg.includedTagIds.every((tagId) =>
-          task.tagIds.includes(tagId),
+          task.tagIds?.includes(tagId),
         );
       }
       if (panelCfg.excludedTagIds?.length) {
         isTaskIncluded =
           isTaskIncluded &&
-          !panelCfg.excludedTagIds.some((tagId) => task.tagIds.includes(tagId));
+          !panelCfg.excludedTagIds.some((tagId) => task.tagIds?.includes(tagId));
       }
 
       if (panelCfg.isParentTasksOnly) {
@@ -239,7 +241,7 @@ export class BoardPanelComponent {
       : // NOTE: original array is mutated and splice does not return a new array
         prevTaskIds.splice(ev.currentIndex, 0, task.id) && prevTaskIds;
 
-    let newTagIds: string[] = task.tagIds;
+    let newTagIds: string[] = task.tagIds || [];
     if (panelCfg.includedTagIds?.length) {
       newTagIds = newTagIds.concat(panelCfg.includedTagIds);
     }
@@ -250,7 +252,7 @@ export class BoardPanelComponent {
     const updates: Partial<TaskCopy> = {};
 
     // conditional updates
-    if (!fastArrayCompare(task.tagIds, newTagIds)) {
+    if (!fastArrayCompare(task.tagIds || [], newTagIds)) {
       this.taskService.updateTags(task, unique(newTagIds));
     }
     if (panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.Done && !task.isDone) {

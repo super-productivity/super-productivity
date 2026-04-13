@@ -1,6 +1,6 @@
 # Plan: Server-Side Entity Versioning (Optimistic Concurrency Control)
 
-> **STATUS: PROPOSED**
+> **Status: Planned**
 >
 > Long-term architectural change to eliminate vector clock pruning as a source of sync conflicts.
 
@@ -8,7 +8,7 @@
 
 ## Problem
 
-Vector clocks grow linearly with the number of participating clients. Pruning to `MAX_VECTOR_CLOCK_SIZE=10` loses causal information, causing false `CONCURRENT` verdicts and sync loops. Multiple mitigations exist (protected IDs, entity clock preservation, prune-aware comparison), but they are all heuristics with edge cases.
+Vector clocks grow linearly with the number of participating clients. Pruning to `MAX_VECTOR_CLOCK_SIZE=20` loses causal information, though at MAX=20 this requires 21+ unique client IDs — extremely rare for a personal productivity app. A same-client check handles the edge case where pruning causes false concurrency for the import client's own ops, but the fundamental issue remains:
 
 The fundamental issue: vector clocks were designed for peer-to-peer systems where no node is authoritative. Super Productivity has a central server -- the server can define ordering authoritatively, making vector clocks unnecessary for online conflict detection.
 

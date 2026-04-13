@@ -32,6 +32,7 @@ import {
   turnOffAllSimpleCounterCounters,
   updateAllSimpleCounters,
   updateSimpleCounter,
+  updateSimpleCounterOrder,
   upsertSimpleCounter,
 } from './simple-counter.actions';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
@@ -88,14 +89,24 @@ const disableIsOnForAll = (state: SimpleCounterState): SimpleCounterState => {
   };
 };
 
+const normalizeCountOnDay = (state: SimpleCounterState): SimpleCounterState => {
+  const entities: SimpleCounterState['entities'] = {};
+  for (const id of Object.keys(state.entities)) {
+    const entity = state.entities[id];
+    if (entity) {
+      entities[id] = entity.countOnDay ? entity : { ...entity, countOnDay: {} };
+    }
+  }
+  return { ...state, entities };
+};
+
 const _reducer = createReducer<SimpleCounterState>(
   initialSimpleCounterState,
 
   on(loadAllData, (oldState, { appDataComplete }) =>
     appDataComplete.simpleCounter
       ? {
-          // ...appDataComplete.simpleCounter,
-          ...disableIsOnForAll(appDataComplete.simpleCounter),
+          ...disableIsOnForAll(normalizeCountOnDay(appDataComplete.simpleCounter)),
         }
       : oldState,
   ),
@@ -110,6 +121,26 @@ const _reducer = createReducer<SimpleCounterState>(
     newState = adapter.upsertMany(items, newState);
     // Explicitly set ids order to match items order (upsertMany doesn't preserve order)
     return { ...newState, ids: allNewItemIds };
+  }),
+
+  on(updateSimpleCounterOrder, (state, { ids }) => {
+    // Filter out stale/deleted IDs that no longer exist in current state
+    const stateIdSet = new Set(state.ids as string[]);
+    const validIds = ids.filter((id) => stateIdSet.has(id));
+    if (validIds.length === 0) {
+      return state;
+    }
+    const enabledSet = new Set(validIds);
+    const result: string[] = [];
+    let enabledIdx = 0;
+    for (const id of state.ids) {
+      if (enabledSet.has(id as string)) {
+        result.push(validIds[enabledIdx++]);
+      } else {
+        result.push(id as string);
+      }
+    }
+    return { ...state, ids: result };
   }),
 
   on(setSimpleCounterCounterToday, (state, { id, newVal, today }) => {

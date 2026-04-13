@@ -35,7 +35,7 @@ export class DialogPromptComponent {
   data = inject(MAT_DIALOG_DATA);
 
   T: typeof T = T;
-  txtVal: string = '';
+  txtVal: string = this.data.txtValue || '';
 
   close(isSave: boolean): void {
     if (isSave) {

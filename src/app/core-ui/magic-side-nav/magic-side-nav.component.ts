@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
@@ -8,10 +10,8 @@ import {
   inject,
   input,
   OnDestroy,
-  OnInit,
   output,
   signal,
-  AfterViewInit,
 } from '@angular/core';
 import { NavigationStart, Router, RouterModule } from '@angular/router';
 import { NavItemComponent } from './nav-item/nav-item.component';
@@ -25,7 +25,7 @@ import { NavMatMenuComponent } from './nav-mat-menu/nav-mat-menu.component';
 import { TaskService } from '../../features/tasks/task.service';
 import { LayoutService } from '../layout/layout.service';
 import { magicSideNavAnimations } from './magic-side-nav.animations';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { filter, take } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { ScheduleExternalDragService } from '../../features/schedule/schedule-week/schedule-external-drag.service';
@@ -35,10 +35,12 @@ import { DragDropRegistry } from '@angular/cdk/drag-drop';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { HISTORY_STATE } from '../../app.constants';
 import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
+import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 
 const COLLAPSED_WIDTH = 64;
 const MOBILE_NAV_WIDTH = 300;
 const FOCUS_DELAY_MS = 10;
+const INITIAL_ENTER_ANIMATION_DURATION_MS = 425;
 
 @Component({
   selector: 'magic-side-nav',
@@ -56,15 +58,20 @@ const FOCUS_DELAY_MS = 10;
   host: {
     '[style.width.px]': 'hostWidthSignal()',
     '[class.animate]': 'animateWidth()',
+    '[class.initial-shell-enter]': 'playInitialShellEnter()',
+    '[class.initial-enter]': 'playInitialEnter()',
+    '[class.initializing]': '!areTransitionsReady()',
     '[class.resizing]': 'isResizing()',
   },
   animations: magicSideNavAnimations,
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
+export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _sideNavConfigService = inject(MagicNavConfigService);
   private readonly _taskService = inject(TaskService);
   private readonly _layoutService = inject(LayoutService);
+  private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _router = inject(Router);
   private _dragDropRegistry = inject(DragDropRegistry);
   private _externalDragService = inject(ScheduleExternalDragService);
@@ -72,15 +79,23 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Use service's computed signal directly
   readonly config = this._sideNavConfigService.navConfig;
+  private readonly _isDataLoaded = toSignal(
+    this._dataInitStateService.isAllDataLoadedInitially$,
+    { initialValue: false },
+  );
+  readonly isDataLoaded = computed(
+    () => this._isDataLoaded() && this._sideNavConfigService.areInitialTreesReady(),
+  );
   readonly WorkContextType = WorkContextType;
+  private readonly _initialState = this._getInitialState();
 
   activeWorkContextId = input<string | null>(null);
 
   // Externally controlled mobile overlay visibility
   mobileVisibleChange = output<boolean>();
 
-  isFullMode = signal(true);
-  isMobile = signal(false);
+  isFullMode = signal(this._initialState.isFullMode);
+  isMobile = signal(this._initialState.isMobile);
   showMobileMenuOverlay = signal(false);
   // Temporarily disable swipe during menu open animation to prevent
   // the touch event from the toggle button being captured as a swipe
@@ -88,10 +103,17 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Animate only for compactMode/fullMode toggle
   animateWidth = signal(false);
+  areTransitionsReady = signal(false);
+  playInitialShellEnter = signal(false);
+  playInitialEnter = signal(false);
+  private _hasPlayedInitialShellEnter = false;
+  private _hasPlayedInitialEnter = false;
   private _animateTimeoutId: number | null = null;
+  private _initialShellEnterTimeoutId: number | null = null;
+  private _initialEnterTimeoutId: number | null = null;
 
   // Resize functionality
-  currentWidth = signal(MOBILE_NAV_WIDTH);
+  currentWidth = signal(this._initialState.currentWidth);
   // Use values directly from config for min/max/thresholds
   isResizing = signal(false);
   startX = signal(0);
@@ -159,6 +181,49 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
       window.removeEventListener('resize', resizeListener);
     });
 
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        this.areTransitionsReady.set(true);
+      });
+    });
+
+    effect(() => {
+      if (
+        this._hasPlayedInitialShellEnter ||
+        !this.areTransitionsReady() ||
+        this.playInitialShellEnter() ||
+        this._initialShellEnterTimeoutId != null
+      ) {
+        return;
+      }
+
+      this._hasPlayedInitialShellEnter = true;
+      this.playInitialShellEnter.set(true);
+      this._initialShellEnterTimeoutId = window.setTimeout(() => {
+        this.playInitialShellEnter.set(false);
+        this._initialShellEnterTimeoutId = null;
+      }, INITIAL_ENTER_ANIMATION_DURATION_MS);
+    });
+
+    effect(() => {
+      if (
+        this._hasPlayedInitialEnter ||
+        !this.areTransitionsReady() ||
+        !this.isDataLoaded() ||
+        this.playInitialEnter() ||
+        this._initialEnterTimeoutId != null
+      ) {
+        return;
+      }
+
+      this._hasPlayedInitialEnter = true;
+      this.playInitialEnter.set(true);
+      this._initialEnterTimeoutId = window.setTimeout(() => {
+        this.playInitialEnter.set(false);
+        this._initialEnterTimeoutId = null;
+      }, INITIAL_ENTER_ANIMATION_DURATION_MS);
+    });
+
     this._router.events
       .pipe(
         filter((event): event is NavigationStart => event instanceof NavigationStart),
@@ -177,37 +242,19 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
       this._animateTimeoutId = null;
     }
 
+    if (this._initialShellEnterTimeoutId != null) {
+      window.clearTimeout(this._initialShellEnterTimeoutId);
+      this._initialShellEnterTimeoutId = null;
+    }
+
+    if (this._initialEnterTimeoutId != null) {
+      window.clearTimeout(this._initialEnterTimeoutId);
+      this._initialEnterTimeoutId = null;
+    }
+
     if (this._pointerUpSubscription) {
       this._pointerUpSubscription.unsubscribe();
       this._pointerUpSubscription = null;
-    }
-  }
-
-  ngOnInit(): void {
-    // Check screen size first to set mobile state
-    this._checkScreenSize();
-
-    // Persisted state is only relevant for desktop when bottom nav is not visible
-    const isBottomNavVisible = this._layoutService.isXs();
-    if (!isBottomNavVisible) {
-      // Load saved fullMode/compactMode state
-      const initialFullMode = readBoolLS(
-        LS.NAV_SIDEBAR_EXPANDED,
-        this.config().fullModeByDefault,
-      );
-      this.isFullMode.set(initialFullMode);
-
-      // Load saved width from localStorage or default
-      const bounded = readNumberLSBounded(
-        LS.NAV_SIDEBAR_WIDTH,
-        this.config().minWidth,
-        this.config().maxWidth,
-      );
-      this.currentWidth.set(bounded ?? this.config().defaultWidth);
-    } else {
-      // Use defaults for mobile; do not apply persisted desktop state
-      this.isFullMode.set(this.config().fullModeByDefault);
-      this.currentWidth.set(this.config().defaultWidth);
     }
   }
 
@@ -228,13 +275,43 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private _checkScreenSize(): void {
     const wasMobile = this.isMobile();
-    const currentMobile = window.innerWidth < this.config().mobileBreakpoint;
+    const currentMobile = this._isMobileViewport();
     this.isMobile.set(currentMobile);
 
     if (wasMobile !== currentMobile && currentMobile) {
       // Switching to mobile - close overlay but preserve fullMode preference
       this.showMobileMenuOverlay.set(false);
     }
+  }
+
+  private _getInitialState(): {
+    currentWidth: number;
+    isFullMode: boolean;
+    isMobile: boolean;
+  } {
+    const config = this.config();
+    const isMobile = this._isMobileViewport();
+
+    if (isMobile) {
+      return {
+        currentWidth: config.defaultWidth,
+        isFullMode: config.fullModeByDefault,
+        isMobile,
+      };
+    }
+
+    return {
+      currentWidth:
+        readNumberLSBounded(LS.NAV_SIDEBAR_WIDTH, config.minWidth, config.maxWidth) ??
+        config.defaultWidth,
+      isFullMode: readBoolLS(LS.NAV_SIDEBAR_EXPANDED, config.fullModeByDefault),
+      isMobile,
+    };
+  }
+
+  private _isMobileViewport(): boolean {
+    const maxWidth = this.config().mobileBreakpoint - 1;
+    return window.matchMedia(`(max-width: ${maxWidth}px)`).matches;
   }
 
   toggleMobileNav(): void {

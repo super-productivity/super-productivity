@@ -67,8 +67,7 @@ if (isPreRelease) {
 }
 
 // CREATE fastlane changelog file
-// Define the paths
-const changelogPath = path.join(__dirname, '..', 'CHANGELOG.md');
+const { execFileSync } = require('child_process');
 const outputDir = path.join(
   __dirname,
   '..',
@@ -81,25 +80,37 @@ const outputDir = path.join(
 );
 const outputFilePath = path.join(outputDir, `${versionCodeDroid}.txt`);
 
-// Read the changelog.md file
-const changelogContent = fs.readFileSync(changelogPath, 'utf8');
-
-// Extract the latest changes
-const lines = changelogContent.split('\n').slice(2); // Remove the first two lines;
-let latestChanges = '';
-let headerCount = 0;
-
-for (const line of lines) {
-  if (line.startsWith('# [') || line.startsWith('## [')) {
-    headerCount++;
-    if (headerCount === 1) break;
-  }
-  latestChanges += line + '\n';
+// Get commit messages since the last tag.
+// During `npm version`, the new tag does not exist yet, so
+// `git describe --tags --abbrev=0 HEAD` gives us the previous release tag,
+// which is exactly the start of the range we want.
+let gitLog;
+try {
+  const lastTag = execFileSync('git', ['describe', '--tags', '--abbrev=0', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim();
+  gitLog = execFileSync(
+    'git',
+    ['log', `${lastTag}...HEAD`, '--no-merges', '--pretty=format:- %s'],
+    { encoding: 'utf8' },
+  );
+} catch (err) {
+  console.warn(`Could not generate changelog from git tags: ${err.message}`);
+  console.warn('Falling back to last 20 commits');
+  gitLog = execFileSync('git', ['log', '-20', '--no-merges', '--pretty=format:- %s'], {
+    encoding: 'utf8',
+  });
 }
-// Remove all links from the extracted text
-latestChanges = latestChanges
-  .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
-  .replace(/\s*\([a-f0-9]{7}\)\s*$/gm, '');
+// Strip conventional-commit prefixes (e.g. "feat(tasks): " → "")
+let latestChanges = gitLog.replace(/^- \w+(\([^)]*\))?!?:\s*/gm, '- ');
+// Truncate to 500 chars at line boundaries for Play Store limit
+const lines = latestChanges.split('\n');
+let truncated = '';
+for (const line of lines) {
+  if ((truncated + line + '\n').length > 500) break;
+  truncated += line + '\n';
+}
+latestChanges = truncated.trimEnd() || 'Bug fixes and improvements';
 
 // Ensure the output directory exists
 if (!fs.existsSync(outputDir)) {

@@ -12,6 +12,8 @@ import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { OperationLogEntry } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { MODEL_CONFIGS } from '../model/model-config';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -21,6 +23,7 @@ describe('OperationLogCompactionService', () => {
   let mockLockService: jasmine.SpyObj<LockService>;
   let mockStateSnapshot: jasmine.SpyObj<StateSnapshotService>;
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
+  let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
 
   const mockState = {
     task: { entities: {}, ids: [] },
@@ -44,6 +47,8 @@ describe('OperationLogCompactionService', () => {
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
     ]);
+    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
+    mockClientIdProvider.loadClientId.and.resolveTo('test-client');
 
     // Mock OpLog methods
     spyOn(OpLog, 'warn');
@@ -71,6 +76,7 @@ describe('OperationLogCompactionService', () => {
         { provide: LockService, useValue: mockLockService },
         { provide: StateSnapshotService, useValue: mockStateSnapshot },
         { provide: VectorClockService, useValue: mockVectorClockService },
+        { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
       ],
     });
 
@@ -149,6 +155,44 @@ describe('OperationLogCompactionService', () => {
           schemaVersion: CURRENT_SCHEMA_VERSION,
         }),
       );
+    });
+
+    it('should prune vector clock before saving when it exceeds MAX_VECTOR_CLOCK_SIZE', async () => {
+      const bloatedClock: Record<string, number> = {};
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 10; i++) {
+        bloatedClock[`client-${i}`] = i + 1;
+      }
+      bloatedClock['test-client'] = 999;
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(bloatedClock);
+
+      await service.compact();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(Object.keys(savedCache.vectorClock).length).toBeLessThanOrEqual(
+        MAX_VECTOR_CLOCK_SIZE,
+      );
+      expect(savedCache.vectorClock['test-client']).toBe(999);
+    });
+
+    it('should not prune vector clock when within MAX_VECTOR_CLOCK_SIZE', async () => {
+      const smallClock = { clientA: 10, clientB: 5 };
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(smallClock);
+
+      await service.compact();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(savedCache.vectorClock).toEqual(smallClock);
+    });
+
+    it('should save unpruned clock if clientId is null', async () => {
+      mockClientIdProvider.loadClientId.and.resolveTo(null);
+      const clock = { clientA: 10 };
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(clock);
+
+      await service.compact();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(savedCache.vectorClock).toEqual(clock);
     });
 
     it('should save state cache with compactedAt timestamp', async () => {

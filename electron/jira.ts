@@ -3,8 +3,8 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { session } from 'electron';
 import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
 import fetch, { RequestInit } from 'node-fetch';
-import { Agent } from 'https';
 import { error, log } from 'electron-log/main';
+import { createProxyAwareAgent } from './proxy-agent';
 
 export const sendJiraRequest = ({
   requestId,
@@ -18,21 +18,11 @@ export const sendJiraRequest = ({
   jiraCfg: JiraCfg;
 }): void => {
   const mainWin = getWin();
-  // log('--------------------------------------------------------------------');
-  // log(url);
-  // log('--------------------------------------------------------------------');
+  const agent = createProxyAwareAgent(jiraCfg?.isAllowSelfSignedCertificate);
+
   fetch(url, {
     ...requestInit,
-    // Allow self-signed certificates for self-hosted Jira instances.
-    // This is an intentional user-configurable setting (isAllowSelfSignedCertificate).
-    // CodeQL alert js/disabling-certificate-validation is expected here.
-    ...(jiraCfg && jiraCfg.isAllowSelfSignedCertificate
-      ? {
-          agent: new Agent({
-            rejectUnauthorized: false, // lgtm[js/disabling-certificate-validation]
-          }),
-        }
-      : {}),
+    ...(agent ? { agent } : {}),
   } as RequestInit)
     .then(async (response) => {
       // log('JIRA_RAW_RESPONSE', response);

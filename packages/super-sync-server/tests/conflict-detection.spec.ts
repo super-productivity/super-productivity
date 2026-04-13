@@ -710,8 +710,9 @@ describe('Conflict Detection', () => {
       // Create clock with entries above MAX_VECTOR_CLOCK_SIZE but within sanitize limit.
       // This simulates conflict resolution where the client merges all entity clock IDs
       // plus its own ID, resulting in MAX+N entries.
+      const entryCount = MAX_VECTOR_CLOCK_SIZE + 10;
       const largeClock: VectorClock = {};
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < entryCount; i++) {
         largeClock[`client-${i}`] = i + 1;
       }
 
@@ -724,14 +725,14 @@ describe('Conflict Detection', () => {
       const result = await service.uploadOps(userId, clientA, [op1]);
       expect(result[0].accepted).toBe(true);
 
-      // Verify the clock was pruned to MAX_VECTOR_CLOCK_SIZE (10) before storage.
-      // clientA ('client-a') is not in the clock, so only the 10 most active
-      // clients are kept (client-10 through client-19 with values 11-20).
+      // Verify the clock was pruned to MAX_VECTOR_CLOCK_SIZE (20) before storage.
+      // clientA ('client-a') is not in the clock, so only the MAX most active
+      // clients are kept (the ones with highest counters).
       const ops = await service.getOpsSince(userId, 0);
       const storedClock = ops[0].op.vectorClock;
-      expect(Object.keys(storedClock).length).toBe(10);
-      // The most active clients should be preserved
-      for (let i = 10; i < 20; i++) {
+      expect(Object.keys(storedClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      // The most active clients should be preserved (top MAX entries by counter)
+      for (let i = entryCount - MAX_VECTOR_CLOCK_SIZE; i < entryCount; i++) {
         expect(storedClock[`client-${i}`]).toBe(i + 1);
       }
     });
@@ -743,7 +744,7 @@ describe('Conflict Detection', () => {
       // Create clock with entries above MAX where the uploading client (clientA) IS in the clock
       // but has a low counter value that would normally be pruned
       const largeClock: VectorClock = { [clientA]: 2 }; // Low counter
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 10; i++) {
         largeClock[`client-${i}`] = 100 + i; // All have higher counters
       }
 
@@ -766,12 +767,12 @@ describe('Conflict Detection', () => {
 
     it('should accept MAX+1 entry clock as GREATER_THAN when it dominates a MAX entry entity clock (regression: infinite loop fix)', async () => {
       // This is the core regression test for the infinite sync loop bug.
-      // Scenario: entity has MAX_VECTOR_CLOCK_SIZE (10) entries in its stored clock.
+      // Scenario: entity has MAX_VECTOR_CLOCK_SIZE (20) entries in its stored clock.
       // A client resolves the conflict by merging all entity clock IDs + its own ID,
-      // producing MAX+1 (11) entries. The server must compare BEFORE pruning,
-      // so the 11-entry clock is seen as GREATER_THAN the 10-entry stored clock.
-      // If the server pruned before comparison, the 11-entry clock would lose one
-      // entity key, and pruning-aware comparison would return CONCURRENT → infinite loop.
+      // producing MAX+1 entries. The server must compare BEFORE pruning,
+      // so the MAX+1-entry clock is seen as GREATER_THAN the MAX-entry stored clock.
+      // If the server pruned before comparison, the MAX+1-entry clock would lose one
+      // entity key, and comparison could return CONCURRENT → infinite loop.
       const service = getSyncService();
       const entityId = 'task-regression';
 

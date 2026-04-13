@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import { info } from 'electron-log/main';
 import { getWin, getWasMaximizedBeforeHide } from './main-window';
-import { hideOverlayWindow } from './overlay-indicator/overlay-indicator';
+import { getIsTaskWidgetAlwaysShow, hideTaskWidget } from './task-widget/task-widget';
 import { setIsQuiting } from './shared-state';
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
@@ -32,11 +32,18 @@ export function showOrFocus(passedWin: BrowserWindow): void {
     if (getWasMaximizedBeforeHide()) win.maximize();
   }
 
-  // Hide overlay when main window is shown
-  hideOverlayWindow();
+  // Hide task widget when main window is shown
+  if (!getIsTaskWidgetAlwaysShow()) {
+    hideTaskWidget();
+  }
 
   // focus window afterwards always
   setTimeout(() => {
+    if (win.isDestroyed()) return;
     win.focus();
+    // Ensure Chromium renderer also gets keyboard focus (electron#20464)
+    if (!win.webContents.isDestroyed()) {
+      win.webContents.focus();
+    }
   }, 60);
 }

@@ -36,7 +36,6 @@ export class SyncImportConflictDialogService {
         data,
         disableClose: true,
         restoreFocus: true,
-        autoFocus: false,
       });
 
       const result = await firstValueFrom(dialogRef.afterClosed());

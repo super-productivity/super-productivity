@@ -18,13 +18,23 @@ const updateParent = (
   } as any);
 };
 
-export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
+export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
   {
     key: 'title',
     type: 'input',
     templateOptions: {
       label: T.F.TASK_REPEAT.F.TITLE,
     },
+  },
+  {
+    key: 'startDate',
+    type: 'date',
+    defaultValue: new Date(),
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.START_DATE,
+      required: true,
+    },
+    parsers: [(val: unknown) => (val instanceof Date ? getDbDateStr(val) : val)],
   },
   {
     key: 'quickSetting',
@@ -34,14 +44,7 @@ export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
       required: true,
       label: T.F.TASK_REPEAT.F.QUICK_SETTING,
       // NOTE replaced in component to allow for dynamic translation
-      options: [
-        // { value: 'DAILY', label: 'DAILY' },
-        // { value: 'WEEKLY_CURRENT_WEEKDAY', label: 'WEEKLY_CURRENT_WEEKDAY' },
-        // { value: 'MONTHLY_CURRENT_DATE', label: 'MONTHLY_CURRENT_DATE' },
-        // { value: 'MONDAY_TO_FRIDAY', label: 'MONDAY_TO_FRIDAY' },
-        // { value: 'YEARLY_CURRENT_DATE', label: 'YEARLY_CURRENT_DATE' },
-        // { value: 'CUSTOM', label: 'CUSTOM' },
-      ],
+      options: [],
       change: (field, event) => {
         const updatesForQuickSetting = getQuickSettingUpdates(
           event.value as RepeatQuickSetting,
@@ -57,6 +60,7 @@ export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
   // REPEAT CUSTOM CFG - Wrapped in container
   {
     fieldGroupClassName: 'repeat-config-container',
+    resetOnHide: false,
     hideExpression: (model: any) => model.quickSetting !== 'CUSTOM',
     fieldGroup: [
       {
@@ -91,64 +95,9 @@ export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
           },
         ],
       },
-      // Schedule type: from due date or from completion
-      {
-        key: 'repeatFromCompletionDate',
-        type: 'select',
-        defaultValue: false,
-        hideExpression: (model: any) => {
-          // Hide for "every 1 day" (same as daily - no difference between fixed/flexible)
-          if (model.repeatCycle === 'DAILY' && model.repeatEvery === 1) {
-            return true;
-          }
-          // Hide for "every 1 week" (e.g., "every Monday" - inherently a fixed schedule)
-          if (model.repeatCycle === 'WEEKLY' && model.repeatEvery === 1) {
-            return true;
-          }
-          // Show for all other cases: "every X days/weeks/months/years" where X > 1
-          return false;
-        },
-        templateOptions: {
-          label: T.F.TASK_REPEAT.F.SCHEDULE_TYPE_LABEL,
-          options: [],
-        },
-        expressionProperties: {
-          ['templateOptions.options']: (model: any) => {
-            const repeatEvery = model.repeatEvery || 1;
-            const cycleMap: Record<string, string> = {
-              DAILY: repeatEvery === 1 ? 'day' : 'days',
-              WEEKLY: repeatEvery === 1 ? 'week' : 'weeks',
-              MONTHLY: repeatEvery === 1 ? 'month' : 'months',
-              YEARLY: repeatEvery === 1 ? 'year' : 'years',
-            };
-            const cycleName = cycleMap[model.repeatCycle] || 'days';
-
-            return [
-              {
-                value: false,
-                label: `Fixed schedule (every ${repeatEvery} ${cycleName} from start date)`,
-              },
-              {
-                value: true,
-                label: `After completion (${repeatEvery} ${cycleName} after I finish)`,
-              },
-            ];
-          },
-        },
-      },
-      {
-        key: 'startDate',
-        type: 'input',
-        defaultValue: getDbDateStr(),
-        templateOptions: {
-          label: T.F.TASK_REPEAT.F.START_DATE,
-          required: true,
-          // min: getWorklogStr() as any,
-          type: 'date',
-        },
-      },
       {
         fieldGroupClassName: 'weekdays',
+        resetOnHide: false,
         hideExpression: (model: any) => model.repeatCycle !== 'WEEKLY',
         fieldGroup: [
           {
@@ -205,7 +154,21 @@ export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
     ],
   },
   // REPEAT CFG END
+];
 
+export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
+  {
+    key: 'defaultEstimate',
+    type: 'duration',
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.DEFAULT_ESTIMATE,
+      description: T.G.DURATION_DESCRIPTION,
+    },
+    // otherwise the input duration field messes up :(
+    modelOptions: {
+      updateOn: 'blur',
+    },
+  },
   {
     fieldGroupClassName: 'formly-row',
     fieldGroup: [
@@ -239,35 +202,58 @@ export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
     ],
   },
   {
-    key: 'defaultEstimate',
-    type: 'duration',
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.DEFAULT_ESTIMATE,
-      description: T.G.DURATION_DESCRIPTION,
-    },
-    // otherwise the input duration field messes up :(
-    modelOptions: {
-      updateOn: 'blur',
-    },
-  },
-  {
-    key: 'order',
-    type: 'input',
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.ORDER,
-      type: 'number',
-      description: T.F.TASK_REPEAT.F.ORDER_DESCRIPTION,
-    },
-  },
-];
-
-export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
-  {
     key: 'notes',
     type: 'textarea',
     templateOptions: {
       label: T.F.TASK_REPEAT.F.NOTES,
       rows: 4,
+    },
+  },
+  // Schedule type: from due date or from completion
+  {
+    key: 'repeatFromCompletionDate',
+    type: 'select',
+    defaultValue: false,
+    resetOnHide: false,
+    hideExpression: (model: any) => {
+      // Only show for custom settings with intervals > 1
+      if (model.quickSetting !== 'CUSTOM') {
+        return true;
+      }
+      if (model.repeatCycle === 'DAILY' && model.repeatEvery === 1) {
+        return true;
+      }
+      if (model.repeatCycle === 'WEEKLY' && model.repeatEvery === 1) {
+        return true;
+      }
+      return false;
+    },
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.SCHEDULE_TYPE_LABEL,
+      options: [],
+    },
+    expressionProperties: {
+      ['templateOptions.options']: (model: any) => {
+        const repeatEvery = model.repeatEvery || 1;
+        const cycleMap: Record<string, string> = {
+          DAILY: repeatEvery === 1 ? 'day' : 'days',
+          WEEKLY: repeatEvery === 1 ? 'week' : 'weeks',
+          MONTHLY: repeatEvery === 1 ? 'month' : 'months',
+          YEARLY: repeatEvery === 1 ? 'year' : 'years',
+        };
+        const cycleName = cycleMap[model.repeatCycle] || 'days';
+
+        return [
+          {
+            value: false,
+            label: `Fixed schedule (every ${repeatEvery} ${cycleName} from start date)`,
+          },
+          {
+            value: true,
+            label: `After completion (${repeatEvery} ${cycleName} after I finish)`,
+          },
+        ];
+      },
     },
   },
   {
@@ -290,5 +276,14 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       description: T.F.TASK_REPEAT.F.DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION,
     },
     className: 'sp-formly-child-option',
+  },
+  {
+    key: 'skipOverdue',
+    type: 'checkbox',
+    defaultValue: false,
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.SKIP_OVERDUE,
+      description: T.F.TASK_REPEAT.F.SKIP_OVERDUE_DESCRIPTION,
+    },
   },
 ];

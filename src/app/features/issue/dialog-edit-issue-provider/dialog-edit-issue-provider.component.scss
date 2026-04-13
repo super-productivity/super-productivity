@@ -33,26 +33,26 @@
 
 :host::ng-deep {
   .tpl .warning-box {
-    margin: 16px;
-    margin-bottom: 32px;
+    margin: var(--s2);
+    margin-bottom: var(--s4);
     font-weight: bold;
     display: flex;
     align-items: center;
 
     &:before {
       @include materialIcon('warning');
-      margin-right: 8px;
+      margin-right: var(--s);
     }
   }
 
   .tpl hr {
-    margin-bottom: 32px;
+    margin-bottom: var(--s4);
 
     border-color: var(--separator-color);
   }
 
   .sub-section-heading {
-    margin-top: 32px;
+    margin-top: var(--s4);
   }
 
   .sub-section-heading,
@@ -61,6 +61,41 @@
   }
 }
 
+.action-row {
+  margin-bottom: var(--s2);
+}
+
+.connected-status {
+  margin-left: var(--s);
+  color: var(--palette-accent);
+}
+
+.connected-status-icon,
+.error-status-icon {
+  vertical-align: middle;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.error-status {
+  margin-left: var(--s);
+  color: var(--palette-warn);
+}
+
 .success-info {
-  margin: 0 16px;
+  margin: 0 var(--s2);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }

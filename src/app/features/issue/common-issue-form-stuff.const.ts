@@ -81,16 +81,44 @@ export const ISSUE_PROVIDER_COMMON_FORM_FIELDS: LimitedFormlyFieldConfig<IssuePr
         'props.disabled': '!model.defaultProjectId',
       },
       props: {
-        // label: T.F.CALDAV.FORM.IS_AUTO_IMPORT_ISSUES,
-        label: 'Auto import to default project (requires default project)',
+        label: T.F.ISSUE.FORM.AUTO_ADD_TO_BACKLOG,
       },
     },
     {
       key: 'isAutoPoll',
       type: 'checkbox',
       props: {
-        // label: T.F.CALDAV.FORM.IS_AUTO_POLL,
-        label: 'Poll imported for changes and notify',
+        label: T.F.ISSUE.FORM.AUTO_POLL,
+      },
+    },
+    {
+      key: 'pollingMode',
+      type: 'select',
+      defaultValue: 'whenProjectOpen',
+      expressions: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'props.disabled': '!model.isAutoPoll && !model.isAutoAddToBacklog',
+        // ICAL already polls globally via selectAllCalendarIssueTasks, so pollingMode has no effect
+        hide: 'model.issueProviderKey === "ICAL"',
+      },
+      props: {
+        label: T.F.ISSUE.FORM.POLLING_MODE,
+        description: T.F.ISSUE.FORM.POLLING_MODE_DESCRIPTION,
+        options: [
+          {
+            value: 'whenProjectOpen',
+            label: T.F.ISSUE.FORM.POLLING_MODE_WHEN_PROJECT_OPEN,
+          },
+          { value: 'always', label: T.F.ISSUE.FORM.POLLING_MODE_ALWAYS },
+        ],
+      },
+    },
+    {
+      key: 'defaultNote',
+      type: 'textarea',
+      props: {
+        label: T.F.ISSUE.DEFAULT_NOTE_LABEL,
+        rows: 3,
       },
     },
     // ISSUE_PROVIDER_FF_LINE,

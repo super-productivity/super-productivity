@@ -18,26 +18,41 @@ import { DOCUMENT } from '@angular/common';
 import { MatIconRegistry } from '@angular/material/icon';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/chrome-extension-interface.service';
-import { ThemeService as NgChartThemeService } from 'ng2-charts';
+
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { WorkContextThemeCfg } from '../../features/work-context/work-context.model';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { combineLatest, fromEvent, Observable, of } from 'rxjs';
 import { IS_FIREFOX } from '../../util/is-firefox';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
-import { IS_MOUSE_PRIMARY, IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
-import { ChartConfiguration } from 'chart.js';
+import {
+  IS_HYBRID_DEVICE,
+  IS_MOUSE_PRIMARY,
+  IS_TOUCH_PRIMARY,
+} from '../../util/is-mouse-primary';
+// Injected to ensure constructor runs and registers global pointer event listeners
+import { InputIntentService } from '../input-intent/input-intent.service';
+import { ipcEnterFullScreen$, ipcLeaveFullScreen$ } from '../ipc-events';
+
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
 import { HttpClient } from '@angular/common/http';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
 import { Keyboard, KeyboardInfo } from '@capacitor/keyboard';
-import { PluginListenerHandle } from '@capacitor/core';
+import { PluginListenerHandle, registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { SafeArea } from 'capacitor-plugin-safe-area';
+import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
 import { CustomThemeService } from './custom-theme.service';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+
+interface NavigationBarPlugin {
+  setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
+}
+
+const NavigationBar = registerPlugin<NavigationBarPlugin>('NavigationBar');
 
 export type DarkModeCfg = 'dark' | 'light' | 'system';
 
@@ -51,7 +66,7 @@ export class GlobalThemeService {
   private _matIconRegistry = inject(MatIconRegistry);
   private readonly _registeredPluginIcons = new Set<string>();
   private _domSanitizer = inject(DomSanitizer);
-  private _chartThemeService = inject(NgChartThemeService);
+
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _imexMetaService = inject(ImexViewService);
   private _http = inject(HttpClient);
@@ -59,6 +74,7 @@ export class GlobalThemeService {
   private _platformService = inject(CapacitorPlatformService);
   private _environmentInjector = inject(EnvironmentInjector);
   private _destroyRef = inject(DestroyRef);
+  private _inputIntentService = inject(InputIntentService);
   private _hasInitialized = false;
   private _keyboardListenerHandles: PluginListenerHandle[] = [];
   private _focusinListener: ((event: FocusEvent) => void) | null = null;
@@ -125,7 +141,9 @@ export class GlobalThemeService {
 
   private _setDarkTheme(isDarkTheme: boolean): void {
     this._materialCssVarsService.setDarkTheme(isDarkTheme);
-    this._setChartTheme(isDarkTheme);
+    this._setChartTheme(isDarkTheme).catch((err) => {
+      Log.warn('Failed to set chart theme', err);
+    });
     // this._materialCssVarsService.setDarkTheme(true);
     // this._materialCssVarsService.setDarkTheme(false);
   }
@@ -175,6 +193,8 @@ export class GlobalThemeService {
       ['tomorrow', 'assets/icons/tomorrow.svg'],
       ['next_week', 'assets/icons/next-week.svg'],
       ['habit', 'assets/icons/habit.svg'],
+      ['azure_devops', 'assets/icons/azure_devops.svg'],
+      ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
     ];
 
     // todo test if can be removed with airplane mode and wifi without internet
@@ -220,6 +240,10 @@ export class GlobalThemeService {
       this._domSanitizer.bypassSecurityTrustResourceUrl(url),
     );
     this._registeredPluginIcons.add(iconName);
+  }
+
+  hasPluginIcon(iconName: string): boolean {
+    return this._registeredPluginIcons.has(iconName);
   }
 
   registerSvgIconFromContent(iconName: string, svgContent: string): void {
@@ -272,6 +296,12 @@ export class GlobalThemeService {
       this.document.body.classList.add(BodyClass.isElectron);
       this.document.body.classList.add(BodyClass.isAdvancedFeatures);
       this.document.body.classList.remove(BodyClass.isNoAdvancedFeatures);
+      ipcEnterFullScreen$.pipe(takeUntilDestroyed(this._destroyRef)).subscribe(() => {
+        this.document.body.classList.add(BodyClass.isFullScreen);
+      });
+      ipcLeaveFullScreen$.pipe(takeUntilDestroyed(this._destroyRef)).subscribe(() => {
+        this.document.body.classList.remove(BodyClass.isFullScreen);
+      });
     } else {
       this.document.body.classList.add(BodyClass.isWeb);
       this._chromeExtensionInterfaceService.onReady$.pipe(take(1)).subscribe(() => {
@@ -285,6 +315,7 @@ export class GlobalThemeService {
     if (this._platformService.isNative) {
       this.document.body.classList.add(BodyClass.isNativeMobile);
       this._initMobileStatusBar();
+      this._initSafeAreaInsets();
 
       if (this._platformService.isIOS()) {
         this.document.body.classList.add(BodyClass.isIOS);
@@ -373,19 +404,23 @@ export class GlobalThemeService {
       this.document.body.classList.add(BodyClass.isNoTouchOnly);
     }
 
-    if (IS_MOUSE_PRIMARY) {
-      this.document.body.classList.add(BodyClass.isMousePrimary);
-    } else if (IS_TOUCH_PRIMARY) {
-      this.document.body.classList.add(BodyClass.isTouchPrimary);
+    // On hybrid devices, InputIntentService dynamically toggles these classes
+    if (!IS_HYBRID_DEVICE) {
+      if (IS_MOUSE_PRIMARY) {
+        this.document.body.classList.add(BodyClass.isMousePrimary);
+      } else if (IS_TOUCH_PRIMARY) {
+        this.document.body.classList.add(BodyClass.isTouchPrimary);
+      }
     }
   }
 
-  private _setChartTheme(isDarkTheme: boolean): void {
-    const overrides: ChartConfiguration['options'] = isDarkTheme
+  private async _setChartTheme(isDarkTheme: boolean): Promise<void> {
+    const { ThemeService } = await import('ng2-charts');
+
+    const chartThemeService = this._environmentInjector.get(ThemeService);
+
+    const overrides: import('chart.js').ChartConfiguration['options'] = isDarkTheme
       ? {
-          // legend: {
-          //   labels: { fontColor: 'white' },
-          // },
           scales: {
             x: {
               ticks: {
@@ -409,7 +444,7 @@ export class GlobalThemeService {
       : {
           scales: {},
         };
-    this._chartThemeService.setColorschemesOptions(overrides);
+    chartThemeService.setColorschemesOptions(overrides);
   }
 
   private _setupCustomThemeEffect(): void {
@@ -507,6 +542,61 @@ export class GlobalThemeService {
    * Initialize mobile status bar styling.
    * Syncs status bar style with app dark/light mode on both iOS and Android.
    */
+  /**
+   * Read native safe area insets and set CSS variables.
+   * Works around Capacitor 7's broken adjustMarginsForEdgeToEdge and
+   * Android WebView's unreliable env(safe-area-inset-*) values.
+   */
+  private _initSafeAreaInsets(): void {
+    const applyInsets = (insets: {
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    }): void => {
+      const root = this.document.documentElement;
+      root.style.setProperty('--safe-area-inset-top', `${insets.top}px`);
+      root.style.setProperty('--safe-area-inset-bottom', `${insets.bottom}px`);
+      root.style.setProperty('--safe-area-inset-left', `${insets.left}px`);
+      root.style.setProperty('--safe-area-inset-right', `${insets.right}px`);
+    };
+
+    SafeArea.getSafeAreaInsets().then(({ insets }) => applyInsets(insets));
+    SafeArea.addListener('safeAreaChanged', ({ insets }) => applyInsets(insets));
+    this._patchCdkViewportForSafeArea();
+  }
+
+  /**
+   * Monkey-patch CDK's viewport rect calculation to include safe area insets.
+   * This makes connected overlays (menus, selects) stay within the safe area
+   * instead of extending behind the status bar or home indicator.
+   */
+  private _patchCdkViewportForSafeArea(): void {
+    const proto = FlexibleConnectedPositionStrategy.prototype as any;
+    const original = proto._getNarrowedViewportRect;
+    const doc = this.document;
+    proto._getNarrowedViewportRect = function (): {
+      top: number;
+      left: number;
+      right: number;
+      bottom: number;
+      width: number;
+      height: number;
+    } {
+      const rect = original.call(this);
+      const style = getComputedStyle(doc.documentElement);
+      const safeTop = parseInt(style.getPropertyValue('--safe-area-inset-top'), 10) || 0;
+      const safeBottom =
+        parseInt(style.getPropertyValue('--safe-area-inset-bottom'), 10) || 0;
+      return {
+        ...rect,
+        top: rect.top + safeTop,
+        bottom: rect.bottom - safeBottom,
+        height: rect.height - safeTop - safeBottom,
+      };
+    };
+  }
+
   private _initMobileStatusBar(): void {
     effect(() => {
       const isDark = this.isDarkTheme();
@@ -514,11 +604,16 @@ export class GlobalThemeService {
         Log.warn('Failed to set status bar style', err);
       });
       if (this._platformService.isAndroid()) {
-        StatusBar.setBackgroundColor({ color: isDark ? '#131314' : '#ffffff' }).catch(
-          (err) => {
-            Log.warn('Failed to set status bar background color', err);
-          },
-        );
+        const bgColor = isDark ? '#131314' : '#f8f8f7';
+        StatusBar.setBackgroundColor({ color: bgColor }).catch((err) => {
+          Log.warn('Failed to set status bar background color', err);
+        });
+        NavigationBar.setColor({
+          color: bgColor,
+          style: isDark ? 'DARK' : 'LIGHT',
+        }).catch((err) => {
+          Log.warn('Failed to set navigation bar color', err);
+        });
       }
     });
   }

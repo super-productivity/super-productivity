@@ -1,0 +1,135 @@
+<h2 mat-dialog-title>
+  @if (task.issueType) {
+    <mat-icon [svgIcon]="task.issueType | issueIcon"></mat-icon>
+  } @else {
+    <mat-icon>archive</mat-icon>
+  }
+  {{ task.title }}
+</h2>
+
+<mat-dialog-content>
+  @if (subTasks().length) {
+    <section class="section">
+      <h3>
+        <mat-icon>list</mat-icon>
+        <strong>{{
+          T.F.TASK.ADDITIONAL_INFO.SUB_TASKS | translate: { nr: subTasks().length }
+        }}</strong>
+      </h3>
+      <ul class="subtask-list">
+        @for (sub of subTasks(); track sub.id) {
+          <li [class.is-done]="sub.isDone">
+            <mat-icon>{{
+              sub.isDone ? 'check_box' : 'check_box_outline_blank'
+            }}</mat-icon>
+            <span>{{ sub.title }}</span>
+            @if (sub.timeSpent) {
+              <span class="time-spent">{{ sub.timeSpent | msToString }}</span>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (task.timeSpent || task.timeEstimate) {
+    <section class="section">
+      <h3>
+        <mat-icon>timer</mat-icon>
+        <strong>{{ T.F.TASK.ADDITIONAL_INFO.TIME | translate }}</strong>
+      </h3>
+      <div class="time-info">
+        <span>{{ task.timeSpent || 0 | msToString }}</span>
+        <span class="separator">/</span>
+        <span>{{ task.timeEstimate || 0 | msToString }}</span>
+      </div>
+    </section>
+  }
+
+  @if (task.notes) {
+    <section class="section notes-section">
+      <h3>
+        <mat-icon>chat</mat-icon>
+        <strong>{{ T.F.TASK.ADDITIONAL_INFO.NOTES | translate }}</strong>
+      </h3>
+      <div class="notes-content">
+        <markdown
+          [data]="task.notes"
+          [disableSanitizer]="true"
+          class="markdown-parsed markdown"
+        ></markdown>
+      </div>
+    </section>
+  }
+
+  @if (task.attachments?.length) {
+    <section class="section">
+      <h3>
+        <mat-icon>attachment</mat-icon>
+        <strong>{{
+          T.F.TASK.ADDITIONAL_INFO.ATTACHMENTS
+            | translate: { nr: task.attachments.length }
+        }}</strong>
+      </h3>
+      <task-attachment-list
+        [attachments]="task.attachments"
+        [isDisableControls]="true"
+        [taskId]="task.id"
+      ></task-attachment-list>
+    </section>
+  }
+
+  @if (issueUrl()) {
+    <section class="section">
+      <h3>
+        <mat-icon [svgIcon]="task.issueType! | issueIcon"></mat-icon>
+        <strong>{{ T.F.TASK.ADDITIONAL_INFO.ISSUE | translate }}</strong>
+      </h3>
+      <a
+        [href]="issueUrl()"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="issue-link-body"
+        >{{ issueUrl() }} <mat-icon>open_in_new</mat-icon></a
+      >
+    </section>
+  }
+
+  @if (task.repeatCfgId) {
+    <section class="section">
+      <h3>
+        <mat-icon svgIcon="repeat"></mat-icon>
+        <strong>{{ T.F.TASK.ADDITIONAL_INFO.REPEAT | translate }}</strong>
+      </h3>
+      @if (repeatCfgLabel()) {
+        <span
+          (click)="openRepeatCfg()"
+          class="repeat-value"
+          >{{ repeatCfgLabel() }}</span
+        >
+      }
+    </section>
+  }
+
+  <section class="section date-info">
+    <div>
+      {{ T.F.TASK.ADDITIONAL_INFO.CREATED_ON | translate }}
+      {{ task.created | localeDate: 'short' }}
+    </div>
+    @if (task.doneOn) {
+      <div>
+        {{ T.F.TASK.ADDITIONAL_INFO.COMPLETED_ON | translate }}
+        {{ task.doneOn | localeDate: 'short' }}
+      </div>
+    }
+  </section>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    mat-dialog-close
+  >
+    {{ T.G.CLOSE | translate }}
+  </button>
+</mat-dialog-actions>

@@ -1,3 +1,5 @@
-mat-form-field {
+:host {
+  display: block;
   width: 100%;
+  padding: var(--s) 0;
 }

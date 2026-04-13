@@ -57,13 +57,13 @@ export class SuperSyncRestoreService {
         // 1. Fetch state at the specified serverSeq
         const snapshot = await provider.getStateAtSeq(serverSeq);
 
-        // 2. Import with isForceConflict=true to generate fresh vector clock
-        // This ensures the restored state syncs cleanly to all devices
+        // 2. Import with isForceConflict=true to gate page reload
+        // Fresh clock is always generated; isSkipReload=true prevents actual reload
         await this._backupService.importCompleteBackup(
           snapshot.state as AppDataComplete,
           true, // isSkipLegacyWarnings
           true, // isSkipReload - no page reload needed
-          true, // isForceConflict - generates fresh vector clock
+          true, // isForceConflict - gates page reload (isSkipReload=true overrides)
         );
 
         this._snackService.open({

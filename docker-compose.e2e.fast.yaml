@@ -23,13 +23,13 @@ services:
 
   # WebDAV sync server (for sync tests)
   webdav:
-    image: hacdias/webdav:latest
+    image: hacdias/webdav:v5
     ports:
       - '${WEBDAV_PORT:-2345}:${WEBDAV_PORT:-2345}'
     environment:
       - PORT=${WEBDAV_PORT:-2345}
     volumes:
-      - ./webdav.yaml:/config.yml:ro
+      - ./webdav.yaml:/etc/webdav/config.yaml:ro
       - webdav_data:/data
     healthcheck:
       test:

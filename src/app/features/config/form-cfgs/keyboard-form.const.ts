@@ -313,6 +313,13 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
       },
     },
     {
+      key: 'taskOpenNotesFullscreen',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TASK_OPEN_NOTES_FULLSCREEN,
+      },
+    },
+    {
       key: 'selectPreviousTask',
       type: 'keyboard',
       templateOptions: {

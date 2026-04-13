@@ -47,7 +47,7 @@ class SimulatedClient {
     // Use incrementing counter for unique client IDs
     this.clientId = clientId || `client-${++clientCounter}-${uuidv7().slice(0, 8)}`;
     this.authToken = jwt.sign({ userId, email: `user${userId}@test.com` }, JWT_SECRET, {
-      expiresIn: '7d',
+      expiresIn: '365d',
     });
   }
 

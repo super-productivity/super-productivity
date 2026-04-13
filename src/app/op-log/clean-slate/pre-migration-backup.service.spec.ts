@@ -23,10 +23,6 @@ describe('PreMigrationBackupService (Placeholder)', () => {
       ).toBeResolved();
     });
 
-    it('should accept FULL_IMPORT reason', async () => {
-      await expectAsync(service.createPreMigrationBackup('FULL_IMPORT')).toBeResolved();
-    });
-
     it('should accept MANUAL reason', async () => {
       await expectAsync(service.createPreMigrationBackup('MANUAL')).toBeResolved();
     });

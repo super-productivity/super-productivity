@@ -47,12 +47,12 @@
   // For mobile bottom sheet, let parent handle overflow
   // For desktop right panel, use overflow-y auto
   overflow-y: auto;
-  padding: 0 8px 4px;
+  padding: 0 var(--s) var(--s-half);
 
   // Mobile bottom sheet specific styles
   :host-context(.bottom-panel-sheet) & {
     overflow: hidden;
-    padding: 0 4px;
+    padding: 0 var(--s-half);
 
     > * {
       height: 100%;

@@ -64,7 +64,9 @@
     >
       <h2>{{ T.SCHEDULE.SCHEDULED_TASKS_WITH_TIME | translate }}</h2>
       @if (!allScheduledTasks?.length) {
-        <p class="no-scheduled-tasks">{{ T.SCHEDULE.NO_SCHEDULED | translate }}</p>
+        <p class="no-scheduled-tasks">
+          {{ T.SCHEDULE.NO_SCHEDULED_WITH_TIME | translate }}
+        </p>
       }
       <div
         [@standardList]="allScheduledTasks?.length"
@@ -108,7 +110,9 @@
     >
       <h2>{{ T.SCHEDULE.NO_SCHEDULED_TITLE | translate }}</h2>
       @if (!allScheduledTasks?.length) {
-        <p class="no-scheduled-tasks">{{ T.SCHEDULE.NO_SCHEDULED | translate }}</p>
+        <p class="no-scheduled-tasks">
+          {{ T.SCHEDULE.NO_SCHEDULED_FOR_DAY | translate }}
+        </p>
       }
       <div
         [@standardList]="allScheduledTasks?.length"
@@ -132,5 +136,50 @@
     </section>
   } @else {
     <full-page-spinner></full-page-spinner>
+  }
+  @if (tasksWithDeadlines$ | async; as tasksWithDeadlines) {
+    @if (tasksWithDeadlines.length) {
+      <section
+        class="component-wrapper"
+        style="margin-top: 24px"
+      >
+        <h2>{{ T.SCHEDULE.TASKS_WITH_DEADLINES | translate }}</h2>
+        <div
+          [@standardList]="tasksWithDeadlines.length"
+          class="tasks"
+        >
+          @for (task of tasksWithDeadlines; track task.id) {
+            <planner-task [task]="task">
+              <div
+                (click)="editDeadline(task, $event)"
+                class="due-date"
+                mat-ripple
+              >
+                <div class="date-and-time-left">
+                  @if (task.deadlineWithTime) {
+                    <div class="date hide-xs">
+                      {{ task.deadlineWithTime | localeDate: 'EE, d MMM, ' }}
+                      {{ task.deadlineWithTime | shortTime }}
+                    </div>
+                    <div class="date show-xs-only">
+                      {{ task.deadlineWithTime | localeDate: 'd MMM, ' }},
+                      {{ task.deadlineWithTime | shortTime }}
+                    </div>
+                    <div class="time-left">
+                      ({{ task.deadlineWithTime | humanizeTimestamp }})
+                    </div>
+                  } @else if (task.deadlineDay) {
+                    <div class="date">
+                      {{ task.deadlineDay | localeDate: 'EE, d MMM' }}
+                    </div>
+                  }
+                </div>
+                <mat-icon>flag</mat-icon>
+              </div>
+            </planner-task>
+          }
+        </div>
+      </section>
+    }
   }
 </div>

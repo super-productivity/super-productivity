@@ -1,6 +1,14 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+} from '@angular/core';
 import { TaskWithSubTasks } from '../../tasks/task.model';
 import { ISSUE_PROVIDER_HUMANIZED, ISSUE_PROVIDER_ICON_MAP } from '../issue.const';
+import { BuiltInIssueProviderKey, IssueProviderKey } from '../issue.model';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { MatIcon } from '@angular/material/icon';
 
 @Component({
@@ -11,8 +19,25 @@ import { MatIcon } from '@angular/material/icon';
   imports: [MatIcon],
 })
 export class IssueHeaderComponent {
+  private _pluginRegistry = inject(PluginIssueProviderRegistryService);
+
   task = input.required<TaskWithSubTasks>();
 
-  readonly ISSUE_PROVIDER_ICON_MAP = ISSUE_PROVIDER_ICON_MAP;
-  readonly ISSUE_PROVIDER_HUMANIZED = ISSUE_PROVIDER_HUMANIZED;
+  icon = computed(() => {
+    const key = this.task().issueType as IssueProviderKey;
+    if (!key) return '';
+    if (this._pluginRegistry.hasProvider(key)) {
+      return this._pluginRegistry.getIcon(key);
+    }
+    return ISSUE_PROVIDER_ICON_MAP[key as BuiltInIssueProviderKey];
+  });
+
+  providerName = computed(() => {
+    const key = this.task().issueType as IssueProviderKey;
+    if (!key) return '';
+    if (this._pluginRegistry.hasProvider(key)) {
+      return this._pluginRegistry.getName(key);
+    }
+    return ISSUE_PROVIDER_HUMANIZED[key as BuiltInIssueProviderKey];
+  });
 }

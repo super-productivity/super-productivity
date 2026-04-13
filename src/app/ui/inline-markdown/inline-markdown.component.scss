@@ -47,6 +47,13 @@
   cursor: text;
 }
 
+:host:has(.controls) {
+  .markdown-unparsed,
+  .markdown-parsed {
+    padding-bottom: var(--s5);
+  }
+}
+
 .markdown-parsed.preview-while-editing {
   position: relative;
   margin-top: var(--s2);

@@ -2,6 +2,8 @@ import { TaskWithDueTime } from '../../tasks/task.model';
 
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { devError } from '../../../util/dev-error';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import {
   BlockedBlock,
@@ -11,6 +13,7 @@ import {
   ScheduleWorkStartEndCfg,
 } from '../schedule.model';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { isSameDay } from '../../../util/is-same-day';
 const PROJECTION_DAYS: number = 30;
 
 export const createSortedBlockerBlocks = (
@@ -21,6 +24,7 @@ export const createSortedBlockerBlocks = (
   lunchBreakCfg?: ScheduleLunchBreakCfg,
   now: number = Date.now(),
   nrOfDays: number = PROJECTION_DAYS,
+  realNow?: number,
 ): BlockedBlock[] => {
   if (typeof now !== 'number') {
     throw new Error('No valid now given');
@@ -32,6 +36,7 @@ export const createSortedBlockerBlocks = (
       now,
       nrOfDays,
       scheduledTaskRepeatCfgs,
+      realNow,
     ),
     ...createBlockerBlocksForWorkStartEnd(now, nrOfDays, workStartEndCfg),
     ...createBlockerBlocksForLunchBreak(now, nrOfDays, lunchBreakCfg),
@@ -56,10 +61,11 @@ const createBlockerBlocksForScheduledRepeatProjections = (
   now: number,
   nrOfDays: number,
   scheduledTaskRepeatCfgs: TaskRepeatCfg[],
+  realNow?: number,
 ): BlockedBlock[] => {
   const blockedBlocks: BlockedBlock[] = [];
-
-  let i: number = 1;
+  const isViewingCurrentDay = realNow === undefined || isSameDay(realNow, now);
+  let i: number = isViewingCurrentDay ? 1 : 0;
   while (i < nrOfDays) {
     // Calculate proper day start instead of adding 24-hour increments
     const nowDate = new Date(now);
@@ -77,8 +83,9 @@ const createBlockerBlocksForScheduledRepeatProjections = (
     i++;
 
     allRepeatableTasksForDay.forEach((repeatCfg) => {
-      if (!repeatCfg.startTime) {
-        throw new Error('Timeline: No startTime for repeat projection');
+      if (!repeatCfg.startTime || !isValidSplitTime(repeatCfg.startTime)) {
+        devError('Timeline: Invalid or missing startTime for repeat projection');
+        return;
       }
       const start = getDateTimeFromClockString(repeatCfg.startTime, currentDayTimestamp);
       const end = start + (repeatCfg.defaultEstimate || 0);

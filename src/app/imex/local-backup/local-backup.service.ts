@@ -111,7 +111,7 @@ export class LocalBackupService {
         )
       ) {
         const backupData = await this.loadBackupElectron(backupMeta.path);
-        Log.log('backupData', backupData);
+        Log.log('backupData loaded from Electron backup');
         await this._importBackup(backupData);
       }
 
@@ -124,9 +124,9 @@ export class LocalBackupService {
         )
       ) {
         const backupData = await this.loadBackupAndroid();
-        Log.log('backupData', backupData);
+        Log.log('backupData loaded from Android, length: ' + backupData.length);
         const lineBreaksReplaced = backupData.replace(/\n/g, '\\n');
-        Log.log('lineBreaksReplaced', lineBreaksReplaced);
+        Log.log('lineBreaksReplaced, length: ' + lineBreaksReplaced.length);
         await this._importBackup(lineBreaksReplaced);
       }
 
@@ -176,7 +176,7 @@ export class LocalBackupService {
 
   private async _importBackup(backupData: string): Promise<void> {
     try {
-      // isForceConflict=true resets vector clock to prevent accumulation of old client IDs
+      // isForceConflict=true only gates page reload; fresh clock is always generated
       await this._backupService.importCompleteBackup(
         JSON.parse(backupData) as AppDataComplete,
         false,

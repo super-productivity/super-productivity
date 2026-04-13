@@ -3,19 +3,11 @@ import { Store } from '@ngrx/store';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { StateSnapshotService } from './state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { VectorClockService } from '../sync/vector-clock.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { Operation, OpType, ActionType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
-import {
-  incrementVectorClock,
-  limitVectorClockSize,
-  selectProtectedClientIds,
-} from '../../core/util/vector-clock';
 import { uuidv7 } from '../../util/uuid-v7';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { validateFull } from '../validation/validation-fn';
-import { dataRepair } from '../validation/data-repair';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
 import { OpLog } from '../../core/log';
 import {
@@ -26,7 +18,6 @@ import {
 import { CompleteBackup } from '../core/types/sync.types';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/archive/archive.model';
-import { isLegacyBackupData, migrateLegacyBackup } from './migrate-legacy-backup';
 
 /**
  * Service for handling backup import and export operations.
@@ -45,7 +36,6 @@ export class BackupService {
   private _store = inject(Store);
   private _stateSnapshotService = inject(StateSnapshotService);
   private _opLogStore = inject(OperationLogStoreService);
-  private _vectorClockService = inject(VectorClockService);
   private _clientIdService = inject(ClientIdService);
   private _archiveDbAdapter = inject(ArchiveDbAdapter);
 
@@ -78,7 +68,7 @@ export class BackupService {
    * @param data - The backup data to import
    * @param isSkipLegacyWarnings - If true, skip legacy data format warnings
    * @param isSkipReload - If true, don't reload the page after import
-   * @param isForceConflict - If true, generate new client ID and reset vector clock
+   * @param isForceConflict - If true, reload page after import
    */
   async importCompleteBackup(
     data: AppDataComplete | CompleteBackup<AllModelConfig>,
@@ -99,6 +89,8 @@ export class BackupService {
       }
 
       // 2. Migrate legacy backups (pre-v14) that have the old data shape
+      const { isLegacyBackupData, migrateLegacyBackup } =
+        await import('./migrate-legacy-backup');
       if (isLegacyBackupData(backupData as unknown as Record<string, unknown>)) {
         OpLog.normal(
           'BackupService: Detected legacy backup format, running migration...',
@@ -109,6 +101,7 @@ export class BackupService {
       }
 
       // 3. Validate data
+      const { validateFull } = await import('../validation/validation-fn');
       const validationResult = validateFull(backupData);
       let validatedData = backupData;
 
@@ -128,14 +121,23 @@ export class BackupService {
             'errors' in validationResult.typiaResult
               ? validationResult.typiaResult.errors
               : [];
-          validatedData = dataRepair(backupData, errors);
+          const { dataRepair } = await import('../validation/data-repair');
+          validatedData = dataRepair(backupData, errors).data;
         } else {
           throw new Error('Data validation failed and repair not possible');
         }
       }
 
       // 4. Persist to operation log
-      await this._persistImportToOperationLog(validatedData, isForceConflict);
+      await this._persistImportToOperationLog(validatedData);
+
+      // 4b. Reset all sync providers' lastServerSeq to 0.
+      // After a backup import, the client must re-sync from the beginning to ensure
+      // that any ops on the server (which may conflict with the backup) are properly
+      // filtered by the local BACKUP_IMPORT operation.
+      // Without this reset, the sync would start from the old seq and skip server ops,
+      // meaning the BACKUP_IMPORT filter never runs and old ops are not filtered.
+      this._resetAllLastServerSeqs();
 
       // 5. Dispatch to NgRx
       this._store.dispatch(loadAllData({ appDataComplete: validatedData }));
@@ -159,7 +161,6 @@ export class BackupService {
 
   private async _persistImportToOperationLog(
     importedData: AppDataComplete,
-    isForceConflict: boolean,
   ): Promise<void> {
     OpLog.normal('BackupService: Persisting import to operation log...');
 
@@ -182,21 +183,11 @@ export class BackupService {
       await this._opLogStore.clearAllOperations();
     }
 
-    let clientId: string;
-    if (isForceConflict) {
-      clientId = await this._clientIdService.generateNewClientId();
-    } else {
-      const loadedClientId = await this._clientIdService.loadClientId();
-      clientId = loadedClientId ?? (await this._clientIdService.generateNewClientId());
-    }
+    // Generate new client ID for both paths - imports are a fresh start
+    const clientId = await this._clientIdService.generateNewClientId();
 
-    const currentClock = await this._vectorClockService.getCurrentVectorClock();
-    // Prune to MAX_VECTOR_CLOCK_SIZE to match server-side pruning.
-    // Without this, the local BACKUP_IMPORT retains an oversized clock while the server
-    // stores a pruned version, causing remote clients' ops to appear CONCURRENT.
-    const newClock = isForceConflict
-      ? { [clientId]: 2 }
-      : limitVectorClockSize(incrementVectorClock(currentClock, clientId), clientId, []);
+    // Fresh clock: new clientId with initial counter for clean baseline
+    const newClock = { [clientId]: 1 };
 
     const opId = uuidv7();
     // IMPORTANT: Uses OpType.BackupImport which maps to reason='recovery' on the server.
@@ -213,6 +204,7 @@ export class BackupService {
       vectorClock: newClock,
       timestamp: Date.now(),
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      syncImportReason: 'BACKUP_RESTORE',
     };
 
     await this._opLogStore.append(op, 'local');
@@ -220,10 +212,6 @@ export class BackupService {
 
     // Update vector clock store (append() doesn't do this, unlike appendWithVectorClockUpdate)
     await this._opLogStore.setVectorClock(newClock);
-
-    // Protect all vector clock keys from pruning
-    const protectedIds = selectProtectedClientIds(newClock);
-    await this._opLogStore.setProtectedClientIds(protectedIds);
 
     await this._opLogStore.saveStateCache({
       state: importedData,
@@ -234,6 +222,35 @@ export class BackupService {
     });
 
     OpLog.normal('BackupService: Import persisted to operation log.');
+  }
+
+  /**
+   * Resets all sync providers' lastServerSeq to 0 in localStorage.
+   *
+   * After a backup import, the client must re-sync from the beginning to ensure
+   * that server ops are properly filtered by the local BACKUP_IMPORT operation.
+   * Without this reset, the sync downloads from the old seq, skipping server ops,
+   * so the BACKUP_IMPORT filter never runs.
+   *
+   * We clear all keys matching the SuperSync prefix to handle any active provider.
+   */
+  private _resetAllLastServerSeqs(): void {
+    const PREFIX = 'super_sync_last_server_seq_';
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+    if (keysToRemove.length > 0) {
+      OpLog.normal(
+        `BackupService: Reset ${keysToRemove.length} lastServerSeq(s) to 0 after backup import.`,
+      );
+    }
   }
 
   /**

@@ -6,8 +6,7 @@ runs:
   steps:
     - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
       with:
-        node-version: 20
-
+        node-version: 22
     - name: Reconfigure git to use HTTP authentication
       shell: bash
       run: >
@@ -24,9 +23,9 @@ runs:
       id: npm-cache
       with:
         path: ${{ steps.npm-cache-dir.outputs.dir }}
-        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
         restore-keys: |
-          ${{ runner.os }}-node-
+          ${{ runner.os }}-node22-
 
     - name: Install npm Packages
       shell: bash

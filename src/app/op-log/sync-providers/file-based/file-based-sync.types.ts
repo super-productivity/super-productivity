@@ -3,6 +3,15 @@ import { CompactOperation } from '../../../core/persistence/operation-log/compac
 import { ArchiveModel } from '../../../features/time-tracking/time-tracking.model';
 
 /**
+ * Wrapper type for compact ops stored in the sync file.
+ * Extends CompactOperation with `sv` (syncVersion) — the syncVersion at which
+ * this op was uploaded. Used for partial-trimming gap detection.
+ *
+ * This is a file-based sync transport concern, NOT a general operation property.
+ */
+export type SyncFileCompactOp = CompactOperation & { sv?: number };
+
+/**
  * File-based sync data structure.
  * This is the schema for `sync-data.json` stored on WebDAV/Dropbox/LocalFile providers.
  *
@@ -75,51 +84,19 @@ export interface FileBasedSyncData {
    * 2. Apply LWW at entity/field level instead of file level
    * 3. Merge non-conflicting changes from concurrent edits
    *
-   * Default limit: 200 operations
+   * Limit: MAX_RECENT_OPS operations
    */
-  recentOps: CompactOperation[];
+  recentOps: SyncFileCompactOp[];
 
   /**
-   * Optional checksum for integrity verification.
-   * SHA-256 hash of the uncompressed state JSON.
+   * The syncVersion (upload batch number) of the oldest operation in recentOps.
+   * Used for partial-trimming gap detection: when recentOps hits MAX_RECENT_OPS
+   * and oldest ops are trimmed, a slow-syncing client compares this against its
+   * sinceSeq to detect missed ops — no cross-machine clock comparison needed.
+   *
+   * Undefined when recentOps is empty or when old ops lack `sv` (backward compat).
    */
-  checksum?: string;
-}
-
-// Note: FileBasedOperationSyncCapable interface was removed.
-// Use isFileBasedProvider() from operation-sync.util.ts instead.
-
-/**
- * Error thrown when sync version conflict is detected.
- * Client expected one version but found another, indicating concurrent modification.
- */
-export class SyncVersionConflictError extends Error {
-  constructor(
-    public readonly expectedVersion: number,
-    public readonly actualVersion: number,
-  ) {
-    super(
-      `Sync version conflict: expected ${expectedVersion}, found ${actualVersion}. ` +
-        `Another device has synced since last download.`,
-    );
-    this.name = 'SyncVersionConflictError';
-  }
-}
-
-/**
- * Error thrown when migration is already in progress by another client.
- */
-export class MigrationInProgressError extends Error {
-  constructor(
-    public readonly lockingClientId: string,
-    public readonly lockTimestamp: number,
-  ) {
-    super(
-      `Migration in progress by client ${lockingClientId} since ${new Date(lockTimestamp).toISOString()}. ` +
-        `Please wait for migration to complete.`,
-    );
-    this.name = 'MigrationInProgressError';
-  }
+  oldestOpSyncVersion?: number;
 }
 
 /**
@@ -154,9 +131,6 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   /** Maximum number of recent operations to keep */
   MAX_RECENT_OPS: 500,
 
-  /** Migration lock timeout in milliseconds (5 minutes) */
-  MIGRATION_LOCK_TIMEOUT_MS: 5 * 60 * 1000,
-
   /** Storage key prefix for last known sync version */
   SYNC_VERSION_STORAGE_KEY_PREFIX: 'FILE_SYNC_VERSION_',
 
@@ -166,52 +140,3 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   /** Base delay in ms for exponential backoff between retries */
   RETRY_BASE_DELAY_MS: 500,
 } as const;
-
-/**
- * Migration lock file content structure
- */
-export interface MigrationLockContent {
-  clientId: string;
-  timestamp: number;
-  stage: 'started' | 'downloading' | 'converting' | 'uploading' | 'cleaning';
-}
-
-/**
- * Result of parsing/validating sync data file
- */
-export interface ParsedSyncData {
-  data: FileBasedSyncData;
-  isValid: boolean;
-  validationErrors?: string[];
-}
-
-/**
- * Conflict resolution result for a single entity
- */
-export interface EntityConflictResolution {
-  entityType: string;
-  entityId: string;
-  winner: 'local' | 'remote';
-  winnerTimestamp: number;
-  loserTimestamp: number;
-}
-
-/**
- * Result of merging local and remote operations
- */
-export interface MergeResult {
-  /** Merged state to upload */
-  mergedState: unknown;
-
-  /** Operations to include in recentOps (combined and deduplicated) */
-  mergedOps: CompactOperation[];
-
-  /** Updated vector clock after merge */
-  mergedVectorClock: VectorClock;
-
-  /** Conflicts that were auto-resolved via LWW */
-  autoResolvedConflicts: EntityConflictResolution[];
-
-  /** True if local ops were rejected (remote won all conflicts) */
-  localOpsRejected: boolean;
-}

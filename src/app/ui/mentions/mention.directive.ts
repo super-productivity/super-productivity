@@ -102,7 +102,7 @@ export class MentionDirective implements OnChanges {
       const itemValue = item[labelKey];
 
       if (itemValue === undefined || itemValue === null) {
-        Log.warn(`MentionDirective: item missing required property '${labelKey}'`, item);
+        Log.warn(`MentionDirective: item missing required property '${labelKey}'`);
         return this.activeConfig?.triggerChar || '';
       }
 

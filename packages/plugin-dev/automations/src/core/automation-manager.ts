@@ -50,13 +50,16 @@ export class AutomationManager {
 
     // Conditions
     globalRegistry.registerCondition(Conditions.ConditionTitleContains);
+    globalRegistry.registerCondition(Conditions.ConditionTitleStartsWith);
     globalRegistry.registerCondition(Conditions.ConditionProjectIs);
     globalRegistry.registerCondition(Conditions.ConditionHasTag);
     globalRegistry.registerCondition(Conditions.ConditionWeekdayIs);
 
     // Actions
     globalRegistry.registerAction(Actions.ActionCreateTask);
+    globalRegistry.registerAction(Actions.ActionDeleteTask);
     globalRegistry.registerAction(Actions.ActionAddTag);
+    globalRegistry.registerAction(Actions.ActionMoveToProject);
     globalRegistry.registerAction(Actions.ActionDisplaySnack);
     globalRegistry.registerAction(Actions.ActionDisplayDialog);
     globalRegistry.registerAction(Actions.ActionWebhook);
@@ -140,7 +143,6 @@ export class AutomationManager {
       this.plugin.log.warn(`[Automation] Event ${event.type} received without task data`);
       return;
     }
-    this.plugin.log.info(`[Automation] Event received: ${event.type}`, event.task.title);
 
     try {
       const rules = await this.ruleRegistry.getEnabledRules();
@@ -148,11 +150,24 @@ export class AutomationManager {
       for (const rule of rules) {
         try {
           const triggerImpl = globalRegistry.getTrigger(rule.trigger.type);
-          // If trigger not found or doesn't match, skip
-          if (!triggerImpl || !triggerImpl.matches(event, rule.trigger.value)) continue;
+          // If trigger not found, skip
+          if (!triggerImpl) {
+            this.plugin.log.warn(
+              `[Automation] Trigger implementation not found for rule "${rule.name}" with type "${rule.trigger.type}"`,
+            );
+            continue;
+          }
+
+          const isMatchingTrigger = triggerImpl.matches(event, rule.trigger.value);
+
+          if (!isMatchingTrigger) {
+            continue;
+          }
 
           const matches = await this.conditionEvaluator.allConditionsMatch(rule.conditions, event);
-          if (!matches) continue;
+          if (!matches) {
+            continue;
+          }
 
           // Check rate limit
           if (!this.rateLimiter.check(rule.id)) {

@@ -1,4 +1,5 @@
 import { T } from '../../../../t.const';
+import { msToString } from '../../../../ui/duration/ms-to-string.pipe';
 import {
   IssueContentConfig,
   IssueFieldType,
@@ -36,12 +37,7 @@ export const JIRA_ISSUE_CONTENT_CONFIG: IssueContentConfig<JiraIssue> = {
       value: (issue: JiraIssue) => {
         const timeSpent = issue.timespent ? issue.timespent * 1000 : 0;
         const timeEstimate = issue.timeestimate ? issue.timeestimate * 1000 : 0;
-        const formatMs = (ms: number): string => {
-          const hours = Math.floor(ms / (1000 * 60 * 60));
-          const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-          return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-        };
-        return `${formatMs(timeSpent)} / ${formatMs(timeEstimate)}`;
+        return `${msToString(timeSpent)} / ${msToString(timeEstimate)}`;
       },
       isVisible: (issue: JiraIssue) => !!issue.timespent || !!issue.timeestimate,
     },

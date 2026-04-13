@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { TaskWithSubTasks } from '../../tasks/task.model';
-import { IssueData, IssueProviderKey } from '../issue.model';
+import { IssueData, IssueProviderKey, BuiltInIssueProviderKey } from '../issue.model';
 import {
   IssueContentConfig,
   IssueFieldConfig,
@@ -31,6 +31,7 @@ import { JiraToMarkdownPipe } from '../../../ui/pipes/jira-to-markdown.pipe';
 import { SortPipe } from '../../../ui/pipes/sort.pipe';
 import { T } from '../../../t.const';
 import { devError } from '../../../util/dev-error';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 @Component({
   selector: 'issue-content',
@@ -55,6 +56,7 @@ import { devError } from '../../../util/dev-error';
 })
 export class IssueContentComponent {
   private _taskService = inject(TaskService);
+  private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   protected readonly T = T;
 
   readonly IssueFieldType = IssueFieldType;
@@ -66,10 +68,48 @@ export class IssueContentComponent {
 
   config = computed<IssueContentConfig | undefined>(() => {
     const issueType = this.task().issueType as IssueProviderKey;
-    if (!ISSUE_CONTENT_CONFIGS[issueType]) {
-      throw new Error(`No issue content config found for issue type: ${issueType}`);
+    if (this._pluginRegistry.hasProvider(issueType)) {
+      const displayFields = this._pluginRegistry.getIssueDisplay(issueType);
+      const commentsCfg = this._pluginRegistry.getCommentsConfig(issueType);
+      const result: IssueContentConfig = {
+        issueType,
+        fields: displayFields.map((f) => {
+          const field: IssueFieldConfig<IssueData> = {
+            label: f.label,
+            type: this._mapPluginFieldType(f.type),
+            value: f.field,
+          };
+          if (f.linkField) {
+            const linkFieldName = f.linkField;
+            field.getLink = (issue: IssueData): string =>
+              (issue as Record<string, unknown>)[linkFieldName] as string;
+          }
+          if (f.hideEmpty) {
+            const fieldName = f.field;
+            field.isVisible = (issue: IssueData): boolean =>
+              !!(issue as Record<string, unknown>)[fieldName];
+          }
+          return field;
+        }),
+      };
+      if (commentsCfg) {
+        result.comments = {
+          field: 'comments',
+          authorField: commentsCfg.authorField ?? 'author',
+          bodyField: commentsCfg.bodyField ?? 'body',
+          createdField: commentsCfg.createdField ?? 'created',
+          avatarField: commentsCfg.avatarField,
+          sortField: commentsCfg.sortField ?? commentsCfg.createdField ?? 'created',
+        };
+        result.hasCollapsingComments = true;
+      }
+      return result;
     }
-    return ISSUE_CONTENT_CONFIGS[issueType];
+    const builtInKey = issueType as BuiltInIssueProviderKey;
+    if (!ISSUE_CONTENT_CONFIGS[builtInKey]) {
+      return undefined;
+    }
+    return ISSUE_CONTENT_CONFIGS[builtInKey];
   });
 
   currentTask = computed(() => this.task());
@@ -183,6 +223,23 @@ export class IssueContentComponent {
 
   trackByIndex(index: number): number {
     return index;
+  }
+
+  private _mapPluginFieldType(type?: string): IssueFieldType {
+    switch (type) {
+      case 'text':
+        return IssueFieldType.TEXT;
+      case 'markdown':
+        return IssueFieldType.MARKDOWN;
+      case 'link':
+        return IssueFieldType.LINK;
+      case 'list':
+        return IssueFieldType.CHIPS;
+      case 'date':
+        return IssueFieldType.TEXT;
+      default:
+        return IssueFieldType.TEXT;
+    }
   }
 
   private _hasCommentsField(issue: IssueData | undefined): boolean {

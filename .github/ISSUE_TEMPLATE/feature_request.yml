@@ -47,3 +47,12 @@ body:
       placeholder: 'Add links to related issues, screenshots, mockups, or any other relevant information.'
     validations:
       required: false
+
+  - type: checkboxes
+    id: docs-impact
+    attributes:
+      label: documentation gap
+      description: Help us keep docs aligned with proposed changes. If this feature is implemented ...
+      options:
+        - label: ... related docs should be updated as part of the same PR whenever possible.
+        - label: ... I can help improve the documentation.

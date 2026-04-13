@@ -4,18 +4,18 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   forwardRef,
   HostListener,
   inject,
   input,
   OnDestroy,
-  Renderer2,
   signal,
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
-import { EMPTY, forkJoin, of, Subscription } from 'rxjs';
+import { EMPTY, forkJoin, Subscription } from 'rxjs';
 import {
   HideSubTasksMode,
   TaskCopy,
@@ -29,15 +29,15 @@ import {
   expandInOnlyAnimation,
 } from '../../../ui/animations/expand.ani';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { concatMap, first, switchMap, tap } from 'rxjs/operators';
+import { concatMap, first, tap } from 'rxjs/operators';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { PanDirective, PanEvent } from '../../../ui/swipe-gesture/pan.directive';
+import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
+import { SwipeBlockComponent } from '../../../ui/swipe-block/swipe-block.component';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
-import { swirlAnimation } from '../../../ui/animations/swirl-in-out.ani';
-import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { ProjectService } from '../../project/project.service';
 import { Project } from '../../project/project.model';
+import { _MISSING_PROJECT_ } from '../../project/project.const';
 import { T } from '../../../t.const';
 import {
   MatMenu,
@@ -49,18 +49,22 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { throttle } from '../../../util/decorators';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
+import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { Update } from '@ngrx/entity';
-import { isToday } from '../../../util/is-today.util';
-import { getDbDateStr } from '../../../util/get-db-date-str';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
+import { isTouchActive } from '../../../util/input-intent';
+import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
+import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { KeyboardConfig } from '../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
+import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
-import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ICAL_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
-import { LongPressIOSDirective } from '../../../ui/longpress/longpress-ios.directive';
 import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { TaskHoverControlsComponent } from './task-hover-controls/task-hover-controls.component';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
@@ -69,10 +73,8 @@ import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
-import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { SubTaskTotalTimeSpentPipe } from '../pipes/sub-task-total-time-spent.pipe';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
-import { ShortDate2Pipe } from '../../../ui/pipes/short-date2.pipe';
 import { TagToggleMenuListComponent } from '../../tag/tag-toggle-menu-list/tag-toggle-menu-list.component';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -88,7 +90,7 @@ import { TaskFocusService } from '../task-focus.service';
   templateUrl: './task.component.html',
   styleUrls: ['./task.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [expandAnimation, fadeAnimation, swirlAnimation, expandInOnlyAnimation],
+  animations: [expandAnimation, fadeAnimation, expandInOnlyAnimation],
   /* eslint-disable @typescript-eslint/naming-convention*/
   host: {
     '[id]': 'taskIdWithPrefix()',
@@ -97,11 +99,12 @@ import { TaskFocusService } from '../task-focus.service';
     '[class.isCurrent]': 'isCurrent()',
     '[class.isSelected]': 'isSelected()',
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
+    '[class.isDragReady]': 'isDragReady()',
+    '(contextmenu)': 'onHostContextMenu($event)',
   },
   imports: [
     MatIcon,
     MatMenuTrigger,
-    LongPressIOSDirective,
     MatIconButton,
     TaskTitleComponent,
     TaskHoverControlsComponent,
@@ -113,15 +116,14 @@ import { TaskFocusService } from '../task-focus.service';
     MatMenuContent,
     MatMenuItem,
     MsToStringPipe,
-    ShortDate2Pipe,
     LocalDateStrPipe,
     TranslatePipe,
-    IssueIconPipe,
     SubTaskTotalTimeSpentPipe,
     TagListComponent,
     ShortPlannedAtPipe,
     TagToggleMenuListComponent,
-    PanDirective,
+    DoneToggleComponent,
+    SwipeBlockComponent,
   ],
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
@@ -131,10 +133,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _configService = inject(GlobalConfigService);
   private readonly _attachmentService = inject(TaskAttachmentService);
   private readonly _elementRef = inject(ElementRef);
-  private readonly _renderer = inject(Renderer2);
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
 
   readonly workContextService = inject(WorkContextService);
@@ -144,6 +146,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
   isInSubTaskList = input<boolean>(false);
+  showDoneAnimation = signal(false);
+  showUndoneAnimation = signal(false);
 
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
@@ -175,33 +179,44 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   isTodayListActive = computed(() => this.workContextService.isTodayList);
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
   isRepeatTaskCreatedToday = computed(
-    () => !!(this.task().repeatCfgId && isToday(this.task().created)),
+    () => !!(this.task().repeatCfgId && this._dateService.isToday(this.task().created)),
   );
   isOverdue = computed(() => {
     const t = this.task();
+    const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return (
       !t.isDone &&
-      ((t.dueWithTime && t.dueWithTime < Date.now()) ||
+      ((t.dueWithTime &&
+        !this._dateService.isToday(t.dueWithTime) &&
+        t.dueWithTime < Date.now()) ||
         // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
         // which is lexicographically sortable. This avoids timezone conversion issues that occur
         // when creating Date objects from date strings.
-        (t.dueDay && t.dueDay !== getDbDateStr() && t.dueDay < getDbDateStr()))
+        // Guard: only compare if dueDay is a valid YYYY-MM-DD string to avoid corrupted data
+        // producing false overdue results (see #6908)
+        (t.dueDay &&
+          isDBDateStr(t.dueDay) &&
+          t.dueDay !== todayStr &&
+          t.dueDay < todayStr))
     );
   });
   isScheduledToday = computed(() => {
     const t = this.task();
+    const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return (
-      (t.dueWithTime && isToday(t.dueWithTime)) ||
-      (t.dueDay && t.dueDay === this.globalTrackingIntervalService.todayDateStr())
+      (t.dueWithTime && this._dateService.isToday(t.dueWithTime)) ||
+      (t.dueDay && t.dueDay === todayStr)
     );
   });
 
   isShowDueDayBtn = computed(() => {
+    const dueDay = this.task().dueDay;
     return (
-      this.task().dueDay &&
+      dueDay &&
+      isDBDateStr(dueDay) &&
       (!this.isTodayListActive() ||
         this.isOverdue() ||
-        this.task().dueDay !== this.globalTrackingIntervalService.todayDateStr())
+        dueDay !== this.globalTrackingIntervalService.todayDateStr())
     );
   });
 
@@ -222,30 +237,34 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const task = this.task();
     const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return this.isTodayListActive()
-      ? (task.dueWithTime && !isToday(task.dueWithTime)) ||
+      ? (task.dueWithTime && !this._dateService.isToday(task.dueWithTime)) ||
           (task.dueDay && task.dueDay !== todayStr)
       : !this.isShowRemoveFromToday() &&
           task.dueDay !== todayStr &&
-          (!task.dueWithTime || !isToday(task.dueWithTime));
+          (!task.dueWithTime || !this._dateService.isToday(task.dueWithTime));
   });
 
-  isPanHelperVisible = signal(false);
+  isDeadlineOverdue = computed(() =>
+    isDeadlineOverdueFn(this.task(), this.globalTrackingIntervalService.todayDateStr()),
+  );
+
+  hasDeadline = computed(() => {
+    const t = this.task();
+    return !!(t.deadlineDay || t.deadlineWithTime);
+  });
 
   T: typeof T = T;
-  IS_TOUCH_PRIMARY: boolean = IS_TOUCH_PRIMARY;
+  isTouchActive = isTouchActive;
   isDragOver: boolean = false;
-  isLockPanLeft: boolean = false;
-  isLockPanRight: boolean = false;
-  isPreventPointerEventsWhilePanning: boolean = false;
-  isActionTriggered: boolean = false;
+  isDragReady = signal(false);
+  private _dragReadyTimeout: number | undefined;
+  private _doneAnimationTimeout: number | undefined;
+  private _touchListenerCleanups: (() => void)[] = [];
   ShowSubTasksMode: typeof HideSubTasksMode = HideSubTasksMode;
   isFirstLineHover: boolean = false;
   _nextFocusTaskEl?: HTMLElement;
 
   readonly taskTitleEditEl = viewChild<TaskTitleComponent>('taskTitleEditEl');
-  readonly blockLeftElRef = viewChild<ElementRef>('blockLeftEl');
-  readonly blockRightElRef = viewChild<ElementRef>('blockRightEl');
-  readonly innerWrapperElRef = viewChild<ElementRef>('innerWrapperEl');
   readonly projectMenuTrigger = viewChild('projectMenuTriggerEl', {
     read: MatMenuTrigger,
   });
@@ -256,28 +275,41 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     read: TaskContextMenuComponent,
   });
 
-  private _task$ = toObservable(this.task);
-
   // Lazy-loaded project list - only fetched when project menu opens
   moveToProjectList = signal<Project[] | undefined>(undefined);
   private _loadedProjectListForProjectId: string | null | undefined;
   private _moveToProjectListSub?: Subscription;
 
-  parentTask = toSignal(
-    this._task$.pipe(
-      switchMap((task) =>
-        task.parentId ? this._taskService.getByIdLive$(task.parentId) : of(null),
-      ),
-    ),
-  );
-  parentTitle = computed(() => this.parentTask()?.title ?? null);
+  // Parent title derived directly from task data when available in subtask model.
+  // Falls back to a live store subscription only when needed (non-subtask-list with parentId).
+  private _parentTaskTitle = signal<string | null>(null);
+  parentTitle = computed(() => {
+    const t = this.task();
+    if (!t.parentId || this.isInSubTaskList()) {
+      return null;
+    }
+    return this._parentTaskTitle();
+  });
+
+  isProjectMenuLoaded = signal(false);
+
+  private _parentTitleEffect = effect((onCleanup) => {
+    const t = this.task();
+    const isInSubTaskList = this.isInSubTaskList();
+    if (!t.parentId || isInSubTaskList) {
+      this._parentTaskTitle.set(null);
+      return;
+    }
+    // Only subscribe when this task has a parentId and is NOT in a subtask list
+    const sub = this._taskService.getByIdLive$(t.parentId).subscribe((parent) => {
+      this._parentTaskTitle.set(parent?.title ?? null);
+    });
+    onCleanup(() => sub.unsubscribe());
+  });
 
   private _dragEnterTarget?: HTMLElement;
-  private _currentPanTimeout?: number;
   private _doubleClickTimeout?: number;
   private _isTaskDeleteTriggered = false;
-  private _panHelperVisibilityTimeout?: number;
-  private readonly _snapBackHideDelayMs = 200;
   isContextMenuLoaded = signal(false);
 
   // methods come last
@@ -285,6 +317,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   @HostListener('focus') onFocus(): void {
     this._taskFocusService.focusedTaskId.set(this.task().id);
     this._taskFocusService.lastFocusedTaskComponent.set(this);
+
+    // If detail panel is open for another task, update it to show this task (#6578)
+    // Skip if this task is inside the detail panel (e.g. subtask list)
+    if (this._elementRef.nativeElement.closest('task-detail-panel')) {
+      return;
+    }
+    const selectedTaskId = this._taskService.selectedTaskId();
+    if (selectedTaskId && selectedTaskId !== this.task().id) {
+      this._taskService.setSelectedId(this.task().id);
+    }
   }
 
   @HostListener('blur') onBlur(): void {
@@ -314,14 +356,21 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this.isDragOver = false;
   }
 
-  // NOTE: this prevents dragging on mobile for no touch area
-  onTouchStart(ev: TouchEvent): void {
-    if (!ev.target || !(ev.target as HTMLElement).classList?.contains('drag-handle')) {
-      ev.stopPropagation();
-    }
-  }
-
   ngAfterViewInit(): void {
+    if (isTouchActive() || IS_HYBRID_DEVICE) {
+      const el = this._elementRef.nativeElement;
+      const onStart = (): void => this.onHostTouchStart();
+      const onEnd = (): void => this.onHostTouchEnd();
+      el.addEventListener('touchstart', onStart, { passive: true });
+      el.addEventListener('touchend', onEnd, { passive: true });
+      el.addEventListener('touchmove', onEnd, { passive: true });
+      this._touchListenerCleanups = [
+        () => el.removeEventListener('touchstart', onStart),
+        () => el.removeEventListener('touchend', onEnd),
+        () => el.removeEventListener('touchmove', onEnd),
+      ];
+    }
+
     // Dev-time sanity check: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
     // Membership is determined by task.dueDay. See: docs/ai/today-tag-architecture.md
     if (!environment.production) {
@@ -351,12 +400,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
-    window.clearTimeout(this._currentPanTimeout);
     window.clearTimeout(this._doubleClickTimeout);
+    window.clearTimeout(this._dragReadyTimeout);
+    window.clearTimeout(this._doneAnimationTimeout);
+    this._touchListenerCleanups.forEach((fn) => fn());
     this._moveToProjectListSub?.unsubscribe();
-    if (this._panHelperVisibilityTimeout) {
-      window.clearTimeout(this._panHelperVisibilityTimeout);
-    }
   }
 
   scheduleTask(): void {
@@ -373,7 +421,22 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       });
   }
 
-  editTaskRepeatCfg(): void {
+  openDeadlineDialog(): void {
+    this._storeNextFocusEl();
+    this._matDialog
+      .open(DialogDeadlineComponent, {
+        autoFocus: false,
+        data: { task: this.task() },
+      })
+      .afterClosed()
+      .subscribe(() => {
+        this.focusSelfOrNextIfNotPossible();
+      });
+  }
+
+  async editTaskRepeatCfg(): Promise<void> {
+    const { DialogEditTaskRepeatCfgComponent } =
+      await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
     this._matDialog
       .open(DialogEditTaskRepeatCfgComponent, {
         data: {
@@ -515,15 +578,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   openProjectMenu(): void {
-    const t = this.task();
-    if (!t.parentId) {
-      // Lazy load project list when menu opens
-      this._loadProjectListIfNeeded();
-      const projectMenuTrigger = this.projectMenuTrigger();
-      if (projectMenuTrigger) {
-        projectMenuTrigger.openMenu();
-      }
+    if (this.task().parentId) {
+      return;
     }
+    this._loadProjectListIfNeeded();
+    if (!this.isProjectMenuLoaded()) {
+      this.isProjectMenuLoaded.set(true);
+      setTimeout(() => this.projectMenuTrigger()?.openMenu());
+      return;
+    }
+    this.projectMenuTrigger()?.openMenu();
   }
 
   _loadProjectListIfNeeded(): void {
@@ -575,11 +639,37 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
   }
 
+  openNotesFullscreen(): void {
+    const task = this.task();
+    const dialogRef = this._matDialog.open(DialogFullscreenMarkdownComponent, {
+      minWidth: '100vw',
+      height: '100vh',
+      restoreFocus: true,
+      autoFocus: 'textarea',
+      data: {
+        content: task.notes || '',
+        taskId: task.id,
+      },
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result?.action === 'DELETE') {
+        this._taskService.update(task.id, { notes: '' });
+      } else if (typeof result === 'string') {
+        this._taskService.update(task.id, { notes: result });
+      }
+      this.focusSelf();
+    });
+  }
+
   estimateTime(): void {
+    if (this.task().subTaskIds?.length > 0) {
+      return;
+    }
+
     this._matDialog
       .open(DialogTimeEstimateComponent, {
         data: { task: this.task() },
-        autoFocus: !IS_TOUCH_PRIMARY,
       })
       .afterClosed()
       .subscribe(() => this.focusSelf());
@@ -608,14 +698,22 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this.toggleTaskDone();
   }
 
-  toggleTaskDone(): void {
-    this.focusNext(true, true);
-
+  onSwipeRightTriggered(isTriggered: boolean): void {
     if (this.task().isDone) {
-      this._taskService.setUnDone(this.task().id);
+      this.showUndoneAnimation.set(isTriggered);
     } else {
-      this._taskService.setDone(this.task().id);
+      this.showDoneAnimation.set(isTriggered);
     }
+  }
+
+  toggleTaskDone(): void {
+    window.clearTimeout(this._doneAnimationTimeout);
+    this.focusNext(true, true);
+    this._doneAnimationTimeout = this._taskService.toggleDoneWithAnimation(
+      this.task().id,
+      this.task().isDone,
+      (v) => this.showDoneAnimation.set(v),
+    );
   }
 
   showDetailPanel(): void {
@@ -713,7 +811,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (targetEl.closest('task-title')) {
       return;
     }
-    if (IS_TOUCH_PRIMARY && this.task().title.length) {
+    if (isTouchActive() && this.task().title.length) {
       this.toggleShowDetailPanel(event);
     } else {
       this.focusSelf();
@@ -721,7 +819,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   focusPrevious(isFocusReverseIfNotPossible: boolean = false): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return;
     }
 
@@ -750,7 +848,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     isFocusReverseIfNotPossible: boolean = false,
     isTaskMovedInList = false,
   ): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return;
     }
 
@@ -771,14 +869,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   focusSelf(): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return;
     }
     this._focusSelfElement();
   }
 
   focusSelfOrNextIfNotPossible(): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return;
     }
 
@@ -807,12 +905,33 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     taskTitleEditEl.focusInput();
   }
 
-  openContextMenu(event: TouchEvent | MouseEvent): void {
+  onHostTouchStart(): void {
+    this._dragReadyTimeout = window.setTimeout(() => {
+      this.isDragReady.set(true);
+    }, DRAG_DELAY_FOR_TOUCH);
+  }
+
+  onHostTouchEnd(): void {
+    window.clearTimeout(this._dragReadyTimeout);
+    this.isDragReady.set(false);
+  }
+
+  onHostContextMenu(event: MouseEvent): void {
+    if (isTouchActive()) {
+      event.preventDefault();
+      return;
+    }
+    this.openContextMenu(event);
+  }
+
+  openContextMenu(event?: TouchEvent | MouseEvent | KeyboardEvent): void {
     this.taskTitleEditEl()?.cancelEditing();
-    event.preventDefault();
-    event.stopPropagation();
-    if ('stopImmediatePropagation' in event) {
-      event.stopImmediatePropagation();
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if ('stopImmediatePropagation' in event) {
+        event.stopImmediatePropagation();
+      }
     }
 
     if (!this.isContextMenuLoaded()) {
@@ -828,90 +947,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   onTagsUpdated(tagIds: string[]): void {
     this._taskService.updateTags(this.task(), tagIds);
-  }
-
-  onPanStart(ev: PanEvent): void {
-    if (!IS_TOUCH_PRIMARY) {
-      return;
-    }
-    const taskTitleEditEl = this.taskTitleEditEl();
-    if (!taskTitleEditEl) {
-      throw new Error('No el');
-    }
-
-    this._resetAfterPan();
-    const targetEl: HTMLElement = ev.target as HTMLElement;
-    if (
-      (targetEl.className.indexOf && targetEl.className.indexOf('drag-handle') > -1) ||
-      Math.abs(ev.deltaY) > Math.abs(ev.deltaX) ||
-      taskTitleEditEl.isEditing() ||
-      ev.isFinal
-    ) {
-      this._hidePanHelper();
-      return;
-    }
-    this._showPanHelper();
-    this.isPreventPointerEventsWhilePanning = true;
-  }
-
-  onPanEnd(): void {
-    if (!IS_TOUCH_PRIMARY || (!this.isLockPanLeft && !this.isLockPanRight)) {
-      return;
-    }
-    const blockLeftElRef = this.blockLeftElRef();
-    const blockRightElRef = this.blockRightElRef();
-    const hideDelay = this._snapBackHideDelayMs;
-
-    this.isPreventPointerEventsWhilePanning = false;
-    if (blockLeftElRef) {
-      this._renderer.removeStyle(blockLeftElRef.nativeElement, 'transition');
-    }
-    if (blockRightElRef) {
-      this._renderer.removeStyle(blockRightElRef.nativeElement, 'transition');
-    }
-
-    if (this._currentPanTimeout) {
-      window.clearTimeout(this._currentPanTimeout);
-    }
-
-    if (this.isActionTriggered) {
-      if (this.isLockPanLeft) {
-        if (blockRightElRef) {
-          this._renderer.setStyle(
-            blockRightElRef.nativeElement,
-            'transform',
-            `scaleX(1)`,
-          );
-        }
-        this._currentPanTimeout = window.setTimeout(() => {
-          if (this.task().repeatCfgId) {
-            this.editTaskRepeatCfg();
-          } else {
-            this.scheduleTask();
-          }
-
-          this._resetAfterPan(hideDelay);
-        }, 100);
-      } else if (this.isLockPanRight) {
-        if (blockLeftElRef) {
-          this._renderer.setStyle(blockLeftElRef.nativeElement, 'transform', `scaleX(1)`);
-        }
-        this._currentPanTimeout = window.setTimeout(() => {
-          this.toggleTaskDone();
-          this._resetAfterPan(hideDelay);
-        }, 100);
-      }
-    } else {
-      this._resetAfterPan(hideDelay);
-    }
-  }
-
-  onPanLeft(ev: PanEvent): void {
-    this._handlePan(ev);
-  }
-
-  onPanRight(ev: PanEvent): void {
-    this._handlePan(ev);
   }
 
   // TODO extract so service
@@ -960,7 +995,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
                     okTxt: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.OK,
                     message: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.MSG,
                     translateParams: {
-                      projectName: targetProject.title,
+                      projectName: targetProject?.title ?? _MISSING_PROJECT_,
                       tasksNr:
                         nonArchiveInstancesWithSubTasks.length + archiveInstances.length,
                     },
@@ -1055,111 +1090,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return nextEl;
   }
 
-  private _handlePan(ev: PanEvent): void {
-    if (!IS_TOUCH_PRIMARY || ev.eventType === 8) {
-      return;
-    }
-    const innerWrapperElRef = this.innerWrapperElRef();
-    const blockLeftElRef = this.blockLeftElRef();
-    const blockRightElRef = this.blockRightElRef();
-    if (!innerWrapperElRef || !blockLeftElRef || !blockRightElRef) {
-      return;
-    }
-
-    // Dynamically determine direction based on current pan position
-    const isPanningRight = ev.deltaX > 0;
-    const isPanningLeft = ev.deltaX < 0;
-
-    // Update lock state dynamically
-    this.isLockPanRight = isPanningRight;
-    this.isLockPanLeft = isPanningLeft;
-
-    // Select the appropriate block element based on current direction
-    const targetRef = isPanningRight ? blockLeftElRef : blockRightElRef;
-
-    const MAGIC_FACTOR = 2;
-    this.isPreventPointerEventsWhilePanning = true;
-
-    // Reset both blocks first
-    this._renderer.setStyle(blockLeftElRef.nativeElement, 'width', '0');
-    this._renderer.setStyle(blockRightElRef.nativeElement, 'width', '0');
-    this._renderer.removeClass(blockLeftElRef.nativeElement, 'isActive');
-    this._renderer.removeClass(blockRightElRef.nativeElement, 'isActive');
-
-    if (targetRef && ev.deltaX !== 0) {
-      let scale =
-        (Math.abs(ev.deltaX) / this._elementRef.nativeElement.offsetWidth) * MAGIC_FACTOR;
-      scale = Math.min(1, Math.max(0, scale));
-
-      if (scale > 0.5) {
-        this.isActionTriggered = true;
-        this._renderer.addClass(targetRef.nativeElement, 'isActive');
-      } else {
-        this.isActionTriggered = false;
-      }
-
-      const moveBy = Math.abs(ev.deltaX);
-      this._renderer.setStyle(targetRef.nativeElement, 'width', `${moveBy}px`);
-      this._renderer.setStyle(targetRef.nativeElement, 'transition', `none`);
-      this._renderer.setStyle(
-        innerWrapperElRef.nativeElement,
-        'transform',
-        `translateX(${ev.deltaX}px)`,
-      );
-    }
-  }
-
-  private _showPanHelper(): void {
-    if (this._panHelperVisibilityTimeout) {
-      window.clearTimeout(this._panHelperVisibilityTimeout);
-      this._panHelperVisibilityTimeout = undefined;
-    }
-    this.isPanHelperVisible.set(true);
-  }
-
-  private _hidePanHelper(delayMs: number = 0): void {
-    if (this._panHelperVisibilityTimeout) {
-      window.clearTimeout(this._panHelperVisibilityTimeout);
-    }
-    if (delayMs > 0) {
-      this._panHelperVisibilityTimeout = window.setTimeout(() => {
-        this.isPanHelperVisible.set(false);
-        this._panHelperVisibilityTimeout = undefined;
-      }, delayMs);
-    } else {
-      this.isPanHelperVisible.set(false);
-      this._panHelperVisibilityTimeout = undefined;
-    }
-  }
-
-  private _resetAfterPan(hideDelay: number = 0): void {
-    const blockLeftElRef = this.blockLeftElRef();
-    const blockRightElRef = this.blockRightElRef();
-    const innerWrapperElRef = this.innerWrapperElRef();
-    this.isPreventPointerEventsWhilePanning = false;
-    this.isActionTriggered = false;
-    this.isLockPanLeft = false;
-    this.isLockPanRight = false;
-    if (blockLeftElRef) {
-      this._renderer.removeClass(blockLeftElRef.nativeElement, 'isActive');
-      this._renderer.setStyle(blockLeftElRef.nativeElement, 'width', '0');
-      this._renderer.removeStyle(blockLeftElRef.nativeElement, 'transition');
-      this._renderer.removeStyle(blockLeftElRef.nativeElement, 'transform');
-    }
-    if (blockRightElRef) {
-      this._renderer.removeClass(blockRightElRef.nativeElement, 'isActive');
-      this._renderer.setStyle(blockRightElRef.nativeElement, 'width', '0');
-      this._renderer.removeStyle(blockRightElRef.nativeElement, 'transition');
-      this._renderer.removeStyle(blockRightElRef.nativeElement, 'transform');
-    }
-    if (innerWrapperElRef) {
-      this._renderer.setStyle(innerWrapperElRef.nativeElement, 'transform', ``);
-    }
-    this._hidePanHelper(hideDelay);
-  }
-
   get kb(): KeyboardConfig {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       return {} as KeyboardConfig;
     }
     return (this._configService.cfg()?.keyboard as KeyboardConfig) || {};

@@ -13,6 +13,8 @@ import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { OpLog } from '../../core/log';
 import { extractEntityKeysFromState } from './extract-entity-keys';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { limitVectorClockSize } from '../../core/util/vector-clock';
 
 /**
  * Manages the compaction (garbage collection) of the operation log.
@@ -28,6 +30,7 @@ export class OperationLogCompactionService {
   private lockService = inject(LockService);
   private stateSnapshot = inject(StateSnapshotService);
   private vectorClockService = inject(VectorClockService);
+  private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
 
   async compact(): Promise<void> {
     await this._doCompact(COMPACTION_RETENTION_MS, false);
@@ -66,6 +69,13 @@ export class OperationLogCompactionService {
       const currentVectorClock = await this.vectorClockService.getCurrentVectorClock();
       this.checkCompactionTimeout(startTime, `${label}vector clock`);
 
+      // Prune vector clock before persisting to prevent bloat (max 20 entries).
+      // Without this, clocks can grow unbounded across sync cycles.
+      const clientId = await this.clientIdProvider.loadClientId();
+      const prunedClock = clientId
+        ? limitVectorClockSize(currentVectorClock, clientId)
+        : currentVectorClock;
+
       // 3. Get lastSeq IMMEDIATELY before writing cache to minimize race window
       // This ensures new ops written after this point have seq > lastSeq
       const lastSeq = await this.opLogStore.getLastSeq();
@@ -79,7 +89,7 @@ export class OperationLogCompactionService {
       await this.opLogStore.saveStateCache({
         state: currentState,
         lastAppliedOpSeq: lastSeq,
-        vectorClock: currentVectorClock,
+        vectorClock: prunedClock,
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
         snapshotEntityKeys,

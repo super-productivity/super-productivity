@@ -157,7 +157,7 @@ export interface FullValidationResult {
  * Performs complete validation: Typia schema validation followed by cross-model
  * relationship validation. This is the single source of truth for full data validation.
  *
- * Used by both SYNC_CONFIG.validate and ValidateStateService.
+ * Used by ValidateStateService, BackupService, and OperationLogMigrationService (via dynamic import).
  */
 export const validateFull = (data: AppDataComplete): FullValidationResult => {
   const typiaResult = validateAllData(data);

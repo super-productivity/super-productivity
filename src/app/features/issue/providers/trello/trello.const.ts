@@ -13,6 +13,7 @@ export const DEFAULT_TRELLO_CFG: TrelloCfg = {
   apiKey: null,
   token: null,
   boardId: null,
+  filterUsername: null,
 };
 
 export const TRELLO_POLL_INTERVAL = 5 * 60 * 1000;
@@ -44,6 +45,15 @@ export const TRELLO_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderTrello>[]
           !c.value || c.value.length >= 32,
         message: 'Trello token is typically 32+ characters',
       },
+    },
+  },
+  {
+    key: 'filterUsername',
+    type: 'input',
+    props: {
+      label: 'Filter by Trello Username',
+      description: 'If provided, only imports cards assigned to this Trello username.',
+      type: 'text',
     },
   },
   // search boards

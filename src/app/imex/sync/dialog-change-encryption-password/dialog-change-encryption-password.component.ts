@@ -14,11 +14,12 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
-import { EncryptionDisableService } from '../encryption-disable.service';
+import { SuperSyncEncryptionToggleService } from '../supersync-encryption-toggle.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatDivider } from '@angular/material/divider';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
+import { SyncWrapperService } from '../sync-wrapper.service';
 
 export interface ChangeEncryptionPasswordResult {
   success: boolean;
@@ -29,8 +30,8 @@ export interface ChangeEncryptionPasswordDialogData {
   mode?: 'full' | 'disable-only';
   /**
    * Type of sync provider. Determines which disable method to call.
-   * - 'supersync': Uses disableEncryption() (deletes server data + uploads)
-   * - 'file-based': Uses disableEncryptionForFileBased() (just uploads unencrypted)
+   * - 'supersync': Uses SuperSyncEncryptionToggleService.disableEncryption() (deletes server data + uploads)
+   * - 'file-based': Uses FileBasedEncryptionService.disableEncryption() (just uploads unencrypted)
    */
   providerType?: 'supersync' | 'file-based';
 }
@@ -59,7 +60,8 @@ export interface ChangeEncryptionPasswordDialogData {
 export class DialogChangeEncryptionPasswordComponent {
   private _encryptionPasswordChangeService = inject(EncryptionPasswordChangeService);
   private _fileBasedEncryptionService = inject(FileBasedEncryptionService);
-  private _encryptionDisableService = inject(EncryptionDisableService);
+  private _encryptionToggleService = inject(SuperSyncEncryptionToggleService);
+  private _syncWrapperService = inject(SyncWrapperService);
   private _snackService = inject(SnackService);
   private _matDialogRef =
     inject<
@@ -101,13 +103,17 @@ export class DialogChangeEncryptionPasswordComponent {
 
     try {
       if (this.providerType === 'file-based') {
-        await this._fileBasedEncryptionService.changePassword(this.newPassword);
+        await this._syncWrapperService.runWithSyncBlocked(() =>
+          this._fileBasedEncryptionService.changePassword(this.newPassword),
+        );
       } else {
         // Always allow unsynced ops since password change does a clean slate + overwrite anyway
         await this._encryptionPasswordChangeService.changePassword(this.newPassword, {
           allowUnsyncedOps: true,
         });
       }
+      this.newPassword = '';
+      this.confirmPassword = '';
       this._snackService.open({
         type: 'SUCCESS',
         msg: this.textKeys.CHANGE_PASSWORD_SUCCESS,
@@ -117,7 +123,8 @@ export class DialogChangeEncryptionPasswordComponent {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this._snackService.open({
         type: 'ERROR',
-        msg: `Failed to change password: ${message}`,
+        msg: T.F.SYNC.S.CHANGE_PASSWORD_FAILED,
+        translateParams: { message },
       });
       this.isLoading.set(false);
     }
@@ -137,9 +144,13 @@ export class DialogChangeEncryptionPasswordComponent {
     try {
       // Call appropriate disable method based on provider type
       if (this.providerType === 'file-based') {
-        await this._encryptionDisableService.disableEncryptionForFileBased();
+        await this._syncWrapperService.runWithSyncBlocked(() =>
+          this._fileBasedEncryptionService.disableEncryption(),
+        );
       } else {
-        await this._encryptionDisableService.disableEncryption();
+        await this._syncWrapperService.runWithSyncBlocked(() =>
+          this._encryptionToggleService.disableEncryption(),
+        );
       }
       this._snackService.open({
         type: 'SUCCESS',
@@ -150,7 +161,8 @@ export class DialogChangeEncryptionPasswordComponent {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this._snackService.open({
         type: 'ERROR',
-        msg: `Failed to disable encryption: ${message}`,
+        msg: T.F.SYNC.S.DISABLE_ENCRYPTION_FAILED,
+        translateParams: { message },
       });
       this.isRemovingEncryption.set(false);
     }

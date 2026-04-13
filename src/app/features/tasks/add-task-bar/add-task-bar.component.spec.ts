@@ -147,7 +147,10 @@ describe('AddTaskBarComponent', () => {
     };
   };
 
-  const mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', ['-']);
+  const mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [
+    'currentLocale',
+  ]);
+  mockDateTimeFormatService.currentLocale.and.returnValue('en-US');
 
   beforeEach(async () => {
     // Create spies
@@ -184,7 +187,9 @@ describe('AddTaskBarComponent', () => {
       shortSyntax$: of({}),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
     });
-    mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+    mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
+    mockStore.pipe.and.returnValue(of([]));
+    mockStore.select.and.returnValue(of([]));
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
     mockAddTaskBarIssueSearchService = jasmine.createSpyObj(
@@ -265,6 +270,17 @@ describe('AddTaskBarComponent', () => {
         }),
       );
       expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addTask', () => {
+    it('should not add a task when the visible input is empty', async () => {
+      component.stateService.updateCleanText('Stale task');
+      component.stateService.updateInputTxt('   ');
+
+      await component.addTask();
+
+      expect(mockTaskService.add).not.toHaveBeenCalled();
     });
   });
 
@@ -526,6 +542,31 @@ describe('AddTaskBarComponent', () => {
         .toPromise();
 
       expect(defaultProject).toBeUndefined();
+    });
+  });
+
+  describe('_setProjectInitially', () => {
+    it('should use projectId from additionalFields instead of defaultProject$', () => {
+      // Set tag work context (would normally fall back to INBOX_PROJECT)
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      fixture.componentRef.setInput('additionalFields', { projectId: 'project-2' });
+      fixture.detectChanges();
+
+      expect(component.stateService.state().projectId).toBe('project-2');
+    });
+
+    it('should fall back to defaultProject$ when additionalFields has no projectId', () => {
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      fixture.componentRef.setInput('additionalFields', { isDone: false });
+      fixture.detectChanges();
+
+      expect(component.stateService.state().projectId).toBe('INBOX_PROJECT');
     });
   });
 

@@ -35,7 +35,9 @@ test.describe('Drag Task to change project and labels', () => {
     // Navigate back to Today view where the task lives
     // (project creation navigates to the new project)
     const todayNavItem = page.getByRole('menuitem').filter({ hasText: 'Today' });
+    await todayNavItem.waitFor({ state: 'visible', timeout: 5000 });
     await todayNavItem.click();
+    await page.waitForURL(/tag\/TODAY/);
     await page.waitForSelector('task', { state: 'visible', timeout: 10000 });
 
     // Expand the Projects section so project nav items are visible for drag targets
@@ -50,10 +52,12 @@ test.describe('Drag Task to change project and labels', () => {
     }
     await project1NavItem.waitFor({ state: 'visible', timeout: 10000 });
     await project2NavItem.waitFor({ state: 'visible', timeout: 10000 });
+    // Let nav settle before starting drag operations
+    await page.waitForTimeout(300);
 
     // find drag handle of task
     const firstTask = page.locator('task').first();
-    const dragHandle = firstTask.locator('.drag-handle');
+    const dragHandle = firstTask.locator('done-toggle').first();
     const tagList = firstTask.locator('tag-list');
 
     // Drag and drop to first project - wait for tag to appear
@@ -127,7 +131,7 @@ test.describe('Drag Task to change project and labels', () => {
 
     // find drag handle of task
     const firstTask = page.locator('task').first();
-    const dragHandle = firstTask.locator('.drag-handle');
+    const dragHandle = firstTask.locator('done-toggle').first();
     const tagList = firstTask.locator('tag-list');
 
     // Drag and drop to first tag - wait for tag to appear

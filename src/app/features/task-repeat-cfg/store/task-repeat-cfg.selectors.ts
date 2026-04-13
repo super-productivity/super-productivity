@@ -154,6 +154,22 @@ export const selectAllUnprocessedTaskRepeatCfgs = createSelector(
     );
   },
 );
+export const selectTaskRepeatCfgsByProjectId = createSelector(
+  selectAllTaskRepeatCfgs,
+  (taskRepeatCfgs: TaskRepeatCfg[], props: { projectId: string }): TaskRepeatCfg[] => {
+    return taskRepeatCfgs
+      .filter((cfg) => cfg.projectId === props.projectId)
+      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  },
+);
+export const selectTaskRepeatCfgsByTagId = createSelector(
+  selectAllTaskRepeatCfgs,
+  (taskRepeatCfgs: TaskRepeatCfg[], props: { tagId: string }): TaskRepeatCfg[] => {
+    return taskRepeatCfgs
+      .filter((cfg) => cfg.tagIds?.includes(props.tagId))
+      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  },
+);
 export const selectTaskRepeatCfgByIdAllowUndefined = createSelector(
   selectTaskRepeatCfgFeatureState,
   (state: TaskRepeatCfgState, props: { id: string }): TaskRepeatCfg | undefined =>

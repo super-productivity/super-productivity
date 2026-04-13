@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "APIキー",
+    "API_KEY_LINK": "個人用APIキーを取得",
+    "TEAM_IDS": "ワークスペース/チームID（カンマ区切り、空欄ですべて対象）",
+    "USER_ID": "ユーザーID（担当者でフィルタリング）"
+  },
+  "DISPLAY": {
+    "SUMMARY": "概要",
+    "STATUS": "状態",
+    "PRIORITY": "優先度",
+    "ASSIGNEE": "担当者",
+    "LABELS": "ラベル",
+    "DESCRIPTION": "説明"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: 不明なエラーです。APIキーを確認して再試行してください。"
+  }
+}

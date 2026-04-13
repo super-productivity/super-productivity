@@ -5,7 +5,11 @@ import { RootState } from '../../root-state';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { Action, ActionReducer } from '@ngrx/store';
-import { BatchOperation, BatchTaskUpdate } from '@super-productivity/plugin-api';
+import {
+  BatchOperation,
+  BatchTaskCreate,
+  BatchTaskUpdate,
+} from '@super-productivity/plugin-api';
 import { createBaseState, createMockTask } from './test-utils';
 import { Log } from '../../../core/log';
 
@@ -517,6 +521,77 @@ describe('taskBatchUpdateMetaReducer - SubTask Updates', () => {
       // Verify old parent no longer has the subtask
       const updatedParent = result[TASK_FEATURE_NAME].entities['parent-id'] as Task;
       expect(updatedParent.subTaskIds).toEqual([]);
+    });
+
+    it('should resolve temp IDs in subTaskIds when creating subtask and updating parent order', () => {
+      // Setup: Parent with one existing subtask
+      const parentTask = createMockTask({
+        id: 'parent-id',
+        title: 'Parent',
+        subTaskIds: ['existing-subtask-id'],
+        projectId: 'project1',
+      });
+      const existingSubtask = createMockTask({
+        id: 'existing-subtask-id',
+        title: 'Existing Subtask',
+        projectId: 'project1',
+        parentId: 'parent-id',
+      });
+
+      baseState[TASK_FEATURE_NAME].entities = {
+        'parent-id': parentTask,
+        'existing-subtask-id': existingSubtask,
+      };
+      baseState[TASK_FEATURE_NAME].ids = ['parent-id', 'existing-subtask-id'];
+
+      // Operations: create new subtask with temp ID, then update parent's subTaskIds
+      // with the temp ID (this is what the sync-md plugin produces)
+      const operations: BatchOperation[] = [
+        {
+          type: 'create',
+          tempId: 'temp_2',
+          data: {
+            parentId: 'parent-id',
+            title: 'New Subtask',
+          },
+        } as BatchTaskCreate,
+        {
+          type: 'update',
+          taskId: 'parent-id',
+          updates: {
+            subTaskIds: ['existing-subtask-id', 'temp_2'],
+          },
+        } as BatchTaskUpdate,
+      ];
+
+      const createdTaskIds: Record<string, string> = {
+        temp_2: 'new-subtask-real-id',
+      };
+
+      const action = TaskSharedActions.batchUpdateForProject({
+        projectId: 'project1',
+        operations,
+        createdTaskIds,
+      });
+
+      const result = metaReducer(baseState, action);
+
+      // Parent's subTaskIds should have the resolved real ID, not the temp ID
+      const updatedParent = result[TASK_FEATURE_NAME].entities['parent-id'] as Task;
+      expect(updatedParent.subTaskIds).toEqual([
+        'existing-subtask-id',
+        'new-subtask-real-id',
+      ]);
+
+      // New subtask should exist with correct parentId
+      const newSubtask = result[TASK_FEATURE_NAME].entities[
+        'new-subtask-real-id'
+      ] as Task;
+      expect(newSubtask).toBeDefined();
+      expect(newSubtask.parentId).toBe('parent-id');
+
+      // No entity with the temp ID should exist
+      expect(result[TASK_FEATURE_NAME].entities['temp_2']).toBeUndefined();
     });
 
     it('should handle adding subtask to parent that already has other subtasks', () => {

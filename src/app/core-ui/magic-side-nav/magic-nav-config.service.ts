@@ -10,7 +10,6 @@ import { ShepherdService } from '../../features/shepherd/shepherd.service';
 import { TourId } from '../../features/shepherd/shepherd-steps.const';
 import { T } from '../../t.const';
 import { LS } from '../../core/persistence/storage-keys.const';
-import { DialogCreateProjectComponent } from '../../features/project/dialogs/create-project/dialog-create-project.component';
 import { getGithubErrorUrl } from '../../core/error-handler/global-error-handler.util';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import {
@@ -34,6 +33,8 @@ import {
   MenuTreeViewNode,
 } from '../../features/menu-tree/store/menu-tree.model';
 import { GlobalConfigService } from '../../features/config/global-config.service';
+import { AppFeaturesConfig } from '../../features/config/global-config.model';
+import { SnackService } from '../../core/snack/snack.service';
 import { IS_IOS_NATIVE } from '../../util/is-native-platform';
 
 @Injectable({
@@ -49,6 +50,7 @@ export class MagicNavConfigService {
   private readonly _pluginService = inject(PluginService);
   private readonly _menuTreeService = inject(MenuTreeService);
   private readonly _configService = inject(GlobalConfigService);
+  private readonly _snackService = inject(SnackService);
   private readonly _router = inject(Router);
 
   // Simple state signals
@@ -103,6 +105,19 @@ export class MagicNavConfigService {
   private readonly isHabitsEnabled = computed(
     () => this._configService.appFeatures().isHabitsEnabled,
   );
+  private readonly isSearchEnabled = computed(
+    () => this._configService.appFeatures().isSearchEnabled,
+  );
+  readonly areInitialTreesReady = computed(() => {
+    const visibleProjects = this._visibleProjects();
+    const tags = this._tags();
+
+    const areProjectsReady =
+      visibleProjects.length === 0 || this._menuTreeService.hasProjectTree();
+    const areTagsReady = tags.length === 0 || this._menuTreeService.hasTagTree();
+
+    return areProjectsReady && areTagsReady;
+  });
 
   constructor() {
     // TODO these should probably live in the _menuTreeService
@@ -211,13 +226,18 @@ export class MagicNavConfigService {
       { type: 'separator', id: 'sep-3', mtAuto: true },
 
       // App Section
-      {
-        type: 'route',
-        id: 'search',
-        label: T.MH.SEARCH,
-        icon: 'search',
-        route: '/search',
-      },
+      ...(this.isSearchEnabled()
+        ? [
+            {
+              type: 'route',
+              id: 'search',
+              label: T.MH.SEARCH,
+              icon: 'search',
+              route: '/search',
+              featureConfigKey: 'isSearchEnabled',
+            } as NavItem,
+          ]
+        : []),
       {
         type: 'route',
         id: 'scheduled-list',
@@ -236,6 +256,7 @@ export class MagicNavConfigService {
               label: T.MH.DONATE,
               icon: 'favorite',
               route: '/donate',
+              featureConfigKey: 'isDonatePageEnabled',
             } as NavItem,
           ]
         : []),
@@ -280,31 +301,10 @@ export class MagicNavConfigService {
           },
           {
             type: 'action',
-            id: 'tour-welcome',
-            label: T.MH.HM.START_WELCOME,
-            icon: 'directions',
-            action: () => this._startTour(TourId.Welcome),
-          },
-          {
-            type: 'action',
             id: 'tour-keyboard',
             label: T.MH.HM.KEYBOARD,
             icon: 'directions',
             action: () => this._startTour(TourId.KeyboardNav),
-          },
-          {
-            type: 'action',
-            id: 'tour-sync',
-            label: T.MH.HM.SYNC,
-            icon: 'directions',
-            action: () => this._startTour(TourId.Sync),
-          },
-          {
-            type: 'action',
-            id: 'tour-calendars',
-            label: T.MH.HM.CALENDARS,
-            icon: 'directions',
-            action: () => this._startTour(TourId.IssueProviders),
           },
         ],
       },
@@ -389,6 +389,7 @@ export class MagicNavConfigService {
         label: T.MH.PLANNER,
         icon: 'edit_calendar',
         route: '/planner',
+        featureConfigKey: 'isPlannerEnabled',
       });
     }
 
@@ -399,6 +400,7 @@ export class MagicNavConfigService {
         label: T.MH.SCHEDULE,
         icon: 'schedule',
         route: '/schedule',
+        featureConfigKey: 'isSchedulerEnabled',
       });
     }
 
@@ -409,6 +411,7 @@ export class MagicNavConfigService {
         label: T.MH.BOARDS,
         icon: 'grid_view',
         route: '/boards',
+        featureConfigKey: 'isBoardsEnabled',
       });
     }
 
@@ -420,6 +423,7 @@ export class MagicNavConfigService {
         icon: 'check_box',
         svgIcon: 'habit',
         route: '/habits',
+        featureConfigKey: 'isHabitsEnabled',
       });
     }
 
@@ -482,7 +486,9 @@ export class MagicNavConfigService {
   }
 
   // Simple action handlers
-  private _openCreateProject(): void {
+  private async _openCreateProject(): Promise<void> {
+    const { DialogCreateProjectComponent } =
+      await import('../../features/project/dialogs/create-project/dialog-create-project.component');
     this._matDialog
       .open(DialogCreateProjectComponent, { restoreFocus: true })
       .afterClosed()
@@ -576,5 +582,19 @@ export class MagicNavConfigService {
 
   createNewTag(): void {
     this._createNewTag();
+  }
+
+  disableFeature(configKey: keyof AppFeaturesConfig, featureName: string): void {
+    this._configService.updateSection(
+      'appFeatures',
+      { [configKey]: false } as Partial<AppFeaturesConfig>,
+      true,
+    );
+    this._snackService.open({
+      msg: T.MH.FEATURE_DISABLED_SNACK,
+      translateParams: { featureName },
+      actionStr: T.MH.OPEN_APP_FEATURES,
+      actionFn: () => this._router.navigate(['/config']),
+    });
   }
 }

@@ -30,6 +30,11 @@
 
   &-title {
     margin-bottom: var(--s);
+    cursor: pointer;
+
+    .collapsible-expand-icon {
+      vertical-align: middle;
+    }
 
     button {
       margin-left: var(--s);
@@ -139,10 +144,7 @@
 
   span {
     &:first-child {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
+      @include center;
       visibility: visible;
 
       tr:hover & {
@@ -250,9 +252,17 @@
   }
 }
 
+.task-title-clickable {
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .repeat-task-icon {
   vertical-align: middle;
-  margin-right: 4px;
+  margin-right: var(--s-half);
   transform: rotate(45deg);
   opacity: 0.7;
 }

@@ -103,6 +103,21 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateCleanText).not.toHaveBeenCalled();
     });
 
+    it('should ignore stale parse results after resetPreviousResult', async () => {
+      const parsePromise = service.parseAndUpdateText(
+        'stale task',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      service.resetPreviousResult();
+      await parsePromise;
+
+      expect(mockStateService.updateCleanText).not.toHaveBeenCalled();
+    });
+
     describe('Date Parsing', () => {
       it('should handle default date when no date syntax present and no current state', async () => {
         const defaultDate = '2024-01-15';
@@ -121,6 +136,7 @@ describe('AddTaskBarParserService', () => {
           cleanText: null,
           remindOption: null,
           attachments: [],
+          repeatQuickSetting: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -158,6 +174,7 @@ describe('AddTaskBarParserService', () => {
           cleanText: null,
           remindOption: null,
           attachments: [],
+          repeatQuickSetting: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -192,6 +209,7 @@ describe('AddTaskBarParserService', () => {
           cleanText: null,
           remindOption: null,
           attachments: [],
+          repeatQuickSetting: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -263,9 +281,9 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('Parsing Integration', () => {
-      it('should call updateEstimate when parsing text', async () => {
+      it('should call updateEstimate when text contains estimate syntax', async () => {
         await service.parseAndUpdateText(
-          'Task with potential time estimate',
+          'Task with estimate 30m',
           mockConfig,
           mockProjects,
           mockTags,
@@ -275,7 +293,7 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateEstimate).toHaveBeenCalled();
       });
 
-      it('should handle null time estimates', async () => {
+      it('should not call updateEstimate for text without estimate on first parse', async () => {
         await service.parseAndUpdateText(
           'Simple task',
           mockConfig,
@@ -284,7 +302,24 @@ describe('AddTaskBarParserService', () => {
           mockDefaultProject,
         );
 
-        expect(mockStateService.updateEstimate).toHaveBeenCalledWith(null);
+        expect(mockStateService.updateEstimate).not.toHaveBeenCalled();
+      });
+
+      it('should not call updateEstimate when typing text without estimate syntax for the first time', async () => {
+        // Simulates: user sets estimate via dropdown, then types task title.
+        // The parser has no previous result (first parse after empty input).
+        // Since the parsed estimate is null and there's no previous result to
+        // diff against, updateEstimate should NOT be called to avoid wiping
+        // out the dropdown-set value.
+        await service.parseAndUpdateText(
+          'My new task',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateEstimate).not.toHaveBeenCalled();
       });
 
       it('should call updateSpent when parsing text', async () => {
@@ -471,7 +506,7 @@ describe('AddTaskBarParserService', () => {
           { input: 'Task 1h', expected: 'Task' },
           { input: 'Task 30m/1h', expected: 'Task' },
           { input: 'Task t1.5h', expected: 'Task' },
-          { input: 'Task 45d', expected: 'Task' },
+          { input: 'Task 45m', expected: 'Task' },
           { input: 'Task t30m other text', expected: 'Task other text' },
           { input: 'Task 1h/', expected: 'Task' },
           { input: 'Task 1h/ between', expected: 'Task between' },
@@ -508,10 +543,10 @@ describe('AddTaskBarParserService', () => {
         expect(result).toBe('Task content');
       });
 
-      it('should handle days format', async () => {
+      it('should not handle days format (removed unit)', async () => {
         const input = 'Task 3d content';
         const result = service.removeShortSyntaxFromInput(input, 'estimate');
-        expect(result).toBe('Task content');
+        expect(result).toBe('Task 3d content');
       });
     });
 
@@ -595,6 +630,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -629,6 +665,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -665,6 +702,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -699,6 +737,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -732,6 +771,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -820,6 +860,7 @@ describe('AddTaskBarParserService', () => {
         isEnableProject: true,
         isEnableDue: true,
         isEnableTag: true,
+        urlBehavior: 'extract',
       } as ShortSyntaxConfig;
 
       mockDefaultProject = {
@@ -848,6 +889,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -881,6 +923,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -914,6 +957,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -945,6 +989,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -977,6 +1022,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1019,6 +1065,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1046,6 +1093,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1093,6 +1141,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1134,6 +1183,7 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         attachments: [],
+        repeatQuickSetting: null,
       };
       mockStateService.state.and.returnValue(mockState);
 

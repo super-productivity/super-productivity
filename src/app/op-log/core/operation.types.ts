@@ -9,9 +9,12 @@ export enum OpType {
   Delete = 'DEL',
   Move = 'MOV', // For list reordering
   Batch = 'BATCH', // For bulk operations (import, mass update)
-  SyncImport = 'SYNC_IMPORT', // Full state import from remote sync
-  BackupImport = 'BACKUP_IMPORT', // Full state import from backup file
-  Repair = 'REPAIR', // Auto-repair operation with full repaired state
+  /** Replaces entire app state from remote sync. All concurrent ops are discarded. See CLAUDE.md #12. */
+  SyncImport = 'SYNC_IMPORT',
+  /** Replaces entire app state from backup file. All concurrent ops are discarded. See CLAUDE.md #12. */
+  BackupImport = 'BACKUP_IMPORT',
+  /** Auto-repair operation containing full repaired state. */
+  Repair = 'REPAIR',
 }
 
 /**
@@ -19,6 +22,18 @@ export enum OpType {
  * Re-exported from @sp/shared-schema to ensure client/server consistency.
  */
 export type EntityType = SharedEntityType;
+
+/**
+ * Reason for a full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
+ * Used in the conflict dialog to explain WHY the import happened.
+ */
+export type SyncImportReason =
+  | 'PASSWORD_CHANGED'
+  | 'FILE_IMPORT'
+  | 'BACKUP_RESTORE'
+  | 'FORCE_UPLOAD'
+  | 'SERVER_MIGRATION'
+  | 'REPAIR';
 
 export interface Operation {
   /**
@@ -96,6 +111,13 @@ export interface Operation {
    * Allows the system to migrate or transform payloads if the data structure changes in the future.
    */
   schemaVersion: number;
+
+  /**
+   * Optional reason for full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
+   * Used in the conflict dialog to explain why the import was created.
+   * Old operations without this field gracefully show a generic message.
+   */
+  syncImportReason?: SyncImportReason;
 }
 
 export interface OperationLogEntry {

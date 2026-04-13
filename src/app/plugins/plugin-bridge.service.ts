@@ -22,6 +22,8 @@ import {
   BatchTaskCreate,
   BatchUpdateRequest,
   BatchUpdateResult,
+  OAuthFlowConfig,
+  OAuthTokenResult,
   PluginManifest,
   SnackCfg,
 } from '@super-productivity/plugin-api';
@@ -35,7 +37,8 @@ import { WorkContextService } from '../features/work-context/work-context.servic
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
 import typia from 'typia';
-import { first, take, map } from 'rxjs/operators';
+import { first, map, take } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../features/tasks/store/task.selectors';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginConfigService } from './plugin-config.service';
@@ -52,6 +55,15 @@ import { TaskCopy } from '../features/tasks/task.model';
 import { ProjectCopy } from '../features/project/project.model';
 import { TagCopy } from '../features/tag/tag.model';
 import { MAX_BATCH_OPERATIONS_SIZE } from '../op-log/core/operation-log.const';
+import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
+import { IssueProviderPluginDefinition } from './issue-provider/plugin-issue-provider.model';
+import { GlobalThemeService } from '../core/theme/global-theme.service';
+import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+import { PluginHttpService } from './issue-provider/plugin-http.service';
+import { createPluginSyncAdapter } from './issue-provider/plugin-sync-adapter.service';
+import { PluginOAuthBridgeService } from './oauth/plugin-oauth-bridge.service';
+import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
+import { PluginService } from './plugin.service';
 
 // New imports for simple counters
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
@@ -61,10 +73,10 @@ import {
 } from '../features/simple-counter/simple-counter.model';
 import { EMPTY_SIMPLE_COUNTER } from '../features/simple-counter/simple-counter.const';
 import {
-  upsertSimpleCounter,
-  updateSimpleCounter,
   deleteSimpleCounter,
   toggleSimpleCounterCounter,
+  updateSimpleCounter,
+  upsertSimpleCounter,
 } from '../features/simple-counter/store/simple-counter.actions';
 import { getDbDateStr } from '../util/get-db-date-str';
 
@@ -96,6 +108,11 @@ export class PluginBridgeService implements OnDestroy {
   private _injector = inject(Injector);
   private _translateService = inject(TranslateService);
   private _syncWrapperService = inject(SyncWrapperService);
+  private _pluginIssueProviderRegistry = inject(PluginIssueProviderRegistryService);
+  private _globalThemeService = inject(GlobalThemeService);
+  private _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
+  private _pluginHttpService = inject(PluginHttpService);
+  private _pluginOAuthBridge = inject(PluginOAuthBridgeService);
 
   // Track header buttons registered by plugins
   private readonly _headerButtons = signal<PluginHeaderBtnCfg[]>([]);
@@ -112,6 +129,9 @@ export class PluginBridgeService implements OnDestroy {
   private readonly _sidePanelButtons = signal<PluginSidePanelBtnCfg[]>([]);
   public readonly sidePanelButtons = this._sidePanelButtons.asReadonly();
 
+  // Track config handlers registered by plugins (for settings button on plugin card)
+  private readonly _configHandlers = new Map<string, () => void>();
+
   constructor() {
     // Initialize window focus tracking
     this._initWindowFocusTracking();
@@ -127,7 +147,7 @@ export class PluginBridgeService implements OnDestroy {
   ): {
     persistDataSynced: (dataStr: string) => Promise<void>;
     loadPersistedData: () => Promise<string | null>;
-    getConfig: () => Promise<any>;
+    getConfig: () => Promise<unknown>;
     downloadFile: (filename: string, data: string) => Promise<void>;
     registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
     registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) => void;
@@ -153,6 +173,12 @@ export class PluginBridgeService implements OnDestroy {
     deleteSimpleCounter: (id: string) => Promise<void>;
     setSimpleCounterToday: (id: string, value: number) => Promise<void>;
     setSimpleCounterDate: (id: string, date: string, value: number) => Promise<void>;
+    registerConfigHandler: (handler: () => void) => void;
+    registerIssueProvider: (definition: IssueProviderPluginDefinition) => void;
+    unregisterIssueProvider: () => void;
+    startOAuthFlow: (config: OAuthFlowConfig) => Promise<OAuthTokenResult>;
+    getOAuthToken: () => Promise<string | null>;
+    clearOAuthToken: () => Promise<void>;
     log: ReturnType<typeof Log.withContext>;
   } {
     return {
@@ -171,6 +197,8 @@ export class PluginBridgeService implements OnDestroy {
       registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) =>
         this._registerSidePanelButton(pluginId, cfg),
       registerShortcut: (cfg: PluginShortcutCfg) => this._registerShortcut(pluginId, cfg),
+      registerConfigHandler: (handler: () => void) =>
+        this._configHandlers.set(pluginId, handler),
 
       // Navigation
       showIndexHtmlAsView: () => this._showIndexHtmlAsView(pluginId),
@@ -210,14 +238,135 @@ export class PluginBridgeService implements OnDestroy {
       setSimpleCounterDate: (id: string, date: string, value: number) =>
         this.setSimpleCounterDate(id, date, value),
 
+      // Issue provider registration
+      registerIssueProvider: (definition: IssueProviderPluginDefinition) =>
+        this._registerIssueProvider(pluginId, manifest, definition),
+      unregisterIssueProvider: () => {
+        const registeredKey =
+          this._pluginIssueProviderRegistry.getRegisteredKey(pluginId);
+        this._pluginIssueProviderRegistry.unregister(pluginId);
+        if (registeredKey) {
+          this._syncAdapterRegistry.unregister(registeredKey);
+        }
+      },
+
+      // OAuth
+      startOAuthFlow: (config: OAuthFlowConfig): Promise<OAuthTokenResult> =>
+        this._pluginOAuthBridge.startOAuthFlow(pluginId, config),
+      getOAuthToken: (): Promise<string | null> =>
+        this._pluginOAuthBridge.getOAuthToken(pluginId),
+      clearOAuthToken: (): Promise<void> =>
+        this._pluginOAuthBridge.clearOAuthTokens(pluginId),
+
       // Logging
       log: Log.withContext(`${pluginId}`),
     };
   }
 
+  private _isPluginBundled(pluginId: string): boolean {
+    const pluginService = this._injector.get(PluginService);
+    const path = pluginService.getPluginPath(pluginId);
+    return !!path && path.startsWith('assets/bundled-plugins/');
+  }
+
   /**
-   * Internal method to download file
+   * Register an issue provider plugin.
    */
+  private _registerIssueProvider(
+    pluginId: string,
+    manifest: PluginManifest | undefined,
+    definition: IssueProviderPluginDefinition,
+  ): void {
+    if (typeof definition?.getHeaders !== 'function') {
+      throw new Error('IssueProviderPluginDefinition.getHeaders must be a function');
+    }
+    if (typeof definition?.searchIssues !== 'function') {
+      throw new Error('IssueProviderPluginDefinition.searchIssues must be a function');
+    }
+    if (typeof definition?.getById !== 'function') {
+      throw new Error('IssueProviderPluginDefinition.getById must be a function');
+    }
+    if (typeof definition?.getIssueLink !== 'function') {
+      throw new Error('IssueProviderPluginDefinition.getIssueLink must be a function');
+    }
+    if (!Array.isArray(definition?.issueDisplay)) {
+      throw new Error('IssueProviderPluginDefinition.issueDisplay must be an array');
+    }
+    if (!Array.isArray(definition?.configFields)) {
+      throw new Error('IssueProviderPluginDefinition.configFields must be an array');
+    }
+
+    const issueProviderCfg = manifest?.issueProvider;
+    const customKey = issueProviderCfg?.issueProviderKey;
+    if (customKey && (ISSUE_PROVIDER_TYPES as readonly string[]).includes(customKey)) {
+      throw new Error(`Plugin cannot register under built-in key "${customKey}"`);
+    }
+    const name = manifest?.name ?? pluginId;
+    const humanReadableName = issueProviderCfg?.humanReadableName ?? name;
+    const customIconName = `plugin-${pluginId}-icon`;
+    const icon = this._globalThemeService.hasPluginIcon(customIconName)
+      ? customIconName
+      : (issueProviderCfg?.icon ?? 'extension');
+    const pollIntervalMs = issueProviderCfg?.pollIntervalMs ?? 0;
+    const issueStrings = issueProviderCfg?.issueStrings ?? {
+      singular: 'Issue',
+      plural: 'Issues',
+    };
+
+    this._pluginIssueProviderRegistry.register({
+      pluginId,
+      definition,
+      name,
+      humanReadableName,
+      icon,
+      pollIntervalMs,
+      issueStrings,
+      issueProviderKey: customKey,
+      useAgendaView: issueProviderCfg?.useAgendaView,
+      defaultAutoAddToBacklog: issueProviderCfg?.defaultAutoAddToBacklog,
+      allowPrivateNetwork:
+        issueProviderCfg?.allowPrivateNetwork && this._isPluginBundled(pluginId),
+    });
+
+    const registeredKey = this._pluginIssueProviderRegistry.getRegisteredKey(pluginId);
+    if (!registeredKey) {
+      PluginLog.warn(`Plugin ${pluginId} registration failed (duplicate?), skipping`);
+      return;
+    }
+
+    // Register sync adapter if plugin supports two-way sync
+    if (definition.fieldMappings?.length && definition.updateIssue) {
+      const registered = this._pluginIssueProviderRegistry.getProvider(registeredKey);
+      const httpOpts = { allowPrivateNetwork: registered?.allowPrivateNetwork };
+      const adapter = createPluginSyncAdapter(definition, (getHeaders) =>
+        this._pluginHttpService.createHttpHelper(getHeaders, httpOpts),
+      );
+      this._syncAdapterRegistry.register(registeredKey, adapter);
+      PluginLog.log(
+        `Plugin ${pluginId} registered sync adapter under '${registeredKey}'`,
+      );
+    }
+
+    PluginLog.log(
+      `Plugin ${pluginId} registered issue provider under '${registeredKey}'`,
+    );
+  }
+
+  async startOAuthFlow(
+    pluginId: string,
+    config: OAuthFlowConfig,
+  ): Promise<OAuthTokenResult> {
+    return this._pluginOAuthBridge.startOAuthFlow(pluginId, config);
+  }
+
+  async clearOAuthTokens(pluginId: string): Promise<void> {
+    return this._pluginOAuthBridge.clearOAuthTokens(pluginId);
+  }
+
+  async restoreAndCheckOAuthTokens(pluginId: string): Promise<boolean> {
+    return this._pluginOAuthBridge.restoreAndCheckOAuthTokens(pluginId);
+  }
+
   private async _downloadFile(filename: string, data: string): Promise<void> {
     typia.assert<string>(filename);
     typia.assert<string>(data);
@@ -269,10 +418,11 @@ export class PluginBridgeService implements OnDestroy {
           autoFocus: true,
           restoreFocus: true,
           disableClose: false,
+          closeOnNavigation: false,
         });
 
         dialogRef.afterClosed().subscribe((result) => {
-          PluginLog.log('PluginBridge: Dialog closed with result:', result);
+          PluginLog.log('PluginBridge: Dialog closed');
           resolve();
         });
       } catch (error) {
@@ -344,17 +494,54 @@ export class PluginBridgeService implements OnDestroy {
     typia.assert<string>(taskId);
     typia.assert<Partial<TaskCopy>>(updates);
 
-    // Validate that referenced project, tags, and parent task exist if they are being updated
+    // Validate that referenced project, tags and parent task exist if they are being updated
     await this._validateTaskReferences(
       updates.projectId,
       updates.tagIds,
       updates.parentId,
     );
 
-    // Update the task using TaskService (TaskCopy is compatible with Task)
-    this._taskService.update(taskId, updates);
+    const { projectId, ...otherUpdates } = updates;
 
-    PluginLog.log('PluginBridge: Task updated successfully', { taskId, updates });
+    if (projectId !== undefined) {
+      const taskWithSubTasks = await firstValueFrom(
+        this._store.select((state) =>
+          selectTaskByIdWithSubTaskData(state, { id: taskId }),
+        ),
+      );
+
+      if (!taskWithSubTasks?.id || taskWithSubTasks.id !== taskId) {
+        throw new Error(
+          this._translateService.instant(T.PLUGINS.TASK_NOT_FOUND, { taskId }),
+        );
+      }
+
+      if (taskWithSubTasks.parentId) {
+        throw new Error(
+          'Subtasks cannot be moved directly. Move the parent task instead.',
+        );
+      }
+
+      if (taskWithSubTasks.projectId === projectId) {
+        PluginLog.log('PluginBridge: Task already in target project', {
+          taskId,
+          projectId,
+        });
+      } else {
+        this._taskService.moveToProject(taskWithSubTasks, projectId);
+
+        PluginLog.log('PluginBridge: Task moved to project successfully', {
+          taskId,
+          projectId,
+        });
+      }
+    }
+
+    if (Object.keys(otherUpdates).length > 0) {
+      this._taskService.update(taskId, otherUpdates);
+    }
+
+    PluginLog.log('PluginBridge: Task updated successfully', { taskId });
   }
 
   /**
@@ -407,6 +594,7 @@ export class PluginBridgeService implements OnDestroy {
         notes: taskData.notes || '',
         timeEstimate: taskData.timeEstimate || 0,
         isDone: (taskData as { isDone?: boolean }).isDone || false,
+        dueDay: taskData.dueDay ?? undefined,
       };
 
       // Add the task using TaskService
@@ -417,7 +605,7 @@ export class PluginBridgeService implements OnDestroy {
         false, // isAddToBottom
       );
 
-      PluginLog.log('PluginBridge: Task added successfully', { taskId, taskData });
+      PluginLog.log('PluginBridge: Task added successfully', { taskId });
       return taskId;
     }
   }
@@ -468,7 +656,7 @@ export class PluginBridgeService implements OnDestroy {
   async addProject(projectData: Partial<ProjectCopy>): Promise<string> {
     typia.assert<Partial<ProjectCopy>>(projectData);
 
-    PluginLog.log('PluginBridge: Project add', { projectData });
+    PluginLog.log('PluginBridge: Project add');
     return this._projectService.add(projectData);
   }
 
@@ -482,7 +670,7 @@ export class PluginBridgeService implements OnDestroy {
     // Update the project using ProjectService (ProjectCopy is compatible with Project)
     this._projectService.update(projectId, updates);
 
-    PluginLog.log('PluginBridge: Project updated successfully', { projectId, updates });
+    PluginLog.log('PluginBridge: Project updated successfully', { projectId });
   }
 
   /**
@@ -501,7 +689,7 @@ export class PluginBridgeService implements OnDestroy {
 
     // Add the tag using TagService (TagCopy is compatible with Tag)
     const tagId = this._tagService.addTag(tagData);
-    PluginLog.log('PluginBridge: Tag added successfully', { tagId, tagData });
+    PluginLog.log('PluginBridge: Tag added successfully', { tagId });
     return tagId;
   }
 
@@ -514,7 +702,7 @@ export class PluginBridgeService implements OnDestroy {
 
     // Update the tag using TagService (TagCopy is compatible with Tag)
     this._tagService.updateTag(tagId, updates);
-    PluginLog.log('PluginBridge: Tag updated successfully', { tagId, updates });
+    PluginLog.log('PluginBridge: Tag updated successfully', { tagId });
   }
 
   /**
@@ -727,7 +915,7 @@ export class PluginBridgeService implements OnDestroy {
   /**
    * Internal method to get plugin configuration
    */
-  private async _getConfig(pluginId: string): Promise<any> {
+  private async _getConfig(pluginId: string): Promise<unknown> {
     try {
       return await this._pluginConfigService.getPluginConfig(pluginId);
     } catch (error) {
@@ -776,9 +964,17 @@ export class PluginBridgeService implements OnDestroy {
     this._removePluginMenuEntries(pluginId);
     this._removePluginSidePanelButtons(pluginId);
     this.unregisterPluginShortcuts(pluginId);
+    this._configHandlers.delete(pluginId);
 
     // Clean up window focus handler
     this._windowFocusHandlers.delete(pluginId);
+
+    // Clean up issue provider and sync adapter
+    const registeredKey = this._pluginIssueProviderRegistry.getRegisteredKey(pluginId);
+    this._pluginIssueProviderRegistry.unregister(pluginId);
+    if (registeredKey) {
+      this._syncAdapterRegistry.unregister(registeredKey);
+    }
 
     console.log('PluginBridge: All hooks unregistered for plugin', { pluginId });
   }
@@ -870,6 +1066,14 @@ export class PluginBridgeService implements OnDestroy {
     this._headerButtons.set(filteredButtons);
 
     PluginLog.log('PluginBridge: Header buttons removed for plugin', { pluginId });
+  }
+
+  hasConfigHandler(pluginId: string): boolean {
+    return this._configHandlers.has(pluginId);
+  }
+
+  invokeConfigHandler(pluginId: string): void {
+    this._configHandlers.get(pluginId)?.();
   }
 
   /**

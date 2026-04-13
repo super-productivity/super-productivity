@@ -25,9 +25,5 @@
     <div class="focus-label focus-running-label">
       {{ runningMs | msToMinuteClockString }}
     </div>
-  } @else if (focusSummaryToday()?.total) {
-    <div class="focus-label">
-      {{ focusSummaryToday()?.total | msToMinuteClockString }}
-    </div>
   }
 </div>

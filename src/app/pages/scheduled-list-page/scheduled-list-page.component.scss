@@ -6,7 +6,7 @@
 }
 
 :host planner-task {
-  margin-bottom: 8px;
+  margin-bottom: var(--s);
   cursor: pointer;
 
   &:active {

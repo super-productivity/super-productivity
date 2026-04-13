@@ -13,7 +13,8 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { ShareService } from '../../core/share/share.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
-import { LegacySyncProvider } from '../../imex/sync/legacy-sync-provider.model';
+import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
+import { TranslateService } from '@ngx-translate/core';
 
 describe('ConfigPageComponent', () => {
   let component: ConfigPageComponent;
@@ -36,9 +37,13 @@ describe('ConfigPageComponent', () => {
         },
         {
           provide: SyncProviderManager,
-          useValue: jasmine.createSpyObj('SyncProviderManager', ['getProviderById'], {
-            currentProviderPrivateCfg$: of(null),
-          }),
+          useValue: (() => {
+            const spy = jasmine.createSpyObj('SyncProviderManager', ['getProviderById'], {
+              currentProviderPrivateCfg$: of(null),
+            });
+            spy.getProviderById.and.returnValue(Promise.resolve(undefined));
+            return spy;
+          })(),
         },
         {
           provide: GlobalConfigService,
@@ -55,6 +60,10 @@ describe('ConfigPageComponent', () => {
         {
           provide: MatDialog,
           useValue: jasmine.createSpyObj('MatDialog', ['open']),
+        },
+        {
+          provide: TranslateService,
+          useValue: jasmine.createSpyObj('TranslateService', ['instant']),
         },
       ],
     })
@@ -75,9 +84,6 @@ describe('ConfigPageComponent', () => {
           fullUrl: 'https://webdav.example.com/sp-test',
         }),
       );
-      spyOn(WebdavApi.prototype, 'testConditionalHeaders').and.returnValue(
-        Promise.resolve(true),
-      );
 
       const webDavCfg = {
         baseUrl: 'https://webdav.example.com',
@@ -88,7 +94,7 @@ describe('ConfigPageComponent', () => {
 
       const fullSyncModel = {
         isEnabled: true,
-        syncProvider: LegacySyncProvider.WebDAV,
+        syncProvider: SyncProviderId.WebDAV,
         syncInterval: 600000,
         webDav: webDavCfg,
       };
@@ -97,10 +103,13 @@ describe('ConfigPageComponent', () => {
         parent: { parent: { model: fullSyncModel } },
       };
 
+      // Wait for async sync form config to be built
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
       // Find the WebDAV Test Connection button onClick handler
-      const webDavItem = component.globalSyncConfigFormCfg.items!.find(
-        (item: any) => item.key === 'webDav',
-      );
+      const webDavItem = component
+        .globalSyncConfigFormCfg()!
+        .items!.find((item: any) => item.key === 'webDav');
       const testConnectionBtn = webDavItem!.fieldGroup!.find(
         (item: any) => item.type === 'btn',
       );

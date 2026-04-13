@@ -8,6 +8,15 @@ import {
   OnDestroy,
 } from '@angular/core';
 
+import { DRAG_DELAY_FOR_TOUCH } from '../../app.constants';
+
+/**
+ * If the touch has been held longer than this before moving,
+ * treat it as a drag intent (e.g. cdkDragStartDelay) rather than a swipe.
+ * Must be less than DRAG_DELAY_FOR_TOUCH so the CDK drag can take over.
+ */
+const PAN_MAX_START_DELAY = DRAG_DELAY_FOR_TOUCH - 100;
+
 export interface PanEvent {
   deltaX: number;
   deltaY: number;
@@ -15,6 +24,8 @@ export interface PanEvent {
   isFinal: boolean;
   eventType: number;
   target: EventTarget | null;
+  clientX: number;
+  clientY: number;
   preventDefault: () => void;
 }
 
@@ -29,6 +40,7 @@ export interface PanEvent {
 export class PanDirective implements OnDestroy {
   readonly panstart = output<PanEvent>();
   readonly panend = output<void>();
+  readonly pancancel = output<void>();
   readonly panleft = output<PanEvent>();
   readonly panright = output<PanEvent>();
 
@@ -170,6 +182,11 @@ export class PanDirective implements OnDestroy {
     // Only start panning for primarily horizontal movements
     // Use a higher threshold for horizontal movement and ensure it's more horizontal than vertical
     if (!this._isPanning && absX >= this.panThreshold() && absX > absY * 1.5) {
+      // If touch was held too long before moving, it's likely a drag, not a swipe
+      if (Date.now() - this._startTime > PAN_MAX_START_DELAY) {
+        this._reset();
+        return;
+      }
       // Additional check: if vertical movement is significant, likely scrolling
       if (absY > 20) {
         this._isScrolling = true;
@@ -188,6 +205,8 @@ export class PanDirective implements OnDestroy {
     if (this._isPanning) {
       // Prevent default to avoid scrolling
       event.preventDefault();
+      // Stop propagation so parent PanDirectives (nested swipe-blocks) don't fire
+      event.stopPropagation();
 
       const panEvent = this._createPanEvent(event, deltaX, deltaY, false, 2); // eventType: 2 = move
 
@@ -242,7 +261,12 @@ export class PanDirective implements OnDestroy {
       return;
     }
 
-    // Just reset on cancel
+    if (this._isPanning) {
+      this._ngZone.run(() => {
+        this.pancancel.emit();
+      });
+    }
+
     this._reset();
   }
 
@@ -274,6 +298,8 @@ export class PanDirective implements OnDestroy {
       isFinal,
       eventType,
       target: originalEvent.target,
+      clientX: this._startX + deltaX,
+      clientY: this._startY + deltaY,
       preventDefault: () => originalEvent.preventDefault(),
     };
   }

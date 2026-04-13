@@ -1,5 +1,7 @@
 # Technical Hurdles for True Two-Way Calendar Sync
 
+> **Status: Planned**
+
 ## Executive Summary
 
 Based on my exploration of Super Productivity's codebase, implementing true two-way calendar sync faces several significant technical challenges that go beyond the robust sync infrastructure already in place. While the app has sophisticated Operation Log-based sync for its own data and read-only iCal polling for calendars, bridging these systems to enable bidirectional calendar sync requires solving authentication, API integration, conflict resolution, and architectural challenges.

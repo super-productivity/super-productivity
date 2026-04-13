@@ -7,6 +7,7 @@ import { TaskComponent } from './task/task.component';
 export class TaskFocusService {
   readonly focusedTaskId = signal<string | null>(null);
   readonly lastFocusedTaskComponent = signal<TaskComponent | null>(null);
+  readonly isTaskContextMenuOpen = signal(false);
 
   // Registry of all task components for efficient focus navigation
   private _taskComponentsRegistry = new Map<string, TaskComponent>();

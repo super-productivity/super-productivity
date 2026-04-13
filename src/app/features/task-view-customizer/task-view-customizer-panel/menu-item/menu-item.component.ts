@@ -24,7 +24,6 @@ import {
 @Component({
   selector: 'task-view-customizer-menu-item',
   templateUrl: './menu-item.component.html',
-  styleUrls: ['./menu-item.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [

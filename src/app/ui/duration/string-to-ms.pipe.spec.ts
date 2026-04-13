@@ -84,10 +84,6 @@ describe('stringToMs', () => {
       expect(stringToMs('0s')).toBe(0);
     });
 
-    it('should handle 0d correctly', () => {
-      expect(stringToMs('0d')).toBe(0);
-    });
-
     it('should handle 0 without unit', () => {
       expect(stringToMs('0')).toBe(0);
     });
@@ -140,19 +136,19 @@ describe('stringToMs', () => {
       expect(stringToMs('1.5h')).toBe(5400000);
     });
 
-    it('should handle days', () => {
-      expect(stringToMs('1d')).toBe(86400000);
-      expect(stringToMs('0.5d')).toBe(43200000);
+    it('should not handle days (removed unit)', () => {
+      expect(stringToMs('1d')).toBe(0);
+      expect(stringToMs('0.5d')).toBe(0);
     });
   });
 
   describe('complex formats', () => {
     it('should handle all units combined', () => {
-      expect(stringToMs('1d 2h 3m 4s')).toBe(93784000);
+      expect(stringToMs('2h 3m 4s')).toBe(7384000);
     });
 
     it('should handle units in any order', () => {
-      expect(stringToMs('3m 2h 1d 4s')).toBe(93784000);
+      expect(stringToMs('3m 2h 4s')).toBe(7384000);
     });
 
     it('should handle repeated units (last wins)', () => {

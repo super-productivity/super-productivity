@@ -205,7 +205,7 @@ export class WorklogService {
         if (isFilterOutTimeSpentOnOtherDays) {
           tasks = tasks.map((task): WorklogTask => {
             const timeSpentOnDay: any = {};
-            Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
+            Object.keys(task.timeSpentOnDay || {}).forEach((dateStr) => {
               // Use date string comparison instead of Date object comparison
               // to avoid timezone issues
               if (dateStr >= rangeStartStr && dateStr <= rangeEndStr) {
@@ -245,7 +245,7 @@ export class WorklogService {
         nonArchiveTaskIds,
         workStartEndForWorkContext,
         this._dateAdapter.getFirstDayOfWeek(),
-        this._dateTimeFormatService.currentLocale,
+        this._dateTimeFormatService.currentLocale(),
       );
       return {
         worklog,
@@ -278,7 +278,7 @@ export class WorklogService {
         nonArchiveTaskIds,
         workStartEndForWorkContext,
         this._dateAdapter.getFirstDayOfWeek(),
-        this._dateTimeFormatService.currentLocale,
+        this._dateTimeFormatService.currentLocale(),
       );
     }
     return null;

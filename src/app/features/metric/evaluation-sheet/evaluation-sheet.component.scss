@@ -39,7 +39,7 @@ reflection-note {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--s-half);
     font-size: 12px;
 
     .time-label {
@@ -90,7 +90,7 @@ reflection-note {
   display: flex;
   flex-direction: column;
   gap: var(--s);
-  transition: all 0.3s ease;
+  transition: var(--transition-standard);
   border: 2px solid var(--card-bg);
 
   .label {
@@ -135,7 +135,7 @@ reflection-note {
   display: flex;
   flex-direction: column;
   gap: var(--s);
-  transition: all 0.3s ease;
+  transition: var(--transition-standard);
   // to prevent too much jumping
   min-height: 126px;
 
@@ -177,7 +177,7 @@ reflection-note {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: var(--s-half) 10px;
   border-radius: 999px;
   border: none;
   background: rgba(255, 255, 255, 0.2);
@@ -190,7 +190,7 @@ reflection-note {
   transition: background-color 0.2s ease;
 
   &:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline: 2px solid var(--c-light-60);
     outline-offset: 2px;
   }
 

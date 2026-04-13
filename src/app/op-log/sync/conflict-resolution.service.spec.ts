@@ -2298,8 +2298,8 @@ describe('ConflictResolutionService', () => {
 
     it('should NOT prune local-win update op clock (server handles pruning)', async () => {
       const now = Date.now();
-      const localClock = createLargeClock('local', 6, 1);
-      const remoteClock = createLargeClock('remote', 6, 10);
+      const localClock = createLargeClock('local', 16, 1);
+      const remoteClock = createLargeClock('remote', 16, 10);
 
       const conflicts: EntityConflict[] = [
         {
@@ -2329,8 +2329,8 @@ describe('ConflictResolutionService', () => {
 
     it('should NOT prune archive-win op clock (server handles pruning)', async () => {
       const now = Date.now();
-      const archiveClock = createLargeClock('archive', 6, 1);
-      const remoteClock = createLargeClock('remote', 6, 10);
+      const archiveClock = createLargeClock('archive', 16, 1);
+      const remoteClock = createLargeClock('remote', 16, 10);
 
       const conflicts: EntityConflict[] = [
         {
@@ -3450,6 +3450,68 @@ describe('ConflictResolutionService', () => {
         );
         expect(result).toBe(VectorClockComparison.CONCURRENT);
       });
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUG CONFIRMATION TEST (Issue #6571)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('Bug #6571: LWW apply failure does not throw', () => {
+    const now = Date.now();
+
+    const createOpForBug = (
+      id: string,
+      clientId: string,
+      timestamp: number,
+    ): Operation => ({
+      id,
+      clientId,
+      actionType: 'test' as ActionType,
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: 'task-1',
+      payload: { source: clientId },
+      vectorClock: { [clientId]: 1 },
+      timestamp,
+      schemaVersion: 1,
+    });
+
+    beforeEach(() => {
+      mockOpLogStore.hasOp.and.resolveTo(false);
+      mockOpLogStore.append.and.callFake(() => Promise.resolve(1));
+      mockOpLogStore.appendWithVectorClockUpdate.and.callFake(() => Promise.resolve(1));
+      mockOpLogStore.markApplied.and.resolveTo(undefined);
+      mockOpLogStore.markRejected.and.resolveTo(undefined);
+      mockOpLogStore.markFailed.and.resolveTo(undefined);
+    });
+
+    it('should throw when applyOperations has a failedOp', async () => {
+      const localOp = createOpForBug('local-1', 'client-a', now - 1000);
+      const remoteOp = createOpForBug('remote-1', 'client-b', now);
+
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          localOps: [localOp],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+      ];
+
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: [],
+        failedOp: { op: remoteOp, error: new Error('Apply failed for task-1') },
+      });
+
+      // FIXED: Should throw on apply failure (parity with applyNonConflictingOps)
+      await expectAsync(service.autoResolveConflictsLWW(conflicts)).toBeRejectedWithError(
+        'Apply failed for task-1',
+      );
+
+      expect(mockOpLogStore.markFailed).toHaveBeenCalled();
+      expect(mockSnackService.open).toHaveBeenCalled();
     });
   });
 });
