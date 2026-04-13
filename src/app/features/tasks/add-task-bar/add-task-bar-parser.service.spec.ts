@@ -305,6 +305,87 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateEstimate).toHaveBeenCalledWith(null);
       });
 
+      it('should preserve a manually selected estimate when plain text is typed', async () => {
+        const manualEstimate = 30 * 60 * 1000;
+        mockStateService.state.and.returnValue({
+          projectId: mockDefaultProject.id,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          spent: null,
+          estimate: manualEstimate,
+          cleanText: null,
+          remindOption: null,
+          attachments: [],
+          repeatQuickSetting: null,
+        });
+
+        await service.parseAndUpdateText(
+          'Simple task',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateEstimate).toHaveBeenCalledWith(manualEstimate);
+      });
+
+      it('should clear a parsed estimate when its short syntax is removed', async () => {
+        const parsedEstimate = 30 * 60 * 1000;
+        mockStateService.state.and.returnValue({
+          projectId: mockDefaultProject.id,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          spent: null,
+          estimate: null,
+          cleanText: null,
+          remindOption: null,
+          attachments: [],
+          repeatQuickSetting: null,
+        });
+
+        await service.parseAndUpdateText(
+          'Simple task 30m',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+        expect(mockStateService.updateEstimate).toHaveBeenCalledWith(parsedEstimate);
+
+        mockStateService.updateEstimate.calls.reset();
+        mockStateService.state.and.returnValue({
+          projectId: mockDefaultProject.id,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          spent: null,
+          estimate: parsedEstimate,
+          cleanText: 'Simple task',
+          remindOption: null,
+          attachments: [],
+          repeatQuickSetting: null,
+        });
+
+        await service.parseAndUpdateText(
+          'Simple task',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateEstimate).toHaveBeenCalledWith(null);
+      });
+
       it('should call updateSpent when parsing text', async () => {
         await service.parseAndUpdateText(
           'Task with potential time spent',
