@@ -64,20 +64,25 @@ export class MobileBottomNavComponent {
   private _entranceAnimationTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
-    effect(() => {
+    effect((onCleanup) => {
       if (this.isEntrance() && this.isAndroid) {
         this.isEntranceAnimating.set(true);
-        // Safety fallback: clear if animationend doesn't fire (prefers-reduced-motion)
+        // Safety fallback: clear if animationend doesn't fire
+        // (e.g. prefers-reduced-motion: reduce → animation: none).
+        // Timeout = 250ms delay + 400ms duration + 50ms buffer = 700ms
         this._entranceAnimationTimeout = setTimeout(() => {
           this.isEntranceAnimating.set(false);
         }, 700);
+        onCleanup(() => clearTimeout(this._entranceAnimationTimeout));
       }
     });
   }
 
-  onEntranceAnimationEnd(): void {
-    this.isEntranceAnimating.set(false);
-    clearTimeout(this._entranceAnimationTimeout);
+  onEntranceAnimationEnd(event: AnimationEvent): void {
+    if (event.animationName === 'slide-up-from-bottom') {
+      this.isEntranceAnimating.set(false);
+      clearTimeout(this._entranceAnimationTimeout);
+    }
   }
 
   readonly T = T;
