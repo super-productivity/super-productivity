@@ -201,7 +201,7 @@ export class OperationLogStoreService {
    * Transient failures (file locks, temporary I/O issues) may resolve on retry.
    *
    * Total attempts = 1 initial + IDB_OPEN_RETRIES retries.
-   * With IDB_OPEN_RETRIES=3: attempts at 0ms, 500ms, 1500ms, 3500ms (total ~3.5s worst case).
+   * With IDB_OPEN_RETRIES=5 and base delay 1000ms: attempts at 0ms, 1s, 3s, 7s, 15s, 31s (~31s total window).
    *
    * @throws IndexedDBOpenError if all retry attempts fail
    * @see https://github.com/johannesjo/super-productivity/issues/6255
@@ -221,7 +221,7 @@ export class OperationLogStoreService {
         lastError = e;
 
         if (attempt < totalAttempts) {
-          // Exponential backoff: 500ms, 1000ms, 2000ms for retries 1, 2, 3
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s for retries 1-5
           const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
           Log.warn(
             `[OpLogStore] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
