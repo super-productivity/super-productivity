@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/src/index.js",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    "pretest": "prisma generate",
+    "pretest": "npm run build --workspace=@sp/shared-schema && prisma generate",
     "test": "vitest run",
     "docker:build": "./scripts/build-and-push.sh",
     "docker:deploy": "./scripts/deploy.sh",
