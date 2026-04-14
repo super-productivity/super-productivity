@@ -23,6 +23,7 @@ import {
   hideTaskWidget,
   showTaskWidget,
 } from './task-widget/task-widget';
+import { ensureIndicator } from './indicator';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
@@ -457,13 +458,18 @@ const appCloseHandler = (app: App): void => {
     // NOTE: this might not work if we run a second instance of the app
     log('close, isQuiting:', getIsQuiting());
     if (!getIsQuiting()) {
-      event.preventDefault();
       if (getIsMinimizeToTray()) {
-        setWasMaximizedBeforeHide(mainWin.isMaximized());
-        mainWin.hide();
-        showTaskWidget();
-        return;
+        const indicator = ensureIndicator();
+        if (indicator) {
+          event.preventDefault();
+          setWasMaximizedBeforeHide(mainWin.isMaximized());
+          mainWin.hide();
+          showTaskWidget();
+          return;
+        }
       }
+
+      event.preventDefault();
 
       if (ids.length > 0) {
         log('Actions to wait for ', ids);
@@ -497,6 +503,10 @@ const appMinimizeHandler = (app: App): void => {
     // @ts-ignore
     mainWin.on('minimize', (event: Event) => {
       if (getIsMinimizeToTray()) {
+        const indicator = ensureIndicator();
+        if (!indicator) {
+          return;
+        }
         event.preventDefault();
         setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();

@@ -2094,6 +2094,7 @@
       "GLOBAL_ADD_NOTE": "Add new note",
       "GLOBAL_ADD_TASK": "Add new task",
       "GLOBAL_SHOW_HIDE": "Show/hide Super Productivity",
+      "GLOBAL_TOGGLE_TASK_WIDGET": "Show/hide task widget",
       "GLOBAL_TOGGLE_TASK_START": "Toggle time tracking for last active task",
       "GO_TO_DAILY_AGENDA": "Go to agenda",
       "GO_TO_FOCUS_MODE": "Enter focus mode",

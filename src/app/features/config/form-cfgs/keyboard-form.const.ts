@@ -49,6 +49,13 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
               label: T.GCF.KEYBOARD.GLOBAL_ADD_TASK,
             },
           },
+          {
+            key: 'globalToggleTaskWidget',
+            type: 'keyboard',
+            templateOptions: {
+              label: T.GCF.KEYBOARD.GLOBAL_TOGGLE_TASK_WIDGET,
+            },
+          },
         ]
       : []) as LimitedFormlyFieldConfig<KeyboardConfig>[]),
     // APP WIDE

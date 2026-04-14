@@ -2,6 +2,7 @@ export type KeyboardConfig = Readonly<{
   globalShowHide?: string | null;
   globalAddNote?: string | null;
   globalAddTask?: string | null;
+  globalToggleTaskWidget?: string | null;
   toggleBacklog?: string | null;
   goToFocusMode?: string | null;
   goToWorkView?: string | null;
