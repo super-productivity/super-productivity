@@ -1,70 +1,77 @@
 import { App, BrowserWindow } from 'electron';
 import { log } from 'electron-log/main';
 import * as path from 'path';
-import { IPC } from './shared-with-frontend/ipc-events.const';
+import {
+  flushPendingDesktopCommands,
+  queueOrExecuteDesktopCommand,
+} from './desktop-command-executor';
+import {
+  getProtocolUrlFromArgv,
+  parseDesktopCommandFromArgv,
+  parseDesktopCommandFromProtocolUrl,
+} from './desktop-command-parser';
 import { showOrFocus } from './various-shared';
+import { getIsAppReady } from './main-window';
 
 export const PROTOCOL_NAME = 'superproductivity';
 export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
 
-// Store pending URLs to process after window is ready
-let pendingUrls: string[] = [];
-
 export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): void => {
   log('Processing protocol URL:', url);
-
-  // Only process after window is ready
-  if (!mainWin || !mainWin.webContents) {
-    log('Window not ready, deferring protocol URL processing');
-    pendingUrls.push(url);
-
-    // Process any pending protocol URLs after window is created
-    setTimeout(() => {
-      processPendingProtocolUrls(mainWin);
-    }, 10000);
+  const parsedResult = parseDesktopCommandFromProtocolUrl(url);
+  if (parsedResult.kind === 'error') {
+    log(parsedResult.error);
+    return;
+  }
+  if (parsedResult.kind === 'none') {
     return;
   }
 
-  try {
-    const urlObj = new URL(url);
-    const action = urlObj.hostname;
-    const pathParts = urlObj.pathname.split('/').filter(Boolean);
-
-    log('Protocol action:', action);
-    log('Protocol path parts:', pathParts);
-
-    switch (action) {
-      case 'create-task':
-        if (pathParts.length > 0) {
-          const taskTitle = decodeURIComponent(pathParts[0]);
-          log('Creating task with title:', taskTitle);
-
-          // Send IPC message to create task
-          if (mainWin && mainWin.webContents) {
-            mainWin.webContents.send(IPC.ADD_TASK_FROM_APP_URI, { title: taskTitle });
-          }
-        }
-        break;
-      case 'task-toggle-start':
-        // Send IPC message to toggle task start
-        if (mainWin && mainWin.webContents) {
-          mainWin.webContents.send(IPC.TASK_TOGGLE_START);
-        }
-        break;
-      default:
-        log('Unknown protocol action:', action);
-    }
-  } catch (error) {
-    log('Error processing protocol URL:', error);
-  }
+  queueOrExecuteDesktopCommand({
+    command: parsedResult.command,
+    getMainWindow: () => mainWin,
+    isAppReady: getIsAppReady,
+    showOrFocus,
+  });
 };
 
 export const processPendingProtocolUrls = (mainWin: BrowserWindow): void => {
-  if (pendingUrls.length > 0) {
-    log(`Processing ${pendingUrls.length} pending protocol URLs`);
-    const urls = [...pendingUrls];
-    pendingUrls = [];
-    urls.forEach((url) => processProtocolUrl(url, mainWin));
+  flushPendingDesktopCommands({
+    getMainWindow: () => mainWin,
+    isAppReady: getIsAppReady,
+    showOrFocus,
+  });
+};
+
+const handleSecondInstanceInvocation = (
+  commandLine: string[],
+  getMainWindow: () => BrowserWindow | null,
+): void => {
+  const mainWin = getMainWindow();
+
+  const parsedCliResult = parseDesktopCommandFromArgv(commandLine);
+  if (parsedCliResult.kind === 'error') {
+    log(parsedCliResult.error);
+    return;
+  }
+  if (parsedCliResult.kind === 'command') {
+    queueOrExecuteDesktopCommand({
+      command: parsedCliResult.command,
+      getMainWindow,
+      isAppReady: getIsAppReady,
+      showOrFocus,
+    });
+    return;
+  }
+
+  const url = getProtocolUrlFromArgv(commandLine);
+  if (url) {
+    processProtocolUrl(url, mainWin);
+    return;
+  }
+
+  if (mainWin) {
+    showOrFocus(mainWin);
   }
 };
 
@@ -86,18 +93,7 @@ export const initializeProtocolHandling = (
 
   // Handle protocol on Windows/Linux via second instance
   appInstance.on('second-instance', (event, commandLine) => {
-    const mainWin = getMainWindow();
-
-    // Someone tried to run a second instance, we should focus our window instead.
-    if (mainWin) {
-      showOrFocus(mainWin);
-    }
-
-    // Handle protocol url from second instance
-    const url = commandLine.find((arg) => arg.startsWith(PROTOCOL_PREFIX));
-    if (url) {
-      processProtocolUrl(url, mainWin);
-    }
+    handleSecondInstanceInvocation(commandLine, getMainWindow);
   });
 
   // Handle protocol on macOS
