@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -47,6 +55,30 @@ export class MobileBottomNavComponent {
 
   isEntrance = input(false);
   readonly isAndroid = IS_ANDROID_NATIVE;
+
+  // Tracks whether the slide-up entrance animation is actively running.
+  // On Android, the web FAB is hidden only during this animation (not the full
+  // entrance duration) so that the button appears as soon as the nav settles —
+  // even if the native startup overlay was not shown (e.g. process-death recreation).
+  readonly isEntranceAnimating = signal(false);
+  private _entranceAnimationTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  constructor() {
+    effect(() => {
+      if (this.isEntrance() && this.isAndroid) {
+        this.isEntranceAnimating.set(true);
+        // Safety fallback: clear if animationend doesn't fire (prefers-reduced-motion)
+        this._entranceAnimationTimeout = setTimeout(() => {
+          this.isEntranceAnimating.set(false);
+        }, 700);
+      }
+    });
+  }
+
+  onEntranceAnimationEnd(): void {
+    this.isEntranceAnimating.set(false);
+    clearTimeout(this._entranceAnimationTimeout);
+  }
 
   readonly T = T;
   readonly TODAY_TAG = TODAY_TAG;
