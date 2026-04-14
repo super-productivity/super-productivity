@@ -196,4 +196,23 @@ describe('TaskContextMenuInnerComponent', () => {
       expect(callArgs.notes).toBeUndefined();
     }));
   });
+
+  describe('CSS.escape in querySelector', () => {
+    it('should use CSS.escape for task ID in focusRelatedTaskOrNext', fakeAsync(() => {
+      component.task = {
+        id: 'task-with-{special}-chars',
+        title: 'Test',
+        projectId: 'P1',
+        tagIds: [],
+        subTaskIds: [],
+      } as any;
+
+      const cssEscapeSpy = spyOn(CSS, 'escape').and.callThrough();
+
+      component.focusRelatedTaskOrNext();
+      tick(100);
+
+      expect(cssEscapeSpy).toHaveBeenCalledWith('task-with-{special}-chars');
+    }));
+  });
 });
