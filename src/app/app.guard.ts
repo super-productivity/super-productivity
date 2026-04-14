@@ -120,8 +120,12 @@ export class DefaultStartPageGuard {
       map((miscCfg) => {
         const TODAY = 0;
         const INBOX = 1;
-        if ((miscCfg?.defaultStartPage ?? TODAY) === INBOX) {
+        const DASHBOARD = 2;
+        const startPage = miscCfg?.defaultStartPage ?? TODAY;
+        if (startPage === INBOX) {
           return this._router.parseUrl(`/project/${INBOX_PROJECT.id}/tasks`);
+        } else if (startPage === DASHBOARD) {
+          return this._router.parseUrl('/dashboard');
         } else {
           return this._router.parseUrl(`/tag/${TODAY_TAG.id}/tasks`);
         }

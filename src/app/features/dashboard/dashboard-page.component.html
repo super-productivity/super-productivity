@@ -1,0 +1,81 @@
+<div class="dashboard-toolbar">
+  <h2>Dashboard</h2>
+  <span class="spacer"></span>
+  <button
+    mat-button
+    (click)="toggleEditMode()"
+  >
+    <mat-icon>{{ isEditMode() ? 'done' : 'edit' }}</mat-icon>
+    {{ isEditMode() ? 'Done' : 'Edit' }}
+  </button>
+  <button
+    mat-button
+    (click)="openWidgetPicker()"
+  >
+    <mat-icon>add</mat-icon>
+    Widgets
+  </button>
+</div>
+
+<div
+  class="dashboard-grid"
+  [class.edit-mode]="isEditMode()"
+  cdkDropList
+  [cdkDropListDisabled]="!isEditMode()"
+  (cdkDropListDropped)="onDrop($event)"
+>
+  @for (item of visibleItems(); track item.widgetId) {
+    <div
+      class="widget-cell"
+      [style.grid-column]="isEditMode() ? null : 'span ' + getColSpan(item.size)"
+      [class.cell-edit-mode]="isEditMode()"
+      cdkDrag
+      cdkDragLockAxis="y"
+    >
+      <dashboard-widget-wrapper
+        [label]="getWidgetLabel(item.widgetId)"
+        [icon]="getWidgetIcon(item.widgetId)"
+        [size]="item.size"
+        (sizeChange)="onSizeChange(item.widgetId, $event)"
+        (hide)="onHide(item.widgetId)"
+      >
+        @switch (item.widgetId) {
+          @case ('builtin:current-task') {
+            <current-task-widget />
+          }
+          @case ('builtin:today-summary') {
+            <today-summary-widget />
+          }
+          @case ('builtin:focus-mode') {
+            <focus-mode-widget />
+          }
+          @case ('builtin:productivity-streak') {
+            <productivity-streak-widget />
+          }
+          @case ('builtin:recent-activity') {
+            <recent-activity-widget />
+          }
+          @case ('builtin:task-list') {
+            <task-list-widget
+              [config]="item.taskListConfig"
+              (configChange)="onTaskListConfigChange($event)"
+            />
+          }
+          @case ('builtin:notes') {
+            <notes-widget />
+          }
+          @default {
+            @if (item.widgetId.startsWith('plugin:')) {
+              <plugin-dashboard-widget [pluginId]="getPluginId(item.widgetId)" />
+            }
+          }
+        }
+      </dashboard-widget-wrapper>
+    </div>
+  } @empty {
+    <div class="empty-state">
+      <mat-icon>dashboard</mat-icon>
+      <p>No widgets visible. Click "Widgets" to add some.</p>
+    </div>
+  }
+</div>

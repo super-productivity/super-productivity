@@ -5,6 +5,7 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { ProjectCfgFormKey } from '../project/project.model';
 import { KeyboardConfig } from './keyboard-config.model';
 import { TaskReminderOptionId } from '../tasks/task.model';
+import { DashboardConfig } from '../dashboard/dashboard.model';
 
 export type AppFeaturesConfig = Readonly<{
   isTimeTrackingEnabled: boolean;
@@ -20,6 +21,7 @@ export type AppFeaturesConfig = Readonly<{
   isDonatePageEnabled: boolean;
   isEnableUserProfiles: boolean;
   isHabitsEnabled: boolean;
+  isDashboardEnabled: boolean;
   isFinishDayEnabled: boolean;
 }>;
 
@@ -277,6 +279,7 @@ export type GlobalConfigState = Readonly<{
 
   sync: SyncConfig;
   dailySummaryNote?: DailySummaryNote;
+  dashboard?: DashboardConfig;
 }>;
 
 export type GlobalConfigSectionKey = keyof GlobalConfigState | 'EMPTY';
@@ -291,7 +294,8 @@ export type GlobalSectionConfig =
   | DailySummaryNote
   | SyncConfig
   | ClipboardImagesConfig
-  | TaskWidgetConfig;
+  | TaskWidgetConfig
+  | DashboardConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export interface LimitedFormlyFieldConfig<FormModel> extends Omit<

@@ -19,6 +19,7 @@ import {
   TakeABreakConfig,
   TasksConfig,
 } from '../global-config.model';
+import { DashboardConfig } from '../../dashboard/dashboard.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
@@ -176,6 +177,12 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         isEnabled,
         isEncryptionEnabled,
       },
+      dashboard: {
+        items: [
+          ...(appDataComplete.globalConfig.dashboard?.items ??
+            DEFAULT_GLOBAL_CONFIG.dashboard!.items),
+        ],
+      },
     };
   }),
 
@@ -186,6 +193,11 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       ...sectionCfg,
     },
   })),
+);
+
+export const selectDashboardConfig = createSelector(
+  selectConfigFeatureState,
+  (cfg): DashboardConfig => cfg?.dashboard ?? DEFAULT_GLOBAL_CONFIG.dashboard!,
 );
 
 export const selectTimelineWorkStartEndHours = createSelector(

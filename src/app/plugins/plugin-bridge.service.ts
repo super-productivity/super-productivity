@@ -15,6 +15,7 @@ import {
   PluginNodeScriptResult,
   PluginShortcutCfg,
   PluginSidePanelBtnCfg,
+  PluginDashboardWidgetCfg,
   Task,
 } from './plugin-api.model';
 
@@ -129,6 +130,10 @@ export class PluginBridgeService implements OnDestroy {
   private readonly _sidePanelButtons = signal<PluginSidePanelBtnCfg[]>([]);
   public readonly sidePanelButtons = this._sidePanelButtons.asReadonly();
 
+  // Track dashboard widgets registered by plugins
+  private readonly _dashboardWidgets = signal<PluginDashboardWidgetCfg[]>([]);
+  public readonly dashboardWidgets = this._dashboardWidgets.asReadonly();
+
   // Track config handlers registered by plugins (for settings button on plugin card)
   private readonly _configHandlers = new Map<string, () => void>();
 
@@ -152,6 +157,7 @@ export class PluginBridgeService implements OnDestroy {
     registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
     registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) => void;
     registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) => void;
+    registerDashboardWidget: (cfg: Omit<PluginDashboardWidgetCfg, 'pluginId'>) => void;
     registerShortcut: (cfg: PluginShortcutCfg) => void;
     showIndexHtmlAsView: () => void;
     triggerSync: () => Promise<void>;
@@ -196,6 +202,8 @@ export class PluginBridgeService implements OnDestroy {
         this._registerMenuEntry(pluginId, cfg),
       registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) =>
         this._registerSidePanelButton(pluginId, cfg),
+      registerDashboardWidget: (cfg: Omit<PluginDashboardWidgetCfg, 'pluginId'>) =>
+        this._registerDashboardWidget(pluginId, cfg),
       registerShortcut: (cfg: PluginShortcutCfg) => this._registerShortcut(pluginId, cfg),
       registerConfigHandler: (handler: () => void) =>
         this._configHandlers.set(pluginId, handler),
@@ -963,6 +971,7 @@ export class PluginBridgeService implements OnDestroy {
     this._removePluginHeaderButtons(pluginId);
     this._removePluginMenuEntries(pluginId);
     this._removePluginSidePanelButtons(pluginId);
+    this._removePluginDashboardWidgets(pluginId);
     this.unregisterPluginShortcuts(pluginId);
     this._configHandlers.delete(pluginId);
 
@@ -1135,6 +1144,38 @@ export class PluginBridgeService implements OnDestroy {
     });
   }
 
+  private _registerDashboardWidget(
+    pluginId: string,
+    cfg: Omit<PluginDashboardWidgetCfg, 'pluginId'>,
+  ): void {
+    if (!cfg.id || typeof cfg.id !== 'string') {
+      throw new Error('Dashboard widget id is required');
+    }
+    if (!cfg.label || typeof cfg.label !== 'string') {
+      throw new Error('Dashboard widget label is required');
+    }
+
+    const widget: PluginDashboardWidgetCfg = { ...cfg, pluginId };
+    const widgetKey = `plugin:${pluginId}:${cfg.id}`;
+    const current = this._dashboardWidgets();
+    const isDuplicate = current.some((w) => w.pluginId === pluginId && w.id === cfg.id);
+
+    if (isDuplicate) {
+      PluginLog.err('PluginBridge: Duplicate dashboard widget, skipping', {
+        pluginId,
+        widgetId: cfg.id,
+      });
+      return;
+    }
+
+    this._dashboardWidgets.set([...current, widget]);
+
+    PluginLog.log('PluginBridge: Dashboard widget registered', {
+      pluginId,
+      widgetKey,
+    });
+  }
+
   /**
    * Remove all side panel buttons for a specific plugin
    */
@@ -1146,6 +1187,16 @@ export class PluginBridgeService implements OnDestroy {
     this._sidePanelButtons.set(filteredButtons);
 
     PluginLog.log('PluginBridge: Side panel buttons removed for plugin', { pluginId });
+  }
+
+  private _removePluginDashboardWidgets(pluginId: string): void {
+    const currentWidgets = this._dashboardWidgets();
+    const filteredWidgets = currentWidgets.filter(
+      (widget) => widget.pluginId !== pluginId,
+    );
+    this._dashboardWidgets.set(filteredWidgets);
+
+    PluginLog.log('PluginBridge: Dashboard widgets removed for plugin', { pluginId });
   }
 
   /**

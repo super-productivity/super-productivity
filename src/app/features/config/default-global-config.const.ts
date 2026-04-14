@@ -2,6 +2,7 @@ import { environment } from '../../../environments/environment';
 
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { GlobalConfigState } from './global-config.model';
+import { DEFAULT_DASHBOARD_CONFIG } from '../dashboard/dashboard.const';
 
 const minute = 60 * 1000;
 const defaultTaskNotesTemplate = `**How can I best achieve it now?**
@@ -27,6 +28,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isDonatePageEnabled: true,
     isEnableUserProfiles: false,
     isHabitsEnabled: true,
+    isDashboardEnabled: true,
     isFinishDayEnabled: true,
   },
   localization: {
@@ -241,4 +243,5 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
       syncFolderPath: 'super-productivity',
     },
   },
+  dashboard: DEFAULT_DASHBOARD_CONFIG,
 } as const;

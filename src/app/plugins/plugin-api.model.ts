@@ -17,6 +17,8 @@ export {
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginSidePanelBtnCfg,
+  PluginDashboardWidgetCfg,
+  DashboardWidgetSize,
   // Export the new unified types
   Task,
   Project,

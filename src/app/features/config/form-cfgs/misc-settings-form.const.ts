@@ -111,6 +111,7 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         options: [
           { label: T.G.TODAY_TAG_TITLE, value: 0 },
           { label: T.G.INBOX_PROJECT_TITLE, value: 1 },
+          { label: 'Dashboard', value: 2 },
         ],
       },
     },

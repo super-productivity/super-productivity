@@ -115,6 +115,14 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       },
     },
     {
+      key: 'isDashboardEnabled',
+      type: 'slide-toggle',
+      templateOptions: {
+        label: 'Dashboard',
+        icon: 'dashboard',
+      },
+    },
+    {
       key: 'isEnableUserProfiles',
       type: 'slide-toggle',
       templateOptions: {

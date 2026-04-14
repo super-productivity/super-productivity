@@ -22,6 +22,7 @@ const BASE_FEATURES: AppFeaturesConfig = {
   isDonatePageEnabled: true,
   isEnableUserProfiles: false,
   isHabitsEnabled: false,
+  isDashboardEnabled: false,
   isFinishDayEnabled: false,
 };
 
@@ -66,6 +67,7 @@ export const ONBOARDING_PRESETS: OnboardingPreset[] = [
       isIssuesPanelEnabled: true,
       isProjectNotesEnabled: true,
       isHabitsEnabled: true,
+      isDashboardEnabled: true,
     },
   },
 ];

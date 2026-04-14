@@ -1,0 +1,114 @@
+@use '../../../styles/_globals.scss' as *;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+  padding: var(--s3);
+
+  @include mq(sm, max) {
+    padding: var(--s2);
+  }
+
+  @include mq(xs, max) {
+    padding: var(--s) var(--s-half);
+  }
+}
+
+.dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--s2);
+  gap: var(--s);
+
+  h2 {
+    margin: 0;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  @include mq(xs, max) {
+    margin-bottom: var(--s);
+  }
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s2);
+
+  // Override global .cdk-drop-list-disabled red border
+  &.cdk-drop-list-disabled {
+    border: none;
+  }
+
+  // In edit mode, single column grid so CDK DragDrop works
+  &.edit-mode {
+    grid-template-columns: 1fr;
+    gap: var(--s);
+  }
+
+  @include mq(sm, max) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--s);
+  }
+
+  @include mq(xs, max) {
+    grid-template-columns: 1fr;
+    gap: var(--s);
+  }
+}
+
+.widget-cell {
+  min-height: 100px;
+  overflow: hidden;
+
+  // On smaller screens, force all widgets to single-column span
+  @include mq(sm, max) {
+    grid-column: span 1 !important;
+  }
+
+  &.cell-edit-mode {
+    outline: 2px dashed var(--divider-color);
+    outline-offset: 2px;
+    border-radius: var(--card-border-radius, 4px);
+  }
+}
+
+.cdk-drag-preview {
+  opacity: 0.8;
+}
+
+.cdk-drag-placeholder {
+  opacity: 0.3;
+}
+
+.cdk-drag-animating {
+  transition: transform var(--transition-duration-m) cubic-bezier(0, 0, 0.2, 1);
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s8);
+  opacity: 0.5;
+  gap: var(--s2);
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+  }
+
+  @include mq(xs, max) {
+    padding: var(--s4);
+  }
+}

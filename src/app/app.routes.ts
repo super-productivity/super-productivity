@@ -44,6 +44,15 @@ export const APP_ROUTES: Routes = [
     canActivate: [FocusOverlayOpenGuard],
   },
   {
+    path: 'dashboard',
+    loadComponent: () =>
+      import('./features/dashboard/dashboard-page.component').then(
+        (m) => m.DashboardPageComponent,
+      ),
+    data: { page: 'dashboard' },
+    canActivate: [FocusOverlayOpenGuard],
+  },
+  {
     path: 'search',
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.SearchPageComponent),
