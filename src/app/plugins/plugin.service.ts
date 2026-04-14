@@ -38,7 +38,6 @@ import { issueProvidersFeature } from '../features/issue/store/issue-provider.re
 import { selectIsDominaModeConfig } from '../features/config/store/global-config.reducer';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
-import { getPluginAssetTooLargeTranslationKey } from './plugin-size-error.util';
 
 const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/yesterday-tasks-plugin',
@@ -1002,13 +1001,9 @@ export class PluginService implements OnDestroy {
       const manifestBytes = extractedFiles['manifest.json'];
       if (manifestBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
         throw new Error(
-          this._translateService.instant(
-            getPluginAssetTooLargeTranslationKey('manifest'),
-            {
-              maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-              fileSize: (manifestBytes.length / 1024).toFixed(1),
-            },
-          ),
+          this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
+            maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
+          }),
         );
       }
 
@@ -1036,7 +1031,6 @@ export class PluginService implements OnDestroy {
         throw new Error(
           this._translateService.instant(T.PLUGINS.CODE_TOO_LARGE, {
             maxSize: (MAX_PLUGIN_CODE_SIZE / 1024 / 1024).toFixed(1),
-            fileSize: (pluginCodeBytes.length / 1024 / 1024).toFixed(1),
           }),
         );
       }
@@ -1047,16 +1041,12 @@ export class PluginService implements OnDestroy {
       let indexHtml: string | null = null;
       if (manifest.iFrame && extractedFiles['index.html']) {
         const indexHtmlBytes = extractedFiles['index.html'];
-        // Validate index.html size (same as manifest for now)
+        // Reuse the manifest size limit for index.html.
         if (indexHtmlBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
           throw new Error(
-            this._translateService.instant(
-              getPluginAssetTooLargeTranslationKey('indexHtml'),
-              {
-                maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-                fileSize: (indexHtmlBytes.length / 1024).toFixed(1),
-              },
-            ),
+            this._translateService.instant(T.PLUGINS.INDEX_HTML_TOO_LARGE, {
+              maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
+            }),
           );
         }
         indexHtml = new TextDecoder().decode(indexHtmlBytes);
@@ -1066,12 +1056,11 @@ export class PluginService implements OnDestroy {
       let iconContent: string | null = null;
       if (manifest.icon && extractedFiles[manifest.icon]) {
         const iconBytes = extractedFiles[manifest.icon];
-        // Validate icon size (same as manifest for now)
+        // Reuse the manifest size limit for the SVG icon.
         if (iconBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
           throw new Error(
-            this._translateService.instant(getPluginAssetTooLargeTranslationKey('icon'), {
+            this._translateService.instant(T.PLUGINS.ICON_TOO_LARGE, {
               maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-              fileSize: (iconBytes.length / 1024).toFixed(1),
             }),
           );
         }
