@@ -87,6 +87,11 @@ h2 {
     margin: 0 calc(1.5 * var(--s));
     text-align: center;
     position: relative;
+
+    &.is-warning .time-val,
+    &.is-warning mat-icon {
+      color: var(--c-warn);
+    }
   }
 
   .controls {
@@ -104,6 +109,26 @@ h2 {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .status-warning-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-quarter);
+    margin-top: var(--s-half);
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--c-warn) 40%, transparent);
+    background: color-mix(in srgb, var(--bg-lighter) 84%, var(--c-warn) 16%);
+    color: var(--c-warn);
+    font-size: 11px;
+    line-height: 1.2;
+
+    mat-icon {
+      width: 14px;
+      height: 14px;
+      font-size: 14px;
+    }
   }
 }
 
