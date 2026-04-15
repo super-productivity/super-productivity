@@ -470,6 +470,19 @@ describe('TaskService', () => {
         jasmine.objectContaining({ type: TaskSharedActions.moveToArchive.type }),
       );
     });
+
+    it('should ignore malformed tasks without valid ids', async () => {
+      const invalidTask = { title: 'Broken task', subTasks: [] } as any;
+
+      await service.moveToArchive([invalidTask]);
+
+      expect(store.dispatch).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: TaskSharedActions.moveToArchive.type }),
+      );
+      expect(
+        archiveService.moveTasksToArchiveAndFlushArchiveIfDue,
+      ).not.toHaveBeenCalled();
+    });
   });
 
   describe('moveToProject', () => {

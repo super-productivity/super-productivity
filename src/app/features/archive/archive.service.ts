@@ -59,6 +59,53 @@ const mapTasksToArchiveFormat = (
   });
 };
 
+const isValidArchiveTaskId = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.length > 0 &&
+  value !== 'undefined' &&
+  value !== 'null';
+
+const sanitizeTasksForArchiving = (
+  tasksIn: TaskWithSubTasks[],
+  logPrefix: string,
+): TaskWithSubTasks[] => {
+  let droppedRootTasks = 0;
+  let droppedSubTasks = 0;
+
+  const sanitizedTasks = tasksIn.flatMap((task) => {
+    if (!task || !isValidArchiveTaskId(task.id)) {
+      droppedRootTasks++;
+      return [];
+    }
+
+    const subTasks = (task.subTasks || []).filter((subTask) => {
+      const isValid = !!subTask && isValidArchiveTaskId(subTask.id);
+      if (!isValid) {
+        droppedSubTasks++;
+      }
+      return isValid;
+    });
+
+    return [
+      {
+        ...task,
+        subTasks,
+      },
+    ];
+  });
+
+  if (droppedRootTasks > 0 || droppedSubTasks > 0) {
+    Log.warn(`[ArchiveService] ${logPrefix}: Dropped malformed archive payload tasks`, {
+      droppedRootTasks,
+      droppedSubTasks,
+      originalTaskCount: tasksIn.length,
+      sanitizedTaskCount: sanitizedTasks.length,
+    });
+  }
+
+  return sanitizedTasks;
+};
+
 /*
 # Considerations for flush architecture:
 ** The main purpose of flushing is mainly to reduce the amount of data that needs to be transferred over the network **
@@ -108,16 +155,18 @@ export class ArchiveService {
   // it is usually triggered every work-day once
   async moveTasksToArchiveAndFlushArchiveIfDue(tasks: TaskWithSubTasks[]): Promise<void> {
     const now = Date.now();
-    const flatTasks = flattenTasks(tasks);
+    const sanitizedTasks = sanitizeTasksForArchiving(tasks, 'moveToArchive');
+    const flatTasks = flattenTasks(sanitizedTasks);
 
     Log.log('[ArchiveService] moveTasksToArchiveAndFlushArchiveIfDue:', {
       inputTasksCount: tasks.length,
+      sanitizedTaskCount: sanitizedTasks.length,
       flatTasksCount: flatTasks.length,
       taskIds: flatTasks.map((t) => t.id),
     });
 
     if (!flatTasks.length) {
-      Log.log('[ArchiveService] No tasks to archive after flattening');
+      Log.log('[ArchiveService] No valid tasks to archive after flattening');
       return;
     }
 
@@ -267,16 +316,18 @@ export class ArchiveService {
    */
   async writeTasksToArchiveForRemoteSync(tasks: TaskWithSubTasks[]): Promise<void> {
     const now = Date.now();
-    const flatTasks = flattenTasks(tasks);
+    const sanitizedTasks = sanitizeTasksForArchiving(tasks, 'Remote sync');
+    const flatTasks = flattenTasks(sanitizedTasks);
 
     Log.log('[ArchiveService] writeTasksToArchiveForRemoteSync:', {
       inputTasksCount: tasks.length,
+      sanitizedTaskCount: sanitizedTasks.length,
       flatTasksCount: flatTasks.length,
       taskIds: flatTasks.map((t) => t.id),
     });
 
     if (!flatTasks.length) {
-      Log.log('[ArchiveService] No tasks to archive for remote sync');
+      Log.log('[ArchiveService] No valid tasks to archive for remote sync');
       return;
     }
 

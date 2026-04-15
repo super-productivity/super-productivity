@@ -342,4 +342,32 @@ describe('ArchiveService', () => {
       });
     });
   });
+
+  describe('writeTasksToArchiveForRemoteSync', () => {
+    it('should ignore malformed tasks without valid ids', async () => {
+      const invalidTask = {
+        title: 'Invalid task',
+        subTasks: [],
+      } as unknown as TaskWithSubTasks;
+
+      await service.writeTasksToArchiveForRemoteSync([invalidTask]);
+
+      expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+    });
+
+    it('should drop malformed subtasks before persisting archive data', async () => {
+      const invalidSubTask = { title: 'Invalid subtask' } as unknown as TaskWithSubTasks;
+      const parentTask = createMockTask('task-1', {
+        subTaskIds: ['sub-1'],
+        subTasks: [invalidSubTask as any],
+      });
+
+      await service.writeTasksToArchiveForRemoteSync([parentTask]);
+
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      const savedData = mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+      expect(savedData.task.ids).toEqual(['task-1']);
+      expect(Object.keys(savedData.task.entities)).toEqual(['task-1']);
+    });
+  });
 });

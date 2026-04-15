@@ -866,16 +866,49 @@ export class TaskService {
       throw new Error('moveToArchive: tasks could not be converted to array');
     }
 
+    const sanitizedTasks = tasks
+      .filter(
+        (task): task is TaskWithSubTasks =>
+          !!task &&
+          typeof task.id === 'string' &&
+          task.id.length > 0 &&
+          task.id !== 'undefined' &&
+          task.id !== 'null',
+      )
+      .map((task) => ({
+        ...task,
+        subTasks: (task.subTasks || []).filter(
+          (subTask): subTask is Task =>
+            !!subTask &&
+            typeof subTask.id === 'string' &&
+            subTask.id.length > 0 &&
+            subTask.id !== 'undefined' &&
+            subTask.id !== 'null',
+        ),
+      }));
+
+    if (sanitizedTasks.length !== tasks.length) {
+      console.warn('[TaskService] moveToArchive dropped malformed tasks', {
+        originalCount: tasks.length,
+        sanitizedCount: sanitizedTasks.length,
+      });
+    }
+
+    if (!sanitizedTasks.length) {
+      TaskLog.log('[TaskService] No valid tasks to archive after sanitization');
+      return;
+    }
+
     TaskLog.log('[TaskService] moveToArchive called with:', {
-      count: tasks.length,
-      taskIds: tasks.map((t) => t?.id || 'undefined'),
-      tasksType: typeof tasks,
-      isArray: Array.isArray(tasks),
+      count: sanitizedTasks.length,
+      taskIds: sanitizedTasks.map((t) => t.id),
+      tasksType: typeof sanitizedTasks,
+      isArray: Array.isArray(sanitizedTasks),
     });
 
     // NOTE: we only update real parents since otherwise we move sub-tasks without their parent into the archive
-    const subTasks = tasks.filter((t) => t?.parentId);
-    const parentTasks = tasks.filter((t) => t && !t.parentId);
+    const subTasks = sanitizedTasks.filter((t) => t?.parentId);
+    const parentTasks = sanitizedTasks.filter((t) => t && !t.parentId);
 
     TaskLog.log('[TaskService] Filtered tasks:', {
       parentTasks: parentTasks.map((t) => t.id),

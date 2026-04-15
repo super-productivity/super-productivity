@@ -670,6 +670,12 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
   return data;
 };
 
+const _isValidEntityId = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.length > 0 &&
+  value !== 'undefined' &&
+  value !== 'null';
+
 const _resetEntityIdsFromObjects = <T extends AppBaseDataEntityLikeStates>(
   data: T,
 ): T => {
@@ -681,12 +687,27 @@ const _resetEntityIdsFromObjects = <T extends AppBaseDataEntityLikeStates>(
     } as T;
   }
 
+  const sanitizedEntities = Object.entries(data.entities).reduce(
+    (acc, [key, entity]) => {
+      if (!entity || typeof entity !== 'object') {
+        return acc;
+      }
+
+      const entityId = (entity as { id?: unknown }).id;
+      if (!_isValidEntityId(entityId) || !_isValidEntityId(key)) {
+        return acc;
+      }
+
+      acc[entityId] = entity;
+      return acc;
+    },
+    {} as AppBaseDataEntityLikeStates['entities'],
+  );
+
   return {
     ...data,
-    entities: data.entities || {},
-    ids: data.entities
-      ? Object.keys(data.entities).filter((id) => !!data.entities[id])
-      : [],
+    entities: sanitizedEntities,
+    ids: Object.keys(sanitizedEntities),
   };
 };
 
