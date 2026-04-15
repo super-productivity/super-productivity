@@ -89,6 +89,23 @@
       </mat-form-field>
     }
 
+    @if (
+      selectedTime &&
+      (scheduleWarnings().hasOverlap || scheduleWarnings().isOutsideWorkHours)
+    ) {
+      <div class="schedule-warning">
+        <mat-icon>warning_amber</mat-icon>
+        <div class="schedule-warning-text">
+          @if (scheduleWarnings().hasOverlap) {
+            <div>Overlaps with another scheduled task.</div>
+          }
+          @if (scheduleWarnings().isOutsideWorkHours) {
+            <div>Falls outside your configured work hours.</div>
+          }
+        </div>
+      </div>
+    }
+
     <mat-dialog-actions align="start">
       <div class="schedule-actions">
         @if (data.task && (data.task.dueWithTime || plannedDayForTask)) {
