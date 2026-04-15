@@ -1,24 +1,42 @@
+import { spawn } from 'child_process';
 import { app } from 'electron';
+import { parseDesktopCommandFromArgv } from './desktop-command-parser';
 import { PROTOCOL_PREFIX } from './protocol-handler';
 import { startApp } from './start-app';
 
-const IS_MAC = process.platform === 'darwin';
+const BACKGROUND_CLI_ENV_FLAG = 'SP_BACKGROUND_CLI_LAUNCH';
+const parsedDesktopCommand = parseDesktopCommandFromArgv(process.argv);
+const hasProtocolUrl = process.argv.some((arg) => arg.startsWith(PROTOCOL_PREFIX));
+const shouldLaunchDetachedInBackground =
+  !process.env[BACKGROUND_CLI_ENV_FLAG] &&
+  (parsedDesktopCommand.kind === 'command' || hasProtocolUrl);
 
-if (!IS_MAC) {
-  // make it a single instance by closing other instances but allow for dev mode
-  // because of https://github.com/electron/electron/issues/14094
-  const isLockObtained = app.requestSingleInstanceLock();
-  if (!isLockObtained) {
-    const hasProtocolUrl = process.argv.some((arg) => arg.startsWith(PROTOCOL_PREFIX));
-    if (!hasProtocolUrl) {
-      console.log('Another instance is already running. Exiting.');
-    }
-    // Force immediate exit without waiting for graceful shutdown
-    process.exit(0);
-  } else {
-    console.log('Start app...');
-    startApp();
+if (shouldLaunchDetachedInBackground) {
+  const child = spawn(process.execPath, process.argv.slice(1), {
+    detached: true,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      [BACKGROUND_CLI_ENV_FLAG]: '1',
+    },
+  });
+  child.unref();
+  process.exit(0);
+}
+
+// Enforce single-instance behavior on all desktop platforms.
+// macOS Finder launches are already single-instance, but CLI invocations still need this.
+const isLockObtained = app.requestSingleInstanceLock();
+if (!isLockObtained) {
+  if (parsedDesktopCommand.kind === 'error') {
+    console.error(parsedDesktopCommand.error);
+    process.exit(1);
   }
+  process.exit(0);
 } else {
+  if (parsedDesktopCommand.kind === 'error' && !hasProtocolUrl) {
+    console.error(parsedDesktopCommand.error);
+    process.exit(1);
+  }
   startApp();
 }
