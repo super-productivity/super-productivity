@@ -244,4 +244,22 @@ describe('LayoutService', () => {
       }, 100);
     });
   });
+
+  describe('trigger signals', () => {
+    it('should increment openTaskViewCustomizerTrigger when opening customizer menu', () => {
+      expect(service.openTaskViewCustomizerTrigger()).toBe(0);
+
+      service.openTaskViewCustomizerMenu();
+
+      expect(service.openTaskViewCustomizerTrigger()).toBe(1);
+    });
+
+    it('should increment toggleSideNavModeTrigger when toggling sidenav mode', () => {
+      expect(service.toggleSideNavModeTrigger()).toBe(0);
+
+      service.toggleSideNavMode();
+
+      expect(service.toggleSideNavModeTrigger()).toBe(1);
+    });
+  });
 });

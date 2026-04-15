@@ -124,6 +124,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     toggleTaskViewCustomizerPanel: 'C',
     toggleIssuePanel: 'P',
     focusSideNav: 'Shift+D',
+    toggleSideNav: 'Ctrl+/',
     showHelp: '?',
     showSearchBar: 'Shift+F',
     toggleBacklog: 'B',

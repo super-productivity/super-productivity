@@ -46,6 +46,15 @@ export class LayoutService {
   private _focusSideNavTrigger = signal(0);
   readonly focusSideNavTrigger = this._focusSideNavTrigger.asReadonly();
 
+  // Signal to trigger task view customizer menu opening
+  private _openTaskViewCustomizerTrigger = signal(0);
+  readonly openTaskViewCustomizerTrigger =
+    this._openTaskViewCustomizerTrigger.asReadonly();
+
+  // Signal to trigger desktop sidenav expand/collapse
+  private _toggleSideNavModeTrigger = signal(0);
+  readonly toggleSideNavModeTrigger = this._toggleSideNavModeTrigger.asReadonly();
+
   // Observable versions (needed for shepherd)
   readonly isShowAddTaskBar$: Observable<boolean> = this._store$.pipe(
     select(selectIsShowAddTaskBar),
@@ -203,6 +212,10 @@ export class LayoutService {
     this._store$.dispatch(toggleTaskViewCustomizerPanel());
   }
 
+  openTaskViewCustomizerMenu(): void {
+    this._openTaskViewCustomizerTrigger.update((value) => value + 1);
+  }
+
   hideTaskViewCustomizerPanel(): void {
     this._store$.dispatch(hideTaskViewCustomizerPanel());
   }
@@ -210,6 +223,10 @@ export class LayoutService {
   focusSideNav(): void {
     // Trigger the focus signal - components listening to this signal will handle the focus
     this._focusSideNavTrigger.update((value) => value + 1);
+  }
+
+  toggleSideNavMode(): void {
+    this._toggleSideNavModeTrigger.update((value) => value + 1);
   }
 
   // Schedule Day Panel controls

@@ -1,8 +1,16 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatMenuTrigger } from '@angular/material/menu';
 import { TranslateModule } from '@ngx-translate/core';
 import { LayoutService } from '../../layout/layout.service';
 import { TaskViewCustomizerService } from '../../../features/task-view-customizer/task-view-customizer.service';
@@ -68,6 +76,7 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 
         <!-- Task View Customizer -->
         <button
+          #customizerMenuTrigger="matMenuTrigger"
           mat-mini-fab
           color=""
           [class.isCustomized]="taskViewCustomizerService.isCustomized()"
@@ -171,6 +180,9 @@ export class MobileSidePanelMenuComponent {
   readonly isShowTaskViewCustomizerPanel = computed(() =>
     this.layoutService.isShowTaskViewCustomizerPanel(),
   );
+  readonly customizerMenuTrigger = viewChild('customizerMenuTrigger', {
+    read: MatMenuTrigger,
+  });
 
   // Computed signal for active panel
   readonly hasActivePanel = computed(() => {
@@ -181,6 +193,16 @@ export class MobileSidePanelMenuComponent {
       (this.activePluginId() && this.isShowPluginPanel())
     );
   });
+
+  constructor() {
+    effect(() => {
+      const trigger = this.layoutService.openTaskViewCustomizerTrigger();
+      if (trigger > 0 && this.isWorkViewPage()) {
+        this.isShowMobileMenu.set(true);
+        this.customizerMenuTrigger()?.openMenu();
+      }
+    });
+  }
 
   toggleMenu(): void {
     this.isShowMobileMenu.update((v) => !v);

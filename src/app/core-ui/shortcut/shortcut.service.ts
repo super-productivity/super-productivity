@@ -152,6 +152,9 @@ export class ShortcutService {
     } else if (checkKeyCombo(ev, keys.focusSideNav)) {
       this._focusSideNav();
       ev.preventDefault();
+    } else if (checkKeyCombo(ev, keys.toggleSideNav)) {
+      this._layoutService.toggleSideNavMode();
+      ev.preventDefault();
     } else if (checkKeyCombo(ev, keys.addNewTask)) {
       this._layoutService.showAddTaskBar();
       ev.preventDefault();
@@ -186,7 +189,7 @@ export class ShortcutService {
       this._layoutService.toggleNotes();
     } else if (checkKeyCombo(ev, keys.toggleTaskViewCustomizerPanel)) {
       ev.preventDefault();
-      this._layoutService.toggleTaskViewCustomizerPanel();
+      this._layoutService.openTaskViewCustomizerMenu();
     } else if (checkKeyCombo(ev, keys.toggleIssuePanel)) {
       ev.preventDefault();
       this._layoutService.toggleAddTaskPanel();

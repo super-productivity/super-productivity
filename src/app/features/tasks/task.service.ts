@@ -109,6 +109,10 @@ import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-bloc
   providedIn: 'root',
 })
 export class TaskService {
+  private static readonly _FIRST_UNDONE_TASK_SELECTOR =
+    'task-list[data-task-focus-scope="undone"] task';
+  private static readonly _FIRST_TASK_SELECTOR = 'task';
+
   private readonly _store = inject<Store<RootState>>(Store);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _imexMetaService = inject(ImexViewService);
@@ -842,10 +846,32 @@ export class TaskService {
   }
 
   focusFirstTaskIfVisible(): void {
-    const tEl = document.getElementsByTagName('task');
-    if (tEl && tEl[0]) {
-      (tEl[0] as HTMLElement).focus();
+    const preferredTaskEl = this._getFirstVisibleTaskElement(
+      TaskService._FIRST_UNDONE_TASK_SELECTOR,
+    );
+    const fallbackTaskEl = this._getFirstVisibleTaskElement(
+      TaskService._FIRST_TASK_SELECTOR,
+    );
+    const taskEl = preferredTaskEl ?? fallbackTaskEl;
+
+    if (taskEl) {
+      taskEl.focus();
     }
+  }
+
+  private _getFirstVisibleTaskElement(selector: string): HTMLElement | null {
+    const elements = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+    return elements.find((el) => this._isVisible(el)) ?? null;
+  }
+
+  private _isVisible(el: HTMLElement): boolean {
+    const styles = window.getComputedStyle(el);
+    return (
+      styles.display !== 'none' &&
+      styles.visibility !== 'hidden' &&
+      styles.opacity !== '0' &&
+      el.getClientRects().length > 0
+    );
   }
 
   async moveToArchive(tasks: TaskWithSubTasks | TaskWithSubTasks[]): Promise<void> {

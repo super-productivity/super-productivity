@@ -836,6 +836,41 @@ describe('TaskService', () => {
     });
   });
 
+  describe('focusFirstTaskIfVisible', () => {
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('should focus the first undone task before overdue tasks', () => {
+      const undoneList = document.createElement('task-list');
+      undoneList.setAttribute('data-task-focus-scope', 'undone');
+      const undoneTask = document.createElement('task');
+      const overdueTask = document.createElement('task');
+
+      spyOn(undoneTask, 'focus');
+      spyOn(overdueTask, 'focus');
+
+      undoneList.appendChild(undoneTask);
+      document.body.appendChild(undoneList);
+      document.body.appendChild(overdueTask);
+
+      service.focusFirstTaskIfVisible();
+
+      expect(undoneTask.focus).toHaveBeenCalled();
+      expect(overdueTask.focus).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to the first available task when there are no undone tasks', () => {
+      const overdueTask = document.createElement('task');
+      spyOn(overdueTask, 'focus');
+      document.body.appendChild(overdueTask);
+
+      service.focusFirstTaskIfVisible();
+
+      expect(overdueTask.focus).toHaveBeenCalled();
+    });
+  });
+
   // Note: convertToMainTask requires complex selector mocking that doesn't work well
   // with the current test setup. It's better tested via integration tests.
 });

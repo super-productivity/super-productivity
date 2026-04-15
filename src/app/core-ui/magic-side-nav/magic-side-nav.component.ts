@@ -175,6 +175,13 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       }
     });
 
+    effect(() => {
+      const trigger = this._layoutService.toggleSideNavModeTrigger();
+      if (trigger > 0 && !this.isMobile()) {
+        this.toggleSideNavMode();
+      }
+    });
+
     const resizeListener = (): void => this._checkScreenSize();
     window.addEventListener('resize', resizeListener);
     this._destroyRef.onDestroy(() => {
@@ -529,18 +536,6 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       return [];
     }
 
-    // Get the sidenav toggle button first (if visible)
-    const toggleButton = nav.querySelector('.mode-toggle') as HTMLElement;
-    const focusableElements: HTMLElement[] = [];
-
-    if (toggleButton) {
-      const styles = window.getComputedStyle(toggleButton);
-      if (styles.display !== 'none' && styles.visibility !== 'hidden') {
-        toggleButton.setAttribute('tabindex', '0');
-        focusableElements.push(toggleButton);
-      }
-    }
-
     // Get all nav-link elements (these are the actual clickable items)
     // Also get any mat-menu-item elements which are used for nav items
     const selector = '.nav-link, [mat-menu-item]';
@@ -549,7 +544,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
     // Filter to only get elements within the nav-list
     const navList = nav.querySelector('.nav-list');
     if (!navList) {
-      return focusableElements; // Return just the toggle if no nav list
+      return [];
     }
 
     const navListElements = allElements.filter((el) => {
@@ -580,10 +575,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       }
     });
 
-    // Combine toggle button (if present) with nav list elements
-    const allFocusable = [...focusableElements, ...navListElements];
-
-    return allFocusable;
+    return navListElements;
   }
 
   private _handleEscapeKey(event: KeyboardEvent): void {

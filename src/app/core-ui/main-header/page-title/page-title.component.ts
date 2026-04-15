@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  viewChild,
+} from '@angular/core';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { MatRipple } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -16,6 +23,7 @@ import { TaskViewCustomizerService } from '../../../features/task-view-customize
 import { TaskViewCustomizerPanelComponent } from '../../../features/task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
+import { LayoutService } from '../../layout/layout.service';
 
 @Component({
   selector: 'page-title',
@@ -55,6 +63,7 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
           </button>
           @if (isWorkViewPage()) {
             <button
+              #customizerMenuTrigger="matMenuTrigger"
               class="task-filter-btn"
               [class.isCustomized]="taskViewCustomizerService.isCustomized()"
               [matMenuTriggerFor]="customizerPanel.menu"
@@ -173,8 +182,21 @@ export class PageTitleComponent {
   readonly taskViewCustomizerService = inject(TaskViewCustomizerService);
   private readonly _configService = inject(GlobalConfigService);
   private _translateService = inject(TranslateService);
+  private readonly _layoutService = inject(LayoutService);
+  readonly customizerMenuTrigger = viewChild('customizerMenuTrigger', {
+    read: MatMenuTrigger,
+  });
 
   readonly T = T;
+
+  constructor() {
+    effect(() => {
+      const trigger = this._layoutService.openTaskViewCustomizerTrigger();
+      if (trigger > 0 && this.isWorkViewPage()) {
+        this.customizerMenuTrigger()?.openMenu();
+      }
+    });
+  }
 
   // Get data directly from services instead of inputs
   activeWorkContextTitle = toSignal(this._workContextService.activeWorkContextTitle$);
