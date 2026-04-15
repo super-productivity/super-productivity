@@ -390,6 +390,14 @@ done-toggle {
   }
 }
 
+:host.hasTimeConflict {
+  .schedule-btn mat-icon,
+  .schedule-btn .time-badge {
+    color: var(--c-warn);
+    border-color: var(--c-warn);
+  }
+}
+
 .deadline-btn {
   position: relative;
 
@@ -422,6 +430,27 @@ done-toggle {
 
   ::ng-deep span {
     font-size: 10px;
+  }
+}
+
+.task-warning-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-quarter);
+  margin: 0 0 var(--s-half) 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--c-warn) 40%, transparent);
+  background: color-mix(in srgb, var(--bg-lighter) 86%, var(--c-warn) 14%);
+  color: var(--c-warn);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+
+  mat-icon {
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
   }
 }
 

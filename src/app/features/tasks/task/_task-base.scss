@@ -161,6 +161,15 @@
     box-shadow: var(--task-current-shadow);
   }
 
+  :host.hasTimeConflict .inner-wrapper > & {
+    border-color: var(--palette-warn-300);
+    border-width: 1px;
+    border-style: solid;
+    box-shadow:
+      inset 3px 0 0 var(--palette-warn-500),
+      var(--task-shadow);
+  }
+
   :host:first-child .inner-wrapper > & {
     border-top-left-radius: var(--task-border-radius);
     border-top-right-radius: var(--task-border-radius);
