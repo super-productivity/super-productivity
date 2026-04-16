@@ -25,4 +25,10 @@ export interface CalendarIntegrationEvent {
    * Used to determine if event supports CRUD operations (plugin providers) vs read-only (iCal).
    */
   issueProviderKey: string;
+  /**
+   * Precise due-with-time timestamp (ms). When set, the task created from this event
+   * will be scheduled at this time instead of just being assigned a due day.
+   * For plugin calendar events, this is passed through from PluginSearchResult.dueWithTime.
+   */
+  dueWithTime?: number;
 }
