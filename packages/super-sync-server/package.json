@@ -41,9 +41,9 @@
     "@sp/shared-schema": "*",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
-    "fastify": "^5.8.1",
+    "fastify": "^5.8.5",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^8.0.4",
+    "nodemailer": "^8.0.5",
     "uuidv7": "^1.1.0",
     "zod": "^4.3.5"
   },
