@@ -20,6 +20,9 @@ import { SnackService } from '../../core/snack/snack.service';
 import { take } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { PluginHttpService } from '../../plugins/issue-provider/plugin-http.service';
+import { IssueProviderPluginType } from '../issue/issue.model';
 
 describe('CalendarIntegrationService', () => {
   let service: CalendarIntegrationService;
@@ -1503,5 +1506,86 @@ END:VCALENDAR`;
 
       discardPeriodicTasks();
     }));
+  });
+
+  // Regression guard for #7238: dueWithTime was dropped during the PluginSearchResult →
+  // CalendarIntegrationEvent conversion, causing tasks created from plugin calendar events
+  // with a precise start time to fall back to dueDay instead of addAndSchedule().
+  describe('_fetchPluginCalendarEvents (plugin → event mapping)', () => {
+    it('should propagate dueWithTime from PluginSearchResult to CalendarIntegrationEvent', async () => {
+      const mockPluginProvider = {
+        id: 'plugin-provider-id',
+        issueProviderKey: 'plugin:my-calendar',
+        pluginConfig: { apiKey: 'x' },
+      } as unknown as IssueProviderPluginType;
+
+      const pluginResults = [
+        {
+          id: 'evt-with-time',
+          title: 'Timed event',
+          start: 1701700000000,
+          dueWithTime: 1701700000000,
+          duration: 3600000,
+        },
+        {
+          id: 'evt-without-time',
+          title: 'All-day event',
+          start: 1701700000000,
+          duration: 0,
+          isAllDay: true,
+        },
+        {
+          // Must be filtered out (no start)
+          id: 'evt-no-start',
+          title: 'No start',
+        },
+      ];
+
+      const mockRegistry = {
+        getProvider: jasmine.createSpy('getProvider').and.returnValue({
+          definition: {
+            getNewIssuesForBacklog: jasmine
+              .createSpy('getNewIssuesForBacklog')
+              .and.returnValue(Promise.resolve(pluginResults)),
+            getHeaders: jasmine.createSpy('getHeaders').and.returnValue({}),
+          },
+          allowPrivateNetwork: false,
+        }),
+      };
+      const mockPluginHttp = {
+        createHttpHelper: jasmine.createSpy('createHttpHelper').and.returnValue({}),
+      };
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [HttpClientTestingModule],
+        providers: [
+          CalendarIntegrationService,
+          provideMockStore({
+            selectors: [
+              { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
+              { selector: selectAllCalendarTaskEventIds, value: [] },
+            ],
+          }),
+          { provide: SnackService, useValue: mockSnackService },
+          { provide: PluginIssueProviderRegistryService, useValue: mockRegistry },
+          { provide: PluginHttpService, useValue: mockPluginHttp },
+        ],
+      });
+
+      const freshService = TestBed.inject(CalendarIntegrationService);
+      const events = await (freshService as any)._fetchPluginCalendarEvents(
+        mockPluginProvider,
+      );
+
+      expect(events.length).toBe(2);
+      const timed = events.find((e: any) => e.id === 'evt-with-time');
+      const allDay = events.find((e: any) => e.id === 'evt-without-time');
+      expect(timed).toBeDefined();
+      expect(timed.dueWithTime).toBe(1701700000000);
+      expect(allDay).toBeDefined();
+      expect(allDay.dueWithTime).toBeUndefined();
+    });
   });
 });

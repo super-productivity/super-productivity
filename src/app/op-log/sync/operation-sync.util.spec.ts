@@ -47,6 +47,40 @@ describe('operation-sync utility', () => {
       } as unknown as SyncProviderBase<SyncProviderId>;
       expect(isFileBasedProvider(provider)).toBeFalse();
     });
+
+    // Regression guard for #7242 (Nextcloud was silently missing from FILE_BASED_PROVIDER_IDS,
+    // causing WrappedProviderService to return null and sync to no-op). When a new
+    // SyncProviderId is added, it must be explicitly classified below — the `unionCoversEnum`
+    // check will fail otherwise, forcing the author to decide which bucket it belongs to.
+    it('should classify every SyncProviderId member as file-based or non-file-based', () => {
+      const KNOWN_FILE_BASED: ReadonlySet<SyncProviderId> = new Set([
+        SyncProviderId.Dropbox,
+        SyncProviderId.WebDAV,
+        SyncProviderId.LocalFile,
+        SyncProviderId.Nextcloud,
+      ]);
+      const KNOWN_NON_FILE_BASED: ReadonlySet<SyncProviderId> = new Set([
+        SyncProviderId.SuperSync,
+      ]);
+
+      const allIds = Object.values(SyncProviderId) as SyncProviderId[];
+      const unclassified = allIds.filter(
+        (id) => !KNOWN_FILE_BASED.has(id) && !KNOWN_NON_FILE_BASED.has(id),
+      );
+      expect(unclassified)
+        .withContext(
+          'New SyncProviderId members must be added to KNOWN_FILE_BASED or KNOWN_NON_FILE_BASED ' +
+            'and wired into FILE_BASED_PROVIDER_IDS (see #7242).',
+        )
+        .toEqual([]);
+
+      for (const id of allIds) {
+        const provider = { id } as unknown as SyncProviderBase<SyncProviderId>;
+        expect(isFileBasedProvider(provider))
+          .withContext(`isFileBasedProvider mismatch for SyncProviderId.${id}`)
+          .toBe(KNOWN_FILE_BASED.has(id));
+      }
+    });
   });
 
   describe('isOperationSyncCapable', () => {
