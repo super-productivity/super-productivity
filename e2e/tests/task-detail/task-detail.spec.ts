@@ -14,7 +14,7 @@ test.describe('Task detail', () => {
 
     await workViewPage.addTask('task');
     await page.getByText(/task/).first().hover();
-    await page.getByRole('button', { name: 'Show/Hide additional info' }).click();
+    await page.getByRole('button', { name: 'Show/hide task panel' }).click();
   };
 
   const addAndOpenCompleteTask = async (
