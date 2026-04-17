@@ -11,29 +11,6 @@ export class DateService {
   }
 
   /**
-   * Logical "now" — Date.now() adjusted for the start-of-next-day offset.
-   * Use when the question is "what day does this moment belong to?".
-   * For wall-clock durations or display formatting, keep using Date.now().
-   */
-  getNow(): number {
-    return Date.now() - this.startOfNextDayDiff;
-  }
-
-  getTodayDate(): Date {
-    return new Date(this.getNow());
-  }
-
-  getTomorrowMs(): number {
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-    return this.getNow() + ONE_DAY_MS;
-  }
-
-  /** Read-only accessor for pure utilities that need the raw offset. */
-  getStartOfNextDayDiffMs(): number {
-    return this.startOfNextDayDiff;
-  }
-
-  /**
    * Returns today's date string with offset applied.
    * NOTE: When a date argument is provided, the offset is NOT applied to it —
    * the caller is responsible for adjusting the date if needed.
