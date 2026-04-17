@@ -107,7 +107,9 @@ describe('DateService — logical clock helpers', () => {
     expect(service.getLogicalTomorrowMs()).toBe(service.getLogicalNowMs() + ONE_DAY);
   });
 
-  it('getLogicalTomorrowMs() across a spring-forward DST boundary still advances the UTC date by one day', () => {
+  it('getLogicalTomorrowMs() advances the UTC date by one day (+24h, independent of DST)', () => {
+    // Documents that the API is "wall-clock +24h", not "same local time next calendar day".
+    // Across a DST boundary the local hour may shift by ±1h, but the UTC date always advances by one.
     service.setStartOfNextDayDiff(0);
     jasmine.clock().mockDate(new Date('2026-03-08T09:30:00Z'));
     const tomorrow = new Date(service.getLogicalTomorrowMs());
