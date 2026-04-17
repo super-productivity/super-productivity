@@ -7,6 +7,8 @@ import {
 } from '../boards.model';
 import { boardsReducer, BoardsState, deduplicatePanelIds } from './boards.reducer';
 import { BoardsActions } from './boards.actions';
+import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { AppDataComplete } from '../../../op-log/model/model-config';
 
 const makePanel = (overrides: Partial<BoardPanelCfg> = {}): BoardPanelCfg => ({
   id: 'panel-default',
@@ -163,5 +165,72 @@ describe('deduplicatePanelIds', () => {
     // All IDs should be unique
     const allIds = result.boardCfgs.flatMap((b) => b.panels.map((p) => p.id));
     expect(new Set(allIds).size).toBe(allIds.length);
+  });
+});
+
+describe('Boards Reducer - panel cfg sanitization', () => {
+  it('migrates legacy sortByDue on loadAllData', () => {
+    const stored: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'b1',
+          panels: [makePanel({ id: 'p1', sortByDue: 'asc' } as Partial<BoardPanelCfg>)],
+        }),
+      ],
+    };
+    const appDataComplete = { boards: stored } as unknown as AppDataComplete;
+
+    const result = boardsReducer({ boardCfgs: [] }, loadAllData({ appDataComplete }));
+
+    const panel = result.boardCfgs[0].panels[0];
+    expect(panel.sortBy).toBe('dueDate');
+    expect(panel.sortDir).toBe('asc');
+    expect('sortByDue' in panel).toBe(false);
+  });
+
+  it('scrubs null sortBy/match-mode fields in updateBoard', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'b1',
+          panels: [makePanel({ id: 'p1' })],
+        }),
+      ],
+    };
+
+    const updates = {
+      panels: [
+        makePanel({
+          id: 'p1',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          sortBy: null as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          sortDir: null as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          includedTagsMatch: null as any,
+        }),
+      ],
+    };
+
+    const result = boardsReducer(state, BoardsActions.updateBoard({ id: 'b1', updates }));
+
+    const panel = result.boardCfgs[0].panels[0];
+    expect('sortBy' in panel).toBe(false);
+    expect('sortDir' in panel).toBe(false);
+    expect('includedTagsMatch' in panel).toBe(false);
+  });
+
+  it('scrubs legacy sortByDue on addBoard', () => {
+    const board = makeBoard({
+      id: 'new',
+      panels: [makePanel({ id: 'p1', sortByDue: 'desc' } as Partial<BoardPanelCfg>)],
+    });
+
+    const result = boardsReducer({ boardCfgs: [] }, BoardsActions.addBoard({ board }));
+
+    const panel = result.boardCfgs[0].panels[0];
+    expect(panel.sortBy).toBe('dueDate');
+    expect(panel.sortDir).toBe('desc');
+    expect('sortByDue' in panel).toBe(false);
   });
 });

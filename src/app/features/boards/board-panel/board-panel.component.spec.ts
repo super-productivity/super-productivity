@@ -296,3 +296,314 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
     expect(tasks[0].id).toBe(hiddenProjectBacklogTaskId);
   });
 });
+
+describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', () => {
+  let component: BoardPanelComponent;
+  let fixture: ComponentFixture<BoardPanelComponent>;
+  let actions$: ReplaySubject<any>;
+
+  const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
+    ({
+      id: overrides.id || 't',
+      title: 'Task',
+      projectId: 'p1',
+      timeSpentOnDay: {},
+      attachments: [],
+      timeEstimate: 0,
+      timeSpent: 0,
+      isDone: false,
+      tagIds: [],
+      created: Date.now(),
+      subTaskIds: [],
+      ...overrides,
+    }) as TaskCopy;
+
+  const setup = async (tasks: TaskCopy[]): Promise<void> => {
+    actions$ = new ReplaySubject(1);
+    const storeMock = {
+      select: (selectorFn: any) => {
+        if (selectorFn === selectUnarchivedProjects)
+          return of([{ id: 'p1', backlogTaskIds: [] }]);
+        if (selectorFn === selectAllTasksWithoutHiddenProjects) return of(tasks);
+        return of([]);
+      },
+      dispatch: jasmine.createSpy('dispatch'),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [
+        BoardPanelComponent,
+        TranslateModule.forRoot({
+          loader: { provide: TranslateLoader, useClass: TranslateNoOpLoader },
+        }),
+      ],
+      providers: [
+        provideMockStore({}),
+        provideMockActions(() => actions$),
+        { provide: Store, useValue: storeMock },
+        { provide: TaskService, useValue: { currentTaskId: signal(null) } },
+        { provide: MatDialog, useValue: {} },
+        { provide: WorkContextService, useValue: {} },
+        { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+      ],
+    })
+      .overrideComponent(PlannerTaskComponent, {
+        set: { template: '<div>Mock Task</div>', inputs: ['task'] },
+      })
+      .overrideComponent(AddTaskInlineComponent, {
+        set: { template: '<div>Mock Add Task</div>' },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(BoardPanelComponent);
+    component = fixture.componentInstance;
+  };
+
+  describe('includedTagsMatch', () => {
+    it('defaults to "all" — task must have every required tag', async () => {
+      await setup([
+        mkTask({ id: 'hasBoth', tagIds: ['a', 'b'] }),
+        mkTask({ id: 'hasOne', tagIds: ['a'] }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: ['a', 'b'],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tasks().map((t) => t.id)).toEqual(['hasBoth']);
+    });
+
+    it('"any" admits a task that matches a single required tag', async () => {
+      await setup([
+        mkTask({ id: 'hasA', tagIds: ['a'] }),
+        mkTask({ id: 'hasB', tagIds: ['b'] }),
+        mkTask({ id: 'hasNone', tagIds: ['c'] }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: ['a', 'b'],
+        includedTagsMatch: 'any',
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      const ids = component.tasks().map((t) => t.id);
+      expect(ids).toContain('hasA');
+      expect(ids).toContain('hasB');
+      expect(ids).not.toContain('hasNone');
+    });
+  });
+
+  describe('excludedTagsMatch', () => {
+    it('defaults to "any" — any excluded tag disqualifies', async () => {
+      await setup([
+        mkTask({ id: 'keep', tagIds: ['a'] }),
+        mkTask({ id: 'drop', tagIds: ['x'] }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: ['x', 'y'],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tasks().map((t) => t.id)).toEqual(['keep']);
+    });
+
+    it('"all" excludes only tasks carrying every excluded tag', async () => {
+      await setup([
+        mkTask({ id: 'some', tagIds: ['x'] }),
+        mkTask({ id: 'all', tagIds: ['x', 'y'] }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: ['x', 'y'],
+        excludedTagsMatch: 'all',
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tasks().map((t) => t.id)).toEqual(['some']);
+    });
+  });
+
+  describe('sortBy', () => {
+    it('sorts by title ascending', async () => {
+      await setup([
+        mkTask({ id: 'c', title: 'Charlie' }),
+        mkTask({ id: 'a', title: 'Alpha' }),
+        mkTask({ id: 'b', title: 'Bravo' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+        sortBy: 'title',
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tasks().map((t) => t.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('sorts by timeEstimate descending', async () => {
+      await setup([
+        mkTask({ id: 'small', timeEstimate: 100 }),
+        mkTask({ id: 'big', timeEstimate: 500 }),
+        mkTask({ id: 'mid', timeEstimate: 300 }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+        sortBy: 'timeEstimate',
+        sortDir: 'desc',
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tasks().map((t) => t.id)).toEqual(['big', 'mid', 'small']);
+    });
+  });
+
+  describe('isManualOrder', () => {
+    it('is true when sortBy is absent', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.isManualOrder()).toBe(true);
+    });
+
+    it('is false when sortBy is set', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+        sortBy: 'title',
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.isManualOrder()).toBe(false);
+    });
+  });
+
+  describe('tagsToAddForInlineCreate', () => {
+    it('returns all required tags in default (all) mode', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: ['a', 'b'],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tagsToAddForInlineCreate()).toEqual(['a', 'b']);
+    });
+
+    it('returns only the first required tag in "any" mode', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: ['a', 'b'],
+        includedTagsMatch: 'any',
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tagsToAddForInlineCreate()).toEqual(['a']);
+    });
+  });
+
+  describe('tagsToRemoveForInlineCreate', () => {
+    it('returns all excluded tags in default (any) mode', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: ['x', 'y'],
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tagsToRemoveForInlineCreate()).toEqual(['x', 'y']);
+    });
+
+    it('returns [] in "all" mode — avoids stripping tags the user types', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: ['x', 'y'],
+        excludedTagsMatch: 'all',
+        taskDoneState: 1,
+        scheduledState: 1,
+        isParentTasksOnly: false,
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tagsToRemoveForInlineCreate()).toEqual([]);
+    });
+  });
+});
