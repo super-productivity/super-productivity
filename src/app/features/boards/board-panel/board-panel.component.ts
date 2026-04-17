@@ -14,6 +14,7 @@ import {
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
 } from '../boards.model';
+import { buildComparator } from '../boards.util';
 import { select, Store } from '@ngrx/store';
 import {
   selectAllTasksWithoutHiddenProjects,
@@ -103,12 +104,36 @@ export class BoardPanelComponent {
     this.tasks().reduce((acc, task) => acc + (task.timeEstimate || 0), 0),
   );
 
+  isManualOrder = computed(() => !this.panelCfg().sortBy);
+
+  // Tags to auto-apply on a new task created via the inline-add row.
+  // - AND mode (default): all required tags.
+  // - OR mode: just the first required tag (one is enough).
+  tagsToAddForInlineCreate = computed<string[]>(() => {
+    const cfg = this.panelCfg();
+    if (!cfg.includedTagIds?.length) return [];
+    return cfg.includedTagsMatch === 'any' ? [cfg.includedTagIds[0]] : cfg.includedTagIds;
+  });
+
+  // Tags to strip from user input on a new task created via the inline-add row.
+  // - OR mode (default): strip all excluded (any match disqualifies the task).
+  // - AND mode: don't strip. add-task-bar applies this list blindly against the
+  //   user's typed tags, so stripping "one excluded tag" would wrongly remove a
+  //   single tag the user legitimately entered (task still wouldn't hit the
+  //   AND-all exclusion). If the user somehow types every excluded tag, the
+  //   new task simply won't appear in this panel on next filter pass.
+  tagsToRemoveForInlineCreate = computed<string[]>(() => {
+    const cfg = this.panelCfg();
+    if (!cfg.excludedTagIds?.length) return [];
+    return cfg.excludedTagsMatch === 'all' ? [] : cfg.excludedTagIds;
+  });
+
   additionalTaskFields = computed(() => {
     const panelCfg = this.panelCfg();
+    const tagsToAdd = this.tagsToAddForInlineCreate();
 
     return {
-      ...(panelCfg.includedTagIds ? { tagIds: panelCfg.includedTagIds } : {}),
-      // ...(panelCfg.projectId ? { projectId: panelCfg.projectId } : {}),
+      ...(tagsToAdd.length ? { tagIds: tagsToAdd } : {}),
       ...(panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.Done
         ? { isDone: true }
         : {}),
@@ -129,15 +154,19 @@ export class BoardPanelComponent {
 
     const allFilteredTasks = this.allTasks().filter((task) => {
       let isTaskIncluded = true;
+      const taskTagIds = task.tagIds ?? [];
       if (panelCfg.includedTagIds?.length) {
-        isTaskIncluded = panelCfg.includedTagIds.every((tagId) =>
-          task.tagIds?.includes(tagId),
-        );
+        isTaskIncluded =
+          panelCfg.includedTagsMatch === 'any'
+            ? panelCfg.includedTagIds.some((tagId) => taskTagIds.includes(tagId))
+            : panelCfg.includedTagIds.every((tagId) => taskTagIds.includes(tagId));
       }
       if (panelCfg.excludedTagIds?.length) {
-        isTaskIncluded =
-          isTaskIncluded &&
-          !panelCfg.excludedTagIds.some((tagId) => task.tagIds?.includes(tagId));
+        const hit =
+          panelCfg.excludedTagsMatch === 'all'
+            ? panelCfg.excludedTagIds.every((tagId) => taskTagIds.includes(tagId))
+            : panelCfg.excludedTagIds.some((tagId) => taskTagIds.includes(tagId));
+        isTaskIncluded = isTaskIncluded && !hit;
       }
 
       if (panelCfg.isParentTasksOnly) {
@@ -186,45 +215,10 @@ export class BoardPanelComponent {
     });
     const merged = [...orderedTasks, ...nonOrderedTasks].filter((t) => !!t);
 
-    // mode: 'off' | 'asc' (earliest first) | 'desc' (latest first)
-    const mode =
-      (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled &&
-        panelCfg.sortByDue) ||
-      'off';
-    if (mode !== 'off') {
-      const getDueTs = (task: TaskCopy): number | null => {
-        // prefer dueWithTime (timestamp), then dueDay (ISO-like date string)
-        if (task.dueWithTime) {
-          return new Date(task.dueWithTime).getTime();
-        }
-        if (task.dueDay) {
-          // interpret dueDay as local date (YYYY-MM-DD) -> parse
-          const d = new Date(task.dueDay);
-          if (!Number.isNaN(d.getTime())) {
-            return d.getTime();
-          }
-        }
-        return null;
-      };
-
-      merged.sort((a, b) => {
-        const aTs = getDueTs(a);
-        const bTs = getDueTs(b);
-        // both undated -> keep relative order
-        if (aTs === null && bTs === null) return 0;
-
-        // - asc: undated should come after dated items
-        // - desc: undated should come before dated items
-        if (aTs === null && bTs !== null) return mode === 'asc' ? 1 : -1;
-        if (aTs !== null && bTs === null) return mode === 'asc' ? -1 : 1;
-
-        // both dated -> compare timestamps
-        if (aTs !== null && bTs !== null) {
-          return mode === 'asc' ? aTs - bTs : bTs - aTs;
-        }
-
-        return 0;
-      });
+    if (panelCfg.sortBy) {
+      const dir = panelCfg.sortDir === 'desc' ? -1 : 1;
+      const cmp = buildComparator(panelCfg.sortBy);
+      merged.sort((a, b) => dir * cmp(a, b));
     }
 
     return merged;
@@ -233,6 +227,13 @@ export class BoardPanelComponent {
   async drop(ev: CdkDragDrop<BoardPanelCfg, string, TaskCopy>): Promise<void> {
     const panelCfg = ev.container.data;
     const task = ev.item.data;
+
+    // In sorted mode, intra-panel drops are no-ops: the task already matches the
+    // panel filter and the visible order is derived from the comparator, not taskIds.
+    if (ev.previousContainer.id === ev.container.id && !this.isManualOrder()) {
+      return;
+    }
+
     const prevTaskIds = this.tasks().map((t) => t.id);
 
     const taskIds = prevTaskIds.includes(task.id)
@@ -243,10 +244,29 @@ export class BoardPanelComponent {
 
     let newTagIds: string[] = task.tagIds || [];
     if (panelCfg.includedTagIds?.length) {
-      newTagIds = newTagIds.concat(panelCfg.includedTagIds);
+      if (panelCfg.includedTagsMatch === 'any') {
+        // OR: task only needs one required tag to belong. Add the first if none match.
+        const hasAny = panelCfg.includedTagIds.some((id) => newTagIds.includes(id));
+        if (!hasAny) {
+          newTagIds = newTagIds.concat(panelCfg.includedTagIds[0]);
+        }
+      } else {
+        newTagIds = newTagIds.concat(panelCfg.includedTagIds);
+      }
     }
     if (panelCfg.excludedTagIds?.length) {
-      newTagIds = newTagIds.filter((tagId) => !panelCfg.excludedTagIds!.includes(tagId));
+      if (panelCfg.excludedTagsMatch === 'all') {
+        // AND-excluded: "exclude only if task has ALL excluded tags". Strip one to
+        // break the condition; don't over-remove tags the user may legitimately want.
+        const hasAll = panelCfg.excludedTagIds.every((id) => newTagIds.includes(id));
+        if (hasAll) {
+          newTagIds = newTagIds.filter((id) => id !== panelCfg.excludedTagIds![0]);
+        }
+      } else {
+        newTagIds = newTagIds.filter(
+          (tagId) => !panelCfg.excludedTagIds!.includes(tagId),
+        );
+      }
     }
 
     const updates: Partial<TaskCopy> = {};

@@ -117,7 +117,6 @@ export const DEFAULT_PANEL_CFG: BoardPanelCfg = {
   excludedTagIds: [],
   includedTagIds: [],
   scheduledState: BoardPanelCfgScheduledState.All,
-  sortByDue: 'off',
   backlogState: BoardPanelCfgTaskTypeFilter.All,
   isParentTasksOnly: false,
   projectId: '',
