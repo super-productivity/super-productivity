@@ -11,29 +11,23 @@ export class DateService {
   }
 
   /**
-   * Logical "now" — Date.now() shifted backwards by the start-of-next-day offset.
-   * Use this to answer: "what day does this moment belong to for bucketing/scheduling?"
-   * Do NOT use for wall-clock display, durations, or user-facing timestamps.
-   * The returned number is in the logical-day coordinate system, not real time.
+   * Returns a Date representing "logical today" — Date.now() shifted backwards by
+   * the start-of-next-day offset, so callers can ask "what day does this moment belong to?".
+   * The returned Date's local-date components (year/month/day) are the logical day.
    */
-  getLogicalNowMs(): number {
-    return Date.now() - this.startOfNextDayDiff;
-  }
-
-  /** Logical today as a Date. Same coordinate system as getLogicalNowMs. */
   getLogicalTodayDate(): Date {
-    return new Date(this.getLogicalNowMs());
+    return new Date(Date.now() - this.startOfNextDayDiff);
   }
 
   /**
-   * Logical tomorrow = getLogicalNowMs() + 24h (in ms).
-   * NOTE: this is wall-clock +24h, not "same local time next calendar day".
-   * Across DST boundaries the local hour of the result may shift by ±1h;
-   * for date-string bucketing that is the correct behavior.
+   * Returns a timestamp on "logical tomorrow" (logical today + 1 calendar day).
+   * Uses local-date arithmetic (setDate) so day advancement is correct across DST
+   * transitions — a naive +24h would stay on the same local date during a fall-back.
    */
   getLogicalTomorrowMs(): number {
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-    return this.getLogicalNowMs() + ONE_DAY_MS;
+    const d = new Date(Date.now() - this.startOfNextDayDiff);
+    d.setDate(d.getDate() + 1);
+    return d.getTime();
   }
 
   /**

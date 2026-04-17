@@ -75,45 +75,41 @@ describe('DateService — logical clock helpers', () => {
     jasmine.clock().uninstall();
   });
 
-  it('getLogicalNowMs() returns Date.now() when offset is 0', () => {
+  it('getLogicalTodayDate() equals Date.now() when offset is 0', () => {
     service.setStartOfNextDayDiff(0);
     jasmine.clock().mockDate(new Date('2026-04-17T10:00:00Z'));
-    expect(service.getLogicalNowMs()).toBe(new Date('2026-04-17T10:00:00Z').getTime());
+    expect(service.getLogicalTodayDate().getTime()).toBe(
+      new Date('2026-04-17T10:00:00Z').getTime(),
+    );
   });
 
-  it('getLogicalNowMs() subtracts offset hours from real now', () => {
+  it('getLogicalTodayDate() subtracts offset hours from real now', () => {
     service.setStartOfNextDayDiff(3);
     jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
     const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
     const expected = new Date('2026-04-17T02:00:00Z').getTime() - THREE_HOURS_MS;
-    expect(service.getLogicalNowMs()).toBe(expected);
+    expect(service.getLogicalTodayDate().getTime()).toBe(expected);
   });
 
-  it('getLogicalNowMs() returns wall-clock now when setStartOfNextDayDiff was never called', () => {
-    jasmine.clock().mockDate(new Date('2026-04-17T10:00:00Z'));
-    expect(service.getLogicalNowMs()).toBe(new Date('2026-04-17T10:00:00Z').getTime());
-  });
-
-  it('getLogicalTodayDate() returns a Date equal to getLogicalNowMs()', () => {
-    service.setStartOfNextDayDiff(3);
-    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
-    expect(service.getLogicalTodayDate().getTime()).toBe(service.getLogicalNowMs());
-  });
-
-  it('getLogicalTomorrowMs() equals getLogicalNowMs() + 24h (wall-clock, not calendar)', () => {
-    service.setStartOfNextDayDiff(3);
-    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
-    const ONE_DAY = 24 * 60 * 60 * 1000;
-    expect(service.getLogicalTomorrowMs()).toBe(service.getLogicalNowMs() + ONE_DAY);
-  });
-
-  it('getLogicalTomorrowMs() advances the UTC date by one day (+24h, independent of DST)', () => {
-    // Documents that the API is "wall-clock +24h", not "same local time next calendar day".
-    // Across a DST boundary the local hour may shift by ±1h, but the UTC date always advances by one.
+  it('getLogicalTomorrowMs() advances the local calendar day by one', () => {
     service.setStartOfNextDayDiff(0);
-    jasmine.clock().mockDate(new Date('2026-03-08T09:30:00Z'));
+    jasmine.clock().mockDate(new Date(2026, 5, 15, 12, 0));
     const tomorrow = new Date(service.getLogicalTomorrowMs());
-    expect(tomorrow.getUTCDate()).toBe(9);
+    expect(tomorrow.getFullYear()).toBe(2026);
+    expect(tomorrow.getMonth()).toBe(5); // June
+    expect(tomorrow.getDate()).toBe(16);
+  });
+
+  it('getLogicalTomorrowMs() advances the local date across a DST fall-back', () => {
+    // 2026-11-01 00:30 is the DST fall-back boundary in US/Pacific.
+    // A naive +24h stays on 2026-11-01 local (wrong); setDate-based advance yields 2026-11-02.
+    // Berlin has no DST transition on this date, so the test passes trivially there.
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date(2026, 10, 1, 0, 30));
+    const tomorrow = new Date(service.getLogicalTomorrowMs());
+    expect(tomorrow.getFullYear()).toBe(2026);
+    expect(tomorrow.getMonth()).toBe(10); // November
+    expect(tomorrow.getDate()).toBe(2);
   });
 
   it('getStartOfNextDayDiffMs() returns the current offset in ms', () => {
