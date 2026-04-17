@@ -1,10 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TaskTitleComponent } from './task-title.component';
 import { TranslateModule } from '@ngx-translate/core';
-import { EMPTY, of } from 'rxjs';
-import { GlobalConfigService } from '../../features/config/global-config.service';
-import { TagService } from '../../features/tag/tag.service';
-import { ProjectService } from '../../features/project/project.service';
+import { EMPTY } from 'rxjs';
+import { MentionConfigService } from '../../features/tasks/mention-config.service';
 
 describe('TaskTitleComponent', () => {
   let component: TaskTitleComponent;
@@ -13,26 +11,7 @@ describe('TaskTitleComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [TaskTitleComponent, TranslateModule.forRoot()],
-      providers: [
-        {
-          provide: GlobalConfigService,
-          useValue: {
-            shortSyntax$: of({
-              isEnableTag: false,
-              isEnableDue: false,
-              isEnableProject: false,
-            }),
-          },
-        },
-        {
-          provide: TagService,
-          useValue: { tagsNoMyDayAndNoListSorted$: EMPTY },
-        },
-        {
-          provide: ProjectService,
-          useValue: { listSortedForUI$: EMPTY },
-        },
-      ],
+      providers: [{ provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TaskTitleComponent);

@@ -18,11 +18,8 @@ import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
 import { MentionConfig, MentionModule } from '../mentions';
 import { AsyncPipe } from '@angular/common';
-import { GlobalConfigService } from '../../features/config/global-config.service';
-import { TagService } from '../../features/tag/tag.service';
-import { ProjectService } from '../../features/project/project.service';
 import { Observable } from 'rxjs';
-import { buildMentionConfig$ } from '../../util/build-mention-config';
+import { MentionConfigService } from '../../features/tasks/mention-config.service';
 import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
 
 /**
@@ -43,18 +40,10 @@ import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
   },
 })
 export class TaskTitleComponent implements OnDestroy {
-  private readonly _globalConfigService = inject(GlobalConfigService);
-  private readonly _tagService = inject(TagService);
-  private readonly _projectService = inject(ProjectService);
-
   T: typeof T = T;
 
-  // mention config observable for short syntax autocomplete in textarea
-  mentionCfg$: Observable<MentionConfig> = buildMentionConfig$(
-    this._globalConfigService,
-    this._tagService,
-    this._projectService,
-  );
+  // short-syntax autocomplete config shared across all editor instances
+  mentionCfg$: Observable<MentionConfig> = inject(MentionConfigService).mentionConfig$;
 
   private readonly _isMentionListShown = signal(false);
   readonly readonly = input<boolean>(false); // When true, disables editing and only displays the value

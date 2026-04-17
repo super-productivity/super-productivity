@@ -66,7 +66,7 @@ import { MarkdownPasteService } from '../markdown-paste.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { unique } from '../../../util/unique';
-import { buildMentionConfig$ } from '../../../util/build-mention-config';
+import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
@@ -249,11 +249,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     startWith([]),
   );
 
-  mentionCfg$ = buildMentionConfig$(
-    this._globalConfigService,
-    this._tagService,
-    this._projectService,
-  );
+  mentionCfg$ = inject(MentionConfigService).mentionConfig$;
 
   // View children
   inputEl = viewChild<ElementRef>('inputEl');
