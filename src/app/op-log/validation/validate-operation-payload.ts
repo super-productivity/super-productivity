@@ -7,6 +7,7 @@ import {
 } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { getPayloadKey, getAllPayloadKeys } from '../core/entity-registry';
+import { isValidEntityId } from './is-valid-entity-id';
 
 /**
  * Result of validating an operation payload.
@@ -25,12 +26,6 @@ const getEntityKeyFromType = (entityType: EntityType): string | null => {
   return getPayloadKey(entityType) ?? null;
 };
 
-const isValidTaskPayloadId = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  value.length > 0 &&
-  value !== 'undefined' &&
-  value !== 'null';
-
 const validateTaskBatchPayload = (tasks: unknown[]): PayloadValidationResult => {
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i] as Record<string, unknown>;
@@ -41,7 +36,7 @@ const validateTaskBatchPayload = (tasks: unknown[]): PayloadValidationResult => 
       };
     }
 
-    if (!isValidTaskPayloadId(task.id)) {
+    if (!isValidEntityId(task.id)) {
       return {
         success: false,
         error: `UPDATE tasks[${i}] missing valid 'id' field`,
@@ -64,7 +59,7 @@ const validateTaskBatchPayload = (tasks: unknown[]): PayloadValidationResult => 
             error: `UPDATE tasks[${i}].subTasks[${j}] must be an object`,
           };
         }
-        if (!isValidTaskPayloadId(subTask.id)) {
+        if (!isValidEntityId(subTask.id)) {
           return {
             success: false,
             error: `UPDATE tasks[${i}].subTasks[${j}] missing valid 'id' field`,

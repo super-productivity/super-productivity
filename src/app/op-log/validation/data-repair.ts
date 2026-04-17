@@ -19,6 +19,7 @@ import { OpLog } from '../../core/log';
 import { repairMenuTree } from './repair-menu-tree';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { RepairSummary } from '../core/operation.types';
+import { isValidEntityId } from './is-valid-entity-id';
 
 export interface DataRepairResult {
   data: AppDataComplete;
@@ -670,12 +671,6 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
   return data;
 };
 
-const _isValidEntityId = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  value.length > 0 &&
-  value !== 'undefined' &&
-  value !== 'null';
-
 const _resetEntityIdsFromObjects = <T extends AppBaseDataEntityLikeStates>(
   data: T,
 ): T => {
@@ -694,7 +689,7 @@ const _resetEntityIdsFromObjects = <T extends AppBaseDataEntityLikeStates>(
       }
 
       const entityId = (entity as { id?: unknown }).id;
-      if (!_isValidEntityId(entityId) || !_isValidEntityId(key)) {
+      if (!isValidEntityId(entityId) || !isValidEntityId(key)) {
         return acc;
       }
 

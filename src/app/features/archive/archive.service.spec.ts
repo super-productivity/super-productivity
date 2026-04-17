@@ -369,5 +369,28 @@ describe('ArchiveService', () => {
       expect(savedData.task.ids).toEqual(['task-1']);
       expect(Object.keys(savedData.task.entities)).toEqual(['task-1']);
     });
+
+    it('should sync subTaskIds with surviving subtasks when some are dropped', async () => {
+      // If a subtask is dropped because its id is invalid, the parent's subTaskIds
+      // must drop the same reference so the archived parent doesn't carry a
+      // dangling id that would re-surface on restore / remote sync.
+      const validSubTask = createMockTask('sub-ok', { parentId: 'task-1' });
+      const invalidSubTask = {
+        title: 'broken',
+        subTasks: [],
+      } as unknown as TaskWithSubTasks;
+      const parentTask = createMockTask('task-1', {
+        subTaskIds: ['sub-ok', 'sub-broken'],
+        subTasks: [validSubTask, invalidSubTask as any],
+      });
+
+      await service.writeTasksToArchiveForRemoteSync([parentTask]);
+
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      const savedData = mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+      const savedParent = savedData.task.entities['task-1'];
+      expect(savedParent).toBeDefined();
+      expect(savedParent!.subTaskIds).toEqual(['sub-ok']);
+    });
   });
 });

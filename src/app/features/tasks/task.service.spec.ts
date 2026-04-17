@@ -471,17 +471,17 @@ describe('TaskService', () => {
       );
     });
 
-    it('should ignore malformed tasks without valid ids', async () => {
+    it('should delegate malformed-task filtering to archive.service', async () => {
+      // Sanitization lives in archive.service (sanitizeTasksForArchiving) so the
+      // same rules apply to both moveTasksToArchiveAndFlushArchiveIfDue and
+      // writeTasksToArchiveForRemoteSync. task.service is a pass-through here.
       const invalidTask = { title: 'Broken task', subTasks: [] } as any;
 
       await service.moveToArchive([invalidTask]);
 
-      expect(store.dispatch).not.toHaveBeenCalledWith(
-        jasmine.objectContaining({ type: TaskSharedActions.moveToArchive.type }),
-      );
-      expect(
-        archiveService.moveTasksToArchiveAndFlushArchiveIfDue,
-      ).not.toHaveBeenCalled();
+      expect(archiveService.moveTasksToArchiveAndFlushArchiveIfDue).toHaveBeenCalledWith([
+        invalidTask,
+      ]);
     });
   });
 

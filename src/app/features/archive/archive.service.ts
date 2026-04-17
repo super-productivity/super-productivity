@@ -18,6 +18,7 @@ import { TimeTrackingState } from '../time-tracking/time-tracking.model';
 import { first } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import { selectTimeTrackingState } from '../time-tracking/store/time-tracking.selectors';
+import { isValidEntityId } from '../../op-log/validation/is-valid-entity-id';
 
 /**
  * Maps tasks to archive format by:
@@ -59,13 +60,7 @@ const mapTasksToArchiveFormat = (
   });
 };
 
-const isValidArchiveTaskId = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  value.length > 0 &&
-  value !== 'undefined' &&
-  value !== 'null';
-
-const sanitizeTasksForArchiving = (
+export const sanitizeTasksForArchiving = (
   tasksIn: TaskWithSubTasks[],
   logPrefix: string,
 ): TaskWithSubTasks[] => {
@@ -73,23 +68,31 @@ const sanitizeTasksForArchiving = (
   let droppedSubTasks = 0;
 
   const sanitizedTasks = tasksIn.flatMap((task) => {
-    if (!task || !isValidArchiveTaskId(task.id)) {
+    if (!task || !isValidEntityId(task.id)) {
       droppedRootTasks++;
       return [];
     }
 
     const subTasks = (task.subTasks || []).filter((subTask) => {
-      const isValid = !!subTask && isValidArchiveTaskId(subTask.id);
+      const isValid = !!subTask && isValidEntityId(subTask.id);
       if (!isValid) {
         droppedSubTasks++;
       }
       return isValid;
     });
 
+    // Keep subTaskIds in sync with the surviving subTasks so the archived
+    // parent cannot carry dangling references when subtasks are dropped.
+    const survivingSubTaskIds = new Set(subTasks.map((st) => st.id));
+    const subTaskIds = Array.isArray(task.subTaskIds)
+      ? task.subTaskIds.filter((id) => survivingSubTaskIds.has(id))
+      : [];
+
     return [
       {
         ...task,
         subTasks,
+        subTaskIds,
       },
     ];
   });

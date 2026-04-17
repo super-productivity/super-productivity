@@ -849,66 +849,34 @@ export class TaskService {
   }
 
   async moveToArchive(tasks: TaskWithSubTasks | TaskWithSubTasks[]): Promise<void> {
-    // Add comprehensive validation and logging
     if (!tasks) {
-      console.error('[TaskService] moveToArchive called with null/undefined tasks');
+      TaskLog.err('[TaskService] moveToArchive called with null/undefined tasks');
       return;
     }
 
     if (!Array.isArray(tasks)) {
-      console.warn('[TaskService] moveToArchive converting single task to array', tasks);
+      TaskLog.warn('[TaskService] moveToArchive converting single task to array', tasks);
       tasks = [tasks];
     }
 
-    // Double-check it's an array after conversion
-    if (!Array.isArray(tasks)) {
-      console.error('[TaskService] Failed to convert tasks to array:', tasks);
-      throw new Error('moveToArchive: tasks could not be converted to array');
-    }
-
-    const sanitizedTasks = tasks
-      .filter(
-        (task): task is TaskWithSubTasks =>
-          !!task &&
-          typeof task.id === 'string' &&
-          task.id.length > 0 &&
-          task.id !== 'undefined' &&
-          task.id !== 'null',
-      )
-      .map((task) => ({
-        ...task,
-        subTasks: (task.subTasks || []).filter(
-          (subTask): subTask is Task =>
-            !!subTask &&
-            typeof subTask.id === 'string' &&
-            subTask.id.length > 0 &&
-            subTask.id !== 'undefined' &&
-            subTask.id !== 'null',
-        ),
-      }));
-
-    if (sanitizedTasks.length !== tasks.length) {
-      console.warn('[TaskService] moveToArchive dropped malformed tasks', {
-        originalCount: tasks.length,
-        sanitizedCount: sanitizedTasks.length,
-      });
-    }
-
-    if (!sanitizedTasks.length) {
-      TaskLog.log('[TaskService] No valid tasks to archive after sanitization');
+    if (!tasks.length) {
+      TaskLog.log('[TaskService] No tasks to archive');
       return;
     }
 
     TaskLog.log('[TaskService] moveToArchive called with:', {
-      count: sanitizedTasks.length,
-      taskIds: sanitizedTasks.map((t) => t.id),
-      tasksType: typeof sanitizedTasks,
-      isArray: Array.isArray(sanitizedTasks),
+      count: tasks.length,
+      taskIds: tasks.map((t) => t?.id),
+      tasksType: typeof tasks,
+      isArray: Array.isArray(tasks),
     });
 
-    // NOTE: we only update real parents since otherwise we move sub-tasks without their parent into the archive
-    const subTasks = sanitizedTasks.filter((t) => t?.parentId);
-    const parentTasks = sanitizedTasks.filter((t) => t && !t.parentId);
+    // NOTE: malformed tasks (missing/invalid ids) are dropped inside archive.service
+    // via sanitizeTasksForArchiving, which also covers writeTasksToArchiveForRemoteSync.
+    // We only update real parents here since otherwise we'd move sub-tasks without
+    // their parent into the archive.
+    const subTasks = tasks.filter((t) => t?.parentId);
+    const parentTasks = tasks.filter((t) => t && !t.parentId);
 
     TaskLog.log('[TaskService] Filtered tasks:', {
       parentTasks: parentTasks.map((t) => t.id),
