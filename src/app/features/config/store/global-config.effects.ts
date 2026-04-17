@@ -128,7 +128,7 @@ export class GlobalConfigEffects {
         const actions: Action[] = [
           AppStateActions.setTodayString({
             todayStr: newTodayStr,
-            startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
           }),
         ];
 
@@ -160,7 +160,7 @@ export class GlobalConfigEffects {
       map(() =>
         AppStateActions.setTodayString({
           todayStr: this._dateService.todayStr(),
-          startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
+          startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         }),
       ),
     ),
