@@ -581,3 +581,21 @@ export class SyncDataCorruptedError extends Error {
     super(`Sync data incompatible at ${filePath}: ${message}`);
   }
 }
+
+/**
+ * Thrown when the remote sync provider has legacy pfapi files (__meta_) but no
+ * sync-data.json. This means a v16.x client is still writing to the same provider
+ * using the old per-file format. Cross-version sync is not supported — both devices
+ * must run the same app version for sync to work.
+ */
+export class LegacySyncFormatDetectedError extends Error {
+  override name = 'LegacySyncFormatDetectedError';
+
+  constructor() {
+    super(
+      'Sync format mismatch: the remote storage was last written by an older app version ' +
+        '(v16.x or earlier) that uses a different sync format. Please update all your ' +
+        'devices to the same app version so they use the same sync format.',
+    );
+  }
+}

@@ -34,6 +34,7 @@ import {
 import { OpLog } from '../../../core/log';
 import {
   InvalidDataSPError,
+  LegacySyncFormatDetectedError,
   RemoteFileNotFoundAPIError,
   UploadRevToMatchMismatchAPIError,
 } from '../../core/errors/sync-errors';
@@ -897,6 +898,12 @@ export class FileBasedSyncAdapterService {
 
   /**
    * Downloads and decrypts the sync file.
+   *
+   * When sync-data.json is not found, checks for a legacy __meta_ file (written
+   * by v16.x pfapi clients) and throws LegacySyncFormatDetectedError instead of
+   * treating the missing file as a fresh start. This prevents silent divergence
+   * when a new client first syncs to a provider still used by an old client.
+   *
    * @returns The sync data and its revision (ETag) for conditional upload
    */
   private async _downloadSyncFile(
@@ -904,7 +911,26 @@ export class FileBasedSyncAdapterService {
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedSyncData; rev: string }> {
-    const response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+    let response: Awaited<ReturnType<typeof provider.downloadFile>>;
+    try {
+      response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+    } catch (e) {
+      if (e instanceof RemoteFileNotFoundAPIError) {
+        // sync-data.json not found. Check for a legacy pfapi __meta_ file before
+        // treating this as a fresh start — a v16.x device may be writing to the
+        // same provider, causing silent divergence if we proceed.
+        let legacyFileFound = false;
+        try {
+          await provider.getFileRev(FILE_BASED_SYNC_CONSTANTS.LEGACY_META_FILE, null);
+          legacyFileFound = true;
+        } catch (innerE) {
+          if (!(innerE instanceof RemoteFileNotFoundAPIError)) throw innerE;
+          // __meta_ not found either → genuine fresh start
+        }
+        if (legacyFileFound) throw new LegacySyncFormatDetectedError();
+      }
+      throw e;
+    }
     const data =
       await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedSyncData>(
         cfg,

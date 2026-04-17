@@ -1354,6 +1354,7 @@
         "INTEGRITY_CHECK_FAILED": "Data integrity issue detected. Auto-repair attempted. If you experience issues, please reload the app.",
         "INVALID_AUTH_CODE": "The authorization code was rejected. Please try authenticating again and make sure to copy the code exactly.",
         "INVALID_OPERATION_PAYLOAD": "Invalid operation detected. Changes may not be saved - please reload.",
+        "LEGACY_FORMAT_DETECTED": "Sync format mismatch: the remote storage was last written by an older app version (v16.x or earlier) that uses a different sync format. Please update all your devices to the same app version. \"Force overwrite\" unblocks this device by writing the new format alongside the legacy files; only use it if no older device will sync to this remote anymore, otherwise they will silently diverge from this device.",
         "LOCAL_CHANGES_DISCARDED": "{{count}} local change(s) discarded - item(s) were deleted on another device",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} unsaved local change(s) discarded - sync downloaded newer data",
         "LOCAL_DATA_REPLACE_CANCELLED": "Sync cancelled. Your local data has been preserved.",

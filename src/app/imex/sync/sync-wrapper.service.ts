@@ -20,6 +20,7 @@ import {
   HttpNotOkAPIError,
   EmptyRemoteBodySPError,
   JsonParseError,
+  LegacySyncFormatDetectedError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
 } from '../../op-log/core/errors/sync-errors';
@@ -637,6 +638,22 @@ export class SyncWrapperService {
           msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
           type: 'ERROR',
           config: { duration: 12000 },
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof LegacySyncFormatDetectedError) {
+        // Remote has v16.x pfapi files (__meta_) but no sync-data.json. Usual cause:
+        // an old device still writing the legacy format, which would silently diverge
+        // from this client. Force-overwrite is offered as an escape hatch for the
+        // stale-__meta_ case (successful migration but old files never cleaned up);
+        // it drops any remaining v16 data in favor of the current local state.
+        // Issues: #5964, #6174.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.LEGACY_FORMAT_DETECTED,
+          type: 'ERROR',
+          config: { duration: 20000 },
+          actionFn: async () => this.forceUpload(),
+          actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof HttpNotOkAPIError && error.response.status === 423) {

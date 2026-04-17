@@ -158,6 +158,10 @@ describe('FileBasedSyncAdapterService', () => {
       'getFileRev',
     ]);
     mockProvider.id = SyncProviderId.WebDAV;
+    // Default: no legacy __meta_ file present → treat missing sync-data.json as fresh start
+    mockProvider.getFileRev.and.callFake(async (_path: string) => {
+      throw new RemoteFileNotFoundAPIError('not found');
+    });
 
     // Clear localStorage to prevent state leaking between tests
     // Note: Must clear both old keys (for migration code path) and new atomic key
@@ -1705,6 +1709,38 @@ describe('FileBasedSyncAdapterService', () => {
       expect(uploadedData.recentOps[1].sv).toBe(1);
       // oldestOpSyncVersion should be sv of first op = 1
       expect(uploadedData.oldestOpSyncVersion).toBe(1);
+    });
+  });
+
+  describe('legacy pfapi format detection (v16.x cross-version guard)', () => {
+    it('throws LegacySyncFormatDetectedError when __meta_ exists but sync-data.json does not', async () => {
+      // Simulate a v16.x provider: __meta_ present, sync-data.json absent
+      mockProvider.downloadFile.and.rejectWith(
+        new RemoteFileNotFoundAPIError('not found'),
+      );
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.LEGACY_META_FILE)
+          return { rev: 'rev-meta' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
+        /Sync format mismatch/,
+      );
+    });
+
+    it('treats missing __meta_ as a genuine fresh start (not an error)', async () => {
+      // Both sync-data.json and __meta_ absent → fresh install
+      mockProvider.downloadFile.and.callFake(async (_path: string) => {
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+      mockProvider.getFileRev.and.callFake(async (_path: string) => {
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+
+      const result = await adapter.downloadOps(0);
+      expect(result.ops).toEqual([]);
     });
   });
 });
