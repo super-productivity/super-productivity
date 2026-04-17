@@ -62,3 +62,50 @@ describe('DateService timezone test', () => {
     });
   });
 });
+
+describe('DateService — logical clock helpers', () => {
+  let service: DateService;
+
+  beforeEach(() => {
+    service = new DateService();
+    jasmine.clock().install();
+  });
+
+  afterEach(() => {
+    jasmine.clock().uninstall();
+  });
+
+  it('getNow() returns Date.now() when offset is 0', () => {
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date('2026-04-17T10:00:00Z'));
+    expect(service.getNow()).toBe(new Date('2026-04-17T10:00:00Z').getTime());
+  });
+
+  it('getNow() subtracts offset hours from real now', () => {
+    service.setStartOfNextDayDiff(3);
+    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
+    const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+    const expected = new Date('2026-04-17T02:00:00Z').getTime() - THREE_HOURS_MS;
+    expect(service.getNow()).toBe(expected);
+  });
+
+  it('getTodayDate() returns a Date equal to getNow()', () => {
+    service.setStartOfNextDayDiff(3);
+    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
+    expect(service.getTodayDate().getTime()).toBe(service.getNow());
+  });
+
+  it('getTomorrowMs() is getNow() + 24h', () => {
+    service.setStartOfNextDayDiff(3);
+    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    expect(service.getTomorrowMs()).toBe(service.getNow() + ONE_DAY);
+  });
+
+  it('getStartOfNextDayDiffMs() returns the current offset in ms', () => {
+    service.setStartOfNextDayDiff(3);
+    expect(service.getStartOfNextDayDiffMs()).toBe(3 * 60 * 60 * 1000);
+    service.setStartOfNextDayDiff(0);
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+  });
+});
