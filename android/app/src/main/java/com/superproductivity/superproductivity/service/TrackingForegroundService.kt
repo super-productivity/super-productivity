@@ -71,6 +71,12 @@ class TrackingForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
 
+        // Every Context.startForegroundService() creates a per-call FGS token
+        // that must be answered with startForeground() within the system
+        // timeout, regardless of action or existing state. Satisfy it here so
+        // every branch below already has the contract honored.
+        ensureForegroundNotification()
+
         when (intent?.action) {
             ACTION_START -> {
                 val taskId = intent.getStringExtra(EXTRA_TASK_ID)
@@ -88,6 +94,11 @@ class TrackingForegroundService : Service() {
             }
 
             ACTION_UPDATE -> {
+                if (!isTracking) {
+                    Log.d(TAG, "Ignoring ACTION_UPDATE - service not tracking")
+                    stopForegroundAndSelf()
+                    return START_NOT_STICKY
+                }
                 val timeSpentMs = intent.getLongExtra(EXTRA_TIME_SPENT, accumulatedMs)
                 updateTimeSpent(timeSpentMs)
             }
@@ -97,6 +108,7 @@ class TrackingForegroundService : Service() {
                     stopTracking()
                 } else {
                     Log.d(TAG, "Ignoring STOP action - service not tracking")
+                    stopForegroundAndSelf()
                 }
             }
 
@@ -109,19 +121,37 @@ class TrackingForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    /**
-     * Posts a minimal foreground notification before stopping, so that the
-     * foreground-service contract is satisfied even on error / unknown-action paths.
-     */
-    private fun stopForegroundAndSelf() {
+    private fun ensureForegroundNotification() {
         try {
-            val notification = androidx.core.app.NotificationCompat.Builder(this, TrackingNotificationHelper.CHANNEL_ID)
-                .setSmallIcon(com.superproductivity.superproductivity.R.drawable.ic_stat_sp)
-                .build()
+            val notification = if (isTracking && taskTitle.isNotEmpty()) {
+                TrackingNotificationHelper.buildNotification(
+                    this,
+                    taskTitle,
+                    getElapsedMs()
+                )
+            } else {
+                // A content title is required on some OEM skins (notably Samsung
+                // One UI) — a title-less notification can render blank or cause
+                // startForeground() to throw IllegalArgumentException on a few
+                // Android 14 builds, which would re-trigger the FGS timeout.
+                androidx.core.app.NotificationCompat.Builder(
+                    this,
+                    TrackingNotificationHelper.CHANNEL_ID
+                )
+                    .setSmallIcon(com.superproductivity.superproductivity.R.drawable.ic_stat_sp)
+                    .setContentTitle(getString(com.superproductivity.superproductivity.R.string.app_name))
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    .setSilent(true)
+                    .build()
+            }
             startForeground(TrackingNotificationHelper.NOTIFICATION_ID, notification)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to post foreground notification before stop", e)
+            Log.e(TAG, "ensureForegroundNotification failed", e)
         }
+    }
+
+    private fun stopForegroundAndSelf() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
