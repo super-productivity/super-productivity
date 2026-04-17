@@ -90,7 +90,7 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.IS_TRAY_SHOW_CURRENT_COUNTDOWN,
       },
     },
-    ...((!IS_GNOME_DESKTOP
+    ...((IS_ELECTRON && !IS_GNOME_DESKTOP
       ? [
           {
             key: 'isUseCustomWindowTitleBar',
