@@ -201,15 +201,26 @@ class FullscreenActivity : AppCompatActivity() {
                 result: JsResult
             ): Boolean {
                 Log.v("TW", "onJsAlert")
-                val builder: AlertDialog.Builder = AlertDialog.Builder(this@FullscreenActivity)
-                builder.setMessage(message)
-                    .setNeutralButton("OK") { dialog, _ ->
-                        dialog.dismiss()
-                    }
-                    .create()
-                    .show()
-                result.cancel()
-                return super.onJsAlert(view, url, message, result)
+                if (isFinishing || isDestroyed) {
+                    result.cancel()
+                    return true
+                }
+                var handled = false
+                try {
+                    AlertDialog.Builder(this@FullscreenActivity)
+                        .setMessage(message)
+                        .setNeutralButton(android.R.string.ok) { _, _ ->
+                            handled = true
+                            result.confirm()
+                        }
+                        .setOnDismissListener { if (!handled) result.cancel() }
+                        .create()
+                        .show()
+                } catch (e: Exception) {
+                    Log.w("TW", "onJsAlert failed to show", e)
+                    if (!handled) result.cancel()
+                }
+                return true
             }
 
             override fun onJsConfirm(
@@ -218,12 +229,29 @@ class FullscreenActivity : AppCompatActivity() {
                 message: String,
                 result: JsResult
             ): Boolean {
-                AlertDialog.Builder(this@FullscreenActivity)
-                    .setMessage(message)
-                    .setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }
-                    .setNegativeButton(android.R.string.cancel) { _, _ -> result.cancel() }
-                    .create()
-                    .show()
+                if (isFinishing || isDestroyed) {
+                    result.cancel()
+                    return true
+                }
+                var handled = false
+                try {
+                    AlertDialog.Builder(this@FullscreenActivity)
+                        .setMessage(message)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            handled = true
+                            result.confirm()
+                        }
+                        .setNegativeButton(android.R.string.cancel) { _, _ ->
+                            handled = true
+                            result.cancel()
+                        }
+                        .setOnDismissListener { if (!handled) result.cancel() }
+                        .create()
+                        .show()
+                } catch (e: Exception) {
+                    Log.w("TW", "onJsConfirm failed to show", e)
+                    if (!handled) result.cancel()
+                }
                 return true
             }
         }
