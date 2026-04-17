@@ -491,6 +491,12 @@ export const getParentTaskElement = (
 /**
  * Mark a task as done by hovering and clicking the done button.
  *
+ * Waits for the `.isDone` class to appear before returning. `TaskService.toggleDoneWithAnimation`
+ * schedules the actual `setDone` dispatch via `setTimeout(200ms)` for the mark-done animation,
+ * so without this wait a following sync can start before the updateTask op is captured — the
+ * late op then lands during the sync's upload, leaving `hasPendingOps=true` and the check icon
+ * never appears.
+ *
  * @param client - The simulated E2E client
  * @param taskName - The task name to mark as done
  */
@@ -501,11 +507,17 @@ export const markTaskDone = async (
   const task = getTaskElement(client, taskName);
   await task.hover();
   await task.locator('done-toggle').click();
+  await expect(getDoneTaskElement(client, taskName).first()).toBeVisible({
+    timeout: UI_VISIBLE_TIMEOUT,
+  });
 };
 
 /**
  * Mark a subtask as done by hovering and clicking the done button.
  * Uses getSubtaskElement to avoid matching parent tasks.
+ *
+ * Waits for `.isDone` for the same reason as `markTaskDone` — the 200ms animation delay in
+ * `toggleDoneWithAnimation` would otherwise race the following sync and leave pending ops.
  *
  * @param client - The simulated E2E client
  * @param subtaskName - The subtask name to mark as done
@@ -517,6 +529,9 @@ export const markSubtaskDone = async (
   const subtask = getSubtaskElement(client, subtaskName);
   await subtask.hover();
   await subtask.locator('done-toggle').click();
+  await expect(getDoneSubtaskElement(client, subtaskName).first()).toBeVisible({
+    timeout: UI_VISIBLE_TIMEOUT,
+  });
 };
 
 /**
