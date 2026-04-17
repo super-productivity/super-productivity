@@ -62,3 +62,62 @@ describe('DateService timezone test', () => {
     });
   });
 });
+
+describe('DateService — logical clock helpers', () => {
+  let service: DateService;
+
+  beforeEach(() => {
+    service = new DateService();
+    jasmine.clock().install();
+  });
+
+  afterEach(() => {
+    jasmine.clock().uninstall();
+  });
+
+  it('getLogicalNowMs() returns Date.now() when offset is 0', () => {
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date('2026-04-17T10:00:00Z'));
+    expect(service.getLogicalNowMs()).toBe(new Date('2026-04-17T10:00:00Z').getTime());
+  });
+
+  it('getLogicalNowMs() subtracts offset hours from real now', () => {
+    service.setStartOfNextDayDiff(3);
+    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
+    const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+    const expected = new Date('2026-04-17T02:00:00Z').getTime() - THREE_HOURS_MS;
+    expect(service.getLogicalNowMs()).toBe(expected);
+  });
+
+  it('getLogicalNowMs() returns wall-clock now when setStartOfNextDayDiff was never called', () => {
+    jasmine.clock().mockDate(new Date('2026-04-17T10:00:00Z'));
+    expect(service.getLogicalNowMs()).toBe(new Date('2026-04-17T10:00:00Z').getTime());
+  });
+
+  it('getLogicalTodayDate() returns a Date equal to getLogicalNowMs()', () => {
+    service.setStartOfNextDayDiff(3);
+    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
+    expect(service.getLogicalTodayDate().getTime()).toBe(service.getLogicalNowMs());
+  });
+
+  it('getLogicalTomorrowMs() equals getLogicalNowMs() + 24h (wall-clock, not calendar)', () => {
+    service.setStartOfNextDayDiff(3);
+    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    expect(service.getLogicalTomorrowMs()).toBe(service.getLogicalNowMs() + ONE_DAY);
+  });
+
+  it('getLogicalTomorrowMs() across a spring-forward DST boundary still advances the UTC date by one day', () => {
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date('2026-03-08T09:30:00Z'));
+    const tomorrow = new Date(service.getLogicalTomorrowMs());
+    expect(tomorrow.getUTCDate()).toBe(9);
+  });
+
+  it('getStartOfNextDayDiffMs() returns the current offset in ms', () => {
+    service.setStartOfNextDayDiff(3);
+    expect(service.getStartOfNextDayDiffMs()).toBe(3 * 60 * 60 * 1000);
+    service.setStartOfNextDayDiff(0);
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+  });
+});
