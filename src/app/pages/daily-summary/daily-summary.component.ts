@@ -269,7 +269,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     this._taskService.setSelectedId(null);
     this.isIncludeYesterday = isWithinYesterdayMargin(
       Date.now(),
-      this._dateService.startOfNextDayDiff,
+      this._dateService.getStartOfNextDayDiffMs(),
     );
 
     const cfg = this.configService.cfg();
