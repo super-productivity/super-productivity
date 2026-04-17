@@ -27,9 +27,13 @@ describe('GlobalConfigEffects', () => {
     dateServiceSpy = jasmine.createSpyObj('DateService', [
       'setStartOfNextDayDiff',
       'todayStr',
+      'getStartOfNextDayDiffMs',
     ]);
     dateServiceSpy.todayStr.and.returnValue('2026-02-20');
     dateServiceSpy.startOfNextDayDiff = 0;
+    dateServiceSpy.getStartOfNextDayDiffMs.and.callFake(
+      () => dateServiceSpy.startOfNextDayDiff,
+    );
 
     TestBed.configureTestingModule({
       providers: [
