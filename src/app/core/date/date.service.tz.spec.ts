@@ -51,7 +51,7 @@ describe('DateService timezone test', () => {
       const result = service.todayStr(now);
 
       console.log('DateService with startOfNextDayDiff:', {
-        startOfNextDayDiff: service.startOfNextDayDiff,
+        startOfNextDayDiffMs: service.getStartOfNextDayDiffMs(),
         localTime: now.toString(),
         result: result,
         expectedBehavior: 'Should treat 1 AM as previous day due to 2-hour offset',

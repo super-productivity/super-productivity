@@ -114,38 +114,6 @@ module.exports = tseslint.config(
       // @typescript-eslint/ban-types replaced by specific rules in v8
       '@typescript-eslint/no-unsafe-function-type': 'error',
       '@typescript-eslint/no-wrapper-object-types': 'error',
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            "MemberExpression[property.type='Identifier'][property.name=/^startOfNextDayDiff(Ms)?$/]",
-          message:
-            "Don't read startOfNextDayDiff directly. Use DateService.getLogicalNowMs() / getLogicalTodayDate() / getLogicalTomorrowMs() for offset-aware operations, or DateService.getStartOfNextDayDiffMs() if you must pass the raw offset to a pure utility.",
-        },
-        {
-          selector:
-            "VariableDeclarator[id.type='ObjectPattern'] > ObjectPattern > Property[key.name=/^startOfNextDayDiff(Ms)?$/]",
-          message:
-            "Don't destructure startOfNextDayDiff. Use DateService accessor methods.",
-        },
-      ],
-    },
-  },
-  // Allowlist: files that legitimately own/read the raw startOfNextDayDiff value
-  {
-    files: [
-      'src/app/core/date/date.service.ts',
-      'src/app/core/date/date.service.tz.spec.ts',
-      'src/app/util/is-today.util.ts',
-      'src/app/util/is-today.util.spec.ts',
-      'src/app/root-store/app-state/**/*.ts',
-      'src/app/root-store/meta/task-shared-meta-reducers/**/*.ts',
-      'src/app/op-log/backup/migrate-legacy-backup.ts',
-      'src/app/features/tasks/store/task-due.effects.ts',
-      'src/app/**/*.spec.ts',
-    ],
-    rules: {
-      'no-restricted-syntax': 'off',
     },
   },
   // NgRx effects files - require hydration guards on selector-based effects

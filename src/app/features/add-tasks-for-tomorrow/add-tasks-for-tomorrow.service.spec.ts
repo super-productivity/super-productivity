@@ -162,8 +162,6 @@ describe('AddTasksForTomorrowService', () => {
     );
     dateServiceSpy.getLogicalTodayDate.and.returnValue(new Date('2026-04-17T00:00:00Z'));
     dateServiceSpy.todayStr.and.returnValue(todayStr);
-    // Ensure `startOfNextDayDiff` reads on the spy don't crash legacy code paths.
-    (dateServiceSpy as unknown as { startOfNextDayDiff: number }).startOfNextDayDiff = 0;
 
     TestBed.configureTestingModule({
       providers: [

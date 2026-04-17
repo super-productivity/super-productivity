@@ -3,7 +3,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 
 @Injectable({ providedIn: 'root' })
 export class DateService {
-  startOfNextDayDiff: number = 0;
+  private startOfNextDayDiff: number = 0;
 
   setStartOfNextDayDiff(startOfNextDay: number): void {
     const clamped = Math.max(0, Math.min(23, startOfNextDay || 0));
@@ -39,7 +39,6 @@ export class DateService {
   /**
    * Read-only accessor for the raw offset in ms.
    * Pure utilities (reducers, selectors) need this value as an argument.
-   * Do not read `startOfNextDayDiff` directly — ESLint enforces this.
    */
   getStartOfNextDayDiffMs(): number {
     return this.startOfNextDayDiff;
