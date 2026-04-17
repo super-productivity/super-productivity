@@ -72,7 +72,17 @@ class FullscreenActivity : AppCompatActivity() {
             return
         }
 
-        initWebView()
+        if (!initWebView()) {
+            // Reuse the already-computed compatibility info so the block screen
+            // keeps the detected WebView provider/version (useful when a user
+            // on a buggy beta channel needs to identify which package to swap).
+            WebViewBlockActivity.present(
+                this,
+                compatibility.copy(status = WebViewCompatibilityChecker.Status.BLOCK),
+            )
+            finish()
+            return
+        }
 
         // FOR TESTING HTML INPUTS QUICKLY
 ////        webView = (application as App).wv
@@ -118,14 +128,18 @@ class FullscreenActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
         // Save scoped storage permission on Android 10+
         storageHelper.onSaveInstanceState(outState)
-        webView.saveState(outState)
+        if (::webView.isInitialized) {
+            webView.saveState(outState)
+        }
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         // Restore scoped storage permission on Android 10+
         super.onRestoreInstanceState(savedInstanceState)
         storageHelper.onRestoreInstanceState(savedInstanceState)
-        webView.restoreState(savedInstanceState);
+        if (::webView.isInitialized) {
+            webView.restoreState(savedInstanceState)
+        }
     }
 
     override fun onPause() {
@@ -151,8 +165,16 @@ class FullscreenActivity : AppCompatActivity() {
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
-    private fun initWebView() {
-        webView = WebHelper().instanceView(this)
+    private fun initWebView(): Boolean {
+        try {
+            webView = WebHelper().instanceView(this)
+        } catch (e: Exception) {
+            // WebView construction can fail on devices with a broken, missing,
+            // or misbehaving Android System WebView package (e.g. a buggy beta
+            // channel throwing IllegalStateException during factory init).
+            Log.e("SP-WebView", "Failed to instantiate WebView", e)
+            return false
+        }
         if (BuildConfig.DEBUG) {
             Toast.makeText(this, "DEBUG: $appUrl", Toast.LENGTH_SHORT).show()
 //            webView.clearCache(true)
@@ -255,10 +277,15 @@ class FullscreenActivity : AppCompatActivity() {
                 return true
             }
         }
+        return true
     }
 
 
     private fun callJSInterfaceFunctionIfExists(fnName: String, objectPath: String, fnParam: String = "") {
+        if (!::javaScriptInterface.isInitialized) {
+            Log.w("TW", "javaScriptInterface not initialized yet. Skipping JS call.")
+            return
+        }
         val fnFullName = "window.$WINDOW_INTERFACE_PROPERTY.$objectPath.$fnName"
         val fullObjectPath = "window.$WINDOW_INTERFACE_PROPERTY.$objectPath"
         javaScriptInterface.callJavaScriptFunction("if($fullObjectPath && $fnFullName)$fnFullName($fnParam)")
@@ -266,8 +293,8 @@ class FullscreenActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        Log.v("TW", "onBackPressed ${webView.canGoBack().toString()}")
-        if (webView.canGoBack()) {
+        if (::webView.isInitialized && webView.canGoBack()) {
+            Log.v("TW", "onBackPressed canGoBack=true")
             webView.goBack()
         } else {
             super.onBackPressed()
