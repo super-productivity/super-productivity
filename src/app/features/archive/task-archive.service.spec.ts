@@ -95,6 +95,24 @@ describe('TaskArchiveService', () => {
       expect(result.entities['task2']).toBeDefined();
       expect(archiveDbAdapterMock.loadArchiveYoung).toHaveBeenCalled();
     });
+
+    it('should normalize tasks with undefined timeSpentOnDay to {}', async () => {
+      // Legacy archive tasks may have timeSpentOnDay: undefined when they were
+      // created before the field existed. Normalization at the data boundary
+      // ensures all consumers receive a valid TaskArchive without needing
+      // individual guards at every access site.
+      const legacyTask = {
+        ...createMockTask('legacy1'),
+        timeSpentOnDay: undefined as any,
+      };
+      const mockArchive = createMockArchiveModel([legacyTask]);
+
+      archiveDbAdapterMock.loadArchiveYoung.and.returnValue(Promise.resolve(mockArchive));
+
+      const result = await service.loadYoung();
+
+      expect(result.entities['legacy1']!.timeSpentOnDay).toEqual({});
+    });
   });
 
   describe('load', () => {
@@ -116,6 +134,25 @@ describe('TaskArchiveService', () => {
       expect(result.entities['old2']).toBeDefined();
       expect(archiveDbAdapterMock.loadArchiveYoung).toHaveBeenCalled();
       expect(archiveDbAdapterMock.loadArchiveOld).toHaveBeenCalled();
+    });
+
+    it('should normalize tasks with undefined timeSpentOnDay to {} in both young and old archives', async () => {
+      // Same as loadYoung — normalize at the boundary so downstream consumers
+      // (worklog, daily-summary, heatmap, etc.) can safely access timeSpentOnDay.
+      const youngTask = { ...createMockTask('young1'), timeSpentOnDay: undefined as any };
+      const oldTask = { ...createMockTask('old1'), timeSpentOnDay: undefined as any };
+
+      archiveDbAdapterMock.loadArchiveYoung.and.returnValue(
+        Promise.resolve(createMockArchiveModel([youngTask])),
+      );
+      archiveDbAdapterMock.loadArchiveOld.and.returnValue(
+        Promise.resolve(createMockArchiveModel([oldTask])),
+      );
+
+      const result = await service.load();
+
+      expect(result.entities['young1']!.timeSpentOnDay).toEqual({});
+      expect(result.entities['old1']!.timeSpentOnDay).toEqual({});
     });
   });
 

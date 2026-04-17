@@ -4,6 +4,7 @@ import {
   computed,
   ElementRef,
   HostListener,
+  inject,
   input,
   Input,
   OnDestroy,
@@ -15,6 +16,10 @@ import { T } from 'src/app/t.const';
 import { TranslateModule } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
+import { MentionConfig, MentionModule } from '../mentions';
+import { AsyncPipe } from '@angular/common';
+import { Observable } from 'rxjs';
+import { MentionConfigService } from '../../features/tasks/mention-config.service';
 import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
 
 /**
@@ -24,7 +29,7 @@ import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
  */
 @Component({
   selector: 'task-title',
-  imports: [TranslateModule, RenderLinksPipe],
+  imports: [TranslateModule, MentionModule, AsyncPipe, RenderLinksPipe],
   templateUrl: './task-title.component.html',
   styleUrl: './task-title.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,6 +42,10 @@ import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
 export class TaskTitleComponent implements OnDestroy {
   T: typeof T = T;
 
+  // short-syntax autocomplete config shared across all editor instances
+  mentionCfg$: Observable<MentionConfig> = inject(MentionConfigService).mentionConfig$;
+
+  private readonly _isMentionListShown = signal(false);
   readonly readonly = input<boolean>(false); // When true, disables editing and only displays the value
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
@@ -87,7 +96,12 @@ export class TaskTitleComponent implements OnDestroy {
   private readonly _isEditing = signal(false);
   private _focusTimeoutId: number | undefined;
 
-  constructor() {}
+  updateMentionListShown(isShown: boolean): void {
+    // use setTimeout to ensure blur event order doesn't interfere with mention selection
+    window.setTimeout(() => {
+      this._isMentionListShown.set(isShown);
+    });
+  }
 
   // Click to enter edit mode or follow links.
   // Using click (not mousedown) allows CDK drag-and-drop to work from the title:
@@ -171,10 +185,16 @@ export class TaskTitleComponent implements OnDestroy {
   handleKeyDown(ev: KeyboardEvent): void {
     ev.stopPropagation();
     if (ev.key === 'Escape') {
-      this._forceBlur();
+      // if mention list is open, Escape is handled by MentionDirective - don't blur
+      if (!this._isMentionListShown()) {
+        this._forceBlur();
+      }
     } else if (ev.key === 'Enter') {
-      this._forceBlur();
-      ev.preventDefault();
+      // if mention list is open, Enter selects from list - don't blur
+      if (!this._isMentionListShown()) {
+        this._forceBlur();
+        ev.preventDefault();
+      }
     }
   }
 

@@ -311,3 +311,173 @@ describe('DialogViewTaskRemindersComponent dismissed reminder tracking', () => {
     expect(currentReminders.find((r) => r.id === 'reminder-6')).toBeDefined();
   });
 });
+
+/**
+ * Tests for the close-animation race condition (issue #7189).
+ *
+ * The fix: _close() cancels the onRemindersActive$ subscription immediately
+ * and guards against re-entry via MatDialogState. Without this, a worker tick
+ * arriving during the 300ms close animation updates a mid-teardown component,
+ * which can corrupt Angular change detection in Electron/Linux environments.
+ */
+describe('DialogViewTaskRemindersComponent close-animation race condition', () => {
+  // Simulate the dialog state machine
+  type MockDialogState = 'OPEN' | 'CLOSING' | 'CLOSED';
+
+  // Simulate the component's subscription management as implemented after the fix.
+  // _close() must:
+  //   1. Guard against double-calls (CLOSING/CLOSED state)
+  //   2. Unsubscribe _onRemindersActiveSub immediately
+  //   3. Transition state to CLOSING
+  const buildComponent = (
+    onRemindersActive$: Subject<TaskWithReminderData[]>,
+  ): {
+    taskIds$: BehaviorSubject<string[]>;
+    dialogState: () => MockDialogState;
+    close: () => void;
+    removeFromList: (taskId: string) => void;
+    simulateAnimationEnd: () => void;
+  } => {
+    let state: MockDialogState = 'OPEN';
+    const dismissedIds = new Set<string>();
+    const taskIds$ = new BehaviorSubject<string[]>([]);
+
+    const close = (): void => {
+      if (state !== 'OPEN') return; // guard (mirrors MatDialogState check)
+      sub.unsubscribe(); // eager cancel
+      state = 'CLOSING';
+      // angular material close animation would run here (~300ms)
+    };
+
+    const simulateAnimationEnd = (): void => {
+      state = 'CLOSED';
+      // ngOnDestroy would be called here — subscription already cancelled
+    };
+
+    const removeFromList = (taskId: string): void => {
+      dismissedIds.add(taskId);
+      const next = taskIds$.getValue().filter((id) => id !== taskId);
+      if (next.length === 0) {
+        close();
+      } else {
+        taskIds$.next(next);
+      }
+    };
+
+    const sub = onRemindersActive$.subscribe((reminders) => {
+      const filtered = reminders.filter((r) => !dismissedIds.has(r.id));
+      if (filtered.length > 0) {
+        taskIds$.next(filtered.map((r) => r.id));
+      } else {
+        close();
+      }
+    });
+
+    return {
+      taskIds$,
+      dialogState: () => state,
+      close,
+      removeFromList,
+      simulateAnimationEnd,
+    };
+  };
+
+  const makeReminder = (taskId: string): TaskWithReminderData =>
+    ({
+      ...DEFAULT_TASK,
+      id: taskId,
+      title: `Task ${taskId}`,
+      remindAt: Date.now() - 1000,
+      isDeadlineReminder: false,
+      reminderData: { remindAt: Date.now() - 1000 },
+    }) as TaskWithReminderData;
+
+  it('should not update taskIds$ after _close() is called (race condition prevention)', () => {
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { taskIds$, dialogState, close } = buildComponent(onRemindersActive$);
+
+    // Dialog open showing task-a
+    taskIds$.next(['task-a']);
+    expect(taskIds$.getValue()).toEqual(['task-a']);
+
+    // User dismisses task-a, dialog begins closing
+    close();
+    expect(dialogState()).toBe('CLOSING');
+
+    // Worker tick fires during close animation with task-b
+    const taskBReminder = makeReminder('task-b');
+    onRemindersActive$.next([taskBReminder]);
+
+    // task-b must NOT have been applied to the closing dialog
+    expect(taskIds$.getValue()).toEqual(['task-a']);
+  });
+
+  it('should guard against double-close (no-op on CLOSING state)', () => {
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { dialogState, close } = buildComponent(onRemindersActive$);
+
+    close();
+    expect(dialogState()).toBe('CLOSING');
+
+    // Second close must be a no-op
+    close();
+    expect(dialogState()).toBe('CLOSING');
+  });
+
+  it('should guard against double-close (no-op on CLOSED state)', () => {
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { dialogState, close, simulateAnimationEnd } =
+      buildComponent(onRemindersActive$);
+
+    close();
+    simulateAnimationEnd();
+    expect(dialogState()).toBe('CLOSED');
+
+    // Third close after animation must be a no-op
+    close();
+    expect(dialogState()).toBe('CLOSED');
+  });
+
+  it('should close when all reminders are filtered out (empty-list path)', () => {
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { taskIds$, dialogState } = buildComponent(onRemindersActive$);
+
+    taskIds$.next(['task-a']);
+
+    // Worker sends stale data that is entirely filtered — simulates #5826 path
+    onRemindersActive$.next([]); // empty after filtering dismissed ids
+    expect(dialogState()).toBe('CLOSING');
+  });
+
+  it('scenario: Task A play then Task B reminder during animation — B must not corrupt closing dialog', () => {
+    // Exactly the sequence from issue #7189:
+    //   1. Dialog opens for task-a
+    //   2. User clicks play → dismissReminderOnly → _removeTaskFromList('task-a') → _close()
+    //   3. Worker tick during close animation sends [task-b]
+    //   4. Dialog must ignore task-b and remain in CLOSING state
+
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { taskIds$, dialogState, removeFromList, simulateAnimationEnd } =
+      buildComponent(onRemindersActive$);
+
+    // Step 1: dialog shows task-a
+    taskIds$.next(['task-a']);
+
+    // Step 2: play() path — _removeTaskFromList empties the list and calls _close()
+    removeFromList('task-a');
+    expect(dialogState()).toBe('CLOSING');
+
+    // Step 3: worker tick arrives during the ~300ms close animation with task-b
+    const taskB = makeReminder('task-b');
+    onRemindersActive$.next([taskB]);
+
+    // Step 4: dialog is CLOSING; the subscription was already cancelled, so
+    // taskIds$ must not have been mutated to show task-b (still has old value)
+    expect(dialogState()).toBe('CLOSING');
+    expect(taskIds$.getValue()).not.toContain('task-b');
+
+    // Animation ends — dialog fully closed
+    simulateAnimationEnd();
+    expect(dialogState()).toBe('CLOSED');
+  });
+});

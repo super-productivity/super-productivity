@@ -24,7 +24,6 @@ import {
   completeTask,
   focusModeLoaded,
   pauseFocusSession,
-  resetCycles,
   selectFocusTask,
   setFocusModeMode,
   setFocusSessionDuration,
@@ -182,7 +181,6 @@ export class FocusModeMainComponent {
   isShowTimeAdjustButtons = computed(
     () => this._isInProgress() && this.mode() !== FocusModeMode.Flowtime,
   );
-  isPomodoro = computed(() => this.mode() === FocusModeMode.Pomodoro);
 
   // Play button should be disabled when sync with tracking is enabled but no task is selected
   isPlayButtonDisabled = computed(() => {
@@ -402,10 +400,6 @@ export class FocusModeMainComponent {
 
   resumeSession(): void {
     this._store.dispatch(unPauseFocusSession());
-  }
-
-  resetCycles(): void {
-    this._store.dispatch(resetCycles());
   }
 
   selectMode(mode: FocusModeMode | string | number): void {

@@ -207,18 +207,6 @@
               <mat-icon>done_all</mat-icon>
             </button>
           }
-
-          <!-- Reset cycles button (In Progress state, Pomodoro only) -->
-          @if (isShowCompleteSessionButton() && isPomodoro()) {
-            <button
-              mat-icon-button
-              [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
-              (click)="resetCycles()"
-              class="reset-cycles-btn"
-            >
-              <mat-icon>restart_alt</mat-icon>
-            </button>
-          }
         </div>
       </div>
 

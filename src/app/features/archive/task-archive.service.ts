@@ -18,6 +18,32 @@ import { WORK_CONTEXT_FEATURE_NAME } from '../work-context/store/work-context.se
 import { plannerFeatureKey } from '../planner/store/planner.reducer';
 import { TODAY_TAG } from '../tag/tag.const';
 
+// Normalize timeSpentOnDay at the data boundary so all consumers can trust the
+// invariant: timeSpentOnDay is always a valid object, never undefined. This mirrors
+// normalizeCountOnDay in simple-counter.reducer.ts. Fixing it here (rather than
+// adding optional-chaining guards at every access site) is correct because:
+//   1. The TypeScript type says timeSpentOnDay is required — the compiler won't catch
+//      unguarded accesses, so individual guards are invisible and get reverted.
+//   2. The undefined comes from legacy archived data written before the field existed.
+//      It is a data-integrity issue, not a valid domain state; the type is correct.
+//   3. Normalizing once at load time is cheaper and more reliable than N guards.
+const normalizeTimeSpentOnDay = (archive: TaskArchive): TaskArchive => {
+  let hasUndefined = false;
+  for (const id of archive.ids as string[]) {
+    if (archive.entities[id] && !archive.entities[id]!.timeSpentOnDay) {
+      hasUndefined = true;
+      break;
+    }
+  }
+  if (!hasUndefined) return archive;
+  const entities: TaskArchive['entities'] = {};
+  for (const id of archive.ids as string[]) {
+    const task = archive.entities[id];
+    entities[id] = task && !task.timeSpentOnDay ? { ...task, timeSpentOnDay: {} } : task;
+  }
+  return { ...archive, entities };
+};
+
 // Default empty archive
 const DEFAULT_ARCHIVE: ArchiveModel = {
   task: { ids: [], entities: {} },
@@ -83,10 +109,10 @@ export class TaskArchiveService {
   async loadYoung(): Promise<TaskArchive> {
     const archiveYoung =
       (await this.archiveDbAdapter.loadArchiveYoung()) || DEFAULT_ARCHIVE;
-    return {
+    return normalizeTimeSpentOnDay({
       ids: archiveYoung.task.ids,
       entities: archiveYoung.task.entities,
-    };
+    });
   }
 
   async load(): Promise<TaskArchive> {
@@ -110,7 +136,7 @@ export class TaskArchiveService {
         mergedIds.push(id as string);
       }
     }
-    return { ids: mergedIds, entities: mergedEntities };
+    return normalizeTimeSpentOnDay({ ids: mergedIds, entities: mergedEntities });
   }
 
   async getById(id: string): Promise<Task> {

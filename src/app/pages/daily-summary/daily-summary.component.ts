@@ -76,8 +76,7 @@ import {
   SimpleCounterSummaryItemComponent,
 } from './simple-counter-summary-item/simple-counter-summary-item.component';
 import { MetricService } from '../../features/metric/metric.service';
-
-const MAGIC_YESTERDAY_MARGIN = 4 * 60 * 60 * 1000;
+import { isWithinYesterdayMargin } from './is-include-yesterday.util';
 
 @Component({
   selector: 'daily-summary',
@@ -268,9 +267,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
   constructor() {
     this._taskService.setSelectedId(null);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    this.isIncludeYesterday = Date.now() - todayStart.getTime() <= MAGIC_YESTERDAY_MARGIN;
+    this.isIncludeYesterday = isWithinYesterdayMargin(
+      Date.now(),
+      this._dateService.startOfNextDayDiff,
+    );
 
     const cfg = this.configService.cfg();
     if (

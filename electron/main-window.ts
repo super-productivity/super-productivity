@@ -334,10 +334,11 @@ function initWinEventListeners(app: Electron.App): void {
     const urlObj = new URL(url);
     urlObj.pathname = urlObj.pathname.replace('//', '/');
     const wellFormedUrl = urlObj.toString();
-    const wasOpened = shell.openExternal(wellFormedUrl);
-    if (!wasOpened) {
-      shell.openExternal(wellFormedUrl);
-    }
+    // shell.openExternal returns Promise<void>; surface the failure reason instead
+    // of silently swallowing it (e.g. when xdg-open / Flatpak portal rejects the URI).
+    shell.openExternal(wellFormedUrl).catch((err) => {
+      error('Failed to open external URL via shell.openExternal:', err);
+    });
   };
 
   // open new window links in browser

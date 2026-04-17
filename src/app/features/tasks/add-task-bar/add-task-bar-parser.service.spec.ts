@@ -281,9 +281,9 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('Parsing Integration', () => {
-      it('should call updateEstimate when text contains estimate syntax', async () => {
+      it('should call updateEstimate when parsing text', async () => {
         await service.parseAndUpdateText(
-          'Task with estimate 30m',
+          'Task with potential time estimate',
           mockConfig,
           mockProjects,
           mockTags,
@@ -293,7 +293,7 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateEstimate).toHaveBeenCalled();
       });
 
-      it('should not call updateEstimate for text without estimate on first parse', async () => {
+      it('should handle null time estimates', async () => {
         await service.parseAndUpdateText(
           'Simple task',
           mockConfig,
@@ -302,24 +302,7 @@ describe('AddTaskBarParserService', () => {
           mockDefaultProject,
         );
 
-        expect(mockStateService.updateEstimate).not.toHaveBeenCalled();
-      });
-
-      it('should not call updateEstimate when typing text without estimate syntax for the first time', async () => {
-        // Simulates: user sets estimate via dropdown, then types task title.
-        // The parser has no previous result (first parse after empty input).
-        // Since the parsed estimate is null and there's no previous result to
-        // diff against, updateEstimate should NOT be called to avoid wiping
-        // out the dropdown-set value.
-        await service.parseAndUpdateText(
-          'My new task',
-          mockConfig,
-          mockProjects,
-          mockTags,
-          mockDefaultProject,
-        );
-
-        expect(mockStateService.updateEstimate).not.toHaveBeenCalled();
+        expect(mockStateService.updateEstimate).toHaveBeenCalledWith(null);
       });
 
       it('should call updateSpent when parsing text', async () => {

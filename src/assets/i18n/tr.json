@@ -7,7 +7,8 @@
     },
     "B_OFFLINE": "İnternet bağlantınız kesildi. Verileri senkronize etmek ve sağlayıcıdan sorunları istemek işe yaramaz.",
     "CONTEXT_MENU": {
-      "CHANGE_BACKGROUND": "Arka planı Değiştir"
+      "CHANGE_PROJECT_SETTINGS": "Proje Ayarlarını Değiştir",
+      "CHANGE_TAG_SETTINGS": "Etiket Ayarlarını Değiştir"
     },
     "SKIP_SYNC_WAIT": "Senkronizasyon beklemesini atla",
     "UPDATE_WEB_APP": "Yeni sürüm mevcut. Yeni Sürüm Yüklensin Mi?"
@@ -106,10 +107,10 @@
       "V": {
         "ADD_NEW_BOARD": "Yeni pano ekle",
         "CONFIRM_DELETE": "Bu panoyu gerçekten silmek istiyor musunuz?",
-        "CREATE_NEW_TAGS_BTN": "Etiketler Oluştur",
-        "CREATE_NEW_TAGS_MSG": "Bu panonun çalışması için {{nr}} yeni etiket oluşturulması gerekiyor",
         "CREATE_NEW_TAG_BTN": "Etiket oluştur",
         "CREATE_NEW_TAG_MSG": "Bu panonun çalışması için 1 yeni etiket oluşturulması gerekiyor",
+        "CREATE_NEW_TAGS_BTN": "Etiketler Oluştur",
+        "CREATE_NEW_TAGS_MSG": "Bu panonun çalışması için {{nr}} yeni etiket oluşturulması gerekiyor",
         "EDIT_BOARD": "Panoyı Düzenle",
         "NO_PANELS_BTN": "Panoyı Yapılandır",
         "NO_PANELS_MSG": "Bu panoda yapılandırılmış panel yok. Buna bazı paneller ekleyin."
@@ -153,44 +154,41 @@
         "SHOW_TASK": "Görevleri Göster",
         "TXT": "<strong>{{title}}</strong> <strong>{{start}}</strong>'da başlıyor!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> <strong>{{start}}</strong>'da başlıyor!<br> (ve {{nrOfOfOtherBanners}} diğer etkinlik sona eriyor)",
-          "ONE": "<strong>{{title}}</strong> <strong>{{start}}</strong> saatinde başlıyor!<br> (ve {{nrOfOtherBanners}} başka etkinlik planlanmış)"
+          "ONE": "<strong>{{title}}</strong> <strong>{{start}}</strong> saatinde başlıyor!<br> (ve {{nrOfOtherBanners}} başka etkinlik planlanmış)",
+          "OTHER": "<strong>{{title}}</strong> <strong>{{start}}</strong>'da başlıyor!<br> (ve {{nrOfOfOtherBanners}} diğer etkinlik sona eriyor)"
         },
         "TXT_PAST": "<strong>{{title}}</strong> <strong>{{start}}</strong>'da başladı!",
         "TXT_PAST_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> <strong>{{start}}</strong>'da başladı!<br> (ve {{nrOfOfOtherBanners}} diğer etkinlik sona eriyor)",
-          "ONE": "<strong>{{title}}</strong> <strong>{{start}}</strong> saatinde başladı!<br> (ve {{nrOfOtherBanners}} başka etkinlik planlanmış)"
+          "ONE": "<strong>{{title}}</strong> <strong>{{start}}</strong> saatinde başladı!<br> (ve {{nrOfOtherBanners}} başka etkinlik planlanmış)",
+          "OTHER": "<strong>{{title}}</strong> <strong>{{start}}</strong>'da başladı!<br> (ve {{nrOfOfOtherBanners}} diğer etkinlik sona eriyor)"
         }
       },
       "EVENT_STRINGS": {
-        "EVENTS_STR": "etkinlikler",
-        "EVENT_STR": "etknilik"
+        "EVENT_STR": "etkinlik",
+        "EVENTS_STR": "etkinlikler"
+      },
+      "CONTEXT_MENU": {
+        "CREATE_TASK": "Görev olarak oluştur",
+        "OPEN_IN_CALENDAR": "Takvimde aç",
+        "RESCHEDULE": "Yeniden planla",
+        "DELETE_EVENT": "Etkinliği sil"
       },
       "S": {
-        "CAL_PROVIDER_ERROR": "Takvim Sağlayıcı Hatası: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "Takvim Sağlayıcı Hatası: {{errTxt}}",
+        "EVENT_HIDDEN": "Takvim etkinliği gizlendi",
+        "EVENT_RESCHEDULED": "Etkinlik yeniden planlandı",
+        "EVENT_DELETED": "Etkinlik silindi",
+        "TIME_BLOCK_ERROR": "Zaman bloğu eşitlenemedi: {{errTxt}}"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "Görsel başarıyla yapıştırıldı",
+      "SIZE_EXCEEDED": "Görsel boyutu ({{actualSize}}) izin verilen maksimum boyutu ({{maxSize}}) aşıyor",
+      "STORAGE_QUOTA_EXCEEDED": "Depolama kotası aşıldı. Lütfen alan açın veya görsel boyutlarını küçültün."
     },
     "CONFIG": {
       "S": {
         "UPDATE_SECTION": " <strong>{{sectionKey}}</strong>için güncellenmiş ayarlar"
-      }
-    },
-    "VOICE_REMINDER": {
-      "FORM": {
-        "HELP": "Bir göreve ilişkin süreyi izlerken, yapılandırılmış cümleyi her X'te tekrarlar.",
-        "L_INTERVAL": "İfadeyi tekrarlama aralığı",
-        "L_TEXT": "Metin",
-        "L_TEXT_DESCRIPTION": "Örn.: \"${currentTaskTitle} üzerinde çalış!\"",
-        "L_VOICE": "Bir Ses Seçin",
-        "L_VOICE_DESCRIPTION": "Bir Ses Seçin",
-        "TITLE": "Sesli hatırlatma"
-      }
-    },
-    "DROPBOX": {
-      "S": {
-        "OFFLINE": "Dropbox: Senkronize edilemiyor, çünkü çevrimdışı",
-        "SYNC_ERROR": "Dropbox: Senkronizasyon sırasında hata",
-        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: PKCE meydan okuması oluşturulamıyor."
       }
     },
     "D_RATE": {
@@ -198,6 +196,13 @@
       "BTN_DONT_BOTHER": "Beni bir daha rahatsız etme",
       "TITLE": "🙈 Lütfen bizi affedin ama...",
       "TXT": "Beğenirseniz, <strong>iyi bir puan vererek projeye son derece yardımcı olursunuz!</strong>"
+    },
+    "DROPBOX": {
+      "S": {
+        "OFFLINE": "Dropbox: Senkronize edilemiyor, çünkü çevrimdışı",
+        "SYNC_ERROR": "Dropbox: Senkronizasyon sırasında hata",
+        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: PKCE meydan okuması oluşturulamıyor."
+      }
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
@@ -214,6 +219,7 @@
         "POMODORO_BREAK_RUNNING": "Mola #{{cycleNr}} çalışıyor",
         "POMODORO_SESSION_RUNNING": "Pomodoro seansı #{{cycleNr}} çalışıyor",
         "RESUME": "Devam Et",
+        "SESSION_OVERTIME": "Oturum süresi aşıldı — hazır olduğunuzda ara verin",
         "SESSION_RUNNING": "Odaklanma oturumu çalışıyor",
         "START": "Başlat",
         "TO_FOCUS_OVERLAY": "Oturuma odaklan"
@@ -230,11 +236,12 @@
       "FLOWTIME_HINT": "Sıkı zamanlayıcılar olmadan esnek hız",
       "FOCUS_TIME_TOOLTIP": "Odaklanma süresi",
       "GET_READY": "Odaklanma oturumunuza hazır olun!",
-      "GOGOGO": "Hadi hadi hadi!!!",
       "GO_TO_PROCRASTINATION": "Ertelediğinde yardım al",
+      "GOGOGO": "Hadi hadi hadi!!!",
       "LONG_BREAK": "Uzun Mola",
       "LONG_BREAK_TITLE": "Uzun Mola - Döngü {{cycle}}",
       "ON": "on",
+      "OVERTIME_MSG": "Süre doldu — hazır olduğunuzda ara verin",
       "OPEN_ISSUE_IN_BROWSER": "Sorunu Tarayıcıda aç",
       "PAUSE_BREAK": "Mola duraklat",
       "PAUSE_SESSION": "Seansı Duraklat",
@@ -248,6 +255,7 @@
       "PREP_SIT_UPRIGHT": "Dik durun",
       "PREP_STRETCH": "Hafifçe esneme hareketleri yapın",
       "REMOVE_TIME_MINUTE": "1 dakika çıkar",
+      "RESET_CYCLES": "Oturum sayacını sıfırla",
       "RESUME_BREAK": "Molaya devam et",
       "RESUME_SESSION": "Oturumu devam ettir",
       "SELECT_MODE": "Odaklanma modunu seçin",
@@ -263,8 +271,7 @@
       "START_FOCUS_SESSION": "Odaklanma Oturumunu Başlat",
       "START_NEXT_FOCUS_SESSION": "Sonraki Odak Oturumunu başlat",
       "SWITCH_TASK": "Görevi Değiştir",
-      "WORKED_FOR": "Şunun için çalıştın",
-      "RESET_CYCLES": "Oturum sayacını sıfırla"
+      "WORKED_FOR": "Şunun için çalıştın"
     },
     "GITEA": {
       "FORM": {
@@ -294,11 +301,11 @@
     "GITLAB": {
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "Önceden doldurulmuş süre, geçmiş günlere ait izlenmeyen verileri içeriyor.",
-        "TITLE": "Sorunlara Harcanan Zamanı GitLab'a Gönderin",
-        "TOTAL_MSG": "Bugünkü toplam <em>{{totalTimeToSubmit}</em> çalışma süresini <em>{{nrOfTasksToSubmit}</em> farklı sorunlara göndereceksiniz.",
         "T_ALREADY_TRACKED": "Zaten Takip Edildi",
         "T_TITLE": "Başlık",
-        "T_TO_BE_SUBMITTED": "Gönderilecek"
+        "T_TO_BE_SUBMITTED": "Gönderilecek",
+        "TITLE": "Sorunlara Harcanan Zamanı GitLab'a Gönderin",
+        "TOTAL_MSG": "Bugünkü toplam <em>{{totalTimeToSubmit}</em> çalışma süresini <em>{{nrOfTasksToSubmit}</em> farklı sorunlara göndereceksiniz."
       },
       "FORM": {
         "FILTER": "Özel Filtre",
@@ -340,11 +347,21 @@
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Bu entegrasyon muhtemelen tarayıcınızda çalışmayacaktır. Lütfen Super Productivity'nin Masaüstü veya Android sürümünü indirin!",
       "DEFAULT": {
-        "ISSUES_STR": "Sorunlar",
-        "ISSUE_STR": "Sorun"
+        "ISSUE_STR": "Sorun",
+        "ISSUES_STR": "Sorunlar"
       },
+      "DEFAULT_NOTE_LABEL": "İçe aktarılan görevler için varsayılan not",
       "DEFAULT_PROJECT_DESCRIPTION": "Sorunlardan oluşturulan görevlere atanan proje.",
       "DEFAULT_PROJECT_LABEL": "Varsayılan Super Productivity Projesi",
+      "DEFAULT_TAGS_LABEL": "İçe aktarılan görevler için varsayılan etiketler",
+      "FORM": {
+        "AUTO_ADD_TO_BACKLOG": "Varsayılan projeye otomatik aktar (varsayılan proje gerektirir)",
+        "AUTO_POLL": "İçe aktarılanları değişiklikler için yokla ve bildir",
+        "POLLING_MODE": "Yoklama tetikleyicisi",
+        "POLLING_MODE_DESCRIPTION": "Yoklamanın ne zaman yapılacağı: yalnızca ilgili proje veya etiket açıkken veya her zaman arka planda",
+        "POLLING_MODE_WHEN_PROJECT_OPEN": "Bağlam açıkken",
+        "POLLING_MODE_ALWAYS": "Her zaman (arka planda)"
+      },
       "HOW_TO_GET_A_TOKEN": "Bir token nasıl alınır?",
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Atanan",
@@ -373,6 +390,9 @@
         "WORKLOG": "Çalışma kaydı"
       },
       "S": {
+        "AUTO_CREATE_FAILED": "Otomatik sorun oluşturma başarısız: {{errorMsg}}",
+        "CONNECTION_FAILED": "Bağlantı başarısız",
+        "CONNECTION_SUCCESS": "Bağlantı çalışıyor!",
         "ERR_GENERIC": "{{issueProviderName}} Hata: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: İstemci tarafı ağ hatası nedeniyle istek başarısız oldu",
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Düzgün yapılandırılmamış",
@@ -381,29 +401,46 @@
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: Güncelleme gerekli değil",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: {{nr}} {{issuesStr}} için güncellenmiş veriler",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: \"{{issueTitle}}\" için güncellenmiş veriler",
+        "PLUGIN_NOT_INSTALLED": "Gerekli eklenti \"{{pluginName}}\" yüklü değil.",
         "POLLING_BACKLOG": "{{issueProviderName}}: Yeni {{issuesStr}}için anket",
         "POLLING_CHANGES": "{{issueProviderName}}: {{issuesStr}}için Anket Değişiklikleri",
-        "AUTO_CREATE_FAILED": "Otomatik sorun oluşturma başarısız: {{errorMsg}}",
-        "CONNECTION_FAILED": "Bağlantı başarısız",
-        "CONNECTION_SUCCESS": "Bağlantı çalışıyor!",
-        "PLUGIN_NOT_INSTALLED": "Gerekli eklenti \"{{pluginName}}\" yüklü değil.",
+        "DELETE_REMOTE_FAILED": "Uzak sorun silinemedi",
+        "LOAD_OPTIONS_FAILED": "{{fieldKey}} için seçenekler yüklenemedi",
+        "OAUTH_CONNECTED": "OAuth hesabı başarıyla bağlandı.",
+        "OAUTH_DISCONNECTED": "OAuth hesabının bağlantısı kesildi.",
+        "OAUTH_FAILED": "Kimlik doğrulama başarısız oldu.",
+        "REMOTE_ISSUE_DELETED": "Uzak sorun silindi. Bağlı olan \"{{taskTitle}}\" görevi silinsin mi?",
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Uzak sorun silindi ancak \"{{taskTitle}}\" görevinin izlenen zamanı var. Yine de silinsin mi?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Çift yönlü senkronizasyon gönderimi başarısız: {{errorMsg}}"
-      },
-      "DIALOG": {
-        "ADVANCED_CONFIG": "Gelişmiş Yapılandırma",
-        "DELETE_CONFIRM": "Bu sorun sağlayıcısını silmek istediğinizden emin misiniz? Silmek, <strong>daha önce içe aktarılmış tüm sorun görevlerinin referanslarını kaybedeceği</strong> anlamına gelir. Bu işlem geri alınamaz!"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Yeni görevler için otomatik sorun oluştur",
         "AUTO_CREATE_ISSUES_DESCRIPTION": "Varsayılan projeye yeni bir üst düzey görev eklediğinizde otomatik olarak bir sorun oluşturur. Varsayılan projenin ayarlanmış olması gerekir.",
         "BOTH": "Her ikisi (çift yönlü)",
+        "DUE_DAY": "Bitiş Günü",
+        "DUE_WITH_TIME": "Bitiş Tarihi/Saati",
         "NOTES": "Notlar / Açıklama senkronizasyon yönü",
         "OFF": "Kapalı",
         "PULL_ONLY": "Yalnızca çekme",
         "PUSH_ONLY": "Yalnızca gönderme",
         "SECTION": "Çift Yönlü Senkronizasyon (deneysel)",
         "STATUS": "Durum senkronizasyon yönü",
+        "TIME_ESTIMATE": "Zaman Tahmini",
         "TITLE": "Başlık senkronizasyon yönü"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "Gelişmiş Yapılandırma",
+        "CONNECTED": "Bağlandı",
+        "DELETE_CONFIRM": "Bu sorun sağlayıcısını silmek istediğinizden emin misiniz? Silmek, <strong>daha önce içe aktarılmış tüm sorun görevlerinin referanslarını kaybedeceği</strong> anlamına gelir. Bu işlem geri alınamaz!",
+        "DISCONNECT": "Bağlantıyı Kes",
+        "EDIT_TITLE": "{{title}} Yapılandırmasını Düzenle",
+        "LOAD_OPTIONS": "Seçenekleri Yükle",
+        "LOAD_OPTIONS_FAILED": "Seçenekler yüklenemedi",
+        "LOADING_OPTIONS": "Seçenekler yükleniyor...",
+        "OPTIONS_LOADED": "Seçenekler yüklendi",
+        "RELOAD_OPTIONS": "Seçenekleri Yeniden Yükle",
+        "SETUP_TITLE": "{{title}} Yapılandırmasını Kur",
+        "TEST_CONNECTION": "Bağlantıyı Test Et"
       }
     },
     "ISSUE_PANEL": {
@@ -418,8 +455,8 @@
       },
       "CFG_CMP": {
         "ALWAYS_ASK": "Her zaman iletişim kutusunu aç",
-        "DONE": "Görevi tamamlama Durumu",
         "DO_NOT": "Geçiş yapma",
+        "DONE": "Görevi tamamlama Durumu",
         "ENABLE": "Jira entegrasyonunu etkinleştir",
         "ENABLE_TRANSITIONS": "Geçiş İşlemini Etkinleştir",
         "IN_PROGRESS": "Başlangıç görevi için Durum",
@@ -477,8 +514,8 @@
         "ALLOW_SELF_SIGNED": "Kendinden imzalı sertifikaya izin ver",
         "HOST": "Host (örneğin: http://my-host.de:1234)",
         "PASSWORD": "Jeton / Şifre",
-        "USER_NAME": "Email / Kullanıcı Adı",
         "USE_PAT": "Şifre yerine Kişisel Erişim Jetonu kullanın",
+        "USER_NAME": "Email / Kullanıcı Adı",
         "WONKY_COOKIE_MODE": "Wonky Cookie Yedek Kimlik Doğrulama (yalnızca masaüstü uygulaması)"
       },
       "FORM_SECTION": {
@@ -525,8 +562,8 @@
         "NO_VALID_TRANSITION": "Jira: Geçerli bir geçiş yapılandırılmadı",
         "TIMED_OUT": "Jira: İstek zaman aşımına uğradı",
         "TRANSITION": "Jira: \"{{issueKey}}\" sayısını \"{{name}}\" olarak ayarla",
-        "TRANSITIONS_LOADED": "Jira: Geçişler yüklendi. Bunları atamak için aşağıdaki seçimleri kullanın",
         "TRANSITION_SUCCESS": "Jira: {{issueKey}} sayısını <strong>{{chosenTransition}}</strong>olarak ayarla",
+        "TRANSITIONS_LOADED": "Jira: Geçişler yüklendi. Bunları atamak için aşağıdaki seçimleri kullanın",
         "UNABLE_TO_REASSIGN": "Jira: Kullanıcı adını belirtmediğiniz için sorunu kendinize yeniden atayamadınız. Lütfen ayarları ziyaret edin."
       },
       "STEPPER": {
@@ -619,12 +656,39 @@
         "PLACEHOLDER_3": "Odak nerede kaydı - ve onu nasıl koruyabilirsin?",
         "PLACEHOLDER_4": "Hangi görev sana enerji verdi? Hangisi tüketti?",
         "PLACEHOLDER_5": "Tekrar edilecek bir şey. Değiştirilecek bir şey.",
+        "REMIND_LABEL": "Bunu yarın hatırlat",
         "REMINDER_CREATED": "Yarın için düşünce hatırlatıcısı planlandı",
         "REMINDER_ERROR": "Hatırlatıcı planlanamadı",
         "REMINDER_NEEDS_TEXT": "Hatırlatıcı istemeden önce bir düşünce yazın",
         "REMINDER_TASK_TITLE": "Düşünce notunu yeniden ziyaret et",
-        "REMIND_LABEL": "Bunu yarın hatırlat",
         "TITLE": "Düşünce Notu"
+      }
+    },
+    "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "Nextcloud Temel URL",
+        "FILTER_BY_ASSIGNEE": "Yalnızca bana atanmış kartları içe aktar",
+        "IS_TRANSITION_ISSUES_ENABLED": "Tamamlanma durumunu ve başlığı Nextcloud Deck'e geri senkronize et",
+        "PASSWORD": "Nextcloud uygulama şifreniz",
+        "POLL_INTERVAL_MINUTES": "Yoklama aralığı (dakika)",
+        "TITLE_TEMPLATE": "Görev başlık şablonu",
+        "TITLE_TEMPLATE_DESCRIPTION": "Değişkenler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Örnek: [{BOARD}: {COLUMN}] {CARD_TITLE}. Yalnızca kart başlığı için boş bırakın.",
+        "USERNAME": "Nextcloud kullanıcı adınız"
+      },
+      "FORM_SECTION": {
+        "HELP": "Kartları görev olarak içe aktarmak için Nextcloud Deck entegrasyonunuzu yapılandırın. Kimlik doğrulama için uygulama şifresi kullanın."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNED_USERS": "Atanan Kullanıcılar",
+        "DECK_DESCRIPTION": "Deck Açıklaması",
+        "LABELS": "Etiketler",
+        "STACK": "Yığın"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Pano bulunamadı",
+        "CARD_NOT_FOUND": "Nextcloud Deck: \"{{issueId}}\" kartı sunucuda silinmiş görünüyor.",
+        "ERR_CREDENTIALS_MISSING": "Önce Nextcloud URL'sini, kullanıcı adını ve şifreyi girin.",
+        "ERR_LOAD_BOARDS": "Deck panoları yüklenemedi. Kimlik bilgilerinizi kontrol edin."
       }
     },
     "NOTE": {
@@ -650,14 +714,14 @@
         "VIEW_SPLIT": "Ayrıştırılmış ve ayrıştırılmamış markdown'ı bölünmüş görünümde görüntüleyin",
         "VIEW_TEXT_ONLY": "Ayrıştırılmamış metin olarak görüntüle"
       },
+      "NOTE_CMP": {
+        "DISABLE_PARSE": "Önizleme için markdown ayrıştırmayı devre dışı bırak",
+        "ENABLE_PARSE": "Markdown ayrıştırmayı etkinleştir"
+      },
       "NOTES_CMP": {
         "ADD_BTN": "Yeni not ekle",
         "DROP_TO_ADD": "Yeni not eklemek için buraya bırakın",
         "NO_NOTES": "Şu anda not yok"
-      },
-      "NOTE_CMP": {
-        "DISABLE_PARSE": "Önizleme için markdown ayrıştırmayı devre dışı bırak",
-        "ENABLE_PARSE": "Markdown ayrıştırmayı etkinleştir"
       },
       "S": {
         "NOTE_ADDED": "Not kaydedildi"
@@ -666,8 +730,8 @@
     "OPEN_PROJECT": {
       "CFG_CMP": {
         "ALWAYS_ASK": "İletişim kutusunu her zaman aç",
-        "DONE": " Görevi tamamlama durumu ",
         "DO_NOT": "Geçiş yapma",
+        "DONE": " Görevi tamamlama durumu ",
         "ENABLE": "Openproject entegrasyonunu etkinleştir",
         "ENABLE_TRANSITIONS": "Geçiş İdaresini Etkinleştir",
         "IN_PROGRESS": "Görev başlatma durumu",
@@ -722,16 +786,16 @@
         "UPLOAD_ATTACHMENT": "Göreve yükle"
       },
       "ISSUE_STRINGS": {
-        "ISSUES_STR": "iş paketleri",
-        "ISSUE_STR": "iş paketi"
+        "ISSUE_STR": "iş paketi",
+        "ISSUES_STR": "iş paketleri"
       },
       "S": {
         "ERR_NO_FILE": "Dosya seçilmedi",
         "ERR_UNKNOWN": "OpenProject: Bilinmeyen hata {{statusCode}} {{errorMsg}}. CORS, sunucu için uygun şekilde yapılandırılmış mı?",
         "POST_TIME_SUCCESS": "OpenProject: {{issueTitle}}için başarıyla oluşturulan zaman girişi",
         "TRANSITION": "OpenProject: \"{{issueKey}}\" sorununu \"{{name}}\" olarak ayarlayın",
-        "TRANSITIONS_LOADED": "Geçişler yüklendi. Bunları atamak için aşağıdaki seçimleri kullanın",
-        "TRANSITION_SUCCESS": "OpenProject: {{issueKey}} sorununu <strong>{{chosenTransition}}</strong> olarak ayarlayın"
+        "TRANSITION_SUCCESS": "OpenProject: {{issueKey}} sorununu <strong>{{chosenTransition}}</strong> olarak ayarlayın",
+        "TRANSITIONS_LOADED": "Geçişler yüklendi. Bunları atamak için aşağıdaki seçimleri kullanın"
       }
     },
     "PLANNER": {
@@ -743,8 +807,8 @@
       "EDIT_REPEATED_TASK": "Tekrarlanan görevi '{{taskName}}' düzenle",
       "NO_TASKS": "Görev yok",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "Planlanmış öğe yok",
-        "NO_DEADLINES": "Son tarih yok"
+        "NO_DEADLINES": "Son tarih yok",
+        "NO_SCHEDULED_ITEMS": "Planlanmış öğe yok"
       },
       "S": {
         "REMOVED_PLAN_DATE": "'{{taskTitle}}' görevi için plan tarihi kaldırıldı",
@@ -776,9 +840,11 @@
         "TITLE": "Temel ayarlar"
       },
       "FORM_THEME": {
+        "D_BACKGROUND_OVERLAY_OPACITY": "Arka planı daha fazla veya daha az saydam yapmak için bu değeri ayarlayın. Varsayılan %20'dir.",
         "HELP": "Projeniz için tema ayarları.",
         "L_BACKGROUND_IMAGE_DARK": "Arka Plan Resmi URL'si (Koyu Tema)",
         "L_BACKGROUND_IMAGE_LIGHT": "Arka Plan Resmi URL'si (Açık Tema)",
+        "L_BACKGROUND_OVERLAY_OPACITY": "Daha iyi kontrast için arka plan görselini koyulaştır/aydınlat",
         "L_COLOR_ACCENT": "Vurgu Rengi",
         "L_COLOR_PRIMARY": "Ana renk",
         "L_COLOR_WARN": "Uyar / Hata Rengi",
@@ -788,9 +854,7 @@
         "L_IS_AUTO_CONTRAST": "En iyi okunabilirlik için otomatik metin renkleri ayarlama",
         "L_IS_DISABLE_BACKGROUND_TINT": "Renkli arka plan gradyanını devre dışı bırak",
         "L_THEME_COLOR": "Tema Rengi",
-        "TITLE": "Tema",
-        "D_BACKGROUND_OVERLAY_OPACITY": "Arka planı daha fazla veya daha az saydam yapmak için bu değeri ayarlayın. Varsayılan %20'dir.",
-        "L_BACKGROUND_OVERLAY_OPACITY": "Daha iyi kontrast için arka plan görselini koyulaştır/aydınlat"
+        "TITLE": "Tema"
       },
       "S": {
         "ARCHIVED": "Arşivlenmiş Proje",
@@ -825,18 +889,27 @@
       "WEEK_TITLE": " {{nr}}. Hafta ({{timeSpent}})"
     },
     "REDMINE": {
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Etkinlik",
+        "INVALID_DATE": "Girilen değer bir tarih değil!",
+        "POST_TIME": "Süreyi Gönder",
+        "STARTED": "Başlangıç",
+        "SUBMIT_TIME_FOR": "Redmine'a süre gönder:",
+        "TIME_SPENT": "Harcanan Süre",
+        "TITLE": "Redmine: Çalışma Kaydı Gönder"
+      },
       "FORM": {
         "API_KEY": "API erişim anahtarı",
         "HOST": "Sağlayıcı (e.g.: https://redmine.org)",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Redmine'a raporlamak için süre takibi diyaloğunu göster",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Redmine projesinde süre takibi modülünün etkinleştirilmiş olması gerekir",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Alt görevler tamamlandığında süre takibi diyaloğunu göster",
         "PROJECT_ID": "Proje Tanımlayıcı",
         "PROJECT_ID_DESCRIPTION": "Projeyi Tarayıcıda görüntülerken URL'nin bir parçası olarak bulunabilir.",
         "SCOPE": "Kapsam",
         "SCOPE_ALL": "Hepsi",
         "SCOPE_ASSIGNED": "Bana atanan",
-        "SCOPE_CREATED": "Benim tarafımdan oluşturuldu",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Redmine'a raporlamak için süre takibi diyaloğunu göster",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Redmine projesinde süre takibi modülünün etkinleştirilmiş olması gerekir",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Alt görevler tamamlandığında süre takibi diyaloğunu göster"
+        "SCOPE_CREATED": "Benim tarafımdan oluşturuldu"
       },
       "FORM_SECTION": {
         "HELP": "<p>Burada, günlük planlama görünümündeki görev oluşturma panelinde belirli bir proje için açık Redmine (çevrimiçi sürümü veya şirket içinde barındırılan bir örnek) sorunlarını listelemek için SuperProductivity'yi yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili bir bağlantının yanı sıra konuyla ilgili daha fazla bilgi sağlayacaklar.</p><p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listenize ekleyebilir ve senkronize edebilirsiniz.</p>",
@@ -848,15 +921,6 @@
         "MARK_AS_CHECKED": "Güncellemeleri kontrol edildi olarak işaretle",
         "PRIORITY": "Öncelik",
         "STATUS": "Durum"
-      },
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Etkinlik",
-        "INVALID_DATE": "Girilen değer bir tarih değil!",
-        "POST_TIME": "Süreyi Gönder",
-        "STARTED": "Başlangıç",
-        "SUBMIT_TIME_FOR": "Redmine'a süre gönder:",
-        "TIME_SPENT": "Harcanan Süre",
-        "TITLE": "Redmine: Çalışma Kaydı Gönder"
       },
       "S": {
         "POST_TIME_SUCCESS": "Redmine: {{issueTitle}} için süre kaydı başarıyla oluşturuldu"
@@ -871,8 +935,8 @@
         "START_NOW": "Şimdi başla",
         "TXT": "<strong>{{title}}</strong>  <strong>ile başlar {{start}}</strong>!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong>  <strong>ile başlar {{start}}</strong>!<br> (ve {{nrOfOtherBanners}} diğer görevlerin zamanı geldi)",
-          "ONE": "<strong>{{title}}</strong> <strong>{{start}}</strong> saatinde başlıyor!<br> (ve {{nrOfOtherBanners}} başka görev planlanmış)"
+          "ONE": "<strong>{{title}}</strong> <strong>{{start}}</strong> saatinde başlıyor!<br> (ve {{nrOfOtherBanners}} başka görev planlanmış)",
+          "OTHER": "<strong>{{title}}</strong>  <strong>ile başlar {{start}}</strong>!<br> (ve {{nrOfOtherBanners}} diğer görevlerin zamanı geldi)"
         }
       },
       "S_ACTIVE_TASK_DUE": "Şu anda üzerinde çalıştığınız görevin süresi doldu!<br/> ({{title}})",
@@ -887,8 +951,8 @@
       "INSERT_BEFORE": "Önce",
       "LUNCH_BREAK": "Öğle Arası",
       "MONTH": "Ay",
-      "NOW": "Şimdi",
       "NO_TASKS": "Şu anda görev yok. Üst çubuktaki + Düğmesi aracılığıyla görev ekleyin.",
+      "NOW": "Şimdi",
       "PLAN_END_DAY": "Günün sonunda planla",
       "PLAN_START_DAY": "Günün başında planla",
       "SHIFT_KEY_INFO": "Shift tuşunu basılı tutarak gün planlama modunu değiştirin",
@@ -916,25 +980,21 @@
         "L_COUNTDOWN_DURATION": "Geri sayım süresi",
         "L_DAILY_GOAL": "Başarılı bir seri için günlük hedef",
         "L_ICON": "İkon",
-        "L_IS_ENABLED": "Etkin",
-        "L_TITLE": "Başlık",
-        "L_TRACK_STREAKS": "Pist Çizgileri",
-        "L_TYPE": "Tip",
-        "L_WEEKDAYS": "Çizgiyi kontrol etmek için hafta içi günler",
-        "TITLE": "Basit Sayaçlar",
-        "TYPE_CLICK_COUNTER": "Tıklama Sayacı",
-        "TYPE_REPEATED_COUNTDOWN": "Tekrarlanan Geri Sayım",
-        "TYPE_STOPWATCH": "Kronometre",
         "L_ICON_ON": "Açıkken simge",
+        "L_IS_ENABLED": "Etkin",
         "L_IS_HIDE_BUTTON": "Araç çubuğu düğmesini gizle",
         "L_STREAK_MODE": "Seri takip modu",
         "L_STREAK_MODE_SPECIFIC_DAYS": "Belirli hafta günleri",
         "L_STREAK_MODE_WEEKLY_FREQUENCY": "Haftalık sıklık (ör. haftada 3 kez)",
-        "L_WEEKLY_FREQUENCY": "Haftalık tamamlama sayısı"
-      },
-      "S": {
-        "GOAL_REACHED_1": "Bugünkü hedefinize ulaştınız!",
-        "GOAL_REACHED_2": "Mevcut seri süresi:"
+        "L_TITLE": "Başlık",
+        "L_TRACK_STREAKS": "Pist Çizgileri",
+        "L_TYPE": "Tip",
+        "L_WEEKDAYS": "Çizgiyi kontrol etmek için hafta içi günler",
+        "L_WEEKLY_FREQUENCY": "Haftalık tamamlama sayısı",
+        "TITLE": "Basit Sayaçlar",
+        "TYPE_CLICK_COUNTER": "Tıklama Sayacı",
+        "TYPE_REPEATED_COUNTDOWN": "Tekrarlanan Geri Sayım",
+        "TYPE_STOPWATCH": "Kronometre"
       },
       "HABIT_TRACKER": {
         "ADD_HABIT": "Yeni alışkanlık ekle",
@@ -942,14 +1002,18 @@
         "NEXT_WEEK": "Sonraki hafta",
         "PREV_WEEK": "Önceki hafta",
         "TODAY": "Bugün"
+      },
+      "S": {
+        "GOAL_REACHED_1": "Bugünkü hedefinize ulaştınız!",
+        "GOAL_REACHED_2": "Mevcut seri süresi:"
       }
     },
     "SYNC": {
       "A": {
         "REMOTE_MODEL_VERSION_NEWER": "Uzak model sürümü, yerel sürümden daha yenidir. Lütfen yerel uygulamanızı en yeni sürüme güncelleyin!"
       },
-      "BTN_SYNC_NOW": "Şimdi Senkronize Et",
       "BTN_RESTORE_FROM_HISTORY": "Geçmişten Geri Yükle",
+      "BTN_SYNC_NOW": "Şimdi Senkronize Et",
       "C": {
         "FORCE_UPLOAD": "Yine de Lokal veriler yüklensin mi?"
       },
@@ -989,36 +1053,91 @@
         "VECTOR_COMPARISON_LOCAL_GREATER": "Lokal > Uzak",
         "VECTOR_COMPARISON_LOCAL_LESS": "Lokal < Uzak"
       },
+      "D_DATA_REPAIR_CONFIRM": {
+        "MSG": "Verileriniz hasarlı görünüyor. Otomatik onarım denemek ister misiniz? Bu, küçük veri kayıplarına neden olabilir.",
+        "TITLE": "Veri Hasarı Tespit Edildi"
+      },
+      "D_DATA_REPAIRED": {
+        "MSG": "Verileriniz otomatik onarım gerektirdi ({{count}} sorun düzeltildi). Bu normalde olmamalı. Tekrarlanırsa lütfen bildirin.",
+        "TITLE": "Veri Onarımı Gerçekleştirildi",
+        "UNKNOWN_ERROR": "Bilinmeyen Senkronizasyon Hatası: {{err}}"
+      },
       "D_DECRYPT_ERROR": {
         "BTN_OVER_WRITE_REMOTE": "Uzaktan kumandayı değiştirme ve üzerine yazma",
         "CHANGE_PW_AND_DECRYPT": "Değiştir ve Şifreyi Çözmeyi Deneyin",
         "P1": "Verileriniz şifrelenir ve şifre çözme başarısız olur. Lütfen doğru şifreyi giriniz!",
-        "PASSWORD": "Şifre",
         "P2_FORGOT_PW": "<strong>Şifrenizi unuttuysanız</strong>, doğru şifreyi girin ve \"Şifre Çözmeyi Yeniden Dene\"ye tıklayın.",
         "P3_PW_CHANGED": "<strong>Şifrenizi başka bir cihazda değiştirdiyseniz</strong>, yeni şifrenizi girin ve \"Uzak Veriyi Üzerine Yaz\"a tıklayın. Bu, yerel verilerinizi sunucuya yükleyecektir.",
+        "PASSWORD": "Şifre",
         "TITLE": "Şifre Çözme Başarısız"
       },
       "D_ENTER_PASSWORD": {
-        "TITLE": "Şifreleme Parolası Gerekli",
-        "MESSAGE": "Senkronizasyon sunucusu şifrelenmiş veriler içeriyor, ancak bu cihazda şifreleme parolası yapılandırılmamış. Verilerinizi şifrelemek ve senkronize etmek için şifreleme parolanızı girin.",
-        "PASSWORD_LABEL": "Şifreleme Parolası",
-        "BTN_SAVE_AND_SYNC": "Kaydet ve Senkronize Et",
         "BTN_FORCE_OVERWRITE": "Yerel Veriyi Kullan",
+        "BTN_SAVE_AND_SYNC": "Kaydet ve Senkronize Et",
         "FORCE_OVERWRITE_CONFIRM": "Bu işlem <strong>sunucudaki tüm verileri silecek</strong> ve yerel verilerinizi bu şifreyle şifreleyerek yükleyecektir. Devam edilsin mi?",
         "FORCE_OVERWRITE_INFO": "Yerel verilerinizi korumayı tercih ediyorsanız, bunun yerine sunucuyu üzerine yazabilirsiniz.",
-        "FORCE_OVERWRITE_TITLE": "Sunucu Verisi Üzerine Yazılsın mı?"
+        "FORCE_OVERWRITE_TITLE": "Sunucu Verisi Üzerine Yazılsın mı?",
+        "MESSAGE": "Senkronizasyon sunucusu şifrelenmiş veriler içeriyor, ancak bu cihazda şifreleme parolası yapılandırılmamış. Verilerinizi şifrelemek ve senkronize etmek için şifreleme parolanızı girin.",
+        "PASSWORD_LABEL": "Şifreleme Parolası",
+        "TITLE": "Şifreleme Parolası Gerekli"
       },
       "D_FRESH_CLIENT_CONFIRM": {
         "MESSAGE": "Bu yeni bir kurulum gibi görünüyor. {{count}} değişiklik içeren uzak veriler bulundu. Bu verileri indirmek ve uygulamak istiyor musunuz?",
         "OK": "Uzak Verileri İndir",
         "TITLE": "İlk Senkronizasyon"
       },
+      "D_INCOMPLETE_SYNC": {
+        "BTN_CLOSE_APP": "Uygulamayı Kapat",
+        "BTN_DOWNLOAD_BACKUP": "Yerel Yedeklemeyi İndir",
+        "BTN_FORCE_DOWNLOAD": "Uzak Veriyi Zorla İndir",
+        "BTN_FORCE_UPLOAD": "Yerel Yüklemeyi Zorla",
+        "INCOHERENT_P1": "Uzak verilerinizin tarihi gelecekten",
+        "INCOHERENT_P2": "Sistemlerinizdeki saat ayarını kontrol etmelisiniz!",
+        "P1": "Uzaktan senkronizasyon verileri tutarsız!",
+        "P2": "Etkilenen model:",
+        "T3": "2 Seçeneğiniz var:",
+        "T4": "1. Diğer cihazınıza gidin ve senkronizasyonu orada tamamlayın.",
+        "T5": "2. Veya uzak verileri yerel verilerinizle üzerine yazabilirsiniz. Tüm uzak değişiklikler\n   kaybolacaktır!",
+        "T6": "Üzerine yazdığınız verilerin bir yedeğini oluşturmanız önerilir!!!"
+      },
+      "D_INITIAL_CFG": {
+        "SAVE_AND_ENABLE": "Kaydet & Senkronizasyonu Etkinleştir",
+        "TITLE": "Senkronizasyonu Yapılandır"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "{{count}} senkronize edilmemiş yerel değişikliğiniz var ve bunlar uzak verilerle değiştirilecek. Devam etmek istiyor musunuz?",
+        "TITLE": "Yerel Verileri Değiştir?"
+      },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "Senkronizasyonu devre dışı bırak",
+        "PERM_FILE": "İzin ver",
+        "TEXT": "<p>Yerel senkronizasyon için dosya izniniz iptal edildi.</p>",
+        "TITLE": "Senkronizasyon: Yerel dosya izni reddedildi"
+      },
+      "D_RESTORE": {
+        "BTN_RESTORE": "Geri Yükle",
+        "CONFIRM_MSG": "<strong>{{timestamp}}</strong> tarihine geri yüklemek istediğinizden emin misiniz?<br><br>Bu, <strong>tüm mevcut verilerinizi tamamen değiştirecek</strong> ve <strong>geri alınamaz</strong>.",
+        "CONFIRM_TITLE": "Geri Yüklemeyi Onayla",
+        "ERROR_LOADING": "Geri yükleme noktaları yüklenemedi",
+        "ERROR_RESTORE": "Veri geri yüklenemedi",
+        "INTRO": "Verilerinizi geri yüklemek için bir zaman noktası seçin:",
+        "LOADING": "Geri yükleme noktaları yükleniyor...",
+        "NO_POINTS": "Kullanılabilir geri yükleme noktası yok. Geri yükleme noktaları senkronize ettiğinizde veya veri içe aktardığınızda oluşturulur.",
+        "TITLE": "Geçmişten Geri Yükle",
+        "TYPE_BACKUP_IMPORT": "Yedek geri yükleme",
+        "TYPE_REPAIR": "Otomatik onarım",
+        "TYPE_SYNC_IMPORT": "Tam senkronizasyon içe aktarma",
+        "WARNING": "Bu, mevcut tüm verilerinizi seçili yedekle ile değiştirecek. Bu işlem geri alınamaz."
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "CONFIRM": "Yerel Veriyi Yükle",
+        "MESSAGE": "Bu senkronizasyon sunucusu zaten veri içeriyor. Yerel verilerinizi birleştirmek için yüklemek ister misiniz? Bunu atlarsanız, bazı yerel değişiklikleriniz senkronize olmayabilir.",
+        "SKIP": "Atla",
+        "TITLE": "Sunucuda Zaten Veri Var"
+      },
       "D_SYNC_IMPORT_CONFLICT": {
-        "TITLE": "Senkronizasyon Çakışması Tespit Edildi",
-        "IMPORT_DATE": "İçe aktarma tarihi",
         "FILTERED_CHANGES": "Filtrelenmiş değişiklikler",
-        "USE_LOCAL": "Verilerimi Kullan",
-        "USE_REMOTE": "Sunucu Verilerini Kullan",
+        "IMPORT_DATE": "İçe aktarma tarihi",
         "MSG_INCOMING": "Verileriniz başka bir cihazda tamamen değiştirildi. Aktarılamayabilecek {{filteredOpCount}} yerel değişikliğiniz var.",
         "MSG_INCOMING_NO_OPS": "Verileriniz başka bir cihazda tamamen değiştirildi. Bu cihaz yeni duruma senkronize olacak.",
         "MSG_LOCAL_FILTERS": "Yerel verileriniz içe aktarıldı/geri yüklendi, ancak sunucuda otomatik olarak birleştirilemeyen diğer cihazlardan {{filteredOpCount}} değişiklik var.",
@@ -1029,168 +1148,24 @@
         "REASON_REPAIR": "Neden: Otomatik veri onarımı yapıldı.",
         "REASON_SERVER_MIGRATION": "Neden: Veri yeni bir senkronizasyon sunucusuna taşındı.",
         "REASON_UNKNOWN": "Neden: Tam durum değişikliği yapıldı.",
-        "RECOMMEND_SERVER": "Önerilen: Diğer cihazla senkronize kalmak için sunucu verilerini kabul edin."
-      },
-      "D_LOCAL_DATA_REPLACE_CONFIRM": {
-        "MESSAGE": "{{count}} senkronize edilmemiş yerel değişikliğiniz var ve bunlar uzak verilerle değiştirilecek. Devam etmek istiyor musunuz?",
-        "TITLE": "Yerel Verileri Değiştir?"
-      },
-      "D_INCOMPLETE_SYNC": {
-        "BTN_CLOSE_APP": "Uygulamayı Kapat",
-        "BTN_DOWNLOAD_BACKUP": "Yerel Yedeklemeyi İndir",
-        "BTN_FORCE_UPLOAD": "Yerel Yüklemeyi Zorla",
-        "P1": "Uzaktan senkronizasyon verileri tutarsız!",
-        "P2": "Etkilenen model:",
-        "T3": "2 Seçeneğiniz var:",
-        "T4": "1. Diğer cihazınıza gidin ve senkronizasyonu orada tamamlayın.",
-        "T5": "2. Veya uzak verileri yerel verilerinizle üzerine yazabilirsiniz. Tüm uzak değişiklikler\n   kaybolacaktır!",
-        "T6": "Üzerine yazdığınız verilerin bir yedeğini oluşturmanız önerilir!!!",
-        "BTN_FORCE_DOWNLOAD": "Uzak Veriyi Zorla İndir",
-        "INCOHERENT_P1": "Uzak verilerinizin tarihi gelecekten",
-        "INCOHERENT_P2": "Sistemlerinizdeki saat ayarını kontrol etmelisiniz!"
-      },
-      "D_INITIAL_CFG": {
-        "SAVE_AND_ENABLE": "Kaydet & Senkronizasyonu Etkinleştir",
-        "TITLE": "Senkronizasyonu Yapılandır"
-      },
-      "D_PERMISSION": {
-        "DISABLE_SYNC": "Senkronizasyonu devre dışı bırak",
-        "PERM_FILE": "İzin ver",
-        "TEXT": "<p>Yerel senkronizasyon için dosya izniniz iptal edildi.</p>",
-        "TITLE": "Senkronizasyon: Yerel dosya izni reddedildi"
-      },
-      "D_RESTORE": {
-        "TITLE": "Geçmişten Geri Yükle",
-        "LOADING": "Geri yükleme noktaları yükleniyor...",
-        "NO_POINTS": "Kullanılabilir geri yükleme noktası yok. Geri yükleme noktaları senkronize ettiğinizde veya veri içe aktardığınızda oluşturulur.",
-        "INTRO": "Verilerinizi geri yüklemek için bir zaman noktası seçin:",
-        "WARNING": "Bu, mevcut tüm verilerinizi seçili yedekle ile değiştirecek. Bu işlem geri alınamaz.",
-        "BTN_RESTORE": "Geri Yükle",
-        "TYPE_SYNC_IMPORT": "Tam senkronizasyon içe aktarma",
-        "TYPE_BACKUP_IMPORT": "Yedek geri yükleme",
-        "TYPE_REPAIR": "Otomatik onarım",
-        "CONFIRM_TITLE": "Geri Yüklemeyi Onayla",
-        "CONFIRM_MSG": "<strong>{{timestamp}}</strong> tarihine geri yüklemek istediğinizden emin misiniz?<br><br>Bu, <strong>tüm mevcut verilerinizi tamamen değiştirecek</strong> ve <strong>geri alınamaz</strong>.",
-        "ERROR_LOADING": "Geri yükleme noktaları yüklenemedi",
-        "ERROR_RESTORE": "Veri geri yüklenemedi"
+        "RECOMMEND_SERVER": "Önerilen: Diğer cihazla senkronize kalmak için sunucu verilerini kabul edin.",
+        "TITLE": "Senkronizasyon Çakışması Tespit Edildi",
+        "USE_LOCAL": "Verilerimi Kullan",
+        "USE_REMOTE": "Sunucu Verilerini Kullan"
       },
       "FORM": {
+        "BTN_CHANGE_PASSWORD": "Şifreyi Değiştir",
+        "BTN_DISABLE_ENCRYPTION": "Şifrelemeyi Devre Dışı Bırak",
         "DROPBOX": {
-          "L_ACCESS_TOKEN": "Erişim Jetonu (Yetkilendirme Kodundan oluşturulmuş)",
           "AUTH_SUCCESS": "Dropbox kimlik doğrulaması başarılı! Kimlik bilgileri kaydedildi.",
           "BTN_AUTHENTICATE": "Dropbox ile Kimlik Doğrula",
           "BTN_REAUTHENTICATE": "Dropbox ile Yeniden Kimlik Doğrula",
           "INFO_TEXT": "Dropbox kimlik doğrulaması OAuth kullanır. Dropbox hesabınızla kimlik doğrulamak için aşağıdaki düğmeye tıklayın.",
+          "L_ACCESS_TOKEN": "Erişim Jetonu (Yetkilendirme Kodundan oluşturulmuş)",
           "REAUTH_SUCCESS": "Dropbox yeniden kimlik doğrulaması başarılı! Kimlik bilgileri güncellendi.",
           "STATUS_CONFIGURED": "Dropbox yapılandırıldı ve senkronizasyona hazır",
           "STATUS_NOT_CONFIGURED": "Yapılandırılmadı - senkronizasyonu etkinleştirmek için kimlik doğrulayın"
         },
-        "GOOGLE": {
-          "L_SYNC_FILE_NAME": "Senkronizasyon Dosya Adı"
-        },
-        "LOCAL_FILE": {
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Dosya erişim izni gerekiyor",
-          "L_SYNC_FOLDER_PATH": "Dosya Yolunu Senkronize Et",
-          "INFO_TEXT": "<strong>Uyarı:</strong> Bu klasörü cihazlar arasında senkronize etmek için Syncthing, Resilio veya benzeri dosya senkronizasyon araçlarını <strong>kullanmayın</strong> — veri bozulmasına ve çakışmalara <strong>neden olurlar</strong>. Çoklu cihaz senkronizasyonu için WebDAV, Dropbox veya SuperSync kullanın."
-        },
-        "SUPER_SYNC": {
-          "INFO_TEXT": "SuperSync görevlerinizi tüm cihazlarınızda gerçek zamanlı olarak senkronize eder. Verileriniz senkronizasyon sunucusunda güvenli bir şekilde depolanır. Not: SuperSync şu anda Beta aşamasındadır.",
-          "L_SERVER_URL": "Sunucu URL'si",
-          "SERVER_URL_DESCRIPTION": "Resmi sunucu için olduğu gibi bırakın veya özel bir sunucu URL'si girin",
-          "LOGIN_INSTRUCTIONS": "Sunucu giriş sayfasını açmak için aşağıdaki düğmeye tıklayın. Giriş yaptıktan sonra erişim jetonunuzu kopyalayın ve buraya yapıştırın.",
-          "BTN_GET_TOKEN": "Sunucuyu Aç ve Jeton Al",
-          "L_ACCESS_TOKEN": "Erişim Jetonu",
-          "ACCESS_TOKEN_DESCRIPTION": "Sunucu giriş sayfasından kopyaladığınız jetonu yapıştırın",
-          "L_ENABLE_E2E_ENCRYPTION": "Uçtan uca şifrelemeyi etkinleştir",
-          "E2E_ENCRYPTION_DESCRIPTION": "Daha yavaş olacak, ancak daha güvenli",
-          "ENCRYPTION_WARNING": "UYARI: Şifreleme parolanızı unutursanız verileriniz kurtarılamaz. Bu parola giriş parolanızdan ayrıdır. Tüm cihazlarda aynı parolayı kullanmanız gerekir.",
-          "L_CHANGE_ENCRYPTION_PASSWORD": "Şifreleme Parolasını Değiştir",
-          "CHANGE_PASSWORD_WARNING": "UYARI: Bu, sunucudaki tüm senkronizasyon geçmişini ve yedekleri kalıcı olarak silecektir. Önceki sürümler kurtarılamaz. Mevcut verileriniz yeni parola ile yeniden yüklenecektir. Tüm diğer cihazlar yeni parolaya ihtiyaç duyacaktır.",
-          "CHANGE_PASSWORD_SUCCESS": "Şifreleme parolası başarıyla değiştirildi",
-          "L_NEW_PASSWORD": "Yeni Şifreleme Parolası",
-          "L_CONFIRM_PASSWORD": "Parolayı Onayla",
-          "PASSWORDS_DONT_MATCH": "Parolalar eşleşmiyor",
-          "PASSWORD_MIN_LENGTH": "Parola en az 8 karakter olmalı",
-          "BTN_CHANGE_PASSWORD": "Parolayı Değiştir",
-          "L_REMOVE_ENCRYPTION": "Veya Şifrelemeyi Kaldır",
-          "REMOVE_ENCRYPTION_WARNING": "Şifrelemeyi kaldırmak tüm sunucu verilerini silecek ve verilerinizi şifrelemeden yeniden yükleyecektir. Tüm cihazlar yeniden yapılandırma yapacaktır.",
-          "DISABLE_ENCRYPTION_TITLE": "Şifrelemeyi Devre Dışı Bırak?",
-          "DISABLE_ENCRYPTION_WARNING": "UYARI: Bu, sunucudaki tüm şifrelenmiş senkronizasyon verilerini kalıcı olarak silecektir. Bu, şifrelenmiş işlemlerin şifrelenmemiş olanlarla karıştırılamaması gerektiği için gereklidir.",
-          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Ne olacak:",
-          "DISABLE_ENCRYPTION_ITEM_1": "Sunucudaki tüm senkronizasyon geçmişi ve yedekler silinecek",
-          "DISABLE_ENCRYPTION_ITEM_2": "Mevcut verileriniz şifrelemeden yeniden yüklenecek",
-          "DISABLE_ENCRYPTION_ITEM_3": "Tüm diğer cihazlar şifrelenmemiş verileri senkronize edecek",
-          "DISABLE_ENCRYPTION_NOTE": "Yerel verileriniz SİLİNMEYECEK. İstediğiniz zaman şifrelemeyi yeniden etkinleştirebilirsiniz.",
-          "BTN_DISABLE_ENCRYPTION": "Şifrelemeyi Devre Dışı Bırak",
-          "DISABLE_ENCRYPTION_SUCCESS": "Şifreleme başarıyla devre dışı bırakıldı",
-          "DISABLE_ENCRYPTION_NOT_READY": "Senkronizasyon etkinleştirilmemiş veya yapılandırılmamış.",
-          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "Bu özellik yalnızca SuperSync için kullanılabilir.",
-          "DISABLE_ENCRYPTION_ENABLE_FIRST": "Lütfen önce senkronizasyonu etkinleştirin ve SuperSync yapılandırmanızı kaydedin, ardından tekrar deneyin.",
-          "ENABLE_ENCRYPTION_TITLE": "Şifrelemeyi Etkinleştir?",
-          "ENABLE_ENCRYPTION_WARNING": "UYARI: Bu, sunucudaki tüm şifrelenmemiş senkronizasyon verilerini kalıcı olarak silecektir. Bu, şifrelenmiş işlemlerin şifrelenmemiş olanlarla karıştırılamaması gerektiği için gereklidir. Şifreleme parolanızı unutursanız verileriniz kurtarılamaz.",
-          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Ne olacak:",
-          "ENABLE_ENCRYPTION_ITEM_1": "Sunucudaki tüm senkronizasyon geçmişi ve yedekler silinecek",
-          "ENABLE_ENCRYPTION_ITEM_2": "Mevcut verileriniz şifreleme ile yeniden yüklenecek",
-          "ENABLE_ENCRYPTION_ITEM_3": "Tüm diğer cihazlar bu şifreleme parolasını girmelidir",
-          "ENABLE_ENCRYPTION_NOTE": "Yerel verileriniz SİLİNMEYECEK. İstediğiniz zaman şifrelemeyi devre dışı bırakabilirsiniz.",
-          "BTN_ENABLE_ENCRYPTION": "Şifrelemeyi Etkinleştir",
-          "ENABLE_ENCRYPTION_SUCCESS": "Şifreleme başarıyla etkinleştirildi",
-          "ENABLE_ENCRYPTION_NOT_READY": "Senkronizasyon etkinleştirilmemiş veya yapılandırılmamış.",
-          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Bu özellik yalnızca SuperSync için kullanılabilir.",
-          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Lütfen önce bir şifreleme parolası girin.",
-          "BTN_FORCE_OVERWRITE": "Sunucuyu Zorla Üzerine Yaz",
-          "ENCRYPTION_ENCOURAGED": "SuperSync için şifreleme gereklidir. Verilerinizi korumak için lütfen şifrelemeyi etkinleştirin.",
-          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync, verilerinizi cihazınızdan çıkmadan önce şifreler</strong>, bu da özel verilerinizin kötüye kullanılmasını veya sızmasını neredeyse imkansız hale getirir.",
-          "FORCE_OVERWRITE_CONFIRM": "Bu işlem <strong>sunucudaki tüm verileri silecek</strong> ve yerel verilerinizi yeni şifreyle yükleyecektir. Senkronize edilmemiş yerel değişiklikler kaybolabilir. Devam etmek istediğinizden emin misiniz?",
-          "FORCE_OVERWRITE_INFO": "Mevcut şifreleme şifresini bilmediğiniz için senkronize edemiyorsanız, sunucuyu yerel verileriniz ve yeni bir şifreyle üzerine yazabilirsiniz.",
-          "FORCE_OVERWRITE_TITLE": "Sunucu Verisi Üzerine Yazılsın mı?",
-          "SETUP_DISABLE_SUPERSYNC_BTN": "SuperSync'i Devre Dışı Bırak",
-          "SETUP_ENCRYPTION_BTN": "Şifre Belirle",
-          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Tüm cihazlarda aynı şifreyi kullanın. Unutulan şifre, uzak verilerin üzerine yazılarak sıfırlanabilir.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Şifre Belirle"
-        },
-        "IMPORT_ENCRYPTION_WARNING": {
-          "TITLE": "Şifreleme Ayarları Değişecek",
-          "WARNING_TEXT": "İçe aktardığınız yedek farklı şifreleme ayarlarına sahip. Şifrelenmiş ve şifrelenmemiş veriler sunucuda birlikte bulunamaz, bu yüzden tüm sunucu verileri silinmelidir.",
-          "CURRENT_STATE": "Mevcut yapılandırmanız",
-          "IMPORTED_STATE": "İçe aktarmadan sonra",
-          "ENCRYPTION_ENABLED": "Şifrelenmiş",
-          "ENCRYPTION_DISABLED": "Şifrelenmemiş",
-          "WHAT_HAPPENS": "Ne olacak:",
-          "ITEM_1": "Sunucudaki tüm senkronizasyon geçmişi ve yedekler kalıcı olarak silinecek",
-          "ITEM_2": "İçe aktarılan verileriniz yeni şifreleme ayarları ile yüklenecek",
-          "ITEM_3": "Tüm diğer cihazlar senkronize olmalı ve şifreleme ayarlarını eşleştirmelidir",
-          "NOTE_ENABLING": "Önemli: Şifreleme bir parola gerektirir. Bu parolayı unutursanız verileriniz KURTARILAMAZ!",
-          "NOTE_DISABLING": "Önemli: Şifreleme olmadan, senkronizasyon sunucunuza erişimi olan herkes verilerinizi okuyabilir.",
-          "NOTE": "Yerel verileriniz bu seçimden bağımsız olarak içe aktarılan verilerle değiştirilecektir.",
-          "BTN_CONTINUE": "İçe Aktar ve Şifrelemeyi Değiştir"
-        },
-        "L_ENABLE_COMPRESSION": "Sıkıştırmayı Etkinleştir (daha hızlı veri aktarımı)",
-        "L_ENABLE_ENCRYPTION": "Uçtan uca şifrelemeyi etkinleştirin (deneysel) – Verilerinizi senkronizasyon sağlayıcınız için erişilemez hale getirin",
-        "L_ENABLE_SYNCING": "Senkronizasyonu Etkinleştir",
-        "L_ENCRYPTION_NOTES": "ÖNEMLİ NOTLAR: Her şeyin çalışması için bir sonraki senkronizasyondan <strong>ÖNCE</strong> diğer cihazlarınızda da aynı parolayı ayarlamanız gerekecektir. Lütfen güvenli bir parola seçin. Ayrıca, bu parolayı unutursanız <strong>verilerinize erişemeyeceğinizi</strong> lütfen unutmayın. Anahtar yalnızca sizde olduğundan kurtarma mümkün DEĞİLDİR</strong>. Şifreleme muhtemelen çoğu saldırganı engellemek için yeterince iyi olacaktır, ancak <strong>bir garanti yoktur.</strong>",
-        "L_ENCRYPTION_PASSWORD": "Şifreleme Şifresi (UNUTMAYIN)",
-        "L_SYNC_INTERVAL": "Senkron Aralığı",
-        "L_MANUAL_SYNC_ONLY": "Yalnızca manuel olarak senkronize et (otomatik senkronizasyonu devre dışı bırak)",
-        "L_SYNC_PROVIDER": "Senkronizasyon Sağlayıcı",
-        "TITLE": "Senkronize et",
-        "WEB_DAV": {
-          "CORS_INFO": "<strong>Tarayıcıda çalışmasını sağlamak:</strong> Bunun tarayıcıda çalışmasını sağlamak için Nextcloud örneğiniz için CORS isteklerine yönelik Süper Üretkenliği beyaz listeye almanız gerekir. Bunun olumsuz güvenlik etkileri olabilir! Lütfen <a href='https://github.com/nextcloud/server/issues/3131'>daha fazla bilgi için bu konuya bakın</a>. Bunun mobil cihazlarda çalışmasını sağlamanın bir yolu, nextcloud uygulaması <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword aracılığıyla \"https://app.super-productivity.com\" adresini beyaz listeye eklemektir. <a>. Kullanım riski size aittir!</p>",
-          "D_SYNC_FOLDER_PATH": "Senkronizasyon dosyalarının depolanacağı WebDAV sunucu köküne göreli yol (örneğin '/super-productivity' veya '/'). Bu, sunucunuzun dahili dizin yolu DEĞİLDİR.",
-          "INFO": "WebDAV uygulamaları ne yazık ki çılgınca farklılık gösteriyor. Süper Verimliliğin Nextcloud ile iyi çalıştığı biliniyor, <strong> ancak sağlayıcınızla çalışmayabilir</strong>.",
-          "L_BASE_URL": "Temel URL",
-          "L_PASSWORD": "Parola",
-          "L_SYNC_FOLDER_PATH": "Dosya Yolunu Senkronize Et",
-          "L_TEST_CONNECTION": "Bağlantıyı Test Et",
-          "L_USER_NAME": "Kullanıcı adı",
-          "S_FILL_ALL_FIELDS": "Lütfen önce tüm WebDAV alanlarını doldurun",
-          "S_TEST_FAIL": "Bağlantı testi başarısız: {{error}} - Hedef URL: {{url}}",
-          "S_TEST_SUCCESS": "Bağlantı testi başarılı! Hedef URL: {{url}}",
-          "CONDITIONAL_HEADER_WARNING_TITLE": "Azaltılmış Senkronizasyon Güvenliği",
-          "CONDITIONAL_HEADER_WARNING_MSG": "WebDAV sunucunuz koşullu başlıkları desteklemiyor (If-Unmodified-Since). Bu, Super Productivity'nin yükleme sırasında diğer cihazlardan eşzamanlı değişiklikleri algılayamayacağı anlamına gelir.<br><br>Senkronizasyon yine de çalışacak, ancak birden fazla cihazda aynı anda değişiklik yaparsanız küçük bir veri çakışma riski vardır."
-        },
-        "BTN_CHANGE_PASSWORD": "Şifreyi Değiştir",
-        "BTN_DISABLE_ENCRYPTION": "Şifrelemeyi Devre Dışı Bırak",
         "FILE_BASED": {
           "BTN_CHANGE_PASSWORD": "Şifreyi Değiştir",
           "BTN_DISABLE_ENCRYPTION": "Şifrelemeyi Devre Dışı Bırak",
@@ -1225,80 +1200,187 @@
           "PASSWORDS_DONT_MATCH": "Şifreler eşleşmiyor",
           "REMOVE_ENCRYPTION_WARNING": "Şifrelemeyi kaldırmak verilerinizi şifrelenmeden yeniden yükleyecektir. Tüm cihazların yeniden yapılandırılması gerekecektir."
         },
-        "PASSWORD_SET_INFO": "🔒 Şifreleme şifresi ayarlandı."
+        "GOOGLE": {
+          "L_SYNC_FILE_NAME": "Senkronizasyon Dosya Adı"
+        },
+        "IMPORT_ENCRYPTION_WARNING": {
+          "BTN_CONTINUE": "İçe Aktar ve Şifrelemeyi Değiştir",
+          "CURRENT_STATE": "Mevcut yapılandırmanız",
+          "ENCRYPTION_DISABLED": "Şifrelenmemiş",
+          "ENCRYPTION_ENABLED": "Şifrelenmiş",
+          "IMPORTED_STATE": "İçe aktarmadan sonra",
+          "ITEM_1": "Sunucudaki tüm senkronizasyon geçmişi ve yedekler kalıcı olarak silinecek",
+          "ITEM_2": "İçe aktarılan verileriniz yeni şifreleme ayarları ile yüklenecek",
+          "ITEM_3": "Tüm diğer cihazlar senkronize olmalı ve şifreleme ayarlarını eşleştirmelidir",
+          "NOTE": "Yerel verileriniz bu seçimden bağımsız olarak içe aktarılan verilerle değiştirilecektir.",
+          "NOTE_DISABLING": "Önemli: Şifreleme olmadan, senkronizasyon sunucunuza erişimi olan herkes verilerinizi okuyabilir.",
+          "NOTE_ENABLING": "Önemli: Şifreleme bir parola gerektirir. Bu parolayı unutursanız verileriniz KURTARILAMAZ!",
+          "TITLE": "Şifreleme Ayarları Değişecek",
+          "WARNING_TEXT": "İçe aktardığınız yedek farklı şifreleme ayarlarına sahip. Şifrelenmiş ve şifrelenmemiş veriler sunucuda birlikte bulunamaz, bu yüzden tüm sunucu verileri silinmelidir.",
+          "WHAT_HAPPENS": "Ne olacak:"
+        },
+        "L_ENABLE_COMPRESSION": "Sıkıştırmayı Etkinleştir (daha hızlı veri aktarımı)",
+        "L_ENABLE_ENCRYPTION": "Uçtan uca şifrelemeyi etkinleştirin (deneysel) – Verilerinizi senkronizasyon sağlayıcınız için erişilemez hale getirin",
+        "L_ENABLE_SYNCING": "Senkronizasyonu Etkinleştir",
+        "L_ENCRYPTION_NOTES": "ÖNEMLİ NOTLAR: Her şeyin çalışması için bir sonraki senkronizasyondan <strong>ÖNCE</strong> diğer cihazlarınızda da aynı parolayı ayarlamanız gerekecektir. Lütfen güvenli bir parola seçin. Ayrıca, bu parolayı unutursanız <strong>verilerinize erişemeyeceğinizi</strong> lütfen unutmayın. Anahtar yalnızca sizde olduğundan kurtarma mümkün DEĞİLDİR</strong>. Şifreleme muhtemelen çoğu saldırganı engellemek için yeterince iyi olacaktır, ancak <strong>bir garanti yoktur.</strong>",
+        "L_ENCRYPTION_PASSWORD": "Şifreleme Şifresi (UNUTMAYIN)",
+        "L_MANUAL_SYNC_ONLY": "Yalnızca manuel olarak senkronize et (otomatik senkronizasyonu devre dışı bırak)",
+        "L_SYNC_INTERVAL": "Senkron Aralığı",
+        "L_SYNC_PROVIDER": "Senkronizasyon Sağlayıcı",
+        "LOCAL_FILE": {
+          "INFO_TEXT": "<strong>Uyarı:</strong> Bu klasörü cihazlar arasında senkronize etmek için Syncthing, Resilio veya benzeri dosya senkronizasyon araçlarını <strong>kullanmayın</strong> — veri bozulmasına ve çakışmalara <strong>neden olurlar</strong>. Çoklu cihaz senkronizasyonu için WebDAV, Dropbox veya SuperSync kullanın.",
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Dosya erişim izni gerekiyor",
+          "L_SYNC_FOLDER_PATH": "Dosya Yolunu Senkronize Et"
+        },
+        "PASSWORD_SET_INFO": "🔒 Şifreleme şifresi ayarlandı.",
+        "SUPER_SYNC": {
+          "ACCESS_TOKEN_DESCRIPTION": "Sunucu giriş sayfasından kopyaladığınız jetonu yapıştırın",
+          "BTN_CHANGE_PASSWORD": "Parolayı Değiştir",
+          "BTN_DISABLE_ENCRYPTION": "Şifrelemeyi Devre Dışı Bırak",
+          "BTN_ENABLE_ENCRYPTION": "Şifrelemeyi Etkinleştir",
+          "BTN_FORCE_OVERWRITE": "Sunucuyu Zorla Üzerine Yaz",
+          "BTN_GET_TOKEN": "Sunucuyu Aç ve Jeton Al",
+          "CHANGE_PASSWORD_SUCCESS": "Şifreleme parolası başarıyla değiştirildi",
+          "CHANGE_PASSWORD_WARNING": "UYARI: Bu, sunucudaki tüm senkronizasyon geçmişini ve yedekleri kalıcı olarak silecektir. Önceki sürümler kurtarılamaz. Mevcut verileriniz yeni parola ile yeniden yüklenecektir. Tüm diğer cihazlar yeni parolaya ihtiyaç duyacaktır.",
+          "DISABLE_ENCRYPTION_ENABLE_FIRST": "Lütfen önce senkronizasyonu etkinleştirin ve SuperSync yapılandırmanızı kaydedin, ardından tekrar deneyin.",
+          "DISABLE_ENCRYPTION_ITEM_1": "Sunucudaki tüm senkronizasyon geçmişi ve yedekler silinecek",
+          "DISABLE_ENCRYPTION_ITEM_2": "Mevcut verileriniz şifrelemeden yeniden yüklenecek",
+          "DISABLE_ENCRYPTION_ITEM_3": "Tüm diğer cihazlar şifrelenmemiş verileri senkronize edecek",
+          "DISABLE_ENCRYPTION_NOT_READY": "Senkronizasyon etkinleştirilmemiş veya yapılandırılmamış.",
+          "DISABLE_ENCRYPTION_NOTE": "Yerel verileriniz SİLİNMEYECEK. İstediğiniz zaman şifrelemeyi yeniden etkinleştirebilirsiniz.",
+          "DISABLE_ENCRYPTION_SUCCESS": "Şifreleme başarıyla devre dışı bırakıldı",
+          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "Bu özellik yalnızca SuperSync için kullanılabilir.",
+          "DISABLE_ENCRYPTION_TITLE": "Şifrelemeyi Devre Dışı Bırak?",
+          "DISABLE_ENCRYPTION_WARNING": "UYARI: Bu, sunucudaki tüm şifrelenmiş senkronizasyon verilerini kalıcı olarak silecektir. Bu, şifrelenmiş işlemlerin şifrelenmemiş olanlarla karıştırılamaması gerektiği için gereklidir.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Ne olacak:",
+          "E2E_ENCRYPTION_DESCRIPTION": "Daha yavaş olacak, ancak daha güvenli",
+          "ENABLE_ENCRYPTION_ITEM_1": "Sunucudaki tüm senkronizasyon geçmişi ve yedekler silinecek",
+          "ENABLE_ENCRYPTION_ITEM_2": "Mevcut verileriniz şifreleme ile yeniden yüklenecek",
+          "ENABLE_ENCRYPTION_ITEM_3": "Tüm diğer cihazlar bu şifreleme parolasını girmelidir",
+          "ENABLE_ENCRYPTION_NOT_READY": "Senkronizasyon etkinleştirilmemiş veya yapılandırılmamış.",
+          "ENABLE_ENCRYPTION_NOTE": "Yerel verileriniz SİLİNMEYECEK. İstediğiniz zaman şifrelemeyi devre dışı bırakabilirsiniz.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Lütfen önce bir şifreleme parolası girin.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Şifreleme başarıyla etkinleştirildi",
+          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Bu özellik yalnızca SuperSync için kullanılabilir.",
+          "ENABLE_ENCRYPTION_TITLE": "Şifrelemeyi Etkinleştir?",
+          "ENABLE_ENCRYPTION_WARNING": "UYARI: Bu, sunucudaki tüm şifrelenmemiş senkronizasyon verilerini kalıcı olarak silecektir. Bu, şifrelenmiş işlemlerin şifrelenmemiş olanlarla karıştırılamaması gerektiği için gereklidir. Şifreleme parolanızı unutursanız verileriniz kurtarılamaz.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Ne olacak:",
+          "ENCRYPTION_ENCOURAGED": "SuperSync için şifreleme gereklidir. Verilerinizi korumak için lütfen şifrelemeyi etkinleştirin.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync, verilerinizi cihazınızdan çıkmadan önce şifreler</strong>, bu da özel verilerinizin kötüye kullanılmasını veya sızmasını neredeyse imkansız hale getirir.",
+          "ENCRYPTION_WARNING": "UYARI: Şifreleme parolanızı unutursanız verileriniz kurtarılamaz. Bu parola giriş parolanızdan ayrıdır. Tüm cihazlarda aynı parolayı kullanmanız gerekir.",
+          "FORCE_OVERWRITE_CONFIRM": "Bu işlem <strong>sunucudaki tüm verileri silecek</strong> ve yerel verilerinizi yeni şifreyle yükleyecektir. Senkronize edilmemiş yerel değişiklikler kaybolabilir. Devam etmek istediğinizden emin misiniz?",
+          "FORCE_OVERWRITE_INFO": "Mevcut şifreleme şifresini bilmediğiniz için senkronize edemiyorsanız, sunucuyu yerel verileriniz ve yeni bir şifreyle üzerine yazabilirsiniz.",
+          "FORCE_OVERWRITE_TITLE": "Sunucu Verisi Üzerine Yazılsın mı?",
+          "INFO_TEXT": "SuperSync görevlerinizi tüm cihazlarınızda gerçek zamanlı olarak senkronize eder. Verileriniz senkronizasyon sunucusunda güvenli bir şekilde depolanır. Not: SuperSync şu anda Beta aşamasındadır.",
+          "L_ACCESS_TOKEN": "Erişim Jetonu",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Şifreleme Parolasını Değiştir",
+          "L_CONFIRM_PASSWORD": "Parolayı Onayla",
+          "L_ENABLE_E2E_ENCRYPTION": "Uçtan uca şifrelemeyi etkinleştir",
+          "L_NEW_PASSWORD": "Yeni Şifreleme Parolası",
+          "L_REMOVE_ENCRYPTION": "Veya Şifrelemeyi Kaldır",
+          "L_SERVER_URL": "Sunucu URL'si",
+          "LOGIN_INSTRUCTIONS": "Sunucu giriş sayfasını açmak için aşağıdaki düğmeye tıklayın. Giriş yaptıktan sonra erişim jetonunuzu kopyalayın ve buraya yapıştırın.",
+          "PASSWORD_MIN_LENGTH": "Parola en az 8 karakter olmalı",
+          "PASSWORDS_DONT_MATCH": "Parolalar eşleşmiyor",
+          "REMOVE_ENCRYPTION_WARNING": "Şifrelemeyi kaldırmak tüm sunucu verilerini silecek ve verilerinizi şifrelemeden yeniden yükleyecektir. Tüm cihazlar yeniden yapılandırma yapacaktır.",
+          "SERVER_URL_DESCRIPTION": "Resmi sunucu için olduğu gibi bırakın veya özel bir sunucu URL'si girin",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "SuperSync'i Devre Dışı Bırak",
+          "SETUP_ENCRYPTION_BTN": "Şifre Belirle",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Tüm cihazlarda aynı şifreyi kullanın. Unutulan şifre, uzak verilerin üzerine yazılarak sıfırlanabilir.",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Şifre Belirle"
+        },
+        "NEXTCLOUD": {
+          "L_SERVER_URL": "Nextcloud Sunucu URL'si",
+          "SERVER_URL_DESCRIPTION": "örn. https://cloud.example.com veya https://example.com/nextcloud",
+          "L_APP_PASSWORD": "Uygulama Parolası",
+          "APP_PASSWORD_DESCRIPTION": "Oluşturmak için Nextcloud → Ayarlar → Güvenlik → Uygulama parolaları bölümüne gidin"
+        },
+        "TITLE": "Senkronize et",
+        "WEB_DAV": {
+          "CORS_INFO": "<strong>Tarayıcıda çalışmasını sağlamak:</strong> Bunun tarayıcıda çalışmasını sağlamak için Nextcloud örneğiniz için CORS isteklerine yönelik Süper Üretkenliği beyaz listeye almanız gerekir. Bunun olumsuz güvenlik etkileri olabilir! Lütfen <a href='https://github.com/nextcloud/server/issues/3131'>daha fazla bilgi için bu konuya bakın</a>. Bunun mobil cihazlarda çalışmasını sağlamanın bir yolu, nextcloud uygulaması <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword aracılığıyla \"https://app.super-productivity.com\" adresini beyaz listeye eklemektir. <a>. Kullanım riski size aittir!</p>",
+          "D_SYNC_FOLDER_PATH": "Senkronizasyon dosyalarının depolanacağı WebDAV sunucu köküne göreli yol (örneğin '/super-productivity' veya '/'). Bu, sunucunuzun dahili dizin yolu DEĞİLDİR.",
+          "INFO": "WebDAV uygulamaları ne yazık ki çılgınca farklılık gösteriyor. Süper Verimliliğin Nextcloud ile iyi çalıştığı biliniyor, <strong> ancak sağlayıcınızla çalışmayabilir</strong>.",
+          "L_BASE_URL": "Temel URL",
+          "L_PASSWORD": "Parola",
+          "L_SYNC_FOLDER_PATH": "Dosya Yolunu Senkronize Et",
+          "L_TEST_CONNECTION": "Bağlantıyı Test Et",
+          "L_USER_NAME": "Kullanıcı adı",
+          "S_FILL_ALL_FIELDS": "Lütfen önce tüm WebDAV alanlarını doldurun",
+          "S_TEST_FAIL": "Bağlantı testi başarısız: {{error}} - Hedef URL: {{url}}",
+          "S_TEST_SUCCESS": "Bağlantı testi başarılı! Hedef URL: {{url}}"
+        }
       },
       "S": {
         "ALREADY_IN_SYNC": "Zaten senkronize",
-        "BTN_CONFIGURE": "Yapılandırmak",
-        "BTN_FORCE_OVERWRITE": "Üzerine Yazmaya Zorla",
-        "CLOCK_DRIFT_WARNING": "Cihazınızın saati {{minutes}} dakika yanlış görünüyor. Bu senkronizasyon sorunlarına neden olabilir.",
-        "COMPACTION_FAILED": "Veritabanı temizliği başarısız. Uygulama yavaşlayabilir.",
-        "CONFLICT_RESOLUTION_FAILED": "Senkronizasyon çakışma çözümü başarısız. Lütfen yeniden yükleyin.",
-        "CONFLICT_DIALOG_TIMEOUT": "Senkronizasyon çakışma iletişim kutusu zaman aşımına uğradı ve iptal edildi. Senkronizasyon bir sonraki tetiklemede yeniden deneyecek.",
-        "OPERATION_PERMANENTLY_FAILED": "Bazı senkronizasyon işlemleri başarısız oldu ve uygulanamadı. Veri eksik olabilir.",
-        "DATA_REPAIRED": "Veri otomatik olarak onarıldı ({{count}} sorun düzeltildi)",
-        "ERROR_CORS": "WebDAV Senkronizasyon Hatası: Ağ isteği başarısız oldu.\n\nBu bir CORS sorunu olabilir. Lütfen emin olun:\n• WebDAV sunucunuz Çapraz Kaynak isteklerine izin verir\n• Sunucu URL'si doğru ve erişilebilirdir\n• Çalışan bir internet bağlantınız var",
-        "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Uzak Veri şu anda yazılıyor",
-        "ERROR_PERMISSION": "Dosya erişimi reddedildi. Flatpak/Snap kullanıyorsanız, Flatseal aracılığıyla dosya sistemi izni verin veya ~/.var/app/ içinde bir yol kullanın",
-        "ERROR_PERMISSION_FLATPAK": "Dosya erişimi reddedildi. Flatseal aracılığıyla dosya sistemi izni verin veya ~/.var/app/ içinde bir yol kullanın",
-        "ERROR_PERMISSION_SNAP": "Dosya erişimi reddedildi. 'snap connect super-productivity:home' çalıştırın veya ~/snap/super-productivity/common/ içinde bir yol kullanın",
-        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Senkronize ederken hata. Uzak veri okunamıyor. Belki şifrelemeyi etkinleştirdiniz ve yerel parolanız uzak veriyi şifrelemek için kullanılanla eşleşmiyor?",
-        "HYDRATION_FAILED": "Veri yüklenemedi. Lütfen uygulamayı yeniden yükleyin.",
-        "INTEGRITY_CHECK_FAILED": "Veri bütünlüğü sorunu tespit edildi. Otomatik onarım denendi. Sorun yaşarsanız lütfen uygulamayı yeniden yükleyin.",
-        "IMPORTING": "Veri içe aktarılıyor",
-        "INCOMPLETE_CFG": "Senkronizasyon için kimlik doğrulama başarısız oldu. Lütfen Yapılandırmanızı kontrol edin!",
-        "INCOMPLETE_OP_SYNC": "Senkronizasyon eksik: {{count}} işlem dosyası indirme başarısız",
-        "TOO_MANY_OPS_TO_DOWNLOAD": "İndirilecek çok fazla senkronizasyon işlemi. Bazı değişiklikler eksik olabilir.",
-        "INITIAL_SYNC_ERROR": "İlk Senkronizasyon başarısız",
-        "INVALID_OPERATION_PAYLOAD": "Geçersiz işlem tespit edildi. Değişiklikler kaydedilmemiş olabilir - lütfen yeniden yükleyin.",
-        "DECRYPTION_FAILED": "Senkronize edilen veri şifresi çözülemedi. Lütfen şifreleme parolanızı kontrol edin.",
-        "ENCRYPTION_PASSWORD_REQUIRED": "Şifrelenmiş veri alındı ancak şifreleme parolası yapılandırılmamış. Lütfen senkronizasyon ayarlarında şifreleme parolanızı ayarlayın.",
-        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Şifreleme başka bir cihazda devre dışı bırakıldı. Senkronizasyon ayarlarınız güncellendi.",
-        "PERSIST_FAILED": "Değişiklikler kaydedilemedi. Durum tutarsız olabilir - lütfen yeniden yükleyin.",
-        "DEFERRED_ACTION_FAILED": "Senkronizasyon sırasında yapılan bazı değişiklikler kaydedilemedi. Kurtarmak için lütfen yeniden yükleyin.",
-        "REMOTE_DATA_TOO_OLD": "Uzak veri işlenmek için çok eski. Lütfen uzak uygulamayı güncelleyin.",
-        "STORAGE_QUOTA_EXCEEDED": "Senkronizasyon sunucu depolama alanı dolu. Değişiklikleriniz SENKRONİZE EDİLMİYOR. Lütfen eski görevleri arşivleyin veya planınızı yükseltin.",
-        "STORAGE_RECOVERED_AFTER_COMPACTION": "Depolama alanı azalmıştı. Eski veri başarıyla temizlendi.",
-        "ERROR_PAYLOAD_TOO_LARGE": "Senkronizasyon Hatası: Verileriniz yüklenmek için çok büyük.\n\nBu, çok fazla arşivlenmiş göreviniz olduğunda olur. Verileriniz SENKRONİZE EDİLMEDİ.\n\nYardım için desteğe başvurun.",
-        "SUCCESS_DOWNLOAD": "Uzaktan kumandadan senkronize edilen veriler",
-        "SUCCESS_VIA_BUTTON": "Veriler başarıyla senkronize edildi",
-        "UNKNOWN_ERROR": "Bilinmeyen senkronizasyon hatası: {{err}}",
-        "UPLOAD_ERROR": "Bilinmeyen Yükleme Hatası (Ayarlar doğru mu?): {{err}}",
-        "UPLOAD_OPS_REJECTED": "{{count}} işlem(ler) sunucu tarafından kalıcı olarak reddedildi ve senkronize edilmeyecek.",
-        "VERSION_TOO_OLD": "Uygulama sürümünüz senkronize edilen veriler için çok eski. Lütfen güncelleyin!",
-        "VERSION_UNSUPPORTED": "Senkronize edilemiyor: veri daha yeni uygulama sürümü gerektiriyor. Lütfen güncelleyin.",
-        "NEWER_VERSION_AVAILABLE": "Bazı değişiklikler daha yeni uygulama sürümünden. Tam uyumluluk için güncellemeyi düşünün.",
-        "FRESH_CLIENT_SYNC_CANCELLED": "İlk senkronizasyon iptal edildi. Uzak veri uygulanmadı.",
-        "LOCAL_DATA_REPLACE_CANCELLED": "Senkronizasyon iptal edildi. Yerel verileriniz korundu.",
-        "RESTORE_SUCCESS": "Veri başarıyla geri yüklendi",
-        "RESTORE_ERROR": "Veri geri yüklenemedi",
-        "TIMEOUT_ERROR": "Senkronizasyon işlemi zaman aşımına uğradı. {{suggestion}}",
-        "PARTIAL_APPLY_FAILURE": "Bazı senkronizasyon işlemleri uygulanamadı. Veri doğrulandı.",
-        "REPLAY_LOCAL_OPS_FAILED": "İçe aktarmadan sonra yerel işlemler yeniden oynatılamadı. Bazı son değişiklikler kaybolmuş olabilir. Veri doğrulandı.",
         "ARCHIVE_OPERATION_FAILED": "Arşiv işlemi başarısız. Bazı temizlik tamamlanmamış olabilir.",
-        "LWW_CONFLICTS_AUTO_RESOLVED": "Senkronizasyon çakışmaları otomatik olarak çözüldü: {{localWins}} yerel kazanım, {{remoteWins}} uzak kazanım",
-        "LOCAL_CHANGES_DISCARDED": "{{count}} yerel değişiklik(ler) atıldı - öğe(ler) başka bir cihazda silindi",
-        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} kaydedilmemiş yerel değişiklik(ler) atıldı - senkronizasyon daha yeni veri indirdi",
-        "FINISH_DAY_SYNC_ERROR": "Gün sonu sırasında senkronizasyon hatası. Lütfen tekrar deneyin.",
-        "SERVER_MIGRATION_VALIDATION_FAILED": "Veri sunucuya taşınamadı - yerel veri doğrulaması başarısız. Lütfen bir yedek içe aktarmayı deneyin.",
         "AUTH_SETUP_FAILED": "Kimlik doğrulama kurulumu başarısız. Web uygulamasını kullanıyorsanız, HTTPS üzerinden eriştiğinizden emin olun. Aksi takdirde, lütfen kararlı sürümü deneyin veya bunu bir hata olarak bildirin.",
         "AUTH_TOKEN_REJECTED": "Senkronizasyon jetonu sunucu tarafından reddedildi: {{reason}}. Lütfen yeni bir jeton alın.",
+        "BTN_CONFIGURE": "Yapılandırmak",
+        "BTN_FORCE_OVERWRITE": "Üzerine Yazmaya Zorla",
         "CHANGE_PASSWORD_FAILED": "Şifre değiştirme başarısız: {{message}}",
+        "CLOCK_DRIFT_WARNING": "Cihazınızın saati {{minutes}} dakika yanlış görünüyor. Bu senkronizasyon sorunlarına neden olabilir.",
+        "COMPACTION_FAILED": "Veritabanı temizliği başarısız. Uygulama yavaşlayabilir.",
+        "CONFLICT_DIALOG_TIMEOUT": "Senkronizasyon çakışma iletişim kutusu zaman aşımına uğradı ve iptal edildi. Senkronizasyon bir sonraki tetiklemede yeniden deneyecek.",
+        "CONFLICT_RESOLUTION_FAILED": "Senkronizasyon çakışma çözümü başarısız. Lütfen yeniden yükleyin.",
+        "DATA_REPAIRED": "Veri otomatik olarak onarıldı ({{count}} sorun düzeltildi)",
+        "DECRYPTION_FAILED": "Senkronize edilen veri şifresi çözülemedi. Lütfen şifreleme parolanızı kontrol edin.",
+        "DEFERRED_ACTION_FAILED": "Senkronizasyon sırasında yapılan bazı değişiklikler kaydedilemedi. Kurtarmak için lütfen yeniden yükleyin.",
         "DIALOG_RESULT_ERROR": "Senkronizasyon diyaloğu işlenirken bir hata oluştu. Lütfen tekrar deneyin.",
         "DISABLE_ENCRYPTION_FAILED": "Şifreleme devre dışı bırakılamadı: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Şifreleme etkinleştirilemedi: {{message}}",
+        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Şifreleme başka bir cihazda devre dışı bırakıldı. Senkronizasyon ayarlarınız güncellendi.",
+        "ENCRYPTION_PASSWORD_REQUIRED": "Şifrelenmiş veri alındı ancak şifreleme parolası yapılandırılmamış. Lütfen senkronizasyon ayarlarında şifreleme parolanızı ayarlayın.",
         "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "SuperSync için şifreleme gereklidir. Senkronizasyona devam etmek için lütfen bir şifreleme şifresi belirleyin.",
+        "ERROR_CORS": "WebDAV Senkronizasyon Hatası: Ağ isteği başarısız oldu.\n\nBu bir CORS sorunu olabilir. Lütfen emin olun:\n• WebDAV sunucunuz Çapraz Kaynak isteklerine izin verir\n• Sunucu URL'si doğru ve erişilebilirdir\n• Çalışan bir internet bağlantınız var",
+        "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Uzak Veri şu anda yazılıyor",
+        "ERROR_PAYLOAD_TOO_LARGE": "Senkronizasyon Hatası: Verileriniz yüklenmek için çok büyük.\n\nBu, çok fazla arşivlenmiş göreviniz olduğunda olur. Verileriniz SENKRONİZE EDİLMEDİ.\n\nYardım için desteğe başvurun.",
+        "ERROR_PERMISSION": "Dosya erişimi reddedildi. Flatpak/Snap kullanıyorsanız, Flatseal aracılığıyla dosya sistemi izni verin veya ~/.var/app/ içinde bir yol kullanın",
+        "ERROR_PERMISSION_FLATPAK": "Dosya erişimi reddedildi. Flatseal aracılığıyla dosya sistemi izni verin veya ~/.var/app/ içinde bir yol kullanın",
+        "ERROR_PERMISSION_SNAP": "Dosya erişimi reddedildi. 'snap connect super-productivity:home' çalıştırın veya ~/snap/super-productivity/common/ içinde bir yol kullanın",
+        "ERROR_REMOTE_FILE_EMPTY": "Uzak eşitleme dosyası boş. Bu, kesintiye uğramış bir eşitlemeden sonra olabilir. Uzaktaki verilerin üzerine yerel verileriniz yazılsın mı?",
+        "ERROR_REMOTE_FILE_LOCKED": "Uzak eşitleme dosyası sunucu tarafından kilitli. Bu durum bir sonraki eşitleme denemesinde çözülebilir.",
+        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Senkronize ederken hata. Uzak veri okunamıyor. Belki şifrelemeyi etkinleştirdiniz ve yerel parolanız uzak veriyi şifrelemek için kullanılanla eşleşmiyor?",
+        "FINISH_DAY_SYNC_ERROR": "Gün sonu sırasında senkronizasyon hatası. Lütfen tekrar deneyin.",
+        "FRESH_CLIENT_SYNC_CANCELLED": "İlk senkronizasyon iptal edildi. Uzak veri uygulanmadı.",
+        "HYDRATION_FAILED": "Veri yüklenemedi. Lütfen uygulamayı yeniden yükleyin.",
+        "IMPORTING": "Veri içe aktarılıyor",
+        "INCOMPLETE_CFG": "Senkronizasyon için kimlik doğrulama başarısız oldu. Lütfen Yapılandırmanızı kontrol edin!",
+        "INCOMPLETE_OP_SYNC": "Senkronizasyon eksik: {{count}} işlem dosyası indirme başarısız",
+        "INITIAL_SYNC_ERROR": "İlk Senkronizasyon başarısız",
+        "INTEGRITY_CHECK_FAILED": "Veri bütünlüğü sorunu tespit edildi. Otomatik onarım denendi. Sorun yaşarsanız lütfen uygulamayı yeniden yükleyin.",
         "INVALID_AUTH_CODE": "Yetkilendirme kodu reddedildi. Lütfen tekrar kimlik doğrulamayı deneyin ve kodu tam olarak kopyaladığınızdan emin olun.",
+        "INVALID_OPERATION_PAYLOAD": "Geçersiz işlem tespit edildi. Değişiklikler kaydedilmemiş olabilir - lütfen yeniden yükleyin.",
+        "LEGACY_FORMAT_DETECTED": "Eşitleme biçimi uyuşmazlığı: uzak depolama alanına en son, farklı bir eşitleme biçimi kullanan daha eski bir uygulama sürümü (v16.x veya altı) tarafından yazılmış. Lütfen tüm cihazlarınızı aynı uygulama sürümüne güncelleyin.",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} yerel değişiklik(ler) atıldı - öğe(ler) başka bir cihazda silindi",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} kaydedilmemiş yerel değişiklik(ler) atıldı - senkronizasyon daha yeni veri indirdi",
+        "LOCAL_DATA_REPLACE_CANCELLED": "Senkronizasyon iptal edildi. Yerel verileriniz korundu.",
         "LOCK_TIMEOUT_ERROR": "Senkronizasyon önceki işlemin bitmesini beklerken zaman aşımına uğradı. Lütfen tekrar deneyin.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Senkronizasyon çakışmaları otomatik olarak çözüldü: {{localWins}} yerel kazanım, {{remoteWins}} uzak kazanım",
         "MIGRATION_FAILED": "Bazı senkronizasyon verileri taşınamadı ve atlandı. Bu, veri bozulması veya bir hata anlamına gelebilir.",
+        "NEWER_VERSION_AVAILABLE": "Bazı değişiklikler daha yeni uygulama sürümünden. Tam uyumluluk için güncellemeyi düşünün.",
+        "OPERATION_PERMANENTLY_FAILED": "Bazı senkronizasyon işlemleri başarısız oldu ve uygulanamadı. Veri eksik olabilir.",
         "OVERWRITE_SERVER_FAILED": "Sunucu verisi üzerine yazılamadı: {{message}}",
+        "PARTIAL_APPLY_FAILURE": "Bazı senkronizasyon işlemleri uygulanamadı. Veri doğrulandı.",
+        "PERSIST_FAILED": "Değişiklikler kaydedilemedi. Durum tutarsız olabilir - lütfen yeniden yükleyin.",
+        "REMOTE_DATA_TOO_OLD": "Uzak veri işlenmek için çok eski. Lütfen uzak uygulamayı güncelleyin.",
+        "REPLAY_LOCAL_OPS_FAILED": "İçe aktarmadan sonra yerel işlemler yeniden oynatılamadı. Bazı son değişiklikler kaybolmuş olabilir. Veri doğrulandı.",
+        "RESTORE_ERROR": "Veri geri yüklenemedi",
+        "RESTORE_SUCCESS": "Veri başarıyla geri yüklendi",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Veri sunucuya taşınamadı - yerel veri doğrulaması başarısız. Lütfen bir yedek içe aktarmayı deneyin.",
+        "STORAGE_QUOTA_EXCEEDED": "Senkronizasyon sunucu depolama alanı dolu. Değişiklikleriniz SENKRONİZE EDİLMİYOR. Lütfen eski görevleri arşivleyin veya planınızı yükseltin.",
+        "STORAGE_RECOVERED_AFTER_COMPACTION": "Depolama alanı azalmıştı. Eski veri başarıyla temizlendi.",
+        "SUCCESS_DOWNLOAD": "Uzaktan kumandadan senkronize edilen veriler",
+        "SUCCESS_VIA_BUTTON": "Veriler başarıyla senkronize edildi",
+        "SYNC_VALIDATION_FAILED": "Eşitlemeden sonra durum doğrulaması başarısız oldu. Bazı veriler tutarsız olabilir.",
+        "TIMEOUT_ERROR": "Senkronizasyon işlemi zaman aşımına uğradı. {{suggestion}}",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "İndirilecek çok fazla senkronizasyon işlemi. Bazı değişiklikler eksik olabilir.",
+        "UNKNOWN_ERROR": "Bilinmeyen senkronizasyon hatası: {{err}}",
+        "UPLOAD_ERROR": "Bilinmeyen Yükleme Hatası (Ayarlar doğru mu?): {{err}}",
+        "UPLOAD_OPS_REJECTED": "{{count}} işlem(ler) sunucu tarafından kalıcı olarak reddedildi ve senkronize edilmeyecek.",
         "VECTOR_CLOCK_LIMIT_REACHED": "Senkronizasyon {{originalSize}} cihaz/tarayıcı izledi, {{maxSize}} sınırını aştı. Etkin olmayan cihaz kayıtları temizlendi. Sorun yaşarsanız senkronizasyon sıfırlamayı düşünün.",
+        "VERSION_TOO_OLD": "Uygulama sürümünüz senkronize edilen veriler için çok eski. Lütfen güncelleyin!",
+        "VERSION_UNSUPPORTED": "Senkronize edilemiyor: veri daha yeni uygulama sürümü gerektiriyor. Lütfen güncelleyin.",
         "WEB_CRYPTO_NOT_AVAILABLE": "Bu cihazda şifreleme kullanılamıyor. Android'de şifreleme, güvenli bağlam (HTTPS) gerektirir ve bu kullanılamıyor. Lütfen senkronizasyon ayarlarında şifrelemeyi devre dışı bırakın veya masaüstü web tarayıcısından senkronize edin."
-      },
-      "D_DATA_REPAIRED": {
-        "TITLE": "Veri Onarımı Gerçekleştirildi",
-        "MSG": "Verileriniz otomatik onarım gerektirdi ({{count}} sorun düzeltildi). Bu normalde olmamalı. Tekrarlanırsa lütfen bildirin.",
-        "UNKNOWN_ERROR": "Bilinmeyen Senkronizasyon Hatası: {{err}}"
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Tümünü Temizle",
@@ -1327,16 +1409,6 @@
         "TOOLTIP_DELETE": "Bu yedeği sil",
         "TOOLTIP_REFRESH": "Yedek listesini yenile",
         "TOOLTIP_RESTORE": "Bu yedeği geri yükle (tüm mevcut verileri değiştirecek)"
-      },
-      "D_DATA_REPAIR_CONFIRM": {
-        "MSG": "Verileriniz hasarlı görünüyor. Otomatik onarım denemek ister misiniz? Bu, küçük veri kayıplarına neden olabilir.",
-        "TITLE": "Veri Hasarı Tespit Edildi"
-      },
-      "D_SERVER_MIGRATION_CONFIRM": {
-        "CONFIRM": "Yerel Veriyi Yükle",
-        "MESSAGE": "Bu senkronizasyon sunucusu zaten veri içeriyor. Yerel verilerinizi birleştirmek için yüklemek ister misiniz? Bunu atlarsanız, bazı yerel değişiklikleriniz senkronize olmayabilir.",
-        "SKIP": "Atla",
-        "TITLE": "Sunucuda Zaten Veri Var"
       }
     },
     "TAG": {
@@ -1384,28 +1456,6 @@
       "TOOLTIP_CREATE": "Etiket klasörü oluştur"
     },
     "TASK": {
-      "ADDITIONAL_INFO": {
-        "ADD_ATTACHMENT": "Eklenti ekle",
-        "ADD_SUB_TASK": "Alt Görev ekle",
-        "ATTACHMENTS": "Ekler {{nr}}",
-        "DUE": "Planlandı",
-        "FROM_PARENT": "(ana görevden)",
-        "LOCAL_ATTACHMENTS": "Lokal Ekler",
-        "NOTES": "Notlar",
-        "PARENT": "Ana",
-        "REMINDER": "Hatırlatıcı",
-        "REPEAT": "Tekrar et",
-        "SCHEDULE_TASK": "Görev Takvimi",
-        "SUB_TASKS": "Alt Görevler ({{nr}})",
-        "TIME": "Zaman",
-        "TITLE_PLACEHOLDER": "Bir başlık girin",
-        "COMPLETED_ON": "Tamamlanma tarihi",
-        "CREATED_ON": "Oluşturulma tarihi",
-        "DEADLINE": "Son Tarih",
-        "DEADLINE_DUE_BY": "Son tarih",
-        "DEADLINE_OVERDUE": "Gecikmiş!",
-        "ISSUE": "Sorun Bağlantısı"
-      },
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Mevcut \"{{taskTitle}}\" görevini ekle",
         "CREATE_NEW_TAGS": "Yeni etiketler oluştur",
@@ -1413,11 +1463,12 @@
         "ESTIMATE_BUTTON": "Tahmin",
         "PLACEHOLDER_CREATE": "Bir görev başlığı #etiket @16:00",
         "PLACEHOLDER_SEARCH": "Mevcut görev veya sorunları ekle...",
+        "REPEAT_BUTTON": "Tekrar",
         "SEARCH_INFO_TEXT": "Arşivden ve diğer projelerden sorunları ve görevleri arayın ve ekleyin",
         "TAGS_BUTTON": "Etiketler",
         "TODAY": "Bugün",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "Görev eklemeyi listenin üstüne ve altına değiştir",
         "TOGGLE_ADD_TO_BACKLOG_TODAY": "Görev eklemeyi biriktirme / bugünkü listeye değiştir",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "Görev eklemeyi listenin üstüne ve altına değiştir",
         "TOMORROW": "Yarın",
         "TOOLTIP_ADD_TASK": "Görev ekle",
         "TOOLTIP_ADD_TO_BACKLOG": "Biriktirme listesine ekle",
@@ -1426,17 +1477,38 @@
         "TOOLTIP_ADD_TO_TOP": "En üste ekle (Ctrl+1)",
         "TOOLTIP_CLEAR_DATE": "Tarihi temizle",
         "TOOLTIP_CLEAR_ESTIMATE": "Tahmini temizle",
+        "TOOLTIP_CLEAR_REPEAT": "Tekrar ayarını temizle",
         "TOOLTIP_CLEAR_TAGS": "Etiketleri temizle",
         "TOOLTIP_DISABLE_SEARCH": "Sorun aramayı devre dışı bırak (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "Sorun aramayı etkinleştir (Ctrl+2)",
-        "REPEAT_BUTTON": "Tekrar",
-        "TOOLTIP_CLEAR_REPEAT": "Tekrar ayarını temizle"
+        "TOOLTIP_ENABLE_SEARCH": "Sorun aramayı etkinleştir (Ctrl+2)"
+      },
+      "ADDITIONAL_INFO": {
+        "ADD_ATTACHMENT": "Eklenti ekle",
+        "ADD_SUB_TASK": "Alt Görev ekle",
+        "ATTACHMENTS": "Ekler {{nr}}",
+        "COMPLETED_ON": "Tamamlanma tarihi",
+        "CREATED_ON": "Oluşturulma tarihi",
+        "DEADLINE": "Son Tarih",
+        "DEADLINE_DUE_BY": "Son tarih",
+        "DEADLINE_OVERDUE": "Gecikmiş!",
+        "DUE": "Planlandı",
+        "FROM_PARENT": "(ana görevden)",
+        "ISSUE": "Sorun Bağlantısı",
+        "LOCAL_ATTACHMENTS": "Lokal Ekler",
+        "NOTES": "Notlar",
+        "PARENT": "Ana",
+        "REMINDER": "Hatırlatıcı",
+        "REPEAT": "Tekrar et",
+        "SCHEDULE_TASK": "Görev Takvimi",
+        "SUB_TASKS": "Alt Görevler ({{nr}})",
+        "TIME": "Zaman",
+        "TITLE_PLACEHOLDER": "Bir başlık girin"
       },
       "B": {
-        "ADD_HALF_HOUR": "1/2 saat ekle",
-        "ESTIMATE_EXCEEDED": "\"{{title}}\" için zaman tahmini aşıldı",
         "ADD_ALL_TO_TODAY": "Tümünü bugüne ekle",
-        "DEADLINES_TODAY": "Bugün planlanmamış {{count}} görevin son tarihi var"
+        "ADD_HALF_HOUR": "1/2 saat ekle",
+        "DEADLINES_TODAY": "Bugün planlanmamış {{count}} görevin son tarihi var",
+        "ESTIMATE_EXCEEDED": "\"{{title}}\" için zaman tahmini aşıldı"
       },
       "CMP": {
         "ADD_SUB_TASK": "Alt Görev ekle",
@@ -1447,6 +1519,7 @@
         "DELETE_REPEAT_INSTANCE": "Tekrarlanan Görev Örneğini Sil",
         "DROP_ATTACHMENT": "\"{{title}}\" öğesine eklemek için buraya bırakın",
         "DUPLICATE": "Çoğalt",
+        "EDIT_DEADLINE": "Son tarihi düzenle",
         "EDIT_SCHEDULED": "Hatırlatıcıyı düzenle",
         "FOCUS_SESSION": "Odak Oturumunu Başlat",
         "MARK_DONE": "Tamamlandı olarak işaretle",
@@ -1457,8 +1530,10 @@
         "OPEN_ATTACH": "Dosya veya bağlantı ekle",
         "OPEN_ISSUE": "Tarayıcıda aç",
         "OPEN_TIME": "Zaman Takibi",
+        "REMOVE_DEADLINE": "Son tarihi kaldır",
         "REMOVE_FROM_MY_DAY": "Günümden Kaldır",
         "SCHEDULE": "Görevi Planla",
+        "SET_DEADLINE": "Son tarih belirle",
         "TOGGLE_ATTACHMENTS": "Ekleri Göster/Gizle",
         "TOGGLE_DETAIL_PANEL": "Ek bilgileri göster/gizle",
         "TOGGLE_DONE": "Yapıldı/Yapılmadı olarak işaretle",
@@ -1467,10 +1542,11 @@
         "TRACK_TIME": "İzlemeye başla",
         "TRACK_TIME_STOP": "İzleme zamanını duraklat",
         "UNSCHEDULE_TASK": "Görevin zamanlamasını kaldır",
-        "UPDATE_ISSUE_DATA": "Sorun verilerini güncelle",
-        "EDIT_DEADLINE": "Son tarihi düzenle",
-        "REMOVE_DEADLINE": "Son tarihi kaldır",
-        "SET_DEADLINE": "Son tarih belirle"
+        "UPDATE_ISSUE_DATA": "Sorun verilerini güncelle"
+      },
+      "D_CONFIRM_DELETE": {
+        "MSG": "\"{{title}}\" görevini silmek istediğinizden emin misiniz?",
+        "OK": "Sil"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "Yeni {{tagsTxt}} etiketini oluşturmak istiyor musunuz?",
@@ -1480,18 +1556,36 @@
         "MSG": "{{tagsTxt}} etiketlerini oluşturmak istiyor musunuz?",
         "OK": "Etiketleri oluştur"
       },
-      "D_CONFIRM_DELETE": {
-        "MSG": "\"{{title}}\" görevini silmek istediğinizden emin misiniz?",
-        "OK": "Sil"
+      "D_DEADLINE": {
+        "ADD_TIME": "Saat ekle",
+        "QA_NEXT_MONTH": "Gelecek ay",
+        "QA_NEXT_WEEK": "Gelecek hafta",
+        "QA_TODAY": "Bugün",
+        "QA_TOMORROW": "Yarın",
+        "REMIND_AT": "Hatırlatma zamanı",
+        "REMOVE_DEADLINE": "Son tarihi kaldır",
+        "RO_1H": "1 saat önce",
+        "RO_5M": "5 dakika önce",
+        "RO_10M": "10 dakika önce",
+        "RO_15M": "15 dakika önce",
+        "RO_30M": "30 dakika önce",
+        "RO_AT_DEADLINE": "Son tarihte",
+        "RO_NEVER": "Asla",
+        "SET_DEADLINE": "Son tarih belirle"
       },
       "D_REMINDER_VIEW": {
         "ADD_ALL_TO_TODAY": "Tümünü bugüne ekle",
         "ADD_TO_TODAY": "Bugüne ekle",
+        "CLEAR_ALL_REMINDERS": "Tüm hatırlatıcıları temizle",
+        "CLEAR_REMINDER": "Hatırlatıcıyı temizle",
         "COMPLETE": "Tamamla",
         "COMPLETE_ALL": "Tümünü tamamla",
+        "DEADLINE_REMINDER": "Son Tarih Hatırlatıcısı",
+        "DEADLINE_SECTION": "Son Tarihler",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Tüm Hatırlatıcıları Kapat (Bugün de Kalsın)",
         "DISMISS_REMINDER_KEEP_TODAY": "Hatırlatıcıyı Kapat (Bugün de Kalsın)",
         "DONE": "Bitti",
+        "DUE_SECTION": "Planlanmış",
         "DUE_TASK": "Yapılacak görev",
         "DUE_TASKS": "Yapılacak görevler",
         "RESCHEDULE_EDIT": "Düzenle (Yeniden planla)",
@@ -1499,14 +1593,9 @@
         "SNOOZE": "Ertele",
         "SNOOZE_ALL": "Tümünü ertele",
         "START": "Başla",
+        "TASK_REMINDERS": "Görev Hatırlatıcıları",
         "UNSCHEDULE": "Programı Kaldır",
-        "UNSCHEDULE_ALL": "Tümünü planlamayı kaldır",
-        "CLEAR_ALL_REMINDERS": "Tüm hatırlatıcıları temizle",
-        "CLEAR_REMINDER": "Hatırlatıcıyı temizle",
-        "DEADLINE_REMINDER": "Son Tarih Hatırlatıcısı",
-        "DEADLINE_SECTION": "Son Tarihler",
-        "DUE_SECTION": "Planlanmış",
-        "TASK_REMINDERS": "Görev Hatırlatıcıları"
+        "UNSCHEDULE_ALL": "Tümünü planlamayı kaldır"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "Gelecek Ay'ı Planla",
@@ -1514,11 +1603,11 @@
         "QA_TODAY": "Bugün Planla",
         "QA_TOMORROW": "Yarın Planla",
         "REMIND_AT": "Şu saatte hatırlat:",
+        "RO_1H": "Başlamadan 1 saat önce",
+        "RO_5M": "Başlamadan 5 dakika önce",
         "RO_10M": "Başlamadan 10 dakika önce",
         "RO_15M": "Başlamadan 15 dakika önce",
-        "RO_1H": "Başlamadan 1 saat önce",
         "RO_30M": "Başlamadan 30 dakika önce",
-        "RO_5M": "Başlamadan 5 dakika önce",
         "RO_NEVER": "Asla",
         "RO_START": "başladığında",
         "SCHEDULE": "Planla",
@@ -1551,6 +1640,8 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Tekrarlanabilir görevler için kısa sözdizimi yoluyla proje atanamıyor!",
         "CREATED_FOR_PROJECT": "\"{{taskTitle}}\" görevini \"{{projectTitle}}\" projesine taşıdı",
+        "DEADLINE_REMOVED": "Son tarih kaldırıldı",
+        "DEADLINE_SET": "Son tarih {{date}} olarak belirlendi",
         "DELETED": "\"{{title}}\" görevi silindi",
         "FOUND_MOVE_FROM_BACKLOG": " <strong>{{title}}</strong> görevini bugünkü görev listesine taşıdı",
         "FOUND_MOVE_FROM_OTHER_LIST": " <strong>{{contextTitle}}</strong> 'den geçerli listeye <strong>{{title}}</strong> görevi eklendi",
@@ -1562,9 +1653,7 @@
         "REMINDER_DELETED": "Görev için silinen hatırlatıcı",
         "REMINDER_UPDATED": "\"{{title}}\" görevi için güncellenmiş hatırlatıcı",
         "TASK_ALREADY_EXISTS": "<strong>{{title}}</strong> görevi zaten mevcut",
-        "TASK_CREATED": "\"{{taskTitle}}\" görevi oluşturuldu",
-        "DEADLINE_REMOVED": "Son tarih kaldırıldı",
-        "DEADLINE_SET": "Son tarih {{date}} olarak belirlendi"
+        "TASK_CREATED": "\"{{taskTitle}}\" görevi oluşturuldu"
       },
       "SELECT_OR_CREATE": "Görev seç veya oluştur",
       "SUMMARY_TABLE": {
@@ -1573,23 +1662,6 @@
         "SPENT_TOTAL": "Toplam Harcanan",
         "TASK": "Görev",
         "TOGGLE_DONE": "tamamlandı olarak işaretle/kaldır"
-      },
-      "D_DEADLINE": {
-        "ADD_TIME": "Saat ekle",
-        "QA_NEXT_MONTH": "Gelecek ay",
-        "QA_NEXT_WEEK": "Gelecek hafta",
-        "QA_TODAY": "Bugün",
-        "QA_TOMORROW": "Yarın",
-        "REMIND_AT": "Hatırlatma zamanı",
-        "REMOVE_DEADLINE": "Son tarihi kaldır",
-        "RO_1H": "1 saat önce",
-        "RO_5M": "5 dakika önce",
-        "RO_10M": "10 dakika önce",
-        "RO_15M": "15 dakika önce",
-        "RO_30M": "30 dakika önce",
-        "RO_AT_DEADLINE": "Son tarihte",
-        "RO_NEVER": "Asla",
-        "SET_DEADLINE": "Son tarih belirle"
       }
     },
     "TASK_REPEAT": {
@@ -1628,16 +1700,16 @@
         "MSG": "Bu tekrarlanabilir görev için oluşturulmuş {{tasksNr}} örnek var. Hepsini yeni varsayılanlarla mı yoksa yalnızca gelecekteki görevlerle mi güncellemek istiyorsunuz?",
         "OK": "Tüm örnekleri güncelle"
       },
-      "D_DELETE_INSTANCE": {
-        "MSG": "Tekrarlanan görevin {{date}} tarihindeki örneğini kaldırmak istiyor musunuz? Bu yalnızca görevin bu tarihte oluşturulmasını engelleyecektir.",
-        "OK": "Örneği Kaldır"
+      "D_SKIP_INSTANCE": {
+        "MSG": "{{date}} tarihindeki yinelenen görevi atla? Bu, görevin yalnızca bu tarihte oluşturulmasını önleyecektir.",
+        "OK": "Atla"
       },
       "D_EDIT": {
         "ADD": "Tekrar Görev Yapısı Ekle",
         "ADVANCED_CFG": "Gelişmiş Yapılandırma",
         "EDIT": "Yinelenen Görev Yapılandırmasını Düzenle",
-        "TAG_LABEL": "Eklenecek etiketler",
         "HEATMAP_LABEL": "Etkinlik",
+        "TAG_LABEL": "Eklenecek etiketler",
         "TIME_SPENT_THIS_MONTH": "Bu ay",
         "TIME_SPENT_THIS_WEEK": "Bu hafta",
         "TIME_SPENT_TOTAL": "Toplam"
@@ -1649,27 +1721,31 @@
         "C_YEAR": "Yıl",
         "DEFAULT_ESTIMATE": "Varsayılan Tahmini",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "Alt görevlerin otomatik güncellenmesini devre dışı bırak",
-        "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "En yeni örnek değiştiğinde devralınan alt görevleri otomatik olarak güncelleme",
+        "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "En yeni örnek değiştiğinde devralınan alt görevleri otomatik olarak güncellenmesin",
         "FRIDAY": "Cuma",
         "INHERIT_SUBTASKS": "Alt görevleri devral",
-        "INHERIT_SUBTASKS_DESCRIPTION": "Etkinleştirildiğinde, en son görev örneğindeki alt görevler tekrarlayan görevle birlikte yeniden oluşturulur",
+        "INHERIT_SUBTASKS_DESCRIPTION": "Etkinleştirildiğinde, en son görev örneğindeki alt görevler, tekrarlayan görevle birlikte yeniden oluşturulur",
         "MONDAY": "Pazartesi",
         "NOTES": "Varsayılan notlar",
-        "QUICK_SETTING": "Yapılandırmayı Tekrarla",
         "Q_CUSTOM": "Özel tekrar yapılandırması",
         "Q_DAILY": "Her gün",
         "Q_MONDAY_TO_FRIDAY": "Her pazartesiden cumaya",
         "Q_MONTHLY_CURRENT_DATE": "Her ayın {{dateDayStr}}. günü",
+        "Q_MONTHLY_FIRST_DAY": "Her ayın ilk günü",
+        "Q_MONTHLY_LAST_DAY": "Her ayın son günü",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Her hafta {{weekdayStr}} günü",
         "Q_YEARLY_CURRENT_DATE": "Her yıl {{dayAndMonthStr}} tarihinde",
+        "QUICK_SETTING": "Yapılandırmayı Tekrarla",
         "REMIND_AT": "Şu saatte hatırlat:",
         "REMIND_AT_PLACEHOLDER": "Ne zaman hatırlatılacağını seçin",
-        "REMOVE_FOR_DATE": "{{date}} için kaldır",
-        "REMOVE_INSTANCE": "Bugünkü örneği kaldır",
+        "SKIP_FOR_DATE": "{{date}} için atla",
+        "SKIP_INSTANCE": "Bugün için atla",
         "REPEAT_CYCLE": "Döngüyü tekrarla",
         "REPEAT_EVERY": "Yinelenme sıklığı",
         "SATURDAY": "Cumartesi",
         "SCHEDULE_TYPE_LABEL": "Planlama Türü",
+        "SKIP_OVERDUE": "Gecikmiş örnekleri atla",
+        "SKIP_OVERDUE_DESCRIPTION": "Etkinleştirildiğinde, uygulama planlanan bir tekrarı kaçırdıktan sonra açılırsa (ör. uygulamanın, haftalık bir görevin planlanmadığı başka bir günde açılması), kaçırılan bu tekrar, gecikmiş bir görev olarak oluşturulmak yerine sessizce atlanır",
         "START_DATE": "Başlangıç tarihi",
         "START_TIME": "Planlanan başlangıç zamanı",
         "START_TIME_DESCRIPTION": "Örneğin. 15:00. Tüm gün süren bir görev için boş bırakın",
@@ -1677,20 +1753,23 @@
         "THURSDAY": "Perşembe",
         "TITLE": "Görevin Başlığı",
         "TUESDAY": "Salı",
-        "WEDNESDAY": "Çarşamba",
-        "Q_MONTHLY_FIRST_DAY": "Her ayın ilk günü",
-        "Q_MONTHLY_LAST_DAY": "Her ayın son günü",
-        "SKIP_OVERDUE": "Gecikmiş örnekleri atla",
-        "SKIP_OVERDUE_DESCRIPTION": "Etkinleştirildiğinde, uygulama planlanan bir tekrarı kaçırdıktan sonra açılırsa (ör. bugün planlanan gün olmayan haftalık bir görev), kaçırılan örnek gecikmiş görev olarak oluşturulmak yerine sessizce atlanır"
+        "WEDNESDAY": "Çarşamba"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Tekrar yapılandırma diyaloğu açılamadı. Görev menüsünden yapılandırabilirsiniz."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
+        "DEADLINE_NEXT_MONTH": "Gelecek Ay Bitiyor",
+        "DEADLINE_NEXT_WEEK": "Gelecek Hafta Bitiyor",
+        "DEADLINE_THIS_MONTH": "Bu Ay Bitiyor",
+        "DEADLINE_THIS_WEEK": "Bu Hafta Bitiyor",
+        "DEADLINE_TODAY": "Bugün Bitiyor",
+        "DEADLINE_TOMORROW": "Yarın Bitiyor",
         "ENTER_PROJECT": "Proje girin",
         "ENTER_TAG": "Etiket girin",
         "ESTIMATED_TIME": "Tahmini Zaman",
         "FILTER_BY": "Filtrele",
+        "FILTER_DEADLINE": "Bitiş Tarihi",
         "FILTER_DEFAULT": "Filtre Yok",
         "FILTER_ESTIMATED_TIME": "Tahmini Zaman",
         "FILTER_NOT_SPECIFIED": "Belirtilmemiş",
@@ -1699,26 +1778,29 @@
         "FILTER_TAG": "Etiket",
         "FILTER_TIME_SPENT": "Geçen Zaman",
         "GROUP_BY": "Grupla",
+        "GROUP_DEADLINE": "Bitiş Tarihi",
+        "GROUP_DEADLINE_NONE": "Bitiş tarihi yok",
         "GROUP_DEFAULT": "Gruplama Yok",
         "GROUP_PROJECT": "Proje",
         "GROUP_SCHEDULED_DATE": "Planlanan Tarih",
         "GROUP_TAG": "Etiket",
         "RESET_ALL": "Tümünü Sıfırla",
+        "SAVE_SORT": "Varsayılan olarak kaydet",
         "SCHEDULED_NEXT_MONTH": "Gelecek ay",
         "SCHEDULED_NEXT_WEEK": "Gelecek hafta",
         "SCHEDULED_THIS_MONTH": "Bu ay",
         "SCHEDULED_THIS_WEEK": "Bu hafta",
         "SCHEDULED_TODAY": "Bugün",
         "SCHEDULED_TOMORROW": "Yarın",
+        "SORT": "Sırala",
         "SORT_CREATION_DATE": "Oluşturma Tarihi",
+        "SORT_DEADLINE": "Bitiş Tarihi",
         "SORT_DEFAULT": "Varsayılan",
         "SORT_NAME": "Ad",
-        "SAVE_SORT": "Varsayılan olarak kaydet",
         "SORT_SCHEDULED_DATE": "Planlanan Tarih",
-        "SORT": "Sırala",
-        "TIME_10MIN": "> 10 Dakika",
         "TIME_1HOUR": "> 1 Saat",
         "TIME_2HOUR": "> 2 Saat",
+        "TIME_10MIN": "> 10 Dakika",
         "TIME_30MIN": "> 30 Dakika",
         "TIME_SPENT": "Geçen Zaman"
       }
@@ -1732,6 +1814,20 @@
         "ADD_TO_TASK": "Göreve Ekle",
         "MSG": "{{time}} süredir, süreyi takip etmiyorsunuz",
         "MSG_WITHOUT_TIME": "Süreyi takip etmiyorsunuz"
+      },
+      "D_ARCHIVE_COMPRESS": {
+        "BTN_COMPRESS": "Arşivi Sıkıştır",
+        "CONFIRM_MSG": "Arşivi sıkıştırmak istediğinizden emin misiniz? Bu, yukarıda listelenen verileri kalıcı olarak silecektir.",
+        "CONFIRM_TITLE": "Arşiv Sıkıştırmayı Onayla",
+        "ESTIMATED_SAVINGS": "Tahmini alan tasarrufu",
+        "INTRO": "Bu, arşivlenmiş görevlerinizi eski verileri kaldırarak sıkıştıracak. Bu işlem tüm cihazlarınızda senkronize edilir.",
+        "ISSUE_FIELDS_TO_CLEAR": "Temizlenecek sorun alanları",
+        "LOADING": "Arşiv analiz ediliyor...",
+        "NO_DATA": "Sıkıştırılacak veri yok. Arşiviniz zaten optimize edilmiş.",
+        "NOTES_TO_CLEAR": "Temizlenecek görev notları (1 yıldan eski)",
+        "SUBTASKS_TO_DELETE": "Silinecek alt görevler (zaman üst öğeye birleştirildi)",
+        "TITLE": "Arşivi Sıkıştır",
+        "WARNING": "Bu işlem geri alınamaz. Devam etmeden önce bir yedek aldığınızdan emin olun."
       },
       "D_IDLE": {
         "ADD_ENTRY": "İzleme için giriş ekleyin",
@@ -1757,20 +1853,6 @@
         "TASK": "Görev",
         "TRACK_TO": "Takip et:",
         "UNTRACKED_TIME": "İzlenmeyen süre:"
-      },
-      "D_ARCHIVE_COMPRESS": {
-        "TITLE": "Arşivi Sıkıştır",
-        "LOADING": "Arşiv analiz ediliyor...",
-        "INTRO": "Bu, arşivlenmiş görevlerinizi eski verileri kaldırarak sıkıştıracak. Bu işlem tüm cihazlarınızda senkronize edilir.",
-        "SUBTASKS_TO_DELETE": "Silinecek alt görevler (zaman üst öğeye birleştirildi)",
-        "NOTES_TO_CLEAR": "Temizlenecek görev notları (1 yıldan eski)",
-        "ISSUE_FIELDS_TO_CLEAR": "Temizlenecek sorun alanları",
-        "ESTIMATED_SAVINGS": "Tahmini alan tasarrufu",
-        "WARNING": "Bu işlem geri alınamaz. Devam etmeden önce bir yedek aldığınızdan emin olun.",
-        "CONFIRM_TITLE": "Arşiv Sıkıştırmayı Onayla",
-        "CONFIRM_MSG": "Arşivi sıkıştırmak istediğinizden emin misiniz? Bu, yukarıda listelenen verileri kalıcı olarak silecektir.",
-        "BTN_COMPRESS": "Arşivi Sıkıştır",
-        "NO_DATA": "Sıkıştırılacak veri yok. Arşiviniz zaten optimize edilmiş."
       }
     },
     "WORKLOG": {
@@ -1781,9 +1863,9 @@
         "RESTORE_TASK_FROM_ARCHIVE": "Arşivden görevi geri yükle",
         "TASKS": "Görevler",
         "TOTAL_TIME": "Toplam harcanan zaman:",
+        "VIEW_TASK_DETAILS": "Görev ayrıntılarını görüntüle",
         "WEEK_NR": "{{nr}} haftası",
-        "WORKED": "Çalışılmış",
-        "VIEW_TASK_DETAILS": "Görev ayrıntılarını görüntüle"
+        "WORKED": "Çalışılmış"
       },
       "D_CONFIRM_RESTORE": " <strong>\"{{title}}\"</strong> görevini bugünün görev listenize taşımak istediğinizden emin misiniz?",
       "D_EXPORT_TITLE": " {{start}}-{{end}}Görev Günlüğünü Dışa Aktarma",
@@ -1830,41 +1912,10 @@
         "NO_DATA": "Henüz bu haftanın görevleri yok.",
         "TITLE": "Başlık"
       }
-    },
-    "CLIPBOARD_IMAGE": {
-      "PASTE_SUCCESS": "Görsel başarıyla yapıştırıldı",
-      "SIZE_EXCEEDED": "Görsel boyutu ({{actualSize}}) izin verilen maksimum boyutu ({{maxSize}}) aşıyor",
-      "STORAGE_QUOTA_EXCEEDED": "Depolama kotası aşıldı. Lütfen alan açın veya görsel boyutlarını küçültün."
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud Temel URL",
-        "FILTER_BY_ASSIGNEE": "Yalnızca bana atanmış kartları içe aktar",
-        "IS_TRANSITION_ISSUES_ENABLED": "Tamamlanma durumunu ve başlığı Nextcloud Deck'e geri senkronize et",
-        "PASSWORD": "Nextcloud uygulama şifreniz",
-        "POLL_INTERVAL_MINUTES": "Yoklama aralığı (dakika)",
-        "TITLE_TEMPLATE": "Görev başlık şablonu",
-        "TITLE_TEMPLATE_DESCRIPTION": "Değişkenler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Örnek: [{BOARD}: {COLUMN}] {CARD_TITLE}. Yalnızca kart başlığı için boş bırakın.",
-        "USERNAME": "Nextcloud kullanıcı adınız"
-      },
-      "FORM_SECTION": {
-        "HELP": "Kartları görev olarak içe aktarmak için Nextcloud Deck entegrasyonunuzu yapılandırın. Kimlik doğrulama için uygulama şifresi kullanın."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Atanan Kullanıcılar",
-        "DECK_DESCRIPTION": "Deck Açıklaması",
-        "LABELS": "Etiketler",
-        "STACK": "Yığın"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Pano bulunamadı",
-        "CARD_NOT_FOUND": "Nextcloud Deck: \"{{issueId}}\" kartı sunucuda silinmiş görünüyor.",
-        "ERR_CREDENTIALS_MISSING": "Önce Nextcloud URL'sini, kullanıcı adını ve şifreyi girin.",
-        "ERR_LOAD_BOARDS": "Deck panoları yüklenemedi. Kimlik bilgilerinizi kontrol edin."
-      }
     }
   },
   "FILE_IMEX": {
+    "BTN_COMPRESS_ARCHIVE": "Arşivi Sıkıştır",
     "DIALOG_CONFIRM_URL_IMPORT": {
       "INITIATED_MSG": "Otomatik veri içe aktarma başlatıldı.",
       "SOURCE_URL_DOMAIN": "Kaynak Alan Adı",
@@ -1885,21 +1936,7 @@
     "S_ERR_INVALID_URL": "İçe aktarma başarısız oldu: Geçersiz URL sağlandı",
     "S_ERR_NETWORK": "İçe aktarma başarısız oldu: URL'den veri alınırken ağ hatası oluştu",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Hata: İçe aktarma için URL parametresi çözümlenemedi. Lütfen doğru biçimlendirildiğinden emin olun.",
-    "URL_PLACEHOLDER": "İçe aktarmak için URL girin",
-    "BTN_COMPRESS_ARCHIVE": "Arşivi Sıkıştır"
-  },
-  "MIGRATE": {
-    "C_DOWNLOAD_BACKUP": "Eski verilerinizin bir yedeğini indirmek istiyor musunuz (Süper Üretkenlik'in eski sürümleriyle kullanılabilir)?",
-    "DETECTED_LEGACY": "Algılanan eski veriler. Sizin için taşıyacağız!",
-    "E_MIGRATION_FAILED": "Geçiş başarısız oldu! Hatalı:",
-    "E_RESTART_FAILED": "Otomatik yeniden başlatma başarısız oldu. Lütfen uygulamayı manuel olarak yeniden başlatın!",
-    "SUCCESS": "Geçiş tamam! Uygulama şimdi yeniden başlatılıyor...",
-    "DIALOG_MESSAGE": "Gelişmiş senkronizasyon güvenilirliği için verilerinizin saklanma şeklini güncelliyoruz. Yedek otomatik olarak indirilecektir.",
-    "DIALOG_TITLE": "Verileriniz Taşınıyor",
-    "STATUS_BACKUP": "Verilerinizin yedeği oluşturuluyor...",
-    "STATUS_COMPLETE": "Taşıma tamamlandı!",
-    "STATUS_MIGRATING": "Veriler taşınıyor...",
-    "STATUS_PREPARING": "Taşıma hazırlanıyor..."
+    "URL_PLACEHOLDER": "İçe aktarmak için URL girin"
   },
   "G": {
     "ADD": "Ekle",
@@ -1907,19 +1944,20 @@
     "APPLY": "Uygula",
     "CANCEL": "İptal",
     "CLOSE": "Kapat",
+    "COMMENT": "Yorum",
     "COMPLETE": "Tamamla",
     "CONFIRM": "Onayla",
     "CONTINUE": "Devam Et",
     "DELETE": "Sil",
     "DISMISS": "Görmezden gel",
-    "DONT_SHOW_AGAIN": "Tekrar gösterme",
     "DO_IT": "Yap!",
+    "DONT_SHOW_AGAIN": "Tekrar gösterme",
     "DUPLICATE": "Çoğalt",
     "DURATION_DESCRIPTION": "Örneğin. \"5h 23m\", yani 5 saat 23 dakika",
     "EDIT": "Düzenle",
     "ENABLED": "Etkin",
     "EXAMPLE_VAL": "Düzenlemek için tıkla",
-    "EXTENSION_INFO": "Jira Api ve Boş Vakit Takibi ile iletişime izin vermek için lütfen <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> krom uzantısını</a> indirin. Bunun mobil cihazlar için işe yaramadığını unutmayın.",
+    "EXTENSION_INFO": "Jira Api ve Boş Vakit Takibi ile iletişime izin vermek için lütfen <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> chrome uzantısını</a> indirin. Bunun mobil cihazlar için işe yaramadığını unutmayın.",
     "HIDE": "Gizle",
     "ICON_INP_DESCRIPTION": "Tüm utf-8 emojileri de destekleniyor!",
     "INBOX_PROJECT_TITLE": "Gelen kutusu",
@@ -1930,41 +1968,45 @@
     "NO_CON": "Şu anda çevrimdışısınız. Lütfen internete tekrar bağlanın.",
     "NONE": "Yok",
     "OK": "Tamam",
+    "OPEN_IN_BROWSER": "Tarayıcıda aç",
     "OVERDUE": "Gecik -miş",
+    "PASSWORD_STRENGTH_FAIR": "Orta",
+    "PASSWORD_STRENGTH_STRONG": "Güçlü",
+    "PASSWORD_STRENGTH_WEAK": "Zayıf",
+    "PROCESSING": "İşleniyor",
     "REMOVE": "Kaldır",
     "SAVE": "Kaydet",
     "SHARE": "Paylaş",
     "SUBMIT": "Gönder",
     "TITLE": "Başlık",
     "TODAY_TAG_TITLE": "Bugün",
+    "TOGGLE_PASSWORD_VISIBILITY": "Şifre görünürlüğünü değiştir",
     "UNDO": "Geri Al",
     "WITHOUT_PROJECT": "Proje Olmadan",
-    "YESTERDAY": "Dün",
-    "PASSWORD_STRENGTH_FAIR": "Orta",
-    "PASSWORD_STRENGTH_STRONG": "Güçlü",
-    "PASSWORD_STRENGTH_WEAK": "Zayıf",
-    "PROCESSING": "İşleniyor",
-    "TOGGLE_PASSWORD_VISIBILITY": "Şifre görünürlüğünü değiştir"
+    "YESTERDAY": "Dün"
   },
   "GCF": {
     "APP_FEATURES": {
       "BOARDS": "Panolar",
       "DONATE_PAGE": "Bağış Sayfası",
+      "FINISH_DAY": "Günü bitir",
       "FOCUS_MODE": "Odak Modu",
+      "HABITS": "Alışkanlıklar",
       "HELP": "Kullanıcı arayüzü genelinde belirli uygulama özelliklerini etkinleştirin veya devre dışı bırakın.",
       "ISSUES_PANEL": "Sorunlar Paneli",
       "PLANNER": "Planlayıcı",
       "PROJECT_NOTES": "Proje Notları",
       "SCHEDULE": "Takvim",
       "SCHEDULE_DAY_PANEL": "Takvim Gün Paneli",
+      "SEARCH": "Arama",
       "SYNC_BUTTON": "Senkronizasyon Düğmesi",
       "TIME_TRACKING": "Kronometre Zaman İzleme",
       "TITLE": "Uygulama Özellikleri",
       "USER_PROFILES": "Kullanıcı profilleri (Deneysel)",
       "USER_PROFILES_HINT": "Farklı kullanıcı profilleri oluşturmanıza ve bunlar arasında geçiş yapmanıza olanak tanır, her biri ayrı ayarlar, görevler ve senkronizasyon yapılandırmalarına sahip. Etkinleştirildiğinde profil yönetimi düğmesi sağ üst köşede görünecektir. Not: Bu özelliği devre dışı bırakmak UI'yi gizleyecek ancak profil verilerinizi koruyacaktır (Deneysel özellik, garanti verilmez. Yedek aldığınızdan emin olun).",
-      "HABITS": "Alışkanlıklar",
-      "SEARCH": "Arama",
-      "USER_PROFILES_WARNING": "<strong>Deneysel özellik:</strong> Bu özellik hâlâ geliştirme aşamasındadır ve gelecekteki bir güncellemede kaldırılabilir veya önemli ölçüde değiştirilebilir. Kendi sorumluluğunuzda kullanın ve verilerinizin yedeklerini tuttuğunuzdan emin olun."
+      "USER_PROFILES_WARNING": "<strong>Deneysel özellik:</strong> Bu özellik hâlâ geliştirme aşamasındadır ve gelecekteki bir güncellemede kaldırılabilir veya önemli ölçüde değiştirilebilir. Kendi sorumluluğunuzda kullanın ve verilerinizin yedeklerini tuttuğunuzdan emin olun.",
+      "EXPERIMENTAL_WARNING_TITLE": "Deneysel Özellik",
+      "EXPERIMENTAL_WARNING_MSG": "Bu özellik deneyseldir. Hatalar içerebilir, önemli ölçüde değişebilir veya gelecekteki bir güncellemede kaldırılabilir. Verilerinizin yedeklerini aldığınızdan emin olun.<br/><br/>Etkinleştirmek istiyor musunuz?"
     },
     "AUTO_BACKUPS": {
       "HELP": "Bir şeyler ters gittiğinde, hazır olması için tüm verileri otomatik olarak uygulama klasörünüze kaydedin.",
@@ -1979,19 +2021,58 @@
       "HELP": "Hatırlatılacak takvimleri entegre edebilir ve bunları Super Productivity içinde görev olarak ekleyebilirsiniz. Entegrasyon iCal biçimini kullanarak çalışır. Bunun çalışması için takvimlerinizin internet üzerinden veya dosya sistemi aracılığıyla erişilebilir olması gerekir.",
       "SHOW_BANNER_THRESHOLD": "Etkinlikten önce bir bildirim X göster (devre dışı bırakmak için boş)"
     },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "Görseli sil",
+      "DELETE_ALL": "Tümünü Sil",
+      "DELETE_ALL_SUCCESS": "Tüm pano görselleri başarıyla silindi",
+      "DELETE_SUCCESS": "Pano görseli başarıyla silindi",
+      "ERROR_DELETING": "Pano görseli silinemedi",
+      "ERROR_DELETING_ALL": "Tüm pano görselleri silinemedi",
+      "ERROR_LOADING": "Pano görselleri yüklenemedi",
+      "HELP": "Panodan yapıştırılan görselleri yönetin. Tarayıcı sürümünde görseller IndexedDB'de saklanır. Masaüstü sürümünde depolama yolunu yapılandırın.",
+      "LOADING": "Görseller yükleniyor...",
+      "MANAGE_DESCRIPTION": "Markdown alanlarına yapıştırılarak saklanan görselleri görüntüleyin ve silin",
+      "MANAGE_TITLE": "Saklanan Görselleri Yönet",
+      "MANAGER_TITLE": "Pano Görselleri",
+      "NO_IMAGES": "Saklanan pano görseli yok",
+      "OPEN_MANAGER": "Görselleri Yönet",
+      "PATH_DESCRIPTION": "Pano görsellerinin dosya sisteminizde nerede saklanacağını yapılandırın (varsayılan konum için boş bırakın)",
+      "PATH_LABEL": "Görsel Depolama Yolu",
+      "PATH_PLACEHOLDER": "Varsayılan konum için boş bırakın",
+      "PATH_TITLE": "Depolama Konumu",
+      "SELECT_PATH": "Klasör Seç",
+      "SELECT_PATH_TITLE": "Pano Görselleri Klasörünü Seç",
+      "SORT_BY": "Sırala",
+      "SORT_LARGEST": "En büyük önce",
+      "SORT_NEWEST": "En yeni önce",
+      "SORT_OLDEST": "En eski önce",
+      "SORT_SMALLEST": "En küçük önce",
+      "TITLE": "Pano Görselleri",
+      "TOTAL_IMAGES": "Toplam görsel",
+      "TOTAL_SIZE": "Toplam boyut"
+    },
     "EVALUATION": {
       "IS_HIDE_EVALUATION_SHEET": "Değerlendirme özetini günlük özette gizle",
       "TITLE": "Değerlendirme ve İstatistikler"
     },
     "FOCUS_MODE": {
+      "FOCUS_MODE_SOUND_OFF": "Kapalı",
+      "FOCUS_MODE_SOUND_TICK": "Tıklama",
+      "FOCUS_MODE_SOUND_WHITE_NOISE": "Beyaz Gürültü",
       "HELP": "Odak Modu, mevcut görevinize odaklanmanıza yardımcı olmak için dikkatinizi dağıtmayan bir ekran açar.",
-      "L_IS_PLAY_TICK": "Odak oturumları sırasında tıklama sesi çal",
+      "L_FOCUS_MODE_SOUND": "Odaklanma oturumları sırasında ortam sesi",
       "L_MANUAL_BREAK_START": "Molaları manuel olarak başlat (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Molalar sırasında görev takibini duraklat",
       "L_SKIP_PREPARATION_SCREEN": "Hazırlık ekranını atlayın (esnetme vb.)",
       "L_START_IN_BACKGROUND": "Odak oturumlarını yalnızca kapak ile başlat (kaplama yok)",
       "L_SYNC_SESSION_WITH_TRACKING": "Odak oturumunu zaman takibi ile senkronize et",
       "TITLE": "Odak modu"
+    },
+    "TASK_WIDGET": {
+      "TITLE": "Görev Araç Takımı",
+      "IS_ENABLED": "Görev araç takımını etkinleştir",
+      "IS_ALWAYS_SHOW": "Görev araç takımını her zaman göster (ana pencere görünür olduğunda bile)",
+      "OPACITY": "Görev araç takımı opaklığı"
     },
     "IDLE": {
       "HELP": "<div><p>Boşta kalma süresi işleme etkinleştirildiğinde, boşta olduğunuzda, hangi görevi ve zamanınızı izlemek istediğinizi kontrol etmek için belirli bir süre sonra bir iletişim kutusu açılır.</p></div>",
@@ -2044,11 +2125,12 @@
       "TASK_OPEN_CONTEXT_MENU": "Görev bağlam menüsünü aç",
       "TASK_OPEN_ESTIMATION_DIALOG": "Tahmini / harcanan zamanı düzenle",
       "TASK_SCHEDULE": "Görev Takvimi",
-      "TASK_UNSCHEDULE": "Görevi Zamanlamayı Kaldır",
       "TASK_SHORTCUTS": "Görevler",
       "TASK_SHORTCUTS_INFO": "Seçili görev için aşağıdaki kısayollar geçerlidir (sekme veya fare ile seçilir).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Ek görev bilgilerini göster / gizle",
+      "TASK_OPEN_NOTES_FULLSCREEN": "Notu/listeyi tam ekranda aç",
       "TASK_TOGGLE_DONE": "Geçiş Yapıldı",
+      "TASK_UNSCHEDULE": "Görevi Zamanlamayı Kaldır",
       "TITLE": "Klavye kısayolları",
       "TOGGLE_BACKLOG": "Görev Listesini Göster / Gizle",
       "TOGGLE_ISSUE_PANEL": "Sorun Panelini Göster/Gizle",
@@ -2080,11 +2162,14 @@
       "PL": "Polish",
       "PT": "Português",
       "PT_BR": "Português (Brazil)",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
       "RU": "Russian",
       "SK": "Slovak",
       "SV": "Svenska",
       "TIME_LOCALE": "Zaman formatı yerel ayarı",
       "TIME_LOCALE_AUTO": "Sistem varsayılanı",
+      "TIME_LOCALE_CS_CZ": "Czech: 24-saat, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "German: 24-saat, DD.MM.YYYY",
       "TIME_LOCALE_DESCRIPTION": "Zaman formatı için bir yerel ayar seçin. Farklı yerel ayarlar farklı gelenekler kullanır (12sa vs 24sa formatı)",
       "TIME_LOCALE_EN_GB": "English (UK): 24-saat, DD/MM/YYYY",
@@ -2094,22 +2179,20 @@
       "TIME_LOCALE_IT_IT": "Italian: 24-saat, DD/MM/YYYY",
       "TIME_LOCALE_JA_JP": "Japanese: 24-saat, YYYY/MM/DD",
       "TIME_LOCALE_KO_KR": "Korean: 12-saat AM/PM, YYYY. MM. DD",
+      "TIME_LOCALE_PL_PL": "Lehçe: 24-saat, GG.AA.YYYY",
       "TIME_LOCALE_PT_BR": "Portuguese (Brazil): 24-saat, DD/MM/YYYY",
+      "TIME_LOCALE_RO_MD": "Romence (Moldova): 24 saat, GG.AA.YYYY",
+      "TIME_LOCALE_RO_RO": "Romence: 24 saat, GG.AA.YYYY",
       "TIME_LOCALE_RU_RU": "Russian: 24-saat, DD.MM.YYYY",
-      "TIME_LOCALE_TR_TR": "Türk: 24-saat, DD.MM.YYYY",
-      "TIME_LOCALE_ZH_CN": "Chinese (Simplified): 24-saat, YYYY/MM/DD",
-      "TIME_LOCALE_CS_CZ": "Czech: 24-saat, DD. MM. YYYY",
       "TIME_LOCALE_SK_SK": "Slovak: 24-saat, DD. MM. YYYY",
+      "TIME_LOCALE_TR_TR": "Türk: 24-saat, DD.MM.YYYY",
       "TIME_LOCALE_UK_UA": "Ukrainian: 24-saat, DD.MM.YYYY",
+      "TIME_LOCALE_ZH_CN": "Chinese (Simplified): 24-saat, YYYY/MM/DD",
       "TITLE": "Dil",
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文(简体)",
-      "ZH_TW": "中文(繁體)",
-      "RO": "Română",
-      "RO_MD": "Română (Moldova)",
-      "TIME_LOCALE_RO_MD": "Romence (Moldova): 24 saat, GG.AA.YYYY",
-      "TIME_LOCALE_RO_RO": "Romence: 24 saat, GG.AA.YYYY"
+      "ZH_TW": "中文(繁體)"
     },
     "MISC": {
       "DARK_MODE": "Karanlık Mod",
@@ -2125,8 +2208,9 @@
       "IS_DARK_MODE": "Karanlık mod",
       "IS_DISABLE_ANIMATIONS": "Tüm animasyonları devre dışı bırak",
       "IS_DISABLE_CELEBRATION": "Günlük özet kutlamasını devre dışı bırak",
+      "IS_LOCAL_REST_API_ENABLED": "Yerel REST API'yi etkinleştir (yalnızca masaüstü)",
+      "IS_LOCAL_REST_API_ENABLED_HINT": "Yerel betiklerin çalışan uygulamayı http://127.0.0.1:3876 üzerinden kontrol etmesini sağlar. Bu bilgisayarda çalışan herhangi bir uygulama görevlerinizi okuyabilir ve değiştirebilir.",
       "IS_MINIMIZE_TO_TRAY": "Tepsiye küçült (yalnızca masaüstü)",
-      "IS_OVERLAY_INDICATOR_ENABLED": "Panel gösterge penceresini etkinleştir (masaüstü linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Uygulamada üretkenlik ipucunu biraz daha uzun süre başlatın",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Mevcut geri sayımı tepsi / durum menüsünde göster (sadece masaüstü mac için)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Özel başlık çubuğunu kullan (Windows/Linux için)",
@@ -2138,16 +2222,6 @@
       "THEME_SELECT_LABEL": "Tema seç",
       "TITLE": "Diğer ayarlar"
     },
-    "TASKS": {
-      "DEFAULT_PROJECT": "Varsayılan proje (belirtilmemişse) için kullanılacak",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Üzerinde çalışılan görevleri otomatik olarak bugüne ekle",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Tüm alt görevler tamamlandığında ana görevi otomatik olarak tamamlandı olarak işaretle",
-      "IS_CONFIRM_BEFORE_DELETE": "Görevleri silmeden önce onayla",
-      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Görev notlarında Markdown biçimlendirmesini etkinleştir",
-      "IS_TRAY_SHOW_CURRENT": "Mevcut görevi tepsi / durum menüsünde göster (yalnızca masaüstü Mac/Windows için)",
-      "NOTES_TEMPLATE": "Görev açıklama şablonu",
-      "TITLE": "Görevler"
-    },
     "POMODORO": {
       "BREAK_DURATION": "Kısa molaların süresi",
       "CYCLES_BEFORE_LONGER_BREAK": "X iş oturumundan sonra daha uzun ara vermeye başlayın",
@@ -2158,24 +2232,24 @@
       "COUNTDOWN_DURATION": "Gerçek hatırlatıcıdan önce X başlığını göster",
       "DEFAULT_TASK_REMIND_OPTION": "Görev oluştururken varsayılan hatırlatma seçeneği",
       "DISABLE_REMINDERS": "Tüm hatırlatıcıları devre dışı bırak",
-      "IS_COUNTDOWN_BANNER_ENABLED": "Hatırlatıcıların son teslim tarihinden önce geri sayım afişini göster",
-      "IS_FOCUS_WINDOW": "Hatırlatıcı tetiklendiğinde uygulama penceresine odaklan",
-      "TITLE": "Hatırlatıcılar",
-      "USE_ALARM_STYLE_REMINDERS": "Alarm tarzı bildirimleri kullan (Android)",
-      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Etkinleştirildiğinde, hatırlatıcılar daha yüksek sesli alarm sesleri ve daha müdahaleci bildirimler kullanır. Kritik hatırlatıcılar için önerilir.",
       "DUE_DATE_NOTIFICATION_HOUR": "Son tarih bildirimlerinin gösterileceği saat (0-23)",
       "HELP": "<p><strong>Önemli:</strong> Hatırlatıcılar push bildirimleri değil, <strong>yerel bildirimler</strong> kullanır. Bu, hatırlatıcıların planlanabilmesi için uygulamanın cihazınızda en az bir kez açılmış olması gerektiği anlamına gelir. Başka bir cihazda ayarlanan hatırlatıcılar, yalnızca uygulama hedef cihazda senkronize olduktan sonra görünecektir.</p><p><strong>iOS</strong>'ta, 'Ayarlar' > 'Bildirimler' altında Super Productivity için bildirimlerin etkinleştirildiğinden emin olun.</p>",
-      "NOTIFY_ON_DUE_DATE": "Bugün son tarihi olan görevler için bildirim göster"
+      "IS_COUNTDOWN_BANNER_ENABLED": "Hatırlatıcıların son teslim tarihinden önce geri sayım afişini göster",
+      "IS_FOCUS_WINDOW": "Hatırlatıcı tetiklendiğinde uygulama penceresine odaklan",
+      "NOTIFY_ON_DUE_DATE": "Bugün son tarihi olan görevler için bildirim göster",
+      "TITLE": "Hatırlatıcılar",
+      "USE_ALARM_STYLE_REMINDERS": "Alarm tarzı bildirimleri kullan (Android)",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Etkinleştirildiğinde, hatırlatıcılar daha yüksek sesli alarm sesleri ve daha müdahaleci bildirimler kullanır. Kritik hatırlatıcılar için önerilir."
     },
     "SCHEDULE": {
       "HELP": "Zaman çizelgesi özelliği, planlanan görevlerinizin zaman içinde nasıl oynandığına dair size hızlı bir genel bakış sağlamalıdır. Bunu sol taraftaki menüde <a href='#/schedule'>\"Zaman çizelgesi\"</a>altında bulabilirsiniz.",
-      "LUNCH_BREAK_START_END_DESCRIPTION": "örn. 13:00",
       "L_IS_LUNCH_BREAK_ENABLED": "Öğle arasını etkinleştir",
       "L_IS_WORK_START_END_ENABLED": "Planlanmamış görev akışını belirli çalışma süreleriyle sınırlandırın",
       "L_LUNCH_BREAK_END": "Öğle arası sonu",
       "L_LUNCH_BREAK_START": "Öğle arası başlangıcı",
       "L_WORK_END": "İş Günü Sonu",
       "L_WORK_START": "İş Günü Başlangıcı",
+      "LUNCH_BREAK_START_END_DESCRIPTION": "örn. 13:00",
       "MONTH": "Ay",
       "TITLE": "Zaman çizelgesi",
       "WORK_START_END_DESCRIPTION": "örn. 17:00"
@@ -2214,6 +2288,16 @@
       "SNOOZE_TIME": "Mola vermeniz istendiğinde zamanı ertele",
       "TITLE": "Mola Hatırlatması"
     },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Hiçbiri belirtilmemişse görevler için kullanılacak varsayılan proje",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Üzerinde çalışılan görevleri otomatik olarak bugüne ekle",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Tüm alt görevler tamamlandığında ana görevi otomatik olarak tamamlandı olarak işaretle",
+      "IS_CONFIRM_BEFORE_DELETE": "Görevleri silmeden önce onayla",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Görev notlarında Markdown biçimlendirmesini etkinleştir",
+      "IS_TRAY_SHOW_CURRENT": "Geçerli görevi sistem tepsisinde / durum menüsünde göster (yalnızca macOS/Windows)",
+      "NOTES_TEMPLATE": "Görev açıklaması şablonu",
+      "TITLE": "Görevler"
+    },
     "TIME_TRACKING": {
       "HELP": "Zaman izlemeyi başlatmayı unutmanız Durumunda görünecek bir başlık yapılandırın.",
       "L_DEFAULT_ESTIMATE": "Yeni görevler için varsayılan zaman tahmini",
@@ -2226,36 +2310,6 @@
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Zaman izleyiciyi mobil uygulamada göster",
       "L_TRACKING_REMINDER_MIN_TIME": "Banner göstermeden önce bekleme süresi",
       "TITLE": "Zaman İzleyici"
-    },
-    "CLIPBOARD_IMAGES": {
-      "DELETE": "Görseli sil",
-      "DELETE_ALL": "Tümünü Sil",
-      "DELETE_ALL_SUCCESS": "Tüm pano görselleri başarıyla silindi",
-      "DELETE_SUCCESS": "Pano görseli başarıyla silindi",
-      "ERROR_DELETING": "Pano görseli silinemedi",
-      "ERROR_DELETING_ALL": "Tüm pano görselleri silinemedi",
-      "ERROR_LOADING": "Pano görselleri yüklenemedi",
-      "HELP": "Panodan yapıştırılan görselleri yönetin. Tarayıcı sürümünde görseller IndexedDB'de saklanır. Masaüstü sürümünde depolama yolunu yapılandırın.",
-      "LOADING": "Görseller yükleniyor...",
-      "MANAGE_DESCRIPTION": "Markdown alanlarına yapıştırılarak saklanan görselleri görüntüleyin ve silin",
-      "MANAGE_TITLE": "Saklanan Görselleri Yönet",
-      "MANAGER_TITLE": "Pano Görselleri",
-      "NO_IMAGES": "Saklanan pano görseli yok",
-      "OPEN_MANAGER": "Görselleri Yönet",
-      "PATH_DESCRIPTION": "Pano görsellerinin dosya sisteminizde nerede saklanacağını yapılandırın (varsayılan konum için boş bırakın)",
-      "PATH_LABEL": "Görsel Depolama Yolu",
-      "PATH_PLACEHOLDER": "Varsayılan konum için boş bırakın",
-      "PATH_TITLE": "Depolama Konumu",
-      "SELECT_PATH": "Klasör Seç",
-      "SELECT_PATH_TITLE": "Pano Görselleri Klasörünü Seç",
-      "SORT_BY": "Sırala",
-      "SORT_LARGEST": "En büyük önce",
-      "SORT_NEWEST": "En yeni önce",
-      "SORT_OLDEST": "En eski önce",
-      "SORT_SMALLEST": "En küçük önce",
-      "TITLE": "Pano Görselleri",
-      "TOTAL_IMAGES": "Toplam görsel",
-      "TOTAL_SIZE": "Toplam boyut"
     }
   },
   "GLOBAL": {
@@ -2263,11 +2317,11 @@
   },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
-      "AN_HOUR": "bir saat içinde",
       "A_DAY": "bir gün içinde",
       "A_MINUTE": "bir dakika içinde",
       "A_MONTH": "Bir ay içinde",
       "A_YEAR": "bir yıl içinde",
+      "AN_HOUR": "bir saat içinde",
       "DAYS": "{{count}} gün içinde",
       "FEW_SECONDS": "birkaç saniye içinde",
       "HOURS": "{{count}} saat içinde",
@@ -2276,11 +2330,11 @@
       "YEARS": "{{count}} yıl içinde"
     },
     "PAST": {
-      "AN_HOUR": "bir saat önce",
       "A_DAY": "Bir gün önce",
       "A_MINUTE": "bir dakika önce",
       "A_MONTH": "Bir ay önce",
       "A_YEAR": "bir yıl önce",
+      "AN_HOUR": "bir saat önce",
       "DAYS": "{{count}} gün önce",
       "FEW_SECONDS": "birkaç saniye önce",
       "HOURS": "{{count}} saat önce",
@@ -2298,6 +2352,7 @@
     "NAVIGATE_TO_TASK_ERR": "Göreve odaklanılamadı. Sildiniz mi?",
     "NO_TASKS_TO_COPY": "Kopyalanacak görev yok",
     "NO_TASKS_TO_UNPLAN": "Planlaması kaldırılacak görev yok",
+    "OPEN_SETTINGS_ERROR": "Ayarlar açılamadı",
     "PERSISTENCE_DISALLOWED": "Veri kalıcı olarak sürdürülmeyecek. Bunun veri kaybına neden olabileceğini unutmayın!",
     "PERSISTENCE_ERROR": "Verilerin kalıcı hale getirilmesi istenirken hata oluştu: {{err}}",
     "RUNNING_X": "\"{{str}}\" çalıştırılıyor.",
@@ -2305,8 +2360,7 @@
     "SHARE_FAILED": "Paylaşım başarısız. Lütfen manuel olarak kopyalayın.",
     "SHARE_FAILED_FALLBACK": "Paylaşım başarısız. Bunun yerine panoya kopyalandı.",
     "SHARE_UNAVAILABLE_FALLBACK": "Panoya kopyalandı.",
-    "UNPLANNED_TODAY_TASKS": "Bugünden tüm görevlerin planlaması kaldırıldı",
-    "OPEN_SETTINGS_ERROR": "Ayarlar açılamadı"
+    "UNPLANNED_TODAY_TASKS": "Bugünden tüm görevlerin planlaması kaldırıldı"
   },
   "GPB": {
     "ASSETS": "Varlıklar yükleniyor ...",
@@ -2329,10 +2383,13 @@
     "CREATE_TAG": "Etiket Oluştur",
     "DELETE_PROJECT": "Projeyi Sil",
     "DELETE_TAG": "Etiketi Sil",
+    "DISABLE_FEATURE": "Özelliği devre dışı bırak",
     "DONATE": "Bize Destek Ol",
     "DUPLICATE_PROJECT": "Çoğalt",
     "ENTER_FOCUS_MODE": "Odak Moduna Geç",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" devre dışı bırakıldı. Uygulama Özellikleri ayarlarından yeniden etkinleştirin.",
     "GO_TO_TASK_LIST": "Görev listesine git",
+    "HABITS": "Alışkanlıklar",
     "HELP": "Yardım",
     "HM": {
       "CALENDARS": "Nasıl Yapılır: Takvim eşleştirme",
@@ -2345,11 +2402,12 @@
       "SYNC": "Nasıl Yapılır: Eşitleme ayarlamak"
     },
     "METRICS": "İstatistikler",
+    "NO_PROJECT_INFO": "Kullanılabilir proje yok. \"Proje Oluştur\" düğmesine tıklayarak yeni bir proje oluşturabilirsiniz.",
+    "NO_TAG_INFO": "Şu anda etiket yok. Görev eklerken veya düzenlerken `#etiketAdınız` girerek etiket ekleyebilirsiniz.",
     "NO_TASKS_TO_TRACK": "Zaman izlemeye başlamak için önce bir görev ekleyin",
     "NOTES": "Notlar",
     "NOTES_PANEL_INFO": "Notlar yalnızca zaman çizelgesi ve normal görev listesi görünümlerinden gösterilebilir.",
-    "NO_PROJECT_INFO": "Kullanılabilir proje yok. \"Proje Oluştur\" düğmesine tıklayarak yeni bir proje oluşturabilirsiniz.",
-    "NO_TAG_INFO": "Şu anda etiket yok. Görev eklerken veya düzenlerken `#etiketAdınız` girerek etiket ekleyebilirsiniz.",
+    "OPEN_APP_FEATURES": "Ayarları Aç",
     "PLANNER": "Planlayıcı",
     "PROCRASTINATE": "Ertele",
     "PROJECT_MENU": "Proje Menüsü",
@@ -2360,26 +2418,36 @@
     "SEARCH": "Arama",
     "SETTINGS": "Ayarlar",
     "SHARE_TASK_LIST_MARKDOWN": "Görev Listesini Paylaş",
+    "SHOW_TRACKED_TASK": "İzlenen görevi göster",
     "SIDE_PANEL_MENU": "Yan Panel Menüsü",
     "TAGS": "Etiketler",
-    "TASKS": "Görevler",
     "TASK_LIST": "Görev Listesi",
+    "TASKS": "Görevler",
     "TOGGLE_SHOW_BOOKMARKS": "Yer İmlerini Göster/Gizle",
     "TOGGLE_SHOW_ISSUE_PANEL": "Göster/Gizle Sorun Paneli",
     "TOGGLE_SHOW_NOTES": "Proje Notlarını Göster / Gizle",
     "TOGGLE_TRACK_TIME": "Başlat / Durdur takip süresi",
     "TRIGGER_SYNC": "Senkronizasyonu manuel olarak tetikle",
     "UNPLAN_ALL_TASKS": "Tüm görevlerin plandan kaldır",
-    "WORKLOG": "Görev günlüğü",
-    "DISABLE_FEATURE": "Özelliği devre dışı bırak",
-    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" devre dışı bırakıldı. Uygulama Özellikleri ayarlarından yeniden etkinleştirin.",
-    "HABITS": "Alışkanlıklar",
-    "OPEN_APP_FEATURES": "Ayarları Aç",
-    "SHOW_TRACKED_TASK": "İzlenen görevi göster"
+    "WORKLOG": "Görev günlüğü"
   },
-  "PRE_MIGRATION": {
-    "DIALOG_TITLE": "Sistem Güncellemesi",
-    "DIALOG_MESSAGE": "Verilerinizin nasıl depolandığını geliştirilmiş senkronizasyon güvenilirliği için güncelliyoruz.<br><br>Verilerinizin bir yedeği otomatik olarak indirilecek. Gerekirse bu yedeği kullanarak verilerinizi geri yükleyebilirsiniz (Dosya > İçe Aktar)."
+  "MIGRATE": {
+    "C_DOWNLOAD_BACKUP": "Eski verilerinizin bir yedeğini indirmek istiyor musunuz (Süper Üretkenlik'in eski sürümleriyle kullanılabilir)?",
+    "DETECTED_LEGACY": "Algılanan eski veriler. Sizin için taşıyacağız!",
+    "DIALOG_MESSAGE": "Gelişmiş senkronizasyon güvenilirliği için verilerinizin saklanma şeklini güncelliyoruz. Yedek otomatik olarak indirilecektir.",
+    "DIALOG_TITLE": "Verileriniz Taşınıyor",
+    "E_MIGRATION_FAILED": "Geçiş başarısız oldu! Hatalı:",
+    "E_RESTART_FAILED": "Otomatik yeniden başlatma başarısız oldu. Lütfen uygulamayı manuel olarak yeniden başlatın!",
+    "STATUS_BACKUP": "Verilerinizin yedeği oluşturuluyor...",
+    "STATUS_COMPLETE": "Taşıma tamamlandı!",
+    "STATUS_MIGRATING": "Veriler taşınıyor...",
+    "STATUS_PREPARING": "Taşıma hazırlanıyor...",
+    "SUCCESS": "Geçiş tamam! Uygulama şimdi yeniden başlatılıyor..."
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "Kesin alarm izni reddedildi. Hatırlatıcılar 15 dakikaya kadar gecikebilir.",
+    "TASK_ALREADY_COMPLETED": "Görev zaten tamamlanmış",
+    "TASK_MARKED_DONE": "Görev tamamlandı olarak işaretlendi"
   },
   "ONBOARDING": {
     "TITLE": "Super Productivity'yi nasıl kullanmak istiyorsunuz?",
@@ -2433,15 +2501,15 @@
     "NO_TASKS": "Bugün için görev yok",
     "PLAN_TOMORROW": "Plan",
     "REVIEW_TASKS": "İnceleme",
+    "ROUND_5M": "Tüm görevleri 5 dakikaya yuvarlayın",
     "ROUND_15M": "Tüm görevleri 15 dakikaya yuvarlayın",
     "ROUND_30M": "Tüm görevleri 30 dakikaya yuvarlayın",
-    "ROUND_5M": "Tüm görevleri 5 dakikaya yuvarlayın",
     "ROUND_TIME_SPENT": "Geçen Zaman Harcandı",
     "ROUND_TIME_SPENT_TITLE": "Tüm görevlere zaman ayırdı. Dikkatli ol! Bunu geri alamazsınız!",
     "ROUND_TIME_WARNING": "!!! Dikkatli olun bu geri alınamaz !!!",
+    "ROUND_UP_5M": "Tüm görevleri 5 dakikaya tamamlayın",
     "ROUND_UP_15M": "Tüm görevleri 15 dakikaya tamamlayın",
     "ROUND_UP_30M": "Tüm görevleri 30 dakikaya tamamlayın",
-    "ROUND_UP_5M": "Tüm görevleri 5 dakikaya tamamlayın",
     "SAVE_AND_GO_HOME": "Günü bitir",
     "SAVE_AND_GO_HOME_TOOLTIP": "Yapılan tüm görevleri arşive (iş günlüğü) taşıyın ve isteğe bağlı olarak tüm verileri senkronize edip uygulamayı kapatın.",
     "START_END": "Başlangıç - Bitiş",
@@ -2466,6 +2534,7 @@
     "CODE_TOO_LARGE": "Eklenti kodu çok büyük (maksimum {{maxSize}}MB)",
     "CONFIGURATION": "Konfigürasyon",
     "CONFIGURE": "Yapılandır",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Bu eklenti şu anda kullanımda olan sorun entegrasyonu sağlıyor ({{count}} sorun sağlayıcı). Devre dışı bırakmak, eklenti yeniden etkinleştirilene kadar bu sağlayıcılar için sorun senkronizasyonunu geçici olarak bozacaktır. \"{{name}}\" eklentisini devre dışı bırakmak istediğinizden emin misiniz?",
     "CONFIRM_REMOVE": "\"{{name}}\" eklentisini kaldırmak istediğinize emin misiniz?",
     "ELECTRON_API_NOT_AVAILABLE": "Electron API'si kullanılamıyor",
     "ERROR": "Hata",
@@ -2476,6 +2545,7 @@
     "FAILED_TO_EXTRACT_ZIP": "Eklenti ZIP dosyası çıkarılamadı",
     "FAILED_TO_INSTALL": "Eklenti yüklenemedi",
     "FAILED_TO_LOAD": "Eklenti yüklenemedi",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Topluluk eklentileri listesi yüklenemedi",
     "FAILED_TO_LOAD_CONFIG": "Eklenti yapılandırması yüklenemedi",
     "FAILED_TO_REMOVE": "Eklenti kaldırılamadı",
     "FAILED_TO_SAVE_CONFIG": "Eklenti yapılandırması kaydedilemedi",
@@ -2483,11 +2553,13 @@
     "GO_BACK": "Geri Dön",
     "GRANT_PERMISSION": "İzin Ver",
     "HOOKS": "Kancalar",
+    "ICON_TOO_LARGE": "Eklenti simgesi çok büyük (maksimum {{maxSize}}KB)",
     "ID": "Kimlik:",
     "INDEX_HTML_NOT_LOADED": "Eklenti index.html yüklenmedi",
-    "INSTALLING": "Yükleniyor...",
+    "INDEX_HTML_TOO_LARGE": "Eklenti index.html dosyası çok büyük (maksimum {{maxSize}}KB)",
     "INSTALL_PLUGIN": "Eklenti Yükle",
     "INSTALL_WARNING": "Bir eklenti yüklemeden önce, kaynağına güvendiğinizden ve talep ettiği izinleri anladığınızdan emin olun.",
+    "INSTALLING": "Yükleniyor...",
     "LANGUAGES": "Diller:",
     "LOADING_INTERFACE": "Eklenti arayüzü yükleniyor...",
     "LOADING_PLUGIN": "Eklenti yükleniyor...",
@@ -2497,11 +2569,11 @@
     "MENU_ENTRY_LABEL_REQUIRED": "Menü girdisi etiketi gereklidir",
     "MENU_ENTRY_ONCLICK_REQUIRED": "Menü girdisi onClick işleyicisi gereklidir",
     "MIN_VERSION": "Min. Sürüm:",
-    "NODE_EXECUTION_REQUIRED": "Bu eklenti, yalnızca masaüstü uygulamasında mevcut olan Node.js çalıştırmasını gerektirir.",
-    "NODE_ONLY_DESKTOP": "Node.js çalıştırması yalnızca masaüstü uygulamasında kullanılabilir",
     "NO_ADDITIONAL_INFO": "Ek bilgi yok",
     "NO_CONTENT_PROVIDED": "İçerik sağlanmadı",
     "NO_PLUGIN_MANIFEST_NODE": "Eklenti manifest dosyası Node.js modülünü içermiyor",
+    "NODE_EXECUTION_REQUIRED": "Bu eklenti, yalnızca masaüstü uygulamasında mevcut olan Node.js çalıştırmasını gerektirir.",
+    "NODE_ONLY_DESKTOP": "Node.js çalıştırması yalnızca masaüstü uygulamasında kullanılabilir",
     "OK": "Tamam",
     "PARENT_TASK_DOES_NOT_EXIST": "Üst görev mevcut değil",
     "PARENT_TASK_NOT_FOUND": "'{{contextId}}' bağlamında üst görev bulunamadı",
@@ -2524,24 +2596,27 @@
     "SYSTEM_ACCESS_REQUEST_DESC": "Bu eklenti, sisteminizde Node.js kodu çalıştırma izni istiyor. Bu izin, aşağıdakilere olanak tanıyacaktır:",
     "SYSTEM_ACCESS_REQUEST_TITLE": "Sistem Erişim Talebi",
     "TAGS_DO_NOT_EXIST": "Bir veya daha fazla etiket mevcut değil",
+    "TASK_NOT_FOUND": "{{taskId}} kimliğine sahip görev bulunamadı",
     "TASKS_NOT_IN_PROJECT": "Bir veya daha fazla görev '{{contextId}}' projesinde değil",
     "TASKS_NOT_SUBTASKS": "Bir veya daha fazla görev '{{contextId}}' alt görevi değil",
-    "TASK_NOT_FOUND": "{{taskId}} kimliğine sahip görev bulunamadı",
     "TOGGLE_PLUGIN": "{{pluginName}} Aç/Kapat",
     "TRUST_WARNING": "Yalnızca bu eklentiye güveniyorsanız izin verin",
     "TYPE": "Tür: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "Eklenti deposuna veri kaydedilemedi",
     "UNKNOWN_ERROR": "Bilinmeyen bir hata oluştu",
     "UPLOAD_PLUGIN_INSTRUCTION": "Yüklemek için bir eklenti ZIP dosyası yükleyin:",
-    "VALIDATION_FAILED": "Doğrulama başarısız oldu",
-    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Bu eklenti şu anda kullanımda olan sorun entegrasyonu sağlıyor ({{count}} sorun sağlayıcı). Devre dışı bırakmak, eklenti yeniden etkinleştirilene kadar bu sağlayıcılar için sorun senkronizasyonunu geçici olarak bozacaktır. \"{{name}}\" eklentisini devre dışı bırakmak istediğinizden emin misiniz?",
-    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Topluluk eklentileri listesi yüklenemedi"
+    "VALIDATION_FAILED": "Doğrulama başarısız oldu"
   },
   "PM": {
-    "TITLE": "Proje İstatistikleri",
-    "ALL_TASKS_TITLE": "Metrikler (tüm görevler)"
+    "ALL_TASKS_TITLE": "Metrikler (tüm görevler)",
+    "TITLE": "Proje İstatistikleri"
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_MESSAGE": "Verilerinizin nasıl depolandığını geliştirilmiş senkronizasyon güvenilirliği için güncelliyoruz.<br><br>Verilerinizin bir yedeği otomatik olarak indirilecek. Gerekirse bu yedeği kullanarak verilerinizi geri yükleyebilirsiniz (Dosya > İçe Aktar).",
+    "DIALOG_TITLE": "Sistem Güncellemesi"
   },
   "PS": {
+    "FAILED_TO_COPY_TO_CLIPBOARD": "Panoya kopyalanamadı",
     "GLOBAL_SETTINGS": "Genel Ayarlar",
     "NO_PLUGINS_INSTALLED": "Şu an yüklenmiş eklenti yok.",
     "PLUGINS": "Eklentiler",
@@ -2552,32 +2627,32 @@
     "SYNC_EXPORT": "Senkronize Et ve Dışa Aktar",
     "TABS": {
       "GENERAL": "Genel",
-      "TASKS": "Görevler",
-      "TIME_TRACKING": "Zaman ve İzleme",
-      "PRODUCTIVITY": "Verimlilik",
       "PLUGINS": "Eklentiler",
-      "SYNC_BACKUP": "Senkronizasyon ve Yedek"
+      "PRODUCTIVITY": "Verimlilik",
+      "SYNC_BACKUP": "Senkronizasyon ve Yedek",
+      "TASKS": "Görevler",
+      "TIME_TRACKING": "Zaman ve İzleme"
     },
     "TAG_SETTINGS": "Etiket Ayarları",
     "TOGGLE_DARK_MODE": "Koyu Modu Aç/Kapat",
-    "UPDATE_APP": "Uygulamayı Güncelle",
-    "FAILED_TO_COPY_TO_CLIPBOARD": "Panoya kopyalanamadı"
+    "UPDATE_APP": "Uygulamayı Güncelle"
   },
   "SCHEDULE": {
     "LAST": "Son:",
     "NEXT": "Sonraki:",
+    "NO_DEADLINES": "Şu anda son tarihi olan görev yok. Görevin bağlam menüsü veya ayrıntı paneli üzerinden son tarih belirleyebilirsiniz.",
     "NO_REPEATABLE_TASKS": "Şu anda tekrarlanan görev yok. Görev yan panelinde \"Görevi Tekrarla\"yı seçerek bir görevi zamanlayabilirsiniz. Açmak için, bir görevin üzerine gelindiğinde görünen en sağdaki simgeye tıklayın (veya mobil cihazda yalnızca göreve dokunun).",
     "NO_SCHEDULED": "Şu anda zamanlanmış görev yok. Görev bağlamı menüsünde \"Görevi Zamanla\" seçeneğini seçerek bir görevi zamanlayabilirsiniz. Açmak için görevin sağındaki 3 küçük noktaya tıklayın.",
+    "NO_SCHEDULED_FOR_DAY": "Henüz belirli günlerde planlanmış görev yok. Bir göreve sağ tıklayın ve bir gün planlamak için \"Planla\"yı seçin.",
+    "NO_SCHEDULED_WITH_TIME": "Henüz başlangıç saatiyle planlanmış görev yok. Bir göreve sağ tıklayın ve belirli bir saat ayarlamak için \"Planla\"yı seçin.",
     "NO_SCHEDULED_TITLE": "Gün İçin Zamanlanmış Görevler",
     "REPEATED_TASKS": "Tekrarlanan görevler",
     "SCHEDULED_TASKS": "Zamanlanmış görevler",
     "SCHEDULED_TASKS_WITH_TIME": "Hatırlatıcılı zamanlanmış görevler",
     "START_TASK": "Görevi başlat ve hatırlatıcıyı kaldır",
-    "NO_DEADLINES": "Şu anda son tarihi olan görev yok. Görevin bağlam menüsü veya ayrıntı paneli üzerinden son tarih belirleyebilirsiniz.",
     "TASKS_WITH_DEADLINES": "Son Tarihli Görevler"
   },
   "THEMES": {
-    "SELECT_THEME": "Tema Seç",
     "amber": "kehribar",
     "blue": "mavi",
     "blue-grey": "mavi-gri",
@@ -2591,18 +2666,20 @@
     "lime": "limon",
     "pink": "pembe",
     "purple": "mor",
+    "SCHEDULED_TASKS_WITH_TIME": "Başlangıç Saati ile Zamanlanmış Görevler",
+    "SELECT_THEME": "Tema Seç",
     "teal": "deniz mavisi",
-    "yellow": "sarı",
-    "SCHEDULED_TASKS_WITH_TIME": "Başlangıç Saati ile Zamanlanmış Görevler"
+    "yellow": "sarı"
   },
   "USER_PROFILES": {
     "ACTIVE": "Aktif",
     "CANCEL": "İptal",
     "CLOSE": "Kapat",
     "CREATE": "Oluştur",
-    "CREATED": "Oluşturuldu:",
     "CREATE_NEW_PROFILE": "Yeni profil oluştur",
+    "CREATED": "Oluşturuldu:",
     "DELETE_PROFILE": "Profili sil",
+    "DEPRECATION_WARNING": "Deneysel Kullanıcı Profilleri özelliği gelecekteki bir güncellemede kaldırılacaktır. Lütfen profil verilerinizi yedek olarak dışa aktarın.",
     "DIALOG_TITLE": "Kullanıcı profillerini yönet",
     "EXISTING_PROFILES": "Mevcut profiller",
     "EXPORT_PROFILE": "Profili dışa aktar",
@@ -2624,7 +2701,6 @@
   "WW": {
     "ADD_MORE": "Daha ekle",
     "ADD_SCHEDULED_FOR_TOMORROW": "Yarın için planlanan görevleri ekleyin ({{nr}})",
-    "ADD_SOME_TASKS": "Gününüzü planlamak için bazı görevler ekleyin!",
     "DONE_TASKS": "Yapılan Görevler",
     "DONE_TASKS_IN_ARCHIVE": "Burada şu anda tamamlanmış görev yok, ancak bazıları zaten arşivlendi.",
     "ESTIMATE_REMAINING": "Tahmini kalan süre:",
@@ -2633,20 +2709,14 @@
     "LATER_TODAY": "Bugün Daha Sonra",
     "MOVE_DONE_TO_ARCHIVE": "Arşive taşıma işlemi tamamlandı",
     "NO_DONE_TASKS": "Şu anda yapılmış bir görev yok",
-    "NO_PLANNED_TASKS": "Planlanmış görev yok",
     "NO_PLANNED_TASK_ALL_DONE": "tüm görevler tamamlandı",
-    "READY_TO_WORK": "Çalışmaya hazır!",
+    "NO_PLANNED_TASKS": "Planlanmış görev yok",
+    "RECURRING_TASKS": "Tekrarlayan Görevler",
     "RESET_BREAK_TIMER": "Mola zamanlayıcısı olmadan sıfırla",
     "TIME_ESTIMATED": "Tahmini Süre:",
     "TODAY_REMAINING": "Bugün kalan:",
     "WITHOUT_BREAK": "Mola vermeden:",
     "WORKING_TODAY": "Bugün çalışıyorum:",
-    "WORKING_TODAY_ARCHIVED": "Arşivlenen görevlerde bugün çalışılan süre",
-    "RECURRING_TASKS": "Tekrarlayan Görevler"
-  },
-  "NOTIFICATION": {
-    "EXACT_ALARM_DENIED": "Kesin alarm izni reddedildi. Hatırlatıcılar 15 dakikaya kadar gecikebilir.",
-    "TASK_ALREADY_COMPLETED": "Görev zaten tamamlanmış",
-    "TASK_MARKED_DONE": "Görev tamamlandı olarak işaretlendi"
+    "WORKING_TODAY_ARCHIVED": "Arşivlenen görevlerde bugün çalışılan süre"
   }
 }

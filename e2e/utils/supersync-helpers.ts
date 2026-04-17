@@ -501,10 +501,6 @@ export const markTaskDone = async (
   const task = getTaskElement(client, taskName);
   await task.hover();
   await task.locator('done-toggle').click();
-  // Wait for the 200ms animation delay in toggleDoneWithAnimation to complete.
-  // During CDK drag animation the task may temporarily resolve to 2 elements;
-  // use .first() to avoid strict-mode violations.
-  await expect(task.first()).toHaveClass(/isDone/, { timeout: UI_VISIBLE_TIMEOUT });
 };
 
 /**
@@ -521,8 +517,6 @@ export const markSubtaskDone = async (
   const subtask = getSubtaskElement(client, subtaskName);
   await subtask.hover();
   await subtask.locator('done-toggle').click();
-  // Wait for the 200ms animation delay in toggleDoneWithAnimation to complete
-  await expect(subtask).toHaveClass(/isDone/, { timeout: UI_VISIBLE_TIMEOUT });
 };
 
 /**

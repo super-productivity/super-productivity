@@ -14,9 +14,8 @@ import {
 import { IS_ELECTRON } from '../../app.constants';
 import { combineLatest, EMPTY, Observable } from 'rxjs';
 import { WorkContextService } from '../work-context/work-context.service';
+import { Task } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
-import { Router } from '@angular/router';
-import { TODAY_TAG } from '../tag/tag.const';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
@@ -32,7 +31,6 @@ export class FinishDayBeforeCloseEffects {
   private _dataInitStateService = inject(DataInitStateService);
   private _taskService = inject(TaskService);
   private _workContextService = inject(WorkContextService);
-  private _router = inject(Router);
   private _translateService = inject(TranslateService);
 
   isEnabled$: Observable<boolean> =
@@ -80,27 +78,32 @@ export class FinishDayBeforeCloseEffects {
               ),
             ),
           ),
-          tap((todayMainTasks) => {
-            const doneTasks = todayMainTasks.filter((t) => t.isDone);
-            if (doneTasks.length) {
-              if (
-                !confirmDialog(
-                  this._translateService.instant(
-                    T.F.FINISH_DAY_BEFORE_EXIT.C.FINISH_DAY_BEFORE_EXIT,
-                    {
-                      nr: doneTasks.length,
-                    },
-                  ),
-                )
-              ) {
-                // User wants to finish day first - navigate them there
-                this._router.navigate([`tag/${TODAY_TAG.id}/daily-summary`]);
-                return; // Don't signal done — keep app open
-              }
-            }
-            this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
-          }),
+          tap((todayMainTasks) => this._handleCloseDecision(todayMainTasks)),
         ),
       { dispatch: false },
     );
+
+  _handleCloseDecision(todayMainTasks: Task[]): void {
+    const doneTasks = todayMainTasks.filter((t) => t.isDone);
+    if (
+      doneTasks.length &&
+      !this._confirm(
+        this._translateService.instant(
+          T.F.FINISH_DAY_BEFORE_EXIT.C.FINISH_DAY_BEFORE_EXIT,
+          {
+            nr: doneTasks.length,
+          },
+        ),
+      )
+    ) {
+      // User clicked Cancel — stay on the current page, do not close
+      return;
+    }
+    // User clicked OK or there are no done tasks — allow the app to close
+    this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+  }
+
+  _confirm(message: string): boolean {
+    return confirmDialog(message);
+  }
 }

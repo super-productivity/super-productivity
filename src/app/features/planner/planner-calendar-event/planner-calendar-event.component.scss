@@ -56,8 +56,7 @@
 .title {
   flex-shrink: 1;
   min-width: 0;
-  overflow: hidden;
-  word-break: break-word;
+  @include truncateText();
   font-size: var(--planner-font-size-mobile);
 
   @include mq(xs) {

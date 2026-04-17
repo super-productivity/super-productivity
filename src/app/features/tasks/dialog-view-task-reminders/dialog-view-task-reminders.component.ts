@@ -11,6 +11,7 @@ import {
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
+  MatDialogState,
   MatDialogTitle,
 } from '@angular/material/dialog';
 import { Task, TaskWithReminderData } from '../task.model';
@@ -127,10 +128,13 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _subs: Subscription = new Subscription();
   // Track dismissed reminder IDs to prevent stale data from worker re-triggering them
   private _dismissedReminderIds = new Set<string>();
+  // Stored separately so it can be cancelled eagerly when the dialog begins closing,
+  // preventing race conditions where a worker tick updates a mid-animation dialog.
+  private _onRemindersActiveSub: Subscription = Subscription.EMPTY;
 
   constructor() {
-    this._subs.add(
-      this._reminderService.onRemindersActive$.subscribe((reminders) => {
+    this._onRemindersActiveSub = this._reminderService.onRemindersActive$.subscribe(
+      (reminders) => {
         // Filter out reminders that were already dismissed in this dialog session
         const filtered = reminders.filter((r) => !this._dismissedReminderIds.has(r.id));
         if (filtered.length > 0) {
@@ -144,8 +148,9 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         } else {
           this._close();
         }
-      }),
+      },
     );
+    this._subs.add(this._onRemindersActiveSub);
     this._subs.add(
       this.isMultiple$.subscribe((isMultiple) => (this.isMultiple = isMultiple)),
     );
@@ -406,6 +411,12 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   }
 
   private _close(): void {
+    if (this._matDialogRef.getState() !== MatDialogState.OPEN) {
+      return;
+    }
+    // Stop listening for new reminders immediately so a worker tick during the
+    // close animation cannot update the view while it is being torn down.
+    this._onRemindersActiveSub.unsubscribe();
     this._menuTriggers().forEach((trigger) => {
       trigger.closeMenu();
     });

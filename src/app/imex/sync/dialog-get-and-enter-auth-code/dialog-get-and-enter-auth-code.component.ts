@@ -53,10 +53,7 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
   T: typeof T = T;
   token?: string;
 
-  // Always use manual code entry flow (show input field on all platforms).
-  // The automatic deep-link redirect flow was reverted: it requires the
-  // redirect URI to be registered in the Dropbox developer console, and
-  // Android may kill the app during auth, losing the in-memory code verifier.
+  // Always use manual code entry flow (show input field)
   readonly isNativePlatform = false;
   private _authCodeSub?: Subscription;
 
@@ -99,5 +96,17 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
 
   close(token?: string): void {
     this._matDialogRef.close(token?.trim());
+  }
+
+  async copyUrl(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.data.url);
+      this._snackService.open(T.GLOBAL_SNACK.COPY_TO_CLIPPBOARD);
+    } catch {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.PS.FAILED_TO_COPY_TO_CLIPBOARD,
+      });
+    }
   }
 }

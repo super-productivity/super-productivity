@@ -227,6 +227,7 @@ export class CalendarIntegrationService {
         duration: r.duration ?? 0,
         isAllDay: r.isAllDay,
         issueProviderKey: pluginProvider.issueProviderKey,
+        dueWithTime: r.dueWithTime,
       }));
   }
 

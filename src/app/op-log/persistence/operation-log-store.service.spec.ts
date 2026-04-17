@@ -22,6 +22,7 @@ describe('OperationLogStoreService', () => {
   let vectorClockService: VectorClockService;
   const mockClientIdProvider: ClientIdProvider = {
     loadClientId: () => Promise.resolve('testClient'),
+    getOrGenerateClientId: () => Promise.resolve('testClient'),
   };
 
   // Helper to create test operations
@@ -2061,6 +2062,32 @@ describe('OperationLogStoreService', () => {
 
       const clock = await service.getVectorClock();
       expect(clock).toEqual({ remoteClient: 10 });
+    });
+
+    it('should not throw and store merged clock when loadClientId returns null (invalid stored ID)', async () => {
+      // Simulate issue #6197: stored clientId has an invalid format, loadClientId() returns null.
+      // mergeRemoteOpClocks must not throw — it falls back to storing the full merged clock
+      // without pruning (suboptimal but safe).
+      spyOn(mockClientIdProvider, 'loadClientId').and.resolveTo(null);
+      await service.setVectorClock({ localClient: 3 });
+
+      const remoteOps = [
+        createTestOperation({
+          clientId: 'remoteClient',
+          vectorClock: { remoteClient: 7, localClient: 2 },
+        }),
+      ];
+
+      await expectAsync(service.mergeRemoteOpClocks(remoteOps)).toBeResolved();
+
+      // The merged clock must contain all entries (no pruning without a clientId, but no data loss)
+      const clock = await service.getVectorClock();
+      expect(clock).toEqual(
+        jasmine.objectContaining({
+          remoteClient: 7,
+          localClient: 3, // local was higher (3 > 2)
+        }),
+      );
     });
 
     it('should REPLACE clock for SYNC_IMPORT (not merge into old clock)', async () => {

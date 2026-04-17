@@ -385,7 +385,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       setTimeout(() => {
         // when there are multiple instances with the same task we should focus the last one, since it is the one in the
         // task side panel
-        const otherTaskEl = document.querySelectorAll('#t-' + t.id);
+        const otherTaskEl = document.querySelectorAll('#t-' + CSS.escape(t.id));
         if (
           otherTaskEl?.length <= 1 ||
           Array.from(otherTaskEl).findIndex(

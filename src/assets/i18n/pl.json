@@ -40,7 +40,7 @@
   "DONATE_PAGE": {
     "BUTTON_TEXT": "Wesprzyj przez GitHub Sponsors",
     "INTRO_1": "Super Productivity jest finansowany w całości przez społeczność. Nie ma śledzenia, reklam ani zbierania danych — Twoje zadania pozostają na Twoim urządzeniu.",
-    "INTRO_2": "Jeśli cenisz takie podejście i chcesz, aby projekt był utrzymywany w dobrej kondycji i się rozwijał, dobrowolna darowizna jest bardzo mile widziana."
+    "INTRO_2": "Jeśli cenisz takie podejście i chcesz, aby projekt był zdrowy i się rozwijał, dobrowolna darowizna jest bardzo mile widziana."
   },
   "EXAMPLE_TASKS": {
     "LEARN_KEYBOARD_SHORTCUTS": {
@@ -167,18 +167,8 @@
         "EVENT_STR": "Wydarzenie",
         "EVENTS_STR": "Wydarzenia"
       },
-      "CONTEXT_MENU": {
-        "CREATE_TASK": "Utwórz jako zadanie",
-        "OPEN_IN_CALENDAR": "Otwórz w kalendarzu",
-        "RESCHEDULE": "Reschedule",
-        "DELETE_EVENT": "Usuń zdarzenie"
-      },
       "S": {
-        "CAL_PROVIDER_ERROR": "Błąd dostawcy kalendarza: {{errTxt}}",
-        "EVENT_HIDDEN": "Calendar event hidden",
-        "EVENT_RESCHEDULED": "Event rescheduled",
-        "EVENT_DELETED": "Event deleted",
-        "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "Błąd dostawcy kalendarza: {{errTxt}}"
       }
     },
     "CLIPBOARD_IMAGE": {
@@ -275,7 +265,7 @@
     },
     "GITEA": {
       "FORM": {
-        "HOST": "Host (np. https://try.gitea.io)",
+        "HOST": "Host (np.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Nazwa użytkownika lub nazwa organizacji/projektu",
         "REPO_FULL_NAME_DESCRIPTION": "Można go znaleźć jako część adresu URL podczas przeglądania projektu w przeglądarce.",
         "SCOPE": "Zakres",
@@ -432,15 +422,7 @@
         "ADVANCED_CONFIG": "Zaawansowana konfiguracja",
         "CONNECTED": "Połączone",
         "DELETE_CONFIRM": "Czy na pewno chcesz usunąć tego dostawcę zgłoszeń? Usunięcie oznacza, że <strong>wszystkie wcześniej zaimportowane zadania zgłoszeń stracą swoje powiązanie</strong>. Tej operacji nie można cofnąć!",
-        "DISCONNECT": "Rozłączone",
-        "EDIT_TITLE": "Edit {{title}} Config",
-        "LOAD_OPTIONS": "Load Options",
-        "LOAD_OPTIONS_FAILED": "Failed to load options",
-        "LOADING_OPTIONS": "Loading options...",
-        "OPTIONS_LOADED": "Options loaded",
-        "RELOAD_OPTIONS": "Reload Options",
-        "SETUP_TITLE": "Setup {{title}} Config",
-        "TEST_CONNECTION": "Test Connection"
+        "DISCONNECT": "Rozłączone"
       }
     },
     "ISSUE_PANEL": {
@@ -512,7 +494,7 @@
       },
       "FORM_CRED": {
         "ALLOW_SELF_SIGNED": "Zezwalaj na certyfikat self-signed",
-        "HOST": "Host (np. http://moja-domena.pl:1234)",
+        "HOST": "Host (np.: http://mój-host.pl:1234)",
         "PASSWORD": "Token / hasło",
         "USE_PAT": "Zamiast tego użyj osobistego tokena dostępu (LEGACY)",
         "USER_NAME": "E-mail / nazwa użytkownika",
@@ -710,13 +692,13 @@
           "STRIKETHROUGH": "Przekreślenie",
           "TASK_LIST": "Lista zadań"
         },
-        "VIEW_PARSED": "Wyświetl jako sparsowany (nieedytowalny) markdown",
-        "VIEW_SPLIT": "Wyświetl jako sparsowany i niesformatowany Markdown w widoku podzielonym",
-        "VIEW_TEXT_ONLY": "Wyświetl jako niesparsowany tekst"
+        "VIEW_PARSED": "Wyświetlanie jako przeanalizowany (nieedytowalny) markdown",
+        "VIEW_SPLIT": "Wyświetlanie przeanalizowanego i nieprzeanalizowanego markdown w widoku podzielonym",
+        "VIEW_TEXT_ONLY": "Wyświetlanie jako nieprzeanalizowany tekst"
       },
       "NOTE_CMP": {
-        "DISABLE_PARSE": "Wyłącz parsowanie Markdown przy podglądzie",
-        "ENABLE_PARSE": "Włącz parsowanie Markdown"
+        "DISABLE_PARSE": "Wyłącz markdown parsing",
+        "ENABLE_PARSE": "Włącz markdown parse"
       },
       "NOTES_CMP": {
         "ADD_BTN": "Dodaj nową notatkę",
@@ -949,7 +931,7 @@
       },
       "END": "Koniec pracy",
       "INSERT_BEFORE": "Przed",
-      "LUNCH_BREAK": "Przerwa na lunch",
+      "LUNCH_BREAK": "Przerwa obiadowa",
       "MONTH": "Miesiąc",
       "NO_TASKS": "Obecnie nie ma żadnych zadań. Dodaj zadania za pomocą przycisku plus (+) na górnym pasku.",
       "NOW": "Teraz",
@@ -969,16 +951,16 @@
         "OK": "Zrób to!"
       },
       "D_EDIT": {
-        "CURRENT_STREAK": "Obecna seria",
+        "CURRENT_STREAK": "Aktualna passa",
         "DAILY_GOAL": "Cel dzienny",
         "DAYS": "Dni",
-        "L_COUNTER": "Stan"
+        "L_COUNTER": "Licznik"
       },
       "FORM": {
         "ADD_NEW": "Dodaj prosty licznik",
         "HELP": "Tutaj możesz skonfigurować proste przyciski, które pojawią się w prawym górnym rogu. Mogą to być timery albo zwykły licznik, który zwiększa się po kliknięciu.",
         "L_COUNTDOWN_DURATION": "Czas trwania odliczania",
-        "L_DAILY_GOAL": "Dzienny cel utrzymania serii",
+        "L_DAILY_GOAL": "Codzienny cel dla udanej passy",
         "L_ICON": "Ikona",
         "L_ICON_ON": "Ikona po włączeniu",
         "L_IS_ENABLED": "Włączone",
@@ -989,11 +971,11 @@
         "L_TITLE": "Tytuł",
         "L_TRACK_STREAKS": "Śledź serie",
         "L_TYPE": "Typ",
-        "L_WEEKDAYS": "Dni sprawdzania serii",
-        "L_WEEKLY_FREQUENCY": "Wymagana liczba ukończeń w tygodniu",
+        "L_WEEKDAYS": "Dni powszednie, aby sprawdzić smugę",
+        "L_WEEKLY_FREQUENCY": "Liczba wykonań na tydzień",
         "TITLE": "Proste liczniki",
         "TYPE_CLICK_COUNTER": "Licznik kliknięć",
-        "TYPE_REPEATED_COUNTDOWN": "Codzienne odliczanie",
+        "TYPE_REPEATED_COUNTDOWN": "Powtarzane odliczanie",
         "TYPE_STOPWATCH": "Stoper"
       },
       "HABIT_TRACKER": {
@@ -1005,7 +987,7 @@
       },
       "S": {
         "GOAL_REACHED_1": "Osiągnąłeś swój dzisiejszy cel!",
-        "GOAL_REACHED_2": "Czas trwania obecnej serii:"
+        "GOAL_REACHED_2": "Aktualny czas trwania passy:"
       }
     },
     "SYNC": {
@@ -1555,7 +1537,7 @@
         "QA_NEXT_WEEK": "Następny tydzień",
         "QA_TODAY": "Dzisiaj",
         "QA_TOMORROW": "Jutro",
-        "REMIND_AT": "Przypomnij",
+        "REMIND_AT": "Przypomnij o",
         "REMOVE_DEADLINE": "Usuń termin",
         "RO_1H": "1 godzinę przed",
         "RO_5M": "5 minut przed",
@@ -1595,7 +1577,7 @@
         "QA_NEXT_WEEK": "Harmonogram na następny tydzień",
         "QA_TODAY": "Harmonogram na dziś",
         "QA_TOMORROW": "Harmonogram na jutro",
-        "REMIND_AT": "Przypomnij",
+        "REMIND_AT": "Przypomnij o",
         "RO_1H": "1 godzinę przed rozpoczęciem",
         "RO_5M": "5 minut przed rozpoczęciem",
         "RO_10M": "10 minut przed rozpoczęciem",
@@ -1612,7 +1594,7 @@
         "TITLE": "Wybierz datę i godzinę"
       },
       "D_TIME": {
-        "ADD_FOR_OTHER_DAY": "Dodaj czas spędzony innego dnia",
+        "ADD_FOR_OTHER_DAY": "Dodaj czas spędzony dla innego dnia",
         "DELETE_FOR": "Usuń wpis dla dnia",
         "ESTIMATE": "Szacowanie",
         "TIME_SPENT": "Czas spędzony",
@@ -1622,7 +1604,7 @@
       "D_TIME_FOR_DAY": {
         "ADD_ENTRY_FOR": "Dodaj nowy wpis dla {{date}}",
         "DATE": "Data nowego wpisu",
-        "HELP": "Przykłady:<br> 30m =&gt; 30 minut<br> 2h =&gt; 2 godziny<br> 2h30m =&gt; 2 godziny i 30 minut<br> 1.5h =&gt; 1 godzina i 30 minut<br> 03:15 => 3 godziny i 15 minut",
+        "HELP": "Przykłady:<br> 30m =&gt; 30 minut<br> 2h =&gt; 2 godziny<br> 2h30m =&gt; 2 godziny i 30 minut<br> 1.5h =&gt; 1 godzina i 30 minut",
         "TINE_SPENT": "Czas spędzony",
         "TITLE": "Dodaj dla dnia"
       },
@@ -1946,7 +1928,7 @@
     "DO_IT": "Zrób to!",
     "DONT_SHOW_AGAIN": "Nie pokazuj ponownie",
     "DUPLICATE": "Powiel",
-    "DURATION_DESCRIPTION": "np. \"5h 23m\" oznacza 5 godzin i 23 minuty",
+    "DURATION_DESCRIPTION": "np. \"5h 23m\", oznacza 5 godzin i 23 minuty",
     "EDIT": "Edytuj",
     "ENABLED": "Włączone",
     "EXAMPLE_VAL": "np. 32m",
@@ -1988,7 +1970,7 @@
       "HELP": "Włącz lub wyłącz konkretne funkcje aplikacji w całym interfejsie użytkownika.",
       "ISSUES_PANEL": "Panel zgłoszeń",
       "PLANNER": "Planer",
-      "PROJECT_NOTES": "Notatki projektu",
+      "PROJECT_NOTES": "Notatki projektowe",
       "SCHEDULE": "Harmonogram",
       "SCHEDULE_DAY_PANEL": "Panel dnia harmonogramu",
       "SEARCH": "Szukaj",
@@ -1997,9 +1979,7 @@
       "TITLE": "Funkcje aplikacji",
       "USER_PROFILES": "Profile użytkowników (eksperymentalne)",
       "USER_PROFILES_HINT": "Pozwala tworzyć i przełączać się między różnymi profilami użytkowników, z których każdy ma oddzielne ustawienia, zadania i konfiguracje synchronizacji. Przycisk zarządzania profilem pojawi się w prawym górnym rogu po włączeniu. Uwaga: Wyłączenie tej funkcji ukryje interfejs użytkownika, ale zachowa dane profilu (Funkcja eksperymentalna, brak gwarancji. Upewnij się, że masz kopię zapasową danych!).",
-      "USER_PROFILES_WARNING": "<strong>Funkcja eksperymentalna:</strong> Ta funkcja jest wciąż w fazie rozwoju i może zostać usunięta lub znacząco zmieniona w przyszłej aktualizacji. Używasz na własne ryzyko. Upewnij się, że masz kopię zapasową danych.",
-      "EXPERIMENTAL_WARNING_TITLE": "Funkcja eksperymentalna",
-      "EXPERIMENTAL_WARNING_MSG": "Ta funkcja jest wciąż w fazie rozwoju i może zostać usunięta lub znacząco zmieniona w przyszłej aktualizacji. Używasz na własne ryzyko. Upewnij się, że masz kopię zapasową danych.<br/><br/>Czy na pewno chcesz ją aktywować?"
+      "USER_PROFILES_WARNING": "<strong>Funkcja eksperymentalna:</strong> Ta funkcja jest wciąż w fazie rozwoju i może zostać usunięta lub znacząco zmieniona w przyszłej aktualizacji. Używasz na własne ryzyko. Upewnij się, że masz kopię zapasową danych."
     },
     "AUTO_BACKUPS": {
       "HELP": "Automatycznie zapisuj wszystkie dane w folderze aplikacji, aby mieć kopię na wypadek problemów.",
@@ -2235,8 +2215,8 @@
       "HELP": "Funkcja harmonogramu ma dać Ci lepszy podgląd tego, jak zaplanowane zadania układają się w czasie. Ustawienia znajdziesz w sekcji „Harmonogram”.",
       "L_IS_LUNCH_BREAK_ENABLED": "Włącz przerwę na lunch",
       "L_IS_WORK_START_END_ENABLED": "Ogranicz przepływ niezaplanowanych zadań do określonych godzin pracy",
-      "L_LUNCH_BREAK_END": "Koniec przerwy na lunch",
-      "L_LUNCH_BREAK_START": "Początek przerwy na lunch",
+      "L_LUNCH_BREAK_END": "Koniec przerwy obiadowej",
+      "L_LUNCH_BREAK_START": "Początek przerwy obiadowej",
       "L_WORK_END": "Koniec dnia pracy",
       "L_WORK_START": "Początek dnia pracy",
       "LUNCH_BREAK_START_END_DESCRIPTION": "np. 13:00",
@@ -2382,14 +2362,14 @@
     "HABITS": "Nawyki",
     "HELP": "Pomoc",
     "HM": {
-      "CALENDARS": "Poradnik: Łączenie się z kalendarzem",
-      "CONTRIBUTE": "Współtwórz",
+      "CALENDARS": "Jak to zrobić: Połącz kalendarze",
+      "CONTRIBUTE": "Wkład",
       "GET_HELP_ONLINE": "Uzyskaj pomoc online",
-      "KEYBOARD": "Poradnik: Zaawansowana klawiatura",
+      "KEYBOARD": "Howto: Zaawansowana klawiatura",
       "REDDIT_COMMUNITY": "Społeczność Reddit",
       "REPORT_A_PROBLEM": "Zgłoś problem",
-      "START_WELCOME": "Rozpocznij samouczek powitalny",
-      "SYNC": "Poradnik: Konfiguracja synchronizacji"
+      "START_WELCOME": "Rozpocznij wycieczkę powitalną",
+      "SYNC": "Jak to zrobić: Konfiguracja synchronizacji"
     },
     "METRICS": "Metryki",
     "NO_PROJECT_INFO": "Brak dostępnych projektów. Możesz utworzyć nowy projekt, klikając przycisk 'Utwórz projekt'.",
@@ -2413,9 +2393,9 @@
     "TAGS": "Tagi",
     "TASK_LIST": "Lista zadań",
     "TASKS": "Zadania",
-    "TOGGLE_SHOW_BOOKMARKS": "Pokaż/Ukryj zakładki",
+    "TOGGLE_SHOW_BOOKMARKS": "Pokaż/ukryj zakładki",
     "TOGGLE_SHOW_ISSUE_PANEL": "Pokaż/Ukryj panel zgłoszeń",
-    "TOGGLE_SHOW_NOTES": "Pokaż/Ukryj notatki projektu",
+    "TOGGLE_SHOW_NOTES": "Pokaż/Ukryj Notatki Projektu",
     "TOGGLE_TRACK_TIME": "Start/Stop zliczania czasu",
     "TRIGGER_SYNC": "Ręczne wyzwalanie synchronizacji",
     "UNPLAN_ALL_TASKS": "Odplanowano wszystkie zadania",
@@ -2699,7 +2679,7 @@
     "NO_PLANNED_TASK_ALL_DONE": "wszystkie zadania zakończone",
     "NO_PLANNED_TASKS": "Nie zaplanowano zadań",
     "RECURRING_TASKS": "Zadania cykliczne",
-    "RESET_BREAK_TIMER": "Zresetuj czas bez przerwy",
+    "RESET_BREAK_TIMER": "Zresetuj bez czasu przerwy",
     "TIME_ESTIMATED": "Zaplanowany czas:",
     "TODAY_REMAINING": "Dziś pozostało:",
     "WITHOUT_BREAK": "Bez przerwy:",

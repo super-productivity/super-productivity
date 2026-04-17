@@ -97,7 +97,7 @@ export abstract class WebdavBaseProvider<
       return { rev: result.rev };
     } catch (e) {
       // Translate RemoteFileChangedUnexpectedly to UploadRevToMatchMismatchAPIError
-      // so the retry mechanism in FileBasedSyncAdapterService._uploadWithRetry() can handle it
+      // so FileBasedSyncAdapterService._uploadWithMismatchFallback() can handle it
       if (e instanceof RemoteFileChangedUnexpectedly) {
         throw new UploadRevToMatchMismatchAPIError(e.message);
       }

@@ -1,7 +1,7 @@
 {
   "CFG": {
     "REPO": "Repository (owner/repo)",
-    "TOKEN": "Personal Access Token (required for private repos/optional for public repos)",
+    "TOKEN": "Personal Access Token (optional, for private repos)",
     "FILTER_USERNAME": "Filter username (ignore own comments for update detection)",
     "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
     "HOW_TO_GET_TOKEN": "How to get a token"

@@ -16,6 +16,12 @@ import { ClientIdService } from '../../core/util/client-id.service';
  */
 export interface ClientIdProvider {
   loadClientId(): Promise<string | null>;
+  /**
+   * Returns the stored client ID, or generates and persists a new one if
+   * none is stored or the stored value is invalid. Preferred over calling
+   * loadClientId() with a manual fallback.
+   */
+  getOrGenerateClientId(): Promise<string>;
 }
 
 /**
@@ -27,7 +33,7 @@ export interface ClientIdProvider {
  * ```typescript
  * private clientIdProvider = inject(CLIENT_ID_PROVIDER);
  * // ...
- * const clientId = await this.clientIdProvider.loadClientId();
+ * const clientId = await this.clientIdProvider.getOrGenerateClientId();
  * ```
  */
 export const CLIENT_ID_PROVIDER = new InjectionToken<ClientIdProvider>(
@@ -38,6 +44,7 @@ export const CLIENT_ID_PROVIDER = new InjectionToken<ClientIdProvider>(
       const clientIdService = inject(ClientIdService);
       return {
         loadClientId: () => clientIdService.loadClientId(),
+        getOrGenerateClientId: () => clientIdService.getOrGenerateClientId(),
       };
     },
   },

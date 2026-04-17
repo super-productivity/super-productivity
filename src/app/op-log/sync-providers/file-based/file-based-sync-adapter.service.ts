@@ -34,7 +34,6 @@ import {
 import { OpLog } from '../../../core/log';
 import {
   InvalidDataSPError,
-  LegacySyncFormatDetectedError,
   RemoteFileNotFoundAPIError,
   UploadRevToMatchMismatchAPIError,
 } from '../../core/errors/sync-errors';
@@ -430,26 +429,28 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
-   * Uploads sync data with retry on revision mismatch.
-   * Returns the final sync version after a successful upload.
+   * Attempts to upload sync data. On revision mismatch, re-downloads once to
+   * distinguish a WebDAV server timestamp inconsistency (same rev → force-upload)
+   * from a genuine concurrent upload (different rev → throw so the next sync cycle
+   * can download the concurrent ops and retry with a consistent snapshot).
    */
-  private async _uploadWithRetry(
+  private async _uploadWithMismatchFallback(
     provider: SyncProviderServiceInterface<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     newData: FileBasedSyncData,
     revToMatch: string | null,
-    ops: SyncOperation[],
-    clientId: string,
   ): Promise<{ finalSyncVersion: number }> {
-    // Initial attempt
     const uploadData = await this._encryptAndCompressHandler.compressAndEncryptData(
       cfg,
       encryptKey,
       newData,
       FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
     );
-    this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadWithRetry');
+    this._assertUploadDataNotEmpty(
+      uploadData,
+      'FileBasedSyncAdapter._uploadWithMismatchFallback',
+    );
 
     try {
       await provider.uploadFile(
@@ -465,78 +466,39 @@ export class FileBasedSyncAdapterService {
       }
     }
 
-    // Retry loop on revision mismatch
-    const maxRetries = FILE_BASED_SYNC_CONSTANTS.MAX_UPLOAD_RETRIES;
-    let previousRev = revToMatch;
+    // Rev mismatch — re-download once to check whether a real concurrent upload occurred.
+    OpLog.normal(
+      'FileBasedSyncAdapter: Rev mismatch detected, re-downloading to check...',
+    );
+    const { rev: freshRev } = await this._downloadSyncFile(provider, cfg, encryptKey);
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      // Exponential backoff with jitter: base * 2^(attempt-1) + random(0..50%)
-      const baseDelay = FILE_BASED_SYNC_CONSTANTS.RETRY_BASE_DELAY_MS;
-      const delay = baseDelay * Math.pow(2, attempt - 1);
-      const jitter = Math.random() * delay * 0.5;
-      const totalDelay = Math.round(delay + jitter);
-
-      OpLog.normal(
-        `FileBasedSyncAdapter: Rev mismatch detected, retry ${attempt}/${maxRetries} after ${totalDelay}ms...`,
+    if (freshRev === revToMatch) {
+      // Rev unchanged after re-download → WebDAV server timestamp/ETag inconsistency
+      // (no real concurrent upload). Reuse the already-built uploadData — the remote
+      // file is confirmed identical to what we were trying to overwrite, so no need
+      // to re-snapshot state, re-merge ops, or re-encrypt.
+      OpLog.warn(
+        'FileBasedSyncAdapter: Rev unchanged after re-download, server has inconsistent ' +
+          'timestamp handling. Force-uploading.',
       );
-      await new Promise((resolve) => setTimeout(resolve, totalDelay));
-
-      const { data: freshData, rev: freshRev } = await this._downloadSyncFile(
-        provider,
-        cfg,
-        encryptKey,
+      await provider.uploadFile(
+        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+        uploadData,
+        freshRev,
+        true,
       );
-
-      // Reuse _buildMergedSyncData to rebuild from fresh data
-      const freshNewData = await this._buildMergedSyncData(
-        freshData,
-        ops,
-        clientId,
-        freshData.syncVersion,
-      );
-
-      const freshUploadData =
-        await this._encryptAndCompressHandler.compressAndEncryptData(
-          cfg,
-          encryptKey,
-          freshNewData,
-          FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
-        );
-      this._assertUploadDataNotEmpty(
-        freshUploadData,
-        'FileBasedSyncAdapter._uploadWithRetry(retry)',
-      );
-
-      // Same content hash means the file has not changed since our last download.
-      // Safe to overwrite unconditionally.
-      const isServerUnchanged = freshRev === previousRev;
-      if (isServerUnchanged) {
-        OpLog.warn(
-          'FileBasedSyncAdapter: Rev unchanged after re-download, force-uploading.',
-        );
-      }
-
-      try {
-        await provider.uploadFile(
-          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-          freshUploadData,
-          freshRev,
-          isServerUnchanged,
-        );
-        OpLog.normal(`FileBasedSyncAdapter: Retry ${attempt} upload successful`);
-        return { finalSyncVersion: freshNewData.syncVersion };
-      } catch (retryErr) {
-        if (!(retryErr instanceof UploadRevToMatchMismatchAPIError)) {
-          throw retryErr;
-        }
-        // If force-upload was used (isServerUnchanged), this shouldn't happen
-        // but if it does, let the loop continue
-        previousRev = freshRev;
-      }
+      return { finalSyncVersion: newData.syncVersion };
     }
 
-    throw new Error(
-      `FileBasedSyncAdapter: Upload failed after ${maxRetries} retries due to repeated revision mismatches`,
+    // Real concurrent upload: another client uploaded between our download and upload.
+    // Re-uploading here would embed a stale NgRx snapshot (their ops were never applied
+    // to our store), creating a recentOps/state inconsistency for fresh-bootstrap clients.
+    // Throw so SyncWrapperService can handle it as a known-transient condition.
+    // The next sync cycle downloads the concurrent ops (applying them to NgRx), then
+    // uploads with a consistent snapshot.
+    throw new UploadRevToMatchMismatchAPIError(
+      'FileBasedSyncAdapter: Concurrent upload detected. Next sync cycle will ' +
+        'download the concurrent ops and retry with a consistent snapshot.',
     );
   }
 
@@ -583,15 +545,13 @@ export class FileBasedSyncAdapterService {
       currentSyncVersion,
     );
 
-    // Step 3: Upload with retry on revision mismatch
-    const { finalSyncVersion } = await this._uploadWithRetry(
+    // Step 3: Upload; on rev mismatch re-download once and either force-upload or throw
+    const { finalSyncVersion } = await this._uploadWithMismatchFallback(
       provider,
       cfg,
       encryptKey,
       newData,
       revToMatch,
-      ops,
-      clientId,
     );
 
     // Step 4: Post-upload processing
@@ -779,7 +739,7 @@ export class FileBasedSyncAdapterService {
           }
         : undefined;
 
-    const result = {
+    return {
       ops: limitedOps,
       hasMore,
       latestSeq,
@@ -792,8 +752,6 @@ export class FileBasedSyncAdapterService {
       // This allows new clients to bootstrap with complete state, not just recent ops
       ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
     };
-
-    return result;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -939,12 +897,6 @@ export class FileBasedSyncAdapterService {
 
   /**
    * Downloads and decrypts the sync file.
-   *
-   * When sync-data.json is not found, checks for a legacy __meta_ file (written
-   * by v16.x pfapi clients) and throws LegacySyncFormatDetectedError instead of
-   * treating the missing file as a fresh start. This prevents silent divergence
-   * when a new client first syncs to a provider still used by an old client.
-   *
    * @returns The sync data and its revision (ETag) for conditional upload
    */
   private async _downloadSyncFile(
@@ -952,27 +904,7 @@ export class FileBasedSyncAdapterService {
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedSyncData; rev: string }> {
-    let response: Awaited<ReturnType<typeof provider.downloadFile>>;
-    try {
-      response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
-    } catch (e) {
-      if (e instanceof RemoteFileNotFoundAPIError) {
-        // sync-data.json not found. Check for a legacy pfapi __meta_ file before
-        // treating this as a fresh start — a v16.x device may be writing to the
-        // same provider, causing silent divergence if we proceed.
-        let legacyFileFound = false;
-        try {
-          await provider.getFileRev(FILE_BASED_SYNC_CONSTANTS.LEGACY_META_FILE, null);
-          legacyFileFound = true;
-        } catch (innerE) {
-          if (!(innerE instanceof RemoteFileNotFoundAPIError)) throw innerE;
-          // __meta_ not found either → genuine fresh start
-        }
-        if (legacyFileFound) throw new LegacySyncFormatDetectedError();
-      }
-      throw e;
-    }
-
+    const response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
     const data =
       await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedSyncData>(
         cfg,

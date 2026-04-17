@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TaskTitleComponent } from './task-title.component';
 import { TranslateModule } from '@ngx-translate/core';
+import { EMPTY } from 'rxjs';
+import { MentionConfigService } from '../../features/tasks/mention-config.service';
 
 describe('TaskTitleComponent', () => {
   let component: TaskTitleComponent;
@@ -9,6 +11,7 @@ describe('TaskTitleComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [TaskTitleComponent, TranslateModule.forRoot()],
+      providers: [{ provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TaskTitleComponent);

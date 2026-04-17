@@ -40,8 +40,7 @@
   font-size: var(--planner-font-size-mobile);
   flex-shrink: 1;
   min-width: 0;
-  overflow: hidden;
-  word-break: break-word;
+  @include truncateText();
 
   @include mq(xs) {
     font-size: var(--planner-font-size);

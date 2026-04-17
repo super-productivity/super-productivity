@@ -447,6 +447,12 @@ describe('GlobalConfigReducer', () => {
     });
 
     describe('selectFocusModeConfig', () => {
+      // Bug #7181: break time was being counted as task work time because the default
+      // was false, so currentTask was never unset when a Pomodoro break started.
+      it('should default isPauseTrackingDuringBreak to true so break time is not counted', () => {
+        expect(DEFAULT_GLOBAL_CONFIG.focusMode.isPauseTrackingDuringBreak).toBe(true);
+      });
+
       it('should return default config when state is undefined', () => {
         const result = selectFocusModeConfig.projector(undefined as any);
         expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.focusMode);

@@ -296,7 +296,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     // Focus the task element after context menu closes
     // Use setTimeout to ensure menu has fully closed and DOM is settled
     setTimeout(() => {
-      const taskElement = document.querySelector(`#t-${this.task.id}`) as HTMLElement;
+      const taskElement = document.getElementById(`t-${this.task.id}`);
       if (taskElement) {
         taskElement.focus();
         // Ensure focusedTaskId is set even if focus event doesn't fire
@@ -687,7 +687,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _highlightSourceTask(): void {
-    const taskEl = document.querySelector(`#t-${this.task.id}`);
+    const taskEl = document.getElementById(`t-${this.task.id}`);
     if (!taskEl) {
       return;
     }

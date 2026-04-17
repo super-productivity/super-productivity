@@ -9,7 +9,6 @@ import {
   renameTask,
   archiveDoneTasks,
   expectTaskInWorklog,
-  hasTaskInWorklog,
   navigateToWorkView,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -268,30 +267,10 @@ test.describe('@supersync Archive Conflict Resolution', () => {
       console.log('[BugB] Client B: task not visible in active list');
 
       // ============ PHASE 7: Verify task IN worklog ============
-      // After archive-wins conflict + sync rounds, the archived task may appear under
-      // either the original title (if archive applied first) or the renamed title (if
-      // the rename op was also synced). Accept either to avoid brittleness.
-      const clientAFound =
-        (await hasTaskInWorklog(clientA, taskName)) ||
-        (await hasTaskInWorklog(clientA, taskRenamed));
-      if (!clientAFound) {
-        throw new Error(
-          `[BugB] Client A: Expected task to be in worklog under "${taskName}" or "${taskRenamed}"`,
-        );
-      }
+      await expectTaskInWorklog(clientA, taskName);
       console.log('[BugB] Client A: task found in worklog');
 
-      // Client B applied the rename locally before archive was received, so the task
-      // is archived under the renamed title. But also accept the original in case the
-      // archive was applied before the rename reached Client B.
-      const clientBFound =
-        (await hasTaskInWorklog(clientB, taskRenamed)) ||
-        (await hasTaskInWorklog(clientB, taskName));
-      if (!clientBFound) {
-        throw new Error(
-          `[BugB] Client B: Expected task to be in worklog under "${taskRenamed}" or "${taskName}"`,
-        );
-      }
+      await expectTaskInWorklog(clientB, taskName);
       console.log('[BugB] Client B: task found in worklog');
 
       console.log('[BugB] ✓ Test B passed: LWW Update did not resurrect archived task');

@@ -7,14 +7,11 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
   let harness: FileBasedSyncTestHarness;
 
   beforeEach(() => {
-    // Eliminate real retry delays to prevent slow tests and timer accumulation
-    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 0;
     harness = FileBasedSyncTestHarness.create({});
   });
 
   afterEach(() => {
     harness.reset();
-    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 500;
   });
 
   describe('syncVersion Mismatch', () => {
@@ -279,10 +276,19 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
         title: 'Task B',
       });
 
-      // Client A uploads first
+      // Client A uploads first (changes the rev)
       await clientA.uploadOps([opA]);
 
-      // Client B uploads (should merge without conflict)
+      // Client B's upload throws: genuine concurrent upload detected
+      // (A changed the rev, so B's cached rev is now stale)
+      await expectAsync(clientB.uploadOps([opB])).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
+
+      // Client B downloads (next sync cycle: picks up A's new op and fresh rev)
+      await clientB.downloadOps();
+
+      // Client B retries upload with the fresh state — succeeds
       const responseB = await clientB.uploadOps([opB]);
       expect(responseB.results[0].accepted).toBe(true);
 

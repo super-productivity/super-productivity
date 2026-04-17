@@ -19,7 +19,9 @@ import {
   MissingRefreshTokenAPIError,
   HttpNotOkAPIError,
   EmptyRemoteBodySPError,
-  LegacySyncFormatDetectedError,
+  JsonParseError,
+  SyncDataCorruptedError,
+  UploadRevToMatchMismatchAPIError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { SyncConfig } from '../../features/config/global-config.model';
@@ -602,8 +604,8 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof EmptyRemoteBodySPError) {
-        // Remote file returned empty body (e.g. Koofr WebDAV corrupted file).
-        // Force overwrite is safe here: local data is intact, remote is empty.
+        // Remote file returned an empty body (e.g. Koofr WebDAV corrupted file).
+        // Force overwrite is safe: local data is intact, remote is empty.
         this._providerManager.setSyncStatus('ERROR');
         this._snackService.open({
           msg: T.F.SYNC.S.ERROR_REMOTE_FILE_EMPTY,
@@ -611,6 +613,30 @@ export class SyncWrapperService {
           config: { duration: 12000 },
           actionFn: async () => this.forceUpload(),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof JsonParseError) {
+        // Remote JSON is unparseable (e.g. truncated write, encoding issue).
+        // Force overwrite is safe: local data is intact, remote cannot be parsed.
+        // Issues: #5574, #4616.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.ERROR_REMOTE_FILE_CORRUPTED,
+          type: 'ERROR',
+          config: { duration: 12000 },
+          actionFn: async () => this.forceUpload(),
+          actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof SyncDataCorruptedError) {
+        // Remote file format version is incompatible (could be older or newer than local).
+        // Do NOT offer force-upload: if remote is newer, overwriting would destroy newer data.
+        // Users should ensure all devices run the same app version.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          type: 'ERROR',
+          config: { duration: 12000 },
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof HttpNotOkAPIError && error.response.status === 423) {
@@ -673,20 +699,22 @@ export class SyncWrapperService {
           },
         });
         return 'HANDLED_ERROR';
-      } else if (error instanceof LegacySyncFormatDetectedError) {
-        this._providerManager.setSyncStatus('ERROR');
-        this._snackService.open({
-          msg: T.F.SYNC.S.LEGACY_FORMAT_DETECTED,
-          type: 'ERROR',
-          config: { duration: 20000 },
-        });
-        return 'HANDLED_ERROR';
       } else if (this._isPermissionError(error)) {
         this._snackService.open({
           msg: this._getPermissionErrorMessage(),
           type: 'ERROR',
           config: { duration: 12000 },
         });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof UploadRevToMatchMismatchAPIError) {
+        // Another client uploaded between our download and upload — self-healing.
+        // The next sync cycle will download their ops first, then upload successfully.
+        // Do not show an error snackbar; just mark as UNKNOWN_OR_CHANGED so the
+        // next sync cycle triggers and resolves the state.
+        SyncLog.log(
+          'SyncWrapperService: Concurrent upload detected, will retry on next sync cycle',
+        );
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return 'HANDLED_ERROR';
       } else {
         this._providerManager.setSyncStatus('ERROR');
@@ -774,20 +802,20 @@ export class SyncWrapperService {
   async configuredAuthForSyncProviderIfNecessary(
     providerId: SyncProviderId,
     force = false,
-  ): Promise<{ wasConfigured: boolean; authAttempted: boolean }> {
+  ): Promise<{ wasConfigured: boolean }> {
     const provider = await this._providerManager.getProviderById(providerId);
 
     if (!provider) {
-      return { wasConfigured: false, authAttempted: false };
+      return { wasConfigured: false };
     }
 
     if (!provider.getAuthHelper) {
-      return { wasConfigured: false, authAttempted: false };
+      return { wasConfigured: false };
     }
 
     if (!force && (await provider.isReady())) {
       SyncLog.warn('Provider already configured');
-      return { wasConfigured: false, authAttempted: false };
+      return { wasConfigured: false };
     }
 
     try {
@@ -816,9 +844,9 @@ export class SyncWrapperService {
           setTimeout(() => {
             this.sync();
           }, 1000);
-          return { wasConfigured: true, authAttempted: true };
+          return { wasConfigured: true };
         } else {
-          return { wasConfigured: false, authAttempted: true };
+          return { wasConfigured: false };
         }
       }
     } catch (error) {
@@ -832,9 +860,9 @@ export class SyncWrapperService {
         type: 'ERROR',
         config: { duration: 0 },
       });
-      return { wasConfigured: false, authAttempted: true };
+      return { wasConfigured: false };
     }
-    return { wasConfigured: false, authAttempted: false };
+    return { wasConfigured: false };
   }
 
   /**

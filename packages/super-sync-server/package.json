@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/src/index.js",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    "pretest": "npm run build --workspace=@sp/shared-schema && prisma generate",
+    "pretest": "prisma generate",
     "test": "vitest run",
     "docker:build": "./scripts/build-and-push.sh",
     "docker:deploy": "./scripts/deploy.sh",
@@ -43,7 +43,7 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.8.1",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^8.0.5",
+    "nodemailer": "^8.0.4",
     "uuidv7": "^1.1.0",
     "zod": "^4.3.5"
   },

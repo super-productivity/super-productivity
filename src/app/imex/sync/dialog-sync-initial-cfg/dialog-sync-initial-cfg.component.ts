@@ -219,21 +219,21 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
       isEnabled: this._tmpUpdatedCfg.isEnabled || !this.isWasEnabled(),
     };
 
-    await this.syncConfigService.updateSettingsFromForm(configToSave as SyncConfig, true);
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
-      const { wasConfigured, authAttempted } =
-        await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(
-          providerId,
-        );
+      await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);
 
-      // If auth was attempted (dialog opened) but not completed (cancelled or failed),
-      // keep dialog open so the user can retry without losing their config.
-      if (authAttempted && !wasConfigured) {
+      // If the provider requires auth (e.g. Dropbox) and is still not ready,
+      // the auth dialog was cancelled or failed. Keep the dialog open so the
+      // user can retry, and do not persist isEnabled:true with missing credentials
+      // (which would trigger the "Sync credentials are missing" snack loop — issue #7131).
+      const provider = await this._providerManager.getProviderById(providerId);
+      if (provider?.getAuthHelper && !(await provider.isReady())) {
         return;
       }
     }
 
+    await this.syncConfigService.updateSettingsFromForm(configToSave as SyncConfig, true);
     this._matDialogRef.close();
 
     if (isOnline()) {

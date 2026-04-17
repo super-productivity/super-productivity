@@ -105,7 +105,7 @@
       height: 28px;
     }
 
-    // On Android, hide during the slide-up entrance animation.
+    // On Android, hide during entrance animation (native add-task button is visible).
     // var(--transition-standard) on .add-task-button already transitions opacity,
     // so removing the class fades in automatically.
     &.hide-for-native {

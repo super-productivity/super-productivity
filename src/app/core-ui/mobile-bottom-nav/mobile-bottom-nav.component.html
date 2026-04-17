@@ -1,7 +1,6 @@
 <nav
   class="mobile-bottom-nav"
   [class.entrance]="isEntrance()"
-  (animationend)="onEntranceAnimationEnd($event)"
 >
   <button
     mat-button
@@ -26,7 +25,7 @@
     mat-fab
     class="add-task-button"
     [class.smaller]="hasProjectBacklog()"
-    [class.hide-for-native]="isEntranceAnimating()"
+    [class.hide-for-native]="isAndroid && isEntrance()"
     color="primary"
     (click)="showAddTaskBar()"
   >

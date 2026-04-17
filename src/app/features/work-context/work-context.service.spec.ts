@@ -370,3 +370,158 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
     });
   });
 });
+
+const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+
+describe('WorkContextService - getDoneTodayInArchive', () => {
+  let dateServiceMock: jasmine.SpyObj<DateService>;
+  let taskArchiveServiceMock: jasmine.SpyObj<TaskArchiveService>;
+  let service: WorkContextService;
+
+  beforeEach(() => {
+    const tagServiceMock = jasmine.createSpyObj('TagService', ['getTagById$']);
+    tagServiceMock.getTagById$.and.returnValue(of(TODAY_TAG));
+
+    const globalTrackingIntervalServiceMock = jasmine.createSpyObj(
+      'GlobalTrackingIntervalService',
+      [],
+      { todayDateStr$: of('2026-04-06') },
+    );
+
+    dateServiceMock = jasmine.createSpyObj('DateService', ['todayStr', 'isToday']);
+    dateServiceMock.todayStr.and.returnValue('2026-04-06');
+
+    const timeTrackingServiceMock = jasmine.createSpyObj('TimeTrackingService', [
+      'getWorkStartEndForWorkContext$',
+    ]);
+    timeTrackingServiceMock.getWorkStartEndForWorkContext$.and.returnValue(of({}));
+
+    taskArchiveServiceMock = jasmine.createSpyObj('TaskArchiveService', ['loadYoung']);
+
+    TestBed.configureTestingModule({
+      imports: [TranslateModule.forRoot()],
+      providers: [
+        provideMockStore({
+          initialState: {
+            workContext: { activeId: TODAY_TAG.id, activeType: 'TAG' },
+            tag: { entities: {}, ids: [] },
+            project: { entities: {}, ids: [] },
+            task: { entities: {}, ids: [] },
+          },
+        }),
+        provideMockActions(() => of()),
+        { provide: Router, useValue: { events: of(), url: '/' } },
+        { provide: TagService, useValue: tagServiceMock },
+        {
+          provide: GlobalTrackingIntervalService,
+          useValue: globalTrackingIntervalServiceMock,
+        },
+        { provide: DateService, useValue: dateServiceMock },
+        { provide: TimeTrackingService, useValue: timeTrackingServiceMock },
+        { provide: TaskArchiveService, useValue: taskArchiveServiceMock },
+        WorkContextService,
+      ],
+    });
+
+    service = TestBed.inject(WorkContextService);
+    service.activeWorkContextId = TODAY_TAG.id;
+    service.activeWorkContextType = WorkContextType.TAG;
+
+    // Short-circuit observables that depend on store selectors we don't set up.
+    (service as any).isTodayList$ = of(true);
+    (service as any).activeWorkContextTypeAndId$ = of({
+      activeId: TODAY_TAG.id,
+      activeType: WorkContextType.TAG,
+    });
+  });
+
+  const archiveTask = (id: string, doneOn: number): any => ({
+    id,
+    parentId: null,
+    doneOn,
+    tagIds: [TODAY_TAG.id],
+    projectId: null,
+  });
+
+  it('counts a task done just after midnight when startOfNextDay=1', async () => {
+    // Bug #7157 scenario. startOfNextDay = 1h.
+    // Now: 00:30 Apr 6 (calendar) = 23:30 Apr 5 (logical).
+    // Task done at 00:15 Apr 6 (same logical day, Apr 5).
+    // DateService.todayStr() => "2026-04-05"; isToday should subtract 1h and return true.
+    const now = new Date(2026, 3, 6, 0, 30).getTime();
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(now));
+
+    dateServiceMock.todayStr.and.returnValue('2026-04-05');
+    dateServiceMock.isToday.and.callFake((date: number | Date) => {
+      const ts = typeof date === 'number' ? date : date.getTime();
+      const offsetMs = 1 * 60 * 60 * 1000;
+      const d = new Date(ts - offsetMs);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}` === '2026-04-05';
+    });
+
+    const doneAt = new Date(2026, 3, 6, 0, 15).getTime();
+    taskArchiveServiceMock.loadYoung.and.returnValue(
+      Promise.resolve({
+        ids: ['t1'],
+        entities: { t1: archiveTask('t1', doneAt) },
+      } as any),
+    );
+
+    const result = await service.getDoneTodayInArchive();
+
+    expect(result).toBe(1);
+    jasmine.clock().uninstall();
+  });
+
+  it('does not count a task done yesterday (different logical day)', async () => {
+    dateServiceMock.isToday.and.returnValue(false);
+    taskArchiveServiceMock.loadYoung.and.returnValue(
+      Promise.resolve({
+        ids: ['t1'],
+        entities: {
+          t1: archiveTask('t1', Date.now() - TWO_DAYS_MS),
+        },
+      } as any),
+    );
+
+    const result = await service.getDoneTodayInArchive();
+
+    expect(result).toBe(0);
+  });
+
+  it('ignores tasks without doneOn', async () => {
+    dateServiceMock.isToday.and.returnValue(true);
+    taskArchiveServiceMock.loadYoung.and.returnValue(
+      Promise.resolve({
+        ids: ['t1'],
+        entities: { t1: { ...archiveTask('t1', 0), doneOn: undefined } },
+      } as any),
+    );
+
+    const result = await service.getDoneTodayInArchive();
+
+    expect(result).toBe(0);
+  });
+
+  it('ignores sub-tasks (only counts parents)', async () => {
+    dateServiceMock.isToday.and.returnValue(true);
+    const doneAt = Date.now();
+    taskArchiveServiceMock.loadYoung.and.returnValue(
+      Promise.resolve({
+        ids: ['parent', 'sub'],
+        entities: {
+          parent: archiveTask('parent', doneAt),
+          sub: { ...archiveTask('sub', doneAt), parentId: 'parent' },
+        },
+      } as any),
+    );
+
+    const result = await service.getDoneTodayInArchive();
+
+    expect(result).toBe(1);
+  });
+});

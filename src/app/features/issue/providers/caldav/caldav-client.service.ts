@@ -135,13 +135,18 @@ export class CaldavClientService {
     const categoriesProperty = todo.getAllProperties('categories')[0];
     const categories: string[] = categoriesProperty?.getValues() || [];
 
+    const dtstart = todo.getFirstPropertyValue('dtstart') as any;
+    const due = todo.getFirstPropertyValue('due') as any;
+
     return {
       id: todo.getFirstPropertyValue('uid') as string,
       completed: !!todo.getFirstPropertyValue('completed'),
       item_url: task.url,
       summary: (todo.getFirstPropertyValue('summary') as string) || '',
-      start: (todo.getFirstPropertyValue('dtstart') as any)?.toJSDate().getTime(),
-      due: (todo.getFirstPropertyValue('due') as any)?.toJSDate().getTime(),
+      start: dtstart?.toJSDate().getTime(),
+      isAllDay: dtstart ? dtstart.isDate === true : undefined,
+      due: due?.toJSDate().getTime(),
+      isDueAllDay: due ? due.isDate === true : undefined,
       note: (todo.getFirstPropertyValue('description') as string) || undefined,
       status: (todo.getFirstPropertyValue('status') as CaldavIssueStatus) || undefined,
       priority: +(todo.getFirstPropertyValue('priority') as string) || undefined,
