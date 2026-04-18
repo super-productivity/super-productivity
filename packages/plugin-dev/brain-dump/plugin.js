@@ -29,68 +29,124 @@ function parseTasksWithSubTasks(text) {
   }
 
   var parsedLines = [];
+  var plainTextCount = 0;
 
   // Parse all lines
   for (var l = 0; l < lines.length; l++) {
     var parsed = parseLineStructure(lines[l]);
     if (parsed) {
       parsedLines.push(parsed);
+      if (!parsed.isBullet) {
+        plainTextCount++;
+      }
     }
   }
 
-  if (parsedLines.length === 0) {
-    return null;
+  // Check if we have mixed input (both bullets and plain text)
+  var hasBullets = parsedLines.some(function (p) { return p.isBullet; });
+  var hasPlainText = parsedLines.some(function (p) { return !p.isBullet; });
+
+  if (hasBullets && hasPlainText) {
+    PluginAPI.showSnack({
+      msg: 'Warning: ' + plainTextCount + ' plain-text line(s) detected. These will be added as regular tasks.',
+      type: 'WARNING',
+    });
   }
 
   // Find the minimum indentation level to normalize
-  var minIndentLevel = Math.min.apply(
-    Math,
-    parsedLines.map(function (line) {
-      return line.indentLevel;
-    }),
-  );
+  var bulletLines = parsedLines.filter(function (p) { return p.isBullet; });
+  if (bulletLines.length > 0) {
+    var minIndentLevel = Math.min.apply(
+      Math,
+      bulletLines.map(function (line) {
+        return line.indentLevel;
+      }),
+    );
 
-  // Normalize indentation levels
-  parsedLines.forEach(function (line) {
-    line.indentLevel -= minIndentLevel;
-  });
+    // Normalize indentation levels
+    parsedLines.forEach(function (line) {
+      if (line.isBullet) {
+        line.indentLevel -= minIndentLevel;
+      }
+    });
+  }
 
   var mainTasks = [];
   var i = 0;
+  var deeplyNestedWarnings = [];
 
   while (i < parsedLines.length) {
     var currentLine = parsedLines[i];
 
-    // Only process top-level items as main tasks
-    if (currentLine.indentLevel === 0) {
+    // Process main tasks (indent level 0 or plain text)
+    if ((currentLine.isBullet && currentLine.indentLevel === 0) || !currentLine.isBullet) {
       var task = {
         title: currentLine.content,
         isCompleted: currentLine.isCompleted,
         subTasks: [],
       };
 
-      // Look ahead for sub-tasks
-      var j = i + 1;
-      while (j < parsedLines.length && parsedLines[j].indentLevel > 0) {
-        var subLine = parsedLines[j];
-        if (subLine.indentLevel === 1) {
-          // Direct sub-tasks
-          task.subTasks.push({
-            title: subLine.content,
-            isCompleted: subLine.isCompleted,
-          });
+      // Look ahead for sub-tasks (only if current is a bullet)
+      if (currentLine.isBullet) {
+        var j = i + 1;
+        while (j < parsedLines.length && parsedLines[j].indentLevel > 0) {
+          var subLine = parsedLines[j];
+          if (subLine.indentLevel === 1) {
+            // Direct sub-tasks
+            task.subTasks.push({
+              title: subLine.content,
+              isCompleted: subLine.isCompleted,
+            });
+          } else if (subLine.indentLevel > 1) {
+            // Deeply-nested items are now flattened with warning
+            deeplyNestedWarnings.push({
+              title: subLine.content,
+              depth: subLine.indentLevel,
+            });
+            task.subTasks.push({
+              title: subLine.content,
+              isCompleted: subLine.isCompleted,
+            });
+          }
+          j++;
         }
-        j++;
+        i = j; // Skip processed sub-tasks
+      } else {
+        i++;
       }
 
       mainTasks.push(task);
-      i = j; // Skip processed sub-tasks
     } else {
       i++;
     }
   }
 
+  // Show warning for deeply-nested items
+  if (deeplyNestedWarnings.length > 0) {
+    var warningMsg = 'Note: ' + deeplyNestedWarnings.length + ' deeply-nested item(s) flattened to sub-task level. ';
+    warningMsg += 'Note: Sub-tasks in Super Productivity do not support nesting.';
+    PluginAPI.showSnack({
+      msg: warningMsg,
+      type: 'INFO',
+    });
+  }
+
   return mainTasks;
+}
+
+// Detect minimum indent and normalize relative to it
+function findMinimumIndent(lines) {
+  var minIndent = Infinity;
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (!line.trim()) continue;
+    var match = line.match(/^(\s*)/);
+    if (match) {
+      var indent = match[1].length;
+      if (indent > 0) minIndent = Math.min(minIndent, indent);
+    }
+  }
+  return minIndent === Infinity ? 0 : minIndent;
 }
 
 function parseLineStructure(line) {
@@ -101,7 +157,10 @@ function parseLineStructure(line) {
     var whitespace = indentMatch[1];
     var tabCount = (whitespace.match(/\t/g) || []).length;
     var spaceCount = (whitespace.match(/ /g) || []).length;
-    indentLevel = tabCount + Math.floor(spaceCount / 2);
+    // Support both 2-space and 4-space conventions
+    // For 4-space indent: Math.floor(4/4) = 1
+    // For 2-space indent: Math.floor(2/2) = 1
+    indentLevel = tabCount + Math.max(Math.floor(spaceCount / 4), Math.floor(spaceCount / 2));
   }
 
   var trimmedLine = line.trim();
@@ -129,7 +188,13 @@ function parseLineStructure(line) {
     };
   }
 
-  return null;
+  // Plain text lines no longer silently dropped
+  return {
+    indentLevel: 0,
+    content: trimmedLine,
+    isCompleted: false,
+    isBullet: false,
+  };
 }
 
 function todayStr() {
@@ -190,6 +255,9 @@ async function openBrainDump() {
     })
     .join('');
 
+  // SUGGESTION: Expose expected format to users
+  var placeholderText = 'One task per line. For sub-tasks, indent with 4 spaces:\n\n- Main task\n    - Sub task\n    - Another sub task\n\nPlain text tasks are also supported.';
+
   var html =
     '<div id="bd-container" style="padding:4px 0">' +
     '<div style="display:flex;gap:12px;margin-bottom:12px">' +
@@ -208,7 +276,9 @@ async function openBrainDump() {
     '" style="width:100%">' +
     '</div>' +
     '</div>' +
-    '<textarea id="bd-input" rows="10" placeholder="One task per line..." style="width:100%;box-sizing:border-box">' +
+    '<textarea id="bd-input" rows="10" placeholder="' +
+    escapeHtml(placeholderText) +
+    '" style="width:100%;box-sizing:border-box">' +
     escapeHtml(savedText) +
     '</textarea>' +
     '<div id="bd-status" style="margin-top:4px;font-size:12px;opacity:0.5">' +
@@ -271,9 +341,9 @@ function updateStatus() {
   if (!statusEl) return;
   var count = countTasks(textarea);
   if (count === 0) {
-    statusEl.textContent = 'One task per line. Empty lines are skipped.';
+    statusEl.textContent = 'One task per line. Empty lines are skipped.\n - Use - for bullet points\n    indent 4 spaces for sub-tasks.';
   } else {
-    statusEl.textContent = count + ' task' + (count !== 1 ? 's' : '') + ' to add';
+    statusEl.textContent = count + ' item' + (count !== 1 ? 's' : '') + ' detected (including sub-tasks) to add.';
   }
 }
 
