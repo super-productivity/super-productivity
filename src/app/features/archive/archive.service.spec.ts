@@ -368,6 +368,7 @@ describe('ArchiveService', () => {
       const savedData = mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
       expect(savedData.task.ids).toEqual(['task-1']);
       expect(Object.keys(savedData.task.entities)).toEqual(['task-1']);
+      expect(savedData.task.entities['task-1']!.subTaskIds).toEqual([]);
     });
 
     it('should sync subTaskIds with surviving subtasks when some are dropped', async () => {

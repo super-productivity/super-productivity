@@ -855,7 +855,9 @@ export class TaskService {
     }
 
     if (!Array.isArray(tasks)) {
-      TaskLog.warn('[TaskService] moveToArchive converting single task to array', tasks);
+      TaskLog.warn('[TaskService] moveToArchive converting single task to array', {
+        id: tasks.id,
+      });
       tasks = [tasks];
     }
 
