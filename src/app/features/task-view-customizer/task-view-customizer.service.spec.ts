@@ -8,7 +8,7 @@ import { selectAllProjects } from '../project/store/project.selectors';
 import { selectAllTags } from '../tag/store/tag.reducer';
 import { getTomorrow } from '../../util/get-tomorrow';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import { Observable, of } from 'rxjs';
+import { BehaviorSubject, Observable, of } from 'rxjs';
 import { WorkContextType } from '../work-context/work-context.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
@@ -37,6 +37,10 @@ describe('TaskViewCustomizerService', () => {
   let mockWorkContextService: {
     activeWorkContextId: string | null;
     activeWorkContextType: WorkContextType | null;
+    activeWorkContextTypeAndId$: Observable<{
+      activeId: string;
+      activeType: WorkContextType;
+    }>;
     mainListTasks$: Observable<TaskWithSubTasks[]>;
     undoneTasks$: Observable<TaskWithSubTasks[]>;
   };
@@ -125,6 +129,10 @@ describe('TaskViewCustomizerService', () => {
     mockWorkContextService = {
       activeWorkContextId: null,
       activeWorkContextType: null,
+      activeWorkContextTypeAndId$: of({
+        activeId: 'TODAY',
+        activeType: WorkContextType.TAG,
+      }),
       mainListTasks$: of<TaskWithSubTasks[]>([]),
       undoneTasks$: of<TaskWithSubTasks[]>([]),
     };
@@ -1191,6 +1199,103 @@ describe('TaskViewCustomizerService', () => {
     });
   });
 
+  describe('work context reset (issue #7262)', () => {
+    it('should reset sort/group/filter when active work context changes', () => {
+      const ctx$ = new BehaviorSubject<{
+        activeId: string;
+        activeType: WorkContextType;
+      }>({ activeId: 'TODAY', activeType: WorkContextType.TAG });
+
+      TestBed.resetTestingModule();
+      const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
+        getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
+      });
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskViewCustomizerService,
+          { provide: LanguageService, useValue: mockLanguageService },
+          { provide: TranslateService, useValue: { instant: (k: string) => k } },
+          { provide: DateAdapter, useValue: dateAdapter },
+          {
+            provide: WorkContextService,
+            useValue: {
+              activeWorkContextId: null,
+              activeWorkContextType: null,
+              activeWorkContextTypeAndId$: ctx$.asObservable(),
+              mainListTasks$: of<TaskWithSubTasks[]>([]),
+              undoneTasks$: of<TaskWithSubTasks[]>([]),
+            },
+          },
+          { provide: ProjectService, useValue: { update: projectUpdateSpy } },
+          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          provideMockStore({
+            selectors: [
+              { selector: selectAllProjects, value: mockProjects },
+              { selector: selectAllTags, value: mockTags },
+            ],
+          }),
+        ],
+      });
+
+      const newService = TestBed.inject(TaskViewCustomizerService);
+      newService.setSort({
+        type: SORT_OPTION_TYPE.name,
+        order: SORT_ORDER.ASC,
+        label: 'Name',
+      });
+      newService.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      newService.setFilter({
+        type: FILTER_OPTION_TYPE.tag,
+        preset: 'Tag A',
+        label: 'Tag',
+      });
+
+      // Switch work context — customizations should be cleared.
+      ctx$.next({ activeId: 'Project A', activeType: WorkContextType.PROJECT });
+
+      expect(newService.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      expect(newService.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
+      expect(newService.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
+    });
+
+    it('should not reset on initial work context emission (preserve persisted state)', () => {
+      const savedFilter: FilterOption = {
+        type: FILTER_OPTION_TYPE.tag,
+        preset: 'Tag A',
+        label: 'Tag',
+      };
+      localStorage.setItem(LS.TASK_VIEW_CUSTOMIZER_FILTER, JSON.stringify(savedFilter));
+
+      TestBed.resetTestingModule();
+      const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
+        getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
+      });
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskViewCustomizerService,
+          { provide: LanguageService, useValue: mockLanguageService },
+          { provide: TranslateService, useValue: { instant: (k: string) => k } },
+          { provide: DateAdapter, useValue: dateAdapter },
+          { provide: WorkContextService, useValue: mockWorkContextService },
+          { provide: ProjectService, useValue: { update: projectUpdateSpy } },
+          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          provideMockStore({
+            selectors: [
+              { selector: selectAllProjects, value: mockProjects },
+              { selector: selectAllTags, value: mockTags },
+            ],
+          }),
+        ],
+      });
+
+      const newService = TestBed.inject(TaskViewCustomizerService);
+
+      expect(newService.selectedFilter()).toEqual(savedFilter);
+    });
+  });
+
   describe('customizeUndoneTasks with group by project (issue #7050)', () => {
     const inboxTask: TaskWithSubTasks = {
       id: 'inbox-task',
@@ -1256,6 +1361,10 @@ describe('TaskViewCustomizerService', () => {
       mockWorkContextService = {
         activeWorkContextId: 'INBOX_PROJECT',
         activeWorkContextType: WorkContextType.PROJECT,
+        activeWorkContextTypeAndId$: of({
+          activeId: 'INBOX_PROJECT',
+          activeType: WorkContextType.PROJECT,
+        }),
         mainListTasks$: of<TaskWithSubTasks[]>([inboxTask]),
         undoneTasks$: of<TaskWithSubTasks[]>([inboxTask]),
       };

@@ -1,6 +1,6 @@
 import { Injectable, signal, inject, effect } from '@angular/core';
 import { Observable, animationFrameScheduler, combineLatest } from 'rxjs';
-import { map, observeOn, switchMap, take } from 'rxjs/operators';
+import { map, observeOn, skip, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { selectAllProjects } from '../project/store/project.selectors';
 import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
@@ -80,6 +80,12 @@ export class TaskViewCustomizerService {
     effect(() => {
       lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_FILTER, this.selectedFilter());
     });
+
+    // Reset sort/group/filter when the active work context changes so that
+    // customizations do not leak across projects/tags/today.
+    this._workContextService.activeWorkContextTypeAndId$
+      .pipe(skip(1), takeUntilDestroyed())
+      .subscribe(() => this.resetAll());
   }
 
   private _allProjects: Project[] = [];
