@@ -61,23 +61,21 @@ export const startApp = (): void => {
   app.commandLine.appendSwitch('gtk-version', '3');
 
   // Force X11 in Snap on Wayland sessions or when the gnome-42-2204 runtime
-  // is missing. Electron's bundled libgbm and the Mesa shipped by
-  // gnome-42-2204's core22-mesa-backports PPA can drift out of ABI sync,
-  // producing "Failed to get system egl display" / "MESA-LOADER failed to
-  // open dri_gbm.so" and a GPU process respawn loop on Wayland. The X11/GLX
-  // path avoids the failing Wayland EGL init entirely and still uses the
-  // GPU — only Wayland fractional scaling is lost. Users can opt back into
-  // Wayland with `superproductivity --ozone-platform=wayland`.
-  // Refs: electron-builder#9452, super-productivity#5672,
-  // forum.snapcraft.io threads #40975 and #49173.
-  // IMPORTANT: Must run before app.whenReady() — ozone platform is set
-  // during Chromium initialization and cannot be changed after the ready
-  // event fires.
-  if (
-    process.platform === 'linux' &&
-    process.env.SNAP &&
-    !process.argv.some((arg) => arg.includes('--ozone-platform='))
-  ) {
+  // is missing. Chromium's Wayland EGL/GBM init can fail against the Mesa
+  // shipped by gnome-42-2204 when the snap runtime's Mesa version drifts
+  // out of sync with what Electron's Chromium expects, producing
+  // "Failed to get system egl display" / "MESA-LOADER failed to open
+  // dri_gbm.so" and a failed GPU process. The X11 ozone backend avoids the
+  // failing Wayland EGL init path while keeping hardware acceleration — at
+  // the cost of Wayland-native features (fractional scaling, per-monitor
+  // HiDPI, native IME, client-side decorations). Override with
+  // `--ozone-platform=wayland`.
+  // IMPORTANT: must run before app.whenReady() — ozone platform is read
+  // during Chromium init and cannot be changed after ready fires.
+  const hasOzoneOverride = process.argv.some(
+    (arg) => arg === '--ozone-platform' || arg.startsWith('--ozone-platform='),
+  );
+  if (process.platform === 'linux' && process.env.SNAP && !hasOzoneOverride) {
     const isWaylandSession =
       process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY;
 
@@ -94,7 +92,7 @@ export const startApp = (): void => {
     if (isWaylandSession || isGnomePlatformMissing) {
       app.commandLine.appendSwitch('ozone-platform', 'x11');
       log(
-        `Snap: forcing X11 (wayland=${isWaylandSession}, gnomePlatformMissing=${isGnomePlatformMissing})`,
+        `Snap: forcing X11 (wayland=${isWaylandSession}, gnomePlatformMissing=${isGnomePlatformMissing}, XDG_SESSION_TYPE=${process.env.XDG_SESSION_TYPE ?? 'unset'}, WAYLAND_DISPLAY=${process.env.WAYLAND_DISPLAY ? 'set' : 'unset'})`,
       );
     }
   }
