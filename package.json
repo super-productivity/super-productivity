@@ -282,7 +282,7 @@
   },
   "overrides": {
     "app-builder-lib": {
-      "minimatch": "10.2.5"
+      "minimatch": "10.1.1"
     }
   },
   "optionalDependencies": {
