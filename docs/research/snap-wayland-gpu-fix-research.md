@@ -7,9 +7,11 @@ launch where the app either (a) shows a tray icon with no window, (b)
 segfaults, or (c) launches but floods logs with GL errors. The likely root
 cause is Mesa ABI drift between Electron's bundled libgbm/Mesa stack and the
 Mesa shipped by the `gnome-42-2204` content snap's `core22-mesa-backports`
-PPA. The December 2025 increase in user reports correlates with upstream
-Electron 38 (Sept 2025) switching Wayland on by default under GNOME, which
-exposed the pre-existing ABI mismatch to far more users.
+PPA. The December 2025 spike in user reports correlates with upstream
+Chromium 140 (Aug 2025) / Electron 38 (Sept 9, 2025) flipping the default
+`--ozone-platform-hint` to `auto`, so Electron now runs as a native Wayland
+client in any Wayland session (detection via `XDG_SESSION_TYPE=wayland`).
+This exposed the pre-existing Mesa ABI mismatch to far more users.
 
 The recommended fix is to **widen the existing Snap-gated `--ozone-platform=x11`
 guard in `electron/start-app.ts` to cover Snap + Wayland sessions, not only
@@ -25,23 +27,33 @@ and should be scheduled for 18.3 or 19.0.
 
 ## 1. Root Cause
 
-**High confidence on direction; medium confidence on the exact Electron
-interaction timing.**
+**High confidence on direction and on the upstream Electron/Chromium
+timing (see Section 9).**
 
 - Not a missing-files problem — `libgl1-mesa-dri` is present in the content
   snap.
-- The failure is an ABI version check: `"DRI driver not from this Mesa build"`
-  (snapcraft forum threads #40975, #49173).
+- The canonical ABI-mismatch error signature is
+  `"DRI driver not from this Mesa build"` (snapcraft forum
+  [#40975](https://forum.snapcraft.io/t/40975)). Forum
+  [#49173](https://forum.snapcraft.io/t/mesa-core22-updates-broke-my-snap/49173)
+  reports a related mesa-core22 ABI breakage but with a different error
+  string ("Failed to initialize GLAD") — same root cause, different
+  symptom.
 - Trigger: Mesa shipped by `gnome-42-2204`'s `core22-mesa-backports` PPA does
   not reliably match the Mesa/libgbm ABI expectations of recent Electron
   Chromium builds.
 - **Timing note:** Issue #5672 was filed 2025-12-06 on Super Productivity
-  16.5.2, which shipped Electron 37.10.3. Super Productivity did not bump
-  Electron until 2026-04-17 (37.10.3 → 41.2.0 — one day before this doc was
-  drafted). The December 2025 increase in reports therefore does **not**
-  correlate with an SP-side Electron upgrade. The more plausible upstream
-  contributor is Electron 38 (released Sept 2025), which flipped Chromium's
-  Wayland backend on by default under GNOME; combined with ongoing
+  16.5.2, which pinned **Electron 39.2.5** (verified via the tagged
+  `package.json`). SP subsequently **downgraded to Electron 37.10.3 at
+  v17.0.0 (2026-01-23)** and held that version until bumping to 41.2.0 on
+  2026-04-17 (one day before this doc was drafted). So the December 2025
+  reports originated on Electron 39 — which already inherits Chromium 140's
+  Wayland-auto default from Electron 38. The upstream trigger is **Chromium
+  140 (Aug 2025) flipping `--ozone-platform-hint=auto`**, inherited by
+  Electron ≥38 (with a regression window in 38.0.0/38.1.0 fixed by
+  [electron/electron#48301](https://github.com/electron/electron/pull/48301);
+  users on [electron-builder#9452](https://github.com/electron-userland/electron-builder/issues/9452)
+  cite Electron ≥38.2.0 as the practical trigger). Combined with ongoing
   `mesa-backports` churn, this exposed the ABI mismatch to many more Snap
   users who had previously been silently running X11.
 
@@ -75,12 +87,19 @@ Three observed modes:
 
 ## 4. Canonical's Position
 
-**Confirmed.**
+**Confirmed with nuance.**
 
-- No official fix for `core22` forthcoming; direction is "move to `core24`."
-- Zero Canonical engagement with `electron-builder` issues #8548 / #9452.
-- `graphics-core22` is not formally deprecated but is superseded in practice
-  by `gpu-2404`.
+- No official fix for `core22` has been announced; Canonical's documented
+  direction is "move to `core24` + `gpu-2404`" (see the
+  [Canonical RFC](https://forum.snapcraft.io/t/rfc-migrating-gnome-and-kde-snapcraft-extensions-to-gpu-2404-userspace-interface/39718)).
+  We did **not** find an explicit Canonical statement ruling out a
+  core22 Mesa-ABI fix — absence of engagement, not a formal position.
+- No Canonical engagement observed in
+  [electron-builder#9452](https://github.com/electron-userland/electron-builder/issues/9452).
+- `graphics-core22` is **not formally deprecated**. Canonical's own wording
+  is that `gpu-2404` is an "evolution" of `graphics-core22` (per
+  [canonical.com/mir/docs/the-gpu-2404-snap-interface](https://canonical.com/mir/docs/the-gpu-2404-snap-interface)).
+  Migration requires a base bump to `core24`, not an interface swap.
 - `--disable-gpu` / `--ozone-platform=x11` are community workarounds, not
   endorsed.
 
@@ -88,43 +107,58 @@ Three observed modes:
 
 ## 5. Peer Consensus (Other Electron Apps)
 
-**Confidence note:** The items below are sourced from community discussions
-and issue trackers. The Super Productivity (first-hand) claim is the
-`electron/start-app.ts:70-88` existing guard. Every other row was **not**
-independently verified to a specific commit or PR in this research pass and
-should be treated as directional, not citable.
+**Verification note:** Entries below were verified in a follow-up pass
+(2026-04-18) against peer-app source repos, GitHub issues, and
+Flathub/snapcrafters packaging. File:line citations linked where applicable.
 
 | App | Approach | Verification |
 |---|---|---|
-| Signal Desktop | Community reports indicate Signal disables GPU by default on Snap and exposes a `snap set` opt-in. | **Not verified** to a specific issue/commit in this pass; do not cite "issue #422" (that issue is unrelated). |
-| Mattermost | Community reports describe a GL-probe + config.json patching pattern. | **Not independently verified.** |
-| VS Code | Community reports describe Wayland → X11 fallback via wrapper. | **Not independently verified.** |
-| electron-builder #9452 | Issue thread exists and discusses `--ozone-platform=x11` as a workaround. | Issue thread confirmed; individual comments **not** re-quoted here. |
-| Teams-for-Linux | `afterPack` rename + wrapper-script pattern. | **Not independently verified.** |
+| Signal Desktop (snap) | Community-maintained [`snapcrafters/signal-desktop`](https://github.com/snapcrafters/signal-desktop) snap: wrapper at `snap/local/usr/bin/signal-desktop-wrapper` defaults `--disable-gpu` ON unless user runs `snap set signal-desktop enable-gpu=true`. Upstream Signal has no snap packaging. | **Verified** (snapcrafters repo). |
+| Mattermost Desktop (snap) | Community-maintained [`snapcrafters/mattermost-desktop`](https://github.com/snapcrafters/mattermost-desktop): `command-chain` runs `fix-hardware-accel-with-no-renderer`; it probes `glxinfo`, and on llvmpipe match patches `${SNAP_USER_DATA}/.config/Mattermost/config.json` with `jq '.enableHardwareAcceleration = false'`. | **Verified** (snapcrafters repo). |
+| VS Code (snap) | No explicit X11 force. The snap crashes on Wayland (sandbox missing Mesa drivers / GLib schemas) and falls back to XWayland implicitly. See [microsoft/vscode#202072](https://github.com/microsoft/vscode/issues/202072). | **Claim contradicted**: outcome is X11, mechanism is not a wrapper. |
+| electron-builder [#9452](https://github.com/electron-userland/electron-builder/issues/9452) | Title: "Snap package of Electron ≥ 38 crashes at startup under GNOME on Wayland". Maintainer `@mmaietta` engaged; users `andersk` and `valkirilov` confirm `--ozone-platform=x11` as the working workaround. Trigger identified as Electron ≥38.2.0. | **Verified — strongest external reference.** |
+| Teams-for-Linux | Sets `build.linux.executableArgs: ["--ozone-platform=x11"]` and `build.snap.executableArgs: [...]` in electron-builder config; **no `afterPack` wrapper**. The snap-side setting is dead code per [electron-builder#4587](https://github.com/electron-userland/electron-builder/issues/4587) — `executableArgs` is silently ignored for snap builds. | **Claim partly contradicted**: intended mechanism is `executableArgs`, which is broken on snap. |
+| Obsidian (Flatpak) | Wrapper [`obsidian.sh`](https://github.com/flathub/md.obsidian.Obsidian/blob/master/obsidian.sh) probes for Wayland socket; adds `--ozone-platform-hint=auto` under Wayland, else `--ozone-platform=x11`; respects `OBSIDIAN_DISABLE_GPU` env var. Not snap, but illustrates the compositor+GPU-probe wrapper pattern. | **Verified** (flathub repo). |
 
-What **is** solid across these reports: multiple Electron apps on Snap have
-adopted some form of X11 fallback or GPU-disable workaround, and nobody in
-Electron land ships `graphics-core22` in production without one.
+What **is** solid: every peer Electron app with a Wayland/GPU workaround on
+Snap uses either an X11 fallback or a GPU-disable; the only maintainer-
+endorsed workaround (electron-builder #9452) converges on
+`--ozone-platform=x11`. The dominant **actually-working** mechanism among
+peer snaps is a `command-chain` wrapper script (Signal, Mattermost).
+`snap.executableArgs` in electron-builder config is broken for snap builds
+(electron-builder #4587). **SP's existing pattern —
+`app.commandLine.appendSwitch` from the Electron main process — is a third
+working mechanism and the one PR #7264 extends.**
 
 ---
 
 ## 6. Electron-Builder Escape Hatches
 
-Earlier research claimed wrapper scripts required rewriting `snapcraft.yaml`.
-That was wrong. Two working mechanisms exist inside `electron-builder`'s snap
-target:
+Three mechanisms exist for applying Chromium flags in an electron-builder
+snap build, ranked by reliability:
 
-1. **`snap.executableArgs` accepts shell substitution.** `command.sh` is a
-   bash script, so
-   `executableArgs: ["$([ -e /dev/dri/card0 ] || echo --disable-gpu)"]` is
-   evaluated at launch.
-2. **`afterPack` hook** can rename the real binary and drop a wrapper script
+1. **`app.commandLine.appendSwitch(...)` inside the Electron main process**
+   (before `app.whenReady()`). SP's existing guard at `electron/start-app.ts`
+   uses this pattern; PR #7264 extends it. Works for any flag Chromium reads
+   during init, including `--ozone-platform`. No packaging changes.
+2. **`afterPack` hook** renames the real binary and drops a wrapper script
    at the same name → a full pre-Electron wrapper, no `snapcraft.yaml`
-   changes. (Teams-for-Linux precedent — not independently re-verified in
-   this pass.)
+   changes. Useful for flags that must be set before the Electron main
+   process starts. (Referenced as a pattern in community sources;
+   Teams-for-Linux does **not** actually use it — see Section 5.)
+3. **`snap.executableArgs` in electron-builder config is broken for snap
+   builds** per [electron-builder#4587](https://github.com/electron-userland/electron-builder/issues/4587) —
+   the flags are silently ignored. Teams-for-Linux's config illustrates
+   this: they set `executableArgs: ["--ozone-platform=x11"]` for both
+   `build.linux` and `build.snap`, but only the non-snap side takes effect.
+   **Do not use.**
 
-Both approaches avoid auto-connect requests, store-review friction, or a base
-bump.
+The dominant pattern among peer snaps (Signal, Mattermost) is a
+`command-chain` entry in `snap/snapcraft.yaml` invoking a wrapper shell
+script — equivalent to mechanism #2 but expressed via snapcraft rather than
+electron-builder. All three working approaches (mechanism #1 plus the two
+wrapper variants) avoid auto-connect requests, store-review friction, and a
+base bump.
 
 ---
 
@@ -132,7 +166,7 @@ bump.
 
 | # | Option | Fixes errors | Keeps HW accel | Scope | Effort | Evidence alignment |
 |---|---|---|---|---|---|---|
-| 1 | **Narrow: `--ozone-platform=x11` via executableArgs/command-line when Snap + Wayland** | Yes for ~95% | Yes (X11/GLX) | Snap only, conditional | ~1 file, ~20 LOC | Strongest — matches the pattern community workarounds converge on |
+| 1 | **Narrow: `--ozone-platform=x11` via `app.commandLine.appendSwitch` when Snap + Wayland** | Yes for ~95% | Yes (X11/GLX) | Snap only, conditional | ~1 file, ~20 LOC | Strongest — electron-builder #9452 maintainer + users converge on `--ozone-platform=x11`; matches SP's existing mechanism |
 | 2 | Disable GPU default on Snap, opt-in via env/config | Yes | **No** — loses HW accel for working users | Snap only, unconditional | One-liner + doc | Evidence-backed but blunt |
 | 3 | `afterPack` wrapper: detect GPU at launch, conditionally add flags | Yes when detection works | Yes when works | Snap only | `afterPack` script + wrapper | GL-probe false negatives are a known failure mode |
 | 4 | Migrate to `core24` + custom snapcraft.yaml + `gpu-2404` | Yes (fundamental) | Yes | All Snap users | 1–2 days + auto-connect wait | Best long-term; orthogonal to this PR |
@@ -157,17 +191,24 @@ existing guard in `electron/start-app.ts`.**
 3. **Non-universal degradation** — Snap X11 users see no change; non-Snap
    users see no change; only Snap + Wayland users are redirected to X11,
    where everything works.
-4. **Zero packaging rewrite** — goes into existing `electron/start-app.ts` (or
-   `electron-builder.yaml`'s `snap.executableArgs`). SP already has Snap-gated
-   `ozone-platform=x11` logic at `electron/start-app.ts:70-88`. The only
-   change needed is to **stop gating on "gnome-platform dir is empty" and
-   instead gate on "Snap + Wayland session."**
+4. **Zero packaging rewrite** — goes into existing `electron/start-app.ts`
+   via `app.commandLine.appendSwitch`. SP already has Snap-gated
+   `ozone-platform=x11` logic in `electron/start-app.ts` (pre-PR: gated on
+   an empty `gnome-platform` directory). The only change needed is to
+   **extend the gate to "Snap + Wayland session," with the `gnome-platform`
+   probe retained as a secondary OR fallback** (belt-and-suspenders for any
+   non-Wayland Snap users who still hit the ABI drift).
+   `electron-builder.yaml`'s `snap.executableArgs` is **broken for snap
+   builds** ([electron-builder#4587](https://github.com/electron-userland/electron-builder/issues/4587)) —
+   `app.commandLine.appendSwitch` is the only reliable mechanism for this
+   from inside electron-builder.
 
 This is what the existing migration plan partially implemented. The plan's
 defense-in-depth was intended to catch exactly this scenario; the
-`gnome-platform` emptiness probe is wrong because `gnome-platform` is
-populated — just ABI-drifted. Widening the guard to `SNAP + Wayland` matches
-the empirical breakage pattern.
+`gnome-platform` emptiness probe doesn't catch the common case because
+`gnome-platform` is populated — just ABI-drifted. Widening the guard to
+`SNAP + Wayland` (with the gnome-platform probe retained as OR fallback)
+matches the empirical breakage pattern.
 
 ### Why not Option 2 (disable-GPU default)
 
@@ -198,22 +239,25 @@ risk of new regressions right after shipping 18.2.x. Schedule for 18.3 or
 | Direction (X11 fallback for Snap + Wayland) | **High** — converged from multiple independent threads (peer app community reports, GitHub issues, scope matrix, Canonical position, escape hatches) |
 | Exact gating predicate (Snap + Wayland vs. just Snap) | **Medium-high** — Wayland is the proximate trigger, but a few X11 reports exist. Keeping the gnome-platform-empty probe as a fallback is the belt-and-suspenders move |
 | `core24` migration as the real long-term fix | **High** on direction, **medium** on timing |
-| Dec 2025 reports correlate with Electron 38 Wayland-default (Sept 2025) | **Medium** — timing is suggestive; not proven |
-| Peer-app implementation details in Section 5 | **Low-medium** — directional, not independently re-verified to specific commits/PRs in this pass |
+| Dec 2025 reports correlate with Chromium 140 / Electron ≥38.2 Wayland-default | **High** — SP was on Electron 39.2.5 in Dec 2025 (verified via tagged `package.json`); Chromium 140 (Aug 2025) flipped `--ozone-platform-hint=auto`; [electron-builder#9452](https://github.com/electron-userland/electron-builder/issues/9452) independently identifies Electron ≥38.2.0 as the trigger |
+| Peer-app implementation details in Section 5 | **High** — verified in follow-up pass against snapcrafters repos, `microsoft/vscode#202072`, `electron-builder#4587`, `flathub/md.obsidian.Obsidian`; several original claims contradicted and reframed |
 
 ---
 
 ## 10. Proposed Change
 
-Widen the existing guard in `electron/start-app.ts:70-88`:
+Widen the existing guard in `electron/start-app.ts` (pre-PR: lines 70–88;
+post-PR #7264: lines 75–98):
 
 - **Before:** gated on Snap + `gnome-platform` directory missing or empty.
 - **After:** gated on Snap + Wayland session (`XDG_SESSION_TYPE === 'wayland'`
   or `WAYLAND_DISPLAY` set), with the existing gnome-platform probe retained
   as a secondary fallback.
 
-Estimated diff: ~10 LOC in `electron/start-app.ts`. No `electron-builder.yaml`
-changes required.
+Estimated diff: ~20 functional LOC in `electron/start-app.ts` (~35 lines
+including comments). No `electron-builder.yaml` changes required
+(`snap.executableArgs` is broken for snap builds —
+[electron-builder#4587](https://github.com/electron-userland/electron-builder/issues/4587)).
 
 ### Open design questions
 
@@ -229,7 +273,17 @@ changes required.
 
 ## 11. References
 
-- snapcraft forum threads #40975, #49173 — Mesa ABI drift reports
-- electron-builder issues #8548, #9452 — community workarounds
-- SP issue #5672 — user reports (filed 2025-12-06 on SP 16.5.2 / Electron 37)
-- `electron/start-app.ts:70-88` — existing Snap guard widened by PR #7264
+- [Snapcraft forum #40975](https://forum.snapcraft.io/t/40975) — "DRI driver not from this Mesa build" error signature (reported in a **core24 + experimental gnome** stack, not gnome-42-2204; the error string is real but the environment differs)
+- [Snapcraft forum #49173](https://forum.snapcraft.io/t/mesa-core22-updates-broke-my-snap/49173) — mesa-core22 breakage (mid-to-late 2025). Error: "Failed to initialize GLAD", distinct from #40975's DRI driver message
+- [electron-builder#9452](https://github.com/electron-userland/electron-builder/issues/9452) — **strongest external reference.** "Snap package of Electron ≥ 38 crashes at startup under GNOME on Wayland"; maintainer engagement; `--ozone-platform=x11` confirmed working
+- [electron-builder#4587](https://github.com/electron-userland/electron-builder/issues/4587) — `snap.executableArgs` silently ignored for snap builds (why mechanism #3 in Section 6 is unusable)
+- [electron/electron#48298](https://github.com/electron/electron/issues/48298) / [PR #48301](https://github.com/electron/electron/pull/48301) — Electron 38.0.0/38.1.0 Wayland auto-detection regression, fixed in 38.2.0
+- [Electron 38.0.0 release blog](https://www.electronjs.org/blog/electron-38-0) — "Electron now runs as a native Wayland app by default when launched in a Wayland session on Linux"
+- [Canonical — gpu-2404 interface](https://canonical.com/mir/docs/the-gpu-2404-snap-interface) — describes gpu-2404 as an "evolution" of graphics-core22 (Canonical's wording, not "deprecation")
+- [Canonical RFC — gpu-2404 migration](https://forum.snapcraft.io/t/rfc-migrating-gnome-and-kde-snapcraft-extensions-to-gpu-2404-userspace-interface/39718)
+- [microsoft/vscode#202072](https://github.com/microsoft/vscode/issues/202072) — VS Code snap Wayland failure (no explicit X11 force)
+- [snapcrafters/signal-desktop](https://github.com/snapcrafters/signal-desktop) — community Signal snap (`snapctl get enable-gpu` toggle)
+- [snapcrafters/mattermost-desktop](https://github.com/snapcrafters/mattermost-desktop) — community Mattermost snap (glxinfo + jq config patching)
+- [flathub/md.obsidian.Obsidian `obsidian.sh`](https://github.com/flathub/md.obsidian.Obsidian/blob/master/obsidian.sh) — Flatpak wrapper with compositor+GPU probe
+- SP issue [#5672](https://github.com/super-productivity/super-productivity/issues/5672) — user reports (filed 2025-12-06 on SP 16.5.2, which pinned Electron 39.2.5 per the tagged `package.json`)
+- SP `electron/start-app.ts` — existing Snap guard widened by PR #7264
