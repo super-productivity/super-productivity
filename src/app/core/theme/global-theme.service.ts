@@ -475,6 +475,9 @@ export class GlobalThemeService {
    * Adds/removes CSS classes when keyboard shows/hides.
    */
   private _initIOSKeyboardHandling(): void {
+    // Show the native iOS accessory bar ("Done" button) above the keyboard
+    Keyboard.setAccessoryBarVisible({ isVisible: true });
+
     Keyboard.addListener('keyboardWillShow', (info: KeyboardInfo) => {
       Log.log('iOS keyboard will show', info);
       this.document.body.classList.add(BodyClass.isKeyboardVisible);

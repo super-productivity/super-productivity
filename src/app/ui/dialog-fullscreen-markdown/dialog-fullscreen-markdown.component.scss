@@ -18,6 +18,13 @@
   padding-top: var(--mac-title-bar-padding);
 }
 
+// On iOS, the virtual keyboard overlaps position:fixed elements since the CDK
+// overlay container does not shrink with Capacitor's resize:'native' mode.
+// Subtract the keyboard height so Save/Close buttons stay above the keyboard.
+:host-context(body.isNativeMobile.isKeyboardVisible) {
+  height: calc(100% - var(--keyboard-height, 0px));
+}
+
 .formatting-toolbar {
   display: flex;
   flex-wrap: nowrap;

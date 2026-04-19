@@ -519,7 +519,7 @@ export const taskReducer = createReducer<TaskState>(
       state,
     );
 
-    return {
+    const stateWithParentTask: TaskState = {
       ...stateCopy,
       // update current task to new sub task if parent was current before
       ...(state.currentTaskId === parentId ? { currentTaskId: task.id } : {}),
@@ -532,6 +532,8 @@ export const taskReducer = createReducer<TaskState>(
         },
       },
     };
+
+    return reCalcTimesForParentIfParent(parentId, stateWithParentTask);
   }),
 
   on(toggleStart, (state) => {
