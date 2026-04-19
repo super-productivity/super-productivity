@@ -28,14 +28,20 @@ describe('IndexedDB open retry configuration', () => {
     expect(totalDelayMs).toBeGreaterThanOrEqual(MINIMUM_LOCK_RETRY_WINDOW_MS);
   });
 
-  it('non-lock retry budget is much shorter than the lock budget', () => {
-    // Non-lock errors must fail fast so the hydrator's reload-on-error path
-    // does not create a reload -> wait -> reload loop. See #7191.
+  it('non-lock retry budget is shorter than the lock budget', () => {
+    // Non-lock errors must fail fast: every op-log read/write awaits
+    // _ensureInit(), so a 31s retry blocks the subsystem for 31s before the
+    // hydrator's alert dialog reaches the user. See #7191.
     expect(IDB_OPEN_RETRIES_NON_LOCK).toBeLessThan(IDB_OPEN_RETRIES);
-    // Short window should stay under ~5s so repeated reloads are tolerable.
+    // With IDB_OPEN_RETRIES_NON_LOCK=3 and base 1000ms: 1+2+4 = 7s ceiling
+    // (delays before attempts 2, 3, 4; no post-delay on the final attempt).
+    // The formula (2^n - 1) * base overstates this slightly because it
+    // includes a hypothetical delay after the final attempt, but it's a
+    // conservative upper bound. Keep well under 10s so failures surface
+    // quickly.
     const nonLockWindowMs =
       (Math.pow(2, IDB_OPEN_RETRIES_NON_LOCK) - 1) * IDB_OPEN_RETRY_BASE_DELAY_MS;
-    expect(nonLockWindowMs).toBeLessThan(5000);
+    expect(nonLockWindowMs).toBeLessThan(10000);
   });
 });
 
@@ -52,6 +58,39 @@ describe('isLockRelatedIdbOpenError', () => {
     ).toBe(true);
     expect(isLockRelatedIdbOpenError(new Error('BACKING STORE is locked'))).toBe(true);
     expect(isLockRelatedIdbOpenError('backing store failure')).toBe(true);
+  });
+
+  it('returns true for DOMException with name InvalidStateError', () => {
+    // Some Electron / older runtimes don't make DOMException satisfy
+    // `instanceof Error`, so the predicate must check DOMException too. This
+    // test constructs a real DOMException when the runtime supports the
+    // two-arg constructor, and falls back to a duck-typed stand-in otherwise.
+    let err: unknown;
+    try {
+      err = new DOMException('Internal error.', 'InvalidStateError');
+    } catch {
+      // Fallback for runtimes without the DOMException constructor:
+      // mimic the shape and prototype chain that isConnectionClosingError
+      // already relies on in the same file.
+      err = Object.assign(Object.create(DOMException.prototype), {
+        name: 'InvalidStateError',
+        message: 'Internal error.',
+      });
+    }
+    expect(isLockRelatedIdbOpenError(err)).toBe(true);
+  });
+
+  it('returns true for DOMException whose message mentions "backing store"', () => {
+    let err: unknown;
+    try {
+      err = new DOMException('Internal error opening backing store', 'UnknownError');
+    } catch {
+      err = Object.assign(Object.create(DOMException.prototype), {
+        name: 'UnknownError',
+        message: 'Internal error opening backing store',
+      });
+    }
+    expect(isLockRelatedIdbOpenError(err)).toBe(true);
   });
 
   it('returns false for generic errors that do not look lock-related', () => {

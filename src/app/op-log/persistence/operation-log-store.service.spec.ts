@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
@@ -16,6 +16,12 @@ import {
 } from '../../core/util/vector-clock';
 import { limitVectorClockSize, MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import {
+  IDB_OPEN_RETRIES,
+  IDB_OPEN_RETRIES_NON_LOCK,
+  IDB_OPEN_RETRY_BASE_DELAY_MS,
+} from '../core/operation-log.const';
+import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 
 describe('OperationLogStoreService', () => {
   let service: OperationLogStoreService;
@@ -2689,5 +2695,90 @@ describe('OperationLogStoreService', () => {
       unsynced = await service.getUnsynced();
       expect(unsynced.length).toBe(0);
     });
+  });
+
+  describe('_openDbWithRetry classification and budget', () => {
+    // Uses a fresh, un-initialized service and spies on `_openDbOnce` (the
+    // testing seam around the real `openDB` call) to observe classification
+    // and retry-budget behavior without mocking the `idb` module.
+    let retryService: OperationLogStoreService;
+    let openSpy: jasmine.Spy;
+
+    const makeFakeDb = (): any => ({
+      addEventListener: () => {},
+    });
+
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          OperationLogStoreService,
+          { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        ],
+      });
+      retryService = TestBed.inject(OperationLogStoreService);
+      openSpy = spyOn<any>(retryService, '_openDbOnce');
+    });
+
+    it('makes 1 + IDB_OPEN_RETRIES_NON_LOCK attempts and throws on a generic error', fakeAsync(() => {
+      openSpy.and.returnValue(Promise.reject(new Error('generic')));
+
+      let caught: unknown;
+      retryService.init().catch((e) => {
+        caught = e;
+      });
+
+      // Advance past each backoff window. With base=1000ms and 3 non-lock
+      // retries, delays are 1s, 2s, 4s before attempts 2, 3, 4.
+      for (let i = 1; i <= IDB_OPEN_RETRIES_NON_LOCK; i++) {
+        tick(IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, i - 1));
+      }
+      // Final tick to resolve the rejection
+      tick();
+
+      expect(openSpy).toHaveBeenCalledTimes(1 + IDB_OPEN_RETRIES_NON_LOCK);
+      expect(caught).toBeInstanceOf(IndexedDBOpenError);
+    }));
+
+    it('makes up to 1 + IDB_OPEN_RETRIES attempts on a lock-related InvalidStateError', fakeAsync(() => {
+      const lockErr = new Error('Internal error.');
+      lockErr.name = 'InvalidStateError';
+      openSpy.and.returnValue(Promise.reject(lockErr));
+
+      let caught: unknown;
+      retryService.init().catch((e) => {
+        caught = e;
+      });
+
+      // Drain all backoff windows for the full lock budget.
+      for (let i = 1; i <= IDB_OPEN_RETRIES; i++) {
+        tick(IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, i - 1));
+      }
+      tick();
+
+      expect(openSpy).toHaveBeenCalledTimes(1 + IDB_OPEN_RETRIES);
+      // Sanity: lock budget strictly exceeds the non-lock budget.
+      expect(openSpy.calls.count()).toBeGreaterThan(1 + IDB_OPEN_RETRIES_NON_LOCK);
+      expect(caught).toBeInstanceOf(IndexedDBOpenError);
+    }));
+
+    it('returns the database when a single lock-related failure is followed by a success', fakeAsync(() => {
+      const lockErr = new Error('Internal error opening backing store');
+      const fakeDb = makeFakeDb();
+      openSpy.and.returnValues(Promise.reject(lockErr), Promise.resolve(fakeDb));
+
+      let resolved = false;
+      retryService.init().then(() => {
+        resolved = true;
+      });
+
+      // First attempt rejects immediately; backoff before attempt 2 is 1s.
+      tick(IDB_OPEN_RETRY_BASE_DELAY_MS);
+      tick();
+
+      expect(openSpy).toHaveBeenCalledTimes(2);
+      expect(resolved).toBe(true);
+      expect((retryService as any)._db).toBe(fakeDb);
+    }));
   });
 });

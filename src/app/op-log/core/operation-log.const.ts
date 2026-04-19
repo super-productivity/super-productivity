@@ -280,15 +280,22 @@ export const IDB_OPEN_RETRIES = 5;
  * Number of retry attempts for IndexedDB open errors that do NOT look like
  * session-restart file locks (e.g. generic `AbortError`, `UnknownError`).
  *
- * The long `IDB_OPEN_RETRIES` window is only useful when waiting for a stale
- * lock to be released. For any other error, `_ensureInit()` is awaited by
- * every op-log read/write, and `OperationLogHydratorService` auto-reloads on
- * failure — so a 31s wait on a non-lock error can create a reload->wait->reload
- * loop that feels like a hang. Fail fast for those errors instead.
+ * Matches master's pre-PR retry count (3) so the non-lock path keeps the
+ * existing behavior; the new long window is only applied when the error
+ * looks lock-related.
+ *
+ * With 3 retries at a 1000ms base, the non-lock wall-clock ceiling is
+ * 1s + 2s + 4s = 7s (delays before attempts 2, 3, 4; no delay after the
+ * final attempt). That matters because every op-log read/write awaits
+ * `_ensureInit()`, so a 31s retry window on a non-lock error would block
+ * the entire op-log subsystem for 31s before the hydrator's alert dialog
+ * (`OperationLogHydratorService._showIndexedDBOpenError`) reaches the user.
+ * For non-lock errors there is no expectation that waiting helps, so fail
+ * fast and let the error surface sooner.
  *
  * @see https://github.com/super-productivity/super-productivity/issues/7191
  */
-export const IDB_OPEN_RETRIES_NON_LOCK = 2;
+export const IDB_OPEN_RETRIES_NON_LOCK = 3;
 
 /**
  * Base delay for IndexedDB open retry exponential backoff (milliseconds).

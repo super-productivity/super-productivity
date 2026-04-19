@@ -107,14 +107,18 @@ export class ArchiveStoreService {
       } catch (e) {
         lastError = e;
 
-        // Non-lock errors fall back to a short retry budget so the hydrator's
-        // auto-reload path can't create a reload->wait->reload hang.
+        // Non-lock errors fall back to a short retry budget so we don't block
+        // the op-log subsystem for 31s before surfacing the error to the user.
+        // See OperationLogStoreService._openDbWithRetry for details.
         if (attempt === 1 && !isLockRelatedIdbOpenError(e)) {
           maxRetries = IDB_OPEN_RETRIES_NON_LOCK;
         }
 
         const totalAttempts = 1 + maxRetries;
         if (attempt < totalAttempts) {
+          // Exponential backoff: BASE * 2^(attempt-1). Lock errors retry up to
+          // IDB_OPEN_RETRIES times (~31s total); non-lock errors truncate at
+          // IDB_OPEN_RETRIES_NON_LOCK (~7s total).
           const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
           Log.warn(
             `[ArchiveStore] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
