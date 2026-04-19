@@ -84,7 +84,7 @@
 .section-title {
   display: flex;
   justify-content: center;
-  margin: 12px 0 var(--s);
+  margin: calc(var(--s) + var(--s-half)) 0 var(--s);
 }
 
 .normal-tasks,
@@ -189,6 +189,9 @@
 .empty {
   text-align: center;
   font-style: italic;
+  font-size: 0.875em;
+  color: var(--text-color-muted);
+  opacity: 0.7;
   line-height: var(--planner-item-height);
   height: 0;
 }
