@@ -43,18 +43,27 @@ function parseTasksWithSubTasks(text) {
   }
 
   // Check if we have mixed input (both bullets and plain text)
-  var hasBullets = parsedLines.some(function (p) { return p.isBullet; });
-  var hasPlainText = parsedLines.some(function (p) { return !p.isBullet; });
+  var hasBullets = parsedLines.some(function (p) {
+    return p.isBullet;
+  });
+  var hasPlainText = parsedLines.some(function (p) {
+    return !p.isBullet;
+  });
 
   if (hasBullets && hasPlainText) {
     PluginAPI.showSnack({
-      msg: 'Warning: ' + plainTextCount + ' plain-text line(s) detected. These will be added as regular tasks.',
+      msg:
+        'Warning: ' +
+        plainTextCount +
+        ' plain-text line(s) detected. These will be added as regular tasks.',
       type: 'WARNING',
     });
   }
 
   // Find the minimum indentation level to normalize
-  var bulletLines = parsedLines.filter(function (p) { return p.isBullet; });
+  var bulletLines = parsedLines.filter(function (p) {
+    return p.isBullet;
+  });
   if (bulletLines.length > 0) {
     var minIndentLevel = Math.min.apply(
       Math,
@@ -79,74 +88,64 @@ function parseTasksWithSubTasks(text) {
     var currentLine = parsedLines[i];
 
     // Process main tasks (indent level 0 or plain text)
-    if ((currentLine.isBullet && currentLine.indentLevel === 0) || !currentLine.isBullet) {
+    if (
+      (currentLine.isBullet && currentLine.indentLevel === 0) ||
+      !currentLine.isBullet
+    ) {
       var task = {
         title: currentLine.content,
         isCompleted: currentLine.isCompleted,
         subTasks: [],
       };
 
-      // Look ahead for sub-tasks (only if current is a bullet)
+      // Look ahead for sub-tasks (only if current is a bullet).
+      // Plain-text lines between the parent and its indented bullets must
+      // not terminate the sub-task scan — skip over them so the indented
+      // bullet still attaches to this parent. The plain-text line itself
+      // will be picked up as its own top-level task by the outer loop.
       if (currentLine.isBullet) {
         var j = i + 1;
-        while (j < parsedLines.length && parsedLines[j].indentLevel > 0) {
+        while (j < parsedLines.length) {
           var subLine = parsedLines[j];
-          if (subLine.indentLevel === 1) {
-            // Direct sub-tasks
-            task.subTasks.push({
-              title: subLine.content,
-              isCompleted: subLine.isCompleted,
-            });
-          } else if (subLine.indentLevel > 1) {
-            // Deeply-nested items are now flattened with warning
-            deeplyNestedWarnings.push({
-              title: subLine.content,
-              depth: subLine.indentLevel,
-            });
+          // Stop at the next top-level bullet — a new main task starts here.
+          if (subLine.isBullet && subLine.indentLevel === 0) break;
+          if (subLine.isBullet && subLine.indentLevel > 0) {
+            if (subLine.indentLevel > 1) {
+              deeplyNestedWarnings.push({
+                title: subLine.content,
+                depth: subLine.indentLevel,
+              });
+            }
             task.subTasks.push({
               title: subLine.content,
               isCompleted: subLine.isCompleted,
             });
           }
+          // Plain-text lines are intentionally skipped here; they are handled
+          // by the outer loop on its next iteration.
           j++;
         }
-        i = j; // Skip processed sub-tasks
-      } else {
-        i++;
       }
 
       mainTasks.push(task);
+      i++;
     } else {
+      // Orphan indented bullet (already consumed as sub-task above, or no parent).
       i++;
     }
   }
 
   // Show warning for deeply-nested items
   if (deeplyNestedWarnings.length > 0) {
-    var warningMsg = 'Note: ' + deeplyNestedWarnings.length + ' deeply-nested item(s) flattened to sub-task level. ';
-    warningMsg += 'Note: Sub-tasks in Super Productivity do not support nesting.';
     PluginAPI.showSnack({
-      msg: warningMsg,
+      msg:
+        deeplyNestedWarnings.length +
+        ' deeply-nested item(s) flattened to sub-task level. Sub-tasks in Super Productivity do not support nesting.',
       type: 'INFO',
     });
   }
 
   return mainTasks;
-}
-
-// Detect minimum indent and normalize relative to it
-function findMinimumIndent(lines) {
-  var minIndent = Infinity;
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i];
-    if (!line.trim()) continue;
-    var match = line.match(/^(\s*)/);
-    if (match) {
-      var indent = match[1].length;
-      if (indent > 0) minIndent = Math.min(minIndent, indent);
-    }
-  }
-  return minIndent === Infinity ? 0 : minIndent;
 }
 
 function parseLineStructure(line) {
@@ -258,7 +257,8 @@ async function openBrainDump() {
     .join('');
 
   // SUGGESTION: Expose expected format to users
-  var placeholderText = 'One task per line. For sub-tasks, indent with 4 spaces:\n\n- Main task\n    - Sub task\n    - Another sub task\n\nPlain text tasks are also supported.';
+  var placeholderText =
+    'One task per line. For sub-tasks, indent with 4 spaces:\n\n- Main task\n    - Sub task\n    - Another sub task\n\nPlain text tasks are also supported.';
 
   var html =
     '<div id="bd-container" style="padding:4px 0">' +
@@ -343,9 +343,14 @@ function updateStatus() {
   if (!statusEl) return;
   var count = countTasks(textarea);
   if (count === 0) {
-    statusEl.textContent = 'One task per line. Empty lines are skipped.\n - Use - for bullet points\n    indent 4 spaces for sub-tasks.';
+    statusEl.textContent =
+      'One task per line. Empty lines are skipped.\n - Use - for bullet points\n    indent 4 spaces for sub-tasks.';
   } else {
-    statusEl.textContent = count + ' item' + (count !== 1 ? 's' : '') + ' detected (including sub-tasks) to add.';
+    statusEl.textContent =
+      count +
+      ' item' +
+      (count !== 1 ? 's' : '') +
+      ' detected (including sub-tasks) to add.';
   }
 }
 
@@ -429,9 +434,9 @@ async function submitTasks() {
           if (projectId) {
             subTaskData.projectId = projectId;
           }
-          if (dueDay) {
-            subTaskData.dueDay = dueDay;
-          }
+          // dueDay is intentionally NOT forwarded: sub-tasks inherit the
+          // parent's date in Super Productivity, and the plugin bridge
+          // drops the field for sub-task creation.
           await PluginAPI.addTask(subTaskData);
         }
       }
