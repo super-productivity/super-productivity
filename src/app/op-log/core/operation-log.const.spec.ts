@@ -33,12 +33,10 @@ describe('IndexedDB open retry configuration', () => {
     // _ensureInit(), so a 31s retry blocks the subsystem for 31s before the
     // hydrator's alert dialog reaches the user. See #7191.
     expect(IDB_OPEN_RETRIES_NON_LOCK).toBeLessThan(IDB_OPEN_RETRIES);
-    // With IDB_OPEN_RETRIES_NON_LOCK=3 and base 1000ms: 1+2+4 = 7s ceiling
-    // (delays before attempts 2, 3, 4; no post-delay on the final attempt).
-    // The formula (2^n - 1) * base overstates this slightly because it
-    // includes a hypothetical delay after the final attempt, but it's a
-    // conservative upper bound. Keep well under 10s so failures surface
-    // quickly.
+    // Geometric series `(2^n - 1) * base` matches the actual wall-clock
+    // window: with n retries the delays are base, 2*base, ..., 2^(n-1)*base
+    // before attempts 2..n+1, with no post-delay on the final attempt.
+    // Cap well under 10s so non-lock failures surface quickly.
     const nonLockWindowMs =
       (Math.pow(2, IDB_OPEN_RETRIES_NON_LOCK) - 1) * IDB_OPEN_RETRY_BASE_DELAY_MS;
     expect(nonLockWindowMs).toBeLessThan(10000);

@@ -299,6 +299,7 @@ export const IDB_OPEN_RETRIES_NON_LOCK = 3;
 
 /**
  * Base delay for IndexedDB open retry exponential backoff (milliseconds).
- * With IDB_OPEN_RETRIES=5: delays are 1s, 2s, 4s, 8s, 16s (~31s total window).
+ * Delays follow `BASE * 2^(attempt-1)`; see `IDB_OPEN_RETRIES` and
+ * `IDB_OPEN_RETRIES_NON_LOCK` for the resulting windows.
  */
 export const IDB_OPEN_RETRY_BASE_DELAY_MS = 1000;
