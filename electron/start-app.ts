@@ -154,16 +154,22 @@ export const startApp = (): void => {
   // Defense-in-depth against GPU init failures on confined Linux packages
   // (Snap Mesa ABI drift, missing DRI nodes under Flatpak, etc.) where the
   // main process stays alive but the GPU process crashes at init and the
-  // window never renders. `--disable-gpu` is the Chromium switch that
-  // actually suppresses GPU-process spawn; `app.disableHardwareAcceleration()`
-  // only disables compositor accel and leaves the failing GPU-process-init
-  // path active. Guard auto-detects only under confinement and recovers on
-  // the next successful launch; env-var overrides work everywhere.
+  // window never renders. `--disable-gpu` avoids the hardware Mesa DRI
+  // driver load path — which is the ABI-drift source on confined Snap.
+  // Note: `--disable-gpu` does NOT guarantee "no GPU process" on Linux
+  // (Chromium may still run a GPU process in SwiftShader or
+  // DisplayCompositor mode), but those modes don't dlopen Mesa DRI
+  // drivers, which is what matters for this bug. `--disable-software-
+  // rasterizer` is added as belt-and-braces; the combined pair is what
+  // Chromium's own GPU integration tests treat as "no GPU process."
+  // `app.disableHardwareAcceleration()` only disables compositor accel
+  // and leaves the failing GPU-process-init path active.
   // IMPORTANT: must stay after every `app.setPath('userData', ...)` call
   // above — the marker lives in userData.
   const gpuDecision = evaluateGpuStartupGuard(app.getPath('userData'));
   if (gpuDecision.disableGpu) {
     app.commandLine.appendSwitch('disable-gpu');
+    app.commandLine.appendSwitch('disable-software-rasterizer');
     log(
       `Disabling GPU acceleration (reason: ${gpuDecision.reason}). ` +
         `Set SP_ENABLE_GPU=1 to force-enable on the next launch` +

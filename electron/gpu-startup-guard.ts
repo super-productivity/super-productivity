@@ -52,8 +52,16 @@ export const evaluateGpuStartupGuard = (userDataPath: string): GpuGuardDecision 
   }
 
   if (!isConfinedLinux) {
+    // Reset module-level state so a second call (tests, reinit) doesn't
+    // leak a previous confined-launch's path into markStartupSuccess().
+    markerPath = null;
     return { disableGpu: false, reason: null, markerPath: null };
   }
+
+  // Narrow markerPath for fs calls below — it was set on the
+  // isConfinedLinux branch above, but TS can't track module-let
+  // assignment across the early returns.
+  const activeMarker: string = markerPath as string;
 
   for (const old of LEGACY_MARKER_FILES) {
     try {
@@ -65,14 +73,19 @@ export const evaluateGpuStartupGuard = (userDataPath: string): GpuGuardDecision 
 
   let previousCrash = false;
   try {
-    previousCrash = fs.existsSync(markerPath);
+    previousCrash = fs.existsSync(activeMarker);
   } catch (e) {
     log('gpu-startup-guard: failed to read marker', e);
   }
 
+  // mkdirSync is load-bearing on first-ever install: Electron's
+  // `app.setPath('userData', ...)` does NOT create the directory, so
+  // $SNAP_USER_COMMON/.config/superproductivity may not exist yet on the
+  // first launch of a fresh Snap install. Without this, writeFileSync
+  // would fail silently and the guard would never write a marker.
   try {
     fs.mkdirSync(userDataPath, { recursive: true });
-    fs.writeFileSync(markerPath, '');
+    fs.writeFileSync(activeMarker, '');
   } catch (e) {
     log('gpu-startup-guard: failed to write marker', e);
   }
@@ -80,7 +93,7 @@ export const evaluateGpuStartupGuard = (userDataPath: string): GpuGuardDecision 
   return {
     disableGpu: previousCrash,
     reason: previousCrash ? 'crash-recovery' : null,
-    markerPath,
+    markerPath: activeMarker,
   };
 };
 
