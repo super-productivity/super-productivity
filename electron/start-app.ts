@@ -151,28 +151,22 @@ export const startApp = (): void => {
     app.setAppLogsPath();
   }
 
-  // Defense-in-depth against GPU init failures that manifest as "app won't
-  // launch" (e.g. Mesa ABI drift on Snap, missing DRI nodes under
-  // confinement, or a Wayland-first session that slips past the X11-force
-  // guard above). The guard tolerates a single unrelated crash/force-quit
-  // and only latches off GPU after repeated failures to reach
-  // IPC.APP_READY; an Electron version change resets the counter so the
-  // GPU-cache purge below has a chance to fix things first.
-  // IMPORTANT: this block must stay after every `app.setPath('userData',
-  // ...)` call above — the marker lives in userData, and a mismatch between
-  // read and write paths would permanently confuse the detector.
-  const gpuDecision = evaluateGpuStartupGuard(
-    app.getPath('userData'),
-    process.versions.electron || 'unknown',
-  );
+  // Defense-in-depth against GPU init failures on confined Linux packages
+  // (Snap Mesa ABI drift, missing DRI nodes under Flatpak, etc.) where the
+  // main process stays alive but the GPU process crashes at init and the
+  // window never renders. `--disable-gpu` is the Chromium switch that
+  // actually suppresses GPU-process spawn; `app.disableHardwareAcceleration()`
+  // only disables compositor accel and leaves the failing GPU-process-init
+  // path active. Guard auto-detects only under confinement and recovers on
+  // the next successful launch; env-var overrides work everywhere.
+  // IMPORTANT: must stay after every `app.setPath('userData', ...)` call
+  // above — the marker lives in userData.
+  const gpuDecision = evaluateGpuStartupGuard(app.getPath('userData'));
   if (gpuDecision.disableGpu) {
-    // `disableHardwareAcceleration()` is the documented Electron API for
-    // this; it is equivalent to passing `--disable-gpu` but routes through
-    // the app layer rather than a raw Chromium switch.
-    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch('disable-gpu');
     log(
       `Disabling GPU acceleration (reason: ${gpuDecision.reason}). ` +
-        `To force-enable on the next launch set SP_ENABLE_GPU=1` +
+        `Set SP_ENABLE_GPU=1 to force-enable on the next launch` +
         (gpuDecision.markerPath ? ` or delete ${gpuDecision.markerPath}.` : '.'),
     );
   }
