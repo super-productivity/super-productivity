@@ -225,6 +225,11 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       // Check if task is in backlog
       if (this._hasTaskInList(this.backlogTasks(), currentSelectedId)) return;
 
+      // Group/filter may pull tasks from other work contexts into the view;
+      // keep those selected so the detail panel can open for them.
+      if (this._hasTaskInList(this.customizedUndoneTasks()?.list, currentSelectedId))
+        return;
+
       // if task really is gone
       this.taskService.setSelectedId(null);
     });
