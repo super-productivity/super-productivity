@@ -35,6 +35,7 @@ let customUrl: string;
 let isDisableTray = false;
 let forceDarkTray = false;
 let wasUserDataDirSet = false;
+let gpuMarkerPath: string | null = null;
 
 if (IS_DEV) {
   log('Starting in DEV Mode!!!');
@@ -151,22 +152,17 @@ export const startApp = (): void => {
     app.setAppLogsPath();
   }
 
-  // Defense-in-depth against GPU init failures on confined Linux packages
-  // (Snap Mesa ABI drift, missing DRI nodes under Flatpak, etc.) where the
-  // main process stays alive but the GPU process crashes at init and the
-  // window never renders. `--disable-gpu` avoids the hardware Mesa DRI
-  // driver load path — which is the ABI-drift source on confined Snap.
-  // Note: `--disable-gpu` does NOT guarantee "no GPU process" on Linux
-  // (Chromium may still run a GPU process in SwiftShader or
-  // DisplayCompositor mode), but those modes don't dlopen Mesa DRI
-  // drivers, which is what matters for this bug. `--disable-software-
-  // rasterizer` is added as belt-and-braces; the combined pair is what
-  // Chromium's own GPU integration tests treat as "no GPU process."
-  // `app.disableHardwareAcceleration()` only disables compositor accel
-  // and leaves the failing GPU-process-init path active.
+  // Confined-Linux GPU init can crash the GPU process while the main
+  // process survives, leaving a blank window. `--disable-gpu` +
+  // `--disable-software-rasterizer` skips the Mesa DRI dlopen path (the
+  // ABI-drift source on Snap); it's what Chromium's own GPU integration
+  // tests treat as "no GPU process." `app.disableHardwareAcceleration()`
+  // is insufficient — it doesn't prevent GPU-process init. See
+  // docs/research/snap-wayland-gpu-fix-research.md for details.
   // IMPORTANT: must stay after every `app.setPath('userData', ...)` call
   // above — the marker lives in userData.
   const gpuDecision = evaluateGpuStartupGuard(app.getPath('userData'));
+  gpuMarkerPath = gpuDecision.markerPath;
   if (gpuDecision.disableGpu) {
     app.commandLine.appendSwitch('disable-gpu');
     app.commandLine.appendSwitch('disable-software-rasterizer');
@@ -458,6 +454,7 @@ export const startApp = (): void => {
       ICONS_FOLDER,
       quitApp,
       customUrl,
+      gpuMarkerPath,
     });
 
     initPluginOAuth(mainWin);

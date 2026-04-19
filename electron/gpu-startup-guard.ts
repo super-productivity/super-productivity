@@ -18,7 +18,8 @@ const LEGACY_MARKER_FILES = ['.gpu-startup-state', '.gpu-startup-state.json'];
 const isTruthyEnv = (v: string | undefined): boolean =>
   !!v && /^(1|true|yes|on)$/i.test(v.trim());
 
-let markerPath: string | null = null;
+const errCode = (e: unknown): string | undefined =>
+  (e as NodeJS.ErrnoException | undefined)?.code;
 
 export interface GpuGuardDecision {
   disableGpu: boolean;
@@ -32,17 +33,21 @@ export interface GpuGuardDecision {
  * Linux — the failure mode this guards against is specific to confined
  * packages with drifting Mesa stacks. `SP_DISABLE_GPU` / `SP_ENABLE_GPU`
  * env vars work everywhere.
+ *
+ * Returns the marker path so the caller can hand it to
+ * `markStartupSuccess` when the renderer signals boot completion. Holding
+ * no module-level state keeps the function idempotent across calls (tests,
+ * reinit) and removes a coupling that previously required runtime state
+ * resets to stay consistent.
  */
 export const evaluateGpuStartupGuard = (userDataPath: string): GpuGuardDecision => {
   const isConfinedLinux =
     process.platform === 'linux' && (!!process.env.SNAP || !!process.env.FLATPAK_ID);
 
-  // Set the module-level marker path unconditionally on confined Linux so
-  // `markStartupSuccess` can clean up a stale marker even when this launch
-  // took an env-var override path and never checked it.
-  if (isConfinedLinux) {
-    markerPath = join(userDataPath, MARKER_FILE);
-  }
+  // Marker path is only meaningful under confinement; env-override paths
+  // still need it so markStartupSuccess can clean up a stale marker left
+  // by a previous (non-override) crashed launch.
+  const markerPath = isConfinedLinux ? join(userDataPath, MARKER_FILE) : null;
 
   if (isTruthyEnv(process.env.SP_ENABLE_GPU)) {
     return { disableGpu: false, reason: null, markerPath };
@@ -51,17 +56,9 @@ export const evaluateGpuStartupGuard = (userDataPath: string): GpuGuardDecision 
     return { disableGpu: true, reason: 'env', markerPath };
   }
 
-  if (!isConfinedLinux) {
-    // Reset module-level state so a second call (tests, reinit) doesn't
-    // leak a previous confined-launch's path into markStartupSuccess().
-    markerPath = null;
+  if (!isConfinedLinux || !markerPath) {
     return { disableGpu: false, reason: null, markerPath: null };
   }
-
-  // Narrow markerPath for fs calls below — it was set on the
-  // isConfinedLinux branch above, but TS can't track module-let
-  // assignment across the early returns.
-  const activeMarker: string = markerPath as string;
 
   for (const old of LEGACY_MARKER_FILES) {
     try {
@@ -73,35 +70,38 @@ export const evaluateGpuStartupGuard = (userDataPath: string): GpuGuardDecision 
 
   let previousCrash = false;
   try {
-    previousCrash = fs.existsSync(activeMarker);
+    previousCrash = fs.existsSync(markerPath);
   } catch (e) {
-    log('gpu-startup-guard: failed to read marker', e);
+    log('gpu-startup-guard: failed to read marker', { code: errCode(e) });
   }
 
   // mkdirSync is load-bearing on first-ever install: Electron's
-  // `app.setPath('userData', ...)` does NOT create the directory, so
-  // $SNAP_USER_COMMON/.config/superproductivity may not exist yet on the
-  // first launch of a fresh Snap install. Without this, writeFileSync
-  // would fail silently and the guard would never write a marker.
+  // `app.setPath('userData', ...)` does NOT create the directory.
   try {
     fs.mkdirSync(userDataPath, { recursive: true });
-    fs.writeFileSync(activeMarker, '');
   } catch (e) {
-    log('gpu-startup-guard: failed to write marker', e);
+    log('gpu-startup-guard: failed to create userData dir', { code: errCode(e) });
+  }
+  try {
+    fs.writeFileSync(markerPath, '');
+  } catch (e) {
+    log('gpu-startup-guard: failed to write marker', { code: errCode(e) });
   }
 
   return {
     disableGpu: previousCrash,
     reason: previousCrash ? 'crash-recovery' : null,
-    markerPath: activeMarker,
+    markerPath,
   };
 };
 
 /**
  * Called once the renderer signals IPC.APP_READY (after Angular boot).
- * Removes the crash marker so the next launch is treated as clean.
+ * Removes the crash marker so the next launch is treated as clean. The
+ * marker path is passed explicitly by the caller rather than read from
+ * module state — see `evaluateGpuStartupGuard` for the rationale.
  */
-export const markStartupSuccess = (): void => {
+export const markStartupSuccess = (markerPath: string | null): void => {
   if (!markerPath) return;
   try {
     fs.unlinkSync(markerPath);

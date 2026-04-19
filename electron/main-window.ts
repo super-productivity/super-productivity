@@ -65,12 +65,18 @@ export const createWindow = async ({
   quitApp,
   app,
   customUrl,
+  gpuMarkerPath,
 }: {
   IS_DEV: boolean;
   ICONS_FOLDER: string;
   quitApp: () => void;
   app: App;
   customUrl?: string;
+  // Path to the GPU crash marker from evaluateGpuStartupGuard, or null
+  // when the guard didn't apply (non-confined launch / first run).
+  // Passed explicitly rather than re-read from module state; the IPC
+  // APP_READY handler hands it to markStartupSuccess.
+  gpuMarkerPath: string | null;
 }): Promise<BrowserWindow> => {
   // make sure the main window isn't already created
   if (mainWin) {
@@ -282,7 +288,7 @@ export const createWindow = async ({
     // (including Angular init) — not just that the compositor painted a
     // frame. This avoids clearing the crash counter on blank/broken
     // renderers that still fire `ready-to-show`.
-    markStartupSuccess();
+    markStartupSuccess(gpuMarkerPath);
   });
 
   // Register F11 key handler for fullscreen toggle
