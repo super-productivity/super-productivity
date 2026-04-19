@@ -34,20 +34,26 @@ export interface GpuGuardDecision {
  * env vars work everywhere.
  */
 export const evaluateGpuStartupGuard = (userDataPath: string): GpuGuardDecision => {
-  if (isTruthyEnv(process.env.SP_ENABLE_GPU)) {
-    return { disableGpu: false, reason: null, markerPath: null };
-  }
-  if (isTruthyEnv(process.env.SP_DISABLE_GPU)) {
-    return { disableGpu: true, reason: 'env', markerPath: null };
-  }
-
   const isConfinedLinux =
     process.platform === 'linux' && (!!process.env.SNAP || !!process.env.FLATPAK_ID);
+
+  // Set the module-level marker path unconditionally on confined Linux so
+  // `markStartupSuccess` can clean up a stale marker even when this launch
+  // took an env-var override path and never checked it.
+  if (isConfinedLinux) {
+    markerPath = join(userDataPath, MARKER_FILE);
+  }
+
+  if (isTruthyEnv(process.env.SP_ENABLE_GPU)) {
+    return { disableGpu: false, reason: null, markerPath };
+  }
+  if (isTruthyEnv(process.env.SP_DISABLE_GPU)) {
+    return { disableGpu: true, reason: 'env', markerPath };
+  }
+
   if (!isConfinedLinux) {
     return { disableGpu: false, reason: null, markerPath: null };
   }
-
-  markerPath = join(userDataPath, MARKER_FILE);
 
   for (const old of LEGACY_MARKER_FILES) {
     try {
