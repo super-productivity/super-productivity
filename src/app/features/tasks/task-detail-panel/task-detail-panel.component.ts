@@ -55,6 +55,7 @@ import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { Store } from '@ngrx/store';
 import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
+import { IssueLog } from '../../../core/log';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
 import { TaskListComponent } from '../task-list/task-list.component';
@@ -365,9 +366,17 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
           distinctUntilChanged(),
           switchMap((issueProviderId) =>
             issueProviderId
-              ? this._store.select(
-                  selectIssueProviderById<IssueProviderJira>(issueProviderId, 'JIRA'),
-                )
+              ? this._store
+                  .select(
+                    selectIssueProviderById<IssueProviderJira>(issueProviderId, 'JIRA'),
+                  )
+                  .pipe(
+                    // Orphan issueProviderId — see #7135.
+                    catchError((err: unknown) => {
+                      IssueLog.warn('Jira header setup skipped', err);
+                      return of(null);
+                    }),
+                  )
               : of(null),
           ),
           takeUntilDestroyed(this._destroyRef),
