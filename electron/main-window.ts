@@ -26,6 +26,7 @@ import { ensureIndicator } from './indicator';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
+import { markStartupSuccess } from './gpu-startup-guard';
 
 let mainWin: BrowserWindow;
 
@@ -243,6 +244,9 @@ export const createWindow = async ({
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
+    // Signal the GPU startup guard that the renderer produced at least one
+    // frame, so the next launch is treated as a clean start.
+    markStartupSuccess();
     mainWin.show();
 
     // Workaround for Windows phantom focus bug (electron#20464):

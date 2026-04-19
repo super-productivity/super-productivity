@@ -21,6 +21,7 @@ import {
   processPendingProtocolUrls,
 } from './protocol-handler';
 import { getIsQuiting, setIsLocked } from './shared-state';
+import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
 
 const ICONS_FOLDER = __dirname + '/assets/icons/';
@@ -148,6 +149,20 @@ export const startApp = (): void => {
     // set userDa dir to common data to avoid the data being accessed by the update process
     app.setPath('userData', newPath);
     app.setAppLogsPath();
+  }
+
+  // Defense-in-depth against GPU init failures that manifest as "app won't
+  // launch" (e.g. Mesa ABI drift on Snap, missing DRI nodes under confinement,
+  // or a Wayland-first session that slips past the X11-force guard above).
+  // If the previous launch never signaled `ready-to-show`, or the user sets
+  // SP_DISABLE_GPU=1, append --disable-gpu. SP_ENABLE_GPU=1 overrides.
+  const gpuDecision = evaluateGpuStartupGuard(app.getPath('userData'));
+  if (gpuDecision.disableGpu) {
+    app.commandLine.appendSwitch('disable-gpu');
+    log(
+      `Disabling GPU acceleration (reason: ${gpuDecision.reason}). ` +
+        `Set SP_ENABLE_GPU=1 to force-enable GPU on the next launch.`,
+    );
   }
 
   initDebug({ showDevTools: isShowDevTools }, IS_DEV);
