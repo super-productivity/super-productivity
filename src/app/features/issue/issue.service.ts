@@ -569,8 +569,10 @@ export class IssueService {
       issueId: issueDataReduced.id.toString(),
       issueWasUpdated: false,
       issueLastUpdated: Date.now(),
-      // Default plan for today unless a precise time is provided by provider
-      dueDay: getDbDateStr(),
+      // Default plan for today unless a precise time is provided by provider.
+      // Skip when going to backlog — a backlog task that's also "due today"
+      // shows up in the Today tab, defeating the point of the backlog.
+      ...(isAddToBacklog ? {} : { dueDay: getDbDateStr() }),
       ...additionalFromProviderIssueService,
       ...(await getTaskDefaults()),
       ...additional,
