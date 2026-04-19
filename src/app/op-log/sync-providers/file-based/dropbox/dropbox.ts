@@ -317,11 +317,12 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
   /**
    * Gets the OAuth redirect URI.
    *
-   * Always returns null to use Dropbox's manual code entry flow.
-   * User must copy the code from Dropbox's page and paste it manually.
-   * This works reliably across all platforms (web, Electron, Android, iOS).
-   *
-   * @returns null for manual code entry flow
+   * Returns null on all platforms to use Dropbox's manual code entry flow.
+   * User copies the code from Dropbox's page and pastes it manually.
+   * This is the most reliable cross-platform approach — the automatic deep-link
+   * redirect flow was reverted because the Dropbox developer console redirect URI
+   * registration is uncertain and Android may kill the app during auth, losing
+   * the in-memory code verifier.
    */
   private _getRedirectUri(): string | null {
     return null;

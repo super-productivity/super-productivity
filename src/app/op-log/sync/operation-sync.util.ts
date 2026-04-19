@@ -29,7 +29,7 @@ export const isOperationSyncCapable = (
 
 /**
  * Type guard to check if a provider uses file-based operation sync.
- * File-based providers (WebDAV, Dropbox, LocalFile) use file storage for sync.
+ * File-based providers (WebDAV, Dropbox, LocalFile, Nextcloud) use file storage for sync.
  */
 export const isFileBasedProvider = (
   provider: SyncProviderBase<SyncProviderId>,

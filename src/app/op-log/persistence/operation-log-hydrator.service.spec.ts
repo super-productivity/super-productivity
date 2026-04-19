@@ -28,6 +28,8 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { bulkApplyHydrationOperations } from '../apply/bulk-hydration.action';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
+import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
+import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -1317,6 +1319,67 @@ describe('OperationLogHydratorService', () => {
         ['still-failing-op'],
         jasmine.any(Number),
       );
+    });
+  });
+
+  describe('IndexedDB open error handling', () => {
+    let reloadSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      (window.alert as jasmine.Spy).calls.reset();
+      reloadSpy = spyOn(service as any, '_triggerReload');
+    });
+
+    afterEach(() => {
+      sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
+    });
+
+    it('should silently auto-reload for backing store error on first occurrence', async () => {
+      const err = new IndexedDBOpenError(
+        new Error('Internal error opening backing store for indexedDB.open'),
+      );
+      mockRecoveryService.recoverPendingRemoteOps.and.rejectWith(err);
+
+      await expectAsync(service.hydrateStore()).toBeRejected();
+
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+      expect(sessionStorage.getItem(IDB_OPEN_ERROR_RELOAD_KEY)).toBe('1');
+      // No dialog on first attempt — autostart users aren't watching
+      expect(window.alert).not.toHaveBeenCalled();
+    });
+
+    it('should show recovery dialog and NOT auto-reload when already reloaded once', async () => {
+      sessionStorage.setItem(IDB_OPEN_ERROR_RELOAD_KEY, '1');
+      const err = new IndexedDBOpenError(
+        new Error('Internal error opening backing store for indexedDB.open'),
+      );
+      mockRecoveryService.recoverPendingRemoteOps.and.rejectWith(err);
+
+      await expectAsync(service.hydrateStore()).toBeRejected();
+
+      expect(reloadSpy).not.toHaveBeenCalled();
+      expect(window.alert).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT auto-reload for non-backing-store IDB open errors', async () => {
+      const err = new IndexedDBOpenError(new Error('QuotaExceededError'));
+      mockRecoveryService.recoverPendingRemoteOps.and.rejectWith(err);
+
+      await expectAsync(service.hydrateStore()).toBeRejected();
+
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('should clear the reload key after successful hydration', async () => {
+      sessionStorage.setItem(IDB_OPEN_ERROR_RELOAD_KEY, '1');
+      // Successful hydration — no errors thrown
+      await service.hydrateStore();
+
+      expect(sessionStorage.getItem(IDB_OPEN_ERROR_RELOAD_KEY)).toBeNull();
     });
   });
 });
