@@ -12,7 +12,7 @@ import {
   SearchResultItemWithProviderId,
 } from './issue.model';
 import { TaskAttachment } from '../tasks/task-attachment/task-attachment.model';
-import { forkJoin, from, merge, Observable, of, Subject } from 'rxjs';
+import { firstValueFrom, forkJoin, from, merge, Observable, of, Subject } from 'rxjs';
 import {
   CALDAV_TYPE,
   GITEA_TYPE,
@@ -734,6 +734,18 @@ export class IssueService {
         res.task.projectId &&
         res.task.projectId === this._workContextService.activeWorkContextId
       ) {
+        // If the existing task is already in this project's backlog, don't
+        // yank it to Today — that's the whole point of the backlog. Without
+        // this guard, every poll that surfaces an already-imported issue
+        // promotes the task, which spams Today with issues the user
+        // consciously parked in Backlog.
+        const project = await firstValueFrom(
+          this._projectService.getByIdOnce$(res.task.projectId),
+        );
+        const isInBacklog = !!project?.backlogTaskIds?.includes(res.task.id);
+        if (isInBacklog) {
+          return true;
+        }
         this._projectService.moveTaskToTodayList(res.task.id, res.task.projectId);
         this._snackService.open({
           ico: 'arrow_upward',
