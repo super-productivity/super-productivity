@@ -152,16 +152,28 @@ export const startApp = (): void => {
   }
 
   // Defense-in-depth against GPU init failures that manifest as "app won't
-  // launch" (e.g. Mesa ABI drift on Snap, missing DRI nodes under confinement,
-  // or a Wayland-first session that slips past the X11-force guard above).
-  // If the previous launch never signaled `ready-to-show`, or the user sets
-  // SP_DISABLE_GPU=1, append --disable-gpu. SP_ENABLE_GPU=1 overrides.
-  const gpuDecision = evaluateGpuStartupGuard(app.getPath('userData'));
+  // launch" (e.g. Mesa ABI drift on Snap, missing DRI nodes under
+  // confinement, or a Wayland-first session that slips past the X11-force
+  // guard above). The guard tolerates a single unrelated crash/force-quit
+  // and only latches off GPU after repeated failures to reach
+  // IPC.APP_READY; an Electron version change resets the counter so the
+  // GPU-cache purge below has a chance to fix things first.
+  // IMPORTANT: this block must stay after every `app.setPath('userData',
+  // ...)` call above — the marker lives in userData, and a mismatch between
+  // read and write paths would permanently confuse the detector.
+  const gpuDecision = evaluateGpuStartupGuard(
+    app.getPath('userData'),
+    process.versions.electron || 'unknown',
+  );
   if (gpuDecision.disableGpu) {
-    app.commandLine.appendSwitch('disable-gpu');
+    // `disableHardwareAcceleration()` is the documented Electron API for
+    // this; it is equivalent to passing `--disable-gpu` but routes through
+    // the app layer rather than a raw Chromium switch.
+    app.disableHardwareAcceleration();
     log(
       `Disabling GPU acceleration (reason: ${gpuDecision.reason}). ` +
-        `Set SP_ENABLE_GPU=1 to force-enable GPU on the next launch.`,
+        `To force-enable on the next launch set SP_ENABLE_GPU=1` +
+        (gpuDecision.markerPath ? ` or delete ${gpuDecision.markerPath}.` : '.'),
     );
   }
 

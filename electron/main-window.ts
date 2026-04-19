@@ -244,9 +244,6 @@ export const createWindow = async ({
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
-    // Signal the GPU startup guard that the renderer produced at least one
-    // frame, so the next launch is treated as a clean start.
-    markStartupSuccess();
     mainWin.show();
 
     // Workaround for Windows phantom focus bug (electron#20464):
@@ -281,6 +278,11 @@ export const createWindow = async ({
   // listen for app ready
   ipcMain.on(IPC.APP_READY, () => {
     mainWinModule.isAppReady = true;
+    // Signal the GPU startup guard that the full boot chain completed
+    // (including Angular init) — not just that the compositor painted a
+    // frame. This avoids clearing the crash counter on blank/broken
+    // renderers that still fire `ready-to-show`.
+    markStartupSuccess();
   });
 
   // Register F11 key handler for fullscreen toggle
