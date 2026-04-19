@@ -160,7 +160,7 @@ function parseLineStructure(line) {
     // Support both 2-space and 4-space conventions
     // For 4-space indent: Math.floor(4/4) = 1
     // For 2-space indent: Math.floor(2/2) = 1
-    indentLevel = tabCount + Math.max(Math.floor(spaceCount / 4), Math.floor(spaceCount / 2));
+    indentLevel = tabCount + Math.floor(spaceCount / 4) || Math.floor(spaceCount / 2);
   }
 
   var trimmedLine = line.trim();
@@ -175,6 +175,7 @@ function parseLineStructure(line) {
       indentLevel: indentLevel,
       content: checkboxMatch[2].trim(),
       isCompleted: checkboxMatch[1] === 'x',
+      isBullet: true,
     };
   }
 
@@ -185,6 +186,7 @@ function parseLineStructure(line) {
       indentLevel: indentLevel,
       content: bulletMatch[1].trim(),
       isCompleted: false,
+      isBullet: true,
     };
   }
 
