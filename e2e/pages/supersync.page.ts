@@ -191,8 +191,14 @@ export class SuperSyncPage extends BasePage {
       //    piggybacked ops in the response, causing data to sync between clients
       //    outside of explicit syncAndWait(). Set here (not in createSimulatedClient)
       //    so tests using enableWebSocket:true still get immediate uploads.
+      // 3. Block WsTriggeredDownloadService: Even when routeWebSocket() closes the
+      //    connection, a WS notification can slip through the moment the connection
+      //    opens (before it's closed). Setting __SP_E2E_BLOCK_WS_DOWNLOAD ensures
+      //    WsTriggeredDownloadService ignores any such notifications, preventing
+      //    uncontrolled background syncs that race with explicit syncAndWait() calls.
       await this.page.evaluate(() => {
         (globalThis as any).__SP_E2E_BLOCK_IMMEDIATE_UPLOAD = true;
+        (globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = true;
       });
     }
 

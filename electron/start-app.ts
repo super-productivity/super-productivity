@@ -13,14 +13,15 @@ import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
 import { initIndicator } from './indicator';
 import { quitApp, showOrFocus } from './various-shared';
-import { createWindow } from './main-window';
+import { createWindow, getWin } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
 import { destroyTaskWidget } from './task-widget/task-widget';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
 } from './protocol-handler';
-import { getIsQuiting, setIsLocked } from './shared-state';
+import { getIsQuiting, setIsQuiting, setIsLocked } from './shared-state';
+import { clearStaleLevelDbLocks } from './clear-stale-idb-locks';
 import * as fs from 'fs';
 
 const ICONS_FOLDER = __dirname + '/assets/icons/';
@@ -356,18 +357,32 @@ export const startApp = (): void => {
   appIN.on('will-quit', () => {
     // un-register all shortcuts.
     globalShortcut.unregisterAll();
+    // Safe to remove IPC listeners here: all windows are closed and before-close
+    // IPC flows (sync, finish-day) are guaranteed to have completed.
+    ipcMain.removeAllListeners();
   });
 
-  appIN.on('before-quit', () => {
-    log('App before-quit: cleaning up resources');
-
-    // Clean up task widget before quitting
+  appIN.on('before-quit', (event) => {
+    log('App before-quit: isQuiting=', getIsQuiting());
+    if (!getIsQuiting()) {
+      // Native quit path (Cmd+Q, Dock > Quit on macOS): app.quit() was called
+      // by the OS without going through quitApp(), so isQuiting was never set.
+      // Prevent the immediate quit and delegate to the window close handler,
+      // which manages the before-close callback flow (sync, finish-day, etc.)
+      // and sets isQuiting=true before re-quitting.
+      event.preventDefault();
+      const win = getWin();
+      if (win && !win.isDestroyed()) {
+        win.close();
+      } else {
+        // No window to close — set flag and re-trigger quit directly.
+        setIsQuiting(true);
+        app.quit();
+      }
+      return;
+    }
+    // isQuiting=true: all before-close IPC work is complete — safe to clean up.
     destroyTaskWidget();
-
-    // Remove all IPC listeners to prevent memory leaks
-    ipcMain.removeAllListeners();
-
-    // Clear any pending timeouts/intervals
     if (global.gc) {
       global.gc();
     }
@@ -425,6 +440,10 @@ export const startApp = (): void => {
 
   // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
   async function createMainWin(): Promise<void> {
+    // Remove stale LevelDB LOCK files before the renderer opens IndexedDB.
+    // Orphaned locks from unclean session shutdowns block the backing store open.
+    await clearStaleLevelDbLocks(app.getPath('userData'));
+
     mainWin = await createWindow({
       app,
       IS_DEV,
