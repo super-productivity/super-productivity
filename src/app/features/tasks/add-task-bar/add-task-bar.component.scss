@@ -15,8 +15,8 @@
 
     @include mq(xs, max) {
       transform: translateX(0) !important;
-      left: 4px;
-      right: 4px;
+      left: var(--s-half);
+      right: var(--s-half);
     }
 
     @include mq(xs) {
@@ -34,7 +34,7 @@
 :host-context(.isTouchOnly).global {
   top: auto;
   bottom: calc(var(--keyboard-height) + var(--s));
-  transition: bottom 0.3s ease-out;
+  transition: bottom var(--transition-duration-m) ease-out;
 }
 
 .add-task-container {
@@ -147,7 +147,7 @@
 }
 
 .spinner {
-  animation: 200ms fadeIn;
+  animation: var(--transition-duration-m) fadeIn;
   position: absolute;
   right: 50%;
   bottom: 2px;
@@ -171,7 +171,7 @@
 //// Autocomplete panel styles
 ::ng-deep .isTouchPrimary .add-task-bar-panel {
   top: auto;
-  bottom: 4px;
+  bottom: var(--s-half);
 }
 
 ::ng-deep .add-task-bar-panel {

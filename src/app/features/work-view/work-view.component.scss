@@ -224,7 +224,7 @@ finish-day-btn,
     @include center;
     text-align: center;
     font-weight: 400;
-    color: #333;
+    color: var(--text-color);
 
     @include darkTheme() {
       color: var(--text-color-most-intense);

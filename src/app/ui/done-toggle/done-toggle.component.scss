@@ -45,7 +45,7 @@ $check-len: 18;
   .done-toggle-svg {
     width: 22px;
     height: 22px;
-    transition: transform 150ms ease;
+    transition: transform var(--transition-duration-s) ease;
   }
 
   &.is-scale-up .done-toggle-svg {
@@ -86,7 +86,7 @@ $check-len: 18;
 
     .done-check {
       opacity: 0.5;
-      animation: draw-check 150ms ease-out forwards;
+      animation: draw-check var(--transition-duration-s) ease-out forwards;
     }
   }
 
