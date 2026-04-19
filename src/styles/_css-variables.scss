@@ -28,10 +28,44 @@
   // -----------------------------
   // Fonts
   // -----------------------------
+  // Lead with the native platform UI font (SF Pro on Apple, Segoe UI Variable
+  // on Win 11, Roboto on Android). Inter/Open Sans are graceful fallbacks.
   --font-primary-stack:
-    'Open Sans', 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-    'Noto Color Emoji', 'Android Emoji', 'EmojiSymbols', -apple-system,
-    BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', Roboto,
+    'Inter', 'Open Sans', 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', 'Android Emoji',
+    'EmojiSymbols', sans-serif;
+  --font-mono-stack:
+    ui-monospace, 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+
+  // Type scale
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px; // base
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 22px;
+  --font-size-3xl: 28px;
+  --font-size-4xl: 34px;
+
+  // Font weights
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  // Line heights (unitless so they scale with font-size)
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.35;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.65;
+
+  // Letter spacing — modern UI tracking
+  --letter-spacing-tighter: -0.02em;
+  --letter-spacing-tight: -0.01em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.02em;
 
   --s2: 16px; // 2 * 8px
   --s3: 24px; // 3 * 8px

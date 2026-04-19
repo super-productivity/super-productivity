@@ -1,8 +1,11 @@
 @use '@angular/material' as mat;
 @use 'angular-material-css-vars' as mat-css-vars;
 
+// Mirror --font-primary-stack. The Material mixin only accepts a string here,
+// so CSS vars can't be used — keep this list in sync with `_css-variables.scss`.
 $custom-typography: mat.m2-define-typography-config(
-  $font-family: 'Open Sans, sans-serif',
+  $font-family:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, Inter, "Open Sans", "Helvetica Neue", Arial, sans-serif',
 );
 @include mat-css-vars.init-material-css-vars($typography-config: $custom-typography);
 

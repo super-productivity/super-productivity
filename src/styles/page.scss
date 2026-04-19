@@ -14,6 +14,81 @@ app-root,
   box-sizing: border-box;
   font-optical-sizing: auto;
   font-family: var(--font-primary-stack);
+  // Crisper rendering on macOS/iOS and Windows/Linux
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  // Common kerning + contextual ligatures; tabular numerals keep digits aligned
+  // in tables (time spent, progress %, etc.)
+  font-feature-settings:
+    'kern' 1,
+    'liga' 1,
+    'clig' 1,
+    'calt' 1;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+  letter-spacing: var(--letter-spacing-normal);
+}
+
+// Tabular figures for any numeric display (durations, counts, time)
+.tabular-nums,
+time,
+.time-display {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+// Headings: tighter tracking + snug leading for a more modern feel.
+// These are non-Material heading tags; Material components keep their own scale.
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: inherit;
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-tight);
+  color: var(--text-color-most-intense);
+}
+
+h1 {
+  font-size: var(--font-size-3xl);
+  letter-spacing: var(--letter-spacing-tighter);
+  line-height: var(--line-height-tight);
+}
+
+h2 {
+  font-size: var(--font-size-2xl);
+  letter-spacing: var(--letter-spacing-tighter);
+}
+
+h3 {
+  font-size: var(--font-size-xl);
+}
+
+h4 {
+  font-size: var(--font-size-lg);
+}
+
+h5 {
+  font-size: var(--font-size-md);
+}
+
+h6 {
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--text-color-muted);
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono-stack);
+  font-feature-settings: 'liga' 0;
 }
 
 html {
