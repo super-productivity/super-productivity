@@ -286,6 +286,14 @@ next with #7266 included). This changes PR #7273's positioning: not a
 "tail 5%" fallback on top of a shipped primary fix, but potentially the
 first released recovery path for confined-Linux users until #7266 ships.
 
+**Empirical confirmation (2026-04-19):** issue 7270's reporter
+confirmed that `superproductivity --ozone-platform=x11` resolves their
+launch failure on Ubuntu 22.04 / 18.2.2-snap. Direct evidence that the
+Mesa ABI-drift diagnosis is correct and #7266's X11 widening is the
+right primary fix. PR #7273 (GPU guard) remains useful as
+defense-in-depth for the tail X11 doesn't rescue (Flatpak, Snap+X11
+with still-drifted Mesa, future Chromium/Mesa regressions).
+
 ### Mechanism
 
 Presence-based crash marker in `userData`:
