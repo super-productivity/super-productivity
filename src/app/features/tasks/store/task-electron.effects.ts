@@ -16,6 +16,7 @@ import {
   pauseFocusSession,
   showFocusOverlay,
   startFocusSession,
+  tick,
   unPauseFocusSession,
 } from '../../focus-mode/store/focus-mode.actions';
 import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.const';
@@ -109,6 +110,9 @@ export class TaskElectronEffects {
           pauseFocusSession,
           unPauseFocusSession,
           completeFocusSession,
+          // Keep tray time in sync during focus-mode breaks and focus sessions
+          // without an active task (addTimeSpent is gated on currentTask.id).
+          tick,
         ),
 
         withLatestFrom(
