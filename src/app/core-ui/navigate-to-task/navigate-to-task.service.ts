@@ -13,6 +13,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { Log } from '../../core/log';
 import { LayoutService } from '../layout/layout.service';
+import { recordSearchNavDebug } from '../../util/search-nav-debug';
 
 @Injectable({
   providedIn: 'root',
@@ -32,8 +33,22 @@ export class NavigateToTaskService {
         throw new Error(`Task with id ${taskId} not found`);
       }
       const location = await this._getLocation(task, isArchiveTask);
+      recordSearchNavDebug('navigateToTask:start', {
+        taskId,
+        isArchiveTask,
+        currentUrl: this._router.url,
+        location,
+        parentId: task.parentId || null,
+        projectId: task.projectId || null,
+        firstTagId: task.tagIds?.[0] || null,
+      });
 
       if (this._router.url.startsWith(location)) {
+        recordSearchNavDebug('navigateToTask:sameContext', {
+          taskId,
+          currentUrl: this._router.url,
+          location,
+        });
         this._focusTaskElement(taskId);
         return;
       }
@@ -44,8 +59,18 @@ export class NavigateToTaskService {
       } else {
         queryParams.isInBacklog = await this._isInBacklog(task);
       }
+      recordSearchNavDebug('navigateToTask:routeChange', {
+        taskId,
+        location,
+        queryParams,
+      });
       await this._router.navigate([location], { queryParams });
     } catch (err) {
+      recordSearchNavDebug('navigateToTask:error', {
+        taskId,
+        isArchiveTask,
+        error: err instanceof Error ? err.message : String(err),
+      });
       Log.err(err);
       this._snackService.open({
         type: 'ERROR',

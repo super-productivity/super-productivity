@@ -67,6 +67,7 @@ import {
 } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
+import { recordSearchNavDebug } from '../../util/search-nav-debug';
 
 @Component({
   selector: 'work-view',
@@ -209,6 +210,11 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   @ViewChild('splitTopEl', { read: ElementRef }) set splitTopElRef(ref: ElementRef) {
     if (ref) {
       this._splitTopElement = ref.nativeElement;
+      recordSearchNavDebug('workView:splitTopElReady', {
+        selectedTaskId: this.selectedTaskId(),
+        clientHeight: ref.nativeElement.clientHeight,
+        scrollHeight: ref.nativeElement.scrollHeight,
+      });
       this.splitTopEl$.next(ref.nativeElement);
       if (this._pendingFocusItemTaskId) {
         this._focusItemInWorkViewWhenReady(this._pendingFocusItemTaskId);
@@ -291,6 +297,11 @@ export class WorkViewComponent implements OnInit, OnDestroy {
           this.splitInputPos = 50;
         }
         if (params?.focusItem) {
+          recordSearchNavDebug('workView:focusQueryParam', {
+            focusItem: params.focusItem,
+            selectedTaskId: this.selectedTaskId(),
+            splitInputPos: this.splitInputPos,
+          });
           this._pendingFocusItemTaskId = params.focusItem;
           this._focusItemInWorkViewWhenReady(params.focusItem);
         } else {
@@ -374,6 +385,18 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     const matchedElement = directMatch ?? selectedMatch;
     const el =
       matchedElement && this._isTaskElementReady(matchedElement) ? matchedElement : null;
+    recordSearchNavDebug('workView:focusAttempt', {
+      taskId,
+      retriesLeft,
+      selectedTaskId: this.selectedTaskId(),
+      hasContainer: !!container,
+      hasDirectMatch: !!directMatch,
+      hasSelectedMatch: !!selectedMatch,
+      matchedElementHeight: matchedElement?.getBoundingClientRect().height ?? null,
+      containerScrollTop: container?.scrollTop ?? null,
+      containerClientHeight: container?.clientHeight ?? null,
+      containerScrollHeight: container?.scrollHeight ?? null,
+    });
     if (container && el) {
       const relativeTop = this._getRelativeTopWithinContainer(el, container);
       const containerCenterOffset = container.clientHeight / 2;
@@ -381,6 +404,25 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       const centeredTop = relativeTop - containerCenterOffset + elementCenterOffset;
       container.scrollTop = Math.max(centeredTop, 0);
       el.focus({ preventScroll: true });
+      recordSearchNavDebug('workView:focusSuccess', {
+        taskId,
+        selectedTaskId: this.selectedTaskId(),
+        matchedElementId: el.id,
+        relativeTop,
+        elementOffsetHeight: el.offsetHeight,
+        centeredTop,
+        appliedScrollTop: container.scrollTop,
+      });
+      window.setTimeout(() => {
+        recordSearchNavDebug('workView:focusPostTick', {
+          taskId,
+          selectedTaskId: this.selectedTaskId(),
+          matchedElementId: el.id,
+          containerScrollTop: container.scrollTop,
+          containerClientHeight: container.clientHeight,
+          containerScrollHeight: container.scrollHeight,
+        });
+      }, 0);
       this._pendingFocusItemTaskId = null;
       return;
     }
