@@ -231,7 +231,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -248,7 +248,9 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const { email } = parseResult.data;
 
         if (!isEmailAllowed(email)) {
-          return reply.status(403).send({ error: 'Registration is not allowed for this email address.' });
+          return reply
+            .status(403)
+            .send({ error: 'Registration is not allowed for this email address.' });
         }
 
         const options = await generateRegistrationOptions(email);
@@ -269,7 +271,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -286,7 +288,9 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const { email, credential } = parseResult.data;
 
         if (!isEmailAllowed(email)) {
-          return reply.status(403).send({ error: 'Registration is not allowed for this email address.' });
+          return reply
+            .status(403)
+            .send({ error: 'Registration is not allowed for this email address.' });
         }
 
         const result = await verifyRegistration(email, credential as any, Date.now());
@@ -310,7 +314,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 20,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -344,7 +348,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 20,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -396,7 +400,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 5,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -430,7 +434,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -464,7 +468,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -502,7 +506,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -519,7 +523,9 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const { email } = parseResult.data;
 
         if (!isEmailAllowed(email)) {
-          return reply.status(403).send({ error: 'Registration is not allowed for this email address.' });
+          return reply
+            .status(403)
+            .send({ error: 'Registration is not allowed for this email address.' });
         }
 
         const result = await registerWithMagicLink(email, Date.now());
@@ -540,7 +546,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 5,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -574,7 +580,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },

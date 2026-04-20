@@ -19,6 +19,7 @@ import { OpLog } from '../../core/log';
 import { repairMenuTree } from './repair-menu-tree';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { RepairSummary } from '../core/operation.types';
+import { isValidEntityId } from './is-valid-entity-id';
 
 export interface DataRepairResult {
   data: AppDataComplete;
@@ -681,12 +682,27 @@ const _resetEntityIdsFromObjects = <T extends AppBaseDataEntityLikeStates>(
     } as T;
   }
 
+  const sanitizedEntities = Object.entries(data.entities).reduce(
+    (acc, [key, entity]) => {
+      if (!entity || typeof entity !== 'object') {
+        return acc;
+      }
+
+      const entityId = (entity as { id?: unknown }).id;
+      if (!isValidEntityId(entityId) || !isValidEntityId(key)) {
+        return acc;
+      }
+
+      acc[entityId] = entity;
+      return acc;
+    },
+    {} as AppBaseDataEntityLikeStates['entities'],
+  );
+
   return {
     ...data,
-    entities: data.entities || {},
-    ids: data.entities
-      ? Object.keys(data.entities).filter((id) => !!data.entities[id])
-      : [],
+    entities: sanitizedEntities,
+    ids: Object.keys(sanitizedEntities),
   };
 };
 

@@ -288,4 +288,47 @@ describe('SyncTriggerService', () => {
       expect(secondVal).toBe(true);
     }));
   });
+
+  describe('getSyncTrigger$', () => {
+    // syncInterval=10000 stays above SYNC_MIN_INTERVAL=5000 so the auditTime
+    // path doesn't fire faster than the periodic timer.
+    const SYNC_INTERVAL = 10000;
+    const DEBOUNCE = 100;
+
+    it('should fire periodically when useIntervalTimer=true (file-based providers)', fakeAsync(() => {
+      const emissions: unknown[] = [];
+      const sub = service
+        .getSyncTrigger$(SYNC_INTERVAL, true)
+        .subscribe((v) => emissions.push(v));
+
+      // Periodic timer fires at SYNC_INTERVAL; debounceTime tail adds DEBOUNCE
+      tick(SYNC_INTERVAL + DEBOUNCE + 50);
+      const afterFirstInterval = emissions.length;
+      expect(afterFirstInterval).toBeGreaterThan(0);
+
+      // Second periodic emission after another SYNC_INTERVAL
+      tick(SYNC_INTERVAL);
+      expect(emissions.length).toBeGreaterThan(afterFirstInterval);
+
+      sub.unsubscribe();
+    }));
+
+    it('should NOT fire periodically when useIntervalTimer=false (SuperSync)', fakeAsync(() => {
+      const emissions: unknown[] = [];
+      const sub = service
+        .getSyncTrigger$(SYNC_INTERVAL, false)
+        .subscribe((v) => emissions.push(v));
+
+      // After one syncInterval, the audit-time path may emit once.
+      tick(SYNC_INTERVAL + DEBOUNCE + 50);
+      const afterFirstInterval = emissions.length;
+
+      // After another full syncInterval, no further emissions
+      // (auditTime's of(null) source has completed; no periodic timer registered)
+      tick(SYNC_INTERVAL);
+      expect(emissions.length).toBe(afterFirstInterval);
+
+      sub.unsubscribe();
+    }));
+  });
 });

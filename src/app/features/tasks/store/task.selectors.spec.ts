@@ -197,6 +197,22 @@ describe('Task Selectors', () => {
     },
   };
 
+  beforeEach(() => {
+    // Clear any overrideResult set by MockStore.overrideSelector in other spec files
+    // (e.g., provideMockStore). overrideSelector calls setResult() which persists
+    // across tests and is NOT cleared by release() — only clearResult() clears it.
+    fromSelectors.selectAllTasksWithSubTasks.clearResult();
+    fromSelectors.selectAllRepeatableTaskWithSubTasks.clearResult();
+    fromSelectors.selectTaskByIdWithSubTaskData.clearResult();
+    fromSelectors.selectOverdueTasksWithSubTasks.clearResult();
+    fromSelectors.selectLaterTodayTasksWithSubTasks.clearResult();
+    fromSelectors.selectAllTasksWithSubTasks.release();
+    fromSelectors.selectAllRepeatableTaskWithSubTasks.release();
+    fromSelectors.selectTaskByIdWithSubTaskData.release();
+    fromSelectors.selectOverdueTasksWithSubTasks.release();
+    fromSelectors.selectLaterTodayTasksWithSubTasks.release();
+  });
+
   // Basic selectors
   describe('Basic selectors', () => {
     it('should select task feature state', () => {

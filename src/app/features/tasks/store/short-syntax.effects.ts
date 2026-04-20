@@ -17,7 +17,7 @@ import {
 import { GlobalConfigService } from '../../config/global-config.service';
 import { unique } from '../../../util/unique';
 import { TaskService } from '../task.service';
-import { from, of } from 'rxjs';
+import { EMPTY, from, of } from 'rxjs';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { shortSyntax } from '../short-syntax';
@@ -102,6 +102,12 @@ export class ShortSyntaxEffects {
         ),
       ),
       mergeMap(([{ task, originalAction }, tags, projects, defaultProjectId]) => {
+        // Guard: task may have been archived/deleted while the effect was in flight
+        // (e.g., a concurrent sync applied a moveToArchive op). Skip processing
+        // to prevent "Cannot read properties of undefined" errors.
+        if (!task) {
+          return EMPTY;
+        }
         const isReplaceTagIds = originalAction.type === TaskSharedActions.updateTask.type;
         return from(
           shortSyntax(

@@ -1,4 +1,5 @@
 import { signal } from '@angular/core';
+import { T } from '../../t.const';
 import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 import { SyncWrapperService } from './sync-wrapper.service';
@@ -28,6 +29,9 @@ import {
   SyncAlreadyInProgressError,
   LocalDataConflictError,
   MissingRefreshTokenAPIError,
+  JsonParseError,
+  SyncDataCorruptedError,
+  UploadRevToMatchMismatchAPIError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 
@@ -810,11 +814,87 @@ describe('SyncWrapperService', () => {
       );
     });
 
-    it('should NOT call clearAuthCredentials on AuthFailSPError for SuperSync', async () => {
+    it('should NOT call clearAuthCredentials on first AuthFailSPError for SuperSync', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new AuthFailSPError()),
       );
 
+      await service.sync();
+
+      expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call clearAuthCredentials on second consecutive AuthFailSPError for SuperSync', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+
+      await service.sync();
+      await service.sync();
+
+      expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
+    });
+
+    it('should call clearAuthCredentials on third consecutive AuthFailSPError for SuperSync', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+
+      await service.sync();
+      await service.sync();
+      await service.sync();
+
+      expect(mockProviderManager.clearAuthCredentials).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+      );
+    });
+
+    it('should reset auth failure counter after successful sync', async () => {
+      // Fail twice
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+      await service.sync();
+      await service.sync();
+      expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
+
+      // Succeed once (reset counter)
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({ kind: 'no_new_ops' as const }),
+      );
+      await service.sync();
+
+      // Fail once more — should NOT clear (counter was reset)
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+      mockProviderManager.clearAuthCredentials.calls.reset();
+      await service.sync();
+
+      expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
+    });
+
+    it('should reset auth failure counter when a non-auth error occurs between auth errors', async () => {
+      // Fail twice with auth error
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+      await service.sync();
+      await service.sync();
+      expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
+
+      // Non-auth error resets the counter
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('network timeout')),
+      );
+      await service.sync();
+
+      // Next two auth failures should NOT clear (counter was reset by non-auth error)
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+      mockProviderManager.clearAuthCredentials.calls.reset();
+      await service.sync();
       await service.sync();
 
       expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
@@ -873,6 +953,70 @@ describe('SyncWrapperService', () => {
       expect(result).toBe('HANDLED_ERROR');
       // Should NOT show snack for this error
       expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('should handle JsonParseError with force-overwrite action and corrupted-data message (#5574, #4616)', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new JsonParseError(new SyntaxError('Unexpected end of JSON'), '')),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.ERROR_REMOTE_FILE_CORRUPTED,
+          type: 'ERROR',
+          actionFn: jasmine.any(Function),
+          actionStr: jasmine.any(String),
+        }),
+      );
+    });
+
+    it('should handle SyncDataCorruptedError with version-mismatch message (no force-overwrite)', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new SyncDataCorruptedError('Unsupported version: 1', 'sync-data.json'),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      // Must show the version-mismatch message (not generic "corrupted data")
+      // Must NOT offer force-upload: remote may be a newer version from another client
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          type: 'ERROR',
+        }),
+      );
+      const callArgs = mockSnackService.open.calls.mostRecent().args[0];
+      expect(callArgs['actionFn']).toBeUndefined();
+    });
+
+    it('should handle SyncDataCorruptedError for newer remote version (no force-overwrite, same message)', async () => {
+      // version 3 > FILE_VERSION 2 — remote is from a future app version
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new SyncDataCorruptedError('Unsupported version: 3', 'sync-data.json'),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          type: 'ERROR',
+        }),
+      );
+      // No force-upload button — overwriting a newer remote would destroy data
+      const callArgs = mockSnackService.open.calls.mostRecent().args[0];
+      expect(callArgs['actionFn']).toBeUndefined();
     });
 
     describe('LocalDataConflictError handling', () => {
@@ -1135,6 +1279,23 @@ describe('SyncWrapperService', () => {
           type: 'ERROR',
         }),
       );
+    });
+
+    it('should treat UploadRevToMatchMismatchAPIError as transient: set UNKNOWN_OR_CHANGED, no error snackbar', async () => {
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.reject(
+          new UploadRevToMatchMismatchAPIError('Concurrent upload detected'),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
     });
   });
 

@@ -18,7 +18,7 @@
     "@types/node": "^22.15.33",
     "solid-js": "^1.9.11",
     "typescript": "^5.8.3",
-    "vite": "^7.1.12",
+    "vite": "^7.3.2",
     "vite-plugin-solid": "^2.11.10",
     "archiver": "^7.0.1"
   },

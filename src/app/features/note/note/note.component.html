@@ -18,9 +18,10 @@
           <div
             (click)="editFullscreen($event)"
             class="markdown-preview"
-          >
-            {{ isLongNote ? resolvedShortenedContent() : resolvedContent() }}
-          </div>
+            [innerHTML]="
+              (isLongNote ? resolvedShortenedContent() : resolvedContent()) | renderLinks
+            "
+          ></div>
         } @else {
           <div
             (click)="editFullscreen($event)"

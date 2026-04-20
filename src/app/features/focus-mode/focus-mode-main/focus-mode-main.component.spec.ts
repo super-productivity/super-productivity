@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, EMPTY, of } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
@@ -25,6 +25,7 @@ import { DialogPomodoroSettingsComponent } from '../dialog-pomodoro-settings/dia
 import { By } from '@angular/platform-browser';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
 import { MarkdownModule } from 'ngx-markdown';
+import { MentionConfigService } from '../../tasks/mention-config.service';
 
 @Component({
   selector: 'focus-mode-task-selector',
@@ -128,6 +129,7 @@ describe('FocusModeMainComponent', () => {
         { provide: SimpleCounterService, useValue: simpleCounterServiceSpy },
         { provide: FocusModeService, useValue: focusModeServiceSpy },
         { provide: MatDialog, useValue: mockMatDialog },
+        { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {
@@ -643,6 +645,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
         { provide: SimpleCounterService, useValue: simpleCounterServiceSpy },
         { provide: FocusModeService, useValue: focusModeServiceMock },
         { provide: MatDialog, useValue: mockMatDialog },
+        { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {
@@ -833,6 +836,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
         { provide: SimpleCounterService, useValue: simpleCounterServiceSpy },
         { provide: FocusModeService, useValue: focusModeServiceMock },
         { provide: MatDialog, useValue: mockMatDialog },
+        { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {

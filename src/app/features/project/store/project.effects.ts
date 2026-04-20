@@ -33,10 +33,18 @@ export class ProjectEffects {
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteProject),
         tap(({ projectId }) => {
-          // Clear defaultProjectId if the deleted project was the default
           const cfg = this._globalConfigService.cfg();
-          if (cfg && projectId === cfg.tasks.defaultProjectId) {
+          if (!cfg) {
+            return;
+          }
+          // Clear defaultProjectId if the deleted project was the default
+          if (projectId === cfg.tasks.defaultProjectId) {
             this._globalConfigService.updateSection('tasks', { defaultProjectId: null });
+          }
+          // Clear misc.defaultStartPage if it pointed at the deleted project,
+          // otherwise users land on a dead route next app launch.
+          if (projectId === cfg.misc.defaultStartPage) {
+            this._globalConfigService.updateSection('misc', { defaultStartPage: 0 });
           }
         }),
       ),

@@ -154,6 +154,10 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
       },
+      focusMode: {
+        ...DEFAULT_GLOBAL_CONFIG.focusMode,
+        ...appDataComplete.globalConfig.focusMode,
+      },
       taskWidget: {
         ...DEFAULT_GLOBAL_CONFIG.taskWidget,
         // Migrate from old 'overlayIndicator' key

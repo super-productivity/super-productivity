@@ -11,6 +11,23 @@ describe('LayoutService', () => {
   let service: LayoutService;
   let mockStore: jasmine.SpyObj<Store>;
 
+  const mockRenderedTaskElement = (
+    el: HTMLElement,
+    top: number = 0,
+    height: number = 40,
+  ): void => {
+    Object.defineProperty(el, 'offsetHeight', { value: height, configurable: true });
+    spyOn(el, 'getBoundingClientRect').and.returnValue({
+      top,
+      height,
+    } as DOMRect);
+    spyOn(el, 'getClientRects').and.returnValue([
+      {
+        height,
+      },
+    ] as unknown as DOMRectList);
+  };
+
   beforeEach(() => {
     const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'pipe', 'select']);
     const breakpointObserverSpy = jasmine.createSpyObj('BreakpointObserver', ['observe']);
@@ -80,6 +97,7 @@ describe('LayoutService', () => {
       const newTaskElement = document.createElement('div');
       newTaskElement.id = `t-${newTaskId}`;
       newTaskElement.tabIndex = 0;
+      mockRenderedTaskElement(newTaskElement);
       document.body.appendChild(newTaskElement);
 
       spyOn(newTaskElement, 'focus');
@@ -100,6 +118,7 @@ describe('LayoutService', () => {
       const pendingTaskElement = document.createElement('div');
       pendingTaskElement.id = `t-${pendingTaskId}`;
       pendingTaskElement.tabIndex = 0;
+      mockRenderedTaskElement(pendingTaskElement);
       document.body.appendChild(pendingTaskElement);
 
       spyOn(pendingTaskElement, 'focus');
@@ -215,22 +234,32 @@ describe('LayoutService', () => {
 
   describe('scrollToNewTask', () => {
     it('should scroll an existing task into view after a short delay', (done) => {
+      const scrollContainer = document.createElement('div');
       const taskId = 'scroll-task';
       const taskElement = document.createElement('div');
       taskElement.id = `t-${taskId}`;
-      spyOn(taskElement, 'scrollIntoView');
-      document.body.appendChild(taskElement);
+      Object.defineProperty(scrollContainer, 'clientHeight', { value: 400 });
+      Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000 });
+      Object.defineProperty(scrollContainer, 'scrollTop', { value: 50, writable: true });
+      Object.defineProperty(taskElement, 'offsetTop', { value: 250 });
+      Object.defineProperty(scrollContainer, 'offsetTop', { value: 0 });
+      spyOn(window, 'getComputedStyle').and.callFake((target: Element) => {
+        if (target === scrollContainer) {
+          return { overflowY: 'auto' } as CSSStyleDeclaration;
+        }
+        return { overflowY: 'visible' } as CSSStyleDeclaration;
+      });
+      mockRenderedTaskElement(taskElement, 250);
+
+      scrollContainer.appendChild(taskElement);
+      document.body.appendChild(scrollContainer);
 
       service.scrollToNewTask(taskId);
 
       setTimeout(() => {
-        expect(taskElement.scrollIntoView).toHaveBeenCalledWith({
-          behavior: 'instant',
-          block: 'center',
-          inline: 'nearest',
-        });
+        expect(scrollContainer.scrollTop).toBe(70);
 
-        document.body.removeChild(taskElement);
+        document.body.removeChild(scrollContainer);
         done();
       }, 100);
     });
@@ -242,6 +271,79 @@ describe('LayoutService', () => {
         expect().nothing();
         done();
       }, 100);
+    });
+  });
+
+  describe('focusTaskInViewIfPossible', () => {
+    it('should center and focus an existing task inside a scrollable container', () => {
+      const scrollContainer = document.createElement('div');
+      const taskId = 'focus-task';
+      const taskElement = document.createElement('div');
+      taskElement.id = `t-${taskId}`;
+      spyOn(taskElement, 'focus');
+      Object.defineProperty(scrollContainer, 'clientHeight', { value: 300 });
+      Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000 });
+      Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, writable: true });
+      Object.defineProperty(taskElement, 'offsetTop', { value: 200 });
+      Object.defineProperty(scrollContainer, 'offsetTop', { value: 0 });
+      spyOn(window, 'getComputedStyle').and.callFake((target: Element) => {
+        if (target === scrollContainer) {
+          return { overflowY: 'auto' } as CSSStyleDeclaration;
+        }
+        return { overflowY: 'visible' } as CSSStyleDeclaration;
+      });
+      mockRenderedTaskElement(taskElement, 200);
+
+      scrollContainer.appendChild(taskElement);
+      document.body.appendChild(scrollContainer);
+
+      const result = service.focusTaskInViewIfPossible(taskId);
+
+      expect(result).toBe(taskElement);
+      expect(scrollContainer.scrollTop).toBe(70);
+      expect(taskElement.focus).toHaveBeenCalledWith({ preventScroll: true });
+
+      document.body.removeChild(scrollContainer);
+    });
+
+    it('should return null when the task element is missing', () => {
+      expect(service.focusTaskInViewIfPossible('missing-task')).toBeNull();
+    });
+  });
+
+  describe('focusTaskInViewWhenReady', () => {
+    it('should retry until the task element is rendered', (done) => {
+      const scrollContainer = document.createElement('div');
+      const taskId = 'delayed-focus-task';
+      const taskElement = document.createElement('div');
+      taskElement.id = `t-${taskId}`;
+      spyOn(taskElement, 'focus');
+      Object.defineProperty(scrollContainer, 'clientHeight', { value: 300 });
+      Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000 });
+      Object.defineProperty(scrollContainer, 'scrollTop', { value: 20, writable: true });
+      Object.defineProperty(taskElement, 'offsetTop', { value: 150 });
+      Object.defineProperty(scrollContainer, 'offsetTop', { value: 0 });
+      spyOn(window, 'getComputedStyle').and.callFake((target: Element) => {
+        if (target === scrollContainer) {
+          return { overflowY: 'auto' } as CSSStyleDeclaration;
+        }
+        return { overflowY: 'visible' } as CSSStyleDeclaration;
+      });
+      mockRenderedTaskElement(taskElement, 180);
+
+      service.focusTaskInViewWhenReady(taskId);
+
+      setTimeout(() => {
+        scrollContainer.appendChild(taskElement);
+        document.body.appendChild(scrollContainer);
+      }, 100);
+
+      setTimeout(() => {
+        expect(scrollContainer.scrollTop).toBe(20);
+        expect(taskElement.focus).toHaveBeenCalledWith({ preventScroll: true });
+        document.body.removeChild(scrollContainer);
+        done();
+      }, 400);
     });
   });
 });

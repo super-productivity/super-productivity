@@ -28,7 +28,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     // 2. Open task detail panel and click the repeat item
     await task.hover();
     const detailBtn = page.getByRole('button', {
-      name: 'Show/Hide additional info',
+      name: 'Show/hide task panel',
     });
     await expect(detailBtn).toBeVisible({ timeout: 5000 });
     await detailBtn.click();
@@ -92,7 +92,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     // 2. Open task detail panel and click the repeat item
     await task.hover();
     const detailBtn = page.getByRole('button', {
-      name: 'Show/Hide additional info',
+      name: 'Show/hide task panel',
     });
     await expect(detailBtn).toBeVisible({ timeout: 5000 });
     await detailBtn.click();

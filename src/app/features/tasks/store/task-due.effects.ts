@@ -167,6 +167,11 @@ export class TaskDueEffects {
             this._store$.select(selectStartOfNextDayDiffMs),
           ),
           switchMap(([, todayStr, startOfNextDayDiffMs]) => {
+            // TODO(startOfNextDay): migrate to dateService.getLogicalTodayDate() once
+            // the spec (task-due.effects.spec.ts) is un-xdescribe'd. Deferred from the
+            // logical-clock centralization refactor because this effect is driven by
+            // selectors (replay-sensitive — see CLAUDE.md note #8) and the test suite
+            // can't verify the change.
             const todayRange = getDateRangeForDay(Date.now() - startOfNextDayDiffMs);
             return combineLatest([
               this._store$.select(selectTasksDueForDay, { day: todayStr }),

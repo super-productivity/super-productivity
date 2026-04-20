@@ -28,11 +28,13 @@ import {
 import {
   DUPLICATE_OPERATION_ERROR_MSG,
   OPERATION_LOG_STORE_NOT_INITIALIZED,
+  isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { runDbUpgrade } from './db-upgrade';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
+  IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
@@ -197,31 +199,63 @@ export class OperationLogStoreService {
   }
 
   /**
+   * Wraps a single `openDB` call. Exists as a testing seam so specs can
+   * `spyOn(service as any, '_openDbOnce')` to inject failures without mocking
+   * the `idb` module import. Not intended to be called directly outside the
+   * retry loop.
+   */
+  private _openDbOnce(): Promise<IDBPDatabase<OpLogDB>> {
+    return openDB<OpLogDB>(DB_NAME, DB_VERSION, {
+      upgrade: (db, oldVersion, _newVersion, transaction) => {
+        runDbUpgrade(db, oldVersion, transaction);
+      },
+    });
+  }
+
+  /**
    * Opens IndexedDB with retry logic and exponential backoff.
    * Transient failures (file locks, temporary I/O issues) may resolve on retry.
    *
-   * Total attempts = 1 initial + IDB_OPEN_RETRIES retries.
-   * With IDB_OPEN_RETRIES=3: attempts at 0ms, 500ms, 1500ms, 3500ms (total ~3.5s worst case).
+   * The retry budget depends on the error:
+   * - Lock-related errors (InvalidStateError, "backing store"): use the full
+   *   IDB_OPEN_RETRIES window (~31s) to outlast stale LevelDB locks from a
+   *   previous session. See issue #7191.
+   * - Other errors: fall back to IDB_OPEN_RETRIES_NON_LOCK (~7s). Every op-log
+   *   read/write awaits `_ensureInit()`, so a 31s retry window on a non-lock
+   *   error blocks the entire op-log subsystem for 31s before the hydrator's
+   *   alert dialog reaches the user. There's no expectation that waiting
+   *   helps for non-lock errors, so fail fast.
    *
    * @throws IndexedDBOpenError if all retry attempts fail
    * @see https://github.com/johannesjo/super-productivity/issues/6255
+   * @see https://github.com/super-productivity/super-productivity/issues/7191
    */
   private async _openDbWithRetry(): Promise<IDBPDatabase<OpLogDB>> {
-    const totalAttempts = 1 + IDB_OPEN_RETRIES;
+    let maxRetries = IDB_OPEN_RETRIES;
+    let attempt = 1;
     let lastError: unknown;
 
-    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    // Loop until either openDB succeeds or we exhaust the retry budget for the
+    // observed error class. `maxRetries` may shrink after the first failure if
+    // the error doesn't look lock-related.
+    while (attempt <= 1 + maxRetries) {
       try {
-        return await openDB<OpLogDB>(DB_NAME, DB_VERSION, {
-          upgrade: (db, oldVersion, _newVersion, transaction) => {
-            runDbUpgrade(db, oldVersion, transaction);
-          },
-        });
+        return await this._openDbOnce();
       } catch (e) {
         lastError = e;
 
+        // Classify the error on the first failure. If it doesn't look
+        // lock-related, shrink the retry budget so we fail fast and let the
+        // hydrator surface the error instead of hanging for the full window.
+        if (attempt === 1 && !isLockRelatedIdbOpenError(e)) {
+          maxRetries = IDB_OPEN_RETRIES_NON_LOCK;
+        }
+
+        const totalAttempts = 1 + maxRetries;
         if (attempt < totalAttempts) {
-          // Exponential backoff: 500ms, 1000ms, 2000ms for retries 1, 2, 3
+          // Exponential backoff: BASE * 2^(attempt-1). Lock errors retry up to
+          // IDB_OPEN_RETRIES times (~31s total); non-lock errors truncate at
+          // IDB_OPEN_RETRIES_NON_LOCK (~7s total).
           const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
           Log.warn(
             `[OpLogStore] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
@@ -229,6 +263,8 @@ export class OperationLogStoreService {
           );
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
+
+        attempt++;
       }
     }
 

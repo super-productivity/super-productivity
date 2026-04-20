@@ -20,6 +20,14 @@
     <mat-icon>open_in_new</mat-icon>
     {{ T.F.SYNC.D_AUTH_CODE.GET_AUTH_CODE | translate }}</a
   >
+  <button
+    mat-button
+    type="button"
+    (click)="copyUrl()"
+  >
+    <mat-icon>content_copy</mat-icon>
+    {{ T.F.SYNC.D_AUTH_CODE.COPY_URL | translate }}
+  </button>
 
   @if (!isNativePlatform) {
     <br />

@@ -88,7 +88,7 @@ export class ReminderModule {
             switchMap((reminders: TaskWithReminderData[]) => {
               const isShowAddTaskBar = this._layoutService.isShowAddTaskBar();
               return isShowAddTaskBar
-                ? merge([
+                ? merge(
                     // Wait for add task bar to close
                     interval(100).pipe(
                       map(() => this._layoutService.isShowAddTaskBar()),
@@ -97,7 +97,7 @@ export class ReminderModule {
                     ),
                     // in case someone just forgot to close it
                     timer(10000),
-                  ]).pipe(first(), mapTo(reminders), delay(1000))
+                  ).pipe(first(), mapTo(reminders), delay(1000))
                 : of(reminders);
             }),
           ),
@@ -186,14 +186,12 @@ export class ReminderModule {
             );
           }
         } else {
-          this._matDialog
-            .open(DialogViewTaskRemindersComponent, {
-              restoreFocus: true,
-              data: {
-                reminders,
-              },
-            })
-            .afterClosed();
+          this._matDialog.open(DialogViewTaskRemindersComponent, {
+            restoreFocus: true,
+            data: {
+              reminders,
+            },
+          });
         }
       });
   }

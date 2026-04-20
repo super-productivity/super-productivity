@@ -122,11 +122,8 @@ export class SyncHydrationService {
           : '(from state snapshot)',
       );
 
-      // 3. Get client ID for vector clock
-      const clientId = await this.clientIdService.loadClientId();
-      if (!clientId) {
-        throw new Error('Failed to load clientId - cannot create SYNC_IMPORT operation');
-      }
+      // 3. Get client ID for vector clock (regenerate if missing or invalid)
+      const clientId = await this.clientIdService.getOrGenerateClientId();
 
       // 4. Create SYNC_IMPORT operation with merged clock
       // CRITICAL: The SYNC_IMPORT's clock must include ALL known clients, not just local ones.

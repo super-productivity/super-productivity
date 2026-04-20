@@ -19,6 +19,10 @@ import {
   MissingRefreshTokenAPIError,
   HttpNotOkAPIError,
   EmptyRemoteBodySPError,
+  JsonParseError,
+  LegacySyncFormatDetectedError,
+  SyncDataCorruptedError,
+  UploadRevToMatchMismatchAPIError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { SyncConfig } from '../../features/config/global-config.model';
@@ -152,6 +156,14 @@ export class SyncWrapperService {
    * without being blocked by recurring auto-sync dialogs. Cleared when encryption config changes.
    */
   private _suppressEncryptionDialogs = false;
+
+  /**
+   * Tracks consecutive SuperSync AuthFailSPError occurrences.
+   * Tolerates up to 2 transient 401s (e.g. infrastructure errors);
+   * on the 3rd consecutive failure, clears the token so re-auth dialog opens.
+   * Reset to 0 on any successful sync or any non-auth error.
+   */
+  private _consecutiveSuperSyncAuthFailures = 0;
 
   /**
    * Observable for UI: true when all local changes have been uploaded.
@@ -394,6 +406,10 @@ export class SyncWrapperService {
         syncCapableProvider,
         isProviderSwitch ? { forceFromSeq0: true } : undefined,
       );
+      // Auth is confirmed working if download didn't throw AuthFailSPError.
+      // Reset here rather than only at InSync so early returns (cancelled,
+      // LWW pending, payload rejected) also break the consecutive-failure chain.
+      this._consecutiveSuperSyncAuthFailures = 0;
       SyncLog.log(`SyncWrapperService: Download complete. kind=${downloadResult.kind}`);
 
       // If user cancelled the sync import conflict dialog, skip upload entirely.
@@ -501,6 +517,15 @@ export class SyncWrapperService {
     } catch (error) {
       SyncLog.err(error);
 
+      // Reset consecutive SuperSync auth failure counter for non-auth errors.
+      // Only AuthFailSPError for SuperSync should accumulate the counter.
+      if (
+        !(error instanceof AuthFailSPError) ||
+        providerId !== SyncProviderId.SuperSync
+      ) {
+        this._consecutiveSuperSyncAuthFailures = 0;
+      }
+
       if (error instanceof PotentialCorsError) {
         this._snackService.open({
           msg: T.F.SYNC.S.ERROR_CORS,
@@ -517,12 +542,19 @@ export class SyncWrapperService {
         this._providerManager.setSyncStatus('ERROR');
         this._superSyncStatusService.clearScope();
         // Clear stale auth credentials so isReady() returns false and re-auth dialog opens.
-        // Exception: SuperSync AuthFailSPError — the server rejection may be transient
-        // (e.g. an infrastructure error returning 401 instead of 500). The snackbar shows
-        // a "Configure" button so users can re-auth on genuine failures. Other providers
-        // (Dropbox, WebDAV) must clear immediately so their OAuth/re-auth flows work.
-        const skipClear =
-          error instanceof AuthFailSPError && providerId === SyncProviderId.SuperSync;
+        // SuperSync AuthFailSPError gets special handling: tolerate up to 2 transient 401s
+        // (e.g. infrastructure errors returning 401 instead of 500), but on the 3rd
+        // consecutive failure, clear the token to break the stale-credential loop.
+        // Other providers (Dropbox, WebDAV) clear immediately so their OAuth/re-auth flows work.
+        let skipClear = false;
+        if (error instanceof AuthFailSPError && providerId === SyncProviderId.SuperSync) {
+          this._consecutiveSuperSyncAuthFailures++;
+          if (this._consecutiveSuperSyncAuthFailures < 3) {
+            skipClear = true;
+          } else {
+            this._consecutiveSuperSyncAuthFailures = 0;
+          }
+        }
         if (providerId && !skipClear) {
           try {
             await this._providerManager.clearAuthCredentials(providerId);
@@ -573,13 +605,53 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof EmptyRemoteBodySPError) {
-        // Remote file returned empty body (e.g. Koofr WebDAV corrupted file).
-        // Force overwrite is safe here: local data is intact, remote is empty.
+        // Remote file returned an empty body (e.g. Koofr WebDAV corrupted file).
+        // Force overwrite is safe: local data is intact, remote is empty.
         this._providerManager.setSyncStatus('ERROR');
         this._snackService.open({
           msg: T.F.SYNC.S.ERROR_REMOTE_FILE_EMPTY,
           type: 'ERROR',
           config: { duration: 12000 },
+          actionFn: async () => this.forceUpload(),
+          actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof JsonParseError) {
+        // Remote JSON is unparseable (e.g. truncated write, encoding issue).
+        // Force overwrite is safe: local data is intact, remote cannot be parsed.
+        // Issues: #5574, #4616.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.ERROR_REMOTE_FILE_CORRUPTED,
+          type: 'ERROR',
+          config: { duration: 12000 },
+          actionFn: async () => this.forceUpload(),
+          actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof SyncDataCorruptedError) {
+        // Remote file format version is incompatible (could be older or newer than local).
+        // Do NOT offer force-upload: if remote is newer, overwriting would destroy newer data.
+        // Users should ensure all devices run the same app version.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          type: 'ERROR',
+          config: { duration: 12000 },
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof LegacySyncFormatDetectedError) {
+        // Remote has v16.x pfapi files (__meta_) but no sync-data.json. Usual cause:
+        // an old device still writing the legacy format, which would silently diverge
+        // from this client. Force-overwrite is offered as an escape hatch for the
+        // stale-__meta_ case (successful migration but old files never cleaned up);
+        // it drops any remaining v16 data in favor of the current local state.
+        // Issues: #5964, #6174.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.LEGACY_FORMAT_DETECTED,
+          type: 'ERROR',
+          config: { duration: 20000 },
           actionFn: async () => this.forceUpload(),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
@@ -650,6 +722,16 @@ export class SyncWrapperService {
           type: 'ERROR',
           config: { duration: 12000 },
         });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof UploadRevToMatchMismatchAPIError) {
+        // Another client uploaded between our download and upload — self-healing.
+        // The next sync cycle will download their ops first, then upload successfully.
+        // Do not show an error snackbar; just mark as UNKNOWN_OR_CHANGED so the
+        // next sync cycle triggers and resolves the state.
+        SyncLog.log(
+          'SyncWrapperService: Concurrent upload detected, will retry on next sync cycle',
+        );
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return 'HANDLED_ERROR';
       } else {
         this._providerManager.setSyncStatus('ERROR');

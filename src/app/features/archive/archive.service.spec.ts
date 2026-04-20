@@ -342,4 +342,56 @@ describe('ArchiveService', () => {
       });
     });
   });
+
+  describe('writeTasksToArchiveForRemoteSync', () => {
+    it('should ignore malformed tasks without valid ids', async () => {
+      const invalidTask = {
+        title: 'Invalid task',
+        subTasks: [],
+      } as unknown as TaskWithSubTasks;
+
+      await service.writeTasksToArchiveForRemoteSync([invalidTask]);
+
+      expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+    });
+
+    it('should drop malformed subtasks before persisting archive data', async () => {
+      const invalidSubTask = { title: 'Invalid subtask' } as unknown as TaskWithSubTasks;
+      const parentTask = createMockTask('task-1', {
+        subTaskIds: ['sub-1'],
+        subTasks: [invalidSubTask as any],
+      });
+
+      await service.writeTasksToArchiveForRemoteSync([parentTask]);
+
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      const savedData = mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+      expect(savedData.task.ids).toEqual(['task-1']);
+      expect(Object.keys(savedData.task.entities)).toEqual(['task-1']);
+      expect(savedData.task.entities['task-1']!.subTaskIds).toEqual([]);
+    });
+
+    it('should sync subTaskIds with surviving subtasks when some are dropped', async () => {
+      // If a subtask is dropped because its id is invalid, the parent's subTaskIds
+      // must drop the same reference so the archived parent doesn't carry a
+      // dangling id that would re-surface on restore / remote sync.
+      const validSubTask = createMockTask('sub-ok', { parentId: 'task-1' });
+      const invalidSubTask = {
+        title: 'broken',
+        subTasks: [],
+      } as unknown as TaskWithSubTasks;
+      const parentTask = createMockTask('task-1', {
+        subTaskIds: ['sub-ok', 'sub-broken'],
+        subTasks: [validSubTask, invalidSubTask as any],
+      });
+
+      await service.writeTasksToArchiveForRemoteSync([parentTask]);
+
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      const savedData = mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+      const savedParent = savedData.task.entities['task-1'];
+      expect(savedParent).toBeDefined();
+      expect(savedParent!.subTaskIds).toEqual(['sub-ok']);
+    });
+  });
 });

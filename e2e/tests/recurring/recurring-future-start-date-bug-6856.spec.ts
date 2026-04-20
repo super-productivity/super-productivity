@@ -29,7 +29,7 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     // 2. Open task detail and click on recur to open the repeat dialog
     await task.hover();
     const detailBtn = page.getByRole('button', {
-      name: 'Show/Hide additional info',
+      name: 'Show/hide task panel',
     });
     await expect(detailBtn).toBeVisible({ timeout: 5000 });
     await detailBtn.click();

@@ -7,6 +7,7 @@ import {
 } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { getPayloadKey, getAllPayloadKeys } from '../core/entity-registry';
+import { isValidEntityId } from './is-valid-entity-id';
 
 /**
  * Result of validating an operation payload.
@@ -23,6 +24,52 @@ export interface PayloadValidationResult {
  */
 const getEntityKeyFromType = (entityType: EntityType): string | null => {
   return getPayloadKey(entityType) ?? null;
+};
+
+const validateTaskBatchPayload = (tasks: unknown[]): PayloadValidationResult => {
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i] as Record<string, unknown>;
+    if (!task || typeof task !== 'object' || Array.isArray(task)) {
+      return {
+        success: false,
+        error: `UPDATE tasks[${i}] must be an object`,
+      };
+    }
+
+    if (!isValidEntityId(task.id)) {
+      return {
+        success: false,
+        error: `UPDATE tasks[${i}] missing valid 'id' field`,
+      };
+    }
+
+    if ('subTasks' in task && task.subTasks !== undefined) {
+      if (!Array.isArray(task.subTasks)) {
+        return {
+          success: false,
+          error: `UPDATE tasks[${i}].subTasks must be an array`,
+        };
+      }
+
+      for (let j = 0; j < task.subTasks.length; j++) {
+        const subTask = task.subTasks[j] as Record<string, unknown>;
+        if (!subTask || typeof subTask !== 'object' || Array.isArray(subTask)) {
+          return {
+            success: false,
+            error: `UPDATE tasks[${i}].subTasks[${j}] must be an object`,
+          };
+        }
+        if (!isValidEntityId(subTask.id)) {
+          return {
+            success: false,
+            error: `UPDATE tasks[${i}].subTasks[${j}] missing valid 'id' field`,
+          };
+        }
+      }
+    }
+  }
+
+  return { success: true };
 };
 
 /**
@@ -147,6 +194,9 @@ const validateUpdatePayload = (
   if (entityKey) {
     const pluralKey = entityKey + 's';
     if (Array.isArray(p[pluralKey])) {
+      if (entityType === 'TASK') {
+        return validateTaskBatchPayload(p[pluralKey] as unknown[]);
+      }
       return { success: true };
     }
   }

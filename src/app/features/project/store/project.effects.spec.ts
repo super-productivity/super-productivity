@@ -133,6 +133,57 @@ describe('ProjectEffects', () => {
         }),
       );
     });
+
+    it('should reset misc.defaultStartPage when deleted project was the start page', (done) => {
+      globalConfigServiceMock.cfg.and.returnValue({
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          defaultStartPage: 'project-1',
+        },
+      });
+
+      effects.deleteProjectRelatedData.subscribe(() => {
+        expect(globalConfigServiceMock.updateSection).toHaveBeenCalledWith('misc', {
+          defaultStartPage: 0,
+        });
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.deleteProject({
+          projectId: 'project-1',
+          noteIds: [],
+          allTaskIds: [],
+        }),
+      );
+    });
+
+    it('should NOT reset misc.defaultStartPage when deleted project does not match', (done) => {
+      globalConfigServiceMock.cfg.and.returnValue({
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          defaultStartPage: 'project-1',
+        },
+      });
+
+      effects.deleteProjectRelatedData.subscribe(() => {
+        expect(globalConfigServiceMock.updateSection).not.toHaveBeenCalledWith(
+          'misc',
+          jasmine.any(Object),
+        );
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.deleteProject({
+          projectId: 'project-2',
+          noteIds: [],
+          allTaskIds: [],
+        }),
+      );
+    });
   });
 
   describe('moveAllProjectToTodayListWhenBacklogIsDisabled$', () => {

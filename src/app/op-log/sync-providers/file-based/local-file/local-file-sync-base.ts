@@ -45,7 +45,10 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
     return this.fileAdapter.listFiles(fullPath);
   }
 
-  async getFileRev(targetPath: string, localRev: string): Promise<{ rev: string }> {
+  async getFileRev(
+    targetPath: string,
+    localRev: string | null,
+  ): Promise<{ rev: string }> {
     SyncLog.normal(`${LocalFileSyncBase.LB}.${this.getFileRev.name}`, {
       targetPath,
       localRev,

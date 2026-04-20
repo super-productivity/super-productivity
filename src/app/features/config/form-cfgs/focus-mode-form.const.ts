@@ -28,10 +28,15 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
       },
     },
     {
-      key: 'isPlayTick',
-      type: 'checkbox',
+      key: 'focusModeSound',
+      type: 'select',
       templateOptions: {
-        label: T.GCF.FOCUS_MODE.L_IS_PLAY_TICK,
+        label: T.GCF.FOCUS_MODE.L_FOCUS_MODE_SOUND,
+        options: [
+          { label: T.GCF.FOCUS_MODE.FOCUS_MODE_SOUND_OFF, value: 'off' },
+          { label: T.GCF.FOCUS_MODE.FOCUS_MODE_SOUND_TICK, value: 'tick' },
+          { label: T.GCF.FOCUS_MODE.FOCUS_MODE_SOUND_WHITE_NOISE, value: 'whiteNoise' },
+        ],
       },
     },
     {

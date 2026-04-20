@@ -1003,7 +1003,6 @@ export class PluginService implements OnDestroy {
         throw new Error(
           this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
             maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-            fileSize: (manifestBytes.length / 1024).toFixed(1),
           }),
         );
       }
@@ -1032,7 +1031,6 @@ export class PluginService implements OnDestroy {
         throw new Error(
           this._translateService.instant(T.PLUGINS.CODE_TOO_LARGE, {
             maxSize: (MAX_PLUGIN_CODE_SIZE / 1024 / 1024).toFixed(1),
-            fileSize: (pluginCodeBytes.length / 1024 / 1024).toFixed(1),
           }),
         );
       }
@@ -1043,12 +1041,11 @@ export class PluginService implements OnDestroy {
       let indexHtml: string | null = null;
       if (manifest.iFrame && extractedFiles['index.html']) {
         const indexHtmlBytes = extractedFiles['index.html'];
-        // Validate index.html size (same as manifest for now)
+        // Reuse the manifest size limit for index.html.
         if (indexHtmlBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
           throw new Error(
-            this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
+            this._translateService.instant(T.PLUGINS.INDEX_HTML_TOO_LARGE, {
               maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-              fileSize: (indexHtmlBytes.length / 1024).toFixed(1),
             }),
           );
         }
@@ -1059,12 +1056,11 @@ export class PluginService implements OnDestroy {
       let iconContent: string | null = null;
       if (manifest.icon && extractedFiles[manifest.icon]) {
         const iconBytes = extractedFiles[manifest.icon];
-        // Validate icon size (same as manifest for now)
+        // Reuse the manifest size limit for the SVG icon.
         if (iconBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
           throw new Error(
-            this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
+            this._translateService.instant(T.PLUGINS.ICON_TOO_LARGE, {
               maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-              fileSize: (iconBytes.length / 1024).toFixed(1),
             }),
           );
         }

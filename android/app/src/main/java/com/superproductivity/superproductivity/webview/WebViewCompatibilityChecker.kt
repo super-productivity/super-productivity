@@ -6,6 +6,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.annotation.VisibleForTesting
@@ -13,6 +14,8 @@ import androidx.core.content.pm.PackageInfoCompat
 import kotlin.math.max
 
 object WebViewCompatibilityChecker {
+    private const val TAG = "WebViewCompat"
+
     const val MIN_CHROMIUM_VERSION = 107
     const val RECOMMENDED_CHROMIUM_VERSION = 110
 
@@ -108,7 +111,16 @@ object WebViewCompatibilityChecker {
 
     private fun resolvePackageInfo(context: Context): PackageInfo? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WebView.getCurrentWebViewPackage()?.let { return it }
+            // Why: on devices with a broken WebView provider getCurrentWebViewPackage()
+            // can throw (AndroidRuntimeException / MissingWebViewPackageException /
+            // NullPointerException) rather than returning null, which would bypass
+            // FullscreenActivity's recovery. All three extend RuntimeException;
+            // keep the catch narrow so non-runtime failures still surface.
+            try {
+                WebView.getCurrentWebViewPackage()?.let { return it }
+            } catch (e: RuntimeException) {
+                Log.d(TAG, "getCurrentWebViewPackage() threw; falling back to PackageManager", e)
+            }
         }
 
         val pm = context.packageManager

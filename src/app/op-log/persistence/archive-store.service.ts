@@ -12,10 +12,12 @@ import { runDbUpgrade } from './db-upgrade';
 import {
   ARCHIVE_STORE_NOT_INITIALIZED,
   isConnectionClosingError,
+  isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
+  IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
@@ -84,11 +86,18 @@ export class ArchiveStoreService {
     this._db = db;
   }
 
+  /**
+   * See OperationLogStoreService._openDbWithRetry for the rationale behind the
+   * lock-vs-non-lock retry budget split.
+   *
+   * @see https://github.com/super-productivity/super-productivity/issues/7191
+   */
   private async _openDbWithRetry(): Promise<IDBPDatabase<ArchiveDBSchema>> {
-    const totalAttempts = 1 + IDB_OPEN_RETRIES;
+    let maxRetries = IDB_OPEN_RETRIES;
+    let attempt = 1;
     let lastError: unknown;
 
-    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    while (attempt <= 1 + maxRetries) {
       try {
         return await openDB<ArchiveDBSchema>(DB_NAME, DB_VERSION, {
           upgrade: (db, oldVersion, _newVersion, transaction) => {
@@ -98,7 +107,18 @@ export class ArchiveStoreService {
       } catch (e) {
         lastError = e;
 
+        // Non-lock errors fall back to a short retry budget so we don't block
+        // the op-log subsystem for 31s before surfacing the error to the user.
+        // See OperationLogStoreService._openDbWithRetry for details.
+        if (attempt === 1 && !isLockRelatedIdbOpenError(e)) {
+          maxRetries = IDB_OPEN_RETRIES_NON_LOCK;
+        }
+
+        const totalAttempts = 1 + maxRetries;
         if (attempt < totalAttempts) {
+          // Exponential backoff: BASE * 2^(attempt-1). Lock errors retry up to
+          // IDB_OPEN_RETRIES times (~31s total); non-lock errors truncate at
+          // IDB_OPEN_RETRIES_NON_LOCK (~7s total).
           const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
           Log.warn(
             `[ArchiveStore] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
@@ -106,6 +126,8 @@ export class ArchiveStoreService {
           );
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
+
+        attempt++;
       }
     }
 

@@ -9,6 +9,7 @@ import { CaldavClientService } from './caldav-client.service';
 import { CaldavSyncAdapterService } from './caldav-sync-adapter.service';
 import { CaldavCfg } from './caldav.model';
 import { truncate } from '../../../../util/truncate';
+import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isCaldavEnabled } from './is-caldav-enabled.util';
 import { CALDAV_POLL_INTERVAL } from './caldav.const';
 
@@ -40,12 +41,31 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
   }
 
   getAddTaskData(issueData: CaldavIssue): IssueTask {
+    // Map DTSTART: all-day → dueDay, timed → dueWithTime, absent → null (prevents "Today" default).
+    // Always null the counterpart field so type transitions clear stale values on update.
+    const startFields: Partial<IssueTask> =
+      issueData.start === undefined
+        ? { dueDay: null, dueWithTime: null }
+        : issueData.isAllDay
+          ? { dueDay: getDbDateStr(issueData.start), dueWithTime: null }
+          : { dueWithTime: issueData.start, dueDay: null };
+
+    // Map DUE → deadline fields (all-day → deadlineDay, timed → deadlineWithTime).
+    // Always null the counterpart field to clear stale values on type transitions.
+    const dueFields: Partial<IssueTask> =
+      issueData.due === undefined
+        ? {}
+        : issueData.isDueAllDay
+          ? { deadlineDay: getDbDateStr(issueData.due), deadlineWithTime: null }
+          : { deadlineWithTime: issueData.due, deadlineDay: null };
+
     return {
       title: issueData.summary,
       issueLastUpdated: issueData.etag_hash,
       notes: issueData.note,
-      dueWithTime: issueData.start,
       related_to: issueData.related_to,
+      ...startFields,
+      ...dueFields,
       issueLastSyncedValues: this._caldavSyncAdapter.extractSyncValues(
         issueData as unknown as Record<string, unknown>,
       ),

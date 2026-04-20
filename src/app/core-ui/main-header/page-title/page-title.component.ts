@@ -43,7 +43,7 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
       >
         {{ displayTitle() }}
       </div>
-      @if (!isXxxs()) {
+      @if (!isXxxs() && !isSpecialSection()) {
         <div class="page-title-actions">
           <button
             [mat-menu-trigger-for]="activeWorkContextMenu"
@@ -217,6 +217,14 @@ export class PageTitleComponent {
     startWith(!!this._router.url.match(/(habits)$/)),
   );
   isHabitsSection = toSignal(this._isHabitsSection$, { initialValue: false });
+
+  isSpecialSection = computed(
+    () =>
+      this.isPlannerSection() ||
+      this.isScheduleSection() ||
+      this.isBoardsSection() ||
+      this.isHabitsSection(),
+  );
 
   // Override title for special routes
   displayTitle = computed(() => {

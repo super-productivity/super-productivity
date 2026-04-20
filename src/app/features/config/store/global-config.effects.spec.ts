@@ -27,9 +27,10 @@ describe('GlobalConfigEffects', () => {
     dateServiceSpy = jasmine.createSpyObj('DateService', [
       'setStartOfNextDayDiff',
       'todayStr',
+      'getStartOfNextDayDiffMs',
     ]);
     dateServiceSpy.todayStr.and.returnValue('2026-02-20');
-    dateServiceSpy.startOfNextDayDiff = 0;
+    dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(0);
 
     TestBed.configureTestingModule({
       providers: [
@@ -183,7 +184,7 @@ describe('GlobalConfigEffects', () => {
     });
 
     it('should dispatch setTodayString with todayStr and startOfNextDayDiffMs', () => {
-      dateServiceSpy.startOfNextDayDiff = 14400000;
+      dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(14400000);
       const dispatched: Action[] = [];
       effects.setStartOfNextDayDiffOnChange.subscribe((action) => {
         dispatched.push(action);
@@ -222,7 +223,7 @@ describe('GlobalConfigEffects', () => {
     });
 
     it('should dispatch setTodayString when loadAllData is dispatched', () => {
-      dateServiceSpy.startOfNextDayDiff = 14400000;
+      dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(14400000);
       let emittedAction: Action | undefined;
       effects.setStartOfNextDayDiffOnLoad.subscribe((action) => {
         emittedAction = action;

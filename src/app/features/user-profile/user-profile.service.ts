@@ -351,13 +351,12 @@ export class UserProfileService {
       // Step 7: Handle target profile data
       if (targetData) {
         // Profile has existing data - import it.
-        // importCompleteBackup clears ops + state_cache and dispatches loadAllData,
-        // fully replacing all NgRx feature state in-memory (no page reload needed).
+        // importCompleteBackup clears ops + state_cache and dispatches loadAllData.
         Log.log('UserProfileService: Importing target profile data');
         await this._backupService.importCompleteBackup(
           targetData,
           false, // isSkipLegacyWarnings
-          false, // isSkipReload
+          true, // isSkipReload - we handle reload ourselves below
         );
       } else {
         // Profile is empty (newly created) - import a clean default state with profiles enabled
@@ -380,14 +379,19 @@ export class UserProfileService {
         };
 
         Log.log('UserProfileService: Importing empty default state');
-        // importCompleteBackup clears ops + state_cache and dispatches loadAllData,
-        // fully replacing all NgRx feature state in-memory (no page reload needed).
+        // importCompleteBackup clears ops + state_cache and dispatches loadAllData.
         await this._backupService.importCompleteBackup(
           emptyData,
           true, // isSkipLegacyWarnings
-          false, // isSkipReload
+          true, // isSkipReload - we handle reload ourselves below
         );
       }
+
+      // Reload the app to ensure all services and state are fully re-initialized
+      // with the new profile's data. A reload is required because some parts of the
+      // app (e.g. WorkContextService) only initialize once at startup via allDataWasLoaded,
+      // and cached state in services cannot be reliably reset in-place.
+      window.location.reload();
     } catch (error) {
       Log.err('UserProfileService: Failed to switch profile', error);
       this._snackService.open({

@@ -63,8 +63,8 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
     const sc = this.simpleCounter();
     return (
       sc?.isTrackStreaks &&
-      sc?.countOnDay[this.todayStr()] &&
-      sc?.countOnDay[this.todayStr()] >= (sc.streakMinValue || 0)
+      sc?.countOnDay?.[this.todayStr()] &&
+      sc?.countOnDay?.[this.todayStr()] >= (sc.streakMinValue || 0)
     );
   });
 

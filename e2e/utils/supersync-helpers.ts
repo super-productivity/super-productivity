@@ -239,8 +239,34 @@ export const createSimulatedClient = async (
     }
   });
 
-  // Navigate to app and wait for ready
-  await page.goto('/');
+  // Navigate to app with retry for transient ERR_CONNECTION_REFUSED.
+  // Under parallel load (many workers × 2-3 browser contexts each), the Angular
+  // dev server can temporarily refuse connections. Retrying recovers from this
+  // without failing the test outright.
+  let lastGotoError: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await page.goto('/');
+      lastGotoError = null;
+      break;
+    } catch (e) {
+      lastGotoError = e as Error;
+      const isConnectionRefused = lastGotoError.message.includes(
+        'ERR_CONNECTION_REFUSED',
+      );
+      if (attempt < 2 && isConnectionRefused) {
+        const delay = 1000 * (attempt + 1);
+        console.log(
+          `[Client ${clientName}] page.goto('/') failed (attempt ${attempt + 1}/3): ERR_CONNECTION_REFUSED — retrying in ${delay}ms`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        break; // Non-connection error or last attempt — let it throw below
+      }
+    }
+  }
+  if (lastGotoError) throw lastGotoError;
+
   await waitForAppReady(page);
 
   const workView = new WorkViewPage(page, `${clientName}-${testPrefix}`);
@@ -491,6 +517,12 @@ export const getParentTaskElement = (
 /**
  * Mark a task as done by hovering and clicking the done button.
  *
+ * Waits for the `.isDone` class to appear before returning. `TaskService.toggleDoneWithAnimation`
+ * schedules the actual `setDone` dispatch via `setTimeout(200ms)` for the mark-done animation,
+ * so without this wait a following sync can start before the updateTask op is captured — the
+ * late op then lands during the sync's upload, leaving `hasPendingOps=true` and the check icon
+ * never appears.
+ *
  * @param client - The simulated E2E client
  * @param taskName - The task name to mark as done
  */
@@ -501,11 +533,17 @@ export const markTaskDone = async (
   const task = getTaskElement(client, taskName);
   await task.hover();
   await task.locator('done-toggle').click();
+  await expect(getDoneTaskElement(client, taskName).first()).toBeVisible({
+    timeout: UI_VISIBLE_TIMEOUT,
+  });
 };
 
 /**
  * Mark a subtask as done by hovering and clicking the done button.
  * Uses getSubtaskElement to avoid matching parent tasks.
+ *
+ * Waits for `.isDone` for the same reason as `markTaskDone` — the 200ms animation delay in
+ * `toggleDoneWithAnimation` would otherwise race the following sync and leave pending ops.
  *
  * @param client - The simulated E2E client
  * @param subtaskName - The subtask name to mark as done
@@ -517,6 +555,9 @@ export const markSubtaskDone = async (
   const subtask = getSubtaskElement(client, subtaskName);
   await subtask.hover();
   await subtask.locator('done-toggle').click();
+  await expect(getDoneSubtaskElement(client, subtaskName).first()).toBeVisible({
+    timeout: UI_VISIBLE_TIMEOUT,
+  });
 };
 
 /**
@@ -883,8 +924,11 @@ export const archiveDoneTasks = async (client: SimulatedE2EClient): Promise<void
   await saveAndGoHomeBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
   await saveAndGoHomeBtn.click();
 
-  // Wait for navigation back to work view
-  await client.page.waitForURL(/(active\/tasks|tag\/TODAY\/tasks)/);
+  // Wait for navigation back to work view.
+  // Use negative lookahead: /(active\/tasks|tag\/TODAY)/ would match the
+  // current /daily-summary URL; adding (?!\/daily-summary) ensures we wait
+  // for a real navigation. Also handles tag/TODAY without /tasks suffix.
+  await client.page.waitForURL(/(active\/tasks|tag\/TODAY(?!\/daily-summary))/);
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 };
 

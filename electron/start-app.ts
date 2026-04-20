@@ -1,15 +1,7 @@
 import { initIpcInterfaces } from './ipc-handler';
 import { initPluginOAuth } from './plugin-oauth';
 import electronLog, { info, log, warn } from 'electron-log/main';
-import {
-  App,
-  app,
-  BrowserWindow,
-  globalShortcut,
-  ipcMain,
-  powerMonitor,
-  protocol,
-} from 'electron';
+import { App, app, BrowserWindow, globalShortcut, ipcMain, powerMonitor } from 'electron';
 import { join } from 'path';
 import { initDebug } from './debug';
 import electronDl from 'electron-dl';
@@ -21,14 +13,17 @@ import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
 import { initIndicator } from './indicator';
 import { quitApp, showOrFocus } from './various-shared';
-import { createWindow } from './main-window';
+import { createWindow, getWin } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
 import { destroyTaskWidget } from './task-widget/task-widget';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
 } from './protocol-handler';
-import { getIsQuiting, setIsLocked } from './shared-state';
+import { getIsQuiting, setIsQuiting, setIsLocked } from './shared-state';
+import { clearStaleLevelDbLocks } from './clear-stale-idb-locks';
+import { evaluateGpuStartupGuard } from './gpu-startup-guard';
+import * as fs from 'fs';
 
 const ICONS_FOLDER = __dirname + '/assets/icons/';
 const IS_MAC = process.platform === 'darwin';
@@ -66,6 +61,43 @@ export const startApp = (): void => {
   // https://github.com/super-productivity/super-productivity/issues/4375#issuecomment-2883838113
   // https://github.com/electron/electron/issues/46538#issuecomment-2808806722
   app.commandLine.appendSwitch('gtk-version', '3');
+
+  // Force X11 in Snap on Wayland sessions or when the gnome-42-2204 runtime
+  // is missing. Chromium's Wayland EGL/GBM init can fail against the Mesa
+  // shipped by gnome-42-2204 when the snap runtime's Mesa version drifts
+  // out of sync with what Electron's Chromium expects, producing
+  // "Failed to get system egl display" / "MESA-LOADER failed to open
+  // dri_gbm.so" and a failed GPU process. The X11 ozone backend avoids the
+  // failing Wayland EGL init path while keeping hardware acceleration — at
+  // the cost of Wayland-native features (fractional scaling, per-monitor
+  // HiDPI, native IME, client-side decorations). Override with
+  // `--ozone-platform=wayland`.
+  // IMPORTANT: must run before app.whenReady() — ozone platform is read
+  // during Chromium init and cannot be changed after ready fires.
+  const hasOzoneOverride = process.argv.some(
+    (arg) => arg === '--ozone-platform' || arg.startsWith('--ozone-platform='),
+  );
+  if (process.platform === 'linux' && process.env.SNAP && !hasOzoneOverride) {
+    const isWaylandSession =
+      process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY;
+
+    let isGnomePlatformMissing = false;
+    try {
+      const gnomePlatformPath = join(process.env.SNAP || '', 'gnome-platform');
+      isGnomePlatformMissing =
+        !fs.existsSync(gnomePlatformPath) ||
+        fs.readdirSync(gnomePlatformPath).length === 0;
+    } catch {
+      isGnomePlatformMissing = true;
+    }
+
+    if (isWaylandSession || isGnomePlatformMissing) {
+      app.commandLine.appendSwitch('ozone-platform', 'x11');
+      log(
+        `Snap: forcing X11 (wayland=${isWaylandSession}, gnomePlatformMissing=${isGnomePlatformMissing}, XDG_SESSION_TYPE=${process.env.XDG_SESSION_TYPE ?? 'unset'}, WAYLAND_DISPLAY=${process.env.WAYLAND_DISPLAY ? 'set' : 'unset'})`,
+      );
+    }
+  }
 
   // NOTE: needs to be executed before everything else
   process.argv.forEach((val) => {
@@ -120,6 +152,41 @@ export const startApp = (): void => {
     app.setAppLogsPath();
   }
 
+  // Defense-in-depth against GPU init failures on confined Linux packages
+  // (Snap Mesa ABI drift, missing DRI nodes under Flatpak, etc.) where the
+  // main process stays alive but the GPU process crashes at init and the
+  // window never renders. `--disable-gpu` avoids the hardware Mesa DRI
+  // driver load path — which is the ABI-drift source on confined Snap.
+  // Note: `--disable-gpu` does NOT guarantee "no GPU process" on Linux
+  // (Chromium may still run a GPU process in SwiftShader or
+  // DisplayCompositor mode), but those modes don't dlopen Mesa DRI
+  // drivers, which is what matters for this bug. `--disable-software-
+  // rasterizer` is added as belt-and-braces; the combined pair is what
+  // Chromium's own GPU integration tests treat as "no GPU process."
+  // `app.disableHardwareAcceleration()` only disables compositor accel
+  // and leaves the failing GPU-process-init path active.
+  //
+  // `--ozone-platform=x11` is also stacked: on Chromium 140+/Electron 38+
+  // the Wayland auto-detection can dlopen libgbm in browser-side init
+  // before the GPU-process gate, so the flag pair alone is a false
+  // negative on Flatpak+Wayland hosts. On Snap this is redundant with
+  // the X11 widening block above, but appending twice is harmless (last
+  // value wins in Chromium argv parsing).
+  //
+  // IMPORTANT: must stay after every `app.setPath('userData', ...)` call
+  // above — the marker lives in userData.
+  const gpuDecision = evaluateGpuStartupGuard(app.getPath('userData'));
+  if (gpuDecision.disableGpu) {
+    app.commandLine.appendSwitch('disable-gpu');
+    app.commandLine.appendSwitch('disable-software-rasterizer');
+    app.commandLine.appendSwitch('ozone-platform', 'x11');
+    log(
+      `Disabling GPU acceleration (reason: ${gpuDecision.reason}). ` +
+        `Set SP_ENABLE_GPU=1 to force-enable on the next launch` +
+        (gpuDecision.markerPath ? ` or delete ${gpuDecision.markerPath}.` : '.'),
+    );
+  }
+
   initDebug({ showDevTools: isShowDevTools }, IS_DEV);
 
   // NOTE: opening the folder crashes the mas build
@@ -147,6 +214,38 @@ export const startApp = (): void => {
 
   // APP EVENT LISTENERS
   // -------------------
+  appIN.on('ready', () => {
+    // Clear GPU cache when Electron version changes to prevent blank/black screens.
+    // Stale GPU shader caches from old Electron versions cause rendering failures.
+    // Pattern used by Obsidian's Flatpak wrapper.
+    if (process.platform === 'linux') {
+      const userDataPath = app.getPath('userData');
+      const versionFile = join(userDataPath, '.electron-version');
+      const currentVersion = process.versions.electron;
+      try {
+        let lastVersion = '';
+        try {
+          lastVersion = fs.readFileSync(versionFile, 'utf8').trim();
+        } catch {
+          // File doesn't exist on first run
+        }
+        if (lastVersion !== currentVersion) {
+          const gpuCachePath = join(userDataPath, 'GPUCache');
+          if (fs.existsSync(gpuCachePath)) {
+            fs.rmSync(gpuCachePath, { recursive: true, force: true });
+            log(
+              `Cleared GPUCache after Electron upgrade (${lastVersion} -> ${currentVersion})`,
+            );
+          }
+          fs.mkdirSync(userDataPath, { recursive: true });
+          fs.writeFileSync(versionFile, currentVersion);
+        }
+      } catch (e) {
+        log('Failed to check/clear GPU cache:', e);
+      }
+    }
+  });
+
   appIN.on('ready', () => createMainWin());
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
@@ -289,28 +388,37 @@ export const startApp = (): void => {
         showOrFocus(mainWin);
       }
     });
-
-    protocol.registerFileProtocol('file', (request, callback) => {
-      const pathname = decodeURI(request.url.replace('file:///', ''));
-      callback(pathname);
-    });
   });
 
   appIN.on('will-quit', () => {
     // un-register all shortcuts.
     globalShortcut.unregisterAll();
+    // Safe to remove IPC listeners here: all windows are closed and before-close
+    // IPC flows (sync, finish-day) are guaranteed to have completed.
+    ipcMain.removeAllListeners();
   });
 
-  appIN.on('before-quit', () => {
-    log('App before-quit: cleaning up resources');
-
-    // Clean up task widget before quitting
+  appIN.on('before-quit', (event) => {
+    log('App before-quit: isQuiting=', getIsQuiting());
+    if (!getIsQuiting()) {
+      // Native quit path (Cmd+Q, Dock > Quit on macOS): app.quit() was called
+      // by the OS without going through quitApp(), so isQuiting was never set.
+      // Prevent the immediate quit and delegate to the window close handler,
+      // which manages the before-close callback flow (sync, finish-day, etc.)
+      // and sets isQuiting=true before re-quitting.
+      event.preventDefault();
+      const win = getWin();
+      if (win && !win.isDestroyed()) {
+        win.close();
+      } else {
+        // No window to close — set flag and re-trigger quit directly.
+        setIsQuiting(true);
+        app.quit();
+      }
+      return;
+    }
+    // isQuiting=true: all before-close IPC work is complete — safe to clean up.
     destroyTaskWidget();
-
-    // Remove all IPC listeners to prevent memory leaks
-    ipcMain.removeAllListeners();
-
-    // Clear any pending timeouts/intervals
     if (global.gc) {
       global.gc();
     }
@@ -368,6 +476,10 @@ export const startApp = (): void => {
 
   // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
   async function createMainWin(): Promise<void> {
+    // Remove stale LevelDB LOCK files before the renderer opens IndexedDB.
+    // Orphaned locks from unclean session shutdowns block the backing store open.
+    await clearStaleLevelDbLocks(app.getPath('userData'));
+
     mainWin = await createWindow({
       app,
       IS_DEV,

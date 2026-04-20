@@ -189,7 +189,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   );
 
   private _subs: Subscription = new Subscription();
-  private _intervalTimer?: NodeJS.Timeout;
 
   constructor() {
     this._startupService.init();
@@ -434,31 +433,20 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this._subs.unsubscribe();
-    if (this._intervalTimer) clearInterval(this._intervalTimer);
   }
 
   /**
    * since page load and animation time are not always equal
-   * an interval seemed to feel the most responsive
+   * retrying until the rendered task row is available avoids missing focus targets
    */
   private _focusElement(id: string): void {
-    let counter = 0;
-    this._intervalTimer = setInterval(() => {
-      counter += 1;
-
-      const el = document.getElementById(`t-${id}`);
-      el?.focus();
-
+    this.layoutService.focusTaskInViewWhenReady(id, (el) => {
       if (el && IS_MOBILE) {
         el.classList.add('mobile-highlight-searched-item');
         el.addEventListener('blur', () =>
           el.classList.remove('mobile-highlight-searched-item'),
         );
       }
-
-      if ((el || counter === 4) && this._intervalTimer) {
-        clearInterval(this._intervalTimer);
-      }
-    }, 400);
+    });
   }
 }

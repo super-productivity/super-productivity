@@ -12,20 +12,21 @@ import {
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
 import * as path from 'path';
 import { join, normalize } from 'path';
-import { format } from 'url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { readFileSync, stat } from 'fs';
 import { error, log } from 'electron-log/main';
-import { IS_MAC } from './common.const';
+import { IS_MAC, IS_GNOME_DESKTOP } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
   hideTaskWidget,
   showTaskWidget,
 } from './task-widget/task-widget';
+import { ensureIndicator } from './indicator';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
+import { markGpuStartupSuccess } from './gpu-startup-guard';
 
 let mainWin: BrowserWindow;
 
@@ -92,8 +93,15 @@ export const createWindow = async ({
     simpleStore[SimpleStoreKey.IS_USE_CUSTOM_WINDOW_TITLE_BAR];
   const legacyIsUseObsidianStyleHeader =
     simpleStore[SimpleStoreKey.LEGACY_IS_USE_OBSIDIAN_STYLE_HEADER];
-  const isUseCustomWindowTitleBar =
-    persistedIsUseCustomWindowTitleBar ?? legacyIsUseObsidianStyleHeader ?? true;
+  const userPrefersCustomWindowTitleBar =
+    persistedIsUseCustomWindowTitleBar ??
+    legacyIsUseObsidianStyleHeader ??
+    !IS_GNOME_DESKTOP;
+  // GNOME + Wayland combinations can miss native controls when titleBarStyle is hidden.
+  // Force native decorations on GNOME to keep window controls available.
+  const isUseCustomWindowTitleBar = IS_GNOME_DESKTOP
+    ? false
+    : userPrefersCustomWindowTitleBar;
   const titleBarStyle: BrowserWindowConstructorOptions['titleBarStyle'] =
     isUseCustomWindowTitleBar || IS_MAC ? 'hidden' : 'default';
   // Determine initial symbol color based on system theme preference
@@ -208,11 +216,7 @@ export const createWindow = async ({
     ? customUrl
     : IS_DEV
       ? 'http://localhost:4200'
-      : format({
-          pathname: normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html')),
-          protocol: 'file:',
-          slashes: true,
-        });
+      : `file://${normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html'))}`;
 
   mainWin.loadURL(url).then(() => {
     // Set window title for dev mode
@@ -274,6 +278,11 @@ export const createWindow = async ({
   // listen for app ready
   ipcMain.on(IPC.APP_READY, () => {
     mainWinModule.isAppReady = true;
+    // Signal the GPU startup guard that the full boot chain completed
+    // (including Angular init) — not just that the compositor painted a
+    // frame. This avoids clearing the crash counter on blank/broken
+    // renderers that still fire `ready-to-show`.
+    markGpuStartupSuccess();
   });
 
   // Register F11 key handler for fullscreen toggle
@@ -332,10 +341,11 @@ function initWinEventListeners(app: Electron.App): void {
     const urlObj = new URL(url);
     urlObj.pathname = urlObj.pathname.replace('//', '/');
     const wellFormedUrl = urlObj.toString();
-    const wasOpened = shell.openExternal(wellFormedUrl);
-    if (!wasOpened) {
-      shell.openExternal(wellFormedUrl);
-    }
+    // shell.openExternal returns Promise<void>; surface the failure reason instead
+    // of silently swallowing it (e.g. when xdg-open / Flatpak portal rejects the URI).
+    shell.openExternal(wellFormedUrl).catch((err) => {
+      error('Failed to open external URL via shell.openExternal:', err);
+    });
   };
 
   // open new window links in browser
@@ -455,15 +465,20 @@ const appCloseHandler = (app: App): void => {
 
   mainWin.on('close', (event) => {
     // NOTE: this might not work if we run a second instance of the app
-    log('close, isQuiting:', getIsQuiting());
+    log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
     if (!getIsQuiting()) {
-      event.preventDefault();
       if (getIsMinimizeToTray()) {
-        setWasMaximizedBeforeHide(mainWin.isMaximized());
-        mainWin.hide();
-        showTaskWidget();
-        return;
+        const indicator = ensureIndicator();
+        if (indicator) {
+          event.preventDefault();
+          setWasMaximizedBeforeHide(mainWin.isMaximized());
+          mainWin.hide();
+          showTaskWidget();
+          return;
+        }
       }
+
+      event.preventDefault();
 
       if (ids.length > 0) {
         log('Actions to wait for ', ids);
@@ -497,6 +512,10 @@ const appMinimizeHandler = (app: App): void => {
     // @ts-ignore
     mainWin.on('minimize', (event: Event) => {
       if (getIsMinimizeToTray()) {
+        const indicator = ensureIndicator();
+        if (!indicator) {
+          return;
+        }
         event.preventDefault();
         setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();

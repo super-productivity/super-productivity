@@ -25,7 +25,7 @@
     overflow: hidden;
     flex: 1;
     min-width: 0;
-    font-family: 'Open Sans', sans-serif;
+    font-family: inherit;
     font-weight: 400;
     letter-spacing: normal;
     color: var(--sidenav-text);
@@ -75,17 +75,6 @@
   }
 }
 
-@media (hover: none) {
-  .additional-btn {
-    opacity: 1;
-    visibility: visible;
-  }
-  .task-count {
-    right: 48px !important;
-    display: flex !important;
-  }
-}
-
 .task-count {
   position: absolute;
   top: 50%;
@@ -99,6 +88,22 @@
   color: var(--text-color-muted);
   // avoid affecting drag handle
   pointer-events: none;
+}
+
+// On touch devices the .additional-btn is always visible, so let the counter
+// flow inline beside it instead of overlapping.
+:host-context(.isTouchPrimary) {
+  .task-count {
+    position: static;
+    transform: none;
+    padding: 0 var(--s);
+    flex-shrink: 0;
+    pointer-events: auto;
+  }
+
+  button:first-of-type.has-tasks {
+    padding-right: var(--s);
+  }
 }
 
 // Active state visuals - ensure they override Angular Material styles
@@ -173,7 +178,7 @@ button[mat-menu-item].nav-link.active {
   width: 100%;
   text-align: left;
   font-size: 14px;
-  font-family: 'Open Sans', sans-serif;
+  font-family: inherit;
   font-weight: 400;
   letter-spacing: normal;
 

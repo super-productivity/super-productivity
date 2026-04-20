@@ -135,10 +135,14 @@ export class SyncEffects {
             combineLatest([
               this._syncWrapperService.isEnabledAndReady$,
               this._syncWrapperService.syncInterval$,
+              this._syncWrapperService.syncProviderId$,
             ]).pipe(
-              switchMap(([isEnabledAndReady, syncInterval]) =>
+              switchMap(([isEnabledAndReady, syncInterval, providerId]) =>
                 isEnabledAndReady && syncInterval
-                  ? this._syncTriggerService.getSyncTrigger$(syncInterval)
+                  ? this._syncTriggerService.getSyncTrigger$(
+                      syncInterval,
+                      providerId !== SyncProviderId.SuperSync,
+                    )
                   : EMPTY,
               ),
             ),

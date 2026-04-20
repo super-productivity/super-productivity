@@ -27,7 +27,7 @@ export class InputIntentService {
   readonly currentIntent = _inputIntentSignal.asReadonly();
 
   constructor() {
-    if (deviceType !== 'hybrid') {
+    if (deviceType === 'mouseOnly') {
       return;
     }
 

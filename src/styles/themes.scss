@@ -1,8 +1,11 @@
 @use '@angular/material' as mat;
 @use 'angular-material-css-vars' as mat-css-vars;
+@use 'fonts';
 
+// Material's m2-define-typography-config only accepts a literal string here,
+// so the stack is imported from styles/_fonts.scss instead of duplicated.
 $custom-typography: mat.m2-define-typography-config(
-  $font-family: 'Open Sans, sans-serif',
+  $font-family: fonts.$primary-stack-material,
 );
 @include mat-css-vars.init-material-css-vars($typography-config: $custom-typography);
 

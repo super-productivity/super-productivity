@@ -2,51 +2,80 @@
   {
     "name": "Date Range Reporter Plugin",
     "shortDescription": "Generates reports of completed tasks and tasks with work logs within a specified date range.",
-    "url": "https://github.com/dougcooper/sp-reporter"
+    "url": "https://github.com/dougcooper/sp-reporter",
+    "author": "dougcooper",
+    "authorUrl": "https://github.com/dougcooper",
+    "stars": 32
   },
   {
     "name": "Archived Tasks Viewer",
     "shortDescription": "Read-only viewer to browse archived tasks with grouping, filtering, subtasks preview, and theme toggle.",
-    "url": "https://github.com/baiyina/Archived-Tasks-Viewer"
+    "url": "https://github.com/baiyina/Archived-Tasks-Viewer",
+    "author": "baiyina",
+    "authorUrl": "https://github.com/baiyina",
+    "stars": 28
   },
   {
     "name": "QuestArc",
     "shortDescription": "Turn your workflow into an adventure! Gamify your tasks with Atomic Habit quests, epic boss fights, earnable badges, and a customizable hero profile.",
-    "url": "https://codeberg.org/Nexumia/QuestArc"
+    "url": "https://codeberg.org/Nexumia/QuestArc",
+    "author": "Nexumia",
+    "authorUrl": "https://codeberg.org/Nexumia",
+    "stars": 3
   },
   {
     "name": "AutoPlan",
     "shortDescription": "Smart non-AI plugin for the automatic scheduling of tasks using priorities assigned automatically based on tags, projects, and time estimation.",
-    "url": "https://github.com/00sapo/sp-autoplan"
+    "url": "https://github.com/00sapo/sp-autoplan",
+    "author": "00sapo",
+    "authorUrl": "https://github.com/00sapo",
+    "stars": 28
   },
   {
     "name": "Asana Integration",
     "shortDescription": "Provides 2-way sync between SP tasks and Asana tasks.",
-    "url": "https://codeberg.org/sinenomine/sp-asana"
+    "url": "https://codeberg.org/sinenomine/sp-asana",
+    "author": "sinenomine",
+    "authorUrl": "https://codeberg.org/sinenomine"
   },
   {
     "name": "Obsidian Integration",
     "shortDescription": "Provides 2-way sync between SP tasks and Obsidian tasks.",
-    "url": "https://codeberg.org/sinenomine/sp-obsidian/"
+    "url": "https://codeberg.org/sinenomine/sp-obsidian/",
+    "author": "sinenomine",
+    "authorUrl": "https://codeberg.org/sinenomine",
+    "stars": 2
   },
   {
     "name": "MCP",
     "shortDescription": "Bridge between the Super Productivity app and MCP (Model Context Protocol) servers for Claude Desktop integration.",
-    "url": "https://github.com/organicmoron/SP-MCP"
+    "url": "https://github.com/organicmoron/SP-MCP",
+    "author": "organicmoron",
+    "authorUrl": "https://github.com/organicmoron",
+    "stars": 56
   },
   {
     "name": "Dashboard",
     "shortDescription": "A lightweight dashboard plugin that visualizes time tracked, completed tasks, overdue items, and project breakdowns within a user\u2011defined date range. It ships as a self-contained HTML/JavaScript widget with no external dependencies and is styled to support light/dark themes.",
-    "url": "https://github.com/dougcooper/sp-dashboard"
+    "url": "https://github.com/dougcooper/sp-dashboard",
+    "author": "dougcooper",
+    "authorUrl": "https://github.com/dougcooper",
+    "stars": 29
   },
   {
     "name": "Invoicer",
     "shortDescription": "Generate client invoices from tracked time in Super Productivity, with flexible billing periods, itemization levels, and PDF export.",
-    "url": "https://github.com/1jamesthompson1/sp-invoicer"
+    "url": "https://github.com/1jamesthompson1/sp-invoicer",
+    "author": "1jamesthompson1",
+    "authorUrl": "https://github.com/1jamesthompson1",
+    "stars": 9
   },
   {
     "name": "StudyForge Leaderboard",
     "shortDescription": "Syncs your daily study time from Super Productivity to the StudyForge leaderboard. Compete with friends, track streaks, and join 7-day study war challenges.",
-    "url": "https://github.com/dhananajay-030/studyforge-plugin"
+    "url": "https://github.com/dhananajay-030/studyforge-plugin",
+    "author": "dhananajay-030",
+    "authorUrl": "https://github.com/dhananajay-030",
+    "stars": 4
   }
 ]

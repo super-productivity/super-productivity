@@ -93,7 +93,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
   focusMode: {
     isSkipPreparation: false,
     isPlayTick: false,
-    isPauseTrackingDuringBreak: false,
+    focusModeSound: 'off',
+    isPauseTrackingDuringBreak: true,
     isSyncSessionWithTracking: false,
     isStartInBackground: false,
   },

@@ -15,7 +15,7 @@ const base64UrlEncode = (buffer: Uint8Array): string => {
  * Uses crypto.subtle when available, otherwise falls back to hash-wasm.
  */
 const sha256 = async (data: Uint8Array): Promise<ArrayBuffer> => {
-  if (typeof crypto !== 'undefined' && crypto.subtle !== undefined) {
+  if (typeof crypto !== 'undefined' && crypto.subtle != null) {
     return crypto.subtle.digest('SHA-256', data as BufferSource);
   }
 

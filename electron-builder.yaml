@@ -92,9 +92,21 @@ snap:
     # Fix for issue #6031: Add filesystem access for local file sync
     # https://github.com/super-productivity/super-productivity/issues/6031
     - removable-media # Allows sync to external drives/USB storage
+    # Override electron-builder's hardcoded gnome-3-28-1804 content snap (core20 era)
+    # with gnome-42-2204 (core22 era) for up-to-date Mesa drivers and GSettings schemas.
+    # The plug name must match the template key to replace it rather than duplicate it.
+    # The explicit `content` attribute tells snapd to match the gnome-42-2204 slot.
+    # Pattern from Tidal HiFi: https://github.com/Mastermindzh/tidal-hifi
+    # gnome-42-2204 has global auto-connect (granted June 2022).
+    # Ref: electron-builder#9452, electron-builder#8548 (closed, not planned)
+    - gnome-3-28-1804:
+        interface: content
+        content: gnome-42-2204
+        target: $SNAP/gnome-platform
+        default-provider: gnome-42-2204
 
 flatpak:
-  runtimeVersion: '23.08'
+  runtimeVersion: '25.08'
   finishArgs:
     - --share=network
     - --share=ipc
@@ -104,8 +116,13 @@ flatpak:
     - --socket=pulseaudio
     - --device=dri
     - --filesystem=home
+    - --talk-name=org.freedesktop.Notifications
+    - --talk-name=org.kde.StatusNotifierWatcher
     - --talk-name=org.gnome.Mutter.IdleMonitor
+    - --talk-name=org.freedesktop.secrets
     - --system-talk-name=org.freedesktop.login1
+    - --env=XCURSOR_PATH=/run/host/user-share/icons:/run/host/share/icons
+    - --env=ELECTRON_TRASH=gio
 
 mac:
   appId: com.super-productivity.app

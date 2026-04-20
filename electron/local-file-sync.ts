@@ -112,6 +112,36 @@ export const initLocalFileSyncAdapter = (): void => {
         return true;
       } catch (e) {
         log('ERR: error while checking dir ' + dirPath);
+        if ((e as NodeJS.ErrnoException).code === 'EACCES') {
+          log(
+            'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
+          );
+        }
+        error(e);
+        return e instanceof Error ? e : new Error(String(e));
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IPC.FILE_SYNC_LIST_FILES,
+    (
+      ev,
+      {
+        dirPath,
+      }: {
+        dirPath: string;
+      },
+    ): string[] | Error => {
+      try {
+        return readdirSync(dirPath);
+      } catch (e) {
+        log('ERR: Sync error while listing files in ' + dirPath);
+        if ((e as NodeJS.ErrnoException).code === 'EACCES') {
+          log(
+            'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
+          );
+        }
         error(e);
         return e instanceof Error ? e : new Error(String(e));
       }

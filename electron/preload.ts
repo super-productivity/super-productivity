@@ -25,6 +25,25 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
   ...args
 ) => ipcRenderer.invoke(channel, ...args);
 
+const isGnomeDesktop = (): boolean => {
+  if (process.platform !== 'linux') {
+    return false;
+  }
+
+  const desktopValues = [
+    process.env.XDG_CURRENT_DESKTOP,
+    process.env.XDG_SESSION_DESKTOP,
+    process.env.DESKTOP_SESSION,
+    process.env.GNOME_SHELL_SESSION_MODE,
+  ]
+    .filter((value): value is string => !!value)
+    .map((value) => value.toLowerCase());
+
+  return desktopValues.some(
+    (value) => value.includes('gnome') || value.includes('ubuntu'),
+  );
+};
+
 const ea: ElectronAPI = {
   on: (
     channel: string,
@@ -49,8 +68,8 @@ const ea: ElectronAPI = {
       dataStr: string | undefined;
     }>,
   fileSyncRemove: (filePath) => _invoke('FILE_SYNC_REMOVE', filePath) as Promise<void>,
-  fileSyncListFiles: ({ dirPath }) =>
-    _invoke('FILE_SYNC_LIST_FILES', dirPath) as Promise<string[] | Error>,
+  fileSyncListFiles: (args) =>
+    _invoke('FILE_SYNC_LIST_FILES', args) as Promise<string[] | Error>,
   checkDirExists: (dirPath) =>
     _invoke('CHECK_DIR_EXISTS', dirPath) as Promise<true | Error>,
 
@@ -68,6 +87,7 @@ const ea: ElectronAPI = {
   },
   getZoomFactor: () => webFrame.getZoomFactor(),
   isLinux: () => process.platform === 'linux',
+  isGnomeDesktop,
   isMacOS: () => process.platform === 'darwin',
   isSnap: () => process && process.env && !!process.env.SNAP,
   isFlatpak: () => process && process.env && !!process.env.FLATPAK_ID,

@@ -66,8 +66,8 @@ mat-dialog-content {
   left: 50%;
   z-index: 11;
   box-shadow: var(--whiteframe-shadow-1dp);
-  border-radius: 8px;
-  margin-top: -12px;
+  border-radius: var(--radius-md);
+  margin-top: calc(var(--s) * -1.5);
   white-space: nowrap;
   transform: translateX(-50%);
 

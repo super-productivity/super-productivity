@@ -672,8 +672,11 @@ test.describe('@supersync SuperSync E2E', () => {
       await saveAndGoHomeBtn.click();
       console.log('[Archive Test] Client B clicked Save and go home (archiving)');
 
-      // Wait for navigation back to work view
-      await clientB.page.waitForURL(/tag\/TODAY/, { timeout: 10000 });
+      // Wait for navigation back to work view.
+      // Use negative lookahead to avoid matching /tag/TODAY/daily-summary prematurely.
+      await clientB.page.waitForURL(/(tag\/TODAY(?!\/daily-summary))/, {
+        timeout: 10000,
+      });
       await clientB.page.waitForLoadState('networkidle');
       console.log('[Archive Test] Client B back on work view after archiving');
 

@@ -106,7 +106,7 @@ export class SnapshotUploadService {
    * - Client ID
    *
    * @param logPrefix - Optional prefix for log messages
-   * @throws Error if validation fails or client ID is not available
+   * @throws Error if provider validation fails
    */
   async gatherSnapshotData(logPrefix?: string): Promise<SnapshotUploadData> {
     const prefix = logPrefix ? `${logPrefix}: ` : '';
@@ -120,11 +120,7 @@ export class SnapshotUploadService {
     SyncLog.normal(`${prefix}Getting current state...`);
     const state = await this._stateSnapshotService.getStateSnapshotAsync();
     const vectorClock = await this._vectorClockService.getCurrentVectorClock();
-    const clientId = await this._clientIdProvider.loadClientId();
-
-    if (!clientId) {
-      throw new Error('Client ID not available');
-    }
+    const clientId = await this._clientIdProvider.getOrGenerateClientId();
 
     return {
       syncProvider,

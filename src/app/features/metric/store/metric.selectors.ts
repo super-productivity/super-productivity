@@ -83,7 +83,7 @@ export const selectSimpleCounterClickCounterLineChartData = createSelector(
     );
     let allDays: string[] = [];
     stopwatchItems.forEach((item, i) => {
-      allDays = allDays.concat(Object.keys(item.countOnDay));
+      allDays = allDays.concat(Object.keys(item.countOnDay || {}));
     });
     const allDaysSorted = sortWorklogDates(unique(allDays)).slice(f);
     chart.labels = allDaysSorted;
@@ -91,7 +91,7 @@ export const selectSimpleCounterClickCounterLineChartData = createSelector(
     stopwatchItems.forEach((item, j) => {
       chart.datasets[j] = { data: [], label: item.title };
       allDaysSorted.forEach((day) => {
-        const valueForDay = item.countOnDay[day];
+        const valueForDay = item.countOnDay?.[day];
         chart.datasets[j].data.push(valueForDay ? valueForDay : undefined);
       });
     });
@@ -112,7 +112,7 @@ export const selectSimpleCounterStopWatchLineChartData = createSelector(
     );
     let allDays: string[] = [];
     stopwatchItems.forEach((item, i) => {
-      allDays = allDays.concat(Object.keys(item.countOnDay));
+      allDays = allDays.concat(Object.keys(item.countOnDay || {}));
     });
     const allDaysSorted = sortWorklogDates(unique(allDays)).slice(f);
     chart.labels = allDaysSorted;
@@ -120,7 +120,7 @@ export const selectSimpleCounterStopWatchLineChartData = createSelector(
     stopwatchItems.forEach((item, j) => {
       chart.datasets[j] = { data: [], label: item.title };
       allDaysSorted.forEach((day) => {
-        const valueForDay = item.countOnDay[day];
+        const valueForDay = item.countOnDay?.[day];
         chart.datasets[j].data.push(
           valueForDay ? Math.round(valueForDay / 60000) : undefined,
         );

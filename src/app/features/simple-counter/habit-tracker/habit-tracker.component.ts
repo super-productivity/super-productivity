@@ -187,7 +187,7 @@ export class HabitTrackerComponent {
   }
 
   getVal(counter: SimpleCounter, day: string): number {
-    return counter.countOnDay[day] || 0;
+    return counter.countOnDay?.[day] ?? 0;
   }
 
   getDisplayValue(counter: SimpleCounter, day: string): string {

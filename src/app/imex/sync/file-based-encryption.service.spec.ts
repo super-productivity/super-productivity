@@ -81,8 +81,12 @@ describe('FileBasedEncryptionService', () => {
     ]);
     mockVectorClockService.getCurrentVectorClock.and.resolveTo({ testClient: 1 });
 
-    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
+    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', [
+      'loadClientId',
+      'getOrGenerateClientId',
+    ]);
     mockClientIdProvider.loadClientId.and.resolveTo('testClient');
+    mockClientIdProvider.getOrGenerateClientId.and.resolveTo('testClient');
 
     mockFileBasedAdapter = jasmine.createSpyObj('FileBasedSyncAdapterService', [
       'createAdapter',
@@ -150,12 +154,12 @@ describe('FileBasedEncryptionService', () => {
       );
     });
 
-    it('should throw when client ID is not available', async () => {
-      mockClientIdProvider.loadClientId.and.resolveTo(null);
+    it('should use getOrGenerateClientId from the provider', async () => {
+      mockClientIdProvider.getOrGenerateClientId.and.resolveTo('B_regen');
 
-      await expectAsync(service.enableEncryption('my-password')).toBeRejectedWithError(
-        'Client ID not available',
-      );
+      // Should NOT throw — getOrGenerateClientId handles null/invalid IDs internally
+      await expectAsync(service.enableEncryption('my-password')).toBeResolved();
+      expect(mockClientIdProvider.getOrGenerateClientId).toHaveBeenCalled();
     });
 
     it('should upload encrypted snapshot before saving config', async () => {

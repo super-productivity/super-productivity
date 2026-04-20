@@ -1,6 +1,8 @@
 // CSS Custom Properties (CSS Variables)
 // This file defines all CSS variables used throughout the application
 
+@use 'fonts';
+
 // ===============================
 // CORE DESIGN TOKENS
 // ===============================
@@ -28,10 +30,39 @@
   // -----------------------------
   // Fonts
   // -----------------------------
-  --font-primary-stack:
-    'Open Sans', 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-    'Noto Color Emoji', 'Android Emoji', 'EmojiSymbols', -apple-system,
-    BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  // Lead with the native platform UI font (SF Pro on Apple, Segoe UI Variable
+  // on Win 11, Roboto on Android). Inter/Open Sans are graceful fallbacks.
+  // Sourced from styles/_fonts.scss so themes.scss can share the same list.
+  --font-primary-stack: #{fonts.$primary-stack};
+  --font-mono-stack:
+    ui-monospace, 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+
+  // Type scale
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px; // base
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 22px;
+  --font-size-3xl: 28px;
+
+  // Font weights — 400 is the browser default, so only non-default weights
+  // are declared.
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  // Line heights (unitless so they scale with font-size)
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.35;
+  --line-height-normal: 1.5;
+
+  // Letter spacing — modern UI tracking
+  --letter-spacing-tighter: -0.02em;
+  --letter-spacing-tight: -0.01em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.02em;
 
   --s2: 16px; // 2 * 8px
   --s3: 24px; // 3 * 8px
@@ -66,7 +97,15 @@
   --bar-height-small: 40px;
   --mat-mini-fab-size: 48px;
   --mac-title-bar-padding: 20px;
-  --card-border-radius: 4px;
+
+  // Radius scale — use tokens below; legacy aliases kept for existing rules.
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+  --card-border-radius: var(--radius-md);
   --window-controls-width: 140px; // Fallback for non-WCO contexts; main-header uses env() directly
 
   // Z-index layers
@@ -194,7 +233,7 @@
   --task-icon-default-opacity: 0.7;
   --task-inner-padding-top-bottom: 4px;
   --task-is-done-dim-opacity: 0.3;
-  --task-border-radius: 4px;
+  --task-border-radius: var(--radius-sm);
 
   // Task z-indexes
   --z-drag-handle: 1;
@@ -223,6 +262,13 @@
   --separator-alpha: 0.3;
   --muted-alpha: 0.6;
   --intense-alpha: 0.9;
+
+  // -----------------------------
+  // Focus Ring (keyboard accessibility)
+  // -----------------------------
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--palette-primary-500);
 }
 
 // ===============================
@@ -369,11 +415,6 @@ body {
 
   // Special colors overrides for light theme
   --sun-yellow: #ffc107;
-
-  // Transition duration overrides for light theme
-  --transition-duration-s: 180ms;
-  --transition-duration-l: 400ms;
-  --transition-duration--leave: 195ms;
 
   // Background overlay
   --c-bg-overlay: var(--c-light-80);

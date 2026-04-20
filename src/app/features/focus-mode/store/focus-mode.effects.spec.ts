@@ -1069,7 +1069,7 @@ describe('FocusModeEffects', () => {
         store.overrideSelector(selectFocusModeConfig, {
           isSyncSessionWithTracking: true,
           isSkipPreparation: true,
-          isPlayTick: true,
+          focusModeSound: 'tick',
         });
         store.refreshState();
 
@@ -1328,7 +1328,7 @@ describe('FocusModeEffects', () => {
         store.overrideSelector(selectFocusModeConfig, {
           isSyncSessionWithTracking: true,
           isSkipPreparation: true,
-          isPlayTick: true,
+          focusModeSound: 'tick',
         });
         store.refreshState();
 

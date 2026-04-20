@@ -52,7 +52,11 @@ describe('SyncHydrationService', () => {
     mockStateSnapshotService.getAllSyncModelDataFromStoreAsync.and.resolveTo({} as any);
     // Default: state cache has no vector clock (simulates fresh start)
     mockOpLogStore.loadStateCache.and.resolveTo(null);
-    mockClientIdService = jasmine.createSpyObj('ClientIdService', ['loadClientId']);
+    mockClientIdService = jasmine.createSpyObj('ClientIdService', [
+      'loadClientId',
+      'generateNewClientId',
+      'getOrGenerateClientId',
+    ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
     ]);
@@ -78,6 +82,7 @@ describe('SyncHydrationService', () => {
 
   const setupDefaultMocks = (): void => {
     mockClientIdService.loadClientId.and.resolveTo('localClient');
+    mockClientIdService.getOrGenerateClientId.and.resolveTo('localClient');
     mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
     mockOpLogStore.append.and.resolveTo(undefined);
     mockOpLogStore.getLastSeq.and.resolveTo(10);
@@ -263,12 +268,17 @@ describe('SyncHydrationService', () => {
       expect(globalConfig['lang']).toBe('en');
     });
 
-    it('should throw when clientId cannot be loaded', async () => {
-      mockClientIdService.loadClientId.and.resolveTo(null);
+    it('should use getOrGenerateClientId and propagate the ID to SYNC_IMPORT', async () => {
+      // Simulate issue #6197: getOrGenerateClientId() generates a fresh ID when stored is invalid.
+      // Service must use the returned ID — not throw, not leave the op with null/undefined.
+      mockClientIdService.getOrGenerateClientId.and.resolveTo('B_regen');
 
-      await expectAsync(service.hydrateFromRemoteSync({})).toBeRejectedWithError(
-        /Failed to load clientId/,
-      );
+      await expectAsync(service.hydrateFromRemoteSync({})).toBeResolved();
+      expect(mockClientIdService.getOrGenerateClientId).toHaveBeenCalled();
+
+      // Verify the SYNC_IMPORT operation carries the ID returned by getOrGenerateClientId
+      const appendCall = mockOpLogStore.append.calls.mostRecent();
+      expect(appendCall.args[0].clientId).toBe('B_regen');
     });
 
     it('should save state cache after appending operation', async () => {

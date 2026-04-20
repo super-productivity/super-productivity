@@ -1,6 +1,7 @@
 import { FileBasedSyncTestHarness } from '../helpers/file-based-sync-test-harness';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../../sync-providers/file-based/file-based-sync.types';
 import { SyncOperation } from '../../../sync-providers/provider.interface';
+import { UploadRevToMatchMismatchAPIError } from '../../../core/errors/sync-errors';
 
 describe('File-Based Sync Integration - Edge Cases', () => {
   let harness: FileBasedSyncTestHarness;
@@ -509,10 +510,19 @@ describe('File-Based Sync Integration - Encryption Round-Trip', () => {
       });
       await clientA.uploadOps([opA]);
 
-      // Client B uploads (merges with A's data)
+      // Client B's upload throws: genuine concurrent upload detected
+      // (A changed the rev, so B's cached rev is now stale)
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'From B',
       });
+      await expectAsync(clientB.uploadOps([opB])).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
+
+      // Client B downloads (next sync cycle: picks up A's new op and fresh rev)
+      await clientB.downloadOps();
+
+      // Client B retries upload — succeeds with the fresh merged state
       const responseB = await clientB.uploadOps([opB]);
       expect(responseB.results[0].accepted).toBe(true);
 

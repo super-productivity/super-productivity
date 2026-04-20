@@ -208,25 +208,29 @@ const showStats = async (): Promise<void> => {
   }
 };
 
-const showUsage = async (
-  saveHistory = true,
-  showFullEmails = false,
-): Promise<void> => {
+const showUsage = async (saveHistory = true, showFullEmails = false): Promise<void> => {
   console.log('\n--- User Storage Usage (Top 20) ---');
   try {
-    // Calculate size of operations and snapshot data per user
+    // Aggregate per-user op size in a single pass; correlated subqueries here
+    // scan the full operations table per user and hang on large DBs.
     const users: UserStorageRow[] = await prisma.$queryRaw`
+      WITH ops_per_user AS (
+        SELECT
+          user_id,
+          SUM(pg_column_size(payload))::bigint AS ops_bytes,
+          COUNT(*)::bigint AS ops_count
+        FROM operations
+        GROUP BY user_id
+      )
       SELECT
         u.id,
         u.email,
-        COALESCE((SELECT SUM(pg_column_size(o.payload)) FROM operations o WHERE o.user_id = u.id), 0) as ops_bytes,
-        COALESCE((SELECT COUNT(*) FROM operations o WHERE o.user_id = u.id), 0) as ops_count,
+        COALESCE(o.ops_bytes, 0) as ops_bytes,
+        COALESCE(o.ops_count, 0) as ops_count,
         COALESCE(LENGTH(s.snapshot_data), 0) as snapshot_bytes,
-        (
-          COALESCE((SELECT SUM(pg_column_size(o.payload)) FROM operations o WHERE o.user_id = u.id), 0) +
-          COALESCE(LENGTH(s.snapshot_data), 0)
-        ) as total_bytes
+        (COALESCE(o.ops_bytes, 0) + COALESCE(LENGTH(s.snapshot_data), 0)) as total_bytes
       FROM users u
+      LEFT JOIN ops_per_user o ON o.user_id = u.id
       LEFT JOIN user_sync_state s ON u.id = s.user_id
       ORDER BY total_bytes DESC
       LIMIT 20;

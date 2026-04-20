@@ -79,7 +79,7 @@
   &:has(page-title [aria-expanded='true']) ::ng-deep .current-task-title {
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease-out;
+    transition: opacity var(--transition-duration-m) ease-out;
   }
 }
 

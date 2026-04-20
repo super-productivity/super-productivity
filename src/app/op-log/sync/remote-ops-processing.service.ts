@@ -23,6 +23,7 @@ import { LOCK_NAMES } from '../core/operation-log.const';
 import { LockService } from './lock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from './sync-import-filter.service';
+import { OperationWriteFlushService } from './operation-write-flush.service';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -51,6 +52,7 @@ export class RemoteOpsProcessingService {
   private lockService = inject(LockService);
   private compactionService = inject(OperationLogCompactionService);
   private syncImportFilterService = inject(SyncImportFilterService);
+  private writeFlushService = inject(OperationWriteFlushService);
 
   /** Flag to show newer version warning only once per session */
   private _hasWarnedNewerVersionThisSession = false;
@@ -276,6 +278,10 @@ export class RemoteOpsProcessingService {
     // The user has explicitly chosen to accept server state — conflict detection
     // is semantically wrong because the NgRx store was just reset to empty state,
     // causing all entities to appear missing and CONCURRENT ops to be discarded.
+    // Flush is also skipped: any pending writes that slip through after
+    // forceDownloadRemoteState() clears the op-log will be uploaded on the next
+    // sync cycle with stale vector clocks, and the server will reject them as
+    // concurrent with or older than the SYNC_IMPORT that seeded the remote state.
     // ─────────────────────────────────────────────────────────────────────────
 
     if (options?.skipConflictDetection) {
@@ -293,13 +299,18 @@ export class RemoteOpsProcessingService {
       };
     }
 
-    // CRITICAL: Acquire the same lock used by writeOperation effects.
-    // This ensures:
-    // 1. All pending writes complete before we read (FIFO lock ordering)
-    // 2. No NEW writes can start while we read the frontier, detect conflicts, AND apply resolutions
-    // Without this, a race condition exists where a write could start after
-    // reading the frontier but before conflict resolution/application completes,
-    // causing the new write to be based on stale state.
+    // CRITICAL: Flush pending operation writes before conflict detection.
+    // The NgRx effect that writes operations uses concatMap for sequential processing.
+    // If a user action (e.g., rename) was dispatched but the effect hasn't written it
+    // to IndexedDB yet, the operation won't appear in getUnsyncedByEntity() and the
+    // conflict won't be detected. This causes the remote op (e.g., moveToArchive) to
+    // be applied as non-conflicting, and the local op gets uploaded later — potentially
+    // resurrecting archived entities via LWW Update (Bug B).
+    await this.writeFlushService.flushPendingWrites();
+
+    // Acquire the same lock used by writeOperation effects.
+    // This ensures no NEW writes can start while we read the frontier,
+    // detect conflicts, AND apply resolutions.
     let localWinOpsCreated = 0;
     await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
       const appliedFrontierByEntity = await this.vectorClockService.getEntityFrontier();

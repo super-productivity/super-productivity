@@ -87,12 +87,11 @@ export class SyncTriggerService {
           )
         : // FALLBACK we check if there was any kind of user interaction
           // (otherwise sync might never be checked if there are no local data changes)
+          // NOTE: visibilitychange is handled separately by _visibilityHiddenTrigger$ —
+          // not throttled, so backgrounding always attempts a sync.
           IS_TOUCH_PRIMARY
-          ? merge(
-              fromEvent(window, 'touchstart'),
-              fromEvent(document, 'visibilitychange'),
-            ).pipe(
-              mapTo('I_MOUSE_TOUCH_MOVE_OR_VISIBILITYCHANGE'),
+          ? fromEvent(window, 'touchstart').pipe(
+              mapTo('I_TOUCH_ACTIVITY'),
               throttleTime(USER_ACTIVITY_SYNC_THROTTLE_TIME),
             )
           : fromEvent(window, 'focus').pipe(
@@ -132,6 +131,16 @@ export class SyncTriggerService {
     filter((isOnline) => isOnline),
     mapTo('I_IS_ONLINE'),
   );
+
+  // Fires when the page becomes hidden (tab switch, app backgrounding, close).
+  // Not throttled — a "last chance before close" trigger should always attempt a sync.
+  // Electron uses execBeforeCloseService (IPC-level blocking close) instead.
+  private _visibilityHiddenTrigger$: Observable<string | never> = !IS_ELECTRON
+    ? fromEvent(document, 'visibilitychange').pipe(
+        filter(() => document.visibilityState === 'hidden'),
+        mapTo('I_VISIBILITY_HIDDEN'),
+      )
+    : EMPTY;
 
   // OTHER INITIAL SYNC STUFF
   // ------------------------
@@ -206,7 +215,10 @@ export class SyncTriggerService {
     shareReplay(1),
   );
 
-  getSyncTrigger$(syncInterval: number = SYNC_DEFAULT_AUDIT_TIME): Observable<unknown> {
+  getSyncTrigger$(
+    syncInterval: number = SYNC_DEFAULT_AUDIT_TIME,
+    useIntervalTimer = false,
+  ): Observable<unknown> {
     const _immediateSyncTrigger$: Observable<string> = IS_ANDROID_WEB_VIEW
       ? // ANDROID ONLY
         merge(
@@ -231,6 +243,14 @@ export class SyncTriggerService {
           this._isOnlineTrigger$,
           this._onIdleTrigger$,
           this._onElectronResumeTrigger$,
+          this._visibilityHiddenTrigger$,
+          // Periodic interval timer: fires every syncInterval ms to detect external file
+          // changes (e.g. Syncthing on Linux) even without user activity.
+          // Only for file-based providers — SuperSync uses WebSocket push and doesn't need polling.
+          // Fixes: Linux auto-sync ignoring interval (#4783), Dropbox sync gaps (#7144)
+          ...(useIntervalTimer
+            ? [timer(syncInterval, syncInterval).pipe(mapTo('I_INTERVAL_TIMER'))]
+            : []),
         );
     return merge(
       // once immediately
