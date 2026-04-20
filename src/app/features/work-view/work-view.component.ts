@@ -366,7 +366,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     }
 
     const container = this._splitTopElement;
-    const directMatch = container?.querySelector(`#t-${taskId}`) as HTMLElement | null;
+    // Avoid querySelector here — task IDs are nanoid-generated and may start
+    // with `-` or a digit, which would throw SyntaxError.
+    const byId = document.getElementById(`t-${taskId}`);
+    const directMatch = byId && container?.contains(byId) ? byId : null;
     const selectedMatch =
       this.selectedTaskId() === taskId
         ? ((container?.querySelector('task.isSelected') as HTMLElement | null) ?? null)
