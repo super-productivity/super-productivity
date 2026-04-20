@@ -100,7 +100,15 @@
   --bar-height-small: 40px;
   --mat-mini-fab-size: 48px;
   --mac-title-bar-padding: 20px;
-  --card-border-radius: 4px;
+
+  // Radius scale — use tokens below; legacy aliases kept for existing rules.
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+  --card-border-radius: var(--radius-md);
   --window-controls-width: 140px; // Fallback for non-WCO contexts; main-header uses env() directly
 
   // Z-index layers
@@ -228,7 +236,7 @@
   --task-icon-default-opacity: 0.7;
   --task-inner-padding-top-bottom: 4px;
   --task-is-done-dim-opacity: 0.3;
-  --task-border-radius: 4px;
+  --task-border-radius: var(--radius-sm);
 
   // Task z-indexes
   --z-drag-handle: 1;
@@ -257,6 +265,14 @@
   --separator-alpha: 0.3;
   --muted-alpha: 0.6;
   --intense-alpha: 0.9;
+
+  // -----------------------------
+  // Focus Ring (keyboard accessibility)
+  // -----------------------------
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--palette-primary-500);
+  --focus-ring: 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
 }
 
 // ===============================
