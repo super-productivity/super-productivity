@@ -25,7 +25,7 @@
     overflow: hidden;
     flex: 1;
     min-width: 0;
-    font-family: 'Open Sans', sans-serif;
+    font-family: var(--font-primary-stack);
     font-weight: 400;
     letter-spacing: normal;
     color: var(--sidenav-text);
