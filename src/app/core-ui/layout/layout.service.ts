@@ -36,11 +36,14 @@ const initialXsMatch =
 })
 export class LayoutService {
   private static readonly _TASK_ACTION_DELAY = 50;
+  private static readonly _TASK_FOCUS_RETRY_DELAY = 250;
+  private static readonly _TASK_FOCUS_MAX_RETRIES = 16;
 
   private _store$ = inject<Store<LayoutState>>(Store);
   private _breakPointObserver = inject(BreakpointObserver);
   private _previouslyFocusedElement: HTMLElement | null = null;
   private _pendingFocusTaskId: string | null = null; // store new task id until user closes the bar
+  private _pendingTaskRevealTimeout?: number;
 
   // Signal to trigger sidebar focus
   private _focusSideNavTrigger = signal(0);
@@ -143,12 +146,45 @@ export class LayoutService {
 
   scrollToNewTask(taskId: string): void {
     this._runForTaskElement(taskId, (el) => {
-      el.scrollIntoView({
-        behavior: 'instant',
-        block: 'center',
-        inline: 'nearest',
-      });
+      this._scrollTaskElementIntoView(el);
     });
+  }
+
+  focusTaskInViewIfPossible(taskId: string): HTMLElement | null {
+    const el = document.getElementById(`t-${taskId}`);
+    if (!el || !this._isTaskElementReady(el)) {
+      return null;
+    }
+
+    this._scrollTaskElementIntoView(el);
+    el.focus({ preventScroll: true });
+    return el;
+  }
+
+  focusTaskInViewWhenReady(
+    taskId: string,
+    onSuccess?: (el: HTMLElement) => void,
+    retriesLeft: number = LayoutService._TASK_FOCUS_MAX_RETRIES,
+  ): void {
+    if (this._pendingTaskRevealTimeout) {
+      window.clearTimeout(this._pendingTaskRevealTimeout);
+      this._pendingTaskRevealTimeout = undefined;
+    }
+
+    const el = this.focusTaskInViewIfPossible(taskId);
+    if (el) {
+      onSuccess?.(el);
+      return;
+    }
+
+    if (retriesLeft <= 0) {
+      return;
+    }
+
+    this._pendingTaskRevealTimeout = window.setTimeout(() => {
+      this._pendingTaskRevealTimeout = undefined;
+      this.focusTaskInViewWhenReady(taskId, onSuccess, retriesLeft - 1);
+    }, LayoutService._TASK_FOCUS_RETRY_DELAY);
   }
 
   private _runForTaskElement(
@@ -158,12 +194,57 @@ export class LayoutService {
   ): void {
     window.setTimeout(() => {
       const el = document.getElementById(`t-${taskId}`);
-      if (el) {
+      if (el && this._isTaskElementReady(el)) {
         cb(el);
       } else {
         onNotFound?.();
       }
     }, LayoutService._TASK_ACTION_DELAY);
+  }
+
+  private _isTaskElementReady(el: HTMLElement): boolean {
+    return (
+      document.body.contains(el) &&
+      el.getClientRects().length > 0 &&
+      el.getBoundingClientRect().height > 0
+    );
+  }
+
+  private _scrollTaskElementIntoView(el: HTMLElement): void {
+    const scrollContainer = this._getNearestScrollableAncestor(el);
+    if (!scrollContainer) {
+      el.scrollIntoView({
+        behavior: 'auto',
+        block: 'center',
+        inline: 'nearest',
+      });
+      return;
+    }
+
+    const elementRect = el.getBoundingClientRect();
+    const relativeTop = el.offsetTop - scrollContainer.offsetTop;
+    const containerCenterOffset = scrollContainer.clientHeight / 2;
+    const elementCenterOffset = elementRect.height / 2;
+    const centeredTop = relativeTop - containerCenterOffset + elementCenterOffset;
+    scrollContainer.scrollTop = Math.max(centeredTop, 0);
+  }
+
+  private _getNearestScrollableAncestor(el: HTMLElement): HTMLElement | null {
+    let current: HTMLElement | null = el.parentElement;
+
+    while (current) {
+      const style = window.getComputedStyle(current);
+      const overflowY = style.overflowY;
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+        current.scrollHeight > current.clientHeight
+      ) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+
+    return null;
   }
 
   private _focusPreviousTaskOrFallback(): void {

@@ -12,6 +12,7 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { Log } from '../../core/log';
+import { LayoutService } from '../layout/layout.service';
 
 @Injectable({
   providedIn: 'root',
@@ -22,6 +23,7 @@ export class NavigateToTaskService {
   private _router = inject(Router);
   private _snackService = inject(SnackService);
   private _dateService = inject(DateService);
+  private _layoutService = inject(LayoutService);
 
   async navigate(taskId: string, isArchiveTask: boolean = false): Promise<void> {
     try {
@@ -88,10 +90,7 @@ export class NavigateToTaskService {
   }
 
   private _focusTaskElement(taskId: string): void {
-    const el = document.getElementById(`t-${taskId}`);
-    if (el) {
-      el.focus();
-    }
+    this._layoutService.focusTaskInViewWhenReady(taskId);
   }
 
   private async _isInBacklog(task: Task): Promise<boolean> {

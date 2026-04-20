@@ -100,6 +100,9 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
+  private static readonly _FOCUS_ITEM_RETRY_DELAY = 250;
+  private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
+
   taskService = inject(TaskService);
   takeABreakService = inject(TakeABreakService);
   layoutService = inject(LayoutService);
@@ -196,13 +199,20 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     );
 
   private _subs: Subscription = new Subscription();
+  private _pendingFocusItemTaskId: string | null = null;
+  private _pendingFocusItemTimeout?: number;
+  private _splitTopElement?: HTMLElement;
   private _switchListAnimationTimeout?: number;
 
   // TODO: Skipped for migration because:
   //  Accessor queries cannot be migrated as they are too complex.
   @ViewChild('splitTopEl', { read: ElementRef }) set splitTopElRef(ref: ElementRef) {
     if (ref) {
+      this._splitTopElement = ref.nativeElement;
       this.splitTopEl$.next(ref.nativeElement);
+      if (this._pendingFocusItemTaskId) {
+        this._focusItemInWorkViewWhenReady(this._pendingFocusItemTaskId);
+      }
     }
   }
 
@@ -280,6 +290,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         } else if (params.isInBacklog === 'true') {
           this.splitInputPos = 50;
         }
+        if (params?.focusItem) {
+          this._pendingFocusItemTaskId = params.focusItem;
+          this._focusItemInWorkViewWhenReady(params.focusItem);
+        } else {
+          this._pendingFocusItemTaskId = null;
+        }
         // NOTE: otherwise this is not triggered right away
         this._cd.detectChanges();
       }),
@@ -287,6 +303,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this._pendingFocusItemTimeout) {
+      window.clearTimeout(this._pendingFocusItemTimeout);
+    }
     if (this._switchListAnimationTimeout) {
       window.clearTimeout(this._switchListAnimationTimeout);
     }
@@ -334,6 +353,68 @@ export class WorkViewComponent implements OnInit, OnDestroy {
           this.layoutService.isWorkViewScrolled.set(false);
         }
       }),
+    );
+  }
+
+  private _focusItemInWorkViewWhenReady(
+    taskId: string,
+    retriesLeft: number = WorkViewComponent._FOCUS_ITEM_MAX_RETRIES,
+  ): void {
+    if (this._pendingFocusItemTimeout) {
+      window.clearTimeout(this._pendingFocusItemTimeout);
+      this._pendingFocusItemTimeout = undefined;
+    }
+
+    const container = this._splitTopElement;
+    const directMatch = container?.querySelector(`#t-${taskId}`) as HTMLElement | null;
+    const selectedMatch =
+      this.selectedTaskId() === taskId
+        ? ((container?.querySelector('task.isSelected') as HTMLElement | null) ?? null)
+        : null;
+    const matchedElement = directMatch ?? selectedMatch;
+    const el =
+      matchedElement && this._isTaskElementReady(matchedElement) ? matchedElement : null;
+    if (container && el) {
+      const relativeTop = this._getRelativeTopWithinContainer(el, container);
+      const containerCenterOffset = container.clientHeight / 2;
+      const elementCenterOffset = el.offsetHeight / 2;
+      const centeredTop = relativeTop - containerCenterOffset + elementCenterOffset;
+      container.scrollTop = Math.max(centeredTop, 0);
+      el.focus({ preventScroll: true });
+      this._pendingFocusItemTaskId = null;
+      return;
+    }
+
+    if (retriesLeft <= 0) {
+      return;
+    }
+
+    this._pendingFocusItemTimeout = window.setTimeout(() => {
+      this._pendingFocusItemTimeout = undefined;
+      this._focusItemInWorkViewWhenReady(taskId, retriesLeft - 1);
+    }, WorkViewComponent._FOCUS_ITEM_RETRY_DELAY);
+  }
+
+  private _getRelativeTopWithinContainer(
+    el: HTMLElement,
+    container: HTMLElement,
+  ): number {
+    let relativeTop = 0;
+    let current: HTMLElement | null = el;
+
+    while (current && current !== container) {
+      relativeTop += current.offsetTop;
+      current = current.offsetParent as HTMLElement | null;
+    }
+
+    return relativeTop;
+  }
+
+  private _isTaskElementReady(el: HTMLElement): boolean {
+    return (
+      document.body.contains(el) &&
+      el.getClientRects().length > 0 &&
+      el.getBoundingClientRect().height > 0
     );
   }
 
