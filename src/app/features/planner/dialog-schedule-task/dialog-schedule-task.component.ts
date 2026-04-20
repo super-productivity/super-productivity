@@ -5,6 +5,7 @@ import {
   Component,
   computed,
   inject,
+  signal,
   viewChild,
 } from '@angular/core';
 import {
@@ -55,6 +56,10 @@ import { MatInput } from '@angular/material/input';
 import { Log } from '../../../core/log';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
+import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
+import { selectTimelineConfig } from '../../config/store/global-config.reducer';
+import { getTimeConflictTaskIds } from '../../tasks/util/get-time-conflict-task-ids';
+import { isTaskOutsideWorkHours } from '../../tasks/util/is-task-outside-work-hours';
 
 const DEFAULT_TIME = '09:00';
 
@@ -101,6 +106,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
   private readonly _dateAdapter = inject(DateAdapter);
+  private readonly _tasksWithDueTimeSorted = this._store.selectSignal(
+    selectAllTasksWithDueTimeSorted,
+  );
+  private readonly _timelineConfig = this._store.selectSignal(selectTimelineConfig);
 
   // Wait for localization config to be loaded before rendering calendar
   // This ensures DateAdapter.getFirstDayOfWeek() returns the correct value
@@ -115,8 +124,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
   task: TaskCopy | undefined = this.data.task;
 
-  selectedDate: Date | string | null = null;
-  selectedTime: string | null = null;
+  private _selectedDate = signal<Date | string | null>(null);
+  private _selectedTime = signal<string | null>(null);
   selectedReminderCfgId!: TaskReminderOptionId;
 
   plannedDayForTask: string | null = null;
@@ -127,6 +136,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   // private _prevSelectedQuickAccessDate: Date | null = null;
   // private _prevQuickAccessAction: number | null = null;
   private _timeCheckVal: string | null = null;
+  private _previewTaskId = '__schedule-preview__';
 
   private _defaultTaskRemindCfgId = computed(
     () =>
@@ -134,6 +144,68 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         ?.defaultTaskRemindOption as TaskReminderOptionId) ??
       DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
   );
+  get selectedDate(): Date | string | null {
+    return this._selectedDate();
+  }
+  set selectedDate(value: Date | string | null) {
+    this._selectedDate.set(value);
+  }
+
+  get selectedTime(): string | null {
+    return this._selectedTime();
+  }
+  set selectedTime(value: string | null) {
+    this._selectedTime.set(value);
+  }
+
+  plannedTimestamp = computed<number | null>(() => {
+    const selectedDate = this._selectedDate();
+    const selectedTime = this._selectedTime();
+    if (!selectedDate || !selectedTime) {
+      return null;
+    }
+
+    return getDateTimeFromClockString(selectedTime, selectedDate as Date);
+  });
+  scheduleWarnings = computed(() => {
+    const plannedTimestamp = this.plannedTimestamp();
+    if (!plannedTimestamp) {
+      return {
+        hasOverlap: false,
+        isOutsideWorkHours: false,
+      };
+    }
+
+    const candidateTask = {
+      id: this._previewTaskId,
+      dueWithTime: plannedTimestamp,
+      timeEstimate: this.task?.timeEstimate || 0,
+      timeSpent: this.task?.timeSpent || 0,
+      subTaskIds: this.task?.subTaskIds || [],
+      isDone: false,
+      projectId: this.task?.projectId || '',
+      timeSpentOnDay: this.task?.timeSpentOnDay || {},
+      attachments: this.task?.attachments || [],
+      title: this.task?.title || '',
+      tagIds: this.task?.tagIds || [],
+      created: this.task?.created || 0,
+    };
+    const selectedDay = getDbDateStr(plannedTimestamp);
+    const sameDay = (timestamp: number): boolean =>
+      getDbDateStr(timestamp) === selectedDay;
+    const conflictIds = getTimeConflictTaskIds(
+      [
+        ...this._tasksWithDueTimeSorted().filter((task) => task.id !== this.task?.id),
+        candidateTask,
+      ],
+      sameDay,
+    );
+
+    return {
+      hasOverlap: conflictIds.has(this._previewTaskId),
+      isOutsideWorkHours: isTaskOutsideWorkHours(candidateTask, this._timelineConfig()),
+    };
+  });
 
   async ngAfterViewInit(): Promise<void> {
     // Handle case when task is provided
@@ -414,6 +486,23 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     const newDate = new Date(
       getDateTimeFromClockString(this.selectedTime as string, this.selectedDate as Date),
     );
+    const warnings = this.scheduleWarnings();
+
+    if (warnings.hasOverlap || warnings.isOutsideWorkHours) {
+      const msgParts: string[] = [];
+      if (warnings.hasOverlap) {
+        msgParts.push('This time overlaps with another scheduled task.');
+      }
+      if (warnings.isOutsideWorkHours) {
+        msgParts.push('This time falls outside your work hours.');
+      }
+      this._snackService.open({
+        type: 'CUSTOM',
+        ico: 'warning',
+        msg: msgParts.join(' '),
+        isSkipTranslate: true,
+      });
+    }
 
     this._taskService.scheduleTask(
       task,

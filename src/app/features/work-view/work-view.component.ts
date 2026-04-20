@@ -67,6 +67,7 @@ import {
 } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
+import { DEFAULT_WORK_HOURS } from '../planner/util/calculate-available-hours';
 
 @Component({
   selector: 'work-view',
@@ -167,6 +168,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isShowRepeatCfgsPanel = computed(
     () =>
       !this.customizerService.isCustomized() && this.repeatCfgsForContext().length > 0,
+  );
+  isEstimateRemainingOverloaded = computed(
+    () => this.estimateRemainingToday() > DEFAULT_WORK_HOURS,
   );
 
   isShowOverduePanel = computed(

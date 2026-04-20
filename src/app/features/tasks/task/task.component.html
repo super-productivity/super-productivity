@@ -49,6 +49,12 @@
               [isShowProjectTagNever]="isInSubTaskList()"
             ></tag-list>
           }
+          @if (isOutsideWorkHours()) {
+            <div class="task-warning-chip">
+              <mat-icon>warning_amber</mat-icon>
+              <span>Outside work hours</span>
+            </div>
+          }
         </div>
       </div>
 
