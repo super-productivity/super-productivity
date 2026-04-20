@@ -11,6 +11,23 @@ describe('LayoutService', () => {
   let service: LayoutService;
   let mockStore: jasmine.SpyObj<Store>;
 
+  const mockRenderedTaskElement = (
+    el: HTMLElement,
+    top: number = 0,
+    height: number = 40,
+  ): void => {
+    Object.defineProperty(el, 'offsetHeight', { value: height, configurable: true });
+    spyOn(el, 'getBoundingClientRect').and.returnValue({
+      top,
+      height,
+    } as DOMRect);
+    spyOn(el, 'getClientRects').and.returnValue([
+      {
+        height,
+      },
+    ] as unknown as DOMRectList);
+  };
+
   beforeEach(() => {
     const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'pipe', 'select']);
     const breakpointObserverSpy = jasmine.createSpyObj('BreakpointObserver', ['observe']);
@@ -80,6 +97,7 @@ describe('LayoutService', () => {
       const newTaskElement = document.createElement('div');
       newTaskElement.id = `t-${newTaskId}`;
       newTaskElement.tabIndex = 0;
+      mockRenderedTaskElement(newTaskElement);
       document.body.appendChild(newTaskElement);
 
       spyOn(newTaskElement, 'focus');
@@ -100,6 +118,7 @@ describe('LayoutService', () => {
       const pendingTaskElement = document.createElement('div');
       pendingTaskElement.id = `t-${pendingTaskId}`;
       pendingTaskElement.tabIndex = 0;
+      mockRenderedTaskElement(pendingTaskElement);
       document.body.appendChild(pendingTaskElement);
 
       spyOn(pendingTaskElement, 'focus');
@@ -230,10 +249,7 @@ describe('LayoutService', () => {
         }
         return { overflowY: 'visible' } as CSSStyleDeclaration;
       });
-      spyOn(taskElement, 'getBoundingClientRect').and.returnValue({
-        top: 250,
-        height: 40,
-      } as DOMRect);
+      mockRenderedTaskElement(taskElement, 250);
 
       scrollContainer.appendChild(taskElement);
       document.body.appendChild(scrollContainer);
@@ -276,10 +292,7 @@ describe('LayoutService', () => {
         }
         return { overflowY: 'visible' } as CSSStyleDeclaration;
       });
-      spyOn(taskElement, 'getBoundingClientRect').and.returnValue({
-        top: 200,
-        height: 40,
-      } as DOMRect);
+      mockRenderedTaskElement(taskElement, 200);
 
       scrollContainer.appendChild(taskElement);
       document.body.appendChild(scrollContainer);
@@ -316,10 +329,7 @@ describe('LayoutService', () => {
         }
         return { overflowY: 'visible' } as CSSStyleDeclaration;
       });
-      spyOn(taskElement, 'getBoundingClientRect').and.returnValue({
-        top: 180,
-        height: 40,
-      } as DOMRect);
+      mockRenderedTaskElement(taskElement, 180);
 
       service.focusTaskInViewWhenReady(taskId);
 
