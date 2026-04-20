@@ -1,0 +1,15 @@
+{
+  "name": "GitHub Daily Summary",
+  "id": "github-daily-summary",
+  "manifestVersion": 1,
+  "version": "1.0.0",
+  "minSupVersion": "13.0.0",
+  "description": "Shows an overview of all your GitHub activity (commits, PRs, reviews, issues) across all repositories for the current day.",
+  "hooks": [],
+  "permissions": ["persistDataSynced", "showIndexHtmlAsView"],
+  "iFrame": true,
+  "sidePanel": true,
+  "type": "standard",
+  "assets": [],
+  "icon": "icon.svg"
+}

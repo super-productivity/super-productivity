@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>GitHub Daily Summary</title>
+    <style>
+      /* Theme vars + UI Kit are injected automatically before this style block.
+         Only plugin-specific layout rules are needed here. */
+
+      body {
+        padding: var(--s3);
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--s2);
+        gap: var(--s2);
+        flex-wrap: wrap;
+      }
+
+      .header-title {
+        margin: 0;
+        font-size: 1.4em;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--s);
+      }
+
+      .date {
+        margin-bottom: var(--s3);
+        color: var(--text-color-muted);
+      }
+
+      .loading,
+      .empty,
+      .error {
+        text-align: center;
+        padding: var(--s4);
+        color: var(--text-color-muted);
+      }
+
+      .error {
+        color: var(--c-warn, #d32f2f);
+      }
+
+      .summary-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: var(--s);
+        margin-bottom: var(--s3);
+      }
+
+      .stat-card {
+        padding: var(--s2);
+        border: 1px solid var(--divider-color);
+        border-radius: 6px;
+        text-align: center;
+      }
+
+      .stat-value {
+        font-size: 1.6em;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+
+      .stat-label {
+        font-size: 0.85em;
+        color: var(--text-color-muted);
+        margin-top: var(--s-quarter);
+      }
+
+      .repo-section {
+        margin-bottom: var(--s3);
+        border: 1px solid var(--divider-color);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      .repo-header {
+        padding: var(--s) var(--s2);
+        background: var(--s);
+        background-color: rgba(127, 127, 127, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s2);
+      }
+
+      .repo-name {
+        font-weight: 600;
+        word-break: break-all;
+      }
+
+      .repo-name a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .repo-name a:hover {
+        text-decoration: underline;
+      }
+
+      .repo-stats {
+        font-size: 0.85em;
+        color: var(--text-color-muted);
+        white-space: nowrap;
+      }
+
+      .event-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .event-item {
+        padding: var(--s) var(--s2);
+        border-top: 1px solid var(--divider-color);
+        display: flex;
+        align-items: flex-start;
+        gap: var(--s);
+      }
+
+      .event-icon {
+        flex-shrink: 0;
+        width: 18px;
+        text-align: center;
+        margin-top: 2px;
+        font-size: 0.95em;
+      }
+
+      .event-body {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .event-title {
+        word-break: break-word;
+      }
+
+      .event-title a {
+        color: var(--c-accent, #1976d2);
+        text-decoration: none;
+      }
+
+      .event-title a:hover {
+        text-decoration: underline;
+      }
+
+      .event-meta {
+        font-size: 0.8em;
+        color: var(--text-color-muted);
+        margin-top: var(--s-quarter);
+      }
+
+      .commit-list {
+        margin: var(--s-half) 0 0 0;
+        padding-left: var(--s2);
+        font-size: 0.9em;
+      }
+
+      .commit-list li {
+        margin-bottom: var(--s-quarter);
+        word-break: break-word;
+      }
+
+      .commit-sha {
+        font-family: monospace;
+        font-size: 0.85em;
+        color: var(--text-color-muted);
+        margin-right: var(--s-half);
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 1px var(--s-half);
+        font-size: 0.75em;
+        border-radius: 3px;
+        background: rgba(127, 127, 127, 0.15);
+        margin-left: var(--s-half);
+      }
+
+      .badge.merged {
+        background: rgba(130, 80, 223, 0.18);
+      }
+
+      .badge.closed {
+        background: rgba(207, 34, 46, 0.18);
+      }
+
+      .badge.opened {
+        background: rgba(35, 134, 54, 0.18);
+      }
+
+      /* Settings panel */
+      .settings {
+        max-width: 480px;
+        margin: var(--s4) auto;
+        padding: var(--s3);
+        border: 1px solid var(--divider-color);
+        border-radius: 8px;
+      }
+
+      .settings h2 {
+        margin-top: 0;
+      }
+
+      .settings p {
+        color: var(--text-color-muted);
+        font-size: 0.9em;
+      }
+
+      .form-row {
+        margin-bottom: var(--s2);
+      }
+
+      .form-row label {
+        display: block;
+        margin-bottom: var(--s-half);
+        font-size: 0.9em;
+      }
+
+      .form-row input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: var(--s);
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        font-size: 1em;
+      }
+
+      .btn {
+        padding: var(--s) var(--s2);
+        background: var(--c-accent, #1976d2);
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.95em;
+      }
+
+      .btn:hover {
+        opacity: 0.9;
+      }
+
+      .btn.secondary {
+        background: transparent;
+        color: inherit;
+        border: 1px solid var(--divider-color);
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .small-link {
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--c-accent, #1976d2);
+        cursor: pointer;
+        font-size: 0.85em;
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="content">
+        <div class="loading">Loading...</div>
+      </div>
+    </div>
+
+    <script>
+      const STORAGE_KEY_VERSION = 1;
+      const GITHUB_API = 'https://api.github.com';
+
+      let state = {
+        token: '',
+        username: '',
+      };
+
+      // ---------- Storage ----------
+      async function loadSettings() {
+        try {
+          const raw = await PluginAPI.loadSyncedData();
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          return parsed && parsed.v === STORAGE_KEY_VERSION ? parsed : null;
+        } catch (e) {
+          console.error('Failed to load settings', e);
+          return null;
+        }
+      }
+
+      async function saveSettings(token, username) {
+        const data = JSON.stringify({
+          v: STORAGE_KEY_VERSION,
+          token,
+          username,
+        });
+        await PluginAPI.persistDataSynced(data);
+      }
+
+      // ---------- GitHub API ----------
+      async function ghFetch(path) {
+        const url = path.startsWith('http') ? path : GITHUB_API + path;
+        const res = await fetch(url, {
+          headers: {
+            Accept: 'application/vnd.github.v3+json',
+            Authorization: 'token ' + state.token,
+          },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(
+            'GitHub API ' +
+              res.status +
+              ' ' +
+              res.statusText +
+              ' — ' +
+              text.slice(0, 200),
+          );
+        }
+        return res.json();
+      }
+
+      async function fetchAuthenticatedUser() {
+        return ghFetch('/user');
+      }
+
+      // The events endpoint returns max 30 events per page, up to 10 pages (300 events
+      // max, last 90 days). We page through until we hit events older than today.
+      async function fetchTodaysEvents(username, todayStart) {
+        const events = [];
+        for (let page = 1; page <= 10; page++) {
+          const batch = await ghFetch(
+            '/users/' +
+              encodeURIComponent(username) +
+              '/events?per_page=100&page=' +
+              page,
+          );
+          if (!Array.isArray(batch) || batch.length === 0) break;
+
+          let reachedYesterday = false;
+          for (const ev of batch) {
+            const t = new Date(ev.created_at).getTime();
+            if (t < todayStart) {
+              reachedYesterday = true;
+              break;
+            }
+            events.push(ev);
+          }
+          if (reachedYesterday) break;
+          if (batch.length < 100) break;
+        }
+        return events;
+      }
+
+      // ---------- Date helpers ----------
+      function getTodayBounds() {
+        const now = new Date();
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(now);
+        end.setHours(23, 59, 59, 999);
+        return { start: start.getTime(), end: end.getTime(), date: now };
+      }
+
+      function formatTime(ts) {
+        const d = new Date(ts);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+
+      // ---------- Aggregation ----------
+      function groupEventsByRepo(events) {
+        const repos = {};
+        for (const ev of events) {
+          const repoName = (ev.repo && ev.repo.name) || 'unknown';
+          if (!repos[repoName]) {
+            repos[repoName] = {
+              name: repoName,
+              events: [],
+              commits: 0,
+              prsOpened: 0,
+              prsMerged: 0,
+              prsClosed: 0,
+              issuesOpened: 0,
+              issuesClosed: 0,
+              reviews: 0,
+              comments: 0,
+            };
+          }
+          repos[repoName].events.push(ev);
+
+          const p = ev.payload || {};
+          switch (ev.type) {
+            case 'PushEvent':
+              repos[repoName].commits += (p.commits || []).length;
+              break;
+            case 'PullRequestEvent':
+              if (p.action === 'opened') repos[repoName].prsOpened++;
+              else if (p.action === 'closed') {
+                if (p.pull_request && p.pull_request.merged) repos[repoName].prsMerged++;
+                else repos[repoName].prsClosed++;
+              }
+              break;
+            case 'PullRequestReviewEvent':
+              repos[repoName].reviews++;
+              break;
+            case 'IssuesEvent':
+              if (p.action === 'opened') repos[repoName].issuesOpened++;
+              else if (p.action === 'closed') repos[repoName].issuesClosed++;
+              break;
+            case 'IssueCommentEvent':
+            case 'PullRequestReviewCommentEvent':
+            case 'CommitCommentEvent':
+              repos[repoName].comments++;
+              break;
+          }
+        }
+        return Object.values(repos).sort((a, b) => b.events.length - a.events.length);
+      }
+
+      function totals(repos) {
+        const t = {
+          commits: 0,
+          prsOpened: 0,
+          prsMerged: 0,
+          prsClosed: 0,
+          issuesOpened: 0,
+          issuesClosed: 0,
+          reviews: 0,
+          comments: 0,
+          repos: repos.length,
+        };
+        for (const r of repos) {
+          t.commits += r.commits;
+          t.prsOpened += r.prsOpened;
+          t.prsMerged += r.prsMerged;
+          t.prsClosed += r.prsClosed;
+          t.issuesOpened += r.issuesOpened;
+          t.issuesClosed += r.issuesClosed;
+          t.reviews += r.reviews;
+          t.comments += r.comments;
+        }
+        return t;
+      }
+
+      // ---------- Rendering ----------
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text == null ? '' : String(text);
+        return div.innerHTML;
+      }
+
+      function renderSettings(message) {
+        const contentEl = document.getElementById('content');
+        contentEl.innerHTML =
+          '<div class="settings">' +
+          '<h2>GitHub Daily Summary</h2>' +
+          '<p>Enter a GitHub Personal Access Token to view your daily activity across all repositories. ' +
+          'A classic token with the <code>repo</code> and <code>read:user</code> scopes works best (use <code>read:org</code> for organization activity).</p>' +
+          (message ? '<div class="error">' + escapeHtml(message) + '</div>' : '') +
+          '<div class="form-row">' +
+          '<label for="gh-token">Personal Access Token</label>' +
+          '<input type="password" id="gh-token" placeholder="ghp_..." autocomplete="off" />' +
+          '</div>' +
+          '<div class="form-row">' +
+          '<label for="gh-user">GitHub username <span style="color:var(--text-color-muted);font-weight:normal">(optional — auto-detected from token)</span></label>' +
+          '<input type="text" id="gh-user" placeholder="octocat" />' +
+          '</div>' +
+          '<div style="display:flex;gap:var(--s);align-items:center">' +
+          '<button class="btn" id="save-btn">Save &amp; load summary</button>' +
+          '<a class="small-link" href="https://github.com/settings/tokens/new?description=Super%20Productivity%20Daily%20Summary&scopes=repo,read:user,read:org" target="_blank" rel="noopener">Create a token →</a>' +
+          '</div>' +
+          '</div>';
+
+        document.getElementById('save-btn').addEventListener('click', onSaveSettings);
+      }
+
+      function renderSummary(repos, username, todayDate) {
+        const t = totals(repos);
+        const dateStr = todayDate.toLocaleDateString(undefined, {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+
+        let html =
+          '<div class="header">' +
+          '<h1 class="header-title">GitHub Daily Summary</h1>' +
+          '<div class="header-actions">' +
+          '<button class="btn secondary" id="refresh-btn" title="Refresh">↻ Refresh</button>' +
+          '<button class="btn secondary" id="settings-btn" title="Settings">⚙</button>' +
+          '</div>' +
+          '</div>' +
+          '<div class="date">' +
+          escapeHtml(dateStr) +
+          ' · @' +
+          escapeHtml(username) +
+          '</div>';
+
+        html +=
+          '<div class="summary-stats">' +
+          statCard(t.commits, 'commits') +
+          statCard(t.prsOpened, 'PRs opened') +
+          statCard(t.prsMerged, 'PRs merged') +
+          statCard(t.reviews, 'reviews') +
+          statCard(t.issuesOpened, 'issues opened') +
+          statCard(t.issuesClosed, 'issues closed') +
+          statCard(t.comments, 'comments') +
+          statCard(t.repos, 'repos') +
+          '</div>';
+
+        if (repos.length === 0) {
+          html +=
+            '<div class="empty">No GitHub activity recorded today. Take a break! 🎉</div>';
+        } else {
+          for (const repo of repos) {
+            html += renderRepoSection(repo);
+          }
+        }
+
+        document.getElementById('content').innerHTML = html;
+        document.getElementById('refresh-btn').addEventListener('click', loadAndRender);
+        document
+          .getElementById('settings-btn')
+          .addEventListener('click', () => renderSettings());
+      }
+
+      function statCard(value, label) {
+        return (
+          '<div class="stat-card">' +
+          '<div class="stat-value">' +
+          value +
+          '</div>' +
+          '<div class="stat-label">' +
+          escapeHtml(label) +
+          '</div>' +
+          '</div>'
+        );
+      }
+
+      function renderRepoSection(repo) {
+        const repoUrl = 'https://github.com/' + repo.name;
+        const statParts = [];
+        if (repo.commits) statParts.push(repo.commits + ' commits');
+        if (repo.prsOpened) statParts.push(repo.prsOpened + ' PRs opened');
+        if (repo.prsMerged) statParts.push(repo.prsMerged + ' merged');
+        if (repo.prsClosed) statParts.push(repo.prsClosed + ' closed');
+        if (repo.reviews) statParts.push(repo.reviews + ' reviews');
+        if (repo.issuesOpened) statParts.push(repo.issuesOpened + ' issues opened');
+        if (repo.issuesClosed) statParts.push(repo.issuesClosed + ' issues closed');
+        if (repo.comments) statParts.push(repo.comments + ' comments');
+
+        let html =
+          '<div class="repo-section">' +
+          '<div class="repo-header">' +
+          '<div class="repo-name"><a href="' +
+          escapeHtml(repoUrl) +
+          '" target="_blank" rel="noopener">' +
+          escapeHtml(repo.name) +
+          '</a></div>' +
+          '<div class="repo-stats">' +
+          escapeHtml(statParts.join(' · ')) +
+          '</div>' +
+          '</div>' +
+          '<ul class="event-list">';
+
+        // Show events oldest-first within the repo so the day reads chronologically
+        const ordered = repo.events
+          .slice()
+          .sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+          );
+        for (const ev of ordered) {
+          html += renderEvent(ev, repo.name);
+        }
+        html += '</ul></div>';
+        return html;
+      }
+
+      function renderEvent(ev, repoName) {
+        const p = ev.payload || {};
+        const time = formatTime(new Date(ev.created_at).getTime());
+        let icon = '•';
+        let body = '';
+
+        switch (ev.type) {
+          case 'PushEvent': {
+            const branch = (p.ref || '').replace(/^refs\/heads\//, '');
+            icon = '⬆';
+            const commitCount = (p.commits || []).length;
+            body =
+              '<div class="event-title">Pushed ' +
+              commitCount +
+              ' commit' +
+              (commitCount === 1 ? '' : 's') +
+              ' to <strong>' +
+              escapeHtml(branch || 'default') +
+              '</strong></div>';
+            if (p.commits && p.commits.length) {
+              body += '<ul class="commit-list">';
+              for (const c of p.commits.slice(0, 10)) {
+                const shortSha = (c.sha || '').slice(0, 7);
+                const commitUrl =
+                  'https://github.com/' + repoName + '/commit/' + (c.sha || '');
+                const firstLine = (c.message || '').split('\n')[0];
+                body +=
+                  '<li><a class="commit-sha" href="' +
+                  escapeHtml(commitUrl) +
+                  '" target="_blank" rel="noopener">' +
+                  escapeHtml(shortSha) +
+                  '</a>' +
+                  escapeHtml(firstLine) +
+                  '</li>';
+              }
+              if (p.commits.length > 10) {
+                body +=
+                  '<li style="color:var(--text-color-muted)">…and ' +
+                  (p.commits.length - 10) +
+                  ' more</li>';
+              }
+              body += '</ul>';
+            }
+            break;
+          }
+          case 'PullRequestEvent': {
+            icon = '⇄';
+            const pr = p.pull_request || {};
+            const action = p.action || '';
+            const merged = pr.merged && action === 'closed';
+            const badgeClass = merged
+              ? 'merged'
+              : action === 'closed'
+                ? 'closed'
+                : 'opened';
+            const badgeText = merged ? 'merged' : action;
+            body =
+              '<div class="event-title"><a href="' +
+              escapeHtml(pr.html_url || '#') +
+              '" target="_blank" rel="noopener">#' +
+              escapeHtml(String(pr.number || '')) +
+              ' ' +
+              escapeHtml(pr.title || '') +
+              '</a><span class="badge ' +
+              badgeClass +
+              '">PR ' +
+              escapeHtml(badgeText) +
+              '</span></div>';
+            break;
+          }
+          case 'PullRequestReviewEvent': {
+            icon = '✓';
+            const pr = p.pull_request || {};
+            const review = p.review || {};
+            const state = (review.state || '').toLowerCase();
+            body =
+              '<div class="event-title">Reviewed <a href="' +
+              escapeHtml(review.html_url || pr.html_url || '#') +
+              '" target="_blank" rel="noopener">#' +
+              escapeHtml(String(pr.number || '')) +
+              ' ' +
+              escapeHtml(pr.title || '') +
+              '</a><span class="badge">' +
+              escapeHtml(state || 'review') +
+              '</span></div>';
+            break;
+          }
+          case 'PullRequestReviewCommentEvent': {
+            icon = '💬';
+            const pr = p.pull_request || {};
+            const comment = p.comment || {};
+            body =
+              '<div class="event-title">Commented on <a href="' +
+              escapeHtml(comment.html_url || pr.html_url || '#') +
+              '" target="_blank" rel="noopener">PR #' +
+              escapeHtml(String(pr.number || '')) +
+              ' ' +
+              escapeHtml(pr.title || '') +
+              '</a></div>';
+            break;
+          }
+          case 'IssuesEvent': {
+            icon = '◉';
+            const issue = p.issue || {};
+            const action = p.action || '';
+            const badgeClass =
+              action === 'opened' ? 'opened' : action === 'closed' ? 'closed' : '';
+            body =
+              '<div class="event-title"><a href="' +
+              escapeHtml(issue.html_url || '#') +
+              '" target="_blank" rel="noopener">#' +
+              escapeHtml(String(issue.number || '')) +
+              ' ' +
+              escapeHtml(issue.title || '') +
+              '</a><span class="badge ' +
+              badgeClass +
+              '">issue ' +
+              escapeHtml(action) +
+              '</span></div>';
+            break;
+          }
+          case 'IssueCommentEvent': {
+            icon = '💬';
+            const issue = p.issue || {};
+            const comment = p.comment || {};
+            body =
+              '<div class="event-title">Commented on <a href="' +
+              escapeHtml(comment.html_url || issue.html_url || '#') +
+              '" target="_blank" rel="noopener">#' +
+              escapeHtml(String(issue.number || '')) +
+              ' ' +
+              escapeHtml(issue.title || '') +
+              '</a></div>';
+            break;
+          }
+          case 'CommitCommentEvent': {
+            icon = '💬';
+            const comment = p.comment || {};
+            body =
+              '<div class="event-title">Commented on <a href="' +
+              escapeHtml(comment.html_url || '#') +
+              '" target="_blank" rel="noopener">commit ' +
+              escapeHtml((comment.commit_id || '').slice(0, 7)) +
+              '</a></div>';
+            break;
+          }
+          case 'CreateEvent': {
+            icon = '+';
+            const refType = p.ref_type || '';
+            const ref = p.ref || '';
+            body =
+              '<div class="event-title">Created ' +
+              escapeHtml(refType) +
+              (ref ? ' <strong>' + escapeHtml(ref) + '</strong>' : '') +
+              '</div>';
+            break;
+          }
+          case 'DeleteEvent': {
+            icon = '−';
+            body =
+              '<div class="event-title">Deleted ' +
+              escapeHtml(p.ref_type || '') +
+              ' <strong>' +
+              escapeHtml(p.ref || '') +
+              '</strong></div>';
+            break;
+          }
+          case 'ForkEvent': {
+            icon = '⑂';
+            const forkee = p.forkee || {};
+            body =
+              '<div class="event-title">Forked to <a href="' +
+              escapeHtml(forkee.html_url || '#') +
+              '" target="_blank" rel="noopener">' +
+              escapeHtml(forkee.full_name || '') +
+              '</a></div>';
+            break;
+          }
+          case 'WatchEvent': {
+            icon = '★';
+            body = '<div class="event-title">Starred the repository</div>';
+            break;
+          }
+          case 'ReleaseEvent': {
+            icon = '🏷';
+            const release = p.release || {};
+            body =
+              '<div class="event-title"><a href="' +
+              escapeHtml(release.html_url || '#') +
+              '" target="_blank" rel="noopener">Released ' +
+              escapeHtml(release.name || release.tag_name || '') +
+              '</a></div>';
+            break;
+          }
+          default: {
+            body =
+              '<div class="event-title">' +
+              escapeHtml(ev.type.replace(/Event$/, '')) +
+              '</div>';
+          }
+        }
+
+        return (
+          '<li class="event-item">' +
+          '<div class="event-icon">' +
+          icon +
+          '</div>' +
+          '<div class="event-body">' +
+          body +
+          '<div class="event-meta">' +
+          escapeHtml(time) +
+          '</div>' +
+          '</div>' +
+          '</li>'
+        );
+      }
+
+      // ---------- Flow ----------
+      async function onSaveSettings() {
+        const tokenInput = document.getElementById('gh-token');
+        const userInput = document.getElementById('gh-user');
+        const saveBtn = document.getElementById('save-btn');
+        const token = tokenInput.value.trim();
+        const username = userInput.value.trim();
+
+        if (!token) {
+          renderSettings('Please enter a token.');
+          return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Verifying...';
+        state.token = token;
+
+        try {
+          let resolvedUser = username;
+          if (!resolvedUser) {
+            const me = await fetchAuthenticatedUser();
+            resolvedUser = me.login;
+          }
+          state.username = resolvedUser;
+          await saveSettings(token, resolvedUser);
+          await loadAndRender();
+        } catch (e) {
+          console.error(e);
+          renderSettings('Could not verify token: ' + (e.message || e));
+        }
+      }
+
+      async function loadAndRender() {
+        const contentEl = document.getElementById('content');
+        contentEl.innerHTML = '<div class="loading">Loading GitHub activity...</div>';
+
+        try {
+          const { start, date } = getTodayBounds();
+          const events = await fetchTodaysEvents(state.username, start);
+          const repos = groupEventsByRepo(events);
+          renderSummary(repos, state.username, date);
+        } catch (e) {
+          console.error(e);
+          contentEl.innerHTML =
+            '<div class="error">Failed to load GitHub data: ' +
+            escapeHtml(e.message || String(e)) +
+            '</div>' +
+            '<div style="text-align:center;margin-top:var(--s2)">' +
+            '<button class="btn secondary" id="reset-btn">Edit settings</button>' +
+            '</div>';
+          document
+            .getElementById('reset-btn')
+            .addEventListener('click', () => renderSettings());
+        }
+      }
+
+      async function init() {
+        const settings = await loadSettings();
+        if (settings && settings.token) {
+          state.token = settings.token;
+          state.username = settings.username || '';
+          if (!state.username) {
+            try {
+              const me = await fetchAuthenticatedUser();
+              state.username = me.login;
+              await saveSettings(state.token, state.username);
+            } catch (e) {
+              renderSettings('Stored token failed: ' + (e.message || e));
+              return;
+            }
+          }
+          await loadAndRender();
+        } else {
+          renderSettings();
+        }
+      }
+
+      function waitForPlugin() {
+        if (typeof PluginAPI !== 'undefined') {
+          init();
+        } else {
+          setTimeout(waitForPlugin, 100);
+        }
+      }
+
+      waitForPlugin();
+    </script>
+  </body>
+</html>
