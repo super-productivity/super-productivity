@@ -75,16 +75,6 @@
   }
 }
 
-@media (hover: none) {
-  .additional-btn {
-    opacity: 1;
-    visibility: visible;
-  }
-  .task-count {
-    display: flex !important;
-  }
-}
-
 .task-count {
   position: absolute;
   top: 50%;
@@ -92,13 +82,28 @@
   line-height: 1;
   text-align: center;
   font-size: 10px;
-  // Position to the left of the additional button (40px) with some padding (8px)
-  right: 48px;
+  right: 16px;
   display: flex;
   align-items: center;
   color: var(--text-color-muted);
   // avoid affecting drag handle
   pointer-events: none;
+}
+
+// On touch devices the .additional-btn is always visible, so let the counter
+// flow inline beside it instead of overlapping.
+:host-context(.isTouchPrimary) {
+  .task-count {
+    position: static;
+    transform: none;
+    padding: 0 var(--s);
+    flex-shrink: 0;
+    pointer-events: auto;
+  }
+
+  button:first-of-type.has-tasks {
+    padding-right: var(--s);
+  }
 }
 
 // Active state visuals - ensure they override Angular Material styles
