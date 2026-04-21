@@ -38,9 +38,14 @@ export async function compressWithGzip(input: string): Promise<Uint8Array> {
   try {
     const stream = new CompressionStream('gzip');
     const writer = stream.writable.getWriter();
-    writer.write(new TextEncoder().encode(input));
-    writer.close();
-    return await readAllBytes(stream.readable);
+    // Write and read concurrently, awaiting both, so close() cannot race
+    // ahead of a pending write on slower engines (older Android WebViews).
+    const writePromise = writer
+      .write(new TextEncoder().encode(input))
+      .then(() => writer.close());
+    const readPromise = readAllBytes(stream.readable);
+    const [, compressed] = await Promise.all([writePromise, readPromise]);
+    return compressed;
   } catch (error) {
     OpLog.err(error);
     throw new CompressError(error);
@@ -56,9 +61,11 @@ export async function compressWithGzipToString(input: string): Promise<string> {
   try {
     const stream = new CompressionStream('gzip');
     const writer = stream.writable.getWriter();
-    writer.write(new TextEncoder().encode(input));
-    writer.close();
-    const compressed = await readAllBytes(stream.readable);
+    const writePromise = writer
+      .write(new TextEncoder().encode(input))
+      .then(() => writer.close());
+    const readPromise = readAllBytes(stream.readable);
+    const [, compressed] = await Promise.all([writePromise, readPromise]);
 
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();

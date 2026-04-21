@@ -32,6 +32,7 @@ export const WebDavHttpMethod = {
  */
 export const WebDavHttpHeader = {
   AUTHORIZATION: 'Authorization',
+  CACHE_CONTROL: 'Cache-Control',
   CONTENT_TYPE: 'Content-Type',
   CONTENT_LENGTH: 'Content-Length',
   DEPTH: 'Depth',

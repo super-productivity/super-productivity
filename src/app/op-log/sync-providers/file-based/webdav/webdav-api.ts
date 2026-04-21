@@ -254,11 +254,64 @@ export class WebdavApi {
         }
       }
 
-      return { rev: this._computeContentHash(data) };
+      const expectedHash = this._computeContentHash(data);
+      const verifiedHash = await this._verifyUpload(path, fullPath, expectedHash);
+      return { rev: verifiedHash };
     } catch (e) {
       SyncLog.error(`${WebdavApi.L}.upload() error`, { path, error: e });
       throw e;
     }
+  }
+
+  /**
+   * Re-GETs the just-uploaded file and verifies its content hash matches what
+   * we sent. Protects against silent truncation (e.g. flaky network, proxy
+   * buffering, Nextcloud accepting a partial body) since WebDAV enforces no
+   * integrity of its own. See issue #7300.
+   *
+   * A hash mismatch after a successful PUT is indistinguishable from a
+   * concurrent write by another client landing in the same window. Both cases
+   * are surfaced as RemoteFileChangedUnexpectedly so the adapter's existing
+   * self-healing path (re-download and retry) handles them uniformly.
+   */
+  private async _verifyUpload(
+    path: string,
+    fullPath: string,
+    expectedHash: string,
+  ): Promise<string> {
+    const remoteResponse = await this._makeRequest({
+      url: fullPath,
+      method: WebDavHttpMethod.GET,
+      headers: {
+        [WebDavHttpHeader.CACHE_CONTROL]: 'no-cache',
+      },
+    });
+
+    if (!remoteResponse.data || remoteResponse.data.length === 0) {
+      throw new EmptyRemoteBodySPError(
+        `Post-upload verification of ${path} returned empty body.`,
+      );
+    }
+
+    // Reject HTML error/login pages returned with 200 by proxies or
+    // misconfigured auth — hashing them would misreport as corruption.
+    this.xmlParser.validateResponseContent(
+      remoteResponse.data,
+      path,
+      'upload-verify',
+      'file content',
+    );
+
+    const remoteHash = this._computeContentHash(remoteResponse.data);
+    if (remoteHash !== expectedHash) {
+      throw new RemoteFileChangedUnexpectedly(
+        `Upload verification of ${path} failed: remote content hash differs ` +
+          `from uploaded data. Either the server stored a truncated copy, or ` +
+          `a concurrent write landed between PUT and verification. The next ` +
+          `sync cycle will re-download and reconcile.`,
+      );
+    }
+    return remoteHash;
   }
 
   async remove(path: string): Promise<void> {

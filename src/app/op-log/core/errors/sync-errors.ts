@@ -1,5 +1,6 @@
 import { IValidation } from 'typia';
 import { OpLog } from '../../../core/log';
+import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
 
 /**
  * Extracts a meaningful error message from various error shapes.
@@ -368,7 +369,38 @@ export class CompressError extends AdditionalLogErrorBase {
 
 export class DecompressError extends AdditionalLogErrorBase {
   override name = 'DecompressError';
+
+  constructor(...additional: unknown[]) {
+    super(...additional);
+    this.message = buildDecompressErrorMessage(this.message);
+  }
 }
+
+/**
+ * Translates opaque browser DecompressionStream errors (e.g. WHATWG's
+ * "compressed Input was truncated") into actionable recovery guidance.
+ * Truncation of the remote sync file is unrecoverable from the client — the
+ * user must delete the corrupt file on the remote before sync can recover.
+ *
+ * NOTE: rawMessage here has already passed through extractErrorMessage, which
+ * rewrites zlib Z_* codes to "compression error: <code>" (spaces, not
+ * underscores), so this heuristic matches the post-normalization form.
+ */
+const buildDecompressErrorMessage = (rawMessage: string): string => {
+  const lower = rawMessage.toLowerCase();
+  const looksTruncated =
+    lower.includes('truncat') ||
+    lower.includes('unexpected end') ||
+    lower.includes('buf error');
+  if (looksTruncated) {
+    return (
+      `Remote sync file appears corrupted (compressed data is truncated). ` +
+      `To recover, delete the ${FILE_BASED_SYNC_CONSTANTS.SYNC_FILE} file on ` +
+      `your sync server, then trigger a sync from the device with your latest data.`
+    );
+  }
+  return `Failed to decompress sync data: ${rawMessage}`;
+};
 
 export class JsonParseError extends Error {
   override name = 'JsonParseError';
