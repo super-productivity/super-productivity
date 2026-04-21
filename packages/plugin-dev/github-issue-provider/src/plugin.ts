@@ -170,7 +170,7 @@ PluginAPI.registerIssueProvider({
       searchTerm.includes('is:issue') || searchTerm.includes('is:pull-request');
     const typeFilter = hasTypeFilter ? '' : ' is:issue';
     const q = encodeGithubQuery(`repo:${owner}/${repo}${typeFilter} ${searchTerm}`);
-    const url = `${API_BASE}/search/issues?q=${q}&per_page=50`;
+    const url = `${API_BASE}/search/issues?q=${q}&per_page=50&advanced_search=true`;
     const response = await http.get<GithubSearchResponse>(url);
     return (response.items || []).map(mapSearchResult);
   },
@@ -270,7 +270,7 @@ PluginAPI.registerIssueProvider({
     const { owner, repo } = parseRepo(cfg);
     const query = cfg.backlogQuery || 'sort:updated state:open assignee:@me';
     const q = encodeGithubQuery(`repo:${owner}/${repo} is:issue ${query}`);
-    const url = `${API_BASE}/search/issues?q=${q}&per_page=50`;
+    const url = `${API_BASE}/search/issues?q=${q}&per_page=50&advanced_search=true`;
     const response = await http.get<GithubSearchResponse>(url);
     return (response.items || []).map(mapSearchResult);
   },
