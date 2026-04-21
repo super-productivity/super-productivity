@@ -744,6 +744,16 @@ export class IssueService {
         );
         const isInBacklog = !!project?.backlogTaskIds?.includes(res.task.id);
         if (isInBacklog) {
+          const taskId = res.task.id;
+          this._snackService.open({
+            ico: 'info',
+            msg: T.F.TASK.S.TASK_ALREADY_EXISTS,
+            translateParams: { title: res.task.title },
+            actionStr: T.F.TASK.S.GO_TO_TASK,
+            actionFn: () => {
+              this._navigateToTaskService.navigate(taskId, false);
+            },
+          });
           return true;
         }
         this._projectService.moveTaskToTodayList(res.task.id, res.task.projectId);

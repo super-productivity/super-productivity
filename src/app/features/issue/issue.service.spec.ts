@@ -400,4 +400,43 @@ describe('IssueService', () => {
       expect(taskData.notes).toBe('Provider-set notes');
     });
   });
+
+  describe('addTaskFromIssue - existing task already in project backlog', () => {
+    const githubIssue = { id: 'github-issue-123', title: 'GitHub Issue' };
+
+    beforeEach(() => {
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'project-1',
+      });
+    });
+
+    it('should show "already exists" snack with Go to Task action for backlog tasks', async () => {
+      const existingTask = createMockTask({
+        issueType: 'GITHUB',
+        projectId: 'project-1',
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+        task: existingTask,
+        subTasks: null,
+        isFromArchive: false,
+      });
+      projectServiceSpy.getByIdOnce$.and.returnValue(
+        of({ backlogTaskIds: [existingTask.id] } as any),
+      );
+
+      await service.addTaskFromIssue({
+        issueDataReduced: githubIssue as any,
+        issueProviderId: 'github-provider-1',
+        issueProviderKey: 'GITHUB',
+      });
+
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.TASK.S.TASK_ALREADY_EXISTS,
+          actionStr: T.F.TASK.S.GO_TO_TASK,
+          actionFn: jasmine.any(Function),
+        }),
+      );
+    });
+  });
 });
