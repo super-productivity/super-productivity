@@ -53,6 +53,11 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
+import { DateAdapter } from '@angular/material/core';
+import { MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
+import { PlannerActions } from '../../planner/store/planner.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Store } from '@ngrx/store';
 import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
 import { IssueLog } from '../../../core/log';
@@ -90,6 +95,8 @@ import { checkKeyCombo } from '../../../util/check-key-combo';
     TaskTitleComponent,
     TaskDetailItemComponent,
     MatIcon,
+    MatIconButton,
+    MatTooltip,
     TaskListComponent,
     MatButton,
     ProgressBarComponent,
@@ -120,6 +127,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _dateAdapter = inject(DateAdapter);
 
   // Inputs
   task = input.required<TaskWithSubTasks>();
@@ -491,6 +499,56 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       restoreFocus: true,
       data: { task: this.task() },
     });
+  }
+
+  quickScheduleToday(ev: Event): void {
+    ev.stopPropagation();
+    const task = this.task();
+    this._store.dispatch(
+      TaskSharedActions.planTasksForToday({
+        taskIds: [task.id],
+        parentTaskMap: { [task.id]: task.parentId },
+        isShowSnack: true,
+      }),
+    );
+  }
+
+  quickScheduleTomorrow(ev: Event): void {
+    ev.stopPropagation();
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    this._planForDay(d);
+  }
+
+  quickScheduleNextWeek(ev: Event): void {
+    ev.stopPropagation();
+    const d = new Date();
+    const dayOffset =
+      (this._dateAdapter.getFirstDayOfWeek() - this._dateAdapter.getDayOfWeek(d) + 7) %
+        7 || 7;
+    d.setDate(d.getDate() + dayOffset);
+    this._planForDay(d);
+  }
+
+  unscheduleTask(ev: Event): void {
+    ev.stopPropagation();
+    this._store.dispatch(TaskSharedActions.unscheduleTask({ id: this.task().id }));
+  }
+
+  removeDeadline(ev: Event): void {
+    ev.stopPropagation();
+    this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: this.task().id }));
+  }
+
+  private _planForDay(date: Date): void {
+    date.setHours(0, 0, 0, 0);
+    this._store.dispatch(
+      PlannerActions.planTaskForDay({
+        task: this.task(),
+        day: getDbDateStr(date),
+        isShowSnack: true,
+      }),
+    );
   }
 
   editTaskRepeatCfg(): void {

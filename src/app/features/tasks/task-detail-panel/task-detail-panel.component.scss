@@ -109,6 +109,18 @@ progress-bar {
   text-align: center;
 }
 
+.quick-chip-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-quarter);
+  margin-left: auto;
+}
+
+.quick-chip {
+  margin-left: var(--s-quarter);
+}
+
 .attachment-list-panel-content-wrapper {
   padding-bottom: var(--s);
 }

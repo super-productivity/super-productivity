@@ -154,40 +154,6 @@
     </button>
   }
 
-  @if (!task.subTaskIds.length) {
-    <button
-      (click)="estimateTime()"
-      class="hide-xs"
-      mat-menu-item
-    >
-      <span class="menuItemLeft">
-        <mat-icon>timer</mat-icon>
-        {{ T.F.TASK.CMP.OPEN_TIME | translate }}
-      </span>
-      <span class="key-i">{{ kb.taskOpenEstimationDialog }}</span>
-    </button>
-  }
-
-  <!--    <button-->
-  <!--      (click)="scheduleTask()"-->
-  <!--      mat-menu-item-->
-  <!--    >-->
-  <!--      <ng-container *ngIf="!task.reminderId">-->
-  <!--        <span>-->
-  <!--          <mat-icon>alarm_add</mat-icon>-->
-  <!--          {{ T.F.TASK.CMP.SCHEDULE|translate }}-->
-  <!--        </span>-->
-  <!--        <span class="key-i">{{ kb.taskSchedule }}</span>-->
-  <!--      </ng-container>-->
-  <!--      <ng-container *ngIf="task.reminderId">-->
-  <!--        <span>-->
-  <!--          <mat-icon>alarm</mat-icon>-->
-  <!--          {{ T.F.TASK.CMP.EDIT_SCHEDULED|translate }}-->
-  <!--        </span>-->
-  <!--        <span class="key-i">{{ kb.taskSchedule }}</span>-->
-  <!--      </ng-container>-->
-  <!--    </button>-->
-
   @if (isAdvancedControls() && !task.parentId && !task.isDone) {
     <button
       (click)="moveToTop()"
@@ -212,32 +178,6 @@
     </button>
   }
 
-  <button
-    (click)="openDeadlineDialog()"
-    mat-menu-item
-  >
-    <span class="menuItemLeft">
-      <mat-icon>flag</mat-icon>
-      {{
-        (task.deadlineWithTime || task.deadlineDay
-          ? T.F.TASK.CMP.EDIT_DEADLINE
-          : T.F.TASK.CMP.SET_DEADLINE
-        ) | translate
-      }}
-    </span>
-  </button>
-  @if (task.deadlineWithTime || task.deadlineDay) {
-    <button
-      (click)="removeDeadline()"
-      mat-menu-item
-    >
-      <span class="menuItemLeft">
-        <mat-icon>flag_circle</mat-icon>
-        {{ T.F.TASK.CMP.REMOVE_DEADLINE | translate }}
-      </span>
-    </button>
-  }
-
   <!-- Only show the duplicate command if it is a parent unfinished task -->
   @if (isAdvancedControls() && !task.parentId && !task.isDone) {
     <button
@@ -250,18 +190,6 @@
       </span>
     </button>
   }
-
-  <button
-    (click)="addAttachment()"
-    class="hide-xs"
-    mat-menu-item
-  >
-    <span class="menuItemLeft">
-      <mat-icon>attachment</mat-icon>
-      {{ T.F.TASK.CMP.OPEN_ATTACH | translate }}
-    </span>
-    <span class="key-i">{{ kb.taskAddAttachment }}</span>
-  </button>
 
   <!--TODO maybe handle dynamically -->
   @if (task.issueId && task.issueType !== ICAL_TYPE) {
