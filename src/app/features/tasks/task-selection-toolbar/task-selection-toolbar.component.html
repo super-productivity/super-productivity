@@ -1,0 +1,40 @@
+@if (selectedCount()) {
+  <div class="toolbar-wrap">
+    <div class="toolbar">
+      <div class="count">
+        {{ T.F.TASK.TASK_SELECTION.COUNT | translate: { count: selectedCount() } }}
+      </div>
+
+      <div class="actions">
+        <button
+          mat-icon-button
+          [title]="T.F.TASK.CMP.MARK_DONE | translate"
+          (click)="markAsDone()"
+        >
+          <mat-icon>check_circle</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          [title]="T.F.TASK.CMP.MOVE_TO_OTHER_PROJECT | translate"
+          [disabled]="!hasProjectTargets()"
+          (click)="moveToProject()"
+        >
+          <mat-icon>drive_file_move</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          [title]="T.F.TASK.CMP.DELETE | translate"
+          (click)="deleteSelected()"
+        >
+          <mat-icon>delete</mat-icon>
+        </button>
+        <button
+          mat-button
+          (click)="clearSelection()"
+        >
+          {{ T.G.CANCEL | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

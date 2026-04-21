@@ -1675,6 +1675,15 @@
         "TASK_CREATED": "Created task \"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "Select or create task",
+      "TASK_SELECTION": {
+        "COUNT_ONE": "{{count}} task selected",
+        "COUNT_OTHER": "{{count}} tasks selected",
+        "TITLE": "Move selected tasks",
+        "D_CONFIRM_DELETE": {
+          "MSG_ONE": "Are you sure you want to delete <strong>{{count}}</strong> selected task?",
+          "MSG_OTHER": "Are you sure you want to delete <strong>{{count}}</strong> selected tasks?"
+        }
+      },
       "SUMMARY_TABLE": {
         "ESTIMATE": "Estimate",
         "SPENT_TODAY": "Spent Today",

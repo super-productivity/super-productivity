@@ -67,6 +67,7 @@ import {
 } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
+import { TaskSelectionToolbarComponent } from '../tasks/task-selection-toolbar/task-selection-toolbar.component';
 
 @Component({
   selector: 'work-view',
@@ -97,6 +98,7 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
+    TaskSelectionToolbarComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {

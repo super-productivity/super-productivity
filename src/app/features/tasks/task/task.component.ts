@@ -15,13 +15,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
-import { EMPTY, forkJoin, Subscription } from 'rxjs';
-import {
-  HideSubTasksMode,
-  TaskCopy,
-  TaskDetailTargetPanel,
-  TaskWithSubTasks,
-} from '../task.model';
+import { Subscription } from 'rxjs';
+import { HideSubTasksMode, TaskDetailTargetPanel, TaskWithSubTasks } from '../task.model';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
 import {
@@ -29,7 +24,6 @@ import {
   expandInOnlyAnimation,
 } from '../../../ui/animations/expand.ani';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { concatMap, first, tap } from 'rxjs/operators';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
 import { SwipeBlockComponent } from '../../../ui/swipe-block/swipe-block.component';
@@ -37,7 +31,6 @@ import { TaskAttachmentService } from '../task-attachment/task-attachment.servic
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { ProjectService } from '../../project/project.service';
 import { Project } from '../../project/project.model';
-import { _MISSING_PROJECT_ } from '../../project/project.const';
 import { T } from '../../../t.const';
 import {
   MatMenu,
@@ -47,10 +40,8 @@ import {
 } from '@angular/material/menu';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { throttle } from '../../../util/decorators';
-import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
-import { Update } from '@ngrx/entity';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { DateService } from '../../../core/date/date.service';
 import { isTouchActive } from '../../../util/input-intent';
@@ -84,6 +75,9 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
+import { TaskSelectionService } from '../task-selection.service';
+import { MatCheckbox } from '@angular/material/checkbox';
+import { TaskBatchOperationService } from '../task-batch-operation.service';
 
 @Component({
   selector: 'task',
@@ -98,6 +92,7 @@ import { TaskFocusService } from '../task-focus.service';
     '[class.isDone]': 'task().isDone',
     '[class.isCurrent]': 'isCurrent()',
     '[class.isSelected]': 'isSelected()',
+    '[class.isMultiSelected]': 'isMultiSelected()',
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
     '(contextmenu)': 'onHostContextMenu($event)',
@@ -124,11 +119,11 @@ import { TaskFocusService } from '../task-focus.service';
     TagToggleMenuListComponent,
     DoneToggleComponent,
     SwipeBlockComponent,
+    MatCheckbox,
   ],
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskService = inject(TaskService);
-  private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _configService = inject(GlobalConfigService);
   private readonly _attachmentService = inject(TaskAttachmentService);
@@ -136,6 +131,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _taskSelectionService = inject(TaskSelectionService);
+  private readonly _taskBatchOperationService = inject(TaskBatchOperationService);
   private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
 
@@ -146,12 +143,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
   isInSubTaskList = input<boolean>(false);
+  allVisibleTaskIds = input<string[]>([]);
   showDoneAnimation = signal(false);
   showUndoneAnimation = signal(false);
 
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
+  isMultiSelected = computed(() => this._taskSelectionService.isSelected(this.task().id));
+  isSelectionMode = this._taskSelectionService.isSelectionMode;
   isShowCloseButton = computed(() => {
     // Only show close button when task is selected AND not on mobile (bottom panel)
     return this.isSelected() && !this.layoutService.isXs();
@@ -260,6 +260,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private _dragReadyTimeout: number | undefined;
   private _doneAnimationTimeout: number | undefined;
   private _touchListenerCleanups: (() => void)[] = [];
+  private _nativeListenerCleanups: (() => void)[] = [];
   ShowSubTasksMode: typeof HideSubTasksMode = HideSubTasksMode;
   isFirstLineHover: boolean = false;
   _nextFocusTaskEl?: HTMLElement;
@@ -357,8 +358,24 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
+    const el = this._elementRef.nativeElement;
+    const onClickCapture = (event: MouseEvent): void => {
+      if (!this._shouldCaptureSelectionClick(event)) {
+        return;
+      }
+      if (!this._handleSelectionClick(event)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    };
+    el.addEventListener('click', onClickCapture, true);
+    this._nativeListenerCleanups.push(() =>
+      el.removeEventListener('click', onClickCapture, true),
+    );
+
     if (isTouchActive() || IS_HYBRID_DEVICE) {
-      const el = this._elementRef.nativeElement;
       const onStart = (): void => this.onHostTouchStart();
       const onEnd = (): void => this.onHostTouchEnd();
       el.addEventListener('touchstart', onStart, { passive: true });
@@ -404,6 +421,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     window.clearTimeout(this._dragReadyTimeout);
     window.clearTimeout(this._doneAnimationTimeout);
     this._touchListenerCleanups.forEach((fn) => fn());
+    this._nativeListenerCleanups.forEach((fn) => fn());
     this._moveToProjectListSub?.unsubscribe();
   }
 
@@ -807,6 +825,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   titleBarClick(event: MouseEvent): void {
+    if (this._handleSelectionClick(event)) {
+      return;
+    }
     const targetEl = event.target as HTMLElement;
     if (targetEl.closest('task-title')) {
       return;
@@ -951,91 +972,58 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   // TODO extract so service
   moveTaskToProject(projectId: string): void {
-    const t = this.task();
-    if (projectId === t.projectId) {
-      return;
-    } else if (!t.repeatCfgId) {
-      this._taskService.moveToProject(t, projectId);
-    } else {
-      forkJoin([
-        this._taskRepeatCfgService.getTaskRepeatCfgById$(t.repeatCfgId).pipe(first()),
-        this._taskService.getTasksWithSubTasksByRepeatCfgId$(t.repeatCfgId).pipe(first()),
-        this._taskService.getArchiveTasksForRepeatCfgId(t.repeatCfgId),
-        this._projectService.getByIdOnce$(projectId),
-      ])
-        .pipe(
-          concatMap(
-            ([
-              reminderCfg,
-              nonArchiveInstancesWithSubTasks,
-              archiveInstances,
-              targetProject,
-            ]) => {
-              TaskLog.log({
-                reminderCfg,
-                nonArchiveInstancesWithSubTasks,
-                archiveInstances,
-              });
+    void this._taskBatchOperationService
+      .moveToProject(this.task(), projectId)
+      .then((isMoved) => {
+        if (isMoved) {
+          this.focusSelf();
+        }
+      });
+  }
 
-              // if there is only a single instance (probably just created) than directly update the task repeat cfg
-              if (
-                nonArchiveInstancesWithSubTasks.length === 1 &&
-                archiveInstances.length === 0
-              ) {
-                this._taskRepeatCfgService.updateTaskRepeatCfg(reminderCfg.id, {
-                  projectId,
-                });
-                this._taskService.moveToProject(this.task(), projectId);
-                return EMPTY;
-              }
-
-              return this._matDialog
-                .open(DialogConfirmComponent, {
-                  data: {
-                    okTxt: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.OK,
-                    message: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.MSG,
-                    translateParams: {
-                      projectName: targetProject?.title ?? _MISSING_PROJECT_,
-                      tasksNr:
-                        nonArchiveInstancesWithSubTasks.length + archiveInstances.length,
-                    },
-                  },
-                })
-                .afterClosed()
-                .pipe(
-                  tap((isConfirm) => {
-                    if (isConfirm) {
-                      this._taskRepeatCfgService.updateTaskRepeatCfg(reminderCfg.id, {
-                        projectId,
-                      });
-                      nonArchiveInstancesWithSubTasks.forEach((nonArchiveTask) => {
-                        this._taskService.moveToProject(nonArchiveTask, projectId);
-                      });
-
-                      const archiveUpdates: Update<TaskCopy>[] = [];
-                      archiveInstances.forEach((archiveTask) => {
-                        archiveUpdates.push({
-                          id: archiveTask.id,
-                          changes: { projectId },
-                        });
-                        if (archiveTask.subTaskIds.length) {
-                          archiveTask.subTaskIds.forEach((subId) => {
-                            archiveUpdates.push({
-                              id: subId,
-                              changes: { projectId },
-                            });
-                          });
-                        }
-                      });
-                      this._taskService.updateArchiveTasks(archiveUpdates);
-                    }
-                  }),
-                );
-            },
-          ),
-        )
-        .subscribe(() => this.focusSelf());
+  toggleSelection(event?: MouseEvent): void {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
     }
+    this._taskSelectionService.toggle(this.task().id);
+  }
+
+  private _handleSelectionClick(event: MouseEvent): boolean {
+    if (event.shiftKey && this._taskSelectionService.isSelectionMode()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this._taskSelectionService.selectRange(this.task().id, this.allVisibleTaskIds());
+      return true;
+    }
+
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      this._taskSelectionService.toggle(this.task().id);
+      return true;
+    }
+
+    if (this._taskSelectionService.isSelectionMode()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this._taskSelectionService.toggle(this.task().id);
+      return true;
+    }
+
+    return false;
+  }
+
+  private _shouldCaptureSelectionClick(event: MouseEvent): boolean {
+    if (event.ctrlKey || event.metaKey) {
+      return true;
+    }
+
+    if (event.shiftKey && this._taskSelectionService.isSelectionMode()) {
+      return true;
+    }
+
+    return false;
   }
 
   moveToBacklog(): void {

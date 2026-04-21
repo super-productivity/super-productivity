@@ -36,6 +36,7 @@ import { WorkContextType } from '../../features/work-context/work-context.model'
 import { HISTORY_STATE } from '../../app.constants';
 import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { TaskBatchOperationService } from '../../features/tasks/task-batch-operation.service';
 
 const COLLAPSED_WIDTH = 64;
 const MOBILE_NAV_WIDTH = 300;
@@ -72,6 +73,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private readonly _taskService = inject(TaskService);
   private readonly _layoutService = inject(LayoutService);
   private readonly _dataInitStateService = inject(DataInitStateService);
+  private readonly _taskBatchOperationService = inject(TaskBatchOperationService);
   private readonly _router = inject(Router);
   private _dragDropRegistry = inject(DragDropRegistry);
   private _externalDragService = inject(ScheduleExternalDragService);
@@ -658,8 +660,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private _handlePointerUp(event: MouseEvent | TouchEvent): void {
     const draggedTask = this._externalDragService.activeTask();
 
-    // exclude recurring tasks
-    if (!draggedTask || draggedTask.repeatCfgId) {
+    if (!draggedTask) {
       return;
     }
 
@@ -697,7 +698,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       // if the dom element is removed before the return animation has finished
       const dragref = this._externalDragService.activeDragRef();
       dragref?.ended.pipe(take(1)).subscribe(() => {
-        this._taskService.moveToProject(draggedTask, projectId!);
+        void this._taskBatchOperationService.moveToProject(draggedTask, projectId!);
       });
     } else if (navItemElement.hasAttribute('data-tag-id')) {
       // Task is dropped on a tag

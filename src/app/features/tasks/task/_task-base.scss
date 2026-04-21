@@ -31,6 +31,13 @@
     //top: 16px;
   }
 
+  &.isMultiSelected {
+    .box {
+      border-color: var(--palette-primary-300);
+      box-shadow: var(--whiteframe-shadow-4dp);
+    }
+  }
+
   &.isCurrent {
     z-index: var(--z-is-current-host);
     position: sticky;
@@ -269,4 +276,14 @@
       text-decoration: line-through;
     }
   }
+}
+
+.selection-checkbox {
+  margin-left: var(--s);
+  margin-right: var(--s-half);
+  --mdc-checkbox-selected-checkmark-color: #fff;
+  --mdc-checkbox-selected-focus-icon-color: var(--palette-primary);
+  --mdc-checkbox-selected-hover-icon-color: var(--palette-primary);
+  --mdc-checkbox-selected-icon-color: var(--palette-primary);
+  --mdc-checkbox-selected-pressed-icon-color: var(--palette-primary);
 }
