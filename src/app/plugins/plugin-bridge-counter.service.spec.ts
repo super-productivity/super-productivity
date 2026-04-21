@@ -27,6 +27,7 @@ import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issu
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
+import { DataInitService } from '../core/data-init/data-init.service';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 describe('PluginBridgeService.setCounter()', () => {
@@ -55,6 +56,8 @@ describe('PluginBridgeService.setCounter()', () => {
     const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [
       'activeWorkContext$',
     ]);
+    const dataInitServiceSpy = jasmine.createSpyObj('DataInitService', ['reInit']);
+    dataInitServiceSpy.reInit.and.resolveTo();
 
     TestBed.configureTestingModule({
       providers: [
@@ -103,6 +106,7 @@ describe('PluginBridgeService.setCounter()', () => {
         { provide: PluginIssueProviderRegistryService, useValue: {} },
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: dataInitServiceSpy },
       ],
     });
 
