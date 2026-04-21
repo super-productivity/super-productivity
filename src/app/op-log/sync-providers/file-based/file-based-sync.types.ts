@@ -99,10 +99,6 @@ export interface FileBasedSyncData {
   oldestOpSyncVersion?: number;
 }
 
-// Re-exported from the shared errors module for backward compatibility.
-// New code should import directly from sync-errors.
-export { SyncDataCorruptedError } from '../../../op-log/core/errors/sync-errors';
-
 /**
  * Constants for file-based sync
  */

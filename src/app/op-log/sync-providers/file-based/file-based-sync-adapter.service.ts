@@ -28,7 +28,6 @@ import {
 import {
   FileBasedSyncData,
   FILE_BASED_SYNC_CONSTANTS,
-  SyncDataCorruptedError,
   SyncFileCompactOp,
 } from './file-based-sync.types';
 import { OpLog } from '../../../core/log';
@@ -36,6 +35,7 @@ import {
   InvalidDataSPError,
   LegacySyncFormatDetectedError,
   RemoteFileNotFoundAPIError,
+  SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
 } from '../../core/errors/sync-errors';
 import { mergeVectorClocks } from '../../../core/util/vector-clock';

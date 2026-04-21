@@ -6,14 +6,11 @@ import {
   OperationSyncCapable,
   SyncOperation,
 } from '../provider.interface';
-import {
-  FILE_BASED_SYNC_CONSTANTS,
-  FileBasedSyncData,
-  SyncDataCorruptedError,
-} from './file-based-sync.types';
+import { FILE_BASED_SYNC_CONSTANTS, FileBasedSyncData } from './file-based-sync.types';
 import {
   InvalidDataSPError,
   RemoteFileNotFoundAPIError,
+  SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
 } from '../../core/errors/sync-errors';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
