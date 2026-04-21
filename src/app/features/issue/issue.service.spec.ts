@@ -401,6 +401,56 @@ describe('IssueService', () => {
     });
   });
 
+  describe('addTaskFromIssue - isAddToBacklog skips default dueDay', () => {
+    const jiraIssue = { id: 'JIRA-1', title: 'Test Jira Issue' };
+
+    const setupForNewTask = (): void => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({ defaultProjectId: 'proj-1', defaultTagIds: [] } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+    };
+
+    it('should NOT set dueDay when isAddToBacklog=true', async () => {
+      setupForNewTask();
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+        isAddToBacklog: true,
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.dueDay).toBeUndefined();
+    });
+
+    it('should set dueDay to today when isAddToBacklog is not set', async () => {
+      setupForNewTask();
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.dueDay).toBeDefined();
+    });
+  });
+
   describe('addTaskFromIssue - existing task already in project backlog', () => {
     const githubIssue = { id: 'github-issue-123', title: 'GitHub Issue' };
 
@@ -408,6 +458,29 @@ describe('IssueService', () => {
       Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
         get: () => 'project-1',
       });
+    });
+
+    it('should NOT move backlog task to Today list on re-import', async () => {
+      const existingTask = createMockTask({
+        issueType: 'GITHUB',
+        projectId: 'project-1',
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+        task: existingTask,
+        subTasks: null,
+        isFromArchive: false,
+      });
+      projectServiceSpy.getByIdOnce$.and.returnValue(
+        of({ backlogTaskIds: [existingTask.id] } as any),
+      );
+
+      await service.addTaskFromIssue({
+        issueDataReduced: githubIssue as any,
+        issueProviderId: 'github-provider-1',
+        issueProviderKey: 'GITHUB',
+      });
+
+      expect(projectServiceSpy.moveTaskToTodayList).not.toHaveBeenCalled();
     });
 
     it('should show "already exists" snack with Go to Task action for backlog tasks', async () => {
@@ -435,6 +508,35 @@ describe('IssueService', () => {
           msg: T.F.TASK.S.TASK_ALREADY_EXISTS,
           actionStr: T.F.TASK.S.GO_TO_TASK,
           actionFn: jasmine.any(Function),
+        }),
+      );
+    });
+
+    it('should still move task from Today-side to context when not in backlog', async () => {
+      const existingTask = createMockTask({
+        issueType: 'GITHUB',
+        projectId: 'project-1',
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+        task: existingTask,
+        subTasks: null,
+        isFromArchive: false,
+      });
+      projectServiceSpy.getByIdOnce$.and.returnValue(of({ backlogTaskIds: [] } as any));
+
+      await service.addTaskFromIssue({
+        issueDataReduced: githubIssue as any,
+        issueProviderId: 'github-provider-1',
+        issueProviderKey: 'GITHUB',
+      });
+
+      expect(projectServiceSpy.moveTaskToTodayList).toHaveBeenCalledWith(
+        existingTask.id,
+        'project-1',
+      );
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.TASK.S.FOUND_MOVE_FROM_BACKLOG,
         }),
       );
     });
