@@ -79,6 +79,8 @@ import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checkl
 import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
 import { checkKeyCombo } from '../../../util/check-key-combo';
+import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
+import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model';
 
 @Component({
   selector: 'task-detail-panel',
@@ -112,6 +114,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   taskService = inject(TaskService);
   layoutService = inject(LayoutService);
 
+  private _clipboardImageService = inject(ClipboardImageService);
   private _globalConfigService = inject(GlobalConfigService);
   private _issueService = inject(IssueService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
@@ -426,6 +429,33 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     this.attachmentService.createFromDrop(ev, this.task().id);
     ev.stopPropagation();
     this.panelState.isDragOver.set(false);
+  }
+
+  @HostListener('paste', ['$event']) async onPaste(ev: ClipboardEvent): Promise<void> {
+    // Let existing textarea/input/contenteditable paste handlers work normally
+    const target = ev.target as HTMLElement;
+    if (
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'INPUT' ||
+      target.isContentEditable
+    ) {
+      return;
+    }
+
+    const progress = this._clipboardImageService.handlePasteWithProgress(ev);
+    if (!progress) return;
+
+    ev.preventDefault();
+    const result = await progress.resultPromise;
+    if (result.success && result.imageUrl) {
+      this.attachmentService.addAttachment(this.task().id, {
+        id: null,
+        type: 'IMG',
+        path: result.imageUrl,
+        title: 'Pasted image',
+        icon: DropPasteIcons.IMG,
+      });
+    }
   }
 
   @HostListener('window:popstate') onBack(): void {

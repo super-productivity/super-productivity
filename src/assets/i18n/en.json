@@ -1504,6 +1504,7 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Attachments",
+        "PASTE_IMAGE_HINT": "Ctrl+V to paste image",
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Attachments ({{nr}})",
         "COMPLETED_ON": "Completed on",

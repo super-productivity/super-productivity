@@ -109,6 +109,14 @@ progress-bar {
   text-align: center;
 }
 
+.paste-hint {
+  display: block;
+  font-size: 11px;
+  opacity: 0.4;
+  margin-top: var(--s-quarter);
+  color: var(--text-color-muted);
+}
+
 .attachment-list-panel-content-wrapper {
   padding-bottom: var(--s);
 }
