@@ -146,36 +146,6 @@
         >
           <mat-icon>event_busy</mat-icon>
         </button>
-      } @else {
-        <div
-          class="quick-chip-row"
-          (click)="$event.stopPropagation()"
-        >
-          <button
-            mat-icon-button
-            class="quick-chip"
-            (click)="quickScheduleToday($event)"
-            [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
-          >
-            <mat-icon>wb_sunny</mat-icon>
-          </button>
-          <button
-            mat-icon-button
-            class="quick-chip"
-            (click)="quickScheduleTomorrow($event)"
-            [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
-          >
-            <mat-icon svgIcon="tomorrow"></mat-icon>
-          </button>
-          <button
-            mat-icon-button
-            class="quick-chip"
-            (click)="quickScheduleNextWeek($event)"
-            [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
-          >
-            <mat-icon svgIcon="next_week"></mat-icon>
-          </button>
-        </div>
       }
     </ng-container>
   </task-detail-item>
