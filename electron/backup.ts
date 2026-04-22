@@ -13,7 +13,7 @@ import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model
 import * as path from 'path';
 import { error, log } from 'electron-log/main';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
-import { getBackupTimestamp } from '../src/app/util/get-backup-timestamp';
+import { getBackupTimestamp } from './shared-with-frontend/get-backup-timestamp';
 
 export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
 export const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(

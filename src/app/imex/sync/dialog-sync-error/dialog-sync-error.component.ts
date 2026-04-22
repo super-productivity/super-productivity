@@ -10,7 +10,7 @@ import { download } from '../../../util/download';
 import {
   BACKUP_FILENAME_PREFIX,
   getBackupTimestamp,
-} from '../../../util/get-backup-timestamp';
+} from '../../../../../electron/shared-with-frontend/get-backup-timestamp';
 
 import { IS_ELECTRON } from '../../../app.constants';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';

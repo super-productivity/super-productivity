@@ -22,7 +22,7 @@ import { AppDataComplete } from '../model/model-config';
 import {
   MIGRATION_BACKUP_PREFIX,
   getBackupTimestamp,
-} from '../../util/get-backup-timestamp';
+} from '../../../../electron/shared-with-frontend/get-backup-timestamp';
 
 /**
  * Service to check for valid operation log state during startup and migrate

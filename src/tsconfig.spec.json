@@ -10,5 +10,5 @@
     }
   },
   "files": ["test.ts", "polyfills.ts"],
-  "include": ["**/*.spec.ts", "**/*.d.ts"]
+  "include": ["**/*.spec.ts", "**/*.d.ts", "../electron/shared-with-frontend/get-backup-timestamp.spec.ts"]
 }

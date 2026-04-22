@@ -14,7 +14,7 @@ import {
   BACKUP_FILENAME_PREFIX,
   BACKUP_FILENAME_PREFIX_ANONYMIZED,
   getBackupTimestamp,
-} from '../../util/get-backup-timestamp';
+} from '../../../../electron/shared-with-frontend/get-backup-timestamp';
 import { DialogImportFromUrlComponent } from '../dialog-import-from-url/dialog-import-from-url.component';
 import { T } from '../../t.const';
 import { TODAY_TAG } from '../../features/tag/tag.const';
