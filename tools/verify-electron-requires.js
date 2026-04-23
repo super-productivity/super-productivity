@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /*
  * Walks the contents of a packaged app.asar and verifies that every relative
- * require() call inside electron/**\/*.js resolves to a file that was actually
- * packaged. Catches #7320-class bugs where tsc happily compiles an import
- * reaching out of the electron tree (e.g. '../src/app/util/foo') but the
- * compiled dependency lives outside the files glob in electron-builder.yaml
- * and is therefore missing from app.asar at runtime.
+ * require() call inside electron/ .js/.cjs/.mjs files resolves to a file that
+ * was actually packaged. Catches #7320-class bugs where tsc happily compiles
+ * an import reaching out of the electron tree (e.g. '../src/app/util/foo')
+ * but the compiled dependency lives outside the files glob in
+ * electron-builder.yaml and is therefore missing from app.asar at runtime.
  *
  * Usage:
  *   node tools/verify-electron-requires.js <path/to/app.asar>
@@ -41,13 +41,20 @@ try {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-verify-asar-'));
 const errors = [];
 
-const walkJsFiles = (root, visit) => {
+// Note: `electron/preload.js` is an esbuild bundle produced by
+// electron/scripts/bundle-preload.js. All relative imports are inlined at
+// bundle time, so no require('./...') calls reach this walker — meaning
+// preload-side regressions of the #7320 class are NOT caught here. That
+// coverage comes from the launch smoke test in electron-smoke.yml.
+const SHIPPED_JS_EXT = /\.(c|m)?js$/;
+
+const walkSourceFiles = (root, visit) => {
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     const full = path.join(root, entry.name);
     if (entry.isDirectory()) {
       if (entry.name === 'node_modules') continue;
-      walkJsFiles(full, visit);
-    } else if (entry.isFile() && full.endsWith('.js')) {
+      walkSourceFiles(full, visit);
+    } else if (entry.isFile() && SHIPPED_JS_EXT.test(full)) {
       visit(full);
     }
   }
@@ -61,32 +68,54 @@ const collectRelativeRequires = (src) => {
   return targets;
 };
 
+// Guard: a resolved path must stay inside the extracted asar tree.
+// Without this, a relative require with enough `..` climbs above `tmp` and
+// Node's resolver happily hits the host filesystem (or the host's
+// node_modules), masking a genuinely missing module behind a stray file.
+const tmpPrefix = tmp.endsWith(path.sep) ? tmp : tmp + path.sep;
+const isInsideTmp = (p) => p === tmp || p.startsWith(tmpPrefix);
+
+let exitCode = 0;
 try {
   asar.extractAll(asarPath, tmp);
 
   const electronDir = path.join(tmp, 'electron');
   if (!fs.existsSync(electronDir)) {
     console.error(`No electron/ directory found inside ${asarPath}`);
-    process.exit(1);
-  }
-
-  walkJsFiles(electronDir, (file) => {
-    const src = fs.readFileSync(file, 'utf8');
-    for (const target of collectRelativeRequires(src)) {
-      try {
-        require.resolve(path.resolve(path.dirname(file), target), {
-          paths: [path.dirname(file)],
-        });
-      } catch {
-        errors.push(
-          `${path.relative(tmp, file)}: cannot resolve require('${target}')`,
-        );
+    exitCode = 1;
+  } else {
+    walkSourceFiles(electronDir, (file) => {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const target of collectRelativeRequires(src)) {
+        const candidate = path.resolve(path.dirname(file), target);
+        if (!isInsideTmp(candidate)) {
+          errors.push(
+            `${path.relative(tmp, file)}: require('${target}') escapes packaged tree`,
+          );
+          continue;
+        }
+        try {
+          const resolved = require.resolve(candidate, {
+            paths: [path.dirname(file)],
+          });
+          if (!isInsideTmp(resolved)) {
+            errors.push(
+              `${path.relative(tmp, file)}: require('${target}') resolved to host path ${resolved} — module is missing from app.asar`,
+            );
+          }
+        } catch {
+          errors.push(
+            `${path.relative(tmp, file)}: cannot resolve require('${target}')`,
+          );
+        }
       }
-    }
-  });
+    });
+  }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
+
+if (exitCode !== 0) process.exit(exitCode);
 
 if (errors.length) {
   console.error(
