@@ -1657,6 +1657,16 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('my-cool-page');
     });
 
+    it('should use domain basename as task name when pasting a root URL with urlBehavior "extract"', async () => {
+      const t = {
+        ...TASK,
+        title: 'https://example.com',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+      expect(r).toBeDefined();
+      expect(r?.taskChanges.title).toBe('example');
+    });
+
     it('should keep URL in title and add attachment when urlBehavior is "keep-and-attach"', async () => {
       const t = {
         ...TASK,
