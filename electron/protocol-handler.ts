@@ -34,6 +34,13 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
     log('Protocol path parts:', pathParts);
 
     switch (action) {
+      case 'oauth-callback':
+        log('Received OAuth callback URL via app protocol');
+        if (mainWin && mainWin.webContents) {
+          mainWin.webContents.send(IPC.OAUTH_CALLBACK, { url });
+          showOrFocus(mainWin);
+        }
+        break;
       case 'create-task':
         if (pathParts.length > 0) {
           const taskTitle = decodeURIComponent(pathParts[0]);
@@ -76,8 +83,16 @@ export const initializeProtocolHandling = (
   // Register protocol handler
   if (IS_DEV && process.defaultApp) {
     if (process.argv.length >= 2) {
+      const launchArgsForProtocol = [path.resolve(process.argv[1])];
+      const userDataDirArg = process.argv.find((arg) =>
+        arg.startsWith('--user-data-dir='),
+      );
+      if (userDataDirArg) {
+        launchArgsForProtocol.push(userDataDirArg);
+      }
+
       appInstance.setAsDefaultProtocolClient(PROTOCOL_NAME, process.execPath, [
-        path.resolve(process.argv[1]),
+        ...launchArgsForProtocol,
       ]);
     }
   } else {

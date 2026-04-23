@@ -23,6 +23,7 @@ import { OAuthCallbackHandlerService } from '../oauth-callback-handler.service';
 import { Subscription } from 'rxjs';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { SnackService } from '../../../core/snack/snack.service';
+import { IS_ELECTRON } from '../../../app.constants';
 
 @Component({
   selector: 'dialog-get-and-enter-auth-code',
@@ -68,35 +69,37 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
   // field is rendered at the top of the dialog — keeps the field above the
   // iOS on-screen keyboard (discussion #7340).
   readonly codeRequested = signal(false);
+  readonly isElectron = IS_ELECTRON;
   private _authCodeSub?: Subscription;
 
   constructor() {
     this._matDialogRef.disableClose = true;
 
-    // On mobile, listen for OAuth callback
-    if (this.isNativePlatform) {
+    // Listen for OAuth callback on native and Electron for automatic auth completion.
+    if (this.isNativePlatform || this.isElectron) {
+      const expectedProvider = this.data.providerName.toLowerCase();
       this._authCodeSub = this._oauthCallbackHandler.authCodeReceived$.subscribe(
         (data) => {
-          if (data.provider === 'dropbox') {
-            if (data.error) {
-              // Handle error from OAuth provider
-              const errorMsg = data.error_description || data.error;
-              this._snackService.open({
-                type: 'ERROR',
-                msg: `Authentication failed: ${errorMsg}`,
-              });
-              this.close();
-            } else if (data.code) {
-              this.token = data.code;
-              this.close(this.token);
-            } else {
-              // Unexpected case - no code and no error
-              this._snackService.open({
-                type: 'ERROR',
-                msg: 'Authentication failed: No authorization code received',
-              });
-              this.close();
-            }
+          if (data.provider !== expectedProvider) {
+            return;
+          }
+
+          if (data.error) {
+            const errorMsg = data.error_description || data.error;
+            this._snackService.open({
+              type: 'ERROR',
+              msg: `Authentication failed: ${errorMsg}`,
+            });
+            this.close();
+          } else if (data.code) {
+            this.token = data.code;
+            this.close(this.token);
+          } else {
+            this._snackService.open({
+              type: 'ERROR',
+              msg: 'Authentication failed: No authorization code received',
+            });
+            this.close();
           }
         },
       );
@@ -108,7 +111,36 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
   }
 
   close(token?: string): void {
-    this._matDialogRef.close(token?.trim());
+    this._matDialogRef.close(this._normalizeAuthCodeInput(token));
+  }
+
+  private _normalizeAuthCodeInput(token?: string): string | undefined {
+    const trimmed = token?.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    // Allow pasting the full callback URL and extract `code` automatically.
+    try {
+      const parsedUrl = new URL(trimmed);
+      const codeFromUrl = parsedUrl.searchParams.get('code');
+      if (codeFromUrl) {
+        return codeFromUrl;
+      }
+    } catch {
+      // Not a URL, continue with other extraction attempts.
+    }
+
+    const codeMatch = trimmed.match(/(?:^|[?&#])code=([^&#]+)/i);
+    if (codeMatch?.[1]) {
+      try {
+        return decodeURIComponent(codeMatch[1]);
+      } catch {
+        return codeMatch[1];
+      }
+    }
+
+    return trimmed;
   }
 
   // iOS Safari only opens the keyboard when .focus() runs synchronously in the
