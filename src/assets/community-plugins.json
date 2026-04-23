@@ -55,6 +55,13 @@
     "stars": 56
   },
   {
+    "name": "Super Productivity MCP",
+    "shortDescription": "Feature-rich MCP server with 19 tools covering full task CRUD, time tracking summaries, project/tag management, and notifications.",
+    "url": "https://github.com/b0x42/Super-Productivity-MCP",
+    "author": "b0x42",
+    "authorUrl": "https://github.com/b0x42"
+  },
+  {
     "name": "Dashboard",
     "shortDescription": "A lightweight dashboard plugin that visualizes time tracked, completed tasks, overdue items, and project breakdowns within a user\u2011defined date range. It ships as a self-contained HTML/JavaScript widget with no external dependencies and is styled to support light/dark themes.",
     "url": "https://github.com/dougcooper/sp-dashboard",
