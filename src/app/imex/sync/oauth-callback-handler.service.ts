@@ -7,6 +7,7 @@ import { IS_ELECTRON } from '../../app.constants';
 import { SyncLog } from '../../core/log';
 import { PluginOAuthService } from '../../plugins/oauth/plugin-oauth.service';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
+import { validateOneDriveOAuthState } from '../../op-log/sync-providers/file-based/onedrive/onedrive';
 
 type OAuthProvider = 'dropbox' | 'onedrive' | 'plugin';
 
@@ -99,16 +100,30 @@ export class OAuthCallbackHandlerService implements OnDestroy {
       const code = urlObj.searchParams.get('code');
       const error = urlObj.searchParams.get('error');
       const errorDescription = urlObj.searchParams.get('error_description');
+      const state = urlObj.searchParams.get('state');
       const pathParts = urlObj.pathname.split('/').filter(Boolean);
       const providerFromPath = pathParts[0]?.toLowerCase();
       const providerFromQuery = urlObj.searchParams.get('provider')?.toLowerCase();
       const providerRaw = providerFromPath || providerFromQuery;
-      const provider: OAuthProvider =
-        providerRaw === 'onedrive'
-          ? 'onedrive'
-          : providerRaw === 'plugin'
-            ? 'plugin'
-            : 'dropbox';
+
+      // Validate state parameter for CSRF protection (OneDrive only)
+      let provider: OAuthProvider;
+      if (providerRaw === 'onedrive') {
+        const stateValid = validateOneDriveOAuthState(state);
+        if (!stateValid) {
+          SyncLog.warn(
+            'OAuthCallbackHandler: Invalid or missing state for OneDrive callback',
+          );
+          return {
+            error: 'invalid_state',
+            error_description: 'OAuth state validation failed',
+            provider: 'onedrive',
+          };
+        }
+        provider = 'onedrive';
+      } else {
+        provider = providerRaw === 'plugin' ? 'plugin' : 'dropbox';
+      }
 
       return {
         code: code || undefined,
