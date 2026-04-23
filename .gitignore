@@ -77,6 +77,8 @@ build/hub
 electron/**/*.js
 !electron/scripts/bundle-preload.js
 electron/**/*.js.map
+electron/bin/wayland-idle-helper
+electron/wayland-idle-helper/target/
 
 # mac os deployment
 *.provisionprofile

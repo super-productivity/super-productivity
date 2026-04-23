@@ -391,6 +391,7 @@ export const startApp = (): void => {
   });
 
   appIN.on('will-quit', () => {
+    idleTimeHandler?.dispose();
     // un-register all shortcuts.
     globalShortcut.unregisterAll();
     // Safe to remove IPC listeners here: all windows are closed and before-close

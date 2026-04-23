@@ -21,6 +21,14 @@ const { join } = require('path');
 const BIN_NAME = 'superproductivity'; // must match linux.executableName
 const RENAMED = 'superproductivity-bin';
 const WRAPPER_SRC = join(__dirname, '..', 'build', 'linux', 'snap-wrapper.sh');
+const WAYLAND_IDLE_HELPER_SRC = join(
+  __dirname,
+  '..',
+  'electron',
+  'bin',
+  'wayland-idle-helper',
+);
+const WAYLAND_IDLE_HELPER_DEST = 'wayland-idle-helper';
 
 async function afterPack(context) {
   if (context.electronPlatformName !== 'linux') return;
@@ -28,6 +36,20 @@ async function afterPack(context) {
   const { appOutDir } = context;
   const binPath = join(appOutDir, BIN_NAME);
   const renamedPath = join(appOutDir, RENAMED);
+  const helperDestPath = join(appOutDir, WAYLAND_IDLE_HELPER_DEST);
+
+  const installWaylandIdleHelper = async () => {
+    const helperStat = await fs.stat(WAYLAND_IDLE_HELPER_SRC).catch(() => null);
+    if (!helperStat) {
+      console.warn(
+        `[afterPack] ${WAYLAND_IDLE_HELPER_SRC} not found; skipping Wayland idle helper copy`,
+      );
+      return;
+    }
+
+    await fs.copyFile(WAYLAND_IDLE_HELPER_SRC, helperDestPath);
+    await fs.chmod(helperDestPath, 0o755);
+  };
 
   // Read wrapper content BEFORE touching appOutDir. If the source file is
   // missing or unreadable we fail fast with the Electron binary still in
@@ -50,6 +72,7 @@ async function afterPack(context) {
   if (binStat && renamedStat) {
     const head = await fs.readFile(binPath, 'utf8').catch(() => '');
     if (head.startsWith('#!')) {
+      await installWaylandIdleHelper();
       console.log(`[afterPack] wrapper already installed`);
       return;
     }
@@ -78,6 +101,7 @@ async function afterPack(context) {
   }
 
   await fs.chmod(renamedPath, 0o755);
+  await installWaylandIdleHelper();
 
   console.log(
     `[afterPack] Installed argv wrapper: ${BIN_NAME} -> ${RENAMED} + shell wrapper`,

@@ -1,14 +1,21 @@
-import { exec } from 'child_process';
+import { ChildProcessWithoutNullStreams, exec, execFile, spawn } from 'child_process';
+import { existsSync } from 'fs';
+import path from 'path';
 import { promisify } from 'util';
-import { powerMonitor } from 'electron';
+import { app, powerMonitor } from 'electron';
 import electronLog from 'electron-log/main';
+import { CONFIG } from './CONFIG';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const log = electronLog.scope('IdleTimeHandler');
+const WAYLAND_IDLE_HELPER_READY_TIMEOUT_MS = 3000;
+const WAYLAND_IDLE_HELPER_PROBE_TIMEOUT_MS = 3000;
 
 type IdleDetectionMethod =
   | 'powerMonitor'
   | 'gnomeDBus'
+  | 'waylandIdleNotify'
   | 'xprintidle'
   | 'loginctl'
   | 'none';
@@ -32,6 +39,11 @@ export class IdleTimeHandler {
   private readonly _environment: EnvironmentInfo;
   private _methodDetectionPromise: Promise<IdleDetectionMethod> | null = null;
   private _workingMethod: IdleDetectionMethod = 'none';
+  private _waylandIdleHelperProcess: ChildProcessWithoutNullStreams | null = null;
+  private _waylandIdleHelperReady: boolean = false;
+  private _waylandIdleHelperReadyPromise: Promise<boolean> | null = null;
+  private _waylandIdleHelperBuffer: string = '';
+  private _waylandIdleSinceMs: number | null = null;
 
   constructor() {
     this._environment = this._detectEnvironment();
@@ -71,6 +83,13 @@ export class IdleTimeHandler {
     return this._workingMethod;
   }
 
+  dispose(): void {
+    if (this._waylandIdleHelperProcess) {
+      this._waylandIdleHelperProcess.kill();
+    }
+    this._resetWaylandIdleHelperState();
+  }
+
   async getIdleTime(): Promise<number> {
     const methodUsed = await this._ensureWorkingMethod();
 
@@ -89,6 +108,18 @@ export class IdleTimeHandler {
           return result ?? 0;
         } catch (error) {
           this._logError('GNOME DBus error', error);
+          return 0;
+        }
+
+      case 'waylandIdleNotify':
+        try {
+          const isReady = await this._ensureWaylandIdleHelperStarted();
+          if (!isReady || this._waylandIdleSinceMs === null) {
+            return 0;
+          }
+          return Math.max(0, Date.now() - this._waylandIdleSinceMs);
+        } catch (error) {
+          this._logError('Wayland idle-notify helper error', error);
           return 0;
         }
 
@@ -186,6 +217,11 @@ export class IdleTimeHandler {
     }
 
     candidates.push({
+      name: 'waylandIdleNotify',
+      test: async () => this._probeWaylandIdleHelper(),
+    });
+
+    candidates.push({
       name: 'xprintidle',
       test: async () => {
         try {
@@ -259,6 +295,137 @@ export class IdleTimeHandler {
     }
 
     return null;
+  }
+
+  private async _ensureWaylandIdleHelperStarted(): Promise<boolean> {
+    if (this._waylandIdleHelperReady && this._waylandIdleHelperProcess) {
+      return true;
+    }
+
+    if (this._waylandIdleHelperReadyPromise) {
+      return this._waylandIdleHelperReadyPromise;
+    }
+
+    const helperPath = this._resolveWaylandIdleHelperPath();
+    if (!helperPath) {
+      return false;
+    }
+
+    this._waylandIdleHelperReadyPromise = new Promise<boolean>((resolve) => {
+      let isSettled = false;
+      const settle = (value: boolean): void => {
+        if (isSettled) {
+          return;
+        }
+        isSettled = true;
+        resolve(value);
+      };
+
+      const child = spawn(helperPath, ['--timeout-ms', String(CONFIG.MIN_IDLE_TIME)], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      this._waylandIdleHelperProcess = child;
+      this._waylandIdleHelperReady = false;
+      this._waylandIdleHelperBuffer = '';
+      this._waylandIdleSinceMs = null;
+
+      const readyTimeout = setTimeout(() => {
+        log.warn('Wayland idle helper did not become ready in time');
+        child.kill();
+        settle(false);
+      }, WAYLAND_IDLE_HELPER_READY_TIMEOUT_MS);
+
+      child.stdout.on('data', (data: Buffer) => {
+        this._waylandIdleHelperBuffer += data.toString();
+        const lines = this._waylandIdleHelperBuffer.split('\n');
+        this._waylandIdleHelperBuffer = lines.pop() ?? '';
+
+        for (const line of lines.map((part) => part.trim()).filter(Boolean)) {
+          if (line === 'ready') {
+            clearTimeout(readyTimeout);
+            this._waylandIdleHelperReady = true;
+            settle(true);
+            continue;
+          }
+
+          if (line === 'idle') {
+            this._waylandIdleSinceMs = Date.now() - CONFIG.MIN_IDLE_TIME;
+            continue;
+          }
+
+          if (line === 'resumed') {
+            this._waylandIdleSinceMs = null;
+            continue;
+          }
+
+          log.debug(`Wayland idle helper sent unexpected message: ${line}`);
+        }
+      });
+
+      child.stderr.on('data', (data: Buffer) => {
+        log.warn(`Wayland idle helper stderr: ${data.toString().trim()}`);
+      });
+
+      child.on('error', (error) => {
+        clearTimeout(readyTimeout);
+        log.warn('Failed to start Wayland idle helper', error);
+        this._resetWaylandIdleHelperState();
+        settle(false);
+      });
+
+      child.on('exit', (code, signal) => {
+        clearTimeout(readyTimeout);
+        if (this._waylandIdleHelperReady) {
+          log.warn(
+            `Wayland idle helper exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`,
+          );
+        }
+        this._resetWaylandIdleHelperState();
+        settle(false);
+      });
+    }).finally(() => {
+      this._waylandIdleHelperReadyPromise = null;
+    });
+
+    return this._waylandIdleHelperReadyPromise;
+  }
+
+  private async _probeWaylandIdleHelper(): Promise<boolean> {
+    const helperPath = this._resolveWaylandIdleHelperPath();
+    if (!helperPath) {
+      return false;
+    }
+
+    try {
+      await execFileAsync(helperPath, ['--probe'], {
+        timeout: WAYLAND_IDLE_HELPER_PROBE_TIMEOUT_MS,
+      });
+      return true;
+    } catch (error) {
+      log.debug('Wayland idle helper probe failed', error);
+      return false;
+    }
+  }
+
+  private _resetWaylandIdleHelperState(): void {
+    this._waylandIdleHelperProcess = null;
+    this._waylandIdleHelperReady = false;
+    this._waylandIdleHelperBuffer = '';
+    this._waylandIdleSinceMs = null;
+  }
+
+  private _resolveWaylandIdleHelperPath(): string | null {
+    const helperPath = app.isPackaged
+      ? path.join(path.dirname(process.execPath), 'wayland-idle-helper')
+      : path.join(__dirname, 'bin', 'wayland-idle-helper');
+
+    if (!existsSync(helperPath)) {
+      log.debug(`Wayland idle helper binary not found at ${helperPath}`);
+      return null;
+    }
+
+    return helperPath;
   }
 
   private async _getLoginctlIdleTime(): Promise<number | null> {
