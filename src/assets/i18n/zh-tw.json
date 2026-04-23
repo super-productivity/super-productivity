@@ -52,7 +52,7 @@
     },
     "SET_UP_SYNC": {
       "TITLE": "設定同步",
-      "NOTES": "確保您的資料安全，並可在多台裝置上存取。\n\n**如何設定：**\n1. 開啟**設定**（側邊欄中的齒輪圖示）\n2. 前往**同步**\n3. 選擇服務提供者：Super Sync、Dropbox、WebDAV 或本機檔案同步\n4. 依照設定說明操作"
+      "NOTES": "確保您的資料安全，並可在多台裝置上存取。\n\n**如何設定：**\n1. 開啟**設定**（側邊欄中的齒輪圖示）\n2. 前往**同步**\n3. 選擇服務提供者：Super Sync、Dropbox、OneDrive、WebDAV 或本機檔案同步\n4. 依照設定說明操作"
     },
     "GO_FURTHER": {
       "TITLE": "探索更多功能",
@@ -1134,6 +1134,24 @@
           "REAUTH_SUCCESS": "Dropbox 重新驗證成功！認證資訊已更新。",
           "STATUS_CONFIGURED": "Dropbox 已設定並準備好同步",
           "STATUS_NOT_CONFIGURED": "未設定 — 請驗證以啟用同步"
+        },
+        "ONEDRIVE": {
+          "AUTH_SUCCESS": "Microsoft 365 驗證成功！認證資訊已儲存。",
+          "BTN_AUTHENTICATE": "使用 Microsoft 365 驗證",
+          "BTN_REAUTHENTICATE": "重新驗證 Microsoft 365",
+          "CLIENT_ID_DESCRIPTION": "來自 Microsoft Entra 應用程式註冊的應用（用戶端）ID",
+          "INFO_TEXT": "Microsoft 365 驗證使用 OAuth。請先填寫用戶端與租戶，再進行驗證。",
+          "L_CLIENT_ID": "應用程式（用戶端）ID",
+          "L_SYNC_FOLDER_PATH": "同步資料夾路徑",
+          "L_TENANT_ID": "租戶 ID",
+          "L_USE_CUSTOM_APP": "使用我自己的 Microsoft Entra 應用程式註冊",
+          "OFFICIAL_MODE_INFO": "目前使用此應用程式內建的 Microsoft 365 登入。只有在需要自己的 Entra 應用程式註冊時，才切換到自訂模式。",
+          "REAUTH_SUCCESS": "Microsoft 365 重新驗證成功！認證資訊已更新。",
+          "STATUS_CONFIGURED": "Microsoft 365 已設定並準備好同步",
+          "STATUS_NOT_CONFIGURED": "未設定 — 請驗證以啟用同步",
+          "SYNC_FOLDER_PATH_DESCRIPTION": "儲存在您的 OneDrive 應用程式資料夾中（例如 super-productivity）",
+          "TENANT_ID_DESCRIPTION": "多租戶登入請使用 common",
+          "USE_CUSTOM_APP_DESCRIPTION": "如果您想提供自己的應用程式（用戶端）ID，請啟用此項"
         },
         "FILE_BASED": {
           "BTN_CHANGE_PASSWORD": "變更密碼",

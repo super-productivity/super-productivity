@@ -1347,6 +1347,24 @@
           "L_APP_PASSWORD": "App Password",
           "APP_PASSWORD_DESCRIPTION": "Go to Nextcloud → Settings → Security → App passwords to generate one"
         },
+        "ONEDRIVE": {
+          "AUTH_SUCCESS": "Microsoft 365 authentication successful! Credentials saved.",
+          "BTN_AUTHENTICATE": "Authenticate with Microsoft 365",
+          "BTN_REAUTHENTICATE": "Re-authenticate with Microsoft 365",
+          "CLIENT_ID_DESCRIPTION": "Application (client) ID from your Microsoft Entra app registration",
+          "INFO_TEXT": "Microsoft 365 authentication uses OAuth. Fill client and tenant first, then authenticate.",
+          "L_CLIENT_ID": "Application (Client) ID",
+          "L_SYNC_FOLDER_PATH": "Sync Folder Path",
+          "L_TENANT_ID": "Tenant ID",
+          "L_USE_CUSTOM_APP": "Use my own Microsoft Entra app registration",
+          "OFFICIAL_MODE_INFO": "Using built-in Microsoft 365 sign-in for this app. Switch to custom mode only if you need your own Entra app registration.",
+          "REAUTH_SUCCESS": "Microsoft 365 re-authentication successful! Credentials updated.",
+          "STATUS_CONFIGURED": "Microsoft 365 is configured and ready to sync",
+          "STATUS_NOT_CONFIGURED": "Not configured - authenticate to enable sync",
+          "SYNC_FOLDER_PATH_DESCRIPTION": "Stored under your OneDrive App Folder (e.g. super-productivity)",
+          "TENANT_ID_DESCRIPTION": "Use 'common' for multi-tenant sign-in",
+          "USE_CUSTOM_APP_DESCRIPTION": "Enable this if you want to provide your own Application (Client) ID"
+        },
         "TITLE": "Sync",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Making it work in a web browser:</strong> You need to allow Super Productivity to make CORS requests to your server. For Nextcloud, one approach is allowing \"https://app.super-productivity.com\" via the <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> app. Refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information.",

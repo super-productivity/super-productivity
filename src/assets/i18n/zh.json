@@ -52,7 +52,7 @@
     },
     "SET_UP_SYNC": {
       "TITLE": "设置同步",
-      "NOTES": "确保您的数据安全，并可在多台设备上访问。\n\n**如何设置：**\n1. 打开**设置**（侧边栏中的齿轮图标）\n2. 进入**同步**\n3. 选择服务提供商：Super Sync、Dropbox、WebDAV 或本地文件同步\n4. 按照设置说明操作"
+      "NOTES": "确保您的数据安全，并可在多台设备上访问。\n\n**如何设置：**\n1. 打开**设置**（侧边栏中的齿轮图标）\n2. 进入**同步**\n3. 选择服务提供商：Super Sync、Dropbox、OneDrive、WebDAV 或本地文件同步\n4. 按照设置说明操作"
     },
     "GO_FURTHER": {
       "TITLE": "探索更多",
@@ -1101,6 +1101,24 @@
           "REAUTH_SUCCESS": "Dropbox 重新验证成功！凭据已更新。",
           "STATUS_CONFIGURED": "Dropbox 已配置并准备好同步",
           "STATUS_NOT_CONFIGURED": "未配置——请验证以启用同步"
+        },
+        "ONEDRIVE": {
+          "AUTH_SUCCESS": "Microsoft 365 身份验证成功！凭据已保存。",
+          "BTN_AUTHENTICATE": "使用 Microsoft 365 验证",
+          "BTN_REAUTHENTICATE": "重新验证 Microsoft 365",
+          "CLIENT_ID_DESCRIPTION": "来自 Microsoft Entra 应用注册的应用（客户端）ID",
+          "INFO_TEXT": "Microsoft 365 身份验证使用 OAuth。请先填写客户端和租户，然后再进行验证。",
+          "L_CLIENT_ID": "应用（客户端）ID",
+          "L_SYNC_FOLDER_PATH": "同步文件夹路径",
+          "L_TENANT_ID": "租户 ID",
+          "L_USE_CUSTOM_APP": "使用我自己的 Microsoft Entra 应用注册",
+          "OFFICIAL_MODE_INFO": "当前使用此应用内置的 Microsoft 365 登录。只有在需要自己的 Entra 应用注册时，才切换到自定义模式。",
+          "REAUTH_SUCCESS": "Microsoft 365 重新验证成功！凭据已更新。",
+          "STATUS_CONFIGURED": "Microsoft 365 已配置并准备好同步",
+          "STATUS_NOT_CONFIGURED": "未配置——请验证以启用同步",
+          "SYNC_FOLDER_PATH_DESCRIPTION": "存储在您的 OneDrive 应用文件夹中（例如 super-productivity）",
+          "TENANT_ID_DESCRIPTION": "多租户登录请使用 common",
+          "USE_CUSTOM_APP_DESCRIPTION": "如果您想使用自己的应用（客户端）ID，请启用此项"
         },
         "GOOGLE": {
           "L_SYNC_FILE_NAME": "同步文件名"

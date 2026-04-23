@@ -51,7 +51,7 @@
         <button
           class="sync-btn"
           matTooltip="{{ T.MH.TRIGGER_SYNC | translate }}"
-          (click)="syncIsEnabledAndReady() ? sync() : setupSync()"
+          (click)="onSyncButtonClick()"
           (longPress)="setupSync()"
           (contextmenu)="$event.preventDefault(); setupSync()"
           mat-icon-button
