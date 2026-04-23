@@ -59,6 +59,39 @@ interface OAuthTokenRequest {
   redirectUri?: string;
 }
 
+// OAuth state storage for CSRF protection: state -> { provider, expiresAt }
+const OAUTH_STATES_MAP = new Map<string, { provider: 'onedrive'; expiresAt: number }>();
+
+// Clean up expired states periodically
+const TOKEN_STATE_VALIDITY_MS = 10 * 60 * 1000; // 10 minutes
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [state, data] of OAUTH_STATES_MAP.entries()) {
+      if (now > data.expiresAt) {
+        OAUTH_STATES_MAP.delete(state);
+      }
+    }
+  },
+  5 * 60 * 1000,
+); // Every 5 minutes
+
+/**
+ * Validate OneDrive OAuth state parameter against stored states.
+ * Returns true if state is valid and belongs to OneDrive, false otherwise.
+ */
+export const validateOneDriveOAuthState = (state: string | null): boolean => {
+  if (!state) return false;
+  const stored = OAUTH_STATES_MAP.get(state);
+  if (!stored) return false;
+  if (Date.now() > stored.expiresAt) {
+    OAUTH_STATES_MAP.delete(state);
+    return false;
+  }
+  OAUTH_STATES_MAP.delete(state);
+  return true;
+};
+
 export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.OneDrive> {
   readonly id = SyncProviderId.OneDrive;
   readonly isUploadForcePossible = true;
@@ -68,6 +101,7 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
   private _ensuredFolderPath: string | null = null;
   private _folderEnsureInFlightPath: string | null = null;
   private _folderEnsureInFlightPromise: Promise<void> | null = null;
+  private _tokenRefreshInFlightPromise: Promise<string> | null = null;
 
   async isReady(): Promise<boolean> {
     const cfg = await this.privateCfg.load();
@@ -99,6 +133,16 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
     const tenant = cfg.tenantId || ONEDRIVE_DEFAULTS.tenantId;
     const redirectUri = this._getRedirectUri();
 
+    // Generate state for OAuth CSRF protection
+    const state = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    const stateExpiresAt = Date.now() + TOKEN_STATE_VALIDITY_MS;
+    OAUTH_STATES_MAP.set(state, {
+      provider: 'onedrive',
+      expiresAt: stateExpiresAt,
+    });
+
     const authUrl =
       `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/authorize` +
       `?client_id=${encodeURIComponent(cfg.clientId)}` +
@@ -106,7 +150,8 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&scope=${encodeURIComponent(ONEDRIVE_PROTOCOL.scope)}` +
       `&code_challenge=${encodeURIComponent(codeChallenge)}` +
-      '&code_challenge_method=S256';
+      '&code_challenge_method=S256' +
+      `&state=${encodeURIComponent(state)}`;
 
     return {
       authUrl,
@@ -390,20 +435,34 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
       throw new MissingRefreshTokenAPIError();
     }
 
-    const tokenData = await this._requestOAuthToken(cfg, {
-      grantType: 'refresh_token',
-      refreshToken: cfg.refreshToken,
-    });
-    const expiresInMs = tokenData.expires_in * 1000;
-    const updatedCfg: OneDrivePrivateCfg = {
-      ...cfg,
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token || cfg.refreshToken,
-      tokenExpiresAt: Date.now() + expiresInMs,
-    };
+    // If a token refresh is already in flight, wait for it instead of creating a duplicate
+    if (this._tokenRefreshInFlightPromise) {
+      return this._tokenRefreshInFlightPromise;
+    }
 
-    await this.privateCfg.setComplete(updatedCfg);
-    return updatedCfg.accessToken || '';
+    // Perform the refresh and cache the promise
+    this._tokenRefreshInFlightPromise = (async () => {
+      try {
+        const tokenData = await this._requestOAuthToken(cfg, {
+          grantType: 'refresh_token',
+          refreshToken: cfg.refreshToken,
+        });
+        const expiresInMs = tokenData.expires_in * 1000;
+        const updatedCfg: OneDrivePrivateCfg = {
+          ...cfg,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token || cfg.refreshToken,
+          tokenExpiresAt: Date.now() + expiresInMs,
+        };
+
+        await this.privateCfg.setComplete(updatedCfg);
+        return updatedCfg.accessToken || '';
+      } finally {
+        this._tokenRefreshInFlightPromise = null;
+      }
+    })();
+
+    return this._tokenRefreshInFlightPromise;
   }
 
   private _buildOAuthTokenUrl(tenantId: string): string {
