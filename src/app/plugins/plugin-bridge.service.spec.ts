@@ -597,11 +597,13 @@ import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issu
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
+import { DataInitService } from '../core/data-init/data-init.service';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
+  let dataInitService: jasmine.SpyObj<DataInitService>;
 
   const mockExistingCounter: SimpleCounter = {
     ...EMPTY_SIMPLE_COUNTER,
@@ -613,6 +615,9 @@ describe('PluginBridgeService - Counter Methods', () => {
   };
 
   beforeEach(() => {
+    const dataInitServiceSpy = jasmine.createSpyObj('DataInitService', ['reInit']);
+    dataInitServiceSpy.reInit.and.resolveTo();
+
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
@@ -639,16 +644,18 @@ describe('PluginBridgeService - Counter Methods', () => {
         { provide: PluginIssueProviderRegistryService, useValue: {} },
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: dataInitServiceSpy },
       ],
     });
 
     service = TestBed.inject(PluginBridgeService);
     store = TestBed.inject(MockStore);
+    dataInitService = TestBed.inject(DataInitService) as jasmine.SpyObj<DataInitService>;
     dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
   });
 
   afterEach(() => {
-    store.resetSelectors();
+    store?.resetSelectors();
   });
 
   describe('setCounter', () => {
@@ -808,6 +815,14 @@ describe('PluginBridgeService - Counter Methods', () => {
 
       (service as any)._configHandlers.delete('test-plugin');
       expect(service.hasConfigHandler('test-plugin')).toBe(false);
+    });
+  });
+
+  describe('reInitData', () => {
+    it('should delegate to DataInitService.reInit', async () => {
+      await service.reInitData();
+
+      expect(dataInitService.reInit).toHaveBeenCalledTimes(1);
     });
   });
 });

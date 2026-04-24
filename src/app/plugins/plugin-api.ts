@@ -179,6 +179,10 @@ export class PluginAPI implements PluginAPIInterface {
     return tasks.map(taskCopyToTaskData);
   }
 
+  async reInitData(): Promise<void> {
+    PluginLog.log(`Plugin ${this._pluginId} requested data re-init`);
+    return this._pluginBridge.reInitData();
+  }
   async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
     PluginLog.log(`Plugin ${this._pluginId} requested to update task ${taskId}`);
     const taskCopyUpdates = taskDataToPartialTaskCopy(updates);

@@ -220,12 +220,6 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       if (model.quickSetting !== 'CUSTOM') {
         return true;
       }
-      if (model.repeatCycle === 'DAILY' && model.repeatEvery === 1) {
-        return true;
-      }
-      if (model.repeatCycle === 'WEEKLY' && model.repeatEvery === 1) {
-        return true;
-      }
       return false;
     },
     templateOptions: {

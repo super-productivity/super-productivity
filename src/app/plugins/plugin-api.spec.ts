@@ -4,6 +4,7 @@ import { PluginBaseCfg } from './plugin-api.model';
 describe('PluginAPI', () => {
   let pluginAPI: PluginAPI;
   let showIndexHtmlAsViewSpy: jasmine.Spy;
+  let reInitDataSpy: jasmine.Spy;
 
   const baseCfg: PluginBaseCfg = {
     theme: 'light',
@@ -14,10 +15,13 @@ describe('PluginAPI', () => {
 
   beforeEach(() => {
     showIndexHtmlAsViewSpy = jasmine.createSpy('showIndexHtmlAsView');
+    reInitDataSpy = jasmine.createSpy('reInitData').and.resolveTo();
 
     const mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
+      'reInitData',
     ]);
+    mockBridge.reInitData.and.callFake(reInitDataSpy);
     mockBridge.createBoundMethods.and.returnValue({
       showIndexHtmlAsView: showIndexHtmlAsViewSpy,
       log: {
@@ -45,6 +49,13 @@ describe('PluginAPI', () => {
     it('should delegate to the bridge method', () => {
       pluginAPI.showIndexHtmlAsView();
       expect(showIndexHtmlAsViewSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('reInitData()', () => {
+    it('should delegate to the bridge method', async () => {
+      await pluginAPI.reInitData();
+      expect(reInitDataSpy).toHaveBeenCalledTimes(1);
     });
   });
 });
