@@ -18,10 +18,25 @@ const run = (command, args, options = {}) => {
   }
 };
 
+const hasCargo = () => {
+  const result = spawnSync('cargo', ['--version'], {
+    stdio: 'ignore',
+  });
+  return result.status === 0;
+};
+
 const buildHelper = () => {
+  if (!hasCargo()) {
+    console.warn(
+      '[build-wayland-idle-helper] Rust toolchain not found -- skipping Wayland idle helper. Install via https://rustup.rs if you need it.',
+    );
+    return;
+  }
+
   run('cargo', [
     'build',
     '--release',
+    '--locked',
     '--manifest-path',
     path.join(CRATE_DIR, 'Cargo.toml'),
     '--target-dir',
