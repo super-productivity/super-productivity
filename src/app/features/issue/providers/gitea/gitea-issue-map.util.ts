@@ -24,3 +24,21 @@ export const isIssueFromProject = (issue: GiteaIssue, cfg: GiteaCfg): boolean =>
   }
   return issue.repository.full_name === cfg.repoFullname;
 };
+
+export const parseLabelList = (raw: string | null): string[] =>
+  (raw ?? '')
+    .split(',')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+// Gitea's issues endpoint only supports inclusive label filtering; exclusion is applied client-side.
+export const isIssueIncludedByLabels = (
+  issue: GiteaIssue,
+  excludedLabelNames: readonly string[],
+): boolean => {
+  if (excludedLabelNames.length === 0) {
+    return true;
+  }
+  const issueLabelNames = new Set((issue.labels ?? []).map((l) => l.name));
+  return !excludedLabelNames.some((name) => issueLabelNames.has(name));
+};

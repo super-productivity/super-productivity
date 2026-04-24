@@ -291,6 +291,10 @@
     },
     "GITEA": {
       "FORM": {
+        "EXCLUDE_LABELS": "Exclude labels (optional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Comma-separated list of label names. Issues carrying any of these labels will be excluded.",
+        "FILTER_LABELS": "Filter by labels (optional)",
+        "FILTER_LABELS_DESCRIPTION": "Comma-separated list of label names. Only issues carrying all of these labels will be synced. Leave empty to sync all issues matching the scope.",
         "HOST": "Host (e.g. https://try.gitea.io)",
         "REPO_FULL_NAME": "Username or Organization name/repository",
         "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the URL when viewing the repository in a web browser.",

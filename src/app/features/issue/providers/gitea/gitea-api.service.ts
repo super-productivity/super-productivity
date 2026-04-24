@@ -14,8 +14,10 @@ import {
 } from './gitea-issue.model';
 import {
   isIssueFromProject,
+  isIssueIncludedByLabels,
   mapGiteaIssueIdToIssueNumber,
   mapGiteaIssueToSearchResult,
+  parseLabelList,
 } from './gitea-issue-map.util';
 import {
   GITEA_API_SUBPATH_REPO,
@@ -36,6 +38,7 @@ export class GiteaApiService {
   private _http = inject(HttpClient);
 
   searchIssueForRepo$(searchText: string, cfg: GiteaCfg): Observable<SearchResultItem[]> {
+    const excludedLabelNames = parseLabelList(cfg.excludeLabels);
     return this.getCurrentRepositoryFor$(cfg).pipe(
       switchMap((repository: GiteaRepositoryReduced) => {
         return this._sendRequest$(
@@ -45,6 +48,7 @@ export class GiteaApiService {
               .withLimit(100)
               .withState(GiteaIssueStateOptions.open)
               .withScopeForSearchFrom(cfg, repository)
+              .withFilterLabels(cfg)
               .withSearchTerm(searchText)
               .build(),
           },
@@ -54,6 +58,9 @@ export class GiteaApiService {
             return res
               ? res
                   .filter((issue: GiteaIssue) => isIssueFromProject(issue, cfg))
+                  .filter((issue: GiteaIssue) =>
+                    isIssueIncludedByLabels(issue, excludedLabelNames),
+                  )
                   .map((issue: GiteaIssue) => mapGiteaIssueIdToIssueNumber(issue))
                   .map((issue: GiteaIssue) => mapGiteaIssueToSearchResult(issue))
               : [];
@@ -69,6 +76,7 @@ export class GiteaApiService {
   }
 
   getLast100IssuesFor$(cfg: GiteaCfg): Observable<GiteaIssue[]> {
+    const excludedLabelNames = parseLabelList(cfg.excludeLabels);
     return this.getLoggedUserFor$(cfg).pipe(
       switchMap((user: GiteaUser) => {
         return this._sendRequest$(
@@ -78,13 +86,18 @@ export class GiteaApiService {
               .withLimit(100)
               .withState(GiteaIssueStateOptions.open)
               .withScopeFrom(cfg, user)
+              .withFilterLabels(cfg)
               .build(),
           },
           cfg,
         ).pipe(
           map((issues: GiteaIssue[]) => {
             return issues
-              ? issues.map((issue: GiteaIssue) => mapGiteaIssueIdToIssueNumber(issue))
+              ? issues
+                  .filter((issue: GiteaIssue) =>
+                    isIssueIncludedByLabels(issue, excludedLabelNames),
+                  )
+                  .map((issue: GiteaIssue) => mapGiteaIssueIdToIssueNumber(issue))
               : [];
           }),
         );
@@ -256,6 +269,14 @@ class ParamsBuilder {
       this.params['assigned'] = true;
     }
 
+    return this;
+  }
+
+  withFilterLabels(cfg: GiteaCfg): ParamsBuilder {
+    const labels = parseLabelList(cfg.filterLabels);
+    if (labels.length > 0) {
+      this.params['labels'] = labels.join(',');
+    }
     return this;
   }
 

@@ -19,6 +19,8 @@ export const DEFAULT_GITEA_CFG: GiteaCfg = {
   repoFullname: null,
   token: null,
   scope: 'created-by-me',
+  filterLabels: null,
+  excludeLabels: null,
 };
 
 export const GITEA_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitea>[] = [
@@ -70,6 +72,24 @@ export const GITEA_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitea>[] =
         { value: ScopeOptions.createdByMe, label: T.F.GITEA.FORM.SCOPE_CREATED },
         { value: ScopeOptions.assignedToMe, label: T.F.GITEA.FORM.SCOPE_ASSIGNED },
       ],
+    },
+  },
+  {
+    key: 'filterLabels',
+    type: 'input',
+    templateOptions: {
+      label: T.F.GITEA.FORM.FILTER_LABELS,
+      type: 'text',
+      description: T.F.GITEA.FORM.FILTER_LABELS_DESCRIPTION,
+    },
+  },
+  {
+    key: 'excludeLabels',
+    type: 'input',
+    templateOptions: {
+      label: T.F.GITEA.FORM.EXCLUDE_LABELS,
+      type: 'text',
+      description: T.F.GITEA.FORM.EXCLUDE_LABELS_DESCRIPTION,
     },
   },
   {
