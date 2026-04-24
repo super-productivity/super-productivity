@@ -2637,6 +2637,7 @@
     "DIALOG_TITLE": "System Update"
   },
   "PS": {
+    "CHECK_FOR_UPDATE": "Check for Updates",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Failed to copy to clipboard",
     "GLOBAL_SETTINGS": "Global Settings",
     "NO_PLUGINS_INSTALLED": "No plugins are currently installed",
@@ -2656,7 +2657,11 @@
     },
     "TAG_SETTINGS": "Tag Specific Settings",
     "TOGGLE_DARK_MODE": "Toggle Dark Mode",
-    "UPDATE_APP": "Update App"
+    "UPDATE_AVAILABLE": "Version {{version}} is available.",
+    "UPDATE_APP": "Update App",
+    "UPDATE_CHECK_ERROR": "Could not check for updates. Please try again later.",
+    "UPDATE_NOT_AVAILABLE": "You are running the latest version ({{version}}).",
+    "VIEW_RELEASE": "View Release"
   },
   "SCHEDULE": {
     "LAST": "Last:",

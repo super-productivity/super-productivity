@@ -17,6 +17,7 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+import { UpdateCheckResponse } from './shared-with-frontend/update-check.model';
 
 const _send: (channel: IPCEventValue, ...args: unknown[]) => void = (channel, ...args) =>
   ipcRenderer.send(channel, ...args);
@@ -80,6 +81,7 @@ const ea: ElectronAPI = {
     title?: string;
     defaultPath?: string;
   }) => _invoke('SHOW_OPEN_DIALOG', options) as Promise<string[] | undefined>,
+  checkForUpdate: () => _invoke(IPC.CHECK_FOR_UPDATE) as Promise<UpdateCheckResponse>,
   // STANDARD
   // --------
   setZoomFactor: (zoomFactor: number) => {

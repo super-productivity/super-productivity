@@ -233,6 +233,15 @@
     target="_blank"
     >Changelog</a
   >
+  @if (isElectron) {
+    –
+    <a
+      (click)="checkForUpdate(); $event?.preventDefault()"
+      href="#"
+    >
+      {{ T.PS.CHECK_FOR_UPDATE | translate }}
+    </a>
+  }
   –
   <a
     (click)="downloadLogs(); $event?.preventDefault()"

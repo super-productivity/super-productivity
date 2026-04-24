@@ -64,6 +64,7 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
+import { UpdateCheckResponse } from '../../../../electron/shared-with-frontend/update-check.model';
 
 @Component({
   selector: 'config-page',
@@ -100,6 +101,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   readonly syncSettingsService = inject(SyncConfigService);
 
   T: typeof T = T;
+  isElectron = IS_ELECTRON;
 
   selectedTabIndex = 0;
   expandedSection: string | null = null;
@@ -632,6 +634,62 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
         msg: T.PS.FAILED_TO_COPY_TO_CLIPBOARD,
       });
     }
+  }
+
+  async checkForUpdate(): Promise<void> {
+    if (!IS_ELECTRON) {
+      return;
+    }
+
+    const promise = window.ea.checkForUpdate();
+
+    this._snackService.open({
+      msg: T.PS.CHECK_FOR_UPDATE,
+      isSpinner: true,
+      promise,
+    });
+
+    let result: UpdateCheckResponse;
+    try {
+      result = await promise;
+    } catch (error) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.PS.UPDATE_CHECK_ERROR,
+      });
+      return;
+    }
+
+    if (this._isUpdateCheckError(result)) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.PS.UPDATE_CHECK_ERROR,
+      });
+      return;
+    }
+
+    if (result.isUpdateAvailable) {
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: T.PS.UPDATE_AVAILABLE,
+        translateParams: { version: result.latestVersion },
+        actionStr: T.PS.VIEW_RELEASE,
+        actionFn: () => {
+          window.ea.openExternalUrl(result.releaseUrl);
+        },
+      });
+      return;
+    }
+
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg: T.PS.UPDATE_NOT_AVAILABLE,
+      translateParams: { version: result.currentVersion },
+    });
+  }
+
+  private _isUpdateCheckError(result: UpdateCheckResponse): result is { error: string } {
+    return 'error' in result;
   }
 
   private _openRestoreDialog(): void {

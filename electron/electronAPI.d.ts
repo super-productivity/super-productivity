@@ -18,6 +18,7 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+import { UpdateCheckResponse } from './shared-with-frontend/update-check.model';
 
 export interface ElectronAPI {
   on(
@@ -59,6 +60,8 @@ export interface ElectronAPI {
     title?: string;
     defaultPath?: string;
   }): Promise<string[] | undefined>;
+
+  checkForUpdate(): Promise<UpdateCheckResponse>;
 
   // checkDirExists(dirPath: string): Promise<true | Error>;
 
