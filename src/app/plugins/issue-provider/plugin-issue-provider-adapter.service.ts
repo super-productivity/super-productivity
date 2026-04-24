@@ -198,6 +198,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
           issueLastSyncedValues ?? {},
           task,
           cfg,
+          issue,
         );
 
         return {
@@ -319,6 +320,11 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     }
   }
 
+  private _getIssueNumber(issue: PluginIssue): number | undefined {
+    const n = (issue as { number?: unknown }).number;
+    return typeof n === 'number' ? n : undefined;
+  }
+
   private _extractTaskFieldsFromIssueWithSyncValues(
     issue: PluginIssue,
     provider: RegisteredPluginIssueProvider,
@@ -326,7 +332,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
   ): Record<string, unknown> {
     const issueRecord = issue as Record<string, unknown>;
     const result: Record<string, unknown> = {};
-    const ctx = { issueId: issue.id };
+    const ctx = { issueId: issue.id, issueNumber: this._getIssueNumber(issue) };
 
     const mappings = provider.definition.fieldMappings;
     if (!mappings?.length) {
@@ -421,6 +427,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     freshSyncValues: Record<string, unknown>,
     task: Task,
     cfg: IssueProviderPluginType,
+    issue: PluginIssue,
   ): Partial<Task> {
     const fieldMappings = provider.definition.fieldMappings;
     if (!fieldMappings?.length) {
@@ -429,7 +436,10 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
 
     const twoWaySync = (cfg.pluginConfig?.['twoWaySync'] as Record<string, string>) ?? {};
     const lastSyncedValues = task.issueLastSyncedValues ?? {};
-    const ctx = { issueId: task.issueId! };
+    const ctx = {
+      issueId: task.issueId!,
+      issueNumber: this._getIssueNumber(issue),
+    };
     const changes: Record<string, unknown> = {};
 
     for (const mapping of fieldMappings) {
