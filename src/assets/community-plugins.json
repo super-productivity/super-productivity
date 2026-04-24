@@ -26,9 +26,9 @@
   {
     "name": "AutoPlan",
     "shortDescription": "Smart non-AI plugin for the automatic scheduling of tasks using priorities assigned automatically based on tags, projects, and time estimation.",
-    "url": "https://github.com/00sapo/sp-autoplan",
+    "url": "https://codeberg.org/00sapo/sp-autoplan",
     "author": "00sapo",
-    "authorUrl": "https://github.com/00sapo",
+    "authorUrl": "https://codeberg.org/00sapo",
     "stars": 28
   },
   {
