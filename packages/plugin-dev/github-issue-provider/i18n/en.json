@@ -4,6 +4,7 @@
     "TOKEN": "Personal Access Token (required for private repos/optional for public repos)",
     "FILTER_USERNAME": "Filter username (ignore own comments for update detection)",
     "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "INCLUDE_PULL_REQUESTS": "Include pull requests (search and backlog return PRs alongside issues)",
     "HOW_TO_GET_TOKEN": "How to get a token"
   },
   "DISPLAY": {
