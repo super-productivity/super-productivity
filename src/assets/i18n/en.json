@@ -2648,6 +2648,13 @@
     "PROJECT_SETTINGS": "Project Specific Settings",
     "PROVIDE_FEEDBACK": "Provide Feedback",
     "RELOAD": "Reload",
+    "SYNC": {
+      "CONFIGURE": "Configure",
+      "EMPTY_STATE_HINT": "Sync your data with Dropbox, WebDAV, Nextcloud, or a local file.",
+      "ENCRYPTED": "Encrypted",
+      "NEEDS_AUTH": "Authentication required",
+      "SET_UP_SYNC": "Set up sync"
+    },
     "SYNC_EXPORT": "Sync & Export",
     "TABS": {
       "GENERAL": "General",

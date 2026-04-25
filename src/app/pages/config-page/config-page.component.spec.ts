@@ -6,27 +6,38 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { ActivatedRoute } from '@angular/router';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
-import { WebdavApi } from '../../op-log/sync-providers/file-based/webdav/webdav-api';
 import { of } from 'rxjs';
 import { signal } from '@angular/core';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { ShareService } from '../../core/share/share.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
-import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { TranslateService } from '@ngx-translate/core';
 
 describe('ConfigPageComponent', () => {
   let component: ConfigPageComponent;
-  let mockSyncConfigService: jasmine.SpyObj<SyncConfigService>;
+  let mockSyncWrapperService: jasmine.SpyObj<SyncWrapperService>;
+  let mockMatDialog: jasmine.SpyObj<MatDialog>;
+  let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
 
   beforeEach(async () => {
-    mockSyncConfigService = jasmine.createSpyObj(
+    const mockSyncConfigService = jasmine.createSpyObj(
       'SyncConfigService',
       ['updateSettingsFromForm'],
       { syncSettingsForm$: of({}) },
     );
     mockSyncConfigService.updateSettingsFromForm.and.returnValue(Promise.resolve());
+
+    mockSyncWrapperService = jasmine.createSpyObj('SyncWrapperService', ['sync']);
+    mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockProviderManager = jasmine.createSpyObj(
+      'SyncProviderManager',
+      ['getProviderById'],
+      {
+        currentProviderPrivateCfg$: of(null),
+      },
+    );
+    mockProviderManager.getProviderById.and.returnValue(Promise.resolve(undefined));
 
     await TestBed.configureTestingModule({
       providers: [
@@ -35,16 +46,7 @@ describe('ConfigPageComponent', () => {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
         },
-        {
-          provide: SyncProviderManager,
-          useValue: (() => {
-            const spy = jasmine.createSpyObj('SyncProviderManager', ['getProviderById'], {
-              currentProviderPrivateCfg$: of(null),
-            });
-            spy.getProviderById.and.returnValue(Promise.resolve(undefined));
-            return spy;
-          })(),
-        },
+        { provide: SyncProviderManager, useValue: mockProviderManager },
         {
           provide: GlobalConfigService,
           useValue: jasmine.createSpyObj('GlobalConfigService', ['updateSection'], {
@@ -54,13 +56,10 @@ describe('ConfigPageComponent', () => {
         },
         { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
         { provide: PluginBridgeService, useValue: { shortcuts: signal([]) } },
-        { provide: SyncWrapperService, useValue: {} },
+        { provide: SyncWrapperService, useValue: mockSyncWrapperService },
         { provide: ShareService, useValue: {} },
         { provide: UserProfileService, useValue: {} },
-        {
-          provide: MatDialog,
-          useValue: jasmine.createSpyObj('MatDialog', ['open']),
-        },
+        { provide: MatDialog, useValue: mockMatDialog },
         {
           provide: TranslateService,
           useValue: jasmine.createSpyObj('TranslateService', ['instant']),
@@ -75,54 +74,18 @@ describe('ConfigPageComponent', () => {
     component = TestBed.createComponent(ConfigPageComponent).componentInstance;
   });
 
-  describe('WebDAV Test Connection button', () => {
-    it('should save settings after successful connection test', async () => {
-      // Arrange
-      spyOn(WebdavApi.prototype, 'testConnection').and.returnValue(
-        Promise.resolve({
-          success: true,
-          fullUrl: 'https://webdav.example.com/sp-test',
-        }),
-      );
+  it('should expose an empty syncStatus by default', () => {
+    expect(component.syncStatus().isEnabled).toBe(false);
+    expect(component.syncStatus().providerId).toBeNull();
+  });
 
-      const webDavCfg = {
-        baseUrl: 'https://webdav.example.com',
-        userName: 'testuser',
-        password: 'testpass',
-        syncFolderPath: '/sp-test',
-      };
+  it('triggerSync() should call SyncWrapperService.sync()', () => {
+    component.triggerSync();
+    expect(mockSyncWrapperService.sync).toHaveBeenCalled();
+  });
 
-      const fullSyncModel = {
-        isEnabled: true,
-        syncProvider: SyncProviderId.WebDAV,
-        syncInterval: 600000,
-        webDav: webDavCfg,
-      };
-
-      const mockField = {
-        parent: { parent: { model: fullSyncModel } },
-      };
-
-      // Wait for async sync form config to be built
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      // Find the WebDAV Test Connection button onClick handler
-      const webDavItem = component
-        .globalSyncConfigFormCfg()!
-        .items!.find((item: any) => item.key === 'webDav');
-      const testConnectionBtn = webDavItem!.fieldGroup!.find(
-        (item: any) => item.type === 'btn',
-      );
-      const onClick = testConnectionBtn!.templateOptions!.onClick;
-
-      // Act
-      await onClick(mockField, {}, webDavCfg);
-
-      // Assert
-      expect(mockSyncConfigService.updateSettingsFromForm).toHaveBeenCalledWith(
-        fullSyncModel,
-        true,
-      );
-    });
+  it('openSyncCfgDialog() should open DialogSyncCfgComponent', async () => {
+    await component.openSyncCfgDialog();
+    expect(mockMatDialog.open).toHaveBeenCalled();
   });
 });

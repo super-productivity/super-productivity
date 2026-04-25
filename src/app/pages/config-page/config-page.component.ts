@@ -20,13 +20,11 @@ import {
 } from '../../features/config/global-config-form-config.const';
 import {
   ConfigFormConfig,
-  ConfigFormSection,
   GlobalConfigSectionKey,
   GlobalConfigState,
   GlobalSectionConfig,
-  SyncConfig,
 } from '../../features/config/global-config.model';
-import { combineLatest, firstValueFrom, Observable, Subscription } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import { ProjectCfgFormKey } from '../../features/project/project.model';
 import { T } from '../../t.const';
 import { versions } from '../../../environments/versions';
@@ -36,15 +34,10 @@ import { getAutomaticBackUpFormCfg } from '../../features/config/form-cfgs/autom
 import { getAppVersionStr } from '../../util/get-app-version-str';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { SYNC_FORM } from '../../features/config/form-cfgs/sync-form.const';
+import { TranslatePipe } from '@ngx-translate/core';
 import { EXPERIMENTAL_APP_FEATURE_KEYS } from '../../features/config/form-cfgs/app-features-form.const';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
-import { map } from 'rxjs/operators';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
-import { WebdavApi } from '../../op-log/sync-providers/file-based/webdav/webdav-api';
-import { WebdavPrivateCfg } from '../../op-log/sync-providers/file-based/webdav/webdav.model';
-import { AsyncPipe } from '@angular/common';
 import { PluginManagementComponent } from '../../plugins/ui/plugin-management/plugin-management.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { createPluginShortcutFormItems } from '../../features/config/form-cfgs/plugin-keyboard-shortcuts';
@@ -58,12 +51,12 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogDisableProfilesConfirmationComponent } from '../../features/user-profile/dialog-disable-profiles-confirmation/dialog-disable-profiles-confirmation.component';
-import { DialogRestorePointComponent } from '../../imex/sync/dialog-restore-point/dialog-restore-point.component';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MatButton } from '@angular/material/button';
 
 @Component({
   selector: 'config-page',
@@ -75,13 +68,13 @@ import { MatTooltip } from '@angular/material/tooltip';
     ConfigSectionComponent,
     ConfigSoundFormComponent,
     TranslatePipe,
-    AsyncPipe,
     PluginManagementComponent,
     MatTabGroup,
     MatTab,
     MatTabLabel,
     MatIcon,
     MatTooltip,
+    MatButton,
   ],
 })
 export class ConfigPageComponent implements OnInit, OnDestroy {
@@ -94,7 +87,6 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _shareService = inject(ShareService);
   private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
-  private readonly _translateService = inject(TranslateService);
 
   readonly configService = inject(GlobalConfigService);
   readonly syncSettingsService = inject(SyncConfigService);
@@ -112,29 +104,24 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
   globalProductivityConfigFormCfg: ConfigFormConfig;
-  globalSyncConfigFormCfg = signal<ConfigFormSection<SyncConfig> | undefined>(undefined);
-
   globalCfg?: GlobalConfigState;
+
+  syncStatus = signal<{
+    isEnabled: boolean;
+    providerId: SyncProviderId | null;
+    requiresAuth: boolean;
+    isAuthed: boolean;
+    isEncryptionEnabled: boolean;
+  }>({
+    isEnabled: false,
+    providerId: null,
+    requiresAuth: false,
+    isAuthed: false,
+    isEncryptionEnabled: false,
+  });
 
   appVersion: string = getAppVersionStr();
   versions?: typeof versions = versions;
-
-  // TODO needs to contain all sync providers....
-  // TODO maybe handling this in an effect would be better????
-  syncFormCfg$: Observable<Record<string, unknown>> = combineLatest([
-    this._providerManager.currentProviderPrivateCfg$,
-    this.configService.sync$,
-  ]).pipe(
-    map(([currentProviderCfg, syncCfg]) => {
-      if (!currentProviderCfg) {
-        return syncCfg as unknown as Record<string, unknown>;
-      }
-      return {
-        ...(syncCfg as unknown as Record<string, unknown>),
-        [currentProviderCfg.providerId]: currentProviderCfg.privateCfg,
-      };
-    }),
-  );
 
   private _subs: Subscription = new Subscription();
 
@@ -146,17 +133,6 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
     this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
-
-    // Build sync form config asynchronously (providers are lazy-loaded)
-    this._buildSyncFormConfig()
-      .then((cfg) => this.globalSyncConfigFormCfg.set(cfg))
-      .catch((err) => {
-        Log.err('Failed to build sync form config:', err);
-        this._snackService.open({
-          type: 'ERROR',
-          msg: T.GLOBAL_SNACK.OPEN_SETTINGS_ERROR,
-        });
-      });
 
     // NOTE: needs special handling cause of the async stuff
     if (IS_ANDROID_WEB_VIEW) {
@@ -184,6 +160,29 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       this.configService.cfg$.subscribe((cfg) => {
         this.globalCfg = cfg;
         // this._cd.detectChanges();
+      }),
+    );
+
+    this._subs.add(
+      this.syncSettingsService.syncSettingsForm$.subscribe(async (sync) => {
+        const providerId = sync.isEnabled
+          ? (sync.syncProvider as SyncProviderId | null)
+          : null;
+        let requiresAuth = false;
+        let isAuthed = false;
+        if (providerId) {
+          const provider = await this._providerManager.getProviderById(providerId);
+          requiresAuth = !!provider?.getAuthHelper;
+          isAuthed = !!(await provider?.isReady());
+        }
+        this.syncStatus.set({
+          isEnabled: !!sync.isEnabled,
+          providerId,
+          requiresAuth,
+          isAuthed,
+          isEncryptionEnabled: !!sync.isEncryptionEnabled,
+        });
+        this._cd.markForCheck();
       }),
     );
 
@@ -267,260 +266,14 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     this._subs.unsubscribe();
   }
 
-  private async _buildSyncFormConfig(): Promise<typeof SYNC_FORM> {
-    // Pre-load dropbox provider for use in the form config
-    await this._providerManager.getProviderById(SyncProviderId.Dropbox);
+  async openSyncCfgDialog(): Promise<void> {
+    const { DialogSyncCfgComponent } =
+      await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component');
+    this._matDialog.open(DialogSyncCfgComponent);
+  }
 
-    // Deep clone the SYNC_FORM items to avoid mutating the original
-    const items = SYNC_FORM.items!.map((item) => {
-      // Find the WebDAV fieldGroup and add the Test Connection button
-      if (item.key === 'webDav' && item.fieldGroup) {
-        return {
-          ...item,
-          fieldGroup: [
-            ...item.fieldGroup,
-            {
-              type: 'btn',
-              className: 'mt3 block',
-              templateOptions: {
-                text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
-                required: false,
-                onClick: async (_field: unknown, _form: unknown, model: unknown) => {
-                  const webDavCfg = model as WebdavPrivateCfg;
-                  if (
-                    !webDavCfg?.baseUrl ||
-                    !webDavCfg?.userName ||
-                    !webDavCfg?.password ||
-                    !webDavCfg?.syncFolderPath
-                  ) {
-                    this._snackService.open({
-                      type: 'ERROR',
-                      msg: T.F.SYNC.FORM.WEB_DAV.S_FILL_ALL_FIELDS,
-                    });
-                    return;
-                  }
-
-                  try {
-                    // Create a temporary WebdavApi instance for testing
-                    const api = new WebdavApi(async () => webDavCfg);
-                    const result = await api.testConnection(webDavCfg);
-
-                    if (result.success) {
-                      this._snackService.open({
-                        type: 'SUCCESS',
-                        msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_SUCCESS,
-                        translateParams: { url: result.fullUrl },
-                      });
-
-                      // Save settings after successful connection test.
-                      // Formly hierarchy: _field (button) -> parent (group wrapper) -> parent (root form) -> model
-                      const fullSyncModel = (
-                        _field as { parent?: { parent?: { model?: SyncConfig } } }
-                      )?.parent?.parent?.model;
-                      if (fullSyncModel) {
-                        await this.syncSettingsService.updateSettingsFromForm(
-                          fullSyncModel,
-                          true,
-                        );
-                      }
-                    } else {
-                      this._snackService.open({
-                        type: 'ERROR',
-                        msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
-                        translateParams: {
-                          error: result.error || 'Unknown error',
-                          url: result.fullUrl,
-                        },
-                      });
-                    }
-                  } catch (e) {
-                    this._snackService.open({
-                      type: 'ERROR',
-                      msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
-                      translateParams: {
-                        error: e instanceof Error ? e.message : 'Unexpected error',
-                        url: (webDavCfg.baseUrl as string) || 'N/A',
-                      },
-                    });
-                  }
-                },
-              },
-            },
-          ],
-        };
-      }
-
-      // Find the Dropbox fieldGroup and add the authentication button
-      if ((item as any).props?.dropboxAuth && item.fieldGroup) {
-        // Check if Dropbox is already authenticated
-        // We need to check auth status asynchronously, so we'll set initial state
-        // and update it when the form is rendered
-        let isAuthenticated = false;
-        this._providerManager
-          .getProviderById(SyncProviderId.Dropbox)
-          .then(async (dropboxProvider) => {
-            const ready = await dropboxProvider?.isReady();
-            isAuthenticated = !!ready;
-            // Update the status field text after checking
-            const statusField = item.fieldGroup?.find(
-              (f: any) => f.key === 'authStatus',
-            ) as any;
-            if (statusField?.templateOptions) {
-              statusField.templateOptions.text = isAuthenticated
-                ? '✓ ' +
-                  this._translateService.instant(T.F.SYNC.FORM.DROPBOX.STATUS_CONFIGURED)
-                : '⚠ ' +
-                  this._translateService.instant(
-                    T.F.SYNC.FORM.DROPBOX.STATUS_NOT_CONFIGURED,
-                  );
-            }
-          })
-          .catch((e) => console.error('Failed to check Dropbox auth status:', e));
-
-        return {
-          ...item,
-          fieldGroup: [
-            ...item.fieldGroup,
-            {
-              type: 'btn',
-              className: 'mt3 block e2e-dropbox-auth-btn',
-              templateOptions: {
-                // Button text will be determined by checking if already authenticated
-                text: T.F.SYNC.FORM.DROPBOX.BTN_AUTHENTICATE,
-                btnType: 'primary',
-                onClick: async (_field: unknown, _form: unknown, model: unknown) => {
-                  try {
-                    // Check current auth status before opening dialog
-                    const dropboxProvider = await this._providerManager.getProviderById(
-                      SyncProviderId.Dropbox,
-                    );
-                    const isCurrentlyAuth = await dropboxProvider?.isReady();
-
-                    const result =
-                      await this._syncWrapperService.configuredAuthForSyncProviderIfNecessary(
-                        SyncProviderId.Dropbox,
-                        true, // force re-authentication even if already configured
-                      );
-
-                    if (result.wasConfigured) {
-                      this._snackService.open({
-                        type: 'SUCCESS',
-                        msg: isCurrentlyAuth
-                          ? T.F.SYNC.FORM.DROPBOX.REAUTH_SUCCESS
-                          : T.F.SYNC.FORM.DROPBOX.AUTH_SUCCESS,
-                      });
-
-                      // Update the status field to show configured
-                      const statusField = item.fieldGroup?.find(
-                        (f: any) => f.key === 'authStatus',
-                      ) as any;
-                      if (statusField?.templateOptions) {
-                        statusField.templateOptions.text =
-                          '✓ ' +
-                          this._translateService.instant(
-                            T.F.SYNC.FORM.DROPBOX.STATUS_CONFIGURED,
-                          );
-                      }
-
-                      // Update button text to "Re-authenticate"
-                      const btnField = _field as any;
-                      if (btnField?.templateOptions) {
-                        btnField.templateOptions.text =
-                          T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE;
-                      }
-
-                      // Save the updated credentials to persist them
-                      const fullSyncModel = (
-                        _field as { parent?: { parent?: { model?: SyncConfig } } }
-                      )?.parent?.parent?.model;
-                      if (fullSyncModel) {
-                        await this.syncSettingsService.updateSettingsFromForm(
-                          fullSyncModel!,
-                          true,
-                        );
-                      }
-                    }
-                  } catch (e) {
-                    // Log error for debugging (storage failures, auth errors, etc.)
-                    Log.err('Dropbox authentication failed:', e);
-                    // Show user-friendly error with actual error message for context
-                    this._snackService.open({
-                      type: 'ERROR',
-                      msg: T.F.SYNC.S.INCOMPLETE_CFG,
-                      translateParams: {
-                        error: e instanceof Error ? e.message : String(e),
-                      },
-                    });
-                  }
-                },
-              },
-              hooks: {
-                // Update button text based on auth status when form initializes
-                onInit: async (field: any) => {
-                  const dropboxProv = await this._providerManager.getProviderById(
-                    SyncProviderId.Dropbox,
-                  );
-                  const isAuth = await dropboxProv?.isReady();
-                  if (field?.templateOptions && isAuth) {
-                    field.templateOptions.text = T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE;
-                  }
-                },
-              },
-            },
-          ],
-        };
-      }
-
-      return item;
-    });
-
-    return {
-      ...SYNC_FORM,
-      items: [
-        ...items,
-        {
-          hideExpression: (m: Record<string, unknown>, _v: unknown, field: unknown) =>
-            !m.isEnabled || !(field as { form?: { valid?: boolean } })?.form?.valid,
-          type: 'btn',
-          className: 'mt3 block',
-          templateOptions: {
-            text: T.F.SYNC.BTN_SYNC_NOW,
-            required: false,
-            onClick: () => {
-              this._syncWrapperService.sync();
-            },
-          },
-        },
-        {
-          hideExpression: (m: Record<string, unknown>, _v: unknown, field: unknown) =>
-            !m.isEnabled || !(field as { form?: { valid?: boolean } })?.form?.valid,
-          type: 'btn',
-          className: 'mt2 block',
-          templateOptions: {
-            text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
-            btnType: 'warn',
-            required: false,
-            onClick: () => {
-              this._syncWrapperService.forceUpload();
-            },
-          },
-        },
-        {
-          hideExpression: (m: Record<string, unknown>) =>
-            !m.isEnabled || m.syncProvider !== SyncProviderId.SuperSync,
-          type: 'btn',
-          className: 'mt2 block',
-          templateOptions: {
-            text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
-            btnType: 'stroked',
-            required: false,
-            onClick: () => {
-              this._openRestoreDialog();
-            },
-          },
-        },
-      ],
-    } as typeof SYNC_FORM;
+  triggerSync(): void {
+    this._syncWrapperService.sync();
   }
 
   async saveGlobalCfg($event: {
@@ -632,12 +385,5 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
         msg: T.PS.FAILED_TO_COPY_TO_CLIPBOARD,
       });
     }
-  }
-
-  private _openRestoreDialog(): void {
-    this._matDialog.open(DialogRestorePointComponent, {
-      width: '500px',
-      maxWidth: '90vw',
-    });
   }
 }
