@@ -1,0 +1,108 @@
+name: Plugin Tests
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'packages/plugin-dev/**'
+      - 'packages/plugin-api/**'
+      - 'packages/vite-plugin/**'
+      - '.github/workflows/plugin-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect plugin changes
+    runs-on: ubuntu-latest
+    outputs:
+      plugins: ${{ steps.detect.outputs.plugins }}
+      has-changes: ${{ steps.detect.outputs.has-changes }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # Plugins that have an `npm test` script configured.
+          PLUGINS=(automations caldav-calendar-provider clickup-issue-provider google-calendar-provider sync-md)
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            CHANGED=$(printf '%s\n' "${PLUGINS[@]}")
+          else
+            # Three-dot: changes on the PR branch only, ignoring commits that
+            # landed on master after the PR forked.
+            DIFF=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+            # Shared package change → run every plugin's tests.
+            if printf '%s\n' "$DIFF" | grep -qE '^packages/(plugin-api|vite-plugin)/'; then
+              CHANGED=$(printf '%s\n' "${PLUGINS[@]}")
+            else
+              CHANGED=""
+              for p in "${PLUGINS[@]}"; do
+                if printf '%s\n' "$DIFF" | grep -q "^packages/plugin-dev/$p/"; then
+                  CHANGED="${CHANGED}${p}"$'\n'
+                fi
+              done
+            fi
+          fi
+
+          JSON=$(printf '%s' "$CHANGED" | awk 'NF' | jq -R . | jq -sc .)
+          echo "Plugins to test: $JSON"
+          echo "plugins=$JSON" >> "$GITHUB_OUTPUT"
+          if [ "$JSON" = "[]" ]; then
+            echo 'has-changes=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'has-changes=true' >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Test ${{ matrix.plugin }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: ${{ fromJson(needs.detect-changes.outputs.plugins) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node22-
+      - name: Install root dependencies
+        run: npm ci
+      # Plugins consume @super-productivity/plugin-api and vite-plugin via file:
+      # references that resolve to dist/. Build those before running plugin tests.
+      - name: Build shared packages
+        run: npm run build:packages
+      - name: Install plugin dependencies
+        working-directory: packages/plugin-dev/${{ matrix.plugin }}
+        run: npm ci
+      - name: Run plugin tests
+        working-directory: packages/plugin-dev/${{ matrix.plugin }}
+        run: npm test
