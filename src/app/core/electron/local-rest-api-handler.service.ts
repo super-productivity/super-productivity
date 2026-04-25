@@ -35,6 +35,14 @@ const ALLOWED_TASK_FIELDS = new Set<string>([
  */
 const REJECTED_TASK_FIELDS = ['parentId', 'subTaskIds'] as const;
 
+/**
+ * Fields a subtask inherits from its parent at the reducer (`addSubTask`
+ * forces `tagIds: []` and `projectId = parent.projectId`). Reject them on
+ * subtask create so callers don't get a 201 with values different from what
+ * they sent.
+ */
+const SUBTASK_INHERITED_FIELDS = ['projectId', 'tagIds'] as const;
+
 const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
   const result: Record<string, unknown> = {};
   for (const key of Object.keys(body)) {
@@ -328,6 +336,16 @@ export class LocalRestApiHandlerService {
           400,
           'INVALID_INPUT',
           'parentId must be a non-empty string',
+        );
+      }
+
+      const inherited = SUBTASK_INHERITED_FIELDS.find((field) => field in body);
+      if (inherited) {
+        return createErrorResponse(
+          requestId,
+          400,
+          'UNSUPPORTED_FIELD',
+          `${inherited} cannot be set when creating a subtask — it's inherited from the parent`,
         );
       }
 
