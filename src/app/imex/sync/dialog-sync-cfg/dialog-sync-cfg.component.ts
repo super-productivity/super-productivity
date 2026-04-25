@@ -35,6 +35,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-restore-point.component';
 import { WebdavApi } from '../../../op-log/sync-providers/file-based/webdav/webdav-api';
 import { WebdavPrivateCfg } from '../../../op-log/sync-providers/file-based/webdav/webdav.model';
+import { NextcloudPrivateCfg } from '../../../op-log/sync-providers/file-based/webdav/nextcloud.model';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -73,7 +74,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
 
   /**
    * Adds helpers into the formly field tree:
-   * - WebDAV Test Connection button inside the WebDAV section.
+   * - Test Connection button inside WebDAV/Nextcloud sections.
    * - Re-authenticate, Force Overwrite (and Restore for SuperSync) inside the
    *   active "Advanced" collapsible (edit mode only — first-time setup gets no
    *   action buttons since there is no saved config to act on).
@@ -86,20 +87,13 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     if (item.key === 'webDav' && item.fieldGroup) {
       return {
         ...item,
-        fieldGroup: [
-          ...item.fieldGroup,
-          {
-            type: 'btn',
-            className: 'mt3 block',
-            templateOptions: {
-              text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
-              required: false,
-              onClick: async (_field: unknown, _form: unknown, model: unknown) => {
-                await this._testWebDavConnection(model as WebdavPrivateCfg);
-              },
-            },
-          },
-        ],
+        fieldGroup: [...item.fieldGroup, this._webDavTestConnectionBtn()],
+      };
+    }
+    if (item.key === 'nextcloud' && item.fieldGroup) {
+      return {
+        ...item,
+        fieldGroup: [...item.fieldGroup, this._nextcloudTestConnectionBtn()],
       };
     }
     if (
@@ -137,6 +131,36 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     return item;
   }
 
+  private _webDavTestConnectionBtn(): FormlyFieldConfig {
+    return {
+      type: 'btn',
+      className: 'mt3 block',
+      templateOptions: {
+        text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
+        btnStyle: 'stroked',
+        required: false,
+        onClick: async (_field: unknown, _form: unknown, model: unknown) => {
+          await this._testWebDavConnection(model as WebdavPrivateCfg);
+        },
+      },
+    };
+  }
+
+  private _nextcloudTestConnectionBtn(): FormlyFieldConfig {
+    return {
+      type: 'btn',
+      className: 'mt3 block',
+      templateOptions: {
+        text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
+        btnStyle: 'stroked',
+        required: false,
+        onClick: async (_field: unknown, _form: unknown, model: unknown) => {
+          await this._testNextcloudConnection(model as NextcloudPrivateCfg);
+        },
+      },
+    };
+  }
+
   private _forceOverwriteBtn(): FormlyFieldConfig {
     return {
       type: 'btn',
@@ -144,6 +168,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       templateOptions: {
         text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         btnType: 'warn',
+        btnStyle: 'stroked',
         required: false,
         onClick: () => this.forceOverwrite(),
       },
@@ -156,7 +181,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       className: 'mt2 block',
       templateOptions: {
         text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
-        btnType: 'stroked',
+        btnStyle: 'stroked',
         required: false,
         onClick: () => this.restoreFromHistory(),
       },
@@ -173,11 +198,30 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         field?.parent?.parent?.model?.syncProvider !== SyncProviderId.Dropbox,
       templateOptions: {
         text: T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE,
-        btnType: 'stroked',
+        btnStyle: 'stroked',
         required: false,
         onClick: () => this.reauth(),
       },
     };
+  }
+
+  private async _testNextcloudConnection(cfg: NextcloudPrivateCfg): Promise<void> {
+    if (!cfg?.serverUrl || !cfg?.userName || !cfg?.password || !cfg?.syncFolderPath) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.FORM.WEB_DAV.S_FILL_ALL_FIELDS,
+      });
+      return;
+    }
+    let serverUrl = cfg.serverUrl.trim();
+    if (serverUrl.endsWith('/')) {
+      serverUrl = serverUrl.slice(0, -1);
+    }
+    const baseUrl = `${serverUrl}/remote.php/dav/files/${encodeURIComponent(cfg.userName.trim())}/`;
+    await this._testWebDavConnection({
+      ...cfg,
+      baseUrl,
+    } as unknown as WebdavPrivateCfg);
   }
 
   private async _testWebDavConnection(webDavCfg: WebdavPrivateCfg): Promise<void> {

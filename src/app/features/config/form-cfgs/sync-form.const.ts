@@ -168,6 +168,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           key: 'syncFolderPath',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
+            btnStyle: 'stroked',
             onClick: async () => {
               const providers = await loadSyncProviders();
               const localProvider = providers.find(
@@ -203,6 +204,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           key: 'safFolderUri',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
+            btnStyle: 'stroked',
             onClick: async () => {
               // NOTE: this actually sets the value in the model
               const providers = await loadSyncProviders();
@@ -432,6 +434,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           templateOptions: {
             text: T.F.SYNC.FORM.FILE_BASED.BTN_ENABLE_ENCRYPTION,
             btnType: 'primary',
+            btnStyle: 'stroked',
             onClick: async (field: FormlyFieldConfig) => {
               const result = await openEnableEncryptionDialogForFileBased();
               if (result?.success && field?.model) {
@@ -458,15 +461,12 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             text: T.F.SYNC.FORM.SUPER_SYNC.BTN_GET_TOKEN,
             tooltip: T.F.SYNC.FORM.SUPER_SYNC.LOGIN_INSTRUCTIONS,
             btnType: 'primary',
+            btnStyle: 'stroked',
             centerBtn: true,
             onClick: (field: any) => {
               const baseUrl = field.model.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
               window.open(baseUrl, '_blank');
             },
-          },
-          expressionProperties: {
-            'templateOptions.btnStyle': (model: any) =>
-              model.accessToken ? 'stroked' : undefined,
           },
         },
         {
@@ -511,6 +511,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           templateOptions: {
             text: T.F.SYNC.FORM.SUPER_SYNC.BTN_ENABLE_ENCRYPTION,
             btnType: 'primary',
+            btnStyle: 'stroked',
             onClick: async (field: FormlyFieldConfig) => {
               const result = await openEnableEncryptionDialog();
               if (result?.success && field?.model) {
