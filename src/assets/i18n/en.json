@@ -1258,7 +1258,6 @@
           "BTN_CHANGE_PASSWORD": "Change Password",
           "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
           "BTN_ENABLE_ENCRYPTION": "Enable Encryption",
-          "BTN_FORCE_OVERWRITE": "Force Overwrite Server",
           "BTN_GET_TOKEN": "Open Server & Get Token",
           "CHANGE_PASSWORD_SUCCESS": "Encryption password changed successfully",
           "CHANGE_PASSWORD_WARNING": "WARNING: This will permanently delete ALL sync history and backups on the server! Previous versions cannot be recovered. Your current data will be re-uploaded with the new password. All other devices will need the new password.",
