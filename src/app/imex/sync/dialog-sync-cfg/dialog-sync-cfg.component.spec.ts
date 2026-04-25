@@ -4,7 +4,7 @@ import { MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { FormlyModule } from '@ngx-formly/core';
 import { of } from 'rxjs';
-import { DialogSyncInitialCfgComponent } from './dialog-sync-initial-cfg.component';
+import { DialogSyncCfgComponent } from './dialog-sync-cfg.component';
 import { SyncConfigService } from '../sync-config.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
@@ -12,10 +12,10 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfig } from '../../../features/config/global-config.model';
 
-describe('DialogSyncInitialCfgComponent', () => {
-  let component: DialogSyncInitialCfgComponent;
-  let fixture: ComponentFixture<DialogSyncInitialCfgComponent>;
-  let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogSyncInitialCfgComponent>>;
+describe('DialogSyncCfgComponent', () => {
+  let component: DialogSyncCfgComponent;
+  let fixture: ComponentFixture<DialogSyncCfgComponent>;
+  let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogSyncCfgComponent>>;
   let mockSyncConfigService: jasmine.SpyObj<SyncConfigService>;
   let mockSyncWrapperService: jasmine.SpyObj<SyncWrapperService>;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
@@ -57,7 +57,7 @@ describe('DialogSyncInitialCfgComponent', () => {
 
     TestBed.configureTestingModule({
       imports: [
-        DialogSyncInitialCfgComponent,
+        DialogSyncCfgComponent,
         TranslateModule.forRoot(),
         FormlyModule.forRoot(),
       ],
@@ -72,12 +72,12 @@ describe('DialogSyncInitialCfgComponent', () => {
     });
     // Replace the Formly-based template with a minimal placeholder so we can
     // test the save() business logic without registering every Formly field type.
-    TestBed.overrideComponent(DialogSyncInitialCfgComponent, {
+    TestBed.overrideComponent(DialogSyncCfgComponent, {
       set: { template: '' },
     });
     await TestBed.compileComponents();
 
-    fixture = TestBed.createComponent(DialogSyncInitialCfgComponent);
+    fixture = TestBed.createComponent(DialogSyncCfgComponent);
     component = fixture.componentInstance;
   });
 

@@ -331,7 +331,7 @@ export class SuperSyncPage extends BasePage {
     await this.page.waitForTimeout(1000);
 
     // Define locators for dialogs we might see
-    const configDialog = this.page.locator('dialog-sync-initial-cfg');
+    const configDialog = this.page.locator('dialog-sync-cfg');
     const passwordDialog = this.page.locator('dialog-enter-encryption-password');
     const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
 
@@ -903,7 +903,7 @@ export class SuperSyncPage extends BasePage {
         }
 
         // Client B: legacy password dialog (dialog-enter-encryption-password vs
-        // dialog-sync-initial-cfg password prompt)
+        // dialog-sync-cfg password prompt)
         const legacyPwVisible = await passwordDialog.isVisible().catch(() => false);
         if (legacyPwVisible) {
           console.log('[SuperSyncPage] Password dialog — entering password');

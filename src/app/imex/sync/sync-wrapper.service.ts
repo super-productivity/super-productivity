@@ -569,14 +569,14 @@ export class SyncWrapperService {
             msg: T.F.SYNC.S.AUTH_TOKEN_REJECTED,
             translateParams: { reason: error.message },
             type: 'ERROR',
-            actionFn: () => this._openSyncInitialCfgDialog(),
+            actionFn: () => this._openSyncCfgDialog(),
             actionStr: T.F.SYNC.S.BTN_CONFIGURE,
           });
         } else {
           this._snackService.open({
             msg: T.F.SYNC.S.INCOMPLETE_CFG,
             type: 'ERROR',
-            actionFn: () => this._openSyncInitialCfgDialog(),
+            actionFn: () => this._openSyncCfgDialog(),
             actionStr: T.F.SYNC.S.BTN_CONFIGURE,
           });
         }
@@ -886,10 +886,10 @@ export class SyncWrapperService {
    * Handle incoherent timestamps dialog with proper async error handling.
    * Uses fire-and-forget pattern but logs errors instead of swallowing them.
    */
-  private async _openSyncInitialCfgDialog(): Promise<void> {
-    const { DialogSyncInitialCfgComponent } =
-      await import('./dialog-sync-initial-cfg/dialog-sync-initial-cfg.component');
-    this._matDialog.open(DialogSyncInitialCfgComponent);
+  private async _openSyncCfgDialog(): Promise<void> {
+    const { DialogSyncCfgComponent } =
+      await import('./dialog-sync-cfg/dialog-sync-cfg.component');
+    this._matDialog.open(DialogSyncCfgComponent);
   }
 
   private _handleIncoherentTimestampsDialog(): void {

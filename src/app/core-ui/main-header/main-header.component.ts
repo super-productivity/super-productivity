@@ -222,9 +222,9 @@ export class MainHeaderComponent implements OnDestroy {
     if (this.dialogSyncCfgRef) {
       return;
     }
-    const { DialogSyncInitialCfgComponent } =
-      await import('../../imex/sync/dialog-sync-initial-cfg/dialog-sync-initial-cfg.component');
-    this.dialogSyncCfgRef = this.matDialog.open(DialogSyncInitialCfgComponent);
+    const { DialogSyncCfgComponent } =
+      await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component');
+    this.dialogSyncCfgRef = this.matDialog.open(DialogSyncCfgComponent);
     this._subs.add(
       this.dialogSyncCfgRef.afterClosed().subscribe(() => {
         this.dialogSyncCfgRef = null;

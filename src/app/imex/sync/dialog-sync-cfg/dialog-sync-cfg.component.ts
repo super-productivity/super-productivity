@@ -32,9 +32,9 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { isOnline } from '../../../util/is-online';
 
 @Component({
-  selector: 'dialog-sync-initial-cfg',
-  templateUrl: './dialog-sync-initial-cfg.component.html',
-  styleUrls: ['./dialog-sync-initial-cfg.component.scss'],
+  selector: 'dialog-sync-cfg',
+  templateUrl: './dialog-sync-cfg.component.html',
+  styleUrls: ['./dialog-sync-cfg.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatDialogTitle,
@@ -47,7 +47,7 @@ import { isOnline } from '../../../util/is-online';
     FormlyModule,
   ],
 })
-export class DialogSyncInitialCfgComponent implements AfterViewInit {
+export class DialogSyncCfgComponent implements AfterViewInit {
   syncConfigService = inject(SyncConfigService);
   syncWrapperService = inject(SyncWrapperService);
   private _providerManager = inject(SyncProviderManager);
@@ -76,8 +76,7 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
     _isInitialSetup: true,
   };
 
-  private _matDialogRef =
-    inject<MatDialogRef<DialogSyncInitialCfgComponent>>(MatDialogRef);
+  private _matDialogRef = inject<MatDialogRef<DialogSyncCfgComponent>>(MatDialogRef);
 
   private _subs = new Subscription();
 
