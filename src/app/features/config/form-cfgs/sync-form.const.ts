@@ -311,8 +311,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider !== SyncProviderId.Dropbox,
       resetOnHide: false,
-      // Custom marker for identifying this field group in config-page.component.ts
-      props: { dropboxAuth: true } as any,
       fieldGroup: [
         {
           type: 'tpl',
@@ -391,7 +389,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       type: 'collapsible',
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider === SyncProviderId.SuperSync,
-      props: { label: T.G.ADVANCED_CFG },
+      // syncRole is a stable structural marker the dialog routes on, so a
+      // future global rename of T.G.ADVANCED_CFG cannot silently break it.
+      props: { label: T.G.ADVANCED_CFG, syncRole: 'advanced' } as Record<string, unknown>,
       fieldGroup: [
         {
           key: 'syncInterval',
@@ -526,7 +526,10 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           type: 'collapsible',
           hideExpression: (m, v, field) =>
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
-          props: { label: T.G.ADVANCED_CFG },
+          props: { label: T.G.ADVANCED_CFG, syncRole: 'advanced' } as Record<
+            string,
+            unknown
+          >,
           fieldGroup: [
             // Server URL
             {

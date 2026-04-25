@@ -6,7 +6,6 @@ import {
   inject,
   OnDestroy,
   OnInit,
-  signal,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
@@ -26,6 +25,7 @@ import {
 } from '../../features/config/global-config.model';
 import { firstValueFrom, from, of, Subscription } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ProjectCfgFormKey } from '../../features/project/project.model';
 import { T } from '../../t.const';
 import { versions } from '../../../environments/versions';
@@ -108,15 +108,38 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   globalCfg?: GlobalConfigState;
 
   // `providerId === null` ⇒ empty state (sync disabled or no provider chosen).
-  syncStatus = signal<{
-    providerId: SyncProviderId | null;
-    needsAuth: boolean;
-    isEncrypted: boolean;
-  }>({
-    providerId: null,
-    needsAuth: false,
-    isEncrypted: false,
-  });
+  // switchMap drops stale signal writes if a new sync-config emission arrives
+  // before the previous provider probe resolves — the underlying probe promise
+  // still runs to completion in the background; only the result is ignored.
+  // try/catch keeps the stream alive when isReady() rejects (otherwise the
+  // observable error would kill the subscription and freeze the status).
+  syncStatus = toSignal(
+    this.syncSettingsService.syncSettingsForm$.pipe(
+      switchMap((sync) => {
+        const providerId = sync.isEnabled
+          ? (sync.syncProvider as SyncProviderId | null)
+          : null;
+        const isEncrypted = !!sync.isEncryptionEnabled;
+        if (!providerId) {
+          return of({ providerId: null, needsAuth: false, isEncrypted });
+        }
+        return from(
+          (async () => {
+            try {
+              const provider = await this._providerManager.getProviderById(providerId);
+              const requiresAuth = !!provider?.getAuthHelper;
+              const isAuthed = !!(await provider?.isReady());
+              return { providerId, needsAuth: requiresAuth && !isAuthed, isEncrypted };
+            } catch {
+              // Surface as "needs auth" rather than dropping the row entirely.
+              return { providerId, needsAuth: true, isEncrypted };
+            }
+          })(),
+        );
+      }),
+    ),
+    { initialValue: { providerId: null, needsAuth: false, isEncrypted: false } },
+  );
 
   appVersion: string = getAppVersionStr();
   versions?: typeof versions = versions;
@@ -159,36 +182,6 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
         this.globalCfg = cfg;
         // this._cd.detectChanges();
       }),
-    );
-
-    // switchMap so a new sync-config emission cancels any in-flight provider
-    // probe — avoids late callbacks overwriting fresh state.
-    this._subs.add(
-      this.syncSettingsService.syncSettingsForm$
-        .pipe(
-          switchMap((sync) => {
-            const providerId = sync.isEnabled
-              ? (sync.syncProvider as SyncProviderId | null)
-              : null;
-            const isEncrypted = !!sync.isEncryptionEnabled;
-            if (!providerId) {
-              return of({ providerId: null, needsAuth: false, isEncrypted });
-            }
-            return from(
-              (async () => {
-                const provider = await this._providerManager.getProviderById(providerId);
-                const requiresAuth = !!provider?.getAuthHelper;
-                const isAuthed = !!(await provider?.isReady());
-                return {
-                  providerId,
-                  needsAuth: requiresAuth && !isAuthed,
-                  isEncrypted,
-                };
-              })(),
-            );
-          }),
-        )
-        .subscribe((status) => this.syncStatus.set(status)),
     );
 
     // Check for tab query parameter and set selected tab

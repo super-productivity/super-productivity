@@ -107,7 +107,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     }
     if (
       item.type === 'collapsible' &&
-      item.props?.label === T.G.ADVANCED_CFG &&
+      (item.props as { syncRole?: string })?.syncRole === 'advanced' &&
       this.isWasEnabled()
     ) {
       return {
@@ -123,7 +123,8 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       return {
         ...item,
         fieldGroup: item.fieldGroup.map((child) =>
-          child.type === 'collapsible' && child.props?.label === T.G.ADVANCED_CFG
+          child.type === 'collapsible' &&
+          (child.props as { syncRole?: string })?.syncRole === 'advanced'
             ? {
                 ...child,
                 fieldGroup: [
@@ -139,82 +140,77 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     return item;
   }
 
-  private _webDavTestConnectionBtn(): FormlyFieldConfig {
+  /**
+   * Single helper for every action button rendered inside the form. All
+   * buttons in the dialog use the stroked style; the caller may add a
+   * warn `btnType`, a custom className, or a `hideExpression` for
+   * conditional visibility.
+   */
+  private _actionBtn(opts: {
+    text: string;
+    onClick: (model: unknown) => void | Promise<void>;
+    className?: string;
+    btnType?: 'warn';
+    hideExpression?: FormlyFieldConfig['hideExpression'];
+  }): FormlyFieldConfig {
     return {
       type: 'btn',
-      className: 'mt3 block',
+      className: opts.className ?? 'mt2 block',
+      hideExpression: opts.hideExpression,
       templateOptions: {
-        text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
+        text: opts.text,
         btnStyle: 'stroked',
+        btnType: opts.btnType,
         required: false,
-        onClick: async (_field: unknown, _form: unknown, model: unknown) => {
-          await this._testWebDavConnection(model as WebdavPrivateCfg);
-        },
+        onClick: (_field: unknown, _form: unknown, model: unknown) => opts.onClick(model),
       },
     };
+  }
+
+  private _webDavTestConnectionBtn(): FormlyFieldConfig {
+    return this._actionBtn({
+      text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
+      className: 'mt3 block',
+      onClick: (model) => this._testWebDavConnection(model as WebdavPrivateCfg),
+    });
   }
 
   private _nextcloudTestConnectionBtn(): FormlyFieldConfig {
-    return {
-      type: 'btn',
+    return this._actionBtn({
+      text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
       className: 'mt3 block',
-      templateOptions: {
-        text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
-        btnStyle: 'stroked',
-        required: false,
-        onClick: async (_field: unknown, _form: unknown, model: unknown) => {
-          await this._testNextcloudConnection(model as NextcloudPrivateCfg);
-        },
-      },
-    };
+      onClick: (model) => this._testNextcloudConnection(model as NextcloudPrivateCfg),
+    });
   }
 
   private _forceOverwriteBtn(): FormlyFieldConfig {
-    return {
-      type: 'btn',
-      className: 'mt2 block',
-      templateOptions: {
-        text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
-        btnType: 'warn',
-        btnStyle: 'stroked',
-        required: false,
-        onClick: () => this.forceOverwrite(),
-      },
-    };
+    return this._actionBtn({
+      text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+      btnType: 'warn',
+      onClick: () => this.forceOverwrite(),
+    });
   }
 
   private _restoreBtn(): FormlyFieldConfig {
-    return {
-      type: 'btn',
-      className: 'mt2 block',
-      templateOptions: {
-        text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
-        btnStyle: 'stroked',
-        required: false,
-        onClick: () => this.restoreFromHistory(),
-      },
-    };
+    return this._actionBtn({
+      text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
+      onClick: () => this.restoreFromHistory(),
+    });
   }
 
   // Re-auth is OAuth-only. Gating via OAUTH_SYNC_PROVIDERS keeps this UI
   // in lockstep with the provider-side definition without an async probe.
   private _reauthBtn(): FormlyFieldConfig {
-    return {
-      type: 'btn',
-      className: 'mt2 block',
+    return this._actionBtn({
+      text: T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE,
+      onClick: () => this.reauth(),
       hideExpression: (m, v, field) => {
         const id = field?.parent?.parent?.model?.syncProvider as
           | SyncProviderId
           | undefined;
         return !id || !OAUTH_SYNC_PROVIDERS.has(id);
       },
-      templateOptions: {
-        text: T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE,
-        btnStyle: 'stroked',
-        required: false,
-        onClick: () => this.reauth(),
-      },
-    };
+    });
   }
 
   private async _testNextcloudConnection(cfg: NextcloudPrivateCfg): Promise<void> {
@@ -475,17 +471,16 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         });
       }
     } catch (e) {
-      // Log a redacted summary — log history is exportable, never include
-      // raw error details that may carry tokens / urls / stack frames.
-      SyncLog.err('Re-auth failed', {
-        name: e instanceof Error ? e.name : typeof e,
-      });
+      // Log a redacted summary AND redact the snack param — both surfaces
+      // are observable to the user (log history is exportable; snack body
+      // is rendered via [innerHtml]), so neither may carry raw error
+      // details that could include tokens, URLs, or stack frames.
+      const errName = _redactErrorName(e);
+      SyncLog.err('Re-auth failed', { name: errName });
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.SYNC.S.INCOMPLETE_CFG,
-        translateParams: {
-          error: e instanceof Error ? e.message : String(e),
-        },
+        translateParams: { error: errName },
       });
     }
   }
@@ -502,3 +497,15 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     });
   }
 }
+
+/**
+ * Discriminator string for an unknown thrown value, suitable for both log
+ * history (exportable) and user-facing snack copy. Never returns the raw
+ * `Error.message` — that may carry tokens, URLs, or stack frames.
+ */
+const _redactErrorName = (e: unknown): string => {
+  if (e instanceof Error) return e.name;
+  if (e === null) return 'null';
+  if (e === undefined) return 'undefined';
+  return typeof e;
+};
