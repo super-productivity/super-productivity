@@ -1,4 +1,39 @@
-<h1 mat-dialog-title>{{ T.F.SYNC.D_INITIAL_CFG.TITLE | translate }}</h1>
+<div class="dialog-title-row">
+  <h1 mat-dialog-title>{{ T.F.SYNC.D_INITIAL_CFG.TITLE | translate }}</h1>
+  @if (showAdvanced()) {
+    <button
+      [matMenuTriggerFor]="advancedMenu"
+      mat-icon-button
+      type="button"
+    >
+      <mat-icon>more_vert</mat-icon>
+    </button>
+  }
+</div>
+
+<mat-menu #advancedMenu="matMenu">
+  <ng-template matMenuContent>
+    @if (canRestore()) {
+      <button
+        (click)="restoreFromHistory()"
+        mat-menu-item
+        type="button"
+      >
+        <mat-icon>history</mat-icon>
+        {{ T.F.SYNC.BTN_RESTORE_FROM_HISTORY | translate }}
+      </button>
+    }
+    <button
+      (click)="forceOverwrite()"
+      class="advanced-menu__danger"
+      mat-menu-item
+      type="button"
+    >
+      <mat-icon>cloud_upload</mat-icon>
+      {{ T.F.SYNC.S.BTN_FORCE_OVERWRITE | translate }}
+    </button>
+  </ng-template>
+</mat-menu>
 
 <mat-dialog-content>
   @if (_tmpUpdatedCfg) {
@@ -22,45 +57,6 @@
         >
           <mat-icon>refresh</mat-icon>
           {{ T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE | translate }}
-        </button>
-      </div>
-    }
-
-    @if (showAdvanced()) {
-      <hr class="advanced-divider" />
-      <h3 class="advanced-title">
-        {{ T.F.SYNC.D_INITIAL_CFG.ADVANCED | translate }}
-      </h3>
-      <p class="advanced-hint">
-        {{ T.F.SYNC.D_INITIAL_CFG.ADVANCED_HINT | translate }}
-      </p>
-      <div class="advanced-actions">
-        @if (canRestore()) {
-          <button
-            (click)="restoreFromHistory()"
-            [disabled]="isFormDirty()"
-            [matTooltip]="
-              isFormDirty() ? (T.F.SYNC.D_INITIAL_CFG.SAVE_FIRST_HINT | translate) : ''
-            "
-            mat-stroked-button
-            type="button"
-          >
-            <mat-icon>history</mat-icon>
-            {{ T.F.SYNC.BTN_RESTORE_FROM_HISTORY | translate }}
-          </button>
-        }
-        <button
-          (click)="forceOverwrite()"
-          [disabled]="isFormDirty()"
-          [matTooltip]="
-            isFormDirty() ? (T.F.SYNC.D_INITIAL_CFG.SAVE_FIRST_HINT | translate) : ''
-          "
-          color="warn"
-          mat-stroked-button
-          type="button"
-        >
-          <mat-icon>cloud_upload</mat-icon>
-          {{ T.F.SYNC.S.BTN_FORCE_OVERWRITE | translate }}
         </button>
       </div>
     }
