@@ -3,7 +3,7 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { combineLatest, from, Observable, of } from 'rxjs';
 import { SyncConfig } from '../../features/config/global-config.model';
-import { switchMap, tap } from 'rxjs/operators';
+import { shareReplay, switchMap, tap } from 'rxjs/operators';
 import {
   CurrentProviderPrivateCfg,
   PrivateCfgByProviderId,
@@ -234,6 +234,10 @@ export class SyncConfigService {
       this._lastSettings = v;
       SyncLog.log('syncSettingsForm$', redactSensitiveFields(v));
     }),
+    // Share the result across subscribers — settings page subscribes long-term
+    // and the dialog re-subscribes per open. Without shareReplay the no-provider
+    // branch re-fetches sync-config-default-override.json per subscription.
+    shareReplay({ bufferSize: 1, refCount: true }),
   );
 
   async updateEncryptionPassword(

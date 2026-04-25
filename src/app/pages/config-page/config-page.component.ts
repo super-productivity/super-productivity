@@ -2,9 +2,9 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  DestroyRef,
   effect,
   inject,
-  OnDestroy,
   OnInit,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -23,9 +23,9 @@ import {
   GlobalConfigState,
   GlobalSectionConfig,
 } from '../../features/config/global-config.model';
-import { firstValueFrom, from, of, Subscription } from 'rxjs';
+import { firstValueFrom, from, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ProjectCfgFormKey } from '../../features/project/project.model';
 import { T } from '../../t.const';
 import { versions } from '../../../environments/versions';
@@ -78,7 +78,7 @@ import { MatButton } from '@angular/material/button';
     MatButton,
   ],
 })
-export class ConfigPageComponent implements OnInit, OnDestroy {
+export class ConfigPageComponent implements OnInit {
   private readonly _cd = inject(ChangeDetectorRef);
   private readonly _route = inject(ActivatedRoute);
   private readonly _providerManager = inject(SyncProviderManager);
@@ -145,7 +145,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   appVersion: string = getAppVersionStr();
   versions?: typeof versions = versions;
 
-  private _subs: Subscription = new Subscription();
+  private readonly _destroyRef = inject(DestroyRef);
 
   constructor() {
     // Initialize tab-specific form configurations
@@ -178,16 +178,16 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this._subs.add(
-      this.configService.cfg$.subscribe((cfg) => {
+    this.configService.cfg$
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((cfg) => {
         this.globalCfg = cfg;
-        // this._cd.detectChanges();
-      }),
-    );
+      });
 
     // Check for tab query parameter and set selected tab
-    this._subs.add(
-      this._route.queryParams.subscribe((params) => {
+    this._route.queryParams
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((params) => {
         if (params['tab'] !== undefined) {
           const tabIndex = parseInt(params['tab'], 10);
           if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex < 5) {
@@ -199,8 +199,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
           this.expandedSection = params['section'];
           this._cd.detectChanges();
         }
-      }),
-    );
+      });
   }
 
   private _updateKeyboardFormWithPluginShortcuts(shortcuts: PluginShortcutCfg[]): void {
@@ -259,10 +258,6 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
 
     // Trigger change detection
     this._cd.detectChanges();
-  }
-
-  ngOnDestroy(): void {
-    this._subs.unsubscribe();
   }
 
   async openSyncCfgDialog(): Promise<void> {
