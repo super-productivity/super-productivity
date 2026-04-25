@@ -525,7 +525,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           type: 'collapsible',
           hideExpression: (m, v, field) =>
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
-          props: { label: T.G.ADVANCED_CFG },
+          props: { label: T.F.SYNC.D_INITIAL_CFG.ADVANCED },
           fieldGroup: [
             // Server URL
             {

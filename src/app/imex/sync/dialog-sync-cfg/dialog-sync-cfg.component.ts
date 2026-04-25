@@ -65,10 +65,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   fields = signal(this._getFields(false));
   form = new FormGroup({});
 
-  private _canReauthSig = signal(false);
-
-  canReauth = this._canReauthSig.asReadonly();
-
   private _getFields(includeEnabledToggle: boolean): FormlyFieldConfig[] {
     return SYNC_FORM.items!.filter(
       (f) => includeEnabledToggle || f.key !== 'isEnabled',
@@ -78,9 +74,13 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   /**
    * Adds helpers into the formly field tree:
    * - WebDAV Test Connection button inside the WebDAV section.
-   * - Force Overwrite + Restore action buttons inside the top-level "Advanced"
-   *   collapsible (edit mode only — first-time setup keeps the SuperSync hide
-   *   so the collapsible doesn't appear empty for SuperSync new users).
+   * - Re-authenticate, Force Overwrite (and Restore for SuperSync) inside the
+   *   active "Advanced" collapsible (edit mode only — first-time setup gets no
+   *   action buttons since there is no saved config to act on).
+   *
+   * Each provider has exactly one Advanced collapsible:
+   * - non-SuperSync: top-level (compression, interval, manual-only) + actions
+   * - SuperSync: nested inside the SuperSync provider section (server URL) + actions
    */
   private _injectProviderHelpers(item: FormlyFieldConfig): FormlyFieldConfig {
     if (item.key === 'webDav' && item.fieldGroup) {
@@ -109,39 +109,75 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     ) {
       return {
         ...item,
-        // Edit mode: SuperSync also gets this collapsible (for the action buttons).
-        hideExpression: undefined,
-        fieldGroup: [...(item.fieldGroup ?? []), ...this._advancedActionFields()],
+        fieldGroup: [
+          ...(item.fieldGroup ?? []),
+          this._reauthBtn(),
+          this._forceOverwriteBtn(),
+        ],
+      };
+    }
+    if (item.key === 'superSync' && item.fieldGroup && this.isWasEnabled()) {
+      return {
+        ...item,
+        fieldGroup: item.fieldGroup.map((child) =>
+          child.type === 'collapsible' &&
+          child.props?.label === T.F.SYNC.D_INITIAL_CFG.ADVANCED
+            ? {
+                ...child,
+                fieldGroup: [
+                  ...(child.fieldGroup ?? []),
+                  this._forceOverwriteBtn(),
+                  this._restoreBtn(),
+                ],
+              }
+            : child,
+        ),
       };
     }
     return item;
   }
 
-  private _advancedActionFields(): FormlyFieldConfig[] {
-    return [
-      {
-        type: 'btn',
-        className: 'mt2 block',
-        templateOptions: {
-          text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
-          btnType: 'warn',
-          required: false,
-          onClick: () => this.forceOverwrite(),
-        },
+  private _forceOverwriteBtn(): FormlyFieldConfig {
+    return {
+      type: 'btn',
+      className: 'mt2 block',
+      templateOptions: {
+        text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        btnType: 'warn',
+        required: false,
+        onClick: () => this.forceOverwrite(),
       },
-      {
-        type: 'btn',
-        className: 'mt2 block',
-        hideExpression: (m, v, field) =>
-          field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync,
-        templateOptions: {
-          text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
-          btnType: 'stroked',
-          required: false,
-          onClick: () => this.restoreFromHistory(),
-        },
+    };
+  }
+
+  private _restoreBtn(): FormlyFieldConfig {
+    return {
+      type: 'btn',
+      className: 'mt2 block',
+      templateOptions: {
+        text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
+        btnType: 'stroked',
+        required: false,
+        onClick: () => this.restoreFromHistory(),
       },
-    ];
+    };
+  }
+
+  // Re-auth is OAuth-only; today only Dropbox qualifies. Gate via the form model
+  // so Formly's sync hideExpression is sufficient — no async readiness probe.
+  private _reauthBtn(): FormlyFieldConfig {
+    return {
+      type: 'btn',
+      className: 'mt2 block',
+      hideExpression: (m, v, field) =>
+        field?.parent?.parent?.model?.syncProvider !== SyncProviderId.Dropbox,
+      templateOptions: {
+        text: T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE,
+        btnType: 'stroked',
+        required: false,
+        onClick: () => this.reauth(),
+      },
+    };
   }
 
   private async _testWebDavConnection(webDavCfg: WebdavPrivateCfg): Promise<void> {
@@ -218,7 +254,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           ...v,
           isEnabled: true,
         });
-        this._updateReauthability(toSyncProviderId(v.syncProvider));
       }),
     );
   }
@@ -247,7 +282,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
             if (!providerId) {
               return;
             }
-            this._updateReauthability(providerId);
 
             // Load the provider's stored configuration
             const provider = await this._providerManager.getProviderById(providerId);
@@ -391,7 +425,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           type: 'SUCCESS',
           msg: T.F.SYNC.FORM.DROPBOX.REAUTH_SUCCESS,
         });
-        await this._updateReauthability(providerId);
       }
     } catch (e) {
       SyncLog.err('Re-auth failed', e);
@@ -415,18 +448,5 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       width: '500px',
       maxWidth: '90vw',
     });
-  }
-
-  private async _updateReauthability(providerId: SyncProviderId | null): Promise<void> {
-    if (!providerId) {
-      this._canReauthSig.set(false);
-      return;
-    }
-    const provider = await this._providerManager.getProviderById(providerId);
-    if (!provider?.getAuthHelper) {
-      this._canReauthSig.set(false);
-      return;
-    }
-    this._canReauthSig.set(await provider.isReady());
   }
 }

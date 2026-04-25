@@ -11,20 +11,6 @@
       >
       </formly-form>
     </form>
-
-    @if (canReauth()) {
-      <div class="reauth-row">
-        <button
-          (click)="reauth()"
-          color="primary"
-          mat-stroked-button
-          type="button"
-        >
-          <mat-icon>refresh</mat-icon>
-          {{ T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE | translate }}
-        </button>
-      </div>
-    }
   }
 </mat-dialog-content>
 
