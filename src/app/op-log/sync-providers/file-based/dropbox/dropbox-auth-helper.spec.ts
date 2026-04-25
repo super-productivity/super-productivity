@@ -1,18 +1,21 @@
 import { Dropbox } from './dropbox';
+import { DropboxApi } from './dropbox-api';
 import { generateCodeChallenge } from '../../../../util/pkce.util';
 
 /**
- * Regression/demonstration tests for issue #7139 — the secondary PKCE-mismatch bug.
+ * PKCE auth-helper lifecycle (issue #7139).
  *
- * Scenario: If the auth dialog is opened twice (e.g. user closes it after the
- * "Get Authorization Code" button fails to open the system browser), each call
- * to `getAuthHelper()` generates a fresh `codeVerifier` + matching `code_challenge`.
- * An auth code obtained from the FIRST authorization URL cannot be exchanged
- * using the SECOND helper's verifier — Dropbox rejects with `invalid_grant:
- * invalid code verifier`, which is exactly what the user reports.
+ * Background: a user on Flatpak reported `invalid_grant: invalid code verifier`
+ * after the "Get Authorization Code" button silently failed and they reopened
+ * the auth dialog. Each call to `getAuthHelper()` used to generate a fresh
+ * verifier+challenge, so a code obtained from the first URL was no longer
+ * exchangeable with the second helper's verifier.
+ *
+ * Fix: cache the PKCE pair on the Dropbox instance and reuse it until the
+ * exchange succeeds (or credentials are explicitly cleared).
  */
 describe('Dropbox.getAuthHelper — PKCE lifecycle (issue #7139)', () => {
-  it('returned authUrl must carry a code_challenge derived from the returned codeVerifier', async () => {
+  it('returned authUrl carries a code_challenge derived from the returned codeVerifier', async () => {
     const dropbox = new Dropbox({ appKey: 'test-key', basePath: '/' });
 
     const helper = await dropbox.getAuthHelper();
@@ -25,25 +28,73 @@ describe('Dropbox.getAuthHelper — PKCE lifecycle (issue #7139)', () => {
     expect(challengeInUrl).toBe(expectedChallenge);
   });
 
-  it('regenerates codeVerifier on every call — stale auth codes will fail token exchange', async () => {
+  it('reuses the same codeVerifier across consecutive calls so a stale-but-original auth code still exchanges', async () => {
     const dropbox = new Dropbox({ appKey: 'test-key', basePath: '/' });
 
     const first = await dropbox.getAuthHelper();
     const second = await dropbox.getAuthHelper();
 
-    expect(first.codeVerifier).not.toBe(second.codeVerifier);
+    expect(first.codeVerifier).toBe(second.codeVerifier);
+    expect(first.authUrl).toBe(second.authUrl);
+  });
 
-    const c1 = new URL(first.authUrl as string).searchParams.get('code_challenge');
-    const c2 = new URL(second.authUrl as string).searchParams.get('code_challenge');
-    expect(c1).not.toBe(c2);
+  it('serializes concurrent getAuthHelper calls onto a single PKCE generation', async () => {
+    const dropbox = new Dropbox({ appKey: 'test-key', basePath: '/' });
 
-    // This is the crux of the user-visible bug: if the user ever opens the
-    // dialog twice (common when the "Get Authorization Code" button silently
-    // fails in Flatpak), the verifier paired with the first URL's challenge
-    // is GONE. Entering an auth code obtained from the first URL produces
-    // `invalid_grant: invalid code verifier`.
-    const firstChallengeMatchesSecondVerifier =
-      (await generateCodeChallenge(second.codeVerifier as string)) === c1;
-    expect(firstChallengeMatchesSecondVerifier).toBe(false);
+    const [first, second] = await Promise.all([
+      dropbox.getAuthHelper(),
+      dropbox.getAuthHelper(),
+    ]);
+
+    expect(first.codeVerifier).toBe(second.codeVerifier);
+  });
+
+  it('regenerates the codeVerifier after a successful exchange', async () => {
+    const dropbox = new Dropbox({ appKey: 'test-key', basePath: '/' });
+    const api = (dropbox as unknown as { _api: DropboxApi })._api;
+    spyOn(api, 'getTokensFromAuthCode').and.resolveTo({
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: 0,
+    });
+
+    const first = await dropbox.getAuthHelper();
+    await first.verifyCodeChallenge!('any-code');
+    const second = await dropbox.getAuthHelper();
+
+    expect(second.codeVerifier).not.toBe(first.codeVerifier);
+  });
+
+  it('does not poison the cache when PKCE generation rejects', async () => {
+    const dropbox = new Dropbox({ appKey: 'test-key', basePath: '/' });
+    const originalSubtle = (globalThis.crypto as Crypto).subtle;
+    Object.defineProperty(globalThis.crypto, 'subtle', {
+      configurable: true,
+      get: () => {
+        throw new Error('crypto unavailable');
+      },
+    });
+
+    try {
+      await expectAsync(dropbox.getAuthHelper()).toBeRejected();
+    } finally {
+      Object.defineProperty(globalThis.crypto, 'subtle', {
+        configurable: true,
+        value: originalSubtle,
+      });
+    }
+
+    const recovered = await dropbox.getAuthHelper();
+    expect(recovered.codeVerifier).toBeTruthy();
+  });
+
+  it('regenerates the codeVerifier after clearAuthCredentials()', async () => {
+    const dropbox = new Dropbox({ appKey: 'test-key', basePath: '/' });
+
+    const first = await dropbox.getAuthHelper();
+    await dropbox.clearAuthCredentials();
+    const second = await dropbox.getAuthHelper();
+
+    expect(second.codeVerifier).not.toBe(first.codeVerifier);
   });
 });

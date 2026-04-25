@@ -361,10 +361,22 @@ function initWinEventListeners(app: Electron.App): void {
     const urlObj = new URL(url);
     urlObj.pathname = urlObj.pathname.replace('//', '/');
     const wellFormedUrl = urlObj.toString();
-    // shell.openExternal returns Promise<void>; surface the failure reason instead
-    // of silently swallowing it (e.g. when xdg-open / Flatpak portal rejects the URI).
+    // shell.openExternal returns Promise<void>; surface the failure to the
+    // renderer (snack via IPC.ERROR) so users on sandboxed packagings
+    // (Flatpak without OpenURI portal, etc.) see why nothing happened.
     shell.openExternal(wellFormedUrl).catch((err) => {
       error('Failed to open external URL via shell.openExternal:', err);
+      // Best-effort renderer notification — guard against the case where the
+      // frontend isn't ready (e.g. during shutdown or pre-load), in which
+      // case errorHandlerWithFrontendInform throws synchronously.
+      try {
+        errorHandlerWithFrontendInform(
+          'Could not open the link in your browser. Copy the URL manually if available.',
+          err,
+        );
+      } catch (informErr) {
+        error('Could not surface open-external failure to renderer:', informErr);
+      }
     });
   };
 
