@@ -35,6 +35,8 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { isOnline } from '../../../util/is-online';
 import { SnackService } from '../../../core/snack/snack.service';
 import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-restore-point.component';
+import { WebdavApi } from '../../../op-log/sync-providers/file-based/webdav/webdav-api';
+import { WebdavPrivateCfg } from '../../../op-log/sync-providers/file-based/webdav/webdav.model';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -76,7 +78,81 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   isFormDirty = this._formDirtySig.asReadonly();
 
   private _getFields(includeEnabledToggle: boolean): FormlyFieldConfig[] {
-    return SYNC_FORM.items!.filter((f) => includeEnabledToggle || f.key !== 'isEnabled');
+    return SYNC_FORM.items!.filter(
+      (f) => includeEnabledToggle || f.key !== 'isEnabled',
+    ).map((item) => this._injectProviderHelpers(item));
+  }
+
+  /**
+   * Adds provider-specific helpers (e.g. WebDAV Test Connection button)
+   * into the formly field tree so they render inside the relevant section.
+   */
+  private _injectProviderHelpers(item: FormlyFieldConfig): FormlyFieldConfig {
+    if (item.key === 'webDav' && item.fieldGroup) {
+      return {
+        ...item,
+        fieldGroup: [
+          ...item.fieldGroup,
+          {
+            type: 'btn',
+            className: 'mt3 block',
+            templateOptions: {
+              text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
+              required: false,
+              onClick: async (_field: unknown, _form: unknown, model: unknown) => {
+                await this._testWebDavConnection(model as WebdavPrivateCfg);
+              },
+            },
+          },
+        ],
+      };
+    }
+    return item;
+  }
+
+  private async _testWebDavConnection(webDavCfg: WebdavPrivateCfg): Promise<void> {
+    if (
+      !webDavCfg?.baseUrl ||
+      !webDavCfg?.userName ||
+      !webDavCfg?.password ||
+      !webDavCfg?.syncFolderPath
+    ) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.FORM.WEB_DAV.S_FILL_ALL_FIELDS,
+      });
+      return;
+    }
+
+    try {
+      const api = new WebdavApi(async () => webDavCfg);
+      const result = await api.testConnection(webDavCfg);
+      if (result.success) {
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_SUCCESS,
+          translateParams: { url: result.fullUrl },
+        });
+      } else {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
+          translateParams: {
+            error: result.error || 'Unknown error',
+            url: result.fullUrl,
+          },
+        });
+      }
+    } catch (e) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
+        translateParams: {
+          error: e instanceof Error ? e.message : 'Unexpected error',
+          url: (webDavCfg.baseUrl as string) || 'N/A',
+        },
+      });
+    }
   }
   // Note: _isInitialSetup flag is checked by sync-form.const.ts hideExpressions
   // to hide the encryption button/warning (encryption is handled by _promptSuperSyncEncryptionIfNeeded after sync)
