@@ -391,7 +391,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       type: 'collapsible',
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider === SyncProviderId.SuperSync,
-      props: { label: T.F.SYNC.D_INITIAL_CFG.ADVANCED },
+      props: { label: T.G.ADVANCED_CFG },
       fieldGroup: [
         {
           key: 'syncInterval',
@@ -526,7 +526,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           type: 'collapsible',
           hideExpression: (m, v, field) =>
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
-          props: { label: T.F.SYNC.D_INITIAL_CFG.ADVANCED },
+          props: { label: T.G.ADVANCED_CFG },
           fieldGroup: [
             // Server URL
             {

@@ -188,7 +188,7 @@
             </h2>
             <section class="config-section sync-summary">
               @let status = syncStatus();
-              @if (!status.isEnabled || !status.providerId) {
+              @if (!status.providerId) {
                 <p class="sync-summary__intro">
                   {{ 'PS.SYNC.EMPTY_STATE_HINT' | translate }}
                 </p>
@@ -209,12 +209,12 @@
                     <mat-icon>cloud_sync</mat-icon>
                     {{ status.providerId }}
                   </span>
-                  @if (status.requiresAuth && !status.isAuthed) {
+                  @if (status.needsAuth) {
                     <span class="sync-summary__pill sync-summary__pill--warn">
                       {{ 'PS.SYNC.NEEDS_AUTH' | translate }}
                     </span>
                   }
-                  @if (status.isEncryptionEnabled) {
+                  @if (status.isEncrypted) {
                     <span class="sync-summary__pill">
                       <mat-icon>lock</mat-icon>
                       {{ 'PS.SYNC.ENCRYPTED' | translate }}

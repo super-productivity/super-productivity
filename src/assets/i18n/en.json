@@ -1118,7 +1118,6 @@
         "T6": "Creating a backup of the data you overwrite is recommended!!!"
       },
       "D_INITIAL_CFG": {
-        "ADVANCED": "Advanced",
         "SAVE_AND_ENABLE": "Save & Enable Sync",
         "TITLE": "Configure Sync"
       },

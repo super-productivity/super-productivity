@@ -75,8 +75,8 @@ describe('ConfigPageComponent', () => {
   });
 
   it('should expose an empty syncStatus by default', () => {
-    expect(component.syncStatus().isEnabled).toBe(false);
     expect(component.syncStatus().providerId).toBeNull();
+    expect(component.syncStatus().needsAuth).toBe(false);
   });
 
   it('triggerSync() should call SyncWrapperService.sync()', () => {

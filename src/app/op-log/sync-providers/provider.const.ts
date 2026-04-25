@@ -8,6 +8,15 @@ export enum SyncProviderId {
 }
 
 /**
+ * Providers that authenticate via OAuth and expose `getAuthHelper()` on the
+ * runtime provider. Listed here so UI gates (e.g. Re-authenticate button)
+ * stay in lockstep with the provider implementations without an async probe.
+ */
+export const OAUTH_SYNC_PROVIDERS: ReadonlySet<SyncProviderId> = new Set([
+  SyncProviderId.Dropbox,
+]);
+
+/**
  * Type-safe conversion from string-based sync provider value to SyncProviderId.
  * Validates that a persisted string value is a valid SyncProviderId at runtime.
  */

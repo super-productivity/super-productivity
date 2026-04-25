@@ -2,9 +2,12 @@ import {
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
+  computed,
+  DestroyRef,
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MatDialog,
   MatDialogActions,
@@ -20,10 +23,12 @@ import { SYNC_FORM } from '../../../features/config/form-cfgs/sync-form.const';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { SyncConfig } from '../../../features/config/global-config.model';
-import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
+import {
+  OAUTH_SYNC_PROVIDERS,
+  SyncProviderId,
+} from '../../../op-log/sync-providers/provider.const';
 import { SyncConfigService } from '../sync-config.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
-import { Subscription } from 'rxjs';
 import { first, skip } from 'rxjs/operators';
 import { toSyncProviderId } from '../../../op-log/sync-exports';
 import { SyncLog } from '../../../core/log';
@@ -36,6 +41,7 @@ import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-rest
 import { WebdavApi } from '../../../op-log/sync-providers/file-based/webdav/webdav-api';
 import { WebdavPrivateCfg } from '../../../op-log/sync-providers/file-based/webdav/webdav.model';
 import { NextcloudPrivateCfg } from '../../../op-log/sync-providers/file-based/webdav/nextcloud.model';
+import { NextcloudProvider } from '../../../op-log/sync-providers/file-based/webdav/nextcloud';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -61,16 +67,19 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _snackService = inject(SnackService);
 
+  private _destroyRef = inject(DestroyRef);
+
   T = T;
   isWasEnabled = signal(false);
-  fields = signal(this._getFields(false));
-  form = new FormGroup({});
-
-  private _getFields(includeEnabledToggle: boolean): FormlyFieldConfig[] {
+  // Single source of truth — buttons appear/disappear automatically when
+  // edit mode flips, no manual fields.set() required.
+  fields = computed<FormlyFieldConfig[]>(() => {
+    const includeEnabledToggle = this.isWasEnabled();
     return SYNC_FORM.items!.filter(
       (f) => includeEnabledToggle || f.key !== 'isEnabled',
     ).map((item) => this._injectProviderHelpers(item));
-  }
+  });
+  form = new FormGroup({});
 
   /**
    * Adds helpers into the formly field tree:
@@ -98,7 +107,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     }
     if (
       item.type === 'collapsible' &&
-      item.props?.label === T.F.SYNC.D_INITIAL_CFG.ADVANCED &&
+      item.props?.label === T.G.ADVANCED_CFG &&
       this.isWasEnabled()
     ) {
       return {
@@ -114,8 +123,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       return {
         ...item,
         fieldGroup: item.fieldGroup.map((child) =>
-          child.type === 'collapsible' &&
-          child.props?.label === T.F.SYNC.D_INITIAL_CFG.ADVANCED
+          child.type === 'collapsible' && child.props?.label === T.G.ADVANCED_CFG
             ? {
                 ...child,
                 fieldGroup: [
@@ -188,14 +196,18 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     };
   }
 
-  // Re-auth is OAuth-only; today only Dropbox qualifies. Gate via the form model
-  // so Formly's sync hideExpression is sufficient — no async readiness probe.
+  // Re-auth is OAuth-only. Gating via OAUTH_SYNC_PROVIDERS keeps this UI
+  // in lockstep with the provider-side definition without an async probe.
   private _reauthBtn(): FormlyFieldConfig {
     return {
       type: 'btn',
       className: 'mt2 block',
-      hideExpression: (m, v, field) =>
-        field?.parent?.parent?.model?.syncProvider !== SyncProviderId.Dropbox,
+      hideExpression: (m, v, field) => {
+        const id = field?.parent?.parent?.model?.syncProvider as
+          | SyncProviderId
+          | undefined;
+        return !id || !OAUTH_SYNC_PROVIDERS.has(id);
+      },
       templateOptions: {
         text: T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE,
         btnStyle: 'stroked',
@@ -213,14 +225,9 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       });
       return;
     }
-    let serverUrl = cfg.serverUrl.trim();
-    if (serverUrl.endsWith('/')) {
-      serverUrl = serverUrl.slice(0, -1);
-    }
-    const baseUrl = `${serverUrl}/remote.php/dav/files/${encodeURIComponent(cfg.userName.trim())}/`;
     await this._testWebDavConnection({
       ...cfg,
-      baseUrl,
+      baseUrl: NextcloudProvider.buildBaseUrl(cfg),
     } as unknown as WebdavPrivateCfg);
   }
 
@@ -285,21 +292,21 @@ export class DialogSyncCfgComponent implements AfterViewInit {
 
   private _matDialogRef = inject<MatDialogRef<DialogSyncCfgComponent>>(MatDialogRef);
 
-  private _subs = new Subscription();
-
   constructor() {
-    this._subs.add(
-      this.syncConfigService.syncSettingsForm$.pipe(first()).subscribe((v) => {
+    this.syncConfigService.syncSettingsForm$
+      .pipe(first(), takeUntilDestroyed(this._destroyRef))
+      .subscribe((v) => {
         if (v.isEnabled) {
           this.isWasEnabled.set(true);
-          this.fields.set(this._getFields(true));
+          // Reset _isInitialSetup so encryption-warning hideExpressions
+          // recognise that we're editing an existing config.
+          this._tmpUpdatedCfg._isInitialSetup = false;
         }
         this.updateTmpCfg({
           ...v,
           isEnabled: true,
         });
-      }),
-    );
+      });
   }
 
   ngAfterViewInit(): void {
@@ -313,87 +320,84 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       }
 
       // Listen for provider changes and reload provider-specific configuration
-      this._subs.add(
-        syncProviderControl.valueChanges
-          .pipe(skip(1))
-          .subscribe(async (newProvider: SyncProviderId | null) => {
-            if (!newProvider) {
-              return;
-            }
+      syncProviderControl.valueChanges
+        .pipe(skip(1), takeUntilDestroyed(this._destroyRef))
+        .subscribe(async (newProvider: SyncProviderId | null) => {
+          if (!newProvider) {
+            return;
+          }
 
-            // Get the current configuration for this provider
-            const providerId = toSyncProviderId(newProvider);
-            if (!providerId) {
-              return;
-            }
+          // Get the current configuration for this provider
+          const providerId = toSyncProviderId(newProvider);
+          if (!providerId) {
+            return;
+          }
 
-            // Load the provider's stored configuration
-            const provider = await this._providerManager.getProviderById(providerId);
-            if (!provider) {
-              // Provider not yet configured, keep current form state
-              return;
-            }
+          // Load the provider's stored configuration
+          const provider = await this._providerManager.getProviderById(providerId);
+          if (!provider) {
+            // Provider not yet configured, keep current form state
+            return;
+          }
 
-            const privateCfg = await provider.privateCfg.load();
-            const globalCfg = await this._globalConfigService.sync$
-              .pipe(first())
-              .toPromise();
+          const privateCfg = await provider.privateCfg.load();
+          const globalCfg = await this._globalConfigService.sync$
+            .pipe(first())
+            .toPromise();
 
-            // Create provider-specific config based on provider type
-            let providerSpecificUpdate: Partial<SyncConfig> = {};
+          // Create provider-specific config based on provider type
+          let providerSpecificUpdate: Partial<SyncConfig> = {};
 
-            if (newProvider === SyncProviderId.SuperSync && privateCfg) {
-              providerSpecificUpdate = {
-                superSync: privateCfg as any,
-                encryptKey: privateCfg.encryptKey || '',
-                // SuperSync stores isEncryptionEnabled in privateCfg, not globalCfg
-                isEncryptionEnabled: (privateCfg as any).isEncryptionEnabled || false,
-              };
-            } else if (newProvider === SyncProviderId.WebDAV && privateCfg) {
-              providerSpecificUpdate = {
-                webDav: privateCfg as any,
-                encryptKey: privateCfg.encryptKey || '',
-              };
-            } else if (newProvider === SyncProviderId.LocalFile && privateCfg) {
-              providerSpecificUpdate = {
-                localFileSync: privateCfg as any,
-                encryptKey: privateCfg.encryptKey || '',
-              };
-            } else if (newProvider === SyncProviderId.Nextcloud && privateCfg) {
-              providerSpecificUpdate = {
-                nextcloud: privateCfg as any,
-                encryptKey: privateCfg.encryptKey || '',
-              };
-            } else if (newProvider === SyncProviderId.Dropbox && privateCfg) {
-              providerSpecificUpdate = {
-                encryptKey: privateCfg.encryptKey || '',
-              };
-            }
+          if (newProvider === SyncProviderId.SuperSync && privateCfg) {
+            providerSpecificUpdate = {
+              superSync: privateCfg as any,
+              encryptKey: privateCfg.encryptKey || '',
+              // SuperSync stores isEncryptionEnabled in privateCfg, not globalCfg
+              isEncryptionEnabled: (privateCfg as any).isEncryptionEnabled || false,
+            };
+          } else if (newProvider === SyncProviderId.WebDAV && privateCfg) {
+            providerSpecificUpdate = {
+              webDav: privateCfg as any,
+              encryptKey: privateCfg.encryptKey || '',
+            };
+          } else if (newProvider === SyncProviderId.LocalFile && privateCfg) {
+            providerSpecificUpdate = {
+              localFileSync: privateCfg as any,
+              encryptKey: privateCfg.encryptKey || '',
+            };
+          } else if (newProvider === SyncProviderId.Nextcloud && privateCfg) {
+            providerSpecificUpdate = {
+              nextcloud: privateCfg as any,
+              encryptKey: privateCfg.encryptKey || '',
+            };
+          } else if (newProvider === SyncProviderId.Dropbox && privateCfg) {
+            providerSpecificUpdate = {
+              encryptKey: privateCfg.encryptKey || '',
+            };
+          }
 
-            // Update the model, preserving non-provider-specific fields
+          // Update the model, preserving non-provider-specific fields
+          this._tmpUpdatedCfg = {
+            ...this._tmpUpdatedCfg,
+            ...providerSpecificUpdate,
+            syncProvider: newProvider,
+            // Preserve global settings (?? not || so explicit `false` is honoured)
+            isEnabled: this._tmpUpdatedCfg.isEnabled,
+            syncInterval: globalCfg?.syncInterval ?? this._tmpUpdatedCfg.syncInterval,
+            isManualSyncOnly:
+              globalCfg?.isManualSyncOnly ?? this._tmpUpdatedCfg.isManualSyncOnly,
+            isCompressionEnabled:
+              globalCfg?.isCompressionEnabled ?? this._tmpUpdatedCfg.isCompressionEnabled,
+          };
+
+          // For non-SuperSync providers, update encryption from global config
+          if (newProvider !== SyncProviderId.SuperSync) {
             this._tmpUpdatedCfg = {
               ...this._tmpUpdatedCfg,
-              ...providerSpecificUpdate,
-              syncProvider: newProvider,
-              // Preserve global settings
-              isEnabled: this._tmpUpdatedCfg.isEnabled,
-              syncInterval: globalCfg?.syncInterval || this._tmpUpdatedCfg.syncInterval,
-              isManualSyncOnly:
-                globalCfg?.isManualSyncOnly || this._tmpUpdatedCfg.isManualSyncOnly,
-              isCompressionEnabled:
-                globalCfg?.isCompressionEnabled ||
-                this._tmpUpdatedCfg.isCompressionEnabled,
+              isEncryptionEnabled: globalCfg?.isEncryptionEnabled ?? false,
             };
-
-            // For non-SuperSync providers, update encryption from global config
-            if (newProvider !== SyncProviderId.SuperSync) {
-              this._tmpUpdatedCfg = {
-                ...this._tmpUpdatedCfg,
-                isEncryptionEnabled: globalCfg?.isEncryptionEnabled || false,
-              };
-            }
-          }),
-      );
+          }
+        });
     }, 0);
   }
 
@@ -471,7 +475,11 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         });
       }
     } catch (e) {
-      SyncLog.err('Re-auth failed', e);
+      // Log a redacted summary — log history is exportable, never include
+      // raw error details that may carry tokens / urls / stack frames.
+      SyncLog.err('Re-auth failed', {
+        name: e instanceof Error ? e.name : typeof e,
+      });
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.SYNC.S.INCOMPLETE_CFG,
