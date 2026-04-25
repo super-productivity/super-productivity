@@ -125,14 +125,15 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
         }
         return from(
           (async () => {
+            const provider = await this._providerManager.getProviderById(providerId);
+            const requiresAuth = !!provider?.getAuthHelper;
             try {
-              const provider = await this._providerManager.getProviderById(providerId);
-              const requiresAuth = !!provider?.getAuthHelper;
               const isAuthed = !!(await provider?.isReady());
               return { providerId, needsAuth: requiresAuth && !isAuthed, isEncrypted };
             } catch {
-              // Surface as "needs auth" rather than dropping the row entirely.
-              return { providerId, needsAuth: true, isEncrypted };
+              // Don't claim a non-OAuth provider needs auth — only surface
+              // the auth pill if the provider could plausibly require it.
+              return { providerId, needsAuth: requiresAuth, isEncrypted };
             }
           })(),
         );

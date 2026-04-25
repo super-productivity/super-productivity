@@ -19,7 +19,10 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
-import { SYNC_FORM } from '../../../features/config/form-cfgs/sync-form.const';
+import {
+  SYNC_FORM,
+  SyncCollapsibleProps,
+} from '../../../features/config/form-cfgs/sync-form.const';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { SyncConfig } from '../../../features/config/global-config.model';
@@ -107,7 +110,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     }
     if (
       item.type === 'collapsible' &&
-      (item.props as { syncRole?: string })?.syncRole === 'advanced' &&
+      (item.props as SyncCollapsibleProps | undefined)?.syncRole === 'advanced' &&
       this.isWasEnabled()
     ) {
       return {
@@ -124,7 +127,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         ...item,
         fieldGroup: item.fieldGroup.map((child) =>
           child.type === 'collapsible' &&
-          (child.props as { syncRole?: string })?.syncRole === 'advanced'
+          (child.props as SyncCollapsibleProps | undefined)?.syncRole === 'advanced'
             ? {
                 ...child,
                 fieldGroup: [
@@ -471,16 +474,14 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         });
       }
     } catch (e) {
-      // Log a redacted summary AND redact the snack param — both surfaces
-      // are observable to the user (log history is exportable; snack body
-      // is rendered via [innerHtml]), so neither may carry raw error
-      // details that could include tokens, URLs, or stack frames.
-      const errName = _redactErrorName(e);
-      SyncLog.err('Re-auth failed', { name: errName });
+      // Log history is exportable, so log only a redacted discriminator —
+      // never raw `Error.message` (which can carry tokens / URLs / stacks).
+      // The user-facing snack just shows the static "credentials missing"
+      // copy; INCOMPLETE_CFG has no error placeholder, so no leak path.
+      SyncLog.err('Re-auth failed', { name: _redactErrorName(e) });
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.SYNC.S.INCOMPLETE_CFG,
-        translateParams: { error: errName },
       });
     }
   }
@@ -499,13 +500,9 @@ export class DialogSyncCfgComponent implements AfterViewInit {
 }
 
 /**
- * Discriminator string for an unknown thrown value, suitable for both log
- * history (exportable) and user-facing snack copy. Never returns the raw
- * `Error.message` — that may carry tokens, URLs, or stack frames.
+ * Coarse, redacted discriminator for an unknown thrown value — safe for
+ * exportable log history. Returns the Error subclass name for instances
+ * (e.g. "TypeError") and a single bucket for everything else.
  */
-const _redactErrorName = (e: unknown): string => {
-  if (e instanceof Error) return e.name;
-  if (e === null) return 'null';
-  if (e === undefined) return 'undefined';
-  return typeof e;
-};
+const _redactErrorName = (e: unknown): string =>
+  e instanceof Error ? e.name : 'UnknownError';

@@ -8,7 +8,16 @@ import {
   loadSyncProviders,
   LocalFileSyncPicker,
 } from '../../../op-log/sync-providers/sync-providers.factory';
-import { FormlyFieldConfig } from '@ngx-formly/core';
+import { FormlyFieldConfig, FormlyFieldProps } from '@ngx-formly/core';
+
+/**
+ * Stable structural marker on the "Advanced" collapsibles so the dialog
+ * component can route action-button injection without depending on the
+ * (globally shared) translation key in `props.label`.
+ */
+export interface SyncCollapsibleProps extends FormlyFieldProps {
+  syncRole?: 'advanced';
+}
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { SUPER_SYNC_DEFAULT_BASE_URL } from '../../../op-log/sync-providers/super-sync/super-sync.model';
 import {
@@ -391,7 +400,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         field?.parent?.model.syncProvider === SyncProviderId.SuperSync,
       // syncRole is a stable structural marker the dialog routes on, so a
       // future global rename of T.G.ADVANCED_CFG cannot silently break it.
-      props: { label: T.G.ADVANCED_CFG, syncRole: 'advanced' } as Record<string, unknown>,
+      props: { label: T.G.ADVANCED_CFG, syncRole: 'advanced' } as SyncCollapsibleProps,
       fieldGroup: [
         {
           key: 'syncInterval',
@@ -526,10 +535,10 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           type: 'collapsible',
           hideExpression: (m, v, field) =>
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
-          props: { label: T.G.ADVANCED_CFG, syncRole: 'advanced' } as Record<
-            string,
-            unknown
-          >,
+          props: {
+            label: T.G.ADVANCED_CFG,
+            syncRole: 'advanced',
+          } as SyncCollapsibleProps,
           fieldGroup: [
             // Server URL
             {
