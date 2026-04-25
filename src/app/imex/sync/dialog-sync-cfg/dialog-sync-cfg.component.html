@@ -1,4 +1,3 @@
-<!--<h1 mat-dialog-title>{{T.F.SYNC.D_CONFLICT.TITLE|translate}}</h1>-->
 <h1 mat-dialog-title>{{ T.F.SYNC.D_INITIAL_CFG.TITLE | translate }}</h1>
 
 <mat-dialog-content>
@@ -12,6 +11,59 @@
       >
       </formly-form>
     </form>
+
+    @if (canReauth()) {
+      <div class="reauth-row">
+        <button
+          (click)="reauth()"
+          color="primary"
+          mat-stroked-button
+          type="button"
+        >
+          <mat-icon>refresh</mat-icon>
+          {{ T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE | translate }}
+        </button>
+      </div>
+    }
+
+    @if (showAdvanced()) {
+      <hr class="advanced-divider" />
+      <h3 class="advanced-title">
+        {{ T.F.SYNC.D_INITIAL_CFG.ADVANCED | translate }}
+      </h3>
+      <p class="advanced-hint">
+        {{ T.F.SYNC.D_INITIAL_CFG.ADVANCED_HINT | translate }}
+      </p>
+      <div class="advanced-actions">
+        @if (canRestore()) {
+          <button
+            (click)="restoreFromHistory()"
+            [disabled]="isFormDirty()"
+            [matTooltip]="
+              isFormDirty() ? (T.F.SYNC.D_INITIAL_CFG.SAVE_FIRST_HINT | translate) : ''
+            "
+            mat-stroked-button
+            type="button"
+          >
+            <mat-icon>history</mat-icon>
+            {{ T.F.SYNC.BTN_RESTORE_FROM_HISTORY | translate }}
+          </button>
+        }
+        <button
+          (click)="forceOverwrite()"
+          [disabled]="isFormDirty()"
+          [matTooltip]="
+            isFormDirty() ? (T.F.SYNC.D_INITIAL_CFG.SAVE_FIRST_HINT | translate) : ''
+          "
+          color="warn"
+          mat-stroked-button
+          type="button"
+        >
+          <mat-icon>cloud_upload</mat-icon>
+          {{ T.F.SYNC.S.BTN_FORCE_OVERWRITE | translate }}
+        </button>
+      </div>
+    }
   }
 </mat-dialog-content>
 

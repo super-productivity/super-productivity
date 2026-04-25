@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { MatDialogRef } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { FormlyModule } from '@ngx-formly/core';
 import { of } from 'rxjs';
@@ -11,6 +11,7 @@ import { SyncProviderManager } from '../../../op-log/sync-providers/provider-man
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfig } from '../../../features/config/global-config.model';
+import { SnackService } from '../../../core/snack/snack.service';
 
 describe('DialogSyncCfgComponent', () => {
   let component: DialogSyncCfgComponent;
@@ -20,6 +21,8 @@ describe('DialogSyncCfgComponent', () => {
   let mockSyncWrapperService: jasmine.SpyObj<SyncWrapperService>;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
+  let mockSnackService: jasmine.SpyObj<SnackService>;
+  let mockMatDialog: jasmine.SpyObj<MatDialog>;
 
   const baseSyncConfig: SyncConfig = {
     isEnabled: false,
@@ -55,6 +58,9 @@ describe('DialogSyncCfgComponent', () => {
       sync$: of(baseSyncConfig),
     });
 
+    mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
+    mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+
     TestBed.configureTestingModule({
       imports: [
         DialogSyncCfgComponent,
@@ -68,6 +74,8 @@ describe('DialogSyncCfgComponent', () => {
         { provide: SyncWrapperService, useValue: mockSyncWrapperService },
         { provide: SyncProviderManager, useValue: mockProviderManager },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
+        { provide: SnackService, useValue: mockSnackService },
+        { provide: MatDialog, useValue: mockMatDialog },
       ],
     });
     // Replace the Formly-based template with a minimal placeholder so we can

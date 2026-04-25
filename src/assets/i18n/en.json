@@ -1118,7 +1118,10 @@
         "T6": "Creating a backup of the data you overwrite is recommended!!!"
       },
       "D_INITIAL_CFG": {
+        "ADVANCED": "Advanced",
+        "ADVANCED_HINT": "These actions modify remote data.",
         "SAVE_AND_ENABLE": "Save & Enable Sync",
+        "SAVE_FIRST_HINT": "Save changes first",
         "TITLE": "Configure Sync"
       },
       "D_LOCAL_DATA_REPLACE_CONFIRM": {

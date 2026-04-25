@@ -2,10 +2,12 @@ import {
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   signal,
 } from '@angular/core';
 import {
+  MatDialog,
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
@@ -13,6 +15,7 @@ import {
 } from '@angular/material/dialog';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { SYNC_FORM } from '../../../features/config/form-cfgs/sync-form.const';
@@ -30,6 +33,8 @@ import { SyncProviderManager } from '../../../op-log/sync-providers/provider-man
 
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { isOnline } from '../../../util/is-online';
+import { SnackService } from '../../../core/snack/snack.service';
+import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-restore-point.component';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -42,6 +47,7 @@ import { isOnline } from '../../../util/is-online';
     MatDialogActions,
     MatButton,
     MatIcon,
+    MatTooltip,
     TranslatePipe,
     ReactiveFormsModule,
     FormlyModule,
@@ -52,11 +58,22 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   syncWrapperService = inject(SyncWrapperService);
   private _providerManager = inject(SyncProviderManager);
   private _globalConfigService = inject(GlobalConfigService);
+  private _matDialog = inject(MatDialog);
+  private _snackService = inject(SnackService);
 
   T = T;
   isWasEnabled = signal(false);
   fields = signal(this._getFields(false));
   form = new FormGroup({});
+
+  private _currentProviderSig = signal<SyncProviderId | null>(SyncProviderId.SuperSync);
+  private _canReauthSig = signal(false);
+  private _formDirtySig = signal(false);
+
+  canReauth = this._canReauthSig.asReadonly();
+  showAdvanced = computed(() => this.isWasEnabled());
+  canRestore = computed(() => this._currentProviderSig() === SyncProviderId.SuperSync);
+  isFormDirty = this._formDirtySig.asReadonly();
 
   private _getFields(includeEnabledToggle: boolean): FormlyFieldConfig[] {
     return SYNC_FORM.items!.filter((f) => includeEnabledToggle || f.key !== 'isEnabled');
@@ -91,6 +108,15 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           ...v,
           isEnabled: true,
         });
+        const providerId = toSyncProviderId(v.syncProvider);
+        this._currentProviderSig.set(providerId);
+        this._updateReauthability(providerId);
+      }),
+    );
+
+    this._subs.add(
+      this.form.valueChanges.subscribe(() => {
+        this._formDirtySig.set(this.form.dirty);
       }),
     );
   }
@@ -119,6 +145,8 @@ export class DialogSyncCfgComponent implements AfterViewInit {
             if (!providerId) {
               return;
             }
+            this._currentProviderSig.set(providerId);
+            this._updateReauthability(providerId);
 
             // Load the provider's stored configuration
             const provider = await this._providerManager.getProviderById(providerId);
@@ -244,5 +272,60 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     // Use Object.assign to preserve the object reference for Formly
     // This ensures Formly detects changes to the model
     Object.assign(this._tmpUpdatedCfg, cfg);
+  }
+
+  async reauth(): Promise<void> {
+    const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
+    if (!providerId) {
+      return;
+    }
+    try {
+      const result =
+        await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(
+          providerId,
+          true,
+        );
+      if (result.wasConfigured) {
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.F.SYNC.FORM.DROPBOX.REAUTH_SUCCESS,
+        });
+        await this._updateReauthability(providerId);
+      }
+    } catch (e) {
+      SyncLog.err('Re-auth failed', e);
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.INCOMPLETE_CFG,
+        translateParams: {
+          error: e instanceof Error ? e.message : String(e),
+        },
+      });
+    }
+  }
+
+  forceOverwrite(): void {
+    // Confirmation is handled inside SyncWrapperService.forceUpload (native confirm)
+    this.syncWrapperService.forceUpload();
+  }
+
+  restoreFromHistory(): void {
+    this._matDialog.open(DialogRestorePointComponent, {
+      width: '500px',
+      maxWidth: '90vw',
+    });
+  }
+
+  private async _updateReauthability(providerId: SyncProviderId | null): Promise<void> {
+    if (!providerId) {
+      this._canReauthSig.set(false);
+      return;
+    }
+    const provider = await this._providerManager.getProviderById(providerId);
+    if (!provider?.getAuthHelper) {
+      this._canReauthSig.set(false);
+      return;
+    }
+    this._canReauthSig.set(await provider.isReady());
   }
 }
