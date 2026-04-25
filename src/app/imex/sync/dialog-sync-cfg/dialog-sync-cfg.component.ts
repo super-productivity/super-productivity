@@ -2,7 +2,6 @@ import {
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
-  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -13,14 +12,8 @@ import {
   MatDialogRef,
   MatDialogTitle,
 } from '@angular/material/dialog';
-import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import {
-  MatMenu,
-  MatMenuContent,
-  MatMenuItem,
-  MatMenuTrigger,
-} from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { SYNC_FORM } from '../../../features/config/form-cfgs/sync-form.const';
@@ -53,12 +46,7 @@ import { WebdavPrivateCfg } from '../../../op-log/sync-providers/file-based/webd
     MatDialogContent,
     MatDialogActions,
     MatButton,
-    MatIconButton,
     MatIcon,
-    MatMenu,
-    MatMenuContent,
-    MatMenuItem,
-    MatMenuTrigger,
     TranslatePipe,
     ReactiveFormsModule,
     FormlyModule,
@@ -77,12 +65,9 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   fields = signal(this._getFields(false));
   form = new FormGroup({});
 
-  private _currentProviderSig = signal<SyncProviderId | null>(SyncProviderId.SuperSync);
   private _canReauthSig = signal(false);
 
   canReauth = this._canReauthSig.asReadonly();
-  showAdvanced = computed(() => this.isWasEnabled());
-  canRestore = computed(() => this._currentProviderSig() === SyncProviderId.SuperSync);
 
   private _getFields(includeEnabledToggle: boolean): FormlyFieldConfig[] {
     return SYNC_FORM.items!.filter(
@@ -91,8 +76,11 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   }
 
   /**
-   * Adds provider-specific helpers (e.g. WebDAV Test Connection button)
-   * into the formly field tree so they render inside the relevant section.
+   * Adds helpers into the formly field tree:
+   * - WebDAV Test Connection button inside the WebDAV section.
+   * - Force Overwrite + Restore action buttons inside the top-level "Advanced"
+   *   collapsible (edit mode only — first-time setup keeps the SuperSync hide
+   *   so the collapsible doesn't appear empty for SuperSync new users).
    */
   private _injectProviderHelpers(item: FormlyFieldConfig): FormlyFieldConfig {
     if (item.key === 'webDav' && item.fieldGroup) {
@@ -114,7 +102,46 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         ],
       };
     }
+    if (
+      item.type === 'collapsible' &&
+      item.props?.label === T.F.SYNC.D_INITIAL_CFG.ADVANCED &&
+      this.isWasEnabled()
+    ) {
+      return {
+        ...item,
+        // Edit mode: SuperSync also gets this collapsible (for the action buttons).
+        hideExpression: undefined,
+        fieldGroup: [...(item.fieldGroup ?? []), ...this._advancedActionFields()],
+      };
+    }
     return item;
+  }
+
+  private _advancedActionFields(): FormlyFieldConfig[] {
+    return [
+      {
+        type: 'btn',
+        className: 'mt2 block',
+        templateOptions: {
+          text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+          btnType: 'warn',
+          required: false,
+          onClick: () => this.forceOverwrite(),
+        },
+      },
+      {
+        type: 'btn',
+        className: 'mt2 block',
+        hideExpression: (m, v, field) =>
+          field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync,
+        templateOptions: {
+          text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
+          btnType: 'stroked',
+          required: false,
+          onClick: () => this.restoreFromHistory(),
+        },
+      },
+    ];
   }
 
   private async _testWebDavConnection(webDavCfg: WebdavPrivateCfg): Promise<void> {
@@ -191,9 +218,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           ...v,
           isEnabled: true,
         });
-        const providerId = toSyncProviderId(v.syncProvider);
-        this._currentProviderSig.set(providerId);
-        this._updateReauthability(providerId);
+        this._updateReauthability(toSyncProviderId(v.syncProvider));
       }),
     );
   }
@@ -222,7 +247,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
             if (!providerId) {
               return;
             }
-            this._currentProviderSig.set(providerId);
             this._updateReauthability(providerId);
 
             // Load the provider's stored configuration

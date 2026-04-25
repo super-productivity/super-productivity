@@ -7,22 +7,7 @@
     }
   }
 
-  .dialog-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s);
-
-    h1 {
-      margin: 0;
-    }
-  }
-
   .reauth-row {
     margin-top: var(--s);
   }
-}
-
-.advanced-menu__danger {
-  color: var(--color-danger);
 }

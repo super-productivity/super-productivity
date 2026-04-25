@@ -383,12 +383,13 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
     },
 
     // COMMON SETTINGS
-    // Hide for SuperSync - uses fixed settings (no compression config, encryption handled separately)
+    // Hide for SuperSync during first-time setup (uses fixed settings; no buttons to host).
+    // The dialog component drops this hide in edit mode and appends action buttons.
     {
       type: 'collapsible',
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider === SyncProviderId.SuperSync,
-      props: { label: T.G.ADVANCED_CFG },
+      props: { label: T.F.SYNC.D_INITIAL_CFG.ADVANCED },
       fieldGroup: [
         {
           key: 'syncInterval',

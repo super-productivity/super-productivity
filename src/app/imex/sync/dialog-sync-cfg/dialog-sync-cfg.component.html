@@ -1,39 +1,4 @@
-<div class="dialog-title-row">
-  <h1 mat-dialog-title>{{ T.F.SYNC.D_INITIAL_CFG.TITLE | translate }}</h1>
-  @if (showAdvanced()) {
-    <button
-      [matMenuTriggerFor]="advancedMenu"
-      mat-icon-button
-      type="button"
-    >
-      <mat-icon>more_vert</mat-icon>
-    </button>
-  }
-</div>
-
-<mat-menu #advancedMenu="matMenu">
-  <ng-template matMenuContent>
-    @if (canRestore()) {
-      <button
-        (click)="restoreFromHistory()"
-        mat-menu-item
-        type="button"
-      >
-        <mat-icon>history</mat-icon>
-        {{ T.F.SYNC.BTN_RESTORE_FROM_HISTORY | translate }}
-      </button>
-    }
-    <button
-      (click)="forceOverwrite()"
-      class="advanced-menu__danger"
-      mat-menu-item
-      type="button"
-    >
-      <mat-icon>cloud_upload</mat-icon>
-      {{ T.F.SYNC.S.BTN_FORCE_OVERWRITE | translate }}
-    </button>
-  </ng-template>
-</mat-menu>
+<h1 mat-dialog-title>{{ T.F.SYNC.D_INITIAL_CFG.TITLE | translate }}</h1>
 
 <mat-dialog-content>
   @if (_tmpUpdatedCfg) {
