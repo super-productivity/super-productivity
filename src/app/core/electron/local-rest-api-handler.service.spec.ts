@@ -449,6 +449,40 @@ describe('LocalRestApiHandlerService', () => {
           expect(response.status).toBe(400);
           expect((response.body as any).error.code).toBe('INVALID_INPUT');
         });
+
+        it('should return 400 when projectId is sent alongside parentId', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: {
+                title: 'Child',
+                parentId: 'parent-1',
+                projectId: 'mismatched-project',
+              },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        });
+
+        it('should return 400 when tagIds is sent alongside parentId', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: {
+                title: 'Child',
+                parentId: 'parent-1',
+                tagIds: ['tag-1'],
+              },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        });
       });
     });
 
