@@ -298,15 +298,14 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         if (v.isEnabled) {
           this.isWasEnabled.set(true);
         }
+        // First-time setup ⇔ sync was previously disabled. Encryption-warning
+        // hideExpressions in sync-form.const.ts read this flag to suppress
+        // the post-save SuperSync encryption prompt during initial setup.
         this.updateTmpCfg({
           ...v,
           isEnabled: true,
-          // Edit-mode override: encryption-warning hideExpressions in
-          // sync-form.const.ts treat `_isInitialSetup === true` as
-          // first-time setup. Editing an existing config is not
-          // first-time. Spread last so `Object.assign` honours this.
           _isInitialSetup: !v.isEnabled,
-        } as SyncConfig & { _isInitialSetup?: boolean });
+        });
       });
   }
 
@@ -452,7 +451,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     }
   }
 
-  updateTmpCfg(cfg: SyncConfig): void {
+  updateTmpCfg(cfg: SyncConfig & { _isInitialSetup?: boolean }): void {
     // Use Object.assign to preserve the object reference for Formly
     // This ensures Formly detects changes to the model
     Object.assign(this._tmpUpdatedCfg, cfg);
@@ -488,14 +487,8 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     }
   }
 
-  /**
-   * Trigger force overwrite of remote sync state with current local state.
-   * Confirmation is intentionally NOT added here — `SyncWrapperService.forceUpload`
-   * already wraps the call in a native `confirmDialog`, which is also the
-   * gate for the 5+ internal call sites (LockPresentError, EmptyRemoteBody,
-   * etc. snackbar action buttons). Adding a Material confirm here would
-   * double-confirm those flows.
-   */
+  /** Confirmation handled inside `SyncWrapperService.forceUpload` (native
+   *  confirm, shared with snackbar action callers). */
   forceOverwrite(): void {
     this.syncWrapperService.forceUpload();
   }

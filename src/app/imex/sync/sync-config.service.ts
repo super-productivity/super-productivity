@@ -234,10 +234,11 @@ export class SyncConfigService {
       this._lastSettings = v;
       SyncLog.log('syncSettingsForm$', redactSensitiveFields(v));
     }),
-    // Share the result across subscribers — settings page subscribes long-term
-    // and the dialog re-subscribes per open. Without shareReplay the no-provider
-    // branch re-fetches sync-config-default-override.json per subscription.
-    shareReplay({ bufferSize: 1, refCount: true }),
+    // Cache the latest emission across all subscribers (refCount:false) so a
+    // dialog opened later from the header — when the settings page is not
+    // mounted — can replay without re-running combineLatest and re-fetching
+    // /assets/sync-config-default-override.json.
+    shareReplay({ bufferSize: 1, refCount: false }),
   );
 
   async updateEncryptionPassword(
