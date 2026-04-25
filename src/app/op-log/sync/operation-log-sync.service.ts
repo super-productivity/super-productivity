@@ -37,6 +37,7 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 import { confirmDialog } from '../../util/native-dialogs';
+import { compareVectorClocks, isVectorClockEmpty } from '../../core/util/vector-clock';
 
 /**
  * Type guard for NgRx entity state (has an `ids` array).
@@ -460,6 +461,52 @@ export class OperationLogSyncService {
     // we receive the complete application state in snapshotState. This must be hydrated
     // directly instead of processing incremental ops (which are already reflected in the state).
     if (result.snapshotState) {
+      // Issue #7339: a file-based snapshot whose vector clock is dominated by the
+      // local clock contains nothing the local client doesn't already have. Hydrating
+      // would discard local-only ops and a conflict dialog has nothing to resolve.
+      // Without this short-circuit, FileBasedSyncAdapter's snapshot-replacement gap
+      // detection re-fires every sync for clients that haven't uploaded their own
+      // snapshot, trapping them in a perpetual conflict-dialog loop.
+      //
+      // Both clocks must be non-empty for the comparison to be meaningful: an empty
+      // remote clock would compare EQUAL to a fresh local client and incorrectly skip
+      // hydrating a snapshot that may carry real state from a legacy file.
+      if (result.snapshotVectorClock && !isVectorClockEmpty(result.snapshotVectorClock)) {
+        const localClock = await this.opLogStore.getVectorClock();
+        if (!isVectorClockEmpty(localClock)) {
+          const cmp = compareVectorClocks(localClock, result.snapshotVectorClock);
+          if (cmp === 'EQUAL' || cmp === 'GREATER_THAN') {
+            OpLog.normal(
+              `OperationLogSyncService: Local vector clock ${cmp} remote snapshot — ` +
+                'skipping snapshot hydration (local already has all remote data).',
+            );
+            // Deliberately do NOT call appendBatchSkipDuplicates(result.newOps).
+            // VectorClockService.getEntityFrontier() builds per-entity frontiers
+            // by iterating the op log in seq order with last-write-wins semantics.
+            // Appending historical remote ops at the current tail would regress
+            // the frontier for any entity where local already has newer ops,
+            // which then lets future remote ops be classified as non-conflicting
+            // and silently overwrite local changes.
+            //
+            // The trade-off: those ops keep coming back in result.newOps on each
+            // sync until the file's snapshot advances or the user uploads their
+            // own snapshot. They are never re-applied to state, because (a) the
+            // dominate-check skips state mutation, and (b) the regular hydration
+            // path replaces state wholesale from snapshotState, not by replaying
+            // individual ops. So the cost is bounded re-download bandwidth, not
+            // data corruption.
+            if (result.latestServerSeq !== undefined) {
+              await syncProvider.setLastServerSeq(result.latestServerSeq);
+            }
+            return {
+              kind: 'no_new_ops',
+              allOpClocks: result.allOpClocks,
+              snapshotVectorClock: result.snapshotVectorClock,
+            };
+          }
+        }
+      }
+
       OpLog.normal(
         'OperationLogSyncService: Received snapshotState from file-based sync. Hydrating...',
       );

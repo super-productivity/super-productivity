@@ -1117,6 +1117,13 @@ describe('SyncWrapperService', () => {
 
         expect(result).toBe('HANDLED_ERROR');
         expect(mockSnackService.open).toHaveBeenCalled();
+        // Issue #7339: previously, filter(undefined) on the dialog stream caused
+        // firstValueFrom() to throw EmptyError, which surfaced as the generic
+        // ERROR snack. After the fix, an undefined close (e.g., iOS app
+        // lifecycle killing the dialog) flows through as a clean cancellation.
+        expect(mockSnackService.open).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ type: 'ERROR' }),
+        );
       });
 
       it('should return HANDLED_ERROR when forceUploadLocalState fails', async () => {

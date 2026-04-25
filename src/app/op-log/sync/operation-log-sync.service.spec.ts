@@ -56,9 +56,17 @@ describe('OperationLogSyncService', () => {
       'markRejected',
       'setVectorClock',
       'clearFullStateOps',
+      'getVectorClock',
+      'appendBatchSkipDuplicates',
     ]);
     opLogStoreSpy.setVectorClock.and.resolveTo();
     opLogStoreSpy.clearFullStateOps.and.resolveTo();
+    opLogStoreSpy.getVectorClock.and.resolveTo(null);
+    opLogStoreSpy.appendBatchSkipDuplicates.and.resolveTo({
+      seqs: [],
+      writtenOps: [],
+      skippedCount: 0,
+    });
     serverMigrationServiceSpy = jasmine.createSpyObj('ServerMigrationService', [
       'checkAndHandleMigration',
       'handleServerMigration',
@@ -1074,6 +1082,339 @@ describe('OperationLogSyncService', () => {
           // Should NOT throw - should hydrate from snapshot instead
           await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalled();
+        });
+
+        it('should skip hydration AND conflict when local clock dominates remote snapshot (issue #7339)', async () => {
+          // Reproduces the iOS WebDAV loop: a foreign-written snapshot with the
+          // same syncVersion fires gap detection on every sync from a client that
+          // never uploaded its own snapshot. If our local clock already dominates
+          // that snapshot's clock, hydration would discard local-only ops and a
+          // conflict dialog has nothing to resolve.
+          const unsyncedEntry: OperationLogEntry = {
+            seq: 1,
+            op: {
+              id: 'local-op-1',
+              clientId: 'iosClient',
+              actionType: '[Global Config] Update Global Config Section' as ActionType,
+              opType: OpType.Update,
+              entityType: 'GLOBAL_CONFIG',
+              entityId: 'config-1',
+              payload: { sectionKey: 'sync' },
+              vectorClock: { windowsClient: 1, iosClient: 5 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+            appliedAt: Date.now(),
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([unsyncedEntry]));
+
+          // Store has real user data — without the dominate-check this would
+          // trigger the conflict dialog every sync.
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: ['task-1', 'task-2'] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+
+          // Local strictly dominates remote: local has both clients, remote only windowsClient.
+          opLogStoreSpy.getVectorClock.and.resolveTo({ windowsClient: 1, iosClient: 5 });
+
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve({
+              newOps: [],
+              hasMore: false,
+              latestSeq: 1,
+              needsFullStateUpload: false,
+              success: true,
+              failedFileCount: 0,
+              snapshotState: { tasks: [{ id: 'old-windows-task' }] },
+              snapshotVectorClock: { windowsClient: 1 },
+              latestServerSeq: 1,
+            }),
+          );
+
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.resolveTo();
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as any;
+
+          const result = await service.downloadRemoteOps(mockProvider);
+
+          // No conflict dialog, no hydration — local already has everything.
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          expect(result.kind).toBe('no_new_ops');
+          // lastServerSeq still advanced so future syncs use the right cursor.
+          expect(setLastServerSeqSpy).toHaveBeenCalledWith(1);
+        });
+
+        it('should NOT persist accompanying newOps on the dominate path — would corrupt per-entity frontiers (codex re-review)', async () => {
+          // VectorClockService.getEntityFrontier() builds per-entity frontiers
+          // by iterating the op log in seq order with last-write-wins semantics.
+          // Appending historical remote ops at the current tail would regress
+          // the frontier for any entity where local already has newer ops,
+          // letting future remote ops be classified as non-conflicting and
+          // silently overwrite local changes. The dominate path must therefore
+          // skip the append; the trade-off is bounded re-download bandwidth
+          // (those ops keep coming back in result.newOps each sync until the
+          // file's snapshot advances), with no risk of state-level duplication
+          // because the dominate path never replays ops to NgRx.
+          const unsyncedEntry: OperationLogEntry = {
+            seq: 1,
+            op: {
+              id: 'local-op-1',
+              clientId: 'iosClient',
+              actionType: '[Global Config] Update Global Config Section' as ActionType,
+              opType: OpType.Update,
+              entityType: 'GLOBAL_CONFIG',
+              entityId: 'config-1',
+              payload: { sectionKey: 'sync' },
+              vectorClock: { windowsClient: 5, iosClient: 5 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+            appliedAt: Date.now(),
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([unsyncedEntry]));
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: ['task-1'] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+
+          opLogStoreSpy.getVectorClock.and.resolveTo({ windowsClient: 5, iosClient: 5 });
+
+          const remoteOps: Operation[] = [
+            {
+              id: 'remote-op-2',
+              clientId: 'windowsClient',
+              actionType: 'test' as ActionType,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-w-2',
+              payload: {},
+              vectorClock: { windowsClient: 2 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+            {
+              id: 'remote-op-3',
+              clientId: 'windowsClient',
+              actionType: 'test' as ActionType,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-w-3',
+              payload: {},
+              vectorClock: { windowsClient: 3 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+          ];
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve({
+              newOps: remoteOps,
+              hasMore: false,
+              latestSeq: 5,
+              needsFullStateUpload: false,
+              success: true,
+              failedFileCount: 0,
+              snapshotState: { tasks: [{ id: 'task-w-1' }] },
+              snapshotVectorClock: { windowsClient: 5 },
+              latestServerSeq: 5,
+            }),
+          );
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as any;
+
+          const result = await service.downloadRemoteOps(mockProvider);
+
+          expect(result.kind).toBe('no_new_ops');
+          // CRITICAL: the dominate path must NOT append historical remote ops
+          // at the current op-log tail; doing so regresses per-entity frontiers
+          // and enables future LWW resolution to overwrite local data.
+          expect(opLogStoreSpy.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+        });
+
+        it('should still throw LocalDataConflictError when remote snapshot has work local does not (concurrent clocks)', async () => {
+          // Sanity check that the dominate-check is conservative: only skips when
+          // local truly has every entry of the remote snapshot.
+          const unsyncedEntry: OperationLogEntry = {
+            seq: 1,
+            op: {
+              id: 'local-op-1',
+              clientId: 'client-A',
+              actionType: 'test' as ActionType,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-1',
+              payload: {},
+              vectorClock: { clientA: 5 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+            appliedAt: Date.now(),
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([unsyncedEntry]));
+
+          // CONCURRENT: local has clientA only, remote has clientB only.
+          opLogStoreSpy.getVectorClock.and.resolveTo({ clientA: 5 });
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve({
+              newOps: [],
+              hasMore: false,
+              latestSeq: 1,
+              needsFullStateUpload: false,
+              success: true,
+              failedFileCount: 0,
+              snapshotState: { tasks: [{ id: 'remote-task' }] },
+              snapshotVectorClock: { clientB: 3 },
+              latestServerSeq: 1,
+            }),
+          );
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as any;
+
+          await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWith(
+            jasmine.any(LocalDataConflictError),
+          );
+        });
+
+        it('should hydrate (NOT skip) when both clocks are empty — fresh client receiving a legacy snapshot', async () => {
+          // Edge case from codex review of issue #7339 fix: an empty remote
+          // snapshot clock compares EQUAL to a fresh local client. Without the
+          // non-empty guard, the dominate-shortcut would silently skip hydrating
+          // a snapshot that carries real legacy state.
+          opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+          // Fresh local: no vector clock at all.
+          opLogStoreSpy.getVectorClock.and.resolveTo(null);
+          // No meaningful local data → fresh client hydration path applies.
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: [] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve({
+              newOps: [],
+              hasMore: false,
+              latestSeq: 1,
+              needsFullStateUpload: false,
+              success: true,
+              failedFileCount: 0,
+              snapshotState: { tasks: [{ id: 'legacy-task' }] },
+              snapshotVectorClock: {}, // empty — legacy file or never populated
+              latestServerSeq: 1,
+            }),
+          );
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as any;
+
+          await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
+          // Hydration must run — the empty-clock guard prevents the dominate
+          // shortcut from silently dropping the snapshot's state.
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalled();
+        });
+
+        it('should NOT loop on consecutive syncs when remote keeps returning the same dominated snapshot (issue #7339)', async () => {
+          // The iOS bug: file-based gap detection signals snapshot replacement on
+          // every sync from a non-writing client. Without the dominate-check, the
+          // conflict dialog re-fires every sync. Verify the dominate-check breaks
+          // the loop across multiple consecutive sync attempts.
+          const unsyncedEntry: OperationLogEntry = {
+            seq: 1,
+            op: {
+              id: 'local-op-1',
+              clientId: 'iosClient',
+              actionType: '[Global Config] Update Global Config Section' as ActionType,
+              opType: OpType.Update,
+              entityType: 'GLOBAL_CONFIG',
+              entityId: 'config-1',
+              payload: { sectionKey: 'sync' },
+              vectorClock: { windowsClient: 1, iosClient: 5 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+            appliedAt: Date.now(),
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([unsyncedEntry]));
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: ['task-1'] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+
+          opLogStoreSpy.getVectorClock.and.resolveTo({ windowsClient: 1, iosClient: 5 });
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve({
+              newOps: [],
+              hasMore: false,
+              latestSeq: 1,
+              needsFullStateUpload: false,
+              success: true,
+              failedFileCount: 0,
+              snapshotState: { tasks: [{ id: 'old-windows-task' }] },
+              snapshotVectorClock: { windowsClient: 1 },
+              latestServerSeq: 1,
+            }),
+          );
+
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as any;
+
+          // First sync — local already has all of remote.
+          const first = await service.downloadRemoteOps(mockProvider);
+          // Second sync immediately after — server still returns same snapshot
+          // (because iOS hasn't uploaded yet); must not throw or hydrate.
+          const second = await service.downloadRemoteOps(mockProvider);
+
+          expect(first.kind).toBe('no_new_ops');
+          expect(second.kind).toBe('no_new_ops');
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
         });
       });
     });

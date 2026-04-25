@@ -1292,7 +1292,7 @@ export class SyncWrapperService {
 
   private _openConflictDialog$(
     conflictData: ConflictData,
-  ): Observable<DialogConflictResolutionResult> {
+  ): Observable<DialogConflictResolutionResult | undefined> {
     if (this.lastConflictDialog) {
       this.lastConflictDialog.close();
     }
@@ -1301,10 +1301,11 @@ export class SyncWrapperService {
       disableClose: true,
       data: conflictData,
     });
-    // disableClose: true ensures the dialog always closes with a result
-    return this.lastConflictDialog
-      .afterClosed()
-      .pipe(filter((r): r is DialogConflictResolutionResult => r !== undefined));
+    // disableClose blocks ESC/backdrop, but a programmatic close (iOS app
+    // lifecycle, navigation, or re-entry calling close()) emits `undefined`.
+    // Forward it as-is so _handleLocalDataConflict treats it as cancellation;
+    // filtering it would leave firstValueFrom() to throw EmptyError (issue #7339).
+    return this.lastConflictDialog.afterClosed();
   }
 
   /**
