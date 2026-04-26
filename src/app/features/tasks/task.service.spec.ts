@@ -326,6 +326,39 @@ describe('TaskService', () => {
         }),
       );
     });
+
+    it('should delete an abandoned empty subtask draft instead of updating it', () => {
+      const emptySubTask = createMockTask('subtask-1', {
+        title: '',
+        parentId: 'parent-1',
+      });
+      store.setState({
+        tasks: {
+          ids: ['task-1', 'task-2', 'subtask-1'],
+          entities: {
+            ['task-1']: createMockTask('task-1'),
+            ['task-2']: createMockTask('task-2'),
+            ['subtask-1']: emptySubTask,
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+        },
+      });
+      store.refreshState();
+
+      service.update('subtask-1', { title: '   ' });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.deleteTask({
+          task: {
+            ...emptySubTask,
+            subTasks: [],
+          },
+        }),
+      );
+    });
   });
 
   describe('updateTags', () => {
@@ -419,6 +452,70 @@ describe('TaskService', () => {
         }),
       );
       expect(id).toBeTruthy();
+    });
+
+    it('should not create another empty subtask draft for the same parent', () => {
+      const emptySubTask = createMockTask('subtask-1', {
+        title: '',
+        parentId: 'parent-1',
+      });
+      store.setState({
+        tasks: {
+          ids: ['task-1', 'task-2', 'subtask-1'],
+          entities: {
+            ['task-1']: createMockTask('task-1'),
+            ['task-2']: createMockTask('task-2'),
+            ['subtask-1']: emptySubTask,
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+        },
+      });
+      store.refreshState();
+
+      const id = service.addSubTaskTo('parent-1');
+
+      expect(store.dispatch).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+        }),
+      );
+      expect(id).toBe('subtask-1');
+    });
+
+    it('should allow creating an empty subtask draft for a different parent', () => {
+      const emptySubTask = createMockTask('subtask-1', {
+        title: '',
+        parentId: 'parent-1',
+      });
+      store.setState({
+        tasks: {
+          ids: ['task-1', 'task-2', 'subtask-1'],
+          entities: {
+            ['task-1']: createMockTask('task-1'),
+            ['task-2']: createMockTask('task-2'),
+            ['subtask-1']: emptySubTask,
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+        },
+      });
+      store.refreshState();
+
+      const id = service.addSubTaskTo('parent-2');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+          parentId: 'parent-2',
+        }),
+      );
+      expect(id).toBeTruthy();
+      expect(id).not.toBe('subtask-1');
     });
   });
 
