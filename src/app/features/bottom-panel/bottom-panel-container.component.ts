@@ -152,7 +152,9 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     if (panelHeader) {
       panelHeader.addEventListener('pointerdown', this._boundOnHeaderPointerDown);
     }
-    if (panelContent) {
+    // Content swipe-to-dismiss is only useful on touch and would otherwise
+    // collide with mouse interactions (e.g. text selection inside notes).
+    if (panelContent && IS_TOUCH_ONLY) {
       panelContent.addEventListener('pointerdown', this._boundOnContentPointerDown);
     }
     // Move/up listeners are attached to document so the gesture survives leaving the source el.
@@ -193,7 +195,14 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     if (this._isDragging) return;
 
-    const scroller = this._findScrollerAt(event.target as HTMLElement | null);
+    const target = event.target as HTMLElement | null;
+    // Don't intercept gestures aimed at interactive controls or CDK drag
+    // handles — they own their own pointer flow (text selection, drag-and-
+    // drop, taps), and arming a competing gesture causes nondeterministic
+    // breakage in those subsystems.
+    if (this._isGestureExempt(target)) return;
+
+    const scroller = this._findScrollerAt(target);
     // No point arming the gesture if the user is already scrolled inside content.
     if (scroller && scroller.scrollTop > 0) return;
 
@@ -201,7 +210,16 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     this._pendingStartY = event.clientY;
     this._pendingScroller = scroller;
     this._activePointerId = event.pointerId;
-    this._activePointerTarget = event.target as HTMLElement | null;
+    this._activePointerTarget = target;
+  }
+
+  private _isGestureExempt(target: HTMLElement | null): boolean {
+    if (!target) return false;
+    const closest = target.closest?.bind(target);
+    if (!closest) return false;
+    return !!closest(
+      'input, textarea, select, button, [contenteditable="true"], [cdkDrag], [cdkDragHandle]',
+    );
   }
 
   private _onPointerMove(event: PointerEvent): void {
