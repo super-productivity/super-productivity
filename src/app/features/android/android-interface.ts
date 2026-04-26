@@ -85,6 +85,12 @@ export interface AndroidInterface {
   // Widget task queue - get queued tasks from home screen widget
   getWidgetTaskQueue?(): string | null;
 
+  // Widget done queue - get task IDs marked done from widget
+  getWidgetDoneQueue?(): string | null;
+
+  // Widget update - trigger native widget refresh
+  updateWidget?(): void;
+
   // Startup overlay
   getStartupOverlayPartialText?(): string | null;
   hideStartupOverlay?(): void;
@@ -122,6 +128,9 @@ export interface AndroidInterface {
   onReminderSnooze$: ReplaySubject<{ taskId: string; newRemindAt: number }>; // emits snooze events
   getReminderSnoozeQueue?(): string | null;
 
+  // Widget done action callbacks
+  onWidgetDone$: ReplaySubject<string>; // emits taskId
+
   // Background sync credential bridge (for WorkManager-based reminder cancellation)
   setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
   clearSuperSyncCredentials?(): void;
@@ -150,6 +159,7 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onReminderTap$ = new ReplaySubject(5);
   androidInterface.onReminderDone$ = new ReplaySubject(20);
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);
+  androidInterface.onWidgetDone$ = new ReplaySubject(20);
   androidInterface.onShareWithAttachment$ = new ReplaySubject(1);
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
 
@@ -263,6 +273,20 @@ if (IS_ANDROID_WEB_VIEW) {
     }
   } catch (e) {
     DroidLog.err('Failed to parse reminder snooze queue', e);
+  }
+
+  // Pull-based: retrieve queued "Done" task IDs from widget actions
+  try {
+    const widgetDoneQueue = androidInterface.getWidgetDoneQueue?.();
+    if (widgetDoneQueue) {
+      const taskIds: string[] = JSON.parse(widgetDoneQueue);
+      DroidLog.log('Pulled widget done queue from SharedPreferences', taskIds);
+      for (const id of taskIds) {
+        androidInterface.onWidgetDone$.next(id);
+      }
+    }
+  } catch (e) {
+    DroidLog.err('Failed to parse widget done queue', e);
   }
 
   // Push-based: sets isFrontendReady=true on native side for warm-start shares

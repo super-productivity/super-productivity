@@ -152,5 +152,24 @@
       </intent-filter>
     </receiver>
 
+    <receiver
+      android:name=".widget.TaskListWidgetProvider"
+      android:exported="true"
+      android:label="@string/widget_title">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        <action android:name="com.superproductivity.superproductivity.WIDGET_MARK_DONE" />
+        <action android:name="com.superproductivity.superproductivity.WIDGET_OPEN_APP" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/appwidget_info" />
+    </receiver>
+
+    <service
+      android:name=".widget.TaskListWidgetService"
+      android:exported="false"
+      android:permission="android.permission.BIND_REMOTEVIEWS" />
+
   </application>
 </manifest>
