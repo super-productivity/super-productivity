@@ -31,29 +31,24 @@ export interface BottomPanelData {
   panelContent: PanelContentType;
 }
 
-// Panel height constants
 const PANEL_HEIGHTS = {
   MAX_HEIGHT: 0.8,
   MIN_HEIGHT: 0.2,
   MAX_HEIGHT_ABSOLUTE: 0.98,
   TASK_PANEL_HEIGHT: 0.6,
   OTHER_PANEL_HEIGHT: 0.9,
-  VELOCITY_THRESHOLD: 0.5, // px/ms — fling-to-close
-  CLOSE_DISTANCE_RATIO: 0.25, // fraction of viewport — slow drag close
-  DRAG_INTENT_THRESHOLD: 6, // px before content drag commits
-  CLOSE_ANIMATION_MIN_DURATION: 120, // ms
-  CLOSE_ANIMATION_MAX_DURATION: 320, // ms
-  SNAP_BACK_DURATION: 260, // ms
-  EXPAND_ANIMATION_DURATION: 280, // ms
-  INITIAL_ANIMATION_BLOCK_DURATION: 300, // ms
+  VELOCITY_THRESHOLD: 0.5, // px/ms
+  CLOSE_DISTANCE_RATIO: 0.4, // close if dragged below this fraction of original height
+  CLOSE_ANIMATION_MIN_DURATION: 140,
+  CLOSE_ANIMATION_MAX_DURATION: 320,
+  EXPAND_ANIMATION_DURATION: 280,
+  INITIAL_ANIMATION_BLOCK_DURATION: 300,
 } as const;
 
-const DRAG_EASING = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
-
-const KEYBOARD_DETECT_THRESHOLD = 100; // px - minimum height change to detect keyboard
-const KEYBOARD_SAFE_HEIGHT_MIN = 200; // px - minimal safe panel height while keyboard visible
-const KEYBOARD_SAFE_HEIGHT_RATIO = 0.85; // fraction of visual viewport height
-const KEYBOARD_RESIZE_DEBOUNCE_MS = 100; // ms - debounce viewport resize events
+const KEYBOARD_DETECT_THRESHOLD = 100;
+const KEYBOARD_SAFE_HEIGHT_MIN = 200;
+const KEYBOARD_SAFE_HEIGHT_RATIO = 0.85;
+const KEYBOARD_RESIZE_DEBOUNCE_MS = 100;
 
 @Component({
   selector: 'bottom-panel-container',
@@ -92,21 +87,12 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   readonly selectedTask = toSignal(this._taskService.selectedTask$, {
     initialValue: null,
   });
-  readonly isDisableTaskPanelAni = signal(true); // Always start with animation disabled
+  readonly isDisableTaskPanelAni = signal(true);
 
   private _isDragging = false;
-  private _isPotentialDrag = false;
-  private _potentialStartX = 0;
-  private _potentialStartY = 0;
-  private _scrollableEl: HTMLElement | null = null;
-  private _scrollableStartTop = 0;
-  private _activePointerId: number | null = null;
-  private _activeTouchId: number | null = null;
-  private _captureTarget: HTMLElement | null = null;
   private _startY = 0;
   private _startHeight = 0;
-  private _currentTranslateY = 0;
-  private _currentRawOffset = 0;
+  private _currentHeight = 0;
   private _lastY = 0;
   private _lastTime = 0;
   private _velocity = 0;
@@ -114,29 +100,21 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _closeAniTimeout?: number;
   private _cachedContainer: HTMLElement | null = null;
 
-  // Mobile keyboard handling
   private _isKeyboardWatcherInitialized = false;
   private _originalHeight: string = '';
   private _vvResizeTimer: number | null = null;
 
-  // Store bound functions to prevent memory leaks
-  private readonly _boundOnTouchStart = this._onTouchStart.bind(this);
-  private readonly _boundOnTouchMove = this._onTouchMove.bind(this);
-  private readonly _boundOnTouchEnd = this._onTouchEnd.bind(this);
-  private readonly _boundOnTouchCancel = this._onTouchCancel.bind(this);
   private readonly _boundOnPointerDown = this._onPointerDown.bind(this);
   private readonly _boundOnPointerMove = this._onPointerMove.bind(this);
   private readonly _boundOnPointerUp = this._onPointerUp.bind(this);
   private readonly _boundOnViewportResize = this._onViewportResize.bind(this);
 
   ngAfterViewInit(): void {
-    // Mark bottom panel as open for mutual exclusion with right panel
     this._bottomPanelState.isOpen.set(true);
     this._setupDragListeners();
     this._setupKeyboardWatcher();
     this._setInitialHeight();
 
-    // Re-enable animations after initial render is complete
     this._disableAniTimeout = window.setTimeout(() => {
       this.isDisableTaskPanelAni.set(false);
     }, PANEL_HEIGHTS.INITIAL_ANIMATION_BLOCK_DURATION);
@@ -147,8 +125,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     this._removeKeyboardWatcher();
     window.clearTimeout(this._disableAniTimeout);
     window.clearTimeout(this._closeAniTimeout);
-    this._cachedContainer = null; // Clear cached reference
-    // Mark bottom panel as closed
+    this._cachedContainer = null;
     this._bottomPanelState.isOpen.set(false);
   }
 
@@ -157,265 +134,84 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _setupDragListeners(): void {
-    const containerEl = this._elementRef.nativeElement as HTMLElement;
-    if (!containerEl) return;
+    const panelHeader = this.panelHeader()?.nativeElement;
+    if (!panelHeader) return;
 
-    // Touch events first — they're the most reliable on mobile and don't
-    // race the browser's pointer-event coalescing or gesture-recognizer.
-    containerEl.addEventListener('touchstart', this._boundOnTouchStart, {
-      passive: true,
-    });
-    containerEl.addEventListener('touchmove', this._boundOnTouchMove, {
+    panelHeader.addEventListener('pointerdown', this._boundOnPointerDown);
+    document.addEventListener('pointermove', this._boundOnPointerMove, {
       passive: false,
     });
-    containerEl.addEventListener('touchend', this._boundOnTouchEnd);
-    containerEl.addEventListener('touchcancel', this._boundOnTouchCancel);
-
-    // Pointer events for mouse / pen on desktop. We deliberately skip touch
-    // pointers (handled above) to avoid double-handling.
-    containerEl.addEventListener('pointerdown', this._boundOnPointerDown);
-    document.addEventListener('pointermove', this._boundOnPointerMove);
     document.addEventListener('pointerup', this._boundOnPointerUp);
     document.addEventListener('pointercancel', this._boundOnPointerUp);
   }
 
   private _removeDragListeners(): void {
-    const containerEl = this._elementRef.nativeElement as HTMLElement;
-    if (containerEl) {
-      containerEl.removeEventListener('touchstart', this._boundOnTouchStart);
-      containerEl.removeEventListener('touchmove', this._boundOnTouchMove);
-      containerEl.removeEventListener('touchend', this._boundOnTouchEnd);
-      containerEl.removeEventListener('touchcancel', this._boundOnTouchCancel);
-      containerEl.removeEventListener('pointerdown', this._boundOnPointerDown);
+    const panelHeader = this.panelHeader()?.nativeElement;
+    if (panelHeader) {
+      panelHeader.removeEventListener('pointerdown', this._boundOnPointerDown);
     }
     document.removeEventListener('pointermove', this._boundOnPointerMove);
     document.removeEventListener('pointerup', this._boundOnPointerUp);
     document.removeEventListener('pointercancel', this._boundOnPointerUp);
   }
 
-  // ── Touch-event path (mobile) ─────────────────────────────────────────
-
-  private _onTouchStart(event: TouchEvent): void {
-    if (this._isDragging || this._isPotentialDrag) return;
-    if (event.touches.length !== 1) return;
-    const touch = event.touches[0];
-    const target = touch.target as HTMLElement;
-    if (!target || this._isInteractiveTarget(target)) return;
-
-    this._activeTouchId = touch.identifier;
-    const isFromHeader = !!target.closest('.bottom-panel-header');
-    if (isFromHeader) {
-      this._beginDrag(touch.clientY);
-    } else {
-      this._armPotentialDrag(touch.clientX, touch.clientY, target);
-    }
-  }
-
-  private _onTouchMove(event: TouchEvent): void {
-    const touch = this._findActiveTouch(event.touches);
-    if (!touch) return;
-
-    if (this._isDragging) {
-      // Active drag — block native scroll/rubber-banding so the panel can
-      // track the finger 1:1.
-      if (event.cancelable) event.preventDefault();
-      this._trackVelocity(touch.clientY);
-      this._applyDragPosition(touch.clientY);
-      return;
-    }
-
-    if (!this._isPotentialDrag) return;
-
-    if (this._evaluatePotentialDrag(touch.clientX, touch.clientY)) {
-      if (event.cancelable) event.preventDefault();
-      this._beginDrag(this._potentialStartY);
-      this._trackVelocity(touch.clientY);
-      this._applyDragPosition(touch.clientY);
-    }
-  }
-
-  private _onTouchEnd(event: TouchEvent): void {
-    if (
-      this._activeTouchId !== null &&
-      !this._findActiveTouch(event.changedTouches)
-    ) {
-      return;
-    }
-    this._endDragOrPotential();
-  }
-
-  private _onTouchCancel(): void {
-    this._endDragOrPotential();
-  }
-
-  private _findActiveTouch(list: TouchList): Touch | null {
-    if (this._activeTouchId === null) return null;
-    for (let i = 0; i < list.length; i++) {
-      if (list[i].identifier === this._activeTouchId) return list[i];
-    }
-    return null;
-  }
-
-  // ── Pointer-event path (desktop / pen) ────────────────────────────────
-
   private _onPointerDown(event: PointerEvent): void {
-    // Touch pointers are handled by the touch listeners above.
-    if (event.pointerType === 'touch') return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
-    if (this._isDragging || this._isPotentialDrag) return;
-
-    const target = event.target as HTMLElement;
-    if (this._isInteractiveTarget(target)) return;
-
-    const isFromHeader = !!target.closest('.bottom-panel-header');
-    if (isFromHeader) {
-      this._activePointerId = event.pointerId;
-      this._captureTarget = target;
-      try {
-        target.setPointerCapture(event.pointerId);
-      } catch {
-        /* setPointerCapture can throw on some browsers — safe to ignore */
-      }
-      this._beginDrag(event.clientY);
-    } else {
-      this._activePointerId = event.pointerId;
-      this._armPotentialDrag(event.clientX, event.clientY, target);
-    }
+    event.preventDefault();
+    this._startDrag(event.clientY);
   }
 
-  private _onPointerMove(event: PointerEvent): void {
-    if (event.pointerType === 'touch') return;
-    if (
-      this._activePointerId !== null &&
-      event.pointerId !== this._activePointerId
-    ) {
-      return;
-    }
-
-    if (this._isDragging) {
-      this._trackVelocity(event.clientY);
-      this._applyDragPosition(event.clientY);
-      return;
-    }
-
-    if (!this._isPotentialDrag) return;
-
-    if (this._evaluatePotentialDrag(event.clientX, event.clientY)) {
-      this._beginDrag(this._potentialStartY);
-      this._trackVelocity(event.clientY);
-      this._applyDragPosition(event.clientY);
-    }
-  }
-
-  private _onPointerUp(event: PointerEvent): void {
-    if (event.pointerType === 'touch') return;
-    if (
-      this._activePointerId !== null &&
-      event.pointerId !== this._activePointerId
-    ) {
-      return;
-    }
-    this._endDragOrPotential();
-  }
-
-  // ── Shared logic ──────────────────────────────────────────────────────
-
-  private _armPotentialDrag(
-    clientX: number,
-    clientY: number,
-    target: HTMLElement,
-  ): void {
-    this._isPotentialDrag = true;
-    this._potentialStartX = clientX;
-    this._potentialStartY = clientY;
-    this._scrollableEl = this._findScrollableUnder(target);
-    this._scrollableStartTop = this._scrollableEl?.scrollTop ?? 0;
-    this._lastY = clientY;
-    this._lastTime = Date.now();
-  }
-
-  private _evaluatePotentialDrag(clientX: number, clientY: number): boolean {
-    const dy = clientY - this._potentialStartY;
-    const dx = clientX - this._potentialStartX;
-    if (Math.abs(dy) < PANEL_HEIGHTS.DRAG_INTENT_THRESHOLD) return false;
-
-    const isDownward = dy > 0;
-    const isMostlyVertical = Math.abs(dy) > Math.abs(dx);
-    const contentWasAtTop = !this._scrollableEl || this._scrollableStartTop <= 0;
-
-    if (isDownward && isMostlyVertical && contentWasAtTop) {
-      return true;
-    }
-    // Hand the gesture back to the browser
-    this._isPotentialDrag = false;
-    this._scrollableEl = null;
-    return false;
-  }
-
-  private _beginDrag(clientY: number): void {
+  private _startDrag(clientY: number): void {
     this._isDragging = true;
-    this._isPotentialDrag = false;
     this._startY = clientY;
     this._lastY = clientY;
     this._lastTime = Date.now();
     this._velocity = 0;
-    this._currentTranslateY = 0;
-    this._currentRawOffset = 0;
     const container = this._getSheetContainer();
     if (container) {
       this._startHeight = container.offsetHeight;
-      // Inline `transition: none` has highest specificity, so it overrides
-      // any leftover Material/Angular animation transitions.
-      container.style.transition = 'none';
+      this._currentHeight = this._startHeight;
       container.classList.add('dragging');
     }
     document.body.style.userSelect = 'none';
   }
 
-  private _trackVelocity(clientY: number): void {
+  private _onPointerMove(event: PointerEvent): void {
+    if (!this._isDragging) return;
+    event.preventDefault();
+    this._updateHeight(event.clientY);
+  }
+
+  private _updateHeight(clientY: number): void {
+    const container = this._getSheetContainer();
+    if (!container) return;
+
+    const deltaY = this._startY - clientY;
+    const newHeight = this._startHeight + deltaY;
+    const viewportHeight = window.innerHeight;
+
+    // Allow heights all the way down to zero so the panel can be dragged
+    // off the bottom — closing happens on release based on threshold/velocity.
+    const minHeight = 0;
+    const maxHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE;
+    const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+
+    container.style.height = `${constrainedHeight}px`;
+    container.style.maxHeight = `${constrainedHeight}px`;
+    this._currentHeight = constrainedHeight;
+
     const currentTime = Date.now();
     const timeDiff = currentTime - this._lastTime;
     if (timeDiff > 0) {
       const instant = (clientY - this._lastY) / timeDiff;
+      // Light low-pass on the velocity sample
       this._velocity = this._velocity * 0.5 + instant * 0.5;
     }
     this._lastY = clientY;
     this._lastTime = currentTime;
   }
 
-  private _applyDragPosition(clientY: number): void {
-    const container = this._getSheetContainer();
-    if (!container) return;
-
-    const rawOffset = clientY - this._startY; // +down, -up
-    // Apply rubber-band resistance to upward over-drag so we never need to
-    // touch `height` (which would force a layout) on the input thread —
-    // transform-only updates stay on the compositor and feel instant.
-    const offset =
-      rawOffset >= 0 ? rawOffset : -Math.sqrt(-rawOffset * 12);
-
-    container.style.transform = `translate3d(0, ${offset}px, 0)`;
-    this._currentTranslateY = Math.max(rawOffset, 0);
-    this._currentRawOffset = rawOffset;
-  }
-
-  private _endDragOrPotential(): void {
-    // Release pointer capture if we had it
-    if (this._captureTarget && this._activePointerId !== null) {
-      try {
-        this._captureTarget.releasePointerCapture(this._activePointerId);
-      } catch {
-        /* may already be released */
-      }
-    }
-    this._captureTarget = null;
-    this._activePointerId = null;
-    this._activeTouchId = null;
-
-    if (this._isPotentialDrag) {
-      this._isPotentialDrag = false;
-      this._scrollableEl = null;
-    }
+  private _onPointerUp(): void {
     if (!this._isDragging) return;
     this._handleDragEnd();
   }
@@ -426,48 +222,39 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     const container = this._getSheetContainer();
     if (!container) return;
 
+    container.classList.remove('dragging');
+
     const viewportHeight = window.innerHeight;
-    const closeByDistance =
-      this._currentTranslateY > viewportHeight * PANEL_HEIGHTS.CLOSE_DISTANCE_RATIO;
     const flingDown = this._velocity > PANEL_HEIGHTS.VELOCITY_THRESHOLD;
     const flingUp = this._velocity < -PANEL_HEIGHTS.VELOCITY_THRESHOLD;
-    const draggedUp = this._currentRawOffset < 0;
+    const closeByDistance =
+      this._currentHeight < this._startHeight * PANEL_HEIGHTS.CLOSE_DISTANCE_RATIO;
 
     if (flingDown || closeByDistance) {
       this._animateClose(container, viewportHeight);
       return;
     }
 
-    // Not closing — release dragging state so transitions re-enable.
-    container.classList.remove('dragging');
-
-    if (flingUp || draggedUp) {
-      // Fling-up or any upward drag → expand toward max height. We commit
-      // the height change here (not on every move) so dragging stays purely
-      // transform-based and the input thread never triggers a layout.
+    if (flingUp) {
       this._animateExpand(container, viewportHeight);
-    } else if (this._currentRawOffset > 0) {
-      // Released a downward drag below the close threshold — snap back.
-      this._animateSnapBack(container);
     }
-    // else: user released without moving — leave the panel as-is.
+    // Otherwise: leave the panel at whatever height the user released at —
+    // they intentionally dragged to that size.
   }
 
   private _animateClose(container: HTMLElement, viewportHeight: number): void {
-    const remaining = Math.max(viewportHeight - this._currentTranslateY, 1);
-    const speed = Math.max(Math.abs(this._velocity), 0.6); // px/ms floor for nice feel
+    // Use translateY (not height) for the close animation so the panel
+    // visibly slides off the bottom with momentum-derived speed.
+    const remaining = Math.max(viewportHeight - (viewportHeight - this._currentHeight), 1);
+    const speed = Math.max(Math.abs(this._velocity), 0.6);
     const duration = Math.min(
       Math.max(remaining / speed, PANEL_HEIGHTS.CLOSE_ANIMATION_MIN_DURATION),
       PANEL_HEIGHTS.CLOSE_ANIMATION_MAX_DURATION,
     );
 
-    // Drop the dragging class so its `transition: none !important` no longer
-    // wins over the close transition we're about to apply.
-    container.classList.remove('dragging');
-    container.style.transition = `transform ${duration}ms ${DRAG_EASING}`;
-    // Force a layout flush so the transition takes effect from the current value
+    container.style.transition = `transform ${duration}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
     void container.offsetHeight;
-    container.style.transform = `translate3d(0, ${viewportHeight}px, 0)`;
+    container.style.transform = `translateY(${this._currentHeight}px)`;
 
     window.clearTimeout(this._closeAniTimeout);
     this._closeAniTimeout = window.setTimeout(() => {
@@ -475,62 +262,15 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     }, duration);
   }
 
-  private _animateSnapBack(container: HTMLElement): void {
-    container.style.transition = `transform ${PANEL_HEIGHTS.SNAP_BACK_DURATION}ms ${DRAG_EASING}`;
-    void container.offsetHeight;
-    container.style.transform = 'translate3d(0, 0, 0)';
-    this._currentTranslateY = 0;
-    this._currentRawOffset = 0;
-
-    window.setTimeout(() => {
-      container.style.transition = '';
-      container.style.transform = '';
-    }, PANEL_HEIGHTS.SNAP_BACK_DURATION);
-  }
-
   private _animateExpand(container: HTMLElement, viewportHeight: number): void {
-    // Animate both: zero out any rubber-band translate from upward drag, and
-    // grow the height to the expanded target.
-    const targetHeight = Math.min(
-      viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT,
-      viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE,
-    );
-    container.style.transition = `transform ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms ${DRAG_EASING}, height ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms ${DRAG_EASING}, max-height ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms ${DRAG_EASING}`;
-    void container.offsetHeight;
-    container.style.transform = 'translate3d(0, 0, 0)';
+    const targetHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT;
+    container.style.transition = `height ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms cubic-bezier(0.22, 0.61, 0.36, 1), max-height ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
     container.style.height = `${targetHeight}px`;
     container.style.maxHeight = `${targetHeight}px`;
-    this._currentTranslateY = 0;
-    this._currentRawOffset = 0;
 
     window.setTimeout(() => {
       container.style.transition = '';
-      container.style.transform = '';
     }, PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION);
-  }
-
-  private _findScrollableUnder(target: HTMLElement | null): HTMLElement | null {
-    let el: HTMLElement | null = target;
-    const root = this._elementRef.nativeElement as HTMLElement;
-    while (el && el !== root && root.contains(el)) {
-      const style = window.getComputedStyle(el);
-      const overflowY = style.overflowY;
-      if (
-        (overflowY === 'auto' || overflowY === 'scroll') &&
-        el.scrollHeight > el.clientHeight
-      ) {
-        return el;
-      }
-      el = el.parentElement;
-    }
-    return null;
-  }
-
-  private _isInteractiveTarget(target: HTMLElement | null): boolean {
-    if (!target) return false;
-    return !!target.closest(
-      'input, textarea, select, button, [contenteditable="true"], [contenteditable=""]',
-    );
   }
 
   private _setInitialHeight(): void {
@@ -570,7 +310,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     }
     this._isKeyboardWatcherInitialized = true;
 
-    // Use Visual Viewport API if available (modern browsers)
     if ('visualViewport' in window && window.visualViewport) {
       window.visualViewport.addEventListener('resize', this._boundOnViewportResize);
     }
@@ -580,7 +319,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     if (typeof window !== 'undefined' && window.visualViewport) {
       window.visualViewport.removeEventListener('resize', this._boundOnViewportResize);
     }
-    // Restore original height if it was stored
     if (this._originalHeight) {
       const container = this._getSheetContainer();
       if (container) {
@@ -591,7 +329,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _onViewportResize(): void {
-    // Debounce rapid viewport resize events while the keyboard animates
     if (this._vvResizeTimer) {
       window.clearTimeout(this._vvResizeTimer);
       this._vvResizeTimer = null;
@@ -614,38 +351,29 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     const viewportHeight = visualViewport.height;
     const keyboardHeight = windowHeight - viewportHeight;
 
-    // Check if keyboard is visible
     const isKeyboardVisible = keyboardHeight > KEYBOARD_DETECT_THRESHOLD;
 
     const container = this._getSheetContainer();
     if (!container) return;
 
     if (isKeyboardVisible) {
-      // Store original height if not already stored
       if (!this._originalHeight) {
         this._originalHeight = container.style.maxHeight || '';
       }
 
-      // Calculate safe height - be more conservative
       const safeHeight = Math.max(
         KEYBOARD_SAFE_HEIGHT_MIN,
         viewportHeight * KEYBOARD_SAFE_HEIGHT_RATIO,
       );
 
-      // Use !important to override CSS max-height
       container.style.setProperty('max-height', `${safeHeight}px`, 'important');
 
-      // Force current height if it exceeds the new max
       if (container.offsetHeight > safeHeight) {
         container.style.setProperty('height', `${safeHeight}px`, 'important');
       }
     } else {
-      // Restore original height constraints when keyboard is hidden
-      // Remove our forced styles
       container.style.removeProperty('max-height');
       container.style.removeProperty('height');
-
-      // Clean up stored height
       this._originalHeight = '';
     }
   }

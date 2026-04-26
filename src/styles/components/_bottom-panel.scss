@@ -11,13 +11,9 @@
     left: 0 !important;
     right: 0 !important;
     width: 100vw !important;
-    // Enable smooth resizing — close/snap transitions are set inline to use
-    // velocity-derived durations, so we keep the default light height ease
-    // for any non-drag-driven height changes.
+    // Smooth height transitions for non-drag changes (set-initial / keyboard).
+    // The release-time animations (close, expand) set transitions inline.
     transition: height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-    // Hint the compositor for smooth transform-based dragging
-    will-change: transform, height;
-    // Allow the sheet to be draggable
     resize: vertical;
     overflow: hidden;
     background: var(--bottom-panel-bg);
@@ -25,12 +21,9 @@
     border-top-left-radius: 20px;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
 
-    // While the user is actively dragging, kill the parent transition so the
-    // panel tracks the finger 1:1. We deliberately avoid a `*` rule here —
-    // it forces a style recalc on every descendant on dragstart, which on
-    // a busy panel (task detail + notes + plugins) can stall the first
-    // few frames of the gesture badly enough that the panel only appears
-    // to move once the user releases.
+    // While dragging: kill the height transition so the panel tracks the
+    // finger 1:1. Only the parent rule — no descendant selectors — so we
+    // don't trigger a style recalc on every child on dragstart.
     &.dragging {
       transition: none !important;
     }
