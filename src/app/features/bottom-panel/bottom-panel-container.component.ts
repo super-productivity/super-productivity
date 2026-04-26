@@ -39,8 +39,8 @@ const PANEL_HEIGHTS = {
   OTHER_PANEL_HEIGHT: 0.9,
   VELOCITY_THRESHOLD: 0.5, // px/ms
   CLOSE_DISTANCE_RATIO: 0.4, // close if dragged below this fraction of original height
-  CLOSE_ANIMATION_MIN_DURATION: 140,
-  CLOSE_ANIMATION_MAX_DURATION: 320,
+  CLOSE_ANIMATION_MIN_DURATION: 70, // ms — fast flings get near-instant dismissal
+  CLOSE_ANIMATION_MAX_DURATION: 280, // ms — slow drags still close briskly
   EXPAND_ANIMATION_DURATION: 280,
   INITIAL_ANIMATION_BLOCK_DURATION: 300,
 } as const;
@@ -93,8 +93,10 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _startY = 0;
   private _startHeight = 0;
   private _currentHeight = 0;
-  private _lastY = 0;
-  private _lastTime = 0;
+  // Rolling window of recent move samples for robust velocity at release.
+  // A naive low-pass filter dilutes the peak fling speed because users
+  // decelerate slightly as they lift their finger.
+  private _velocitySamples: { y: number; t: number }[] = [];
   private _velocity = 0;
   private _disableAniTimeout?: number;
   private _closeAniTimeout?: number;
@@ -164,9 +166,8 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _startDrag(clientY: number): void {
     this._isDragging = true;
     this._startY = clientY;
-    this._lastY = clientY;
-    this._lastTime = Date.now();
     this._velocity = 0;
+    this._velocitySamples = [{ y: clientY, t: Date.now() }];
     const container = this._getSheetContainer();
     if (container) {
       this._startHeight = container.offsetHeight;
@@ -200,15 +201,25 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     container.style.maxHeight = `${constrainedHeight}px`;
     this._currentHeight = constrainedHeight;
 
-    const currentTime = Date.now();
-    const timeDiff = currentTime - this._lastTime;
-    if (timeDiff > 0) {
-      const instant = (clientY - this._lastY) / timeDiff;
-      // Light low-pass on the velocity sample
-      this._velocity = this._velocity * 0.5 + instant * 0.5;
+    // Push a sample and trim to the last 80ms of motion. Velocity at
+    // release is then computed from the oldest-still-fresh sample to the
+    // newest, which keeps the peak fling speed even if the user decelerates
+    // their finger in the last frame or two before lift-off.
+    const now = Date.now();
+    this._velocitySamples.push({ y: clientY, t: now });
+    const cutoff = now - 80;
+    while (
+      this._velocitySamples.length > 2 &&
+      this._velocitySamples[0].t < cutoff
+    ) {
+      this._velocitySamples.shift();
     }
-    this._lastY = clientY;
-    this._lastTime = currentTime;
+    const first = this._velocitySamples[0];
+    const last = this._velocitySamples[this._velocitySamples.length - 1];
+    const dt = last.t - first.t;
+    if (dt > 0) {
+      this._velocity = (last.y - first.y) / dt;
+    }
   }
 
   private _onPointerUp(): void {
@@ -243,18 +254,34 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _animateClose(container: HTMLElement, viewportHeight: number): void {
-    // Use translateY (not height) for the close animation so the panel
-    // visibly slides off the bottom with momentum-derived speed.
-    const remaining = Math.max(viewportHeight - (viewportHeight - this._currentHeight), 1);
-    const speed = Math.max(Math.abs(this._velocity), 0.6);
-    const duration = Math.min(
-      Math.max(remaining / speed, PANEL_HEIGHTS.CLOSE_ANIMATION_MIN_DURATION),
+    // Slide the panel off the bottom via translateY. The panel sits at
+    // `bottom: 0`, so translating by its current height moves it exactly
+    // off-screen.
+    const distance = Math.max(this._currentHeight, 1);
+
+    // For slow / distance-only closes, keep a friendly minimum speed so
+    // the duration doesn't balloon. For real flings we use the measured
+    // velocity directly — a 4 px/ms swing closes a 600px panel in 150ms.
+    const flingSpeed = Math.abs(this._velocity);
+    const speed = Math.max(flingSpeed, 0.6);
+
+    let duration = distance / speed;
+    duration = Math.min(
+      Math.max(duration, PANEL_HEIGHTS.CLOSE_ANIMATION_MIN_DURATION),
       PANEL_HEIGHTS.CLOSE_ANIMATION_MAX_DURATION,
     );
 
-    container.style.transition = `transform ${duration}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
+    // Easing: slower releases get a soft ease-out (looks natural). Fast
+    // flings use a near-linear curve so the panel actually moves at the
+    // velocity the user gave it instead of decelerating immediately.
+    const easing =
+      flingSpeed > 1.8
+        ? 'cubic-bezier(0.33, 0.0, 0.67, 1)'
+        : 'cubic-bezier(0.22, 0.61, 0.36, 1)';
+
+    container.style.transition = `transform ${duration}ms ${easing}`;
     void container.offsetHeight;
-    container.style.transform = `translateY(${this._currentHeight}px)`;
+    container.style.transform = `translateY(${distance}px)`;
 
     window.clearTimeout(this._closeAniTimeout);
     this._closeAniTimeout = window.setTimeout(() => {
