@@ -5,6 +5,9 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  // Constrain native gestures to vertical pan so swipe-to-close from the
+  // content area doesn't race horizontal scroll/pull-to-refresh.
+  touch-action: pan-y;
 }
 
 .bottom-panel-header {

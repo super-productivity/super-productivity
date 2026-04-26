@@ -11,8 +11,12 @@
     left: 0 !important;
     right: 0 !important;
     width: 100vw !important;
-    // Enable smooth resizing - but disable during custom dragging
+    // Enable smooth resizing — close/snap transitions are set inline to use
+    // velocity-derived durations, so we keep the default light height ease
+    // for any non-drag-driven height changes.
     transition: height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    // Hint the compositor for smooth transform-based dragging
+    will-change: transform, height;
     // Allow the sheet to be draggable
     resize: vertical;
     overflow: hidden;
@@ -21,7 +25,10 @@
     border-top-left-radius: 20px;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
 
-    // Disable transitions during custom drag
+    // While the user is actively dragging, kill all transitions so the panel
+    // tracks the finger 1:1. Inline transitions (snap-back / close) override
+    // this rule because they are set after the dragging class is removed
+    // (or, in the close case, take precedence as inline styles).
     &.dragging {
       transition: none;
       // Prevent any inner animation/transition jank while dragging
