@@ -68,6 +68,13 @@
 }
 @if (isForProject && contextId !== INBOX_PROJECT.id) {
   <button
+    (click)="archiveProject()"
+    mat-menu-item
+  >
+    <mat-icon>archive</mat-icon>
+    <span class="text">{{ T.MH.ARCHIVE_PROJECT | translate }}</span>
+  </button>
+  <button
     (click)="duplicateProject()"
     mat-menu-item
   >
