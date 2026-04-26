@@ -92,6 +92,12 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _isDragging = false;
   private _startY = 0;
   private _startHeight = 0;
+  // Drag-down uses transform so the close animation can continue the exact
+  // same property — no discontinuity at release. Drag-up keeps using
+  // height (panel grows) and never sets transform.
+  private _currentTranslateY = 0;
+  // Tracks the larger of (start height, last expanded height) so a partial
+  // drag-down after expanding still has a known starting point.
   private _currentHeight = 0;
   // Rolling window of recent move samples for robust velocity at release.
   // A naive low-pass filter dilutes the peak fling speed because users
@@ -168,10 +174,13 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     this._startY = clientY;
     this._velocity = 0;
     this._velocitySamples = [{ y: clientY, t: Date.now() }];
+    this._currentTranslateY = 0;
     const container = this._getSheetContainer();
     if (container) {
       this._startHeight = container.offsetHeight;
       this._currentHeight = this._startHeight;
+      // Clear any leftover transition so the drag tracks 1:1.
+      container.style.transition = '';
       container.classList.add('dragging');
     }
     document.body.style.userSelect = 'none';
@@ -180,26 +189,34 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _onPointerMove(event: PointerEvent): void {
     if (!this._isDragging) return;
     event.preventDefault();
-    this._updateHeight(event.clientY);
+    this._updatePosition(event.clientY);
   }
 
-  private _updateHeight(clientY: number): void {
+  private _updatePosition(clientY: number): void {
     const container = this._getSheetContainer();
     if (!container) return;
 
-    const deltaY = this._startY - clientY;
-    const newHeight = this._startHeight + deltaY;
+    const offset = clientY - this._startY; // +down, -up
     const viewportHeight = window.innerHeight;
 
-    // Allow heights all the way down to zero so the panel can be dragged
-    // off the bottom — closing happens on release based on threshold/velocity.
-    const minHeight = 0;
-    const maxHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE;
-    const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
-
-    container.style.height = `${constrainedHeight}px`;
-    container.style.maxHeight = `${constrainedHeight}px`;
-    this._currentHeight = constrainedHeight;
+    if (offset > 0) {
+      // Drag down: translate the whole panel with the finger. The close
+      // animation continues this exact transform — no jump at release.
+      // Translate is clamped to the current rendered height so it can move
+      // exactly off-screen even if the panel was expanded earlier.
+      const translateY = Math.min(offset, this._currentHeight);
+      container.style.transform = `translateY(${translateY}px)`;
+      this._currentTranslateY = translateY;
+    } else {
+      // Drag up: grow height (the original, proven-responsive behavior).
+      const maxHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE;
+      const newHeight = Math.min(this._startHeight - offset, maxHeight);
+      container.style.transform = '';
+      container.style.height = `${newHeight}px`;
+      container.style.maxHeight = `${newHeight}px`;
+      this._currentTranslateY = 0;
+      this._currentHeight = newHeight;
+    }
 
     // Push a sample and trim to the last 80ms of motion. Velocity at
     // release is then computed from the oldest-still-fresh sample to the
@@ -233,35 +250,38 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     const container = this._getSheetContainer();
     if (!container) return;
 
-    container.classList.remove('dragging');
-
     const viewportHeight = window.innerHeight;
     const flingDown = this._velocity > PANEL_HEIGHTS.VELOCITY_THRESHOLD;
     const flingUp = this._velocity < -PANEL_HEIGHTS.VELOCITY_THRESHOLD;
     const closeByDistance =
-      this._currentHeight < this._startHeight * PANEL_HEIGHTS.CLOSE_DISTANCE_RATIO;
+      this._currentTranslateY > this._currentHeight * PANEL_HEIGHTS.CLOSE_DISTANCE_RATIO;
 
     if (flingDown || closeByDistance) {
-      this._animateClose(container, viewportHeight);
+      this._animateClose(container);
       return;
     }
 
-    if (flingUp) {
+    container.classList.remove('dragging');
+
+    if (this._currentTranslateY > 0) {
+      // Released a partial drag-down without enough velocity/distance to
+      // close — snap the translate back to 0.
+      this._animateSnapBack(container);
+    } else if (flingUp) {
       this._animateExpand(container, viewportHeight);
     }
     // Otherwise: leave the panel at whatever height the user released at —
     // they intentionally dragged to that size.
   }
 
-  private _animateClose(container: HTMLElement, viewportHeight: number): void {
-    // Slide the panel off the bottom via translateY. The panel sits at
-    // `bottom: 0`, so translating by its current height moves it exactly
-    // off-screen.
-    const distance = Math.max(this._currentHeight, 1);
+  private _animateClose(container: HTMLElement): void {
+    // We were already updating `transform` during the drag, so this just
+    // continues that motion to fully off-screen — the browser interpolates
+    // from the current transform value, no jump.
+    const distance = Math.max(this._currentHeight - this._currentTranslateY, 1);
 
-    // For slow / distance-only closes, keep a friendly minimum speed so
-    // the duration doesn't balloon. For real flings we use the measured
-    // velocity directly — a 4 px/ms swing closes a 600px panel in 150ms.
+    // Use the measured fling velocity directly when present. The min
+    // floor only applies for slow / distance-triggered closes.
     const flingSpeed = Math.abs(this._velocity);
     const speed = Math.max(flingSpeed, 0.6);
 
@@ -271,22 +291,44 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
       PANEL_HEIGHTS.CLOSE_ANIMATION_MAX_DURATION,
     );
 
-    // Easing: slower releases get a soft ease-out (looks natural). Fast
-    // flings use a near-linear curve so the panel actually moves at the
-    // velocity the user gave it instead of decelerating immediately.
+    // Curve choice: a CSS transition always interpolates from the current
+    // value at velocity 0 along the timing function, so the *initial slope*
+    // of the curve is what determines whether the motion looks continuous
+    // with the drag.
+    //   - For a fast fling we want a curve that starts at near-fling speed
+    //     and decelerates — `(0.2, 0.8, 0.4, 1)` has a tall initial slope
+    //     (~4) so it actually launches into the motion instead of easing in.
+    //   - For slow / distance-only closes a softer ease-out feels natural.
     const easing =
-      flingSpeed > 1.8
-        ? 'cubic-bezier(0.33, 0.0, 0.67, 1)'
+      flingSpeed > 0.8
+        ? 'cubic-bezier(0.2, 0.8, 0.4, 1)'
         : 'cubic-bezier(0.22, 0.61, 0.36, 1)';
 
+    // Keeping the dragging class through the close keeps the parent's
+    // `transition: none !important` from racing the inline transition we
+    // set below — we resolve this by setting transition inline AFTER
+    // removing the class.
+    container.classList.remove('dragging');
     container.style.transition = `transform ${duration}ms ${easing}`;
     void container.offsetHeight;
-    container.style.transform = `translateY(${distance}px)`;
+    container.style.transform = `translateY(${this._currentHeight}px)`;
 
     window.clearTimeout(this._closeAniTimeout);
     this._closeAniTimeout = window.setTimeout(() => {
       this.close();
     }, duration);
+  }
+
+  private _animateSnapBack(container: HTMLElement): void {
+    container.style.transition = `transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
+    void container.offsetHeight;
+    container.style.transform = 'translateY(0)';
+    this._currentTranslateY = 0;
+
+    window.setTimeout(() => {
+      container.style.transition = '';
+      container.style.transform = '';
+    }, 220);
   }
 
   private _animateExpand(container: HTMLElement, viewportHeight: number): void {
