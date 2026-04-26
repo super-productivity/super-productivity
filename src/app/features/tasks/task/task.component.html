@@ -57,6 +57,10 @@
           (click)="estimateTime()"
           [class.hasNoTimeSpentOrEstimate]="!t.timeSpent && !t.timeEstimate"
           [class.isEditable]="!t.subTasks?.length"
+          [style.visibility]="
+          isFirstLineHover && !IS_TOUCH_PRIMARY && !t.subTasks?.length
+            ? 'hidden'
+            : 'visible'"
           class="time-wrapper"
         >
           @if (!t.subTasks?.length) {
