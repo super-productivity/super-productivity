@@ -1,5 +1,21 @@
+// :host(.is-group) {
+//   border: 1px solid transparent;
+//   border-radius: var(--border-radius);
+//   transition:
+//     border-color 0.2s ease,
+//     background-color 0.2s ease;
+
+//   &:focus-within {
+//     background-color: rgba(var(--text-color-rgb, 0, 0, 0), 0.04);
+//   }
+// }
+
 :host {
   display: block;
+}
+
+:host(.is-group) .collapsible-header {
+  padding: calc(var(--s) / 2) var(--s);
 }
 
 .collapsible-header {
@@ -9,7 +25,7 @@
   flex-direction: row;
   align-items: center;
 
-  &:focus {
+  &:focus-visible {
     outline: none;
   }
 
