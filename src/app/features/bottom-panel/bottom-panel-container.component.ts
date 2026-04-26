@@ -103,11 +103,10 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _activePointerId: number | null = null;
   private _activeTouchId: number | null = null;
   private _captureTarget: HTMLElement | null = null;
-  private _pendingClientY: number | null = null;
-  private _rafId: number | null = null;
   private _startY = 0;
   private _startHeight = 0;
   private _currentTranslateY = 0;
+  private _currentRawOffset = 0;
   private _lastY = 0;
   private _lastTime = 0;
   private _velocity = 0;
@@ -129,7 +128,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private readonly _boundOnPointerMove = this._onPointerMove.bind(this);
   private readonly _boundOnPointerUp = this._onPointerUp.bind(this);
   private readonly _boundOnViewportResize = this._onViewportResize.bind(this);
-  private readonly _boundFlushDrag = this._flushDrag.bind(this);
 
   ngAfterViewInit(): void {
     // Mark bottom panel as open for mutual exclusion with right panel
@@ -193,10 +191,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     document.removeEventListener('pointermove', this._boundOnPointerMove);
     document.removeEventListener('pointerup', this._boundOnPointerUp);
     document.removeEventListener('pointercancel', this._boundOnPointerUp);
-    if (this._rafId !== null) {
-      cancelAnimationFrame(this._rafId);
-      this._rafId = null;
-    }
   }
 
   // ── Touch-event path (mobile) ─────────────────────────────────────────
@@ -225,7 +219,8 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
       // Active drag — block native scroll/rubber-banding so the panel can
       // track the finger 1:1.
       if (event.cancelable) event.preventDefault();
-      this._scheduleDragUpdate(touch.clientY);
+      this._trackVelocity(touch.clientY);
+      this._applyDragPosition(touch.clientY);
       return;
     }
 
@@ -234,7 +229,8 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     if (this._evaluatePotentialDrag(touch.clientX, touch.clientY)) {
       if (event.cancelable) event.preventDefault();
       this._beginDrag(this._potentialStartY);
-      this._scheduleDragUpdate(touch.clientY);
+      this._trackVelocity(touch.clientY);
+      this._applyDragPosition(touch.clientY);
     }
   }
 
@@ -297,7 +293,8 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     }
 
     if (this._isDragging) {
-      this._scheduleDragUpdate(event.clientY);
+      this._trackVelocity(event.clientY);
+      this._applyDragPosition(event.clientY);
       return;
     }
 
@@ -305,7 +302,8 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
 
     if (this._evaluatePotentialDrag(event.clientX, event.clientY)) {
       this._beginDrag(this._potentialStartY);
-      this._scheduleDragUpdate(event.clientY);
+      this._trackVelocity(event.clientY);
+      this._applyDragPosition(event.clientY);
     }
   }
 
@@ -362,6 +360,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     this._lastTime = Date.now();
     this._velocity = 0;
     this._currentTranslateY = 0;
+    this._currentRawOffset = 0;
     const container = this._getSheetContainer();
     if (container) {
       this._startHeight = container.offsetHeight;
@@ -373,9 +372,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     document.body.style.userSelect = 'none';
   }
 
-  private _scheduleDragUpdate(clientY: number): void {
-    // Track velocity on the input thread so we have an up-to-date sample
-    // even if multiple moves coalesce into one rAF.
+  private _trackVelocity(clientY: number): void {
     const currentTime = Date.now();
     const timeDiff = currentTime - this._lastTime;
     if (timeDiff > 0) {
@@ -384,46 +381,22 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     }
     this._lastY = clientY;
     this._lastTime = currentTime;
-
-    this._pendingClientY = clientY;
-    if (this._rafId === null) {
-      this._rafId = requestAnimationFrame(this._boundFlushDrag);
-    }
-  }
-
-  private _flushDrag(): void {
-    this._rafId = null;
-    if (!this._isDragging || this._pendingClientY === null) return;
-    this._applyDragPosition(this._pendingClientY);
   }
 
   private _applyDragPosition(clientY: number): void {
     const container = this._getSheetContainer();
     if (!container) return;
 
-    const offset = clientY - this._startY; // +down, -up
-    const viewportHeight = window.innerHeight;
+    const rawOffset = clientY - this._startY; // +down, -up
+    // Apply rubber-band resistance to upward over-drag so we never need to
+    // touch `height` (which would force a layout) on the input thread —
+    // transform-only updates stay on the compositor and feel instant.
+    const offset =
+      rawOffset >= 0 ? rawOffset : -Math.sqrt(-rawOffset * 12);
 
-    if (offset <= 0) {
-      // Drag up: grow height, no translate
-      const minHeight = viewportHeight * PANEL_HEIGHTS.MIN_HEIGHT;
-      const maxHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE;
-      const newHeight = Math.min(
-        Math.max(this._startHeight - offset, minHeight),
-        maxHeight,
-      );
-      container.style.height = `${newHeight}px`;
-      container.style.maxHeight = `${newHeight}px`;
-      // translate3d keeps the layer on the GPU compositor for smooth motion
-      container.style.transform = 'translate3d(0, 0, 0)';
-      this._currentTranslateY = 0;
-    } else {
-      // Drag down: translate the panel with the finger so it visibly moves
-      container.style.height = `${this._startHeight}px`;
-      container.style.maxHeight = `${this._startHeight}px`;
-      container.style.transform = `translate3d(0, ${offset}px, 0)`;
-      this._currentTranslateY = offset;
-    }
+    container.style.transform = `translate3d(0, ${offset}px, 0)`;
+    this._currentTranslateY = Math.max(rawOffset, 0);
+    this._currentRawOffset = rawOffset;
   }
 
   private _endDragOrPotential(): void {
@@ -438,11 +411,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     this._captureTarget = null;
     this._activePointerId = null;
     this._activeTouchId = null;
-    this._pendingClientY = null;
-    if (this._rafId !== null) {
-      cancelAnimationFrame(this._rafId);
-      this._rafId = null;
-    }
 
     if (this._isPotentialDrag) {
       this._isPotentialDrag = false;
@@ -463,6 +431,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
       this._currentTranslateY > viewportHeight * PANEL_HEIGHTS.CLOSE_DISTANCE_RATIO;
     const flingDown = this._velocity > PANEL_HEIGHTS.VELOCITY_THRESHOLD;
     const flingUp = this._velocity < -PANEL_HEIGHTS.VELOCITY_THRESHOLD;
+    const draggedUp = this._currentRawOffset < 0;
 
     if (flingDown || closeByDistance) {
       this._animateClose(container, viewportHeight);
@@ -472,14 +441,16 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     // Not closing — release dragging state so transitions re-enable.
     container.classList.remove('dragging');
 
-    if (this._currentTranslateY > 0) {
-      // Snap back to the start height/position
-      this._animateSnapBack(container);
-    } else if (flingUp) {
-      // Fling up → expand to max height
+    if (flingUp || draggedUp) {
+      // Fling-up or any upward drag → expand toward max height. We commit
+      // the height change here (not on every move) so dragging stays purely
+      // transform-based and the input thread never triggers a layout.
       this._animateExpand(container, viewportHeight);
+    } else if (this._currentRawOffset > 0) {
+      // Released a downward drag below the close threshold — snap back.
+      this._animateSnapBack(container);
     }
-    // else: user released at a height they chose; leave it.
+    // else: user released without moving — leave the panel as-is.
   }
 
   private _animateClose(container: HTMLElement, viewportHeight: number): void {
@@ -505,12 +476,11 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _animateSnapBack(container: HTMLElement): void {
-    container.style.transition = `transform ${PANEL_HEIGHTS.SNAP_BACK_DURATION}ms ${DRAG_EASING}, height ${PANEL_HEIGHTS.SNAP_BACK_DURATION}ms ${DRAG_EASING}, max-height ${PANEL_HEIGHTS.SNAP_BACK_DURATION}ms ${DRAG_EASING}`;
+    container.style.transition = `transform ${PANEL_HEIGHTS.SNAP_BACK_DURATION}ms ${DRAG_EASING}`;
     void container.offsetHeight;
     container.style.transform = 'translate3d(0, 0, 0)';
-    container.style.height = `${this._startHeight}px`;
-    container.style.maxHeight = `${this._startHeight}px`;
     this._currentTranslateY = 0;
+    this._currentRawOffset = 0;
 
     window.setTimeout(() => {
       container.style.transition = '';
@@ -519,13 +489,23 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _animateExpand(container: HTMLElement, viewportHeight: number): void {
-    const targetHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT;
-    container.style.transition = `height ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms ${DRAG_EASING}, max-height ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms ${DRAG_EASING}`;
+    // Animate both: zero out any rubber-band translate from upward drag, and
+    // grow the height to the expanded target.
+    const targetHeight = Math.min(
+      viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT,
+      viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE,
+    );
+    container.style.transition = `transform ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms ${DRAG_EASING}, height ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms ${DRAG_EASING}, max-height ${PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION}ms ${DRAG_EASING}`;
+    void container.offsetHeight;
+    container.style.transform = 'translate3d(0, 0, 0)';
     container.style.height = `${targetHeight}px`;
     container.style.maxHeight = `${targetHeight}px`;
+    this._currentTranslateY = 0;
+    this._currentRawOffset = 0;
 
     window.setTimeout(() => {
       container.style.transition = '';
+      container.style.transform = '';
     }, PANEL_HEIGHTS.EXPAND_ANIMATION_DURATION);
   }
 

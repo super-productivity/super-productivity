@@ -25,17 +25,14 @@
     border-top-left-radius: 20px;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
 
-    // While the user is actively dragging, kill all transitions so the panel
-    // tracks the finger 1:1. The component also sets inline `transition: none`
-    // on dragstart so this is a belt-and-braces guard against Material's
-    // animation framework leaving residual transitions on the element.
+    // While the user is actively dragging, kill the parent transition so the
+    // panel tracks the finger 1:1. We deliberately avoid a `*` rule here —
+    // it forces a style recalc on every descendant on dragstart, which on
+    // a busy panel (task detail + notes + plugins) can stall the first
+    // few frames of the gesture badly enough that the panel only appears
+    // to move once the user releases.
     &.dragging {
       transition: none !important;
-      // Prevent any inner animation/transition jank while dragging
-      * {
-        transition: none !important;
-        animation: none !important;
-      }
     }
   }
 
