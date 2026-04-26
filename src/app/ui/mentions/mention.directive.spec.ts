@@ -236,6 +236,27 @@ describe('MentionDirective', () => {
 
       expect(result).toEqual(items);
     });
+
+    it('should match substrings, not just prefixes', () => {
+      const items = [
+        { label: 'xxaaxx' },
+        { label: 'aabb' },
+        { label: 'bbaa' },
+        { label: 'cccc' },
+      ];
+
+      const result = mentionFilter('aa', items);
+
+      expect(result).toEqual([{ label: 'xxaaxx' }, { label: 'aabb' }, { label: 'bbaa' }]);
+    });
+
+    it('should match substrings for plain string items', () => {
+      const items = ['xxaaxx', 'aabb', 'bbaa', 'cccc'];
+
+      const result = mentionFilter('aa', items);
+
+      expect(result).toEqual(['xxaaxx', 'aabb', 'bbaa']);
+    });
   });
 
   describe('stopEvent', () => {
