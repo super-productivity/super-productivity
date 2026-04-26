@@ -84,5 +84,13 @@
     "author": "dhananajay-030",
     "authorUrl": "https://github.com/dhananajay-030",
     "stars": 4
+  },
+  {
+    "name": "Print Tasks",
+    "shortDescription": "Provides print layouts for Today, All Tasks, All Projects, by Tag etc.",
+    "url": "https://codeberg.org/sinenomine/sp-task-print",
+    "author": "sinenomine",
+    "authorUrl": "https://codeberg.org/sinenomine/",
+    "stars": 1
   }
 ]
