@@ -26,11 +26,11 @@
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
 
     // While the user is actively dragging, kill all transitions so the panel
-    // tracks the finger 1:1. Inline transitions (snap-back / close) override
-    // this rule because they are set after the dragging class is removed
-    // (or, in the close case, take precedence as inline styles).
+    // tracks the finger 1:1. The component also sets inline `transition: none`
+    // on dragstart so this is a belt-and-braces guard against Material's
+    // animation framework leaving residual transitions on the element.
     &.dragging {
-      transition: none;
+      transition: none !important;
       // Prevent any inner animation/transition jank while dragging
       * {
         transition: none !important;
