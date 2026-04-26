@@ -226,6 +226,12 @@
       ></progress-bar>
     }
     @if (t.subTasks?.length) {
+      <progress-bar
+        [cssClass]="'bg-success sub-task-progress'"
+        [progress]="subTaskProgress()"
+      ></progress-bar>
+    }
+    @if (t.subTasks?.length) {
       <div class="sub-tasks">
         <button
           (click)="toggleSubTaskMode()"
