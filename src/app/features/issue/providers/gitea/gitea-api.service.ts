@@ -13,6 +13,7 @@ import {
   GiteaRepositoryReduced,
 } from './gitea-issue.model';
 import {
+  hasAllLabels,
   isIssueFromProject,
   isIssueIncludedByLabels,
   mapGiteaIssueIdToIssueNumber,
@@ -38,6 +39,7 @@ export class GiteaApiService {
   private _http = inject(HttpClient);
 
   searchIssueForRepo$(searchText: string, cfg: GiteaCfg): Observable<SearchResultItem[]> {
+    const includedLabelNames = parseLabelList(cfg.filterLabels);
     const excludedLabelNames = parseLabelList(cfg.excludeLabels);
     return this.getCurrentRepositoryFor$(cfg).pipe(
       switchMap((repository: GiteaRepositoryReduced) => {
@@ -58,6 +60,7 @@ export class GiteaApiService {
             return res
               ? res
                   .filter((issue: GiteaIssue) => isIssueFromProject(issue, cfg))
+                  .filter((issue: GiteaIssue) => hasAllLabels(issue, includedLabelNames))
                   .filter((issue: GiteaIssue) =>
                     isIssueIncludedByLabels(issue, excludedLabelNames),
                   )
@@ -76,6 +79,7 @@ export class GiteaApiService {
   }
 
   getLast100IssuesFor$(cfg: GiteaCfg): Observable<GiteaIssue[]> {
+    const includedLabelNames = parseLabelList(cfg.filterLabels);
     const excludedLabelNames = parseLabelList(cfg.excludeLabels);
     return this.getLoggedUserFor$(cfg).pipe(
       switchMap((user: GiteaUser) => {
@@ -94,6 +98,7 @@ export class GiteaApiService {
           map((issues: GiteaIssue[]) => {
             return issues
               ? issues
+                  .filter((issue: GiteaIssue) => hasAllLabels(issue, includedLabelNames))
                   .filter((issue: GiteaIssue) =>
                     isIssueIncludedByLabels(issue, excludedLabelNames),
                   )

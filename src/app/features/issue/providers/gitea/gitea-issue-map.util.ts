@@ -31,7 +31,11 @@ export const parseLabelList = (raw: string | null): string[] =>
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-// Gitea's issues endpoint only supports inclusive label filtering; exclusion is applied client-side.
+// Gitea/Forgejo's two issue endpoints (`/repos/{o}/{r}/issues` and
+// `/repos/issues/search`) historically disagree on whether `labels=a,b` means
+// AND or OR (see go-gitea/gitea#33509), and Forgejo inherits the same code.
+// We always filter labels client-side so behavior is consistent and independent
+// of any server-side fixes.
 export const isIssueIncludedByLabels = (
   issue: GiteaIssue,
   excludedLabelNames: readonly string[],
@@ -41,4 +45,15 @@ export const isIssueIncludedByLabels = (
   }
   const issueLabelNames = new Set((issue.labels ?? []).map((l) => l.name));
   return !excludedLabelNames.some((name) => issueLabelNames.has(name));
+};
+
+export const hasAllLabels = (
+  issue: GiteaIssue,
+  requiredLabelNames: readonly string[],
+): boolean => {
+  if (requiredLabelNames.length === 0) {
+    return true;
+  }
+  const issueLabelNames = new Set((issue.labels ?? []).map((l) => l.name));
+  return requiredLabelNames.every((name) => issueLabelNames.has(name));
 };

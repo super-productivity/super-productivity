@@ -1,4 +1,8 @@
-import { isIssueIncludedByLabels, parseLabelList } from './gitea-issue-map.util';
+import {
+  hasAllLabels,
+  isIssueIncludedByLabels,
+  parseLabelList,
+} from './gitea-issue-map.util';
 import { GiteaIssue, GiteaLabel } from './gitea-issue.model';
 
 const makeLabel = (name: string): GiteaLabel =>
@@ -64,6 +68,38 @@ describe('gitea-issue-map.util', () => {
       const issue = makeIssue([makeLabel('project/ai')]);
       expect(isIssueIncludedByLabels(issue, ['project/uconsole'])).toBe(true);
       expect(isIssueIncludedByLabels(issue, ['project/ai'])).toBe(false);
+    });
+  });
+
+  describe('hasAllLabels', () => {
+    it('includes any issue when the required list is empty', () => {
+      const issue = makeIssue([makeLabel('bug')]);
+      expect(hasAllLabels(issue, [])).toBe(true);
+    });
+
+    it('includes issues that carry every required label', () => {
+      const issue = makeIssue([
+        makeLabel('bug'),
+        makeLabel('enhancement'),
+        makeLabel('docs'),
+      ]);
+      expect(hasAllLabels(issue, ['bug', 'enhancement'])).toBe(true);
+    });
+
+    it('excludes issues missing any required label (AND semantics)', () => {
+      const issue = makeIssue([makeLabel('bug')]);
+      expect(hasAllLabels(issue, ['bug', 'wontfix'])).toBe(false);
+    });
+
+    it('treats missing issue.labels as no labels and excludes the issue', () => {
+      const issue = makeIssue(undefined);
+      expect(hasAllLabels(issue, ['bug'])).toBe(false);
+    });
+
+    it('matches scoped label names exactly', () => {
+      const issue = makeIssue([makeLabel('project/ai'), makeLabel('bug')]);
+      expect(hasAllLabels(issue, ['project/ai', 'bug'])).toBe(true);
+      expect(hasAllLabels(issue, ['project/uconsole', 'bug'])).toBe(false);
     });
   });
 });
