@@ -1,6 +1,10 @@
 <div
   (click)="toggleExpand()"
+  (keydown)="onHeaderKeydown($event)"
   class="collapsible-header"
+  role="button"
+  tabindex="0"
+  [attr.aria-expanded]="isExpanded"
 >
   @if (isIconBefore()) {
     <mat-icon class="collapsible-expand-icon">expand_more</mat-icon>

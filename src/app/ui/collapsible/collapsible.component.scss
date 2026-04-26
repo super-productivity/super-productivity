@@ -1,5 +1,15 @@
 :host {
   display: block;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+
+  &:focus-within {
+    border-color: var(--c-accent);
+    background-color: rgba(var(--text-color-rgb, 0, 0, 0), 0.04);
+  }
 }
 
 .collapsible-header {
@@ -8,8 +18,9 @@
   display: flex;
   flex-direction: row;
   align-items: center;
+  padding: calc(var(--s) / 2) var(--s);
 
-  &:focus {
+  &:focus-visible {
     outline: none;
   }
 
