@@ -25,7 +25,7 @@ import {
 import { TaskDetailTargetPanel, TaskReminderOptionId } from './task.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { INBOX_PROJECT } from '../project/project.const';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 
 describe('TaskService', () => {
@@ -34,6 +34,11 @@ describe('TaskService', () => {
   let archiveService: jasmine.SpyObj<ArchiveService>;
   let deletedTaskIssueSidecar: DeletedTaskIssueSidecarService;
   let tickSubject: Subject<{ duration: number; date: string }>;
+  let globalCfgSignal: WritableSignal<{
+    tasks: { defaultProjectId: null | string; isSetDefaultDayForTodayTasks: boolean };
+    reminder: { defaultTaskRemindOption: string };
+    appFeatures: { isTimeTrackingEnabled: boolean };
+  }>;
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
     ({
@@ -105,12 +110,14 @@ describe('TaskService', () => {
     );
     taskArchiveServiceSpy.getById.and.returnValue(Promise.resolve(null));
 
+    globalCfgSignal = signal({
+      tasks: { defaultProjectId: null, isSetDefaultDayForTodayTasks: true },
+      reminder: { defaultTaskRemindOption: 'AT_START' },
+      appFeatures: { isTimeTrackingEnabled: true },
+    });
+
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [''], {
-      cfg: signal({
-        tasks: { defaultProjectId: null },
-        reminder: { defaultTaskRemindOption: 'AT_START' },
-        appFeatures: { isTimeTrackingEnabled: true },
-      }),
+      cfg: globalCfgSignal,
       misc: signal({ isShowProductivityTipLonger: false }),
       tasks: signal({ defaultProjectId: null }),
       appFeatures: signal({ isTimeTrackingEnabled: true }),
@@ -606,6 +613,39 @@ describe('TaskService', () => {
       });
 
       expect(task.dueDay).toBeTruthy();
+    });
+
+    it('should NOT set dueDay for TODAY tag context when isSetDefaultDayForTodayTasks is false', () => {
+      globalCfgSignal.set({
+        tasks: { defaultProjectId: null, isSetDefaultDayForTodayTasks: false },
+        reminder: { defaultTaskRemindOption: 'AT_START' },
+        appFeatures: { isTimeTrackingEnabled: true },
+      });
+
+      const task = service.createNewTaskWithDefaults({
+        title: 'Test',
+        workContextType: WorkContextType.TAG,
+        workContextId: TODAY_TAG.id,
+      });
+
+      expect(task.dueDay).toBeFalsy();
+    });
+
+    it('should still set dueDay when explicitly provided even if isSetDefaultDayForTodayTasks is false', () => {
+      globalCfgSignal.set({
+        tasks: { defaultProjectId: null, isSetDefaultDayForTodayTasks: false },
+        reminder: { defaultTaskRemindOption: 'AT_START' },
+        appFeatures: { isTimeTrackingEnabled: true },
+      });
+
+      const task = service.createNewTaskWithDefaults({
+        title: 'Test',
+        workContextType: WorkContextType.TAG,
+        workContextId: TODAY_TAG.id,
+        additional: { dueDay: '2026-04-07' },
+      });
+
+      expect(task.dueDay).toBe('2026-04-07');
     });
 
     it('should use custom id if provided', () => {

@@ -1313,7 +1313,8 @@ export class TaskService {
       ...(workContextId === TODAY_TAG.id &&
       !additional.parentId &&
       !additional.dueWithTime &&
-      !('dueDay' in additional)
+      !('dueDay' in additional) &&
+      this._globalConfigService.cfg()?.tasks?.isSetDefaultDayForTodayTasks
         ? { dueDay: getDbDateStr() }
         : {}),
 
