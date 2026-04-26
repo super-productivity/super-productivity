@@ -38,8 +38,13 @@ const PANEL_HEIGHTS = {
   MAX_HEIGHT_ABSOLUTE: 0.98,
   TASK_PANEL_HEIGHT: 0.6,
   OTHER_PANEL_HEIGHT: 0.9,
-  VELOCITY_THRESHOLD: 0.5,
+  VELOCITY_THRESHOLD: 0.5, // px/ms — minimum flick velocity for momentum snap
+  DISMISS_DISTANCE_RATIO: 0.35, // fraction of start height to trigger dismiss on release
   INITIAL_ANIMATION_BLOCK_DURATION: 300, // ms
+  SNAP_BACK_DURATION: 220, // ms — return-to-rest transition
+  DISMISS_DURATION: 240, // ms — slide-out transition before dismiss
+  EXPAND_DURATION: 260, // ms — flick-up expand transition
+  GESTURE_START_THRESHOLD: 6, // px — content gesture only commits after this much movement
 } as const;
 
 const KEYBOARD_DETECT_THRESHOLD = 100; // px - minimum height change to detect keyboard
@@ -76,6 +81,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   });
 
   readonly panelHeader = viewChild<ElementRef>('panelHeader');
+  readonly panelContentEl = viewChild<ElementRef>('panelContent');
 
   readonly panelContent = computed<PanelContentType | null>(() => {
     const dataContent = this.data?.panelContent ?? null;
@@ -92,6 +98,12 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _lastY = 0;
   private _lastTime = 0;
   private _velocity = 0;
+  private _activePointerId: number | null = null;
+  private _activePointerTarget: HTMLElement | null = null;
+  // Content-area swipe detection (deferred — only commits if gesture is downward at scroll-top)
+  private _pendingContentDrag = false;
+  private _pendingStartY = 0;
+  private _pendingScroller: HTMLElement | null = null;
   private _disableAniTimeout?: number;
   private _cachedContainer: HTMLElement | null = null;
 
@@ -101,7 +113,8 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _vvResizeTimer: number | null = null;
 
   // Store bound functions to prevent memory leaks
-  private readonly _boundOnPointerDown = this._onPointerDown.bind(this);
+  private readonly _boundOnHeaderPointerDown = this._onHeaderPointerDown.bind(this);
+  private readonly _boundOnContentPointerDown = this._onContentPointerDown.bind(this);
   private readonly _boundOnPointerMove = this._onPointerMove.bind(this);
   private readonly _boundOnPointerUp = this._onPointerUp.bind(this);
   private readonly _boundOnViewportResize = this._onViewportResize.bind(this);
@@ -133,11 +146,16 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _setupDragListeners(): void {
-    const panelHeader = this.panelHeader()?.nativeElement;
-    if (!panelHeader) return;
+    const panelHeader = this.panelHeader()?.nativeElement as HTMLElement | undefined;
+    const panelContent = this.panelContentEl()?.nativeElement as HTMLElement | undefined;
 
-    // Unified pointer events (mouse, touch, pen)
-    panelHeader.addEventListener('pointerdown', this._boundOnPointerDown);
+    if (panelHeader) {
+      panelHeader.addEventListener('pointerdown', this._boundOnHeaderPointerDown);
+    }
+    if (panelContent) {
+      panelContent.addEventListener('pointerdown', this._boundOnContentPointerDown);
+    }
+    // Move/up listeners are attached to document so the gesture survives leaving the source el.
     document.addEventListener('pointermove', this._boundOnPointerMove, {
       passive: false,
     });
@@ -146,106 +164,221 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _removeDragListeners(): void {
-    const panelHeader = this.panelHeader()?.nativeElement;
+    const panelHeader = this.panelHeader()?.nativeElement as HTMLElement | undefined;
+    const panelContent = this.panelContentEl()?.nativeElement as HTMLElement | undefined;
     if (panelHeader) {
-      panelHeader.removeEventListener('pointerdown', this._boundOnPointerDown);
+      panelHeader.removeEventListener('pointerdown', this._boundOnHeaderPointerDown);
+    }
+    if (panelContent) {
+      panelContent.removeEventListener('pointerdown', this._boundOnContentPointerDown);
     }
     document.removeEventListener('pointermove', this._boundOnPointerMove);
     document.removeEventListener('pointerup', this._boundOnPointerUp);
     document.removeEventListener('pointercancel', this._boundOnPointerUp);
   }
 
-  private _onPointerDown(event: PointerEvent): void {
-    // Only react to primary button for mouse
-    if (event.pointerType === 'mouse' && event.button !== 0) {
-      return;
-    }
+  // Header gesture: commits immediately and supports both directions
+  // (downward = drag-to-dismiss via translate, upward = expand via height).
+  private _onHeaderPointerDown(event: PointerEvent): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.preventDefault();
-    this._startDrag(event.clientY);
+    this._activePointerTarget = event.currentTarget as HTMLElement | null;
+    this._startDrag(event);
   }
 
-  private _startDrag(clientY: number): void {
+  // Content gesture: deferred. Only commits to a drag once we see the user
+  // moving downward AND the underlying scroller is at the top — otherwise we
+  // let native scrolling take over.
+  private _onContentPointerDown(event: PointerEvent): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (this._isDragging) return;
+
+    const scroller = this._findScrollerAt(event.target as HTMLElement | null);
+    // No point arming the gesture if the user is already scrolled inside content.
+    if (scroller && scroller.scrollTop > 0) return;
+
+    this._pendingContentDrag = true;
+    this._pendingStartY = event.clientY;
+    this._pendingScroller = scroller;
+    this._activePointerId = event.pointerId;
+    this._activePointerTarget = event.target as HTMLElement | null;
+  }
+
+  private _onPointerMove(event: PointerEvent): void {
+    if (this._pendingContentDrag && event.pointerId === this._activePointerId) {
+      const deltaY = event.clientY - this._pendingStartY;
+      if (Math.abs(deltaY) < PANEL_HEIGHTS.GESTURE_START_THRESHOLD) return;
+
+      const scrolledFromTop =
+        this._pendingScroller && this._pendingScroller.scrollTop > 0;
+      // Commit only on a downward gesture starting from scroll-top.
+      if (deltaY > 0 && !scrolledFromTop) {
+        this._pendingContentDrag = false;
+        this._startDrag(event, this._pendingStartY);
+        event.preventDefault();
+      } else {
+        // Upward or already scrolling — abandon, let native handlers run.
+        this._pendingContentDrag = false;
+        this._pendingScroller = null;
+        this._activePointerId = null;
+        this._activePointerTarget = null;
+      }
+      return;
+    }
+
+    if (!this._isDragging) return;
+    event.preventDefault();
+    this._updateDrag(event.clientY);
+  }
+
+  private _startDrag(event: PointerEvent, startY: number = event.clientY): void {
     this._isDragging = true;
-    this._startY = clientY;
-    this._lastY = clientY;
-    this._lastTime = Date.now();
+    this._startY = startY;
+    this._lastY = event.clientY;
+    this._lastTime = performance.now();
     this._velocity = 0;
+    this._activePointerId = event.pointerId;
+
     const container = this._getSheetContainer();
     if (container) {
       this._startHeight = container.offsetHeight;
       container.classList.add('dragging');
+      // Kill any in-flight snap transition so the finger takes over instantly.
+      container.style.transition = 'none';
+      container.style.transform = 'translateY(0)';
     }
     document.body.style.userSelect = 'none';
+
+    // Capture so we keep getting move/up even if the finger leaves the element.
+    const captureTarget = this._activePointerTarget;
+    if (captureTarget && typeof captureTarget.setPointerCapture === 'function') {
+      try {
+        captureTarget.setPointerCapture(event.pointerId);
+      } catch {
+        /* element may have been removed; safe to ignore */
+      }
+    }
+    this._activePointerTarget = null;
+
+    // Apply current frame immediately so there is no visual lag.
+    this._updateDrag(event.clientY);
   }
 
-  private _onPointerMove(event: PointerEvent): void {
-    if (!this._isDragging) return;
-    event.preventDefault();
-    this._updateHeight(event.clientY);
-  }
-
-  private _updateHeight(clientY: number): void {
+  private _updateDrag(clientY: number): void {
     const container = this._getSheetContainer();
     if (!container) return;
 
-    const deltaY = this._startY - clientY;
-    const newHeight = this._startHeight + deltaY;
+    const deltaY = clientY - this._startY; // positive = moved down
     const viewportHeight = window.innerHeight;
 
-    // Constrain height between min and max bounds
-    const minHeight = viewportHeight * PANEL_HEIGHTS.MIN_HEIGHT;
-    const maxHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE;
-    const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+    if (deltaY >= 0) {
+      // Downward — translate (GPU-accelerated, no layout reflow).
+      container.style.transform = `translateY(${deltaY}px)`;
+      // Make sure any prior height growth is preserved at start height.
+      container.style.height = `${this._startHeight}px`;
+      container.style.maxHeight = `${this._startHeight}px`;
+    } else {
+      // Upward — grow height (top edge moves up; bottom stays anchored).
+      const minHeight = viewportHeight * PANEL_HEIGHTS.MIN_HEIGHT;
+      const maxHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE;
+      const newHeight = Math.min(
+        Math.max(this._startHeight - deltaY, minHeight),
+        maxHeight,
+      );
+      container.style.transform = 'translateY(0)';
+      container.style.height = `${newHeight}px`;
+      container.style.maxHeight = `${newHeight}px`;
+    }
 
-    container.style.height = `${constrainedHeight}px`;
-    container.style.maxHeight = `${constrainedHeight}px`;
-
-    // Calculate velocity for momentum detection
-    const currentTime = Date.now();
-    const timeDiff = currentTime - this._lastTime;
+    // Sliding-window velocity (px/ms). Positive = downward.
+    const now = performance.now();
+    const timeDiff = now - this._lastTime;
     if (timeDiff > 0) {
       this._velocity = (clientY - this._lastY) / timeDiff;
     }
     this._lastY = clientY;
-    this._lastTime = currentTime;
+    this._lastTime = now;
   }
 
-  private _onPointerUp(): void {
-    this._handleDragEnd();
+  private _onPointerUp(event: PointerEvent): void {
+    if (this._pendingContentDrag && event.pointerId === this._activePointerId) {
+      this._pendingContentDrag = false;
+      this._pendingScroller = null;
+      this._activePointerId = null;
+      this._activePointerTarget = null;
+      return;
+    }
+    if (this._isDragging) {
+      this._handleDragEnd();
+    }
   }
 
   private _handleDragEnd(): void {
     this._isDragging = false;
+    this._activePointerId = null;
     document.body.style.userSelect = '';
     const container = this._getSheetContainer();
-    if (container) {
-      container.classList.remove('dragging');
+    if (!container) return;
 
-      // Check for momentum and handle snap behavior
-      const viewportHeight = window.innerHeight;
+    container.classList.remove('dragging');
 
-      if (Math.abs(this._velocity) > PANEL_HEIGHTS.VELOCITY_THRESHOLD) {
-        if (this._velocity > 0) {
-          // Swiping down with momentum - close the panel
+    const deltaY = this._lastY - this._startY; // positive = moved down
+    const viewportHeight = window.innerHeight;
+    const flickDown = this._velocity > PANEL_HEIGHTS.VELOCITY_THRESHOLD;
+    const flickUp = this._velocity < -PANEL_HEIGHTS.VELOCITY_THRESHOLD;
+
+    if (deltaY > 0) {
+      // Was sliding down — decide dismiss vs snap-back.
+      const draggedFraction = deltaY / Math.max(this._startHeight, 1);
+      const shouldDismiss =
+        flickDown || draggedFraction > PANEL_HEIGHTS.DISMISS_DISTANCE_RATIO;
+
+      if (shouldDismiss) {
+        // Animate fully off-screen, then dismiss the bottom sheet.
+        container.style.transition = `transform ${PANEL_HEIGHTS.DISMISS_DURATION}ms cubic-bezier(0.32, 0.72, 0, 1)`;
+        container.style.transform = `translateY(${this._startHeight}px)`;
+        window.setTimeout(() => {
           this.close();
-          return;
-        } else {
-          // Swiping up with momentum - expand to max height
-          const targetHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT;
-          container.style.height = `${targetHeight}px`;
-          container.style.maxHeight = `${targetHeight}px`;
-          container.style.transition = 'height 0.3s ease-out, max-height 0.3s ease-out';
-
-          // Remove transition after animation
-          setTimeout(() => {
-            container.style.transition = '';
-          }, PANEL_HEIGHTS.INITIAL_ANIMATION_BLOCK_DURATION);
-          return;
-        }
+        }, PANEL_HEIGHTS.DISMISS_DURATION);
+      } else {
+        // Spring back to rest.
+        container.style.transition = `transform ${PANEL_HEIGHTS.SNAP_BACK_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        container.style.transform = 'translateY(0)';
+        window.setTimeout(() => {
+          container.style.transition = '';
+        }, PANEL_HEIGHTS.SNAP_BACK_DURATION);
       }
-
-      // No momentum - no action needed
+      return;
     }
+
+    if (deltaY < 0 && flickUp) {
+      // Flicked up — expand to max.
+      const targetHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT;
+      container.style.transition = `height ${PANEL_HEIGHTS.EXPAND_DURATION}ms ease-out, max-height ${PANEL_HEIGHTS.EXPAND_DURATION}ms ease-out`;
+      container.style.height = `${targetHeight}px`;
+      container.style.maxHeight = `${targetHeight}px`;
+      window.setTimeout(() => {
+        container.style.transition = '';
+      }, PANEL_HEIGHTS.EXPAND_DURATION);
+      return;
+    }
+
+    // No-op: leave the panel at whatever height it was dragged to.
+    container.style.transition = '';
+  }
+
+  private _findScrollerAt(start: HTMLElement | null): HTMLElement | null {
+    const root = this.panelContentEl()?.nativeElement as HTMLElement | undefined;
+    if (!root || !start) return null;
+    let node: HTMLElement | null = start;
+    while (node && node !== root.parentElement) {
+      if (node.scrollHeight > node.clientHeight) {
+        const overflowY = window.getComputedStyle(node).overflowY;
+        if (overflowY === 'auto' || overflowY === 'scroll') return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
   }
 
   private _setInitialHeight(): void {

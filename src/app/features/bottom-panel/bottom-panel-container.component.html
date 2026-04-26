@@ -13,7 +13,10 @@
     </button>
   </div>
 
-  <div class="bottom-panel-content">
+  <div
+    class="bottom-panel-content"
+    #panelContent
+  >
     @switch (panelContent()) {
       @case ('NOTES') {
         <notes></notes>

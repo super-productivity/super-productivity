@@ -53,6 +53,9 @@
   :host-context(.bottom-panel-sheet) & {
     overflow: hidden;
     padding: 0 var(--s-half);
+    // Hint to the browser that vertical pan is the expected gesture; the
+    // component arms a swipe-to-dismiss only when the inner scroller is at top.
+    touch-action: pan-y;
 
     > * {
       height: 100%;
