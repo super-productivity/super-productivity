@@ -125,7 +125,7 @@ export class MentionDirective implements OnChanges {
 
         // Handle string items directly
         if (typeof e === 'string') {
-          return e.toLowerCase().startsWith(searchStringLowerCase);
+          return e.toLowerCase().includes(searchStringLowerCase);
         }
 
         // Handle MentionItem objects
@@ -138,7 +138,7 @@ export class MentionDirective implements OnChanges {
           ) {
             return false;
           }
-          return itemValue.toLowerCase().startsWith(searchStringLowerCase);
+          return itemValue.toLowerCase().includes(searchStringLowerCase);
         }
 
         return false;
