@@ -17,7 +17,6 @@ import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { Task } from './task.model';
 import { SectionService } from '../section/section.service';
 import { WorkContextService } from '../work-context/work-context.service';
-import { WorkContextType } from '../work-context/work-context.model';
 
 @Injectable({
   providedIn: 'root',
@@ -101,12 +100,10 @@ export class MarkdownPasteService {
         }
 
         const workContextId = this._workContextService.activeWorkContextId;
-        const workContextType = this._workContextService.activeWorkContextType;
-        if (!workContextId || !workContextType) {
+        const sectionContextType = this._workContextService.activeWorkContextType;
+        if (!workContextId || !sectionContextType) {
           return;
         }
-        const sectionContextType =
-          workContextType === WorkContextType.PROJECT ? 'PROJECT' : 'TAG';
 
         // Create sections and tasks
         let sectionsCreated = 0;

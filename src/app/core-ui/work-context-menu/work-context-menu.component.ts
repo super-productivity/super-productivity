@@ -156,7 +156,7 @@ export class WorkContextMenuComponent implements OnInit {
           this._sectionService.addSection(
             title,
             this.contextId,
-            this.isForProject ? 'PROJECT' : 'TAG',
+            this.isForProject ? WorkContextType.PROJECT : WorkContextType.TAG,
           );
         }
       });

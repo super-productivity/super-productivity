@@ -7,11 +7,12 @@ import {
   updateSectionOrder,
 } from './section.actions';
 import { Section, SectionState } from '../section.model';
+import { WorkContextType } from '../../work-context/work-context.model';
 
 const makeSection = (overrides: Partial<Section> = {}): Section => ({
   id: 's1',
   contextId: 'project1',
-  contextType: 'PROJECT',
+  contextType: WorkContextType.PROJECT,
   title: 'Section 1',
   taskIds: [],
   ...overrides,
@@ -31,7 +32,7 @@ describe('sectionReducer', () => {
         section: {
           id: 'new',
           contextId: 'p1',
-          contextType: 'PROJECT',
+          contextType: WorkContextType.PROJECT,
           title: 'New',
         } as Section,
       });

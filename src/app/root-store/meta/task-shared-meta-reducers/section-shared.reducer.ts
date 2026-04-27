@@ -5,15 +5,12 @@ import {
   adapter as sectionAdapter,
   SECTION_FEATURE_NAME,
 } from '../../../features/section/store/section.reducer';
-import {
-  Section,
-  SectionContextType,
-  SectionState,
-} from '../../../features/section/section.model';
+import { Section, SectionState } from '../../../features/section/section.model';
 import { TaskSharedActions } from '../task-shared.actions';
 import { deleteTag, deleteTags } from '../../../features/tag/store/tag.actions';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
+import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { ActionHandlerMap } from './task-shared-helpers';
 
 interface ExtendedState extends RootState {
@@ -63,7 +60,7 @@ const cleanupSectionTaskIds = (
 const removeSectionsByContext = (
   sectionState: SectionState | undefined,
   contextIds: string[],
-  contextType: SectionContextType,
+  contextType: WorkContextType,
 ): SectionState | undefined => {
   if (!sectionState || contextIds.length === 0) return sectionState;
 
@@ -90,7 +87,7 @@ const cleanupTaskIdsInContexts = (
   sectionState: SectionState | undefined,
   taskIds: string[],
   contextIds: string[],
-  contextType: SectionContextType,
+  contextType: WorkContextType,
 ): SectionState | undefined => {
   if (!sectionState || taskIds.length === 0 || contextIds.length === 0) {
     return sectionState;
@@ -137,7 +134,7 @@ const handleTaskDeletion = (
 const handleContextDeletion = (
   state: ExtendedState,
   contextIds: string[],
-  contextType: SectionContextType,
+  contextType: WorkContextType,
 ): ExtendedState => {
   const updatedSectionState = removeSectionsByContext(
     state[SECTION_FEATURE_NAME],
@@ -180,7 +177,7 @@ const handleMoveToOtherProject = (
     state[SECTION_FEATURE_NAME],
     affectedTaskIds,
     [oldProjectId],
-    'PROJECT',
+    WorkContextType.PROJECT,
   );
   if (updatedSectionState === state[SECTION_FEATURE_NAME]) return state;
   return {
@@ -209,7 +206,7 @@ const handleTaskTagsChange = (
     state[SECTION_FEATURE_NAME],
     [taskId],
     removedTagIds,
-    'TAG',
+    WorkContextType.TAG,
   );
   if (updatedSectionState === state[SECTION_FEATURE_NAME]) return state;
   return {
@@ -232,15 +229,19 @@ const createActionHandlers = (
   },
   [TaskSharedActions.deleteProject.type]: () => {
     const { projectId } = action as ReturnType<typeof TaskSharedActions.deleteProject>;
-    return handleContextDeletion(state, [projectId], 'PROJECT') as RootState;
+    return handleContextDeletion(
+      state,
+      [projectId],
+      WorkContextType.PROJECT,
+    ) as RootState;
   },
   [deleteTag.type]: () => {
     const { id } = action as ReturnType<typeof deleteTag>;
-    return handleContextDeletion(state, [id], 'TAG') as RootState;
+    return handleContextDeletion(state, [id], WorkContextType.TAG) as RootState;
   },
   [deleteTags.type]: () => {
     const { ids } = action as ReturnType<typeof deleteTags>;
-    return handleContextDeletion(state, ids, 'TAG') as RootState;
+    return handleContextDeletion(state, ids, WorkContextType.TAG) as RootState;
   },
   [TaskSharedActions.moveToOtherProject.type]: () => {
     const { task, targetProjectId } = action as ReturnType<

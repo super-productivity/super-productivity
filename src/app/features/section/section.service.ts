@@ -2,7 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { nanoid } from 'nanoid';
 import { Observable } from 'rxjs';
-import { Section, SectionContextType } from './section.model';
+import { Section } from './section.model';
+import { WorkContextType } from '../work-context/work-context.model';
 import {
   addSection,
   addTaskToSection,
@@ -24,7 +25,7 @@ export class SectionService {
     return this._store.select(selectSectionsByContextId(contextId));
   }
 
-  addSection(title: string, contextId: string, contextType: SectionContextType): void {
+  addSection(title: string, contextId: string, contextType: WorkContextType): void {
     this._store.dispatch(
       addSection({
         section: {
@@ -46,7 +47,7 @@ export class SectionService {
     id: string,
     title: string,
     contextId: string,
-    contextType: SectionContextType,
+    contextType: WorkContextType,
   ): void {
     this._store.dispatch(
       addSection({

@@ -1,11 +1,10 @@
 import { EntityState } from '@ngrx/entity';
-
-export type SectionContextType = 'PROJECT' | 'TAG';
+import { WorkContextType } from '../work-context/work-context.model';
 
 export interface Section {
   id: string;
   contextId: string;
-  contextType: SectionContextType;
+  contextType: WorkContextType;
   title: string;
   taskIds: string[];
 }

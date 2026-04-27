@@ -41,7 +41,6 @@ import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-project-change.ani';
 import { WorkContextService } from '../work-context/work-context.service';
-import { WorkContextType } from '../work-context/work-context.model';
 import { ProjectService } from '../project/project.service';
 import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -400,11 +399,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         const contextId = this.workContextService.activeWorkContextId;
         const contextType = this.workContextService.activeWorkContextType;
         if (!contextId || !contextType) return;
-        this.sectionService.addSection(
-          title,
-          contextId,
-          contextType === WorkContextType.PROJECT ? 'PROJECT' : 'TAG',
-        );
+        this.sectionService.addSection(title, contextId, contextType);
       });
   }
 

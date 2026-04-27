@@ -8,6 +8,7 @@ import { SECTION_FEATURE_NAME } from '../../../features/section/store/section.re
 import { Section, SectionState } from '../../../features/section/section.model';
 import { createBaseState, createMockTask } from './test-utils';
 import { Task } from '../../../features/tasks/task.model';
+import { WorkContextType } from '../../../features/work-context/work-context.model';
 
 const sectionStateOf = (sections: Section[]): SectionState => ({
   ids: sections.map((s) => s.id),
@@ -49,7 +50,7 @@ describe('sectionSharedMetaReducer', () => {
       {
         id: 's1',
         contextId: 'p1',
-        contextType: 'PROJECT',
+        contextType: WorkContextType.PROJECT,
         title: 'A',
         taskIds: ['t1', 't2'],
       },
@@ -78,7 +79,7 @@ describe('sectionSharedMetaReducer', () => {
         {
           id: 's1',
           contextId: 'p1',
-          contextType: 'PROJECT',
+          contextType: WorkContextType.PROJECT,
           title: 'A',
           // sections only hold parent task ids in the new model, but the
           // meta-reducer must defensively scrub subtask ids too.
@@ -87,7 +88,7 @@ describe('sectionSharedMetaReducer', () => {
         {
           id: 's2',
           contextId: 'p1',
-          contextType: 'PROJECT',
+          contextType: WorkContextType.PROJECT,
           title: 'B',
           taskIds: ['sub1'],
         },
@@ -113,14 +114,14 @@ describe('sectionSharedMetaReducer', () => {
       {
         id: 's1',
         contextId: 'p1',
-        contextType: 'PROJECT',
+        contextType: WorkContextType.PROJECT,
         title: 'A',
         taskIds: ['t1', 't2'],
       },
       {
         id: 's2',
         contextId: 'p1',
-        contextType: 'PROJECT',
+        contextType: WorkContextType.PROJECT,
         title: 'B',
         taskIds: ['t3', 't4'],
       },
@@ -140,7 +141,7 @@ describe('sectionSharedMetaReducer', () => {
       {
         id: 's1',
         contextId: 'p1',
-        contextType: 'PROJECT',
+        contextType: WorkContextType.PROJECT,
         title: 'A',
         taskIds: ['t1'],
       },
@@ -155,7 +156,7 @@ describe('sectionSharedMetaReducer', () => {
       {
         id: 's1',
         contextId: 'p1',
-        contextType: 'PROJECT',
+        contextType: WorkContextType.PROJECT,
         title: 'A',
         taskIds: ['t2'],
       },
@@ -177,21 +178,21 @@ describe('sectionSharedMetaReducer', () => {
         {
           id: 'sP',
           contextId: 'p1',
-          contextType: 'PROJECT',
+          contextType: WorkContextType.PROJECT,
           title: 'In project',
           taskIds: [],
         },
         {
           id: 'sP2',
           contextId: 'p2',
-          contextType: 'PROJECT',
+          contextType: WorkContextType.PROJECT,
           title: 'Other project',
           taskIds: [],
         },
         {
           id: 'sT',
           contextId: 'p1',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'Tag with same id (no collision)',
           taskIds: [],
         },
@@ -220,14 +221,14 @@ describe('sectionSharedMetaReducer', () => {
         {
           id: 'sT',
           contextId: 'tag1',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'Tag section',
           taskIds: [],
         },
         {
           id: 'sP',
           contextId: 'tag1',
-          contextType: 'PROJECT',
+          contextType: WorkContextType.PROJECT,
           title: 'Project with same id',
           taskIds: [],
         },
@@ -252,21 +253,21 @@ describe('sectionSharedMetaReducer', () => {
           {
             id: 'sOld',
             contextId: 'oldP',
-            contextType: 'PROJECT',
+            contextType: WorkContextType.PROJECT,
             title: 'old project section',
             taskIds: ['parent', 'sub1', 'unrelated'],
           },
           {
             id: 'sOther',
             contextId: 'newP',
-            contextType: 'PROJECT',
+            contextType: WorkContextType.PROJECT,
             title: 'target project section',
             taskIds: [],
           },
           {
             id: 'sTag',
             contextId: 'oldP',
-            contextType: 'TAG',
+            contextType: WorkContextType.TAG,
             title: 'tag with same id as old project',
             taskIds: ['parent'],
           },
@@ -296,21 +297,21 @@ describe('sectionSharedMetaReducer', () => {
         {
           id: 'sa',
           contextId: 'a',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'tag a',
           taskIds: ['t1', 'other'],
         },
         {
           id: 'sb',
           contextId: 'b',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'tag b',
           taskIds: ['t1'],
         },
         {
           id: 'sc',
           contextId: 'c',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'tag c (still on the task)',
           taskIds: ['t1'],
         },
@@ -338,7 +339,7 @@ describe('sectionSharedMetaReducer', () => {
         {
           id: 'sa',
           contextId: 'a',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'tag a',
           taskIds: ['t1'],
         },
@@ -359,21 +360,21 @@ describe('sectionSharedMetaReducer', () => {
         {
           id: 's1',
           contextId: 'a',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'a',
           taskIds: [],
         },
         {
           id: 's2',
           contextId: 'b',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'b',
           taskIds: [],
         },
         {
           id: 's3',
           contextId: 'c',
-          contextType: 'TAG',
+          contextType: WorkContextType.TAG,
           title: 'c',
           taskIds: [],
         },
