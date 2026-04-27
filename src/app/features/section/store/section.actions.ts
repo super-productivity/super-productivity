@@ -63,27 +63,39 @@ export const updateSectionOrder = createAction(
 );
 
 /**
- * Atomically place `taskId` into `sectionId` (or null = no section) at the
- * position implied by `afterTaskId`. The reducer enforces uniqueness — if
- * the task is already in another section, it is removed from there in the
- * same reducer pass, producing a single sync operation.
+ * Atomically place `taskId` into `sectionId` at the position implied by
+ * `afterTaskId`. The reducer enforces uniqueness — if the task is already
+ * in another section, it is removed from there in the same reducer pass,
+ * producing a single sync operation keyed on the *destination* section.
  */
 export const addTaskToSection = createAction(
   '[Section] Add Task to Section',
-  (payload: {
-    sectionId: string | null;
-    taskId: string;
-    afterTaskId?: string | null;
-  }) => ({
+  (payload: { sectionId: string; taskId: string; afterTaskId?: string | null }) => ({
     ...payload,
     meta: {
       isPersistent: true,
       entityType: 'SECTION',
-      // entityId tracks the *target* section, or 'NONE' when ungrouping —
-      // sync conflict detection treats moves between sections as updates
-      // to the destination.
-      entityId: payload.sectionId ?? 'NONE',
+      entityId: payload.sectionId,
       opType: OpType.Move,
+    } satisfies PersistentActionMeta,
+  }),
+);
+
+/**
+ * Remove `taskId` from `sectionId`. Used when a task is dragged out of a
+ * section into the "no section" area. Persisted as an Update on the
+ * source section so concurrent ungroups from different sections never
+ * collide on a sentinel id (the prior 'NONE' approach).
+ */
+export const removeTaskFromSection = createAction(
+  '[Section] Remove Task from Section',
+  (payload: { sectionId: string; taskId: string }) => ({
+    ...payload,
+    meta: {
+      isPersistent: true,
+      entityType: 'SECTION',
+      entityId: payload.sectionId,
+      opType: OpType.Update,
     } satisfies PersistentActionMeta,
   }),
 );

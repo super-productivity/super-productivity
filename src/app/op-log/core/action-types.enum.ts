@@ -138,6 +138,7 @@ export enum ActionType {
   SECTION_UPDATE = '[Section] Update Section',
   SECTION_UPDATE_ORDER = '[Section] Update Section Order',
   SECTION_ADD_TASK = '[Section] Add Task to Section',
+  SECTION_REMOVE_TASK = '[Section] Remove Task from Section',
 
   // SimpleCounter actions (S)
   COUNTER_ADD = '[SimpleCounter] Add SimpleCounter',

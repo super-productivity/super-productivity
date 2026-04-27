@@ -8,6 +8,7 @@ import {
   addSection,
   addTaskToSection,
   deleteSection,
+  removeTaskFromSection,
   updateSection,
   updateSectionOrder,
 } from './store/section.actions';
@@ -69,15 +70,27 @@ export class SectionService {
   }
 
   /**
-   * Atomic: places `taskId` into `sectionId` (or null = no section) at the
-   * position implied by `afterTaskId`. Removes it from any other section
-   * in the same reducer pass.
+   * Atomic: places `taskId` into `targetSectionId` at the position implied
+   * by `afterTaskId`. Removes the task from any other section in the same
+   * reducer pass (uniqueness invariant).
    */
-  placeTaskInSection(
-    sectionId: string | null,
+  addTaskToSection(
+    targetSectionId: string,
     taskId: string,
     afterTaskId: string | null = null,
   ): void {
-    this._store.dispatch(addTaskToSection({ sectionId, taskId, afterTaskId }));
+    this._store.dispatch(
+      addTaskToSection({ sectionId: targetSectionId, taskId, afterTaskId }),
+    );
+  }
+
+  /**
+   * Removes `taskId` from `sourceSectionId`. Persisted as a single Update
+   * keyed on the source — concurrent ungroups from different sections do
+   * NOT collide (the prior `addTaskToSection({sectionId: null})` form
+   * shared a sentinel entityId).
+   */
+  removeTaskFromSection(sourceSectionId: string, taskId: string): void {
+    this._store.dispatch(removeTaskFromSection({ sectionId: sourceSectionId, taskId }));
   }
 }

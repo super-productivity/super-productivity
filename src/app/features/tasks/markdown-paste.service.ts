@@ -135,7 +135,7 @@ export class MarkdownPasteService {
             );
 
             if (sectionId) {
-              this._sectionService.placeTaskInSection(sectionId, taskId);
+              this._sectionService.addTaskToSection(sectionId, taskId);
             }
 
             // Create sub-tasks if any

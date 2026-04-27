@@ -319,17 +319,21 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     if (workContextId) {
       // Sections are pure visual grouping. A target/src that isn't one of the
-      // built-in list keywords is treated as a section id (or "no section"
-      // when ungrouping). Subtask drop-lists never reach this path.
+      // built-in list keywords is treated as a section id. Subtask drop-lists
+      // never reach this path (rejected by enterPredicate above).
       const isReservedList = (id: string): boolean =>
         ['DONE', 'UNDONE', 'BACKLOG', 'OVERDUE', 'LATER_TODAY'].includes(id);
       const targetIsSection = !isReservedList(target);
       const srcIsSection = !isReservedList(src);
 
-      if (targetIsSection || srcIsSection) {
-        const sectionId = targetIsSection ? (target as string) : null;
+      if (targetIsSection) {
         const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._sectionService.placeTaskInSection(sectionId, taskId, afterTaskId);
+        this._sectionService.addTaskToSection(target as string, taskId, afterTaskId);
+        return;
+      }
+      if (srcIsSection) {
+        // Dragged out of a section into the no-section area.
+        this._sectionService.removeTaskFromSection(src as string, taskId);
         return;
       }
     }

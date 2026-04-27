@@ -3,6 +3,7 @@ import {
   addSection,
   addTaskToSection,
   deleteSection,
+  removeTaskFromSection,
   updateSection,
   updateSectionOrder,
 } from './section.actions';
@@ -147,19 +148,6 @@ describe('sectionReducer', () => {
       expect(next.entities['s1']?.taskIds).toEqual(['b', 'a', 'c']);
     });
 
-    it('ungroups when sectionId is null — task is removed from any section it was in', () => {
-      const start = stateWithSections([
-        makeSection({ id: 's1', taskIds: ['t1', 't2'] }),
-        makeSection({ id: 's2', taskIds: ['t3'] }),
-      ]);
-      const next = sectionReducer(
-        start,
-        addTaskToSection({ sectionId: null, taskId: 't1', afterTaskId: null }),
-      );
-      expect(next.entities['s1']?.taskIds).toEqual(['t2']);
-      expect(next.entities['s2']?.taskIds).toEqual(['t3']);
-    });
-
     it('returns the same reference when nothing changes (target missing, task not in any section)', () => {
       const start = stateWithSections([makeSection({ id: 's1', taskIds: [] })]);
       const next = sectionReducer(
@@ -169,6 +157,40 @@ describe('sectionReducer', () => {
           taskId: 't1',
           afterTaskId: null,
         }),
+      );
+      expect(next).toBe(start);
+    });
+  });
+
+  describe('removeTaskFromSection', () => {
+    it('strips the task from the named section only', () => {
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['t1', 't2'] }),
+        makeSection({ id: 's2', taskIds: ['t1', 't3'] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        removeTaskFromSection({ sectionId: 's1', taskId: 't1' }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual(['t2']);
+      // Other sections untouched — caller is responsible for the right source.
+      expect(next.entities['s2']?.taskIds).toEqual(['t1', 't3']);
+    });
+
+    it('is a no-op when the section does not have the task', () => {
+      const start = stateWithSections([makeSection({ id: 's1', taskIds: ['t1'] })]);
+      const next = sectionReducer(
+        start,
+        removeTaskFromSection({ sectionId: 's1', taskId: 'absent' }),
+      );
+      expect(next).toBe(start);
+    });
+
+    it('is a no-op when the section is missing', () => {
+      const start = stateWithSections([makeSection({ id: 's1', taskIds: ['t1'] })]);
+      const next = sectionReducer(
+        start,
+        removeTaskFromSection({ sectionId: 'missing', taskId: 't1' }),
       );
       expect(next).toBe(start);
     });

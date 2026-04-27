@@ -76,6 +76,8 @@ export const sectionReducer = createReducer(
   on(SectionActions.addTaskToSection, (state, { sectionId, taskId, afterTaskId }) => {
     const updates: Update<Section>[] = [];
 
+    // Strip the task from any other section that currently holds it —
+    // a task lives in at most one section at a time.
     Object.values(state.entities).forEach((s) => {
       if (!s) return;
       if (s.id === sectionId) return;
@@ -83,20 +85,25 @@ export const sectionReducer = createReducer(
       if (removal) updates.push(removal);
     });
 
-    if (sectionId) {
-      const target = state.entities[sectionId];
-      if (target) {
-        const targetTaskIds = target.taskIds ?? [];
-        const newTaskIds = moveItemAfterAnchor(
-          taskId,
-          afterTaskId ?? null,
-          targetTaskIds.includes(taskId) ? targetTaskIds : [...targetTaskIds, taskId],
-        );
-        updates.push({ id: sectionId, changes: { taskIds: newTaskIds } });
-      }
+    const target = state.entities[sectionId];
+    if (target) {
+      const targetTaskIds = target.taskIds ?? [];
+      const newTaskIds = moveItemAfterAnchor(
+        taskId,
+        afterTaskId ?? null,
+        targetTaskIds.includes(taskId) ? targetTaskIds : [...targetTaskIds, taskId],
+      );
+      updates.push({ id: sectionId, changes: { taskIds: newTaskIds } });
     }
 
     return updates.length ? adapter.updateMany(updates, state) : state;
+  }),
+
+  on(SectionActions.removeTaskFromSection, (state, { sectionId, taskId }) => {
+    const section = state.entities[sectionId];
+    if (!section) return state;
+    const removal = removeTaskIdFromSection(section, taskId);
+    return removal ? adapter.updateOne(removal, state) : state;
   }),
 
   on(loadAllData, (state, { appDataComplete }) =>
