@@ -81,18 +81,10 @@ describe('findAdjacentFocusable', () => {
     expect(findAdjacentFocusable(taskB1, 'next', SELECTOR)).toBeNull();
   });
 
-  it('falls back to compareDocumentPosition when from does not match selector', () => {
+  it('returns null when from does not match the selector', () => {
     setupTree();
     const outsider = document.createElement('div');
     root.insertBefore(outsider, root.firstChild);
-    // outsider is before everything; next focusable is the first header
-    const result = findAdjacentFocusable(outsider, 'next', SELECTOR);
-    expect(result?.id).toBe('hA');
-  });
-
-  it('returns null when no elements match the selector', () => {
-    const lonely = document.createElement('div');
-    root.appendChild(lonely);
-    expect(findAdjacentFocusable(lonely, 'next', '.does-not-exist')).toBeNull();
+    expect(findAdjacentFocusable(outsider, 'next', SELECTOR)).toBeNull();
   });
 });

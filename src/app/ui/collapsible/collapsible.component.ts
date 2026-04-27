@@ -143,14 +143,16 @@ export class CollapsibleComponent implements OnInit, OnDestroy {
     }
   }
 
-  expandIfCollapsed(): void {
+  private expandIfCollapsed(): void {
     if (!this.isExpanded) {
       this.toggleExpand();
     }
   }
 
   focusHeader(): void {
-    const header = this._elementRef.nativeElement.querySelector('.collapsible-header');
+    const header = this._elementRef.nativeElement.querySelector(
+      ':scope > .collapsible-header',
+    );
     if (header instanceof HTMLElement) {
       header.focus();
     }
@@ -169,7 +171,7 @@ export class CollapsibleComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  static setAllGroupExpanded(isExpanded: boolean): void {
+  private static setAllGroupExpanded(isExpanded: boolean): void {
     for (const collapsible of CollapsibleComponent._groupCollapsibles) {
       if (collapsible.isExpanded !== isExpanded) {
         collapsible.isExpanded = isExpanded;
