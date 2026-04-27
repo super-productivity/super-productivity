@@ -24,8 +24,8 @@ import {
   moveProjectTaskInBacklogList,
   moveProjectTaskToBacklogList,
   moveProjectTaskToRegularList,
-  moveProjectTaskToSection,
 } from '../../project/store/project.actions';
+import { SectionService } from '../../section/section.service';
 import { moveSubTask } from '../store/task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { WorkContextService } from '../../work-context/work-context.service';
@@ -75,6 +75,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _taskService = inject(TaskService);
   private _workContextService = inject(WorkContextService);
   private _store = inject(Store);
+  private _sectionService = inject(SectionService);
   private _issueService = inject(IssueService);
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
@@ -312,20 +313,19 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
-    if (workContextId && this._workContextService.activeWorkContextType === WorkContextType.PROJECT) {
-      // NOTE: sections are not sub task lists
-      const targetIsSection = !['DONE', 'UNDONE', 'BACKLOG', 'OVERDUE', 'LATER_TODAY'].includes(target);
-      const srcIsSection = !['DONE', 'UNDONE', 'BACKLOG', 'OVERDUE', 'LATER_TODAY'].includes(src);
+    if (workContextId) {
+      // Sections are pure visual grouping. A target/src that isn't one of the
+      // built-in list keywords is treated as a section id (or "no section"
+      // when ungrouping). Subtask drop-lists never reach this path.
+      const isReservedList = (id: string): boolean =>
+        ['DONE', 'UNDONE', 'BACKLOG', 'OVERDUE', 'LATER_TODAY'].includes(id);
+      const targetIsSection = !isReservedList(target);
+      const srcIsSection = !isReservedList(src);
 
       if (targetIsSection || srcIsSection) {
-        const sectionId = targetIsSection ? target : null;
+        const sectionId = targetIsSection ? (target as string) : null;
         const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(moveProjectTaskToSection({
-          taskId,
-          sectionId,
-          afterTaskId,
-          workContextId,
-        }));
+        this._sectionService.placeTaskInSection(sectionId, taskId, afterTaskId);
         return;
       }
     }

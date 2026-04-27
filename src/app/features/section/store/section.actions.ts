@@ -5,59 +5,85 @@ import { PersistentActionMeta } from '../../../op-log/core/persistent-action.int
 import { OpType } from '../../../op-log/core/operation.types';
 
 export const loadSections = createAction(
-    '[Section] Load Sections',
-    props<{ sections: Section[] }>(),
+  '[Section] Load Sections',
+  props<{ sections: Section[] }>(),
 );
 
 export const addSection = createAction(
-    '[Section] Add Section',
-    (section: { section: Section }) => ({
-        ...section,
-        meta: {
-            isPersistent: true,
-            entityType: 'SECTION',
-            entityId: section.section.id,
-            opType: OpType.Create,
-        } satisfies PersistentActionMeta,
-    }),
+  '[Section] Add Section',
+  (payload: { section: Section }) => ({
+    ...payload,
+    meta: {
+      isPersistent: true,
+      entityType: 'SECTION',
+      entityId: payload.section.id,
+      opType: OpType.Create,
+    } satisfies PersistentActionMeta,
+  }),
 );
 
 export const deleteSection = createAction(
-    '[Section] Delete Section',
-    (payload: { id: string }) => ({
-        ...payload,
-        meta: {
-            isPersistent: true,
-            entityType: 'SECTION',
-            entityId: payload.id,
-            opType: OpType.Delete,
-        } satisfies PersistentActionMeta,
-    }),
+  '[Section] Delete Section',
+  (payload: { id: string }) => ({
+    ...payload,
+    meta: {
+      isPersistent: true,
+      entityType: 'SECTION',
+      entityId: payload.id,
+      opType: OpType.Delete,
+    } satisfies PersistentActionMeta,
+  }),
 );
 
 export const updateSection = createAction(
-    '[Section] Update Section',
-    (payload: { section: Update<Section> }) => ({
-        ...payload,
-        meta: {
-            isPersistent: true,
-            entityType: 'SECTION',
-            entityId: payload.section.id as string,
-            opType: OpType.Update,
-        } satisfies PersistentActionMeta,
-    }),
+  '[Section] Update Section',
+  (payload: { section: Update<Section> }) => ({
+    ...payload,
+    meta: {
+      isPersistent: true,
+      entityType: 'SECTION',
+      entityId: payload.section.id as string,
+      opType: OpType.Update,
+    } satisfies PersistentActionMeta,
+  }),
 );
 
 export const updateSectionOrder = createAction(
-    '[Section] Update Section Order',
-    (payload: { ids: string[] }) => ({
-        ...payload,
-        meta: {
-            isPersistent: true,
-            entityType: 'SECTION',
-            // Uses ids[0] as random entity id reference, actual sync logic handles payload
-            entityId: payload.ids[0],
-            opType: OpType.Update,
-        } satisfies PersistentActionMeta,
-    }),
+  '[Section] Update Section Order',
+  (payload: { contextId: string; ids: string[] }) => ({
+    ...payload,
+    meta: {
+      isPersistent: true,
+      entityType: 'SECTION',
+      entityIds: payload.ids,
+      opType: OpType.Move,
+      isBulk: true,
+    } satisfies PersistentActionMeta,
+  }),
+);
+
+/**
+ * Atomically place `taskId` into `sectionId` (or null = no section) at the
+ * position implied by `afterTaskId`. The reducer enforces uniqueness — if
+ * the task is already in another section, it is removed from there in the
+ * same reducer pass, producing a single sync operation.
+ */
+export const addTaskToSection = createAction(
+  '[Section] Add Task to Section',
+  (payload: {
+    sectionId: string | null;
+    taskId: string;
+    afterTaskId?: string | null;
+  }) => ({
+    ...payload,
+    meta: {
+      isPersistent: true,
+      entityType: 'SECTION',
+      // entityId tracks the *target* section, or 'NONE' when ungrouping —
+      // sync conflict detection treats moves between sections as updates
+      // to the destination.
+      entityId: payload.sectionId ?? 'NONE',
+      opType: OpType.Move,
+    } satisfies PersistentActionMeta,
+  }),
 );

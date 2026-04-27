@@ -2,64 +2,81 @@ import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { nanoid } from 'nanoid';
 import { Observable } from 'rxjs';
-import { Section } from './section.model';
-import { addSection, deleteSection, updateSection, updateSectionOrder } from './store/section.actions';
-import { selectAllSections, selectSectionsByProjectId } from './store/section.selectors';
+import { Section, SectionContextType } from './section.model';
+import {
+  addSection,
+  addTaskToSection,
+  deleteSection,
+  updateSection,
+  updateSectionOrder,
+} from './store/section.actions';
+import { selectAllSections, selectSectionsByContextId } from './store/section.selectors';
 
 @Injectable({
-    providedIn: 'root',
+  providedIn: 'root',
 })
 export class SectionService {
-    private _store = inject(Store);
+  private _store = inject(Store);
 
-    // Expose selectors
-    sections$: Observable<Section[]> = this._store.select(selectAllSections);
+  sections$: Observable<Section[]> = this._store.select(selectAllSections);
 
-    getSectionsByProjectId$(projectId: string): Observable<Section[]> {
-        return this._store.select(selectSectionsByProjectId(projectId));
-    }
+  getSectionsByContextId$(contextId: string): Observable<Section[]> {
+    return this._store.select(selectSectionsByContextId(contextId));
+  }
 
-    addSection(title: string, projectId: string | null = null): void {
-        const id = nanoid();
-        this._store.dispatch(addSection({
-            section: {
-                id,
-                title,
-                projectId,
-            }
-        }));
-    }
+  addSection(title: string, contextId: string, contextType: SectionContextType): void {
+    this._store.dispatch(
+      addSection({
+        section: {
+          id: nanoid(),
+          contextId,
+          contextType,
+          title,
+          taskIds: [],
+        },
+      }),
+    );
+  }
 
-    // Generate a section ID without dispatching
-    generateSectionId(): string {
-        return nanoid();
-    }
+  generateSectionId(): string {
+    return nanoid();
+  }
 
-    // Add section with a pre-generated ID
-    addSectionWithId(id: string, title: string, projectId: string | null = null): void {
-        this._store.dispatch(addSection({
-            section: {
-                id,
-                title,
-                projectId,
-            }
-        }));
-    }
+  addSectionWithId(
+    id: string,
+    title: string,
+    contextId: string,
+    contextType: SectionContextType,
+  ): void {
+    this._store.dispatch(
+      addSection({
+        section: { id, contextId, contextType, title, taskIds: [] },
+      }),
+    );
+  }
 
-    deleteSection(id: string): void {
-        this._store.dispatch(deleteSection({ id }));
-    }
+  deleteSection(id: string): void {
+    this._store.dispatch(deleteSection({ id }));
+  }
 
-    updateSection(id: string, sectionChanges: Partial<Section>): void {
-        this._store.dispatch(updateSection({
-            section: {
-                id,
-                changes: sectionChanges,
-            }
-        }));
-    }
+  updateSection(id: string, sectionChanges: Partial<Section>): void {
+    this._store.dispatch(updateSection({ section: { id, changes: sectionChanges } }));
+  }
 
-    updateSectionOrder(ids: string[]): void {
-        this._store.dispatch(updateSectionOrder({ ids }));
-    }
+  updateSectionOrder(contextId: string, ids: string[]): void {
+    this._store.dispatch(updateSectionOrder({ contextId, ids }));
+  }
+
+  /**
+   * Atomic: places `taskId` into `sectionId` (or null = no section) at the
+   * position implied by `afterTaskId`. Removes it from any other section
+   * in the same reducer pass.
+   */
+  placeTaskInSection(
+    sectionId: string | null,
+    taskId: string,
+    afterTaskId: string | null = null,
+  ): void {
+    this._store.dispatch(addTaskToSection({ sectionId, taskId, afterTaskId }));
+  }
 }

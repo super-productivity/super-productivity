@@ -17,6 +17,7 @@ import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { Task } from './task.model';
 import { SectionService } from '../section/section.service';
 import { WorkContextService } from '../work-context/work-context.service';
+import { WorkContextType } from '../work-context/work-context.model';
 
 @Injectable({
   providedIn: 'root',
@@ -77,7 +78,10 @@ export class MarkdownPasteService {
       const sectionsData = parseMarkdownWithSections(pastedText);
       if (sectionsData && sectionsData.hasHeaders) {
         // Confirm with user
-        const totalTasks = sectionsData.sections.reduce((sum, section) => sum + section.tasks.length, 0);
+        const totalTasks = sectionsData.sections.reduce(
+          (sum, section) => sum + section.tasks.length,
+          0,
+        );
         const dialogRef = this._matDialog.open(DialogConfirmComponent, {
           data: {
             okTxt: T.G.CONFIRM,
@@ -97,8 +101,15 @@ export class MarkdownPasteService {
         }
 
         const workContextId = this._workContextService.activeWorkContextId;
+        const workContextType = this._workContextService.activeWorkContextType;
+        if (!workContextId || !workContextType) {
+          return;
+        }
+        const sectionContextType =
+          workContextType === WorkContextType.PROJECT ? 'PROJECT' : 'TAG';
 
         // Create sections and tasks
+        let sectionsCreated = 0;
         for (const section of sectionsData.sections) {
           let sectionId: string | null = null;
 
@@ -106,7 +117,12 @@ export class MarkdownPasteService {
           if (section.sectionTitle) {
             // Generate ID locally to avoid async wait issues
             sectionId = this._sectionService.generateSectionId();
-            this._sectionService.addSectionWithId(sectionId, section.sectionTitle, workContextId);
+            this._sectionService.addSectionWithId(
+              sectionId,
+              section.sectionTitle,
+              workContextId,
+              sectionContextType,
+            );
           }
 
           // Create tasks for this section
@@ -117,10 +133,13 @@ export class MarkdownPasteService {
               {
                 isDone: task.isCompleted,
                 notes: task.notes,
-                sectionId: sectionId,
               },
               true,
             );
+
+            if (sectionId) {
+              this._sectionService.placeTaskInSection(sectionId, taskId);
+            }
 
             // Create sub-tasks if any
             if (task.subTasks && task.subTasks.length > 0) {
@@ -133,11 +152,16 @@ export class MarkdownPasteService {
                     notes: subTask.notes,
                   },
                 });
-                this._store.dispatch(
-                  addSubTask({ task: subTaskObj, parentId: taskId }),
-                );
+                this._store.dispatch(addSubTask({ task: subTaskObj, parentId: taskId }));
               }
             }
+          }
+
+          // Yield every 10 sections to prevent the event loop from stalling
+          // on large pastes (50+ sections × 10+ tasks).
+          sectionsCreated++;
+          if (sectionsCreated % 10 === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
           }
         }
         return;

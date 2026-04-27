@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  DestroyRef,
   OnInit,
   inject,
   Input,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { T } from 'src/app/t.const';
 import { TODAY_TAG } from '../../features/tag/tag.const';
@@ -51,6 +53,7 @@ export class WorkContextMenuComponent implements OnInit {
   private _shareService = inject(ShareService);
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
+  private _destroyRef = inject(DestroyRef);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -147,9 +150,14 @@ export class WorkContextMenuComponent implements OnInit {
         },
       })
       .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe((title: string) => {
         if (title) {
-          this._sectionService.addSection(title, this.contextId);
+          this._sectionService.addSection(
+            title,
+            this.contextId,
+            this.isForProject ? 'PROJECT' : 'TAG',
+          );
         }
       });
   }

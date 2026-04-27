@@ -3,6 +3,7 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
+  DestroyRef,
   effect,
   ElementRef,
   afterNextRender,
@@ -14,7 +15,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { MatMenu, MatMenuTrigger, MatMenuItem, MatMenuModule } from '@angular/material/menu';
+import { MatMenuModule } from '@angular/material/menu';
 
 import { TaskService } from '../tasks/task.service';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
@@ -40,9 +41,10 @@ import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-project-change.ani';
 import { WorkContextService } from '../work-context/work-context.service';
+import { WorkContextType } from '../work-context/work-context.model';
 import { ProjectService } from '../project/project.service';
 import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import {
@@ -119,7 +121,6 @@ import { recordSearchNavDebug } from '../../util/search-nav-debug';
     RepeatCfgPreviewComponent,
   ],
 })
-
 export class WorkViewComponent implements OnInit, OnDestroy {
   private static readonly _FOCUS_ITEM_RETRY_DELAY = 250;
   private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
@@ -137,6 +138,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _snackService = inject(SnackService);
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
+  private _destroyRef = inject(DestroyRef);
 
   isFinishDayEnabled = computed(
     () => this._globalConfigService.appFeatures().isFinishDayEnabled,
@@ -195,7 +197,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   // Section Logic
   sections = toSignal(
     this.workContextService.activeWorkContextId$.pipe(
-      switchMap((id) => (id ? this.sectionService.getSectionsByProjectId$(id) : of([]))),
+      switchMap((id) => (id ? this.sectionService.getSectionsByContextId$(id) : of([]))),
     ),
     { initialValue: [] },
   );
@@ -204,21 +206,31 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     const tasks = this.undoneTasks();
     const sections = this.sections();
 
+    if (!sections.length) {
+      return { dict: {} as Record<string, TaskWithSubTasks[]>, noSection: tasks };
+    }
+
+    // Build sectionId-by-taskId in O(m) where m = total taskIds across sections.
+    const sectionByTaskId = new Map<string, string>();
+    for (const s of sections) {
+      for (const tId of s.taskIds) sectionByTaskId.set(tId, s.id);
+    }
+
     const dict: Record<string, TaskWithSubTasks[]> = {};
+    for (const s of sections) dict[s.id] = [];
     const noSection: TaskWithSubTasks[] = [];
 
-    tasks.forEach((task) => {
-      if (task.sectionId && sections.find((s) => s.id === task.sectionId)) {
-        if (!dict[task.sectionId]) dict[task.sectionId] = [];
-        dict[task.sectionId].push(task);
+    for (const task of tasks) {
+      const sId = sectionByTaskId.get(task.id);
+      if (sId) {
+        dict[sId].push(task);
       } else {
         noSection.push(task);
       }
-    });
+    }
 
     return { dict, noSection };
   });
-
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -382,13 +394,17 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         },
       })
       .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe((title: string | undefined) => {
-        if (title) {
-          this.sectionService.addSection(
-            title,
-            this.workContextService.activeWorkContextId,
-          );
-        }
+        if (!title) return;
+        const contextId = this.workContextService.activeWorkContextId;
+        const contextType = this.workContextService.activeWorkContextType;
+        if (!contextId || !contextType) return;
+        this.sectionService.addSection(
+          title,
+          contextId,
+          contextType === WorkContextType.PROJECT ? 'PROJECT' : 'TAG',
+        );
       });
   }
 
@@ -396,10 +412,11 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this._matDialog
       .open(DialogConfirmComponent, {
         data: {
-          message: T.CONFIRM.DELETE_SECTION_CASCADE,
+          message: T.CONFIRM.DELETE_SECTION,
         },
       })
       .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe((isConfirm: boolean) => {
         if (isConfirm) {
           this.sectionService.deleteSection(id);
@@ -416,6 +433,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         },
       })
       .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe((newTitle: string | undefined) => {
         if (newTitle) {
           this.sectionService.updateSection(id, { title: newTitle });
@@ -465,15 +483,17 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     const newSections = [...sections];
     moveItemInArray(newSections, event.previousIndex, event.currentIndex);
 
-    // Update the section order in the store
-    this.sectionService.updateSectionOrder(newSections.map((s) => s.id));
+    const contextId = this.workContextService.activeWorkContextId;
+    if (!contextId) return;
+    this.sectionService.updateSectionOrder(
+      contextId,
+      newSections.map((s) => s.id),
+    );
   }
 
   private _initScrollTracking(): void {
     this._subs.add(
-      this.upperContainerScroll$.subscribe(({
-        target
-      }) => {
+      this.upperContainerScroll$.subscribe(({ target }) => {
         if ((target as HTMLElement).scrollTop !== 0) {
           this.layoutService.isWorkViewScrolled.set(true);
         } else {
