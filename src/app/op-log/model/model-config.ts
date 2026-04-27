@@ -97,7 +97,6 @@ export const MODEL_CONFIGS: AllModelConfig = {
   section: {
     defaultData: initialSectionState,
     isMainFileModel: true,
-    validate: appDataValidators.section,
     repair: fixEntityStateConsistency,
   },
   note: {
