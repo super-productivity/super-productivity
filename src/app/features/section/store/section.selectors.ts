@@ -1,4 +1,4 @@
-import { createFeatureSelector, createSelector, MemoizedSelector } from '@ngrx/store';
+import { createFeatureSelector, createSelector } from '@ngrx/store';
 import { Section, SectionState } from '../section.model';
 import { selectAll, SECTION_FEATURE_NAME } from './section.reducer';
 
@@ -8,22 +8,22 @@ export const selectSectionFeatureState =
 export const selectAllSections = createSelector(selectSectionFeatureState, selectAll);
 
 /**
- * Memoized selector grouping sections by contextId. Replaces the per-call
- * factory pattern from the original PR so consumers share a cache instance.
+ * Memoized selector grouping sections by contextId. A Map (not a plain
+ * object) is used so that a malicious sync peer cannot poison
+ * Object.prototype via a crafted contextId like "__proto__".
  */
 export const selectSectionsByContextIdMap = createSelector(
   selectAllSections,
-  (sections): Record<string, Section[]> => {
-    const map: Record<string, Section[]> = {};
+  (sections): Map<string, Section[]> => {
+    const map = new Map<string, Section[]>();
     for (const s of sections) {
-      if (!map[s.contextId]) map[s.contextId] = [];
-      map[s.contextId].push(s);
+      const arr = map.get(s.contextId);
+      if (arr) {
+        arr.push(s);
+      } else {
+        map.set(s.contextId, [s]);
+      }
     }
     return map;
   },
 );
-
-export const selectSectionsByContextId = (
-  contextId: string,
-): MemoizedSelector<object, Section[]> =>
-  createSelector(selectSectionsByContextIdMap, (map) => map[contextId] ?? []);

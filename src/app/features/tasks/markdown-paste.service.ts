@@ -108,19 +108,13 @@ export class MarkdownPasteService {
         // Create sections and tasks
         let sectionsCreated = 0;
         for (const section of sectionsData.sections) {
-          let sectionId: string | null = null;
-
-          // Create section if it has a title
-          if (section.sectionTitle) {
-            // Generate ID locally to avoid async wait issues
-            sectionId = this._sectionService.generateSectionId();
-            this._sectionService.addSectionWithId(
-              sectionId,
-              section.sectionTitle,
-              workContextId,
-              sectionContextType,
-            );
-          }
+          const sectionId = section.sectionTitle
+            ? this._sectionService.addSection(
+                section.sectionTitle,
+                workContextId,
+                sectionContextType,
+              )
+            : null;
 
           // Create tasks for this section
           for (const task of section.tasks) {

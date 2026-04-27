@@ -27,9 +27,11 @@ const removeTaskIdFromSection = (
 };
 
 const normalizeLoadedSections = (state: SectionState): SectionState => {
+  // Older persisted shapes could write `section: {}` with no ids array.
+  const ids = (state.ids as string[] | undefined) ?? [];
   let dirty = false;
   const entities: SectionState['entities'] = {};
-  for (const id of state.ids as string[]) {
+  for (const id of ids) {
     const s = state.entities[id];
     if (!s) continue;
     if (!Array.isArray(s.taskIds)) {
@@ -38,6 +40,9 @@ const normalizeLoadedSections = (state: SectionState): SectionState => {
     } else {
       entities[id] = s;
     }
+  }
+  if (state.ids === undefined) {
+    return { ids: [], entities };
   }
   return dirty ? { ...state, entities } : state;
 };
@@ -77,13 +82,16 @@ export const sectionReducer = createReducer(
     const updates: Update<Section>[] = [];
 
     // Strip the task from any other section that currently holds it —
-    // a task lives in at most one section at a time.
-    Object.values(state.entities).forEach((s) => {
-      if (!s) return;
-      if (s.id === sectionId) return;
+    // a task lives in at most one section at a time, so we can stop at
+    // the first hit.
+    for (const s of Object.values(state.entities)) {
+      if (!s || s.id === sectionId) continue;
       const removal = removeTaskIdFromSection(s, taskId);
-      if (removal) updates.push(removal);
-    });
+      if (removal) {
+        updates.push(removal);
+        break;
+      }
+    }
 
     const target = state.entities[sectionId];
     if (target) {

@@ -334,6 +334,42 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sc']?.taskIds).toEqual(['t1']);
     });
 
+    it('handles bulk updateTasks with tagIds changes across multiple tasks', () => {
+      const state = stateWith({ t1: { tagIds: ['a', 'b'] }, t2: { tagIds: ['a'] } }, [
+        {
+          id: 'sa',
+          contextId: 'a',
+          contextType: WorkContextType.TAG,
+          title: 'tag a',
+          taskIds: ['t1', 't2'],
+        },
+        {
+          id: 'sb',
+          contextId: 'b',
+          contextType: WorkContextType.TAG,
+          title: 'tag b',
+          taskIds: ['t1'],
+        },
+      ]);
+
+      metaReducer(
+        state,
+        TaskSharedActions.updateTasks({
+          tasks: [
+            { id: 't1', changes: { tagIds: [] } }, // drop a + b
+            { id: 't2', changes: { title: 'rename' } }, // no tagIds change
+          ],
+        } as any),
+      );
+
+      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+        SECTION_FEATURE_NAME
+      ] as SectionState;
+      // t1 dropped both tags → removed from sa and sb. t2 untouched.
+      expect(updated.entities['sa']?.taskIds).toEqual(['t2']);
+      expect(updated.entities['sb']?.taskIds).toEqual([]);
+    });
+
     it('updateTask without tagIds change is a no-op for sections', () => {
       const state = stateWith({ t1: { tagIds: ['a'] } }, [
         {

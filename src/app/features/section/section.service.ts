@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { nanoid } from 'nanoid';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { Section } from './section.model';
 import { WorkContextType } from '../work-context/work-context.model';
 import {
@@ -12,7 +13,10 @@ import {
   updateSection,
   updateSectionOrder,
 } from './store/section.actions';
-import { selectAllSections, selectSectionsByContextId } from './store/section.selectors';
+import {
+  selectAllSections,
+  selectSectionsByContextIdMap,
+} from './store/section.selectors';
 
 @Injectable({
   providedIn: 'root',
@@ -23,38 +27,25 @@ export class SectionService {
   sections$: Observable<Section[]> = this._store.select(selectAllSections);
 
   getSectionsByContextId$(contextId: string): Observable<Section[]> {
-    return this._store.select(selectSectionsByContextId(contextId));
+    return this._store
+      .select(selectSectionsByContextIdMap)
+      .pipe(map((m) => m.get(contextId) ?? []));
   }
 
-  addSection(title: string, contextId: string, contextType: WorkContextType): void {
-    this._store.dispatch(
-      addSection({
-        section: {
-          id: nanoid(),
-          contextId,
-          contextType,
-          title,
-          taskIds: [],
-        },
-      }),
-    );
-  }
-
-  generateSectionId(): string {
-    return nanoid();
-  }
-
-  addSectionWithId(
-    id: string,
-    title: string,
-    contextId: string,
-    contextType: WorkContextType,
-  ): void {
+  /**
+   * Dispatches `addSection` and returns the new id synchronously. Callers
+   * that need the id (e.g. the markdown-paste flow that places tasks into
+   * the just-created section) read it from the return value — store
+   * dispatch is synchronous, so no async awaiting is needed.
+   */
+  addSection(title: string, contextId: string, contextType: WorkContextType): string {
+    const id = nanoid();
     this._store.dispatch(
       addSection({
         section: { id, contextId, contextType, title, taskIds: [] },
       }),
     );
+    return id;
   }
 
   deleteSection(id: string): void {

@@ -13,8 +13,19 @@ import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { ActionHandlerMap } from './task-shared-helpers';
 
+/**
+ * IMPORTANT — Phase 3.5 placement is load-bearing.
+ *
+ * This meta-reducer reads `state.task.entities[id]` (for projectId,
+ * tagIds, subTaskIds) BEFORE `taskSharedCrudMetaReducer` strips deleted
+ * tasks or applies updates. If anyone moves it below Phase 4, the
+ * `handleMoveToOtherProject` and `handleTaskTagsChange` handlers will
+ * silently no-op because state already reflects the new values.
+ *
+ * The registry's validateMetaReducerOrdering() pins the position.
+ */
 interface ExtendedState extends RootState {
-  [SECTION_FEATURE_NAME]?: SectionState;
+  [SECTION_FEATURE_NAME]: SectionState;
 }
 
 const collectAffectedTaskIds = (
@@ -33,10 +44,10 @@ const collectAffectedTaskIds = (
 };
 
 const cleanupSectionTaskIds = (
-  sectionState: SectionState | undefined,
+  sectionState: SectionState,
   removedTaskIds: string[],
-): SectionState | undefined => {
-  if (!sectionState || removedTaskIds.length === 0) return sectionState;
+): SectionState => {
+  if (removedTaskIds.length === 0) return sectionState;
 
   const removedSet = new Set(removedTaskIds);
   const updates: Update<Section>[] = [];
@@ -58,11 +69,11 @@ const cleanupSectionTaskIds = (
 };
 
 const removeSectionsByContext = (
-  sectionState: SectionState | undefined,
+  sectionState: SectionState,
   contextIds: string[],
   contextType: WorkContextType,
-): SectionState | undefined => {
-  if (!sectionState || contextIds.length === 0) return sectionState;
+): SectionState => {
+  if (contextIds.length === 0) return sectionState;
 
   const contextIdSet = new Set(contextIds);
   const idsToRemove: string[] = [];
@@ -78,20 +89,18 @@ const removeSectionsByContext = (
 };
 
 /**
- * Remove `taskIds` from any section whose owning context appears in
+ * Strip `taskIds` from any section whose owning context appears in
  * `contextIds` and matches `contextType`. Used when a task leaves a
  * project (moveToOtherProject) or a tag (updateTask removing a tagId)
- * — the task's sectionId in the old context becomes stale.
+ * — the task's section membership in the old context becomes stale.
  */
-const cleanupTaskIdsInContexts = (
-  sectionState: SectionState | undefined,
+const removeTaskIdsFromContextSections = (
+  sectionState: SectionState,
   taskIds: string[],
   contextIds: string[],
   contextType: WorkContextType,
-): SectionState | undefined => {
-  if (!sectionState || taskIds.length === 0 || contextIds.length === 0) {
-    return sectionState;
-  }
+): SectionState => {
+  if (taskIds.length === 0 || contextIds.length === 0) return sectionState;
 
   const taskIdSet = new Set(taskIds);
   const contextIdSet = new Set(contextIds);
@@ -113,55 +122,40 @@ const cleanupTaskIdsInContexts = (
   return sectionAdapter.updateMany(updates, sectionState);
 };
 
+const withSectionStateUpdate = (
+  state: ExtendedState,
+  next: SectionState,
+): ExtendedState =>
+  next === state[SECTION_FEATURE_NAME]
+    ? state
+    : ({ ...state, [SECTION_FEATURE_NAME]: next } as ExtendedState);
+
 const handleTaskDeletion = (
   state: ExtendedState,
   primaryTaskIds: string[],
 ): ExtendedState => {
   const affectedIds = collectAffectedTaskIds(state, primaryTaskIds);
-  const updatedSectionState = cleanupSectionTaskIds(
-    state[SECTION_FEATURE_NAME],
-    affectedIds,
+  return withSectionStateUpdate(
+    state,
+    cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], affectedIds),
   );
-  if (updatedSectionState === state[SECTION_FEATURE_NAME]) {
-    return state;
-  }
-  return {
-    ...state,
-    [SECTION_FEATURE_NAME]: updatedSectionState,
-  } as ExtendedState;
 };
 
 const handleContextDeletion = (
   state: ExtendedState,
   contextIds: string[],
   contextType: WorkContextType,
-): ExtendedState => {
-  const updatedSectionState = removeSectionsByContext(
-    state[SECTION_FEATURE_NAME],
-    contextIds,
-    contextType,
+): ExtendedState =>
+  withSectionStateUpdate(
+    state,
+    removeSectionsByContext(state[SECTION_FEATURE_NAME], contextIds, contextType),
   );
-  if (updatedSectionState === state[SECTION_FEATURE_NAME]) {
-    return state;
-  }
-  return {
-    ...state,
-    [SECTION_FEATURE_NAME]: updatedSectionState,
-  } as ExtendedState;
-};
-
-const collectTaskAndSubtaskIds = (state: ExtendedState, taskId: string): string[] => {
-  const t = state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
-  if (!t) return [taskId];
-  if (!t.subTaskIds?.length) return [taskId];
-  return [taskId, ...t.subTaskIds];
-};
 
 /**
- * Task is moving from its current project to `targetProjectId`. Strip the
- * task (and its subtasks) from any project-scoped section in the old
- * project; tag-scoped sections are unaffected because tag membership
- * doesn't change on a project move.
+ * Task is moving from its current project to `targetProjectId`. Strip
+ * the task (and its subtasks) from any project-scoped section in the
+ * old project; tag-scoped sections are unaffected because tag
+ * membership doesn't change on a project move.
  */
 const handleMoveToOtherProject = (
   state: ExtendedState,
@@ -172,18 +166,16 @@ const handleMoveToOtherProject = (
   const oldProjectId = t?.projectId;
   if (!oldProjectId || oldProjectId === targetProjectId) return state;
 
-  const affectedTaskIds = collectTaskAndSubtaskIds(state, taskId);
-  const updatedSectionState = cleanupTaskIdsInContexts(
-    state[SECTION_FEATURE_NAME],
-    affectedTaskIds,
-    [oldProjectId],
-    WorkContextType.PROJECT,
+  const affectedTaskIds = collectAffectedTaskIds(state, [taskId]);
+  return withSectionStateUpdate(
+    state,
+    removeTaskIdsFromContextSections(
+      state[SECTION_FEATURE_NAME],
+      affectedTaskIds,
+      [oldProjectId],
+      WorkContextType.PROJECT,
+    ),
   );
-  if (updatedSectionState === state[SECTION_FEATURE_NAME]) return state;
-  return {
-    ...state,
-    [SECTION_FEATURE_NAME]: updatedSectionState,
-  } as ExtendedState;
 };
 
 /**
@@ -202,17 +194,15 @@ const handleTaskTagsChange = (
   const removedTagIds = oldTagIds.filter((id) => !newSet.has(id));
   if (!removedTagIds.length) return state;
 
-  const updatedSectionState = cleanupTaskIdsInContexts(
-    state[SECTION_FEATURE_NAME],
-    [taskId],
-    removedTagIds,
-    WorkContextType.TAG,
+  return withSectionStateUpdate(
+    state,
+    removeTaskIdsFromContextSections(
+      state[SECTION_FEATURE_NAME],
+      [taskId],
+      removedTagIds,
+      WorkContextType.TAG,
+    ),
   );
-  if (updatedSectionState === state[SECTION_FEATURE_NAME]) return state;
-  return {
-    ...state,
-    [SECTION_FEATURE_NAME]: updatedSectionState,
-  } as ExtendedState;
 };
 
 const createActionHandlers = (
@@ -255,13 +245,38 @@ const createActionHandlers = (
     if (!Array.isArray(tagIds)) return state as RootState;
     return handleTaskTagsChange(state, task.id as string, tagIds) as RootState;
   },
+  [TaskSharedActions.updateTasks.type]: () => {
+    const { tasks } = action as ReturnType<typeof TaskSharedActions.updateTasks>;
+    let next: ExtendedState = state;
+    for (const u of tasks) {
+      const tagIds = u.changes.tagIds;
+      if (!Array.isArray(tagIds)) continue;
+      next = handleTaskTagsChange(next, u.id as string, tagIds);
+    }
+    return next as RootState;
+  },
 });
+
+// Action types this meta-reducer reacts to. Looked up in O(1) so the
+// 99% of dispatches that don't match short-circuit before allocating
+// the handler dispatch table.
+const HANDLED_ACTION_TYPES: ReadonlySet<string> = new Set([
+  TaskSharedActions.deleteTask.type,
+  TaskSharedActions.deleteTasks.type,
+  TaskSharedActions.deleteProject.type,
+  deleteTag.type,
+  deleteTags.type,
+  TaskSharedActions.moveToOtherProject.type,
+  TaskSharedActions.updateTask.type,
+  TaskSharedActions.updateTasks.type,
+]);
 
 export const sectionSharedMetaReducer: MetaReducer = (
   reducer: ActionReducer<any, Action>,
 ) => {
   return (state: unknown, action: Action) => {
     if (!state) return reducer(state, action);
+    if (!HANDLED_ACTION_TYPES.has(action.type)) return reducer(state, action);
 
     const extendedState = state as ExtendedState;
     const handlers = createActionHandlers(extendedState, action);

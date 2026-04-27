@@ -476,22 +476,13 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   };
 
   dropSection(event: CdkDragDrop<Section[]>): void {
-    const sections = this.sections();
-    if (event.previousIndex === event.currentIndex) {
-      return;
-    }
-
-    // We can't mutate the array directly as it is from a signal/store
-    // So we copy it, move the item, and then extract the IDs
-    const newSections = [...sections];
-    moveItemInArray(newSections, event.previousIndex, event.currentIndex);
-
+    if (event.previousIndex === event.currentIndex) return;
     const contextId = this.workContextService.activeWorkContextId;
     if (!contextId) return;
-    this.sectionService.updateSectionOrder(
-      contextId,
-      newSections.map((s) => s.id),
-    );
+
+    const ids = this.sections().map((s) => s.id);
+    moveItemInArray(ids, event.previousIndex, event.currentIndex);
+    this.sectionService.updateSectionOrder(contextId, ids);
   }
 
   private _initScrollTracking(): void {
