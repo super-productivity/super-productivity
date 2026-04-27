@@ -44,7 +44,6 @@ import {
   SECTION_FEATURE_NAME,
   sectionReducer,
 } from '../features/section/store/section.reducer';
-import { SectionEffects } from '../features/section/store/section.effects';
 import { TAG_FEATURE_NAME, tagReducer } from '../features/tag/store/tag.reducer';
 import { TagEffects } from '../features/tag/store/tag.effects';
 import {
@@ -143,8 +142,6 @@ import {
     EffectsModule.forFeature([SimpleCounterEffects]),
 
     StoreModule.forFeature(SECTION_FEATURE_NAME, sectionReducer),
-    EffectsModule.forFeature([SectionEffects]),
-
 
     StoreModule.forFeature(TAG_FEATURE_NAME, tagReducer),
     EffectsModule.forFeature([TagEffects]),
