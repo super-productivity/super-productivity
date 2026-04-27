@@ -242,6 +242,118 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sP']).toBeDefined();
     });
 
+    it('strips a moved task (and its subtasks) from sections in the old project only', () => {
+      const state = stateWith(
+        {
+          parent: { projectId: 'oldP', subTaskIds: ['sub1'] },
+          sub1: { projectId: 'oldP', parentId: 'parent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: 'PROJECT',
+            title: 'old project section',
+            taskIds: ['parent', 'sub1', 'unrelated'],
+          },
+          {
+            id: 'sOther',
+            contextId: 'newP',
+            contextType: 'PROJECT',
+            title: 'target project section',
+            taskIds: [],
+          },
+          {
+            id: 'sTag',
+            contextId: 'oldP',
+            contextType: 'TAG',
+            title: 'tag with same id as old project',
+            taskIds: ['parent'],
+          },
+        ],
+      );
+
+      metaReducer(
+        state,
+        TaskSharedActions.moveToOtherProject({
+          task: state[TASK_FEATURE_NAME].entities.parent as any,
+          targetProjectId: 'newP',
+        } as any),
+      );
+
+      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+        SECTION_FEATURE_NAME
+      ] as SectionState;
+      expect(updated.entities['sOld']?.taskIds).toEqual(['unrelated']);
+      // Target project section is untouched.
+      expect(updated.entities['sOther']?.taskIds).toEqual([]);
+      // Tag-context section keeps the parent — tag membership didn't change.
+      expect(updated.entities['sTag']?.taskIds).toEqual(['parent']);
+    });
+
+    it('strips the task from sections of tags it no longer carries (updateTask)', () => {
+      const state = stateWith({ t1: { tagIds: ['a', 'b', 'c'] } }, [
+        {
+          id: 'sa',
+          contextId: 'a',
+          contextType: 'TAG',
+          title: 'tag a',
+          taskIds: ['t1', 'other'],
+        },
+        {
+          id: 'sb',
+          contextId: 'b',
+          contextType: 'TAG',
+          title: 'tag b',
+          taskIds: ['t1'],
+        },
+        {
+          id: 'sc',
+          contextId: 'c',
+          contextType: 'TAG',
+          title: 'tag c (still on the task)',
+          taskIds: ['t1'],
+        },
+      ]);
+
+      // Drop tags a and b; keep c.
+      metaReducer(
+        state,
+        TaskSharedActions.updateTask({
+          task: { id: 't1', changes: { tagIds: ['c'] } },
+        } as any),
+      );
+
+      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+        SECTION_FEATURE_NAME
+      ] as SectionState;
+      expect(updated.entities['sa']?.taskIds).toEqual(['other']);
+      expect(updated.entities['sb']?.taskIds).toEqual([]);
+      // Still has tag c, so the section keeps the task.
+      expect(updated.entities['sc']?.taskIds).toEqual(['t1']);
+    });
+
+    it('updateTask without tagIds change is a no-op for sections', () => {
+      const state = stateWith({ t1: { tagIds: ['a'] } }, [
+        {
+          id: 'sa',
+          contextId: 'a',
+          contextType: 'TAG',
+          title: 'tag a',
+          taskIds: ['t1'],
+        },
+      ]);
+
+      metaReducer(
+        state,
+        TaskSharedActions.updateTask({
+          task: { id: 't1', changes: { title: 'renamed' } },
+        } as any),
+      );
+
+      expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
+    });
+
     it('removes tag-context sections in bulk on deleteTags', () => {
       const state = stateWith({}, [
         {
