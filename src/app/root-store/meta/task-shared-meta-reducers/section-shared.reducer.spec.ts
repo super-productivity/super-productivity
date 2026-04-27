@@ -216,6 +216,50 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sT']).toBeDefined();
     });
 
+    it('on deleteProject, also strips cascaded task ids from tag-context sections', () => {
+      // task t1 lives in project p1 AND in tag tA. Deleting p1 removes t1
+      // (task.reducer cascades removeMany(allTaskIds)); the tag-context
+      // section sA must drop t1 from its taskIds in the same reducer pass.
+      const state = stateWith(
+        {
+          t1: { projectId: 'p1', tagIds: ['tA'] },
+          t2: { projectId: 'p1' },
+        },
+        [
+          {
+            id: 'sP',
+            contextId: 'p1',
+            contextType: WorkContextType.PROJECT,
+            title: 'Project section',
+            taskIds: ['t1', 't2'],
+          },
+          {
+            id: 'sA',
+            contextId: 'tA',
+            contextType: WorkContextType.TAG,
+            title: 'Tag section',
+            taskIds: ['t1'],
+          },
+        ],
+      );
+
+      metaReducer(
+        state,
+        TaskSharedActions.deleteProject({
+          projectId: 'p1',
+          allTaskIds: ['t1', 't2'],
+          noteIds: [],
+        } as any),
+      );
+
+      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+        SECTION_FEATURE_NAME
+      ] as SectionState;
+      expect(updated.entities['sP']).toBeUndefined();
+      expect(updated.entities['sA']).toBeDefined();
+      expect(updated.entities['sA']?.taskIds).toEqual([]);
+    });
+
     it('removes a tag context section on deleteTag', () => {
       const state = stateWith({}, [
         {

@@ -280,7 +280,12 @@ finish-day-btn,
   padding: var(--s-half);
 }
 
-// Ensure section titles are left aligned and actions are right aligned
+.no-section,
+.section-container {
+  margin-bottom: var(--s3);
+}
+
+// Section header layout: title left, actions right.
 .section-container {
   ::ng-deep .collapsible-header {
     justify-content: space-between;
@@ -296,14 +301,18 @@ finish-day-btn,
     display: inline-flex;
     align-items: center;
     cursor: move;
-    margin-right: 8px;
-    color: var(--text-color-secondary); // standard Material color variable often used
+    margin-right: var(--s);
+    color: var(--text-color-secondary);
   }
 
-  button {
-    background: transparent !important;
-    box-shadow: none !important;
-    color: var(--text-color-secondary) !important;
-    border: none !important;
+  // Style the action-slot menu trigger only — narrow scope avoids leaking
+  // resets into <task-list> descendants. The collapsible projects content
+  // via `[actions]`, which lands inside `.collapsible-header`; the next
+  // selector matches an icon-button that's a direct child of that header.
+  ::ng-deep > collapsible > .collapsible-header > button[mat-icon-button] {
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-color-secondary);
+    border: none;
   }
 }

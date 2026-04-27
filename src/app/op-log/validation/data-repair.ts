@@ -122,6 +122,7 @@ export const dataRepair = (
   dataOut = _removeNonExistentTagsFromTasks(dataOut, summary);
   dataOut = _addInboxProjectIdIfNecessary(dataOut, summary);
   dataOut = _repairMenuTree(dataOut, summary);
+  dataOut = _repairSections(dataOut, summary);
   dataOut = autoFixTypiaErrors(dataOut, errors);
   summary.typeErrorsFixed = errors.length;
 
@@ -1354,5 +1355,64 @@ const _repairMenuTree = (
     summary.structureRepaired++;
   }
 
+  return data;
+};
+
+const _repairSections = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  const sectionState = data.section;
+  if (!sectionState?.ids?.length) return data;
+
+  const validProjectIds = new Set<string>(data.project.ids as string[]);
+  const validTagIds = new Set<string>(data.tag.ids as string[]);
+  const validTaskIds = new Set<string>(data.task.ids as string[]);
+
+  const keptIds: string[] = [];
+  const newEntities: typeof sectionState.entities = {};
+  let droppedSections = 0;
+  let droppedTaskRefs = 0;
+
+  for (const sid of sectionState.ids as string[]) {
+    const section = sectionState.entities[sid];
+    if (!section) continue;
+
+    // contextType === TAG with contextId === TODAY is allowed even though
+    // TODAY isn't in tag.ids (virtual tag).
+    const isTodayTag =
+      section.contextType === 'TAG' && section.contextId === TODAY_TAG.id;
+    const ownerSet = section.contextType === 'PROJECT' ? validProjectIds : validTagIds;
+    if (!isTodayTag && !ownerSet.has(section.contextId)) {
+      droppedSections++;
+      continue;
+    }
+
+    const taskIds = section.taskIds ?? [];
+    const filtered = taskIds.filter((tid) => validTaskIds.has(tid));
+    if (filtered.length !== taskIds.length) {
+      droppedTaskRefs += taskIds.length - filtered.length;
+      newEntities[sid] = { ...section, taskIds: filtered };
+    } else {
+      newEntities[sid] = section;
+    }
+    keptIds.push(sid);
+  }
+
+  if (droppedSections === 0 && droppedTaskRefs === 0) return data;
+
+  data.section = { ids: keptIds, entities: newEntities };
+  if (droppedSections > 0) {
+    OpLog.warn(
+      `[data-repair] Removed ${droppedSections} section(s) with missing project/tag`,
+    );
+    summary.invalidReferencesRemoved += droppedSections;
+  }
+  if (droppedTaskRefs > 0) {
+    OpLog.warn(
+      `[data-repair] Removed ${droppedTaskRefs} stale task reference(s) from sections`,
+    );
+    summary.invalidReferencesRemoved += droppedTaskRefs;
+  }
   return data;
 };

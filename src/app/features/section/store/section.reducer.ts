@@ -60,10 +60,6 @@ export const sectionReducer = createReducer(
     adapter.updateOne(section, state),
   ),
 
-  on(SectionActions.loadSections, (state, { sections }) =>
-    adapter.setAll(sections, state),
-  ),
-
   on(SectionActions.updateSectionOrder, (state, { contextId, ids }) => {
     const idsSet = new Set(ids);
     const otherIds = (state.ids as string[]).filter((id) => {

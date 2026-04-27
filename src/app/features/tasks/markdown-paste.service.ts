@@ -105,18 +105,17 @@ export class MarkdownPasteService {
           return;
         }
 
-        // Create sections and tasks. Yield every YIELD_EVERY_N_DISPATCHES
-        // store dispatches — see CLAUDE.md rule #11 ("Event Loop Yield After
-        // Bulk Dispatches"). One section with 100+ tasks must not run as a
-        // single dispatch storm.
-        const YIELD_EVERY_N_DISPATCHES = 30;
-        let dispatchCount = 0;
-        const yieldIfNeeded = async (): Promise<void> => {
-          if (++dispatchCount % YIELD_EVERY_N_DISPATCHES === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 0));
-          }
-        };
-
+        // ATOMICITY NOTE — paste creates one section + N tasks + M sub-tasks.
+        // Each call below dispatches a separate action and produces a separate
+        // op-log entry. A sync push that lands mid-paste can leave a partial
+        // state on remote clients (e.g. a section with no tasks). The proper
+        // fix is a single bulk action reduced atomically across the
+        // task/section/project/tag reducers — tracked as follow-up.
+        // For now we do NOT yield to the event loop between dispatches: a
+        // mid-loop yield would widen the interleave window with concurrent
+        // sync replay (CLAUDE.md item 11 yields *after* a bulk apply, not
+        // inside one). The dispatches are synchronous so the whole paste
+        // completes in a single tick; a 100-task paste blocks for a few ms.
         for (const section of sectionsData.sections) {
           const sectionId = section.sectionTitle
             ? this._sectionService.addSection(
@@ -125,7 +124,6 @@ export class MarkdownPasteService {
                 sectionContextType,
               )
             : null;
-          if (sectionId) await yieldIfNeeded();
 
           for (const task of section.tasks) {
             const taskId = this._taskService.add(
@@ -137,11 +135,9 @@ export class MarkdownPasteService {
               },
               true,
             );
-            await yieldIfNeeded();
 
             if (sectionId) {
               this._sectionService.addTaskToSection(sectionId, taskId, null, null);
-              await yieldIfNeeded();
             }
 
             if (task.subTasks && task.subTasks.length > 0) {
@@ -155,7 +151,6 @@ export class MarkdownPasteService {
                   },
                 });
                 this._store.dispatch(addSubTask({ task: subTaskObj, parentId: taskId }));
-                await yieldIfNeeded();
               }
             }
           }

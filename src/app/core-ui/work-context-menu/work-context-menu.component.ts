@@ -142,7 +142,6 @@ export class WorkContextMenuComponent implements OnInit {
       .open(DialogPromptComponent, {
         data: {
           placeholder: T.G.TITLE,
-          defaultValue: '',
           message: T.CONFIRM.ADD_SECTION,
         },
       })

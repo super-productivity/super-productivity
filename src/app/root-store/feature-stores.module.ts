@@ -205,4 +205,4 @@ import {
     EffectsModule.forFeature([PluginHooksEffects]),
   ],
 })
-export class FeatureStoresModule { }
+export class FeatureStoresModule {}

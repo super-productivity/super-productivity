@@ -100,6 +100,7 @@ import { TaskFocusService } from '../task-focus.service';
   /* eslint-disable @typescript-eslint/naming-convention*/
   host: {
     '[id]': 'taskIdWithPrefix()',
+    '[attr.data-task-id]': 'task().id',
     '[tabindex]': '1',
     '[class.isDone]': 'task().isDone',
     '[class.isCurrent]': 'isCurrent()',

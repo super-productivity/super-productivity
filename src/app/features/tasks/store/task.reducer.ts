@@ -324,9 +324,17 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {
-    // Guard against invalid moves (e.g. 'UNDONE' passed as ID) which might be in the op log
-    if (!state.entities[srcTaskId] || !state.entities[targetTaskId]) {
-      console.warn('Ignoring invalid moveSubTask action', {
+    // Guard against invalid moves (e.g. 'UNDONE' passed as ID) that may
+    // appear in older op-log entries. Also reject self-moves where the
+    // task being moved is its own src/target — that would put a task into
+    // its own subTaskIds.
+    if (
+      !state.entities[srcTaskId] ||
+      !state.entities[targetTaskId] ||
+      taskId === srcTaskId ||
+      taskId === targetTaskId
+    ) {
+      TaskLog.warn('Ignoring invalid moveSubTask action', {
         taskId,
         srcTaskId,
         targetTaskId,

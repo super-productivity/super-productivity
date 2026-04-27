@@ -135,17 +135,14 @@
                 ></task-list>
               </collapsible>
             }
-          } @else if (sections().length) {
+          } @else if (sections().length && !customizerService.isCustomized()) {
             <div
               class="sections-wrapper"
               cdkDropList
               [cdkDropListEnterPredicate]="acceptSectionDragOnly"
               (cdkDropListDropped)="dropSection($event)"
             >
-              <div
-                class="no-section"
-                style="margin-bottom: 24px"
-              >
+              <div class="no-section">
                 <task-list
                   [tasks]="undoneTasksBySection().noSection"
                   [listId]="'PARENT'"
@@ -155,7 +152,6 @@
               @for (section of sections(); track section.id) {
                 <div
                   class="section-container"
-                  style="margin-bottom: 24px"
                   cdkDrag
                   [cdkDragLockAxis]="'y'"
                 >

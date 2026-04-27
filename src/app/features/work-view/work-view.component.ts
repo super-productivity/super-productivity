@@ -424,7 +424,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       .open(DialogPromptComponent, {
         data: {
           placeholder: T.WW.ADD_SECTION_TITLE,
-          val: title,
+          txtValue: title,
         },
       })
       .afterClosed()

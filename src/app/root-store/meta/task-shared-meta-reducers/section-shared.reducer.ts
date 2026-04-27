@@ -261,11 +261,24 @@ const createActionHandlers = (
     return handleTaskDeletion(state, taskIds) as RootState;
   },
   [TaskSharedActions.deleteProject.type]: () => {
-    const { projectId } = action as ReturnType<typeof TaskSharedActions.deleteProject>;
-    return handleContextDeletion(
+    const { projectId, allTaskIds } = action as ReturnType<
+      typeof TaskSharedActions.deleteProject
+    >;
+    // Two-step in a single reducer pass:
+    //   1. drop sections owned by the deleted project
+    //   2. strip the deleted task ids from any remaining (tag-context)
+    //      sections — task.reducer cascades removeMany(allTaskIds), so
+    //      tag sections that held shared tasks would otherwise keep
+    //      stale ids forever.
+    const afterContextRemoval = handleContextDeletion(
       state,
       [projectId],
       WorkContextType.PROJECT,
+    );
+    if (!allTaskIds.length) return afterContextRemoval as RootState;
+    return withSectionStateUpdate(
+      afterContextRemoval,
+      cleanupSectionTaskIds(afterContextRemoval[SECTION_FEATURE_NAME], allTaskIds),
     ) as RootState;
   },
   [deleteTag.type]: () => {

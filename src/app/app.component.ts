@@ -277,16 +277,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     let taskTitle: string | null = null;
     let isSubTask = false;
 
-    // Find task element by traversing up the DOM tree
-    let element: HTMLElement | null = target;
-    while (element && !element.id.startsWith('t-')) {
-      element = element.parentElement;
+    // Find the nearest task element via the data-task-id attribute (set
+    // on the <task> host). Avoids brittle id-prefix scans that could match
+    // unrelated elements whose id happens to start with "t-".
+    const taskEl = target.closest<HTMLElement>('[data-task-id]');
+
+    if (taskEl) {
+      taskId = taskEl.getAttribute('data-task-id');
     }
 
-    if (element && element.id.startsWith('t-')) {
-      // Extract task ID from DOM id (format: "t-{taskId}")
-      taskId = element.id.substring(2);
-
+    if (taskId) {
       // Get task data to determine if it's a sub-task
       this._taskService.getByIdOnce$(taskId).subscribe((task) => {
         if (task) {

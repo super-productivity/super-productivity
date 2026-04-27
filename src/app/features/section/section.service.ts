@@ -13,18 +13,13 @@ import {
   updateSection,
   updateSectionOrder,
 } from './store/section.actions';
-import {
-  selectAllSections,
-  selectSectionsByContextIdMap,
-} from './store/section.selectors';
+import { selectSectionsByContextIdMap } from './store/section.selectors';
 
 @Injectable({
   providedIn: 'root',
 })
 export class SectionService {
   private _store = inject(Store);
-
-  sections$: Observable<Section[]> = this._store.select(selectAllSections);
 
   getSectionsByContextId$(contextId: string): Observable<Section[]> {
     return this._store

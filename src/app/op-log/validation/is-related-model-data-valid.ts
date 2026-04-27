@@ -8,6 +8,7 @@ import {
 } from '../../features/menu-tree/store/menu-tree.model';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { TaskArchive } from '../../features/tasks/task.model';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 
 // WARNING: Module-level mutable state. This is not ideal because:
 // 1. Can cause test pollution if tests don't properly isolate
@@ -84,6 +85,9 @@ export const isRelatedModelDataValid = (d: AppDataComplete): boolean => {
   if (!validateMenuTree(d, projectIds, tagIds)) {
     return false;
   }
+
+  // Validate sections (soft: orphans are logged + auto-repaired downstream)
+  validateSections(d, projectIds, tagIds, taskIds);
 
   return true;
 };
@@ -472,6 +476,58 @@ const validateIssueProviders = (d: AppDataComplete, projectIds: Set<string>): bo
 // This validation is kept as a no-op for backward compatibility
 const validateReminders = (_d: AppDataComplete): boolean => {
   return true;
+};
+
+/**
+ * Sections refer to a project or tag (`contextId` + `contextType`) and hold
+ * an ordered `taskIds` list. Both classes of orphan are recoverable:
+ *   - section pointing to a missing context → drop the section
+ *   - taskIds pointing to missing tasks → drop the stale ids
+ * Both are repaired by `repairSections` in `data-repair.ts`. Here we only
+ * log so callers can see drift without failing the whole validation pass.
+ */
+const validateSections = (
+  d: AppDataComplete,
+  projectIds: Set<string>,
+  tagIds: Set<string>,
+  taskIds: Set<string>,
+): void => {
+  const sectionState = d.section;
+  if (!sectionState?.ids) return;
+
+  const orphanContextIds: string[] = [];
+  const sectionsWithStaleTaskIds: string[] = [];
+
+  for (const sid of sectionState.ids as string[]) {
+    const section = sectionState.entities[sid];
+    if (!section) continue;
+
+    const owner = section.contextType === WorkContextType.PROJECT ? projectIds : tagIds;
+    // TODAY-context sections are valid even though TODAY isn't in `tagIds`.
+    const isTodayTag =
+      section.contextType === WorkContextType.TAG && section.contextId === TODAY_TAG.id;
+    if (!isTodayTag && !owner.has(section.contextId)) {
+      orphanContextIds.push(sid);
+    }
+
+    const ids = section.taskIds ?? [];
+    if (ids.some((tid) => !taskIds.has(tid))) {
+      sectionsWithStaleTaskIds.push(sid);
+    }
+  }
+
+  if (orphanContextIds.length > 0) {
+    OpLog.info(
+      `[ValidateState] ${orphanContextIds.length} section(s) reference a missing project/tag (harmless, auto-repaired)`,
+      { orphanContextIds },
+    );
+  }
+  if (sectionsWithStaleTaskIds.length > 0) {
+    OpLog.info(
+      `[ValidateState] ${sectionsWithStaleTaskIds.length} section(s) hold stale taskIds (harmless, auto-repaired)`,
+      { sectionsWithStaleTaskIds },
+    );
+  }
 };
 
 const validateMenuTree = (

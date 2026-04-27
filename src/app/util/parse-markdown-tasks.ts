@@ -1,3 +1,23 @@
+// Cap clipboard size to keep the parser from blocking the main thread on
+// pathological inputs. Tracks roughly 10k task lines at ~80 chars each.
+const MAX_INPUT_LENGTH = 800_000;
+
+const splitMarkdownLines = (text: string): string[] => {
+  // CRLF (Windows clipboard, GitHub render) → LF; strip BOM.
+  const normalized = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  return normalized.split('\n').filter((line) => line.trim().length > 0);
+};
+
+const findMinIndentLevel = (parsedLines: { indentLevel: number }[]): number => {
+  // Reduce-based to avoid `Math.min(...arr)` which throws RangeError on
+  // very large arrays (V8 spread limit).
+  let min = Infinity;
+  for (const line of parsedLines) {
+    if (line.indentLevel < min) min = line.indentLevel;
+  }
+  return min === Infinity ? 0 : min;
+};
+
 export interface ParsedMarkdownTask {
   title: string;
   isCompleted: boolean;
@@ -98,7 +118,8 @@ export const convertToMarkdownNotes = (text: string): string | null => {
     return null;
   }
 
-  const lines = text.split('\n').filter((line) => line.trim().length > 0);
+  if (text.length > MAX_INPUT_LENGTH) return null;
+  const lines = splitMarkdownLines(text);
   const convertedLines: string[] = [];
 
   for (const line of lines) {
@@ -128,7 +149,8 @@ export const parseMarkdownTasksWithStructure = (
     return null;
   }
 
-  const lines = text.split('\n').filter((line) => line.trim().length > 0);
+  if (text.length > MAX_INPUT_LENGTH) return null;
+  const lines = splitMarkdownLines(text);
   const parsedLines: ParsedLine[] = [];
 
   // Parse all lines first
@@ -147,7 +169,7 @@ export const parseMarkdownTasksWithStructure = (
   }
 
   // Find the minimum indentation level to normalize
-  const minIndentLevel = Math.min(...parsedLines.map((line) => line.indentLevel));
+  const minIndentLevel = findMinIndentLevel(parsedLines);
 
   // Normalize indentation levels by subtracting the minimum
   parsedLines.forEach((line) => {
@@ -255,7 +277,8 @@ export const parseMarkdownTasks = (text: string): ParsedMarkdownTask[] | null =>
     return null;
   }
 
-  const lines = text.split('\n').filter((line) => line.trim().length > 0);
+  if (text.length > MAX_INPUT_LENGTH) return null;
+  const lines = splitMarkdownLines(text);
   const parsedLines: ParsedLine[] = [];
 
   // Parse all lines first
@@ -274,7 +297,7 @@ export const parseMarkdownTasks = (text: string): ParsedMarkdownTask[] | null =>
   }
 
   // Find the minimum indentation level to normalize
-  const minIndentLevel = Math.min(...parsedLines.map((line) => line.indentLevel));
+  const minIndentLevel = findMinIndentLevel(parsedLines);
 
   // Normalize indentation levels by subtracting the minimum
   parsedLines.forEach((line) => {
@@ -321,7 +344,9 @@ export const parseMarkdownTasks = (text: string): ParsedMarkdownTask[] | null =>
 };
 
 /**
- * Parse markdown text to detect H1 headers (#) and group tasks under sections
+ * Parse markdown text to detect ATX headers (`#` to `######`) and group
+ * tasks under sections. Returns `null` if no headers are present so callers
+ * can fall through to a flat-task parse.
  * @param text - Markdown text with potential headers and task lists
  * @returns Sections with tasks, or null if not valid markdown
  */
@@ -329,8 +354,11 @@ export const parseMarkdownWithSections = (text: string): MarkdownWithSections | 
   if (!text || typeof text !== 'string') {
     return null;
   }
+  if (text.length > MAX_INPUT_LENGTH) return null;
 
-  const lines = text.split('\n');
+  // Mirror splitMarkdownLines but preserve empty lines — section parsing
+  // uses them as separators.
+  const lines = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
   const sections: SectionWithTasks[] = [];
   let currentSection: SectionWithTasks | null = null;
   let hasHeaders = false;

@@ -1,13 +1,8 @@
-import { createAction, props } from '@ngrx/store';
+import { createAction } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { Section } from '../section.model';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { OpType } from '../../../op-log/core/operation.types';
-
-export const loadSections = createAction(
-  '[Section] Load Sections',
-  props<{ sections: Section[] }>(),
-);
 
 export const addSection = createAction(
   '[Section] Add Section',
