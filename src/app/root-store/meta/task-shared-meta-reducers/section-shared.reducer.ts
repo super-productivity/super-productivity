@@ -40,10 +40,12 @@ const cleanupSectionTaskIds = (
 
   Object.values(sectionState.entities).forEach((s) => {
     if (!s) return;
-    if (s.taskIds.some((id) => removedSet.has(id))) {
+    // Older persisted sections may lack taskIds entirely; treat as empty.
+    const taskIds = s.taskIds ?? [];
+    if (taskIds.some((id) => removedSet.has(id))) {
       updates.push({
         id: s.id,
-        changes: { taskIds: s.taskIds.filter((id) => !removedSet.has(id)) },
+        changes: { taskIds: taskIds.filter((id) => !removedSet.has(id)) },
       });
     }
   });

@@ -22,13 +22,15 @@ describe('TaskListComponent', () => {
       data: task,
     }) as unknown as CdkDrag;
 
-  // Helper to create mock CdkDropList with allTasks
+  // Helper to create mock CdkDropList with allTasks. listId defaults to
+  // 'PARENT' to mirror top-level task lists; pass 'SUB' for subtask lists.
   const createMockDrop = (
     listModelId: string,
     allTasks: Partial<TaskWithSubTasks>[] = [],
+    listId: 'PARENT' | 'SUB' = 'PARENT',
   ): CdkDropList =>
     ({
-      data: { listModelId, allTasks },
+      data: { listId, listModelId, allTasks },
     }) as unknown as CdkDropList;
 
   beforeEach(async () => {
@@ -128,7 +130,7 @@ describe('TaskListComponent', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
         // listModelId is the parent task ID (subtask list)
-        const drop = createMockDrop('parent1', [{ id: 'sub1' }, { id: 'sub2' }]);
+        const drop = createMockDrop('parent1', [{ id: 'sub1' }, { id: 'sub2' }], 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
@@ -136,8 +138,16 @@ describe('TaskListComponent', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
         // Another task ID (not in PARENT_ALLOWED_LISTS)
-        const drop = createMockDrop('parent2', [{ id: 'sub3' }]);
+        const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(true);
+      });
+
+      it('should block subtask from dropping into a section drop-list', () => {
+        const subtask = { id: 'sub1', parentId: 'parent1' };
+        const drag = createMockDrag(subtask);
+        // Section drop-lists render with listId='PARENT' and a section id.
+        const drop = createMockDrop('section-abc', [], 'PARENT');
+        expect(component.enterPredicate(drag, drop)).toBe(false);
       });
     });
 
@@ -173,9 +183,17 @@ describe('TaskListComponent', () => {
       it('should block parent task from dropping to subtask list', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        // Task ID = subtask list
-        const drop = createMockDrop('some-task-id', []);
+        // Task ID listed as a subtask drop-list (listId='SUB').
+        const drop = createMockDrop('some-task-id', [], 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(false);
+      });
+
+      it('should allow parent task to drop into a section drop-list', () => {
+        const task = { id: 'task1', parentId: null };
+        const drag = createMockDrag(task);
+        // Section drop-lists are listId='PARENT' with an arbitrary section id.
+        const drop = createMockDrop('section-xyz', [], 'PARENT');
+        expect(component.enterPredicate(drag, drop)).toBe(true);
       });
     });
 

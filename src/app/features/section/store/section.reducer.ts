@@ -17,11 +17,29 @@ const removeTaskIdFromSection = (
   section: Section,
   taskId: string,
 ): Update<Section> | null => {
-  if (!section.taskIds.includes(taskId)) return null;
+  // Older persisted sections may lack taskIds entirely.
+  const taskIds = section.taskIds ?? [];
+  if (!taskIds.includes(taskId)) return null;
   return {
     id: section.id,
-    changes: { taskIds: section.taskIds.filter((id) => id !== taskId) },
+    changes: { taskIds: taskIds.filter((id) => id !== taskId) },
   };
+};
+
+const normalizeLoadedSections = (state: SectionState): SectionState => {
+  let dirty = false;
+  const entities: SectionState['entities'] = {};
+  for (const id of state.ids as string[]) {
+    const s = state.entities[id];
+    if (!s) continue;
+    if (!Array.isArray(s.taskIds)) {
+      entities[id] = { ...s, taskIds: [] };
+      dirty = true;
+    } else {
+      entities[id] = s;
+    }
+  }
+  return dirty ? { ...state, entities } : state;
 };
 
 export const sectionReducer = createReducer(
@@ -58,7 +76,6 @@ export const sectionReducer = createReducer(
   on(SectionActions.addTaskToSection, (state, { sectionId, taskId, afterTaskId }) => {
     const updates: Update<Section>[] = [];
 
-    // 1. Remove the task from any other section that currently holds it.
     Object.values(state.entities).forEach((s) => {
       if (!s) return;
       if (s.id === sectionId) return;
@@ -66,14 +83,14 @@ export const sectionReducer = createReducer(
       if (removal) updates.push(removal);
     });
 
-    // 2. Add the task into the target section at the requested position.
     if (sectionId) {
       const target = state.entities[sectionId];
       if (target) {
+        const targetTaskIds = target.taskIds ?? [];
         const newTaskIds = moveItemAfterAnchor(
           taskId,
           afterTaskId ?? null,
-          target.taskIds.includes(taskId) ? target.taskIds : [...target.taskIds, taskId],
+          targetTaskIds.includes(taskId) ? targetTaskIds : [...targetTaskIds, taskId],
         );
         updates.push({ id: sectionId, changes: { taskIds: newTaskIds } });
       }
@@ -83,7 +100,9 @@ export const sectionReducer = createReducer(
   }),
 
   on(loadAllData, (state, { appDataComplete }) =>
-    appDataComplete.section ? { ...(appDataComplete.section as SectionState) } : state,
+    appDataComplete.section
+      ? normalizeLoadedSections({ ...(appDataComplete.section as SectionState) })
+      : state,
   ),
 );
 

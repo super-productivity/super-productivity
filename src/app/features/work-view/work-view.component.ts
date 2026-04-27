@@ -213,7 +213,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     // Build sectionId-by-taskId in O(m) where m = total taskIds across sections.
     const sectionByTaskId = new Map<string, string>();
     for (const s of sections) {
-      for (const tId of s.taskIds) sectionByTaskId.set(tId, s.id);
+      for (const tId of s.taskIds ?? []) sectionByTaskId.set(tId, s.id);
     }
 
     const dict: Record<string, TaskWithSubTasks[]> = {};
@@ -471,6 +471,14 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       }),
     );
   }
+
+  // The sections-wrapper is part of the cdkDropListGroup, so without this
+  // predicate a task drag could drop into the section-reorder list and
+  // dropSection would interpret a Task as a Section, corrupting ordering.
+  acceptSectionDragOnly = (drag: CdkDrag): boolean => {
+    const data = drag.data as Partial<Section> | undefined;
+    return !!data && Array.isArray(data.taskIds) && typeof data.contextId === 'string';
+  };
 
   dropSection(event: CdkDragDrop<Section[]>): void {
     const sections = this.sections();

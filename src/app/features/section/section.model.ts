@@ -8,7 +8,6 @@ export interface Section {
   contextType: SectionContextType;
   title: string;
   taskIds: string[];
-  isCollapsed?: boolean;
 }
 
 export interface SectionState extends EntityState<Section> {

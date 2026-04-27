@@ -178,10 +178,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         return false;
       }
 
-      // Subtasks can move within subtask lists (listModelId is a parent task
-      // id) and — at this commit — also into section drop-lists. A later
-      // commit tightens this by keying on listId.
-      if (!PARENT_ALLOWED_LISTS.includes(targetModelId)) {
+      // Subtasks may drop into another subtask list (listId === 'SUB' with a
+      // task id as listModelId). Reject section drop-lists (listId === 'PARENT'
+      // with a non-reserved id) — section.taskIds is parent-only.
+      if (targetListId === 'SUB' && !PARENT_ALLOWED_LISTS.includes(targetModelId)) {
         return true;
       }
       return false;

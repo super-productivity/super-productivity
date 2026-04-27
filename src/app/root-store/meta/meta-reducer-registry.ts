@@ -89,6 +89,12 @@ export const META_REDUCERS: MetaReducer[] = [
   // Captures task context before deletion for undo/restore.
   undoTaskDeleteMetaReducer,
 
+  // sectionSharedMetaReducer must run BEFORE taskSharedCrudMetaReducer because
+  // it needs to expand subTaskIds via state.task.entities for the deleteTasks
+  // bulk action — once Phase 4 strips the parent, the subtask references are
+  // gone and section.taskIds entries pointing at removed subtasks would leak.
+  sectionSharedMetaReducer, // Task deletion → prune section.taskIds (incl. subtasks)
+
   // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 4: CORE CRUD OPERATIONS (Ordered by dependency)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -103,7 +109,6 @@ export const META_REDUCERS: MetaReducer[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   projectSharedMetaReducer, // Project deletion → cleanup tasks, time-tracking
   tagSharedMetaReducer, // Tag deletion → cleanup tasks, repeat-cfgs, time-tracking
-  sectionSharedMetaReducer, // Section deletion → cascade-delete tasks in section
   issueProviderSharedMetaReducer, // Issue provider unlinking
   taskRepeatCfgSharedMetaReducer, // Repeat config unlinking
 
