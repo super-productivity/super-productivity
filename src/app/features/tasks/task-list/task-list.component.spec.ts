@@ -378,6 +378,30 @@ describe('TaskListComponent', () => {
       expect(args[3]).toBe('section-from');
     });
 
+    it('computes afterTaskId from newOrderedIds (anchor: previous sibling)', () => {
+      // newOrderedIds is the post-drop order of the destination list.
+      // getAnchorFromDragDrop returns the id immediately preceding `taskId`,
+      // which is what placeTaskAfterAnchor uses to position the move.
+      callMove('task1', 'UNDONE', 'section-x', 'PARENT', 'PARENT', [
+        'before',
+        'task1',
+        'after',
+      ]);
+
+      const args = sectionServiceMock.addTaskToSection.calls.mostRecent().args;
+      expect(args[0]).toBe('section-x');
+      expect(args[1]).toBe('task1');
+      expect(args[2]).toBe('before');
+      expect(args[3]).toBeNull();
+    });
+
+    it('passes null afterTaskId when dropped at the start of a section', () => {
+      callMove('task1', 'UNDONE', 'section-x', 'PARENT', 'PARENT', ['task1', 'after']);
+
+      const args = sectionServiceMock.addTaskToSection.calls.mostRecent().args;
+      expect(args[2]).toBeNull();
+    });
+
     it('routes a section -> no-section drag to removeTaskFromSection', () => {
       callMove('task1', 'section-from', 'UNDONE', 'PARENT', 'PARENT');
 

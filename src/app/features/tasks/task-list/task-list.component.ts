@@ -57,6 +57,10 @@ export type ListModelId = DropListModelSource | string;
 // section would otherwise create one if the short-circuit ever moves.
 // PARENT_ALLOWED_LISTS deliberately omits LATER_TODAY — enterPredicate must
 // reject parent drops onto LATER_TODAY at the drag layer (see line ~190).
+//
+// `satisfies DropListModelSource[]` validates each entry against the union
+// (catches typos / removed variants) without narrowing the Set's value
+// type, which would force a cast at every `.has(target as string)` call.
 const RESERVED_LIST_IDS = new Set<string>([
   'DONE',
   'UNDONE',
@@ -64,7 +68,7 @@ const RESERVED_LIST_IDS = new Set<string>([
   'BACKLOG',
   'LATER_TODAY',
   'ADD_TASK_PANEL',
-]);
+] satisfies DropListModelSource[]);
 const PARENT_ALLOWED_LISTS = ['DONE', 'UNDONE', 'OVERDUE', 'BACKLOG', 'ADD_TASK_PANEL'];
 
 export interface DropModelDataForList {

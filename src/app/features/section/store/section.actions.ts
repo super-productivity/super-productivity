@@ -65,12 +65,15 @@ export const updateSectionOrder = createAction(
 /**
  * Atomically place `taskId` into `sectionId` at the position implied by
  * `afterTaskId`. The reducer enforces uniqueness:
- * - If `sourceSectionId` is provided, the task is stripped from there
- *   explicitly. Replay is deterministic from the operation payload alone
- *   and conflict scope spans both sections via `entityIds: [src, dest]`.
- * - If `sourceSectionId` is null/undefined (e.g. a just-created task that
- *   was never in a section), the reducer falls back to a defensive sweep
- *   over all sections.
+ * - If `sourceSectionId` is a non-null string different from `sectionId`,
+ *   the task is stripped from there explicitly and meta sets
+ *   `entityIds: [src, dest]` so vector-clock conflict detection covers
+ *   both sections. Replay is deterministic from the payload alone.
+ * - If `sourceSectionId === sectionId` (intra-section reorder) or `null`
+ *   (just-created task), the reducer skips the strip step and meta
+ *   falls back to single-entity `entityId: sectionId`.
+ * - If `sourceSectionId` is omitted entirely (legacy callers), the
+ *   reducer falls back to a defensive sweep over all sections.
  *
  * RESIDUAL: under concurrent moves of the same task to different sections
  * across devices, the task may end up in multiple sections after sync
