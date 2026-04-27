@@ -5,8 +5,13 @@ import {
   adapter as sectionAdapter,
   SECTION_FEATURE_NAME,
 } from '../../../features/section/store/section.reducer';
-import { Section, SectionState } from '../../../features/section/section.model';
+import {
+  Section,
+  SectionContextType,
+  SectionState,
+} from '../../../features/section/section.model';
 import { TaskSharedActions } from '../task-shared.actions';
+import { deleteTag, deleteTags } from '../../../features/tag/store/tag.actions';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { ActionHandlerMap } from './task-shared-helpers';
 
@@ -54,6 +59,26 @@ const cleanupSectionTaskIds = (
   return sectionAdapter.updateMany(updates, sectionState);
 };
 
+const removeSectionsByContext = (
+  sectionState: SectionState | undefined,
+  contextIds: string[],
+  contextType: SectionContextType,
+): SectionState | undefined => {
+  if (!sectionState || contextIds.length === 0) return sectionState;
+
+  const contextIdSet = new Set(contextIds);
+  const idsToRemove: string[] = [];
+  Object.values(sectionState.entities).forEach((s) => {
+    if (!s) return;
+    if (s.contextType === contextType && contextIdSet.has(s.contextId)) {
+      idsToRemove.push(s.id);
+    }
+  });
+
+  if (!idsToRemove.length) return sectionState;
+  return sectionAdapter.removeMany(idsToRemove, sectionState);
+};
+
 const handleTaskDeletion = (
   state: ExtendedState,
   primaryTaskIds: string[],
@@ -62,6 +87,25 @@ const handleTaskDeletion = (
   const updatedSectionState = cleanupSectionTaskIds(
     state[SECTION_FEATURE_NAME],
     affectedIds,
+  );
+  if (updatedSectionState === state[SECTION_FEATURE_NAME]) {
+    return state;
+  }
+  return {
+    ...state,
+    [SECTION_FEATURE_NAME]: updatedSectionState,
+  } as ExtendedState;
+};
+
+const handleContextDeletion = (
+  state: ExtendedState,
+  contextIds: string[],
+  contextType: SectionContextType,
+): ExtendedState => {
+  const updatedSectionState = removeSectionsByContext(
+    state[SECTION_FEATURE_NAME],
+    contextIds,
+    contextType,
   );
   if (updatedSectionState === state[SECTION_FEATURE_NAME]) {
     return state;
@@ -83,6 +127,18 @@ const createActionHandlers = (
   [TaskSharedActions.deleteTasks.type]: () => {
     const { taskIds } = action as ReturnType<typeof TaskSharedActions.deleteTasks>;
     return handleTaskDeletion(state, taskIds) as RootState;
+  },
+  [TaskSharedActions.deleteProject.type]: () => {
+    const { projectId } = action as ReturnType<typeof TaskSharedActions.deleteProject>;
+    return handleContextDeletion(state, [projectId], 'PROJECT') as RootState;
+  },
+  [deleteTag.type]: () => {
+    const { id } = action as ReturnType<typeof deleteTag>;
+    return handleContextDeletion(state, [id], 'TAG') as RootState;
+  },
+  [deleteTags.type]: () => {
+    const { ids } = action as ReturnType<typeof deleteTags>;
+    return handleContextDeletion(state, ids, 'TAG') as RootState;
   },
 });
 
