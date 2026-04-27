@@ -718,6 +718,7 @@ describe('OperationLogCompactionService', () => {
         archiveOld: 'TASK', // Archives map to TASK
         pluginUserData: 'PLUGIN_USER_DATA',
         pluginMetadata: 'PLUGIN_METADATA',
+        section: 'SECTION',
       };
 
       const missingModels: string[] = [];

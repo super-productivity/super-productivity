@@ -154,6 +154,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // TODO this gets called very often for nested lists. Maybe there are possibilities to optimize
     const task = drag.data;
     const targetModelId = drop.data.listModelId;
+    const targetListId = drop.data.listId;
     const isSubtask = !!task.parentId;
 
     if (targetModelId === 'OVERDUE' || targetModelId === 'LATER_TODAY') {
@@ -186,10 +187,13 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return false;
     }
 
-    // Parent tasks: allow PARENT_ALLOWED_LISTS or section drop-lists. The
-    // top-level OVERDUE/LATER_TODAY guard above already rejects the only
-    // restricted parent destinations, so any remaining target is acceptable.
-    return true;
+    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS or to sections (parent-level
+    // lists with a non-reserved id). Subtask drop-lists (listId === 'SUB') are
+    // rejected so a top-level task can't be nested into another task's subtree.
+    if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
+      return true;
+    }
+    return targetListId === 'PARENT';
   };
 
   async drop(

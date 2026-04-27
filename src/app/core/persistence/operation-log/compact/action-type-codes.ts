@@ -158,6 +158,7 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.SECTION_DELETE]: 'S2',
   [ActionType.SECTION_UPDATE]: 'S3',
   [ActionType.SECTION_UPDATE_ORDER]: 'S4',
+  [ActionType.SECTION_ADD_TASK]: 'S5',
 
   // SimpleCounter actions (S)
   [ActionType.COUNTER_ADD]: 'SA',
