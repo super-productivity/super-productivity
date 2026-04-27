@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TaskListComponent } from './task-list.component';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { CdkDrag, CdkDropList } from '@angular/cdk/drag-drop';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
@@ -11,10 +11,14 @@ import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { TaskWithSubTasks } from '../task.model';
+import { SectionService } from '../../section/section.service';
+import { moveSubTask } from '../store/task.actions';
 
 describe('TaskListComponent', () => {
   let component: TaskListComponent;
   let fixture: ComponentFixture<TaskListComponent>;
+  let sectionServiceMock: jasmine.SpyObj<SectionService>;
+  let store: MockStore;
 
   // Helper to create mock CdkDrag
   const createMockDrag = (task: { id: string; parentId: string | null }): CdkDrag =>
@@ -34,6 +38,11 @@ describe('TaskListComponent', () => {
     }) as unknown as CdkDropList;
 
   beforeEach(async () => {
+    sectionServiceMock = jasmine.createSpyObj<SectionService>('SectionService', [
+      'addTaskToSection',
+      'removeTaskFromSection',
+    ]);
+
     await TestBed.configureTestingModule({
       imports: [TaskListComponent, NoopAnimationsModule],
       providers: [
@@ -67,8 +76,12 @@ describe('TaskListComponent', () => {
             blockAniTrigger$: { next: () => {} },
           },
         },
+        { provide: SectionService, useValue: sectionServiceMock },
       ],
     }).compileComponents();
+
+    store = TestBed.inject(MockStore);
+    spyOn(store, 'dispatch').and.callThrough();
 
     fixture = TestBed.createComponent(TaskListComponent);
     component = fixture.componentInstance;
@@ -302,6 +315,84 @@ describe('TaskListComponent', () => {
         // Empty string is falsy, so treated as parent task
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
+    });
+  });
+
+  // _move() routes drag drops to the correct dispatch path. The crux of the
+  // section feature: a non-reserved listModelId must only be treated as a
+  // section when listId === 'PARENT'; subtask drop-lists ('SUB') also use
+  // non-reserved ids (parent task ids) and must fall through to moveSubTask.
+  describe('_move dispatch routing', () => {
+    // Cast to any to call the private method directly.
+    const callMove = (
+      taskId: string,
+      src: string,
+      target: string,
+      srcListId: 'PARENT' | 'SUB',
+      targetListId: 'PARENT' | 'SUB',
+      newOrderedIds: string[] = [taskId],
+    ): void => {
+      (
+        component as unknown as {
+          _move: (
+            t: string,
+            s: string,
+            tg: string,
+            sl: 'PARENT' | 'SUB',
+            tl: 'PARENT' | 'SUB',
+            ids: string[],
+          ) => void;
+        }
+      )._move(taskId, src, target, srcListId, targetListId, newOrderedIds);
+    };
+
+    it('routes a subtask drop into another subtask list to moveSubTask (not addTaskToSection)', () => {
+      // Both src and target are subtask lists with parent task ids as listModelId.
+      callMove('sub1', 'parentA', 'parentB', 'SUB', 'SUB');
+
+      expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof moveSubTask>;
+      expect(dispatchedAction.type).toBe(moveSubTask.type);
+      expect(dispatchedAction.taskId).toBe('sub1');
+      expect(dispatchedAction.srcTaskId).toBe('parentA');
+      expect(dispatchedAction.targetTaskId).toBe('parentB');
+    });
+
+    it('routes a parent drop into a section drop-list (PARENT + non-reserved id) to addTaskToSection', () => {
+      callMove('task1', 'UNDONE', 'section-abc', 'PARENT', 'PARENT');
+
+      const args = sectionServiceMock.addTaskToSection.calls.mostRecent().args;
+      expect(args[0]).toBe('section-abc');
+      expect(args[1]).toBe('task1');
+      // Source was a reserved list (UNDONE), so sourceSectionId is null.
+      expect(args[3]).toBeNull();
+    });
+
+    it('passes the explicit sourceSectionId when dragging between sections', () => {
+      callMove('task1', 'section-from', 'section-to', 'PARENT', 'PARENT');
+
+      const args = sectionServiceMock.addTaskToSection.calls.mostRecent().args;
+      expect(args[0]).toBe('section-to');
+      expect(args[1]).toBe('task1');
+      expect(args[3]).toBe('section-from');
+    });
+
+    it('routes a section -> no-section drag to removeTaskFromSection', () => {
+      callMove('task1', 'section-from', 'UNDONE', 'PARENT', 'PARENT');
+
+      expect(sectionServiceMock.removeTaskFromSection).toHaveBeenCalledWith(
+        'section-from',
+        'task1',
+      );
+      expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
+    });
+
+    it('does NOT route reserved-list drops (DONE/UNDONE/BACKLOG) as section moves', () => {
+      callMove('task1', 'UNDONE', 'DONE', 'PARENT', 'PARENT');
+
+      expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
+      expect(sectionServiceMock.removeTaskFromSection).not.toHaveBeenCalled();
     });
   });
 });

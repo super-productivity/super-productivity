@@ -78,34 +78,49 @@ export const sectionReducer = createReducer(
     };
   }),
 
-  on(SectionActions.addTaskToSection, (state, { sectionId, taskId, afterTaskId }) => {
-    const updates: Update<Section>[] = [];
+  on(
+    SectionActions.addTaskToSection,
+    (state, { sectionId, taskId, afterTaskId, sourceSectionId }) => {
+      const updates: Update<Section>[] = [];
 
-    // Strip the task from any other section that currently holds it —
-    // a task lives in at most one section at a time, so we can stop at
-    // the first hit.
-    for (const s of Object.values(state.entities)) {
-      if (!s || s.id === sectionId) continue;
-      const removal = removeTaskIdFromSection(s, taskId);
-      if (removal) {
-        updates.push(removal);
-        break;
+      if (sourceSectionId !== undefined) {
+        // Deterministic path: strip from the explicit source (if any).
+        // Replay produces the same result regardless of current state.
+        if (sourceSectionId && sourceSectionId !== sectionId) {
+          const src = state.entities[sourceSectionId];
+          if (src) {
+            const removal = removeTaskIdFromSection(src, taskId);
+            if (removal) updates.push(removal);
+          }
+        }
+      } else {
+        // Legacy path: caller didn't track source. Sweep for the first
+        // section that currently holds the task — a task lives in at
+        // most one section, so we can stop at the first hit.
+        for (const s of Object.values(state.entities)) {
+          if (!s || s.id === sectionId) continue;
+          const removal = removeTaskIdFromSection(s, taskId);
+          if (removal) {
+            updates.push(removal);
+            break;
+          }
+        }
       }
-    }
 
-    const target = state.entities[sectionId];
-    if (target) {
-      const targetTaskIds = target.taskIds ?? [];
-      const newTaskIds = moveItemAfterAnchor(
-        taskId,
-        afterTaskId ?? null,
-        targetTaskIds.includes(taskId) ? targetTaskIds : [...targetTaskIds, taskId],
-      );
-      updates.push({ id: sectionId, changes: { taskIds: newTaskIds } });
-    }
+      const target = state.entities[sectionId];
+      if (target) {
+        const targetTaskIds = target.taskIds ?? [];
+        const newTaskIds = moveItemAfterAnchor(
+          taskId,
+          afterTaskId ?? null,
+          targetTaskIds.includes(taskId) ? targetTaskIds : [...targetTaskIds, taskId],
+        );
+        updates.push({ id: sectionId, changes: { taskIds: newTaskIds } });
+      }
 
-    return updates.length ? adapter.updateMany(updates, state) : state;
-  }),
+      return updates.length ? adapter.updateMany(updates, state) : state;
+    },
+  ),
 
   on(SectionActions.removeTaskFromSection, (state, { sectionId, taskId }) => {
     const section = state.entities[sectionId];

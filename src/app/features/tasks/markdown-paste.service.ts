@@ -78,7 +78,7 @@ export class MarkdownPasteService {
       if (sectionsData && sectionsData.hasHeaders) {
         // Confirm with user
         const totalTasks = sectionsData.sections.reduce(
-          (sum, section) => sum + section.tasks.length,
+          (sum: number, section) => sum + section.tasks.length,
           0,
         );
         const dialogRef = this._matDialog.open(DialogConfirmComponent, {
@@ -105,8 +105,18 @@ export class MarkdownPasteService {
           return;
         }
 
-        // Create sections and tasks
-        let sectionsCreated = 0;
+        // Create sections and tasks. Yield every YIELD_EVERY_N_DISPATCHES
+        // store dispatches — see CLAUDE.md rule #11 ("Event Loop Yield After
+        // Bulk Dispatches"). One section with 100+ tasks must not run as a
+        // single dispatch storm.
+        const YIELD_EVERY_N_DISPATCHES = 30;
+        let dispatchCount = 0;
+        const yieldIfNeeded = async (): Promise<void> => {
+          if (++dispatchCount % YIELD_EVERY_N_DISPATCHES === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        };
+
         for (const section of sectionsData.sections) {
           const sectionId = section.sectionTitle
             ? this._sectionService.addSection(
@@ -115,8 +125,8 @@ export class MarkdownPasteService {
                 sectionContextType,
               )
             : null;
+          if (sectionId) await yieldIfNeeded();
 
-          // Create tasks for this section
           for (const task of section.tasks) {
             const taskId = this._taskService.add(
               task.title,
@@ -127,12 +137,13 @@ export class MarkdownPasteService {
               },
               true,
             );
+            await yieldIfNeeded();
 
             if (sectionId) {
-              this._sectionService.addTaskToSection(sectionId, taskId);
+              this._sectionService.addTaskToSection(sectionId, taskId, null, null);
+              await yieldIfNeeded();
             }
 
-            // Create sub-tasks if any
             if (task.subTasks && task.subTasks.length > 0) {
               for (const subTask of task.subTasks) {
                 const subTaskObj = this._taskService.createNewTaskWithDefaults({
@@ -144,15 +155,9 @@ export class MarkdownPasteService {
                   },
                 });
                 this._store.dispatch(addSubTask({ task: subTaskObj, parentId: taskId }));
+                await yieldIfNeeded();
               }
             }
-          }
-
-          // Yield every 10 sections to prevent the event loop from stalling
-          // on large pastes (50+ sections × 10+ tasks).
-          sectionsCreated++;
-          if (sectionsCreated % 10 === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 0));
           }
         }
         return;

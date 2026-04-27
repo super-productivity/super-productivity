@@ -1,6 +1,7 @@
 import {
   parseMarkdownTasks,
   parseMarkdownTasksWithStructure,
+  parseMarkdownWithSections,
 } from './parse-markdown-tasks';
 
 describe('parseMarkdownTasks', () => {
@@ -362,5 +363,65 @@ describe('parseMarkdownTasksWithStructure', () => {
       ],
       totalSubTasks: 2,
     });
+  });
+});
+
+describe('parseMarkdownWithSections', () => {
+  it('returns null when no header is present', () => {
+    expect(parseMarkdownWithSections('- a\n- b')).toBeNull();
+  });
+
+  it('groups tasks under H1 headers', () => {
+    const result = parseMarkdownWithSections(`# One\n- a\n- b\n# Two\n- c`);
+    expect(result?.hasHeaders).toBe(true);
+    expect(result?.sections).toEqual([
+      {
+        sectionTitle: 'One',
+        tasks: [
+          { title: 'a', isCompleted: false },
+          { title: 'b', isCompleted: false },
+        ],
+      },
+      {
+        sectionTitle: 'Two',
+        tasks: [{ title: 'c', isCompleted: false }],
+      },
+    ]);
+  });
+
+  it('recognizes H2/H3 headers (not just H1)', () => {
+    const result = parseMarkdownWithSections(`## Two\n- a\n### Three\n- b`);
+    expect(result?.sections.map((s) => s.sectionTitle)).toEqual(['Two', 'Three']);
+  });
+
+  it('keeps tasks that appear before the first header as a "No Section" entry', () => {
+    const result = parseMarkdownWithSections(`- pre1\n- pre2\n# Header\n- post`);
+    expect(result?.sections[0]).toEqual({
+      sectionTitle: null,
+      tasks: [
+        { title: 'pre1', isCompleted: false },
+        { title: 'pre2', isCompleted: false },
+      ],
+    });
+    expect(result?.sections[1]).toEqual({
+      sectionTitle: 'Header',
+      tasks: [{ title: 'post', isCompleted: false }],
+    });
+  });
+
+  it('produces an empty tasks array for headers with no following tasks', () => {
+    const result = parseMarkdownWithSections(`# Empty\n# Has Tasks\n- a`);
+    expect(result?.sections).toEqual([
+      { sectionTitle: 'Empty', tasks: [] },
+      {
+        sectionTitle: 'Has Tasks',
+        tasks: [{ title: 'a', isCompleted: false }],
+      },
+    ]);
+  });
+
+  it('returns null for null/empty input', () => {
+    expect(parseMarkdownWithSections('')).toBeNull();
+    expect(parseMarkdownWithSections(null as unknown as string)).toBeNull();
   });
 });

@@ -64,18 +64,35 @@ export const updateSectionOrder = createAction(
 
 /**
  * Atomically place `taskId` into `sectionId` at the position implied by
- * `afterTaskId`. The reducer enforces uniqueness — if the task is already
- * in another section, it is removed from there in the same reducer pass,
- * producing a single sync operation keyed on the *destination* section.
+ * `afterTaskId`. The reducer enforces uniqueness:
+ * - If `sourceSectionId` is provided, the task is stripped from there
+ *   explicitly. Replay is deterministic from the operation payload alone
+ *   and conflict scope spans both sections via `entityIds: [src, dest]`.
+ * - If `sourceSectionId` is null/undefined (e.g. a just-created task that
+ *   was never in a section), the reducer falls back to a defensive sweep
+ *   over all sections.
+ *
+ * RESIDUAL: under concurrent moves of the same task to different sections
+ * across devices, the task may end up in multiple sections after sync
+ * because each per-section update applies independently. A future fix
+ * could either model membership as `task.sectionId` (atomic per-task) or
+ * use a Phase 6.5 cleanup pass. See review notes.
  */
 export const addTaskToSection = createAction(
   '[Section] Add Task to Section',
-  (payload: { sectionId: string; taskId: string; afterTaskId?: string | null }) => ({
+  (payload: {
+    sectionId: string;
+    taskId: string;
+    afterTaskId?: string | null;
+    sourceSectionId?: string | null;
+  }) => ({
     ...payload,
     meta: {
       isPersistent: true,
       entityType: 'SECTION',
-      entityId: payload.sectionId,
+      ...(payload.sourceSectionId && payload.sourceSectionId !== payload.sectionId
+        ? { entityIds: [payload.sourceSectionId, payload.sectionId] }
+        : { entityId: payload.sectionId }),
       opType: OpType.Move,
     } satisfies PersistentActionMeta,
   }),

@@ -11,6 +11,7 @@ import { deleteTag, deleteTags } from '../../../features/tag/store/tag.actions';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { ActionHandlerMap } from './task-shared-helpers';
 
 /**
@@ -179,6 +180,48 @@ const handleMoveToOtherProject = (
 };
 
 /**
+ * A bulk "remove from TODAY" action (removeTasksFromTodayTag /
+ * localRemoveOverdueFromToday) fired. TODAY is virtual — `task.tagIds`
+ * doesn't contain `'TODAY'`, so `handleTaskTagsChange` won't catch it.
+ * Strip the affected tasks (and their subtasks) from any TODAY-context
+ * section so they don't reappear there next time the task is planned for
+ * today.
+ *
+ * RESIDUAL GAP — the following reducers also mutate `TODAY_TAG.taskIds`
+ * directly without dispatching either bulk-remove action, so a task
+ * that leaves TODAY via these paths can leave a stale id in a TODAY
+ * section's `taskIds`:
+ *  - task-shared-scheduling.reducer.ts: scheduleTaskWithTime,
+ *    reScheduleTaskWithTime (when not isSkipAutoRemoveFromToday),
+ *    unscheduleTask
+ *  - planner-shared.reducer.ts: planTaskForDay (when moving away from
+ *    today), removeTaskFromTodayTagAndPlanner, planner cleanup paths
+ *  - short-syntax-shared.reducer.ts: short-syntax day moves
+ *  - task-shared-crud.reducer.ts: undo paths that re-insert/remove
+ *  - lww-update.meta-reducer.ts: conflict-resolution replacements
+ * Accurate detection per-action requires duplicating each reducer's
+ * dueDay/dueWithTime decision logic. The clean fix is a separate
+ * Phase 6.5 meta-reducer that diffs `TODAY_TAG.taskIds` pre/post the
+ * inner reducer call and strips removed ids from TODAY-context
+ * sections — captured for follow-up.
+ */
+const handleRemoveFromTodayTag = (
+  state: ExtendedState,
+  taskIds: string[],
+): ExtendedState => {
+  const affectedTaskIds = collectAffectedTaskIds(state, taskIds);
+  return withSectionStateUpdate(
+    state,
+    removeTaskIdsFromContextSections(
+      state[SECTION_FEATURE_NAME],
+      affectedTaskIds,
+      [TODAY_TAG.id],
+      WorkContextType.TAG,
+    ),
+  );
+};
+
+/**
  * Task's tagIds were updated. For each tag the task no longer carries,
  * strip the task id from any section owned by that tag.
  */
@@ -255,6 +298,18 @@ const createActionHandlers = (
     }
     return next as RootState;
   },
+  [TaskSharedActions.removeTasksFromTodayTag.type]: () => {
+    const { taskIds } = action as ReturnType<
+      typeof TaskSharedActions.removeTasksFromTodayTag
+    >;
+    return handleRemoveFromTodayTag(state, taskIds) as RootState;
+  },
+  [TaskSharedActions.localRemoveOverdueFromToday.type]: () => {
+    const { taskIds } = action as ReturnType<
+      typeof TaskSharedActions.localRemoveOverdueFromToday
+    >;
+    return handleRemoveFromTodayTag(state, taskIds) as RootState;
+  },
 });
 
 // Action types this meta-reducer reacts to. Looked up in O(1) so the
@@ -269,12 +324,14 @@ const HANDLED_ACTION_TYPES: ReadonlySet<string> = new Set([
   TaskSharedActions.moveToOtherProject.type,
   TaskSharedActions.updateTask.type,
   TaskSharedActions.updateTasks.type,
+  TaskSharedActions.removeTasksFromTodayTag.type,
+  TaskSharedActions.localRemoveOverdueFromToday.type,
 ]);
 
-export const sectionSharedMetaReducer: MetaReducer = (
-  reducer: ActionReducer<any, Action>,
+export const sectionSharedMetaReducer: MetaReducer<RootState> = (
+  reducer: ActionReducer<RootState, Action>,
 ) => {
-  return (state: unknown, action: Action) => {
+  return (state: RootState | undefined, action: Action): RootState => {
     if (!state) return reducer(state, action);
     if (!HANDLED_ACTION_TYPES.has(action.type)) return reducer(state, action);
 

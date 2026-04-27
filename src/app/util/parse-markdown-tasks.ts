@@ -26,7 +26,6 @@ export interface MarkdownWithSections {
   hasHeaders: boolean;
 }
 
-
 interface ParsedLine {
   indentLevel: number;
   content: string;
@@ -337,30 +336,36 @@ export const parseMarkdownWithSections = (text: string): MarkdownWithSections | 
   let hasHeaders = false;
   const pendingTaskLines: string[] = [];
 
+  // Flush pendingTaskLines into a section. If currentSection is null (i.e. we
+  // are about to enter the first header but already collected tasks above it),
+  // create a "No Section" entry at the top so those tasks aren't dropped.
+  const flushPending = (): void => {
+    if (pendingTaskLines.length === 0) return;
+    const parsedTasks = parseMarkdownTasksWithStructure(pendingTaskLines.join('\n'));
+    pendingTaskLines.length = 0;
+    if (!parsedTasks) return;
+    if (currentSection) {
+      currentSection.tasks = parsedTasks.mainTasks;
+    } else {
+      sections.unshift({ sectionTitle: null, tasks: parsedTasks.mainTasks });
+    }
+  };
+
+  const headerRegex = /^#{1,6}\s+(.+)$/;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Detect H1 header (only single #)
-    if (trimmed.match(/^#\s+(.+)$/)) {
+    // Detect ATX header (#, ##, ### up to ######)
+    const headerMatch = trimmed.match(headerRegex);
+    if (headerMatch) {
       hasHeaders = true;
+      flushPending();
 
-      // Process any pending tasks from previous section
-      if (pendingTaskLines.length > 0) {
-        const tasksText = pendingTaskLines.join('\n');
-        const parsedTasks = parseMarkdownTasksWithStructure(tasksText);
-
-        if (currentSection && parsedTasks) {
-          currentSection.tasks = parsedTasks.mainTasks;
-        }
-        pendingTaskLines.length = 0; // Clear
-      }
-
-      // Create new section
-      const headerText = trimmed.replace(/^#\s+/, '').trim();
       currentSection = {
-        sectionTitle: headerText,
-        tasks: []
+        sectionTitle: headerMatch[1].trim(),
+        tasks: [],
       };
       sections.push(currentSection);
     }
@@ -371,22 +376,7 @@ export const parseMarkdownWithSections = (text: string): MarkdownWithSections | 
     // Empty lines and other content are ignored for now
   }
 
-  // Process remaining pending tasks
-  if (pendingTaskLines.length > 0) {
-    const tasksText = pendingTaskLines.join('\n');
-    const parsedTasks = parseMarkdownTasksWithStructure(tasksText);
-
-    if (currentSection && parsedTasks) {
-      // Add to current section
-      currentSection.tasks = parsedTasks.mainTasks;
-    } else if (parsedTasks) {
-      // Tasks before any header - create "No Section"
-      sections.unshift({
-        sectionTitle: null,
-        tasks: parsedTasks.mainTasks
-      });
-    }
-  }
+  flushPending();
 
   // Only return if we found headers
   if (!hasHeaders) {
@@ -395,6 +385,6 @@ export const parseMarkdownWithSections = (text: string): MarkdownWithSections | 
 
   return {
     sections,
-    hasHeaders
+    hasHeaders,
   };
 };

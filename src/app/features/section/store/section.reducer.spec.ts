@@ -148,6 +148,77 @@ describe('sectionReducer', () => {
       expect(next.entities['s1']?.taskIds).toEqual(['b', 'a', 'c']);
     });
 
+    it('strips from the explicit sourceSectionId (deterministic replay)', () => {
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['t1'] }),
+        makeSection({ id: 's2', taskIds: [] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        addTaskToSection({
+          sectionId: 's2',
+          taskId: 't1',
+          afterTaskId: null,
+          sourceSectionId: 's1',
+        }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual([]);
+      expect(next.entities['s2']?.taskIds).toEqual(['t1']);
+    });
+
+    it('does not sweep other sections when sourceSectionId is null', () => {
+      // Local invariant says t1 should only be in s1, but the test simulates
+      // a stale duplicate (e.g. concurrent move). With explicit null source
+      // the reducer must NOT touch the duplicate — replay determinism.
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['t1'] }),
+        makeSection({ id: 's2', taskIds: [] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        addTaskToSection({
+          sectionId: 's2',
+          taskId: 't1',
+          afterTaskId: null,
+          sourceSectionId: null,
+        }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual(['t1']);
+      expect(next.entities['s2']?.taskIds).toEqual(['t1']);
+    });
+
+    it('falls back to defensive sweep when sourceSectionId is omitted', () => {
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['t1'] }),
+        makeSection({ id: 's2', taskIds: [] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        addTaskToSection({ sectionId: 's2', taskId: 't1', afterTaskId: null }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual([]);
+      expect(next.entities['s2']?.taskIds).toEqual(['t1']);
+    });
+
+    it('handles intra-section reorder with sourceSectionId === sectionId', () => {
+      // Real callers pass sourceSectionId === sectionId for an in-section
+      // reorder (drag within the same section). The strip step must be
+      // short-circuited or the task would be removed before re-insert.
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        addTaskToSection({
+          sectionId: 's1',
+          taskId: 'a',
+          afterTaskId: 'b',
+          sourceSectionId: 's1',
+        }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual(['b', 'a', 'c']);
+    });
+
     it('returns the same reference when nothing changes (target missing, task not in any section)', () => {
       const start = stateWithSections([makeSection({ id: 's1', taskIds: [] })]);
       const next = sectionReducer(

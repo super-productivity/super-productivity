@@ -426,4 +426,89 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['s3']).toBeUndefined();
     });
   });
+
+  describe('TODAY-tag removal cleanup', () => {
+    it('strips taskIds from TODAY-context sections on removeTasksFromTodayTag', () => {
+      const state = stateWith({ t1: {}, t2: {}, t3: {} }, [
+        {
+          id: 'today-sec',
+          contextId: 'TODAY',
+          contextType: WorkContextType.TAG,
+          title: 'Morning',
+          taskIds: ['t1', 't2', 't3'],
+        },
+        {
+          id: 'tag-sec',
+          contextId: 'work',
+          contextType: WorkContextType.TAG,
+          title: 'Work',
+          taskIds: ['t1', 't2'],
+        },
+      ]);
+
+      metaReducer(
+        state,
+        TaskSharedActions.removeTasksFromTodayTag({ taskIds: ['t1', 't3'] }) as Action,
+      );
+
+      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+        SECTION_FEATURE_NAME
+      ] as SectionState;
+      expect(updated.entities['today-sec']?.taskIds).toEqual(['t2']);
+      // Other tag contexts must NOT be touched.
+      expect(updated.entities['tag-sec']?.taskIds).toEqual(['t1', 't2']);
+    });
+
+    it('cascades subtasks of a removed parent on TODAY removal', () => {
+      const state = stateWith(
+        {
+          parent: { subTaskIds: ['sub1', 'sub2'] },
+          sub1: { parentId: 'parent' },
+          sub2: { parentId: 'parent' },
+          other: {},
+        },
+        [
+          {
+            id: 'today-sec',
+            contextId: 'TODAY',
+            contextType: WorkContextType.TAG,
+            title: 'Morning',
+            taskIds: ['parent', 'sub1', 'other'],
+          },
+        ],
+      );
+
+      metaReducer(
+        state,
+        TaskSharedActions.removeTasksFromTodayTag({ taskIds: ['parent'] }) as Action,
+      );
+
+      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+        SECTION_FEATURE_NAME
+      ] as SectionState;
+      expect(updated.entities['today-sec']?.taskIds).toEqual(['other']);
+    });
+
+    it('also handles localRemoveOverdueFromToday', () => {
+      const state = stateWith({ t1: {}, t2: {} }, [
+        {
+          id: 'today-sec',
+          contextId: 'TODAY',
+          contextType: WorkContextType.TAG,
+          title: 'Morning',
+          taskIds: ['t1', 't2'],
+        },
+      ]);
+
+      metaReducer(
+        state,
+        TaskSharedActions.localRemoveOverdueFromToday({ taskIds: ['t1'] }) as Action,
+      );
+
+      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+        SECTION_FEATURE_NAME
+      ] as SectionState;
+      expect(updated.entities['today-sec']?.taskIds).toEqual(['t2']);
+    });
+  });
 });

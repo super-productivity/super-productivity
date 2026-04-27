@@ -62,16 +62,25 @@ export class SectionService {
 
   /**
    * Atomic: places `taskId` into `targetSectionId` at the position implied
-   * by `afterTaskId`. Removes the task from any other section in the same
-   * reducer pass (uniqueness invariant).
+   * by `afterTaskId`. Pass `sourceSectionId` (or `null` if the task wasn't
+   * in a section) so replay is deterministic — the reducer strips from
+   * the explicit source rather than searching state. Omit `sourceSectionId`
+   * for legacy callers that don't track it; the reducer falls back to a
+   * defensive sweep.
    */
   addTaskToSection(
     targetSectionId: string,
     taskId: string,
     afterTaskId: string | null = null,
+    sourceSectionId?: string | null,
   ): void {
     this._store.dispatch(
-      addTaskToSection({ sectionId: targetSectionId, taskId, afterTaskId }),
+      addTaskToSection({
+        sectionId: targetSectionId,
+        taskId,
+        afterTaskId,
+        ...(sourceSectionId !== undefined ? { sourceSectionId } : {}),
+      }),
     );
   }
 
