@@ -45,6 +45,27 @@ const collectAffectedTaskIds = (
   return Array.from(all);
 };
 
+/**
+ * Walk `taskIds` once removing entries in `removedSet`. Returns `null`
+ * when nothing was removed so callers can keep the original array
+ * reference, avoiding the `.some` + `.filter` double-walk.
+ */
+const filterRemovingTaskIds = (
+  taskIds: string[],
+  removedSet: Set<string>,
+): string[] | null => {
+  let next: string[] | null = null;
+  for (let i = 0; i < taskIds.length; i++) {
+    const id = taskIds[i];
+    if (removedSet.has(id)) {
+      if (next === null) next = taskIds.slice(0, i);
+    } else if (next !== null) {
+      next.push(id);
+    }
+  }
+  return next;
+};
+
 const cleanupSectionTaskIds = (
   sectionState: SectionState,
   removedTaskIds: string[],
@@ -54,16 +75,16 @@ const cleanupSectionTaskIds = (
   const removedSet = new Set(removedTaskIds);
   const updates: Update<Section>[] = [];
 
-  Object.values(sectionState.entities).forEach((s) => {
-    if (!s) return;
-    const taskIds = s.taskIds;
-    if (taskIds.some((id) => removedSet.has(id))) {
-      updates.push({
-        id: s.id,
-        changes: { taskIds: taskIds.filter((id) => !removedSet.has(id)) },
-      });
+  // Iterate `state.ids` directly — `Object.values(entities)` allocates
+  // a fresh array on every dispatch, which adds up under op-log replay.
+  for (const id of sectionState.ids) {
+    const s = sectionState.entities[id];
+    if (!s) continue;
+    const filtered = filterRemovingTaskIds(s.taskIds, removedSet);
+    if (filtered !== null) {
+      updates.push({ id: s.id, changes: { taskIds: filtered } });
     }
-  });
+  }
 
   if (!updates.length) return sectionState;
   return sectionAdapter.updateMany(updates, sectionState);
@@ -78,12 +99,13 @@ const removeSectionsByContext = (
 
   const contextIdSet = new Set(contextIds);
   const idsToRemove: string[] = [];
-  Object.values(sectionState.entities).forEach((s) => {
-    if (!s) return;
+  for (const id of sectionState.ids) {
+    const s = sectionState.entities[id];
+    if (!s) continue;
     if (s.contextType === contextType && contextIdSet.has(s.contextId)) {
       idsToRemove.push(s.id);
     }
-  });
+  }
 
   if (!idsToRemove.length) return sectionState;
   return sectionAdapter.removeMany(idsToRemove, sectionState);
@@ -107,17 +129,16 @@ const removeTaskIdsFromContextSections = (
   const contextIdSet = new Set(contextIds);
   const updates: Update<Section>[] = [];
 
-  Object.values(sectionState.entities).forEach((s) => {
-    if (!s) return;
-    if (s.contextType !== contextType) return;
-    if (!contextIdSet.has(s.contextId)) return;
-    const ids = s.taskIds;
-    if (!ids.some((id) => taskIdSet.has(id))) return;
-    updates.push({
-      id: s.id,
-      changes: { taskIds: ids.filter((id) => !taskIdSet.has(id)) },
-    });
-  });
+  for (const id of sectionState.ids) {
+    const s = sectionState.entities[id];
+    if (!s) continue;
+    if (s.contextType !== contextType) continue;
+    if (!contextIdSet.has(s.contextId)) continue;
+    const filtered = filterRemovingTaskIds(s.taskIds, taskIdSet);
+    if (filtered !== null) {
+      updates.push({ id: s.id, changes: { taskIds: filtered } });
+    }
+  }
 
   if (!updates.length) return sectionState;
   return sectionAdapter.updateMany(updates, sectionState);
@@ -249,6 +270,59 @@ const handleTaskTagsChange = (
 };
 
 /**
+ * Bulk variant: aggregate (taskId → removedTagIds) pairs across the
+ * batch first, then sweep sections once instead of N times. Builds a
+ * `tagId → tasks-that-left-this-tag` map and applies all updates in a
+ * single `adapter.updateMany`.
+ */
+const handleBulkTaskTagsChange = (
+  state: ExtendedState,
+  updates: ReadonlyArray<{ taskId: string; newTagIds: string[] }>,
+): ExtendedState => {
+  const taskState = state[TASK_FEATURE_NAME];
+  const removedByTag = new Map<string, Set<string>>();
+
+  for (const { taskId, newTagIds } of updates) {
+    const t = taskState.entities[taskId] as Task | undefined;
+    if (!t) continue;
+    const oldTagIds = t.tagIds ?? [];
+    if (!oldTagIds.length) continue;
+    const newSet = new Set(newTagIds);
+    for (const tagId of oldTagIds) {
+      if (newSet.has(tagId)) continue;
+      const bucket = removedByTag.get(tagId);
+      if (bucket) {
+        bucket.add(taskId);
+      } else {
+        removedByTag.set(tagId, new Set([taskId]));
+      }
+    }
+  }
+
+  if (removedByTag.size === 0) return state;
+
+  const sectionState = state[SECTION_FEATURE_NAME];
+  const sectionUpdates: Update<Section>[] = [];
+
+  for (const id of sectionState.ids) {
+    const s = sectionState.entities[id];
+    if (!s || s.contextType !== WorkContextType.TAG) continue;
+    const removedTaskSet = removedByTag.get(s.contextId);
+    if (!removedTaskSet) continue;
+    const filtered = filterRemovingTaskIds(s.taskIds, removedTaskSet);
+    if (filtered !== null) {
+      sectionUpdates.push({ id: s.id, changes: { taskIds: filtered } });
+    }
+  }
+
+  if (!sectionUpdates.length) return state;
+  return withSectionStateUpdate(
+    state,
+    sectionAdapter.updateMany(sectionUpdates, sectionState),
+  );
+};
+
+/**
  * Single source of truth for which actions trigger section cleanup.
  * The meta-reducer looks up the handler directly — adding an entry here
  * is the only step needed to react to a new action type. Keeping action
@@ -325,13 +399,15 @@ const ACTION_HANDLERS: Record<string, Handler> = {
   },
   [TaskSharedActions.updateTasks.type]: (state, action) => {
     const { tasks } = action as ReturnType<typeof TaskSharedActions.updateTasks>;
-    let next: ExtendedState = state;
+    const tagChanges: { taskId: string; newTagIds: string[] }[] = [];
     for (const u of tasks) {
       const tagIds = u.changes.tagIds;
-      if (!Array.isArray(tagIds)) continue;
-      next = handleTaskTagsChange(next, u.id as string, tagIds);
+      if (Array.isArray(tagIds)) {
+        tagChanges.push({ taskId: u.id as string, newTagIds: tagIds });
+      }
     }
-    return next;
+    if (!tagChanges.length) return state;
+    return handleBulkTaskTagsChange(state, tagChanges);
   },
   [TaskSharedActions.removeTasksFromTodayTag.type]: (state, action) => {
     const { taskIds } = action as ReturnType<

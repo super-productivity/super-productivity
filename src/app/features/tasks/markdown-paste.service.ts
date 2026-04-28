@@ -17,6 +17,30 @@ import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { Task } from './task.model';
 import { SectionService } from '../section/section.service';
 import { WorkContextService } from '../work-context/work-context.service';
+import type { MarkdownWithSections } from '../../util/parse-markdown-tasks';
+
+// Anchored at line start: ATX header (#…) or list-item marker (-/* with
+// optional checkbox). One-shot regex that bails before invoking the full
+// parsers on plain-text pastes.
+const MARKDOWN_TASK_OR_HEADER_RE = /^(?:#{1,6}\s|\s*[-*]\s)/m;
+
+// Single-slot memo for the sectioned parse result. `isMarkdownTaskList`
+// runs first (paste-gate) and `handleMarkdownPaste` runs immediately
+// after with the same string — without this, the parser ran twice.
+// Keyed by string reference; falls back to a fresh parse on miss.
+let _lastSectionInput: string | null = null;
+let _lastSectionResult: MarkdownWithSections | null = null;
+
+const parseSectionsCached = (
+  text: string,
+  parse: (t: string) => MarkdownWithSections | null,
+): MarkdownWithSections | null => {
+  if (text !== _lastSectionInput) {
+    _lastSectionInput = text;
+    _lastSectionResult = parse(text);
+  }
+  return _lastSectionResult;
+};
 
 @Injectable({
   providedIn: 'root',
@@ -74,7 +98,7 @@ export class MarkdownPasteService {
 
     // Try to parse with sections first (for markdown with H1 headers)
     if (!selectedTaskId) {
-      const sectionsData = parseMarkdownWithSections(pastedText);
+      const sectionsData = parseSectionsCached(pastedText, parseMarkdownWithSections);
       if (sectionsData) {
         // Confirm with user
         const totalTasks = sectionsData.sections.reduce(
@@ -278,9 +302,15 @@ export class MarkdownPasteService {
   }
 
   isMarkdownTaskList(text: string): boolean {
+    // Cheap pre-screen — bails out for plain-text pastes (the common
+    // case for Ctrl+V) before invoking the full parsers, which would
+    // otherwise scan the whole input even for 800KB of prose.
+    if (!MARKDOWN_TASK_OR_HEADER_RE.test(text)) return false;
+
     // Sectioned (H1+) markdown — parseMarkdownWithSections already
-    // returns null for header-less input.
-    if (parseMarkdownWithSections(text)) return true;
+    // returns null for header-less input. Result is memoised so the
+    // immediately-following handleMarkdownPaste reuses it.
+    if (parseSectionsCached(text, parseMarkdownWithSections)) return true;
 
     // Flat task list fallback
     const parsedTasks = parseMarkdownTasks(text);

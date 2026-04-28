@@ -196,9 +196,13 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   // Section Logic
   sections = toSignal(
     this.workContextService.activeWorkContextId$.pipe(
-      switchMap((id) => (id ? this.sectionService.getSectionsByContextId$(id) : of([]))),
+      switchMap((id) =>
+        id
+          ? this.sectionService.getSectionsByContextId$(id)
+          : of([] as readonly Section[]),
+      ),
     ),
-    { initialValue: [] },
+    { initialValue: [] as readonly Section[] },
   );
 
   undoneTasksBySection = computed(() => {
@@ -452,10 +456,11 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   // The sections-wrapper is part of the cdkDropListGroup, so without this
   // predicate a task drag could drop into the section-reorder list and
   // dropSection would interpret a Task as a Section, corrupting ordering.
-  acceptSectionDragOnly = (drag: CdkDrag): boolean => {
-    const data = drag.data as Partial<Section> | undefined;
-    return !!data && Array.isArray(data.taskIds) && typeof data.contextId === 'string';
-  };
+  // Section drags carry the Section via [cdkDragData]; tasks carry a Task
+  // (no `taskIds`), so a single-property check distinguishes them. Called
+  // on every dragOver tick — keep it allocation-free.
+  acceptSectionDragOnly = (drag: CdkDrag): boolean =>
+    Array.isArray((drag.data as Section | undefined)?.taskIds);
 
   dropSection(event: CdkDragDrop<Section[]>): void {
     if (event.previousIndex === event.currentIndex) return;

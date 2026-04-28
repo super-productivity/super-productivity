@@ -153,6 +153,7 @@
                 <div
                   class="section-container"
                   cdkDrag
+                  [cdkDragData]="section"
                   [cdkDragLockAxis]="'y'"
                 >
                   <collapsible
@@ -193,7 +194,7 @@
                     </ng-container>
 
                     <task-list
-                      [tasks]="undoneTasksBySection().dict[section.id] || []"
+                      [tasks]="undoneTasksBySection().dict[section.id]"
                       [listId]="'PARENT'"
                       [listModelId]="section.id"
                     ></task-list>
