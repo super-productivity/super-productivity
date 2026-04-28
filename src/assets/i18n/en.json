@@ -21,7 +21,6 @@
     "SHOW_NOTES": "Project Notes"
   },
   "CONFIRM": {
-    "ADD_SECTION": "Add Section",
     "AUTO_FIX": "Your data seems to be damaged (\"{{validityError}}\"). Do you want to try to automatically fix it? This may result in partial data loss.",
     "DELETE_SECTION": "Are you sure you want to delete this section? Tasks in it will be moved to the task list.",
     "RELOAD_AFTER_IDB_ERROR": "Database Error - App Will Restart\n\nSuper Productivity cannot save data! This is usually caused by:\n• Low disk space (most common)\n• App update in background\n• Linux Snap users: run 'snap set core experimental.refresh-app-awareness=true'\n\nYour recent changes may not have been saved. Please free up disk space if low. The app will restart after you close this dialog.",

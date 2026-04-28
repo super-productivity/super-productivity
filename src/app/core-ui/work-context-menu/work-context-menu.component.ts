@@ -140,9 +140,11 @@ export class WorkContextMenuComponent implements OnInit {
   addSection(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        // Omit `message` to match the Add Tag pattern — the dialog
+        // collapses its outer padding when there's no message text
+        // (`dialog-prompt.scss: mat-dialog-content.isNoMsg`).
         data: {
           placeholder: T.G.TITLE,
-          message: T.CONFIRM.ADD_SECTION,
         },
       })
       // NOTE: do NOT pipe takeUntilDestroyed here. This component lives inside
