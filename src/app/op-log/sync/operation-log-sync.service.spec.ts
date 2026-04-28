@@ -2182,6 +2182,160 @@ describe('OperationLogSyncService', () => {
     });
   });
 
+  describe('downloaded SYNC_IMPORT conflict dialog', () => {
+    let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
+
+    beforeEach(() => {
+      downloadServiceSpy = TestBed.inject(
+        OperationLogDownloadService,
+      ) as jasmine.SpyObj<OperationLogDownloadService>;
+    });
+
+    const createIncomingSyncImport = (): Operation => ({
+      id: 'import-1',
+      clientId: 'client-B',
+      actionType: ActionType.LOAD_ALL_DATA,
+      opType: OpType.SyncImport,
+      entityType: 'ALL',
+      payload: { task: { ids: ['remote-task'] } },
+      vectorClock: { clientB: 5 },
+      timestamp: Date.now(),
+      schemaVersion: 1,
+      syncImportReason: 'SERVER_MIGRATION',
+    });
+
+    it('should process incoming SYNC_IMPORT silently when client only has already-synced meaningful data', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+
+      opLogStoreSpy.getUnsynced.and.resolveTo([]);
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: ['task-1'] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: [] },
+      } as any);
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      const result = await service.downloadRemoteOps(mockProvider);
+
+      expect(
+        syncImportConflictDialogServiceSpy.showConflictDialog,
+      ).not.toHaveBeenCalled();
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
+        incomingSyncImport,
+      ]);
+      expect(mockProvider.setLastServerSeq).toHaveBeenCalledWith(42);
+      expect(result.kind).toBe('ops_processed');
+    });
+
+    it('should show conflict dialog for incoming SYNC_IMPORT when client has pending meaningful ops', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        {
+          seq: 1,
+          op: {
+            id: 'local-op-1',
+            clientId: 'client-A',
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'Local Title' },
+            vectorClock: { clientA: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        },
+      ]);
+      syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('CANCEL');
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      const result = await service.downloadRemoteOps(mockProvider);
+
+      expect(syncImportConflictDialogServiceSpy.showConflictDialog).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          scenario: 'INCOMING_IMPORT',
+          syncImportReason: 'SERVER_MIGRATION',
+        }),
+      );
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).not.toHaveBeenCalled();
+      expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+      expect(result.kind).toBe('cancelled');
+    });
+
+    it('should process incoming SYNC_IMPORT when pending ops are config-only', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        {
+          seq: 1,
+          op: {
+            id: 'local-config-op-1',
+            clientId: 'client-A',
+            actionType: '[Global Config] Update Global Config Section' as ActionType,
+            opType: OpType.Update,
+            entityType: 'GLOBAL_CONFIG',
+            entityId: 'sync',
+            payload: { sectionKey: 'sync' },
+            vectorClock: { clientA: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        },
+      ]);
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      const result = await service.downloadRemoteOps(mockProvider);
+
+      expect(
+        syncImportConflictDialogServiceSpy.showConflictDialog,
+      ).not.toHaveBeenCalled();
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
+        incomingSyncImport,
+      ]);
+      expect(mockProvider.setLastServerSeq).toHaveBeenCalledWith(42);
+      expect(result.kind).toBe('ops_processed');
+    });
+  });
+
   describe('piggybacked SYNC_IMPORT conflict dialog', () => {
     let uploadServiceSpy: jasmine.SpyObj<OperationLogUploadService>;
 
@@ -2258,7 +2412,7 @@ describe('OperationLogSyncService', () => {
       expect(result.kind).toBe('cancelled');
     });
 
-    it('should show conflict dialog when piggybacked ops contain SYNC_IMPORT and client has meaningful data', async () => {
+    it('should process piggybacked SYNC_IMPORT silently when client only has already-synced meaningful data', async () => {
       const piggybackedSyncImport: Operation = {
         id: 'import-1',
         clientId: 'client-B',
@@ -2278,7 +2432,8 @@ describe('OperationLogSyncService', () => {
         rejectedOps: [],
       });
 
-      // No pending ops but meaningful local data — dialog should show
+      // No pending ops but meaningful local data — this is already-synced state,
+      // not a conflict with the incoming full-state op.
       opLogStoreSpy.getUnsynced.and.resolveTo([]);
       stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
         task: { ids: ['task-1'] },
@@ -2287,16 +2442,19 @@ describe('OperationLogSyncService', () => {
         note: { ids: [] },
       } as any);
 
-      syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('CANCEL');
-
       const mockProvider = {
         isReady: () => Promise.resolve(true),
       } as any;
 
       const result = await service.uploadPendingOps(mockProvider);
 
-      expect(syncImportConflictDialogServiceSpy.showConflictDialog).toHaveBeenCalled();
-      expect(result.kind).toBe('cancelled');
+      expect(
+        syncImportConflictDialogServiceSpy.showConflictDialog,
+      ).not.toHaveBeenCalled();
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
+        piggybackedSyncImport,
+      ]);
+      expect(result.kind).not.toBe('cancelled');
     });
 
     it('should process piggybacked SYNC_IMPORT silently when no meaningful local data', async () => {
@@ -2405,7 +2563,25 @@ describe('OperationLogSyncService', () => {
         rejectedOps: [],
       });
 
-      opLogStoreSpy.getUnsynced.and.resolveTo([]);
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        {
+          seq: 1,
+          op: {
+            id: 'local-op-1',
+            clientId: 'client-A',
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'Local Title' },
+            vectorClock: { clientA: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        },
+      ]);
       stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
         task: { ids: ['task-1'] },
         project: { ids: [INBOX_PROJECT.id] },
@@ -2446,7 +2622,25 @@ describe('OperationLogSyncService', () => {
         rejectedOps: [],
       });
 
-      opLogStoreSpy.getUnsynced.and.resolveTo([]);
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        {
+          seq: 1,
+          op: {
+            id: 'local-op-1',
+            clientId: 'client-A',
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'Local Title' },
+            vectorClock: { clientA: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        },
+      ]);
       stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
         task: { ids: ['task-1'] },
         project: { ids: [INBOX_PROJECT.id] },

@@ -307,13 +307,13 @@ export class OperationLogSyncService {
         const pendingOps = await this.opLogStore.getUnsynced();
         const hasMeaningfulPending = this._hasMeaningfulPendingOps(pendingOps);
 
-        // Skip the conflict dialog for password-change SYNC_IMPORTs when there are no
-        // meaningful pending ops. The data is identical, only the encryption changed.
-        const isEncryptionOnlyChange =
-          piggybackedFullStateOp.syncImportReason === 'PASSWORD_CHANGED' &&
-          !hasMeaningfulPending;
-
-        if (!isEncryptionOnlyChange && this._hasAnyMeaningfulData(pendingOps)) {
+        // Existing synced store data is not a conflict here. Prompt only when
+        // local pending user changes would be discarded; otherwise an old client
+        // can accidentally force-upload stale state over the remote import.
+        // (PASSWORD_CHANGED SYNC_IMPORTs without pending ops also fall through
+        // to silent acceptance via this gate — the data is identical, only the
+        // encryption changed.)
+        if (hasMeaningfulPending) {
           OpLog.warn(
             `OperationLogSyncService: Piggybacked ${piggybackedFullStateOp.opType} from client ${piggybackedFullStateOp.clientId} ` +
               `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
@@ -342,6 +342,12 @@ export class OperationLogSyncService {
             hasMorePiggyback: false,
             rejectedOps: [],
           };
+        } else {
+          OpLog.normal(
+            `OperationLogSyncService: Accepting piggybacked ${piggybackedFullStateOp.opType} from client ` +
+              `${piggybackedFullStateOp.clientId} without conflict dialog; ` +
+              `${pendingOps.length} pending op(s), no meaningful pending user changes.`,
+          );
         }
       }
 
@@ -723,13 +729,13 @@ export class OperationLogSyncService {
       const pendingLocalOps = await this.opLogStore.getUnsynced();
       const hasMeaningfulPending = this._hasMeaningfulPendingOps(pendingLocalOps);
 
-      // Skip the conflict dialog for password-change SYNC_IMPORTs when there are no
-      // meaningful pending ops. The data is identical, only the encryption changed.
-      const isEncryptionOnlyChange =
-        incomingFullStateOp.syncImportReason === 'PASSWORD_CHANGED' &&
-        !hasMeaningfulPending;
-
-      if (!isEncryptionOnlyChange && this._hasAnyMeaningfulData(pendingLocalOps)) {
+      // Existing synced store data is not a conflict here. Prompt only when
+      // local pending user changes would be discarded; otherwise an old client
+      // can accidentally force-upload stale state over the remote import.
+      // (PASSWORD_CHANGED SYNC_IMPORTs without pending ops also fall through
+      // to silent acceptance via this gate — the data is identical, only the
+      // encryption changed.)
+      if (hasMeaningfulPending) {
         OpLog.warn(
           `OperationLogSyncService: Incoming ${incomingFullStateOp.opType} from client ${incomingFullStateOp.clientId} ` +
             `with ${pendingLocalOps.length} pending local ops. Showing conflict dialog.`,
@@ -749,6 +755,12 @@ export class OperationLogSyncService {
           return { kind: 'cancelled' };
         }
         return { kind: 'no_new_ops' };
+      } else {
+        OpLog.normal(
+          `OperationLogSyncService: Accepting incoming ${incomingFullStateOp.opType} from client ` +
+            `${incomingFullStateOp.clientId} without conflict dialog; ` +
+            `${pendingLocalOps.length} pending op(s), no meaningful pending user changes.`,
+        );
       }
     }
 

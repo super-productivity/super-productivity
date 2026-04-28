@@ -184,15 +184,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Expected:**
 
 1. Download batch contains SYNC_IMPORT/BACKUP_IMPORT/REPAIR
-2. Check pending local ops → 0, BUT check `_hasMeaningfulLocalData()` → true
-3. **Show conflict dialog** with `scenario: 'INCOMING_IMPORT'` and `syncImportReason` from the incoming op
-4. Dialog recommends "Use Server Data" (primary button) since this is an incoming import
-5. USE_LOCAL → `forceUploadLocalState()` (overrides remote with local data)
-6. USE_REMOTE → `forceDownloadRemoteState()` (clears local ops, downloads from seq 0)
-7. CANCEL → return with `cancelled: true`, skip upload phase
-8. If no meaningful local data → `processRemoteOps()` applies silently (no dialog)
+2. Check pending local ops → no meaningful pending changes (`_hasMeaningfulPendingOps()` = false)
+3. **Apply silently via `processRemoteOps()`** — no dialog. Already-synced store data is not a conflict here; the SYNC_IMPORT is the new authoritative state.
+4. The reason `_hasMeaningfulLocalData()` is intentionally NOT checked: prompting an old client whose only "data" is already-synced state would let the user pick `USE_LOCAL` and force-upload that stale state as a new SYNC_IMPORT, rolling back the remote import for everyone.
+5. The dialog **does** appear only when there are unsynced pending user changes that would actually be discarded — see D.2.
 
-**User sees:** Conflict dialog explaining the reason for the remote import (encryption change, file import, etc.) with "Use Server Data" recommended. If client has no meaningful data, data is replaced seamlessly.
+**User sees:** Nothing. Data updates seamlessly to the new authoritative state. The user-facing warning happened on the originating device (`D_SERVER_MIGRATION_CONFIRM` / encryption flow), not here.
 
 ### D.2: Incoming Remote SYNC_IMPORT — Has Local Pending Ops ✓
 
@@ -257,16 +254,16 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 1. Upload completes → server returns piggybacked ops containing SYNC_IMPORT
 2. Check for SYNC_IMPORT in piggybacked ops BEFORE `processRemoteOps()`
-3. If found AND (pending local ops > 0 OR `_hasMeaningfulLocalData()` = true):
+3. If found AND `_hasMeaningfulPendingOps()` = true (unsynced TASK/PROJECT/TAG/NOTE C/U/D or full-state ops):
    - **Show conflict dialog** with `scenario: 'INCOMING_IMPORT'` and `syncImportReason` from the piggybacked op
    - USE_LOCAL → `forceUploadLocalState()` (overrides remote)
    - USE_REMOTE → `forceDownloadRemoteState()` (clears local, downloads from seq 0)
    - CANCEL → return with `cancelled: true`, callers skip post-upload logic
-4. If no meaningful local data → `processRemoteOps()` applies silently (no dialog)
+4. If no meaningful pending ops → `processRemoteOps()` applies silently (no dialog) regardless of whether the NgRx store already has user data — that data was already synced and the SYNC_IMPORT is the new authoritative state.
 
-**Previously broken:** Piggybacked SYNC_IMPORTs went directly to `processRemoteOps()` without the conflict dialog check that the download path has, silently replacing local state.
+**Mirrors the download path (D.1 / D.2):** the gate is unsynced pending changes, not store contents. Prompting on already-synced store data would let an old client roll back the remote import via USE_LOCAL.
 
-**User sees:** Conflict dialog explaining remote import detected. Same UX as download-path SYNC_IMPORT.
+**User sees:** Nothing when there are no pending changes. Conflict dialog only when actual unsynced work is at risk.
 
 ---
 

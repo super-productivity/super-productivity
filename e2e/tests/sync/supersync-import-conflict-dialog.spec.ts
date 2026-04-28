@@ -465,4 +465,131 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       if (clientB) await closeClient(clientB);
     }
   });
+
+  /**
+   * Scenario: Receiving client with only synced data (no pending changes) silently
+   * accepts an incoming SYNC_IMPORT — no conflict dialog shown.
+   *
+   * Regression guard: previously the gate was "any pending ops OR any meaningful
+   * store data," which prompted on already-synced state. If the user picked
+   * `USE_LOCAL` on that prompt, `forceUploadLocalState()` would re-upload the
+   * pre-import state as a new SYNC_IMPORT, rolling back the import for everyone.
+   *
+   * Actions:
+   * 1. Clients A and B both sync a shared task (B's store has user data, no pending)
+   * 2. Client A imports a backup → SYNC_IMPORT lands on the server
+   * 3. Client B syncs
+   *
+   * Verify:
+   * - No `dialog-sync-import-conflict` ever appears on Client B
+   * - Client B ends up with the imported state (not its pre-import state)
+   */
+  test('Incoming SYNC_IMPORT applies silently when receiver has only synced data', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.slow();
+
+    const uniqueId = Date.now();
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      // ============ PHASE 1: Both clients sync a shared task ============
+      console.log('[Silent Accept] Phase 1: Both clients sync a shared task');
+
+      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      await clientA.sync.setupSuperSync(syncConfig);
+
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig);
+
+      const sharedTask = `Shared-Task-${uniqueId}`;
+      await clientA.workView.addTask(sharedTask);
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, sharedTask);
+      console.log('[Silent Accept] Both clients have synced shared task');
+
+      // ============ PHASE 2: Client A imports a backup and pushes it ============
+      console.log('[Silent Accept] Phase 2: Client A imports backup');
+
+      const importPage = new ImportPage(clientA.page);
+      await importPage.navigateToImportPage();
+      const backupPath = ImportPage.getFixturePath('test-backup.json');
+      await importPage.importBackupFile(backupPath);
+
+      // Reload to pick up imported state with fresh services
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await clientA.page.waitForLoadState('networkidle');
+
+      // Sync A. The local SYNC_IMPORT will conflict with A's previously-synced
+      // ops on the server, so A sees its own conflict dialog — choose USE_LOCAL
+      // to push the import to the server.
+      await clientA.sync.syncAndWait({ useLocal: true });
+      console.log('[Silent Accept] Client A pushed SYNC_IMPORT to server');
+
+      // ============ PHASE 3: Client B syncs — must NOT see the dialog ============
+      console.log('[Silent Accept] Phase 3: Client B syncs (expect silent accept)');
+
+      // Click sync directly so we can race the dialog vs. completion ourselves.
+      // (syncAndWait() would auto-dismiss the dialog and mask the regression.)
+      // The check icon is stale from Phase 1's sync — wait for the new sync to
+      // start (icon hidden or spinner visible) before treating "icon visible"
+      // as a completion signal.
+      const checkVisibleBeforeClick = await clientB.sync.syncCheckIcon
+        .isVisible()
+        .catch(() => false);
+
+      await clientB.sync.syncBtn.click();
+
+      if (checkVisibleBeforeClick) {
+        await Promise.race([
+          clientB.sync.syncCheckIcon.waitFor({ state: 'hidden', timeout: 5000 }),
+          clientB.sync.syncSpinner.waitFor({ state: 'visible', timeout: 5000 }),
+        ]).catch(() => {
+          // Fall through — sync may have been a no-op.
+        });
+      }
+
+      const outcome = await Promise.race([
+        clientB.sync.syncImportConflictDialog
+          .waitFor({ state: 'visible', timeout: 20000 })
+          .then(() => 'dialog' as const),
+        clientB.sync.syncCheckIcon
+          .waitFor({ state: 'visible', timeout: 20000 })
+          .then(() => 'complete' as const),
+      ]).catch(() => 'timeout' as const);
+
+      expect(outcome).toBe('complete');
+      await expect(clientB.sync.syncImportConflictDialog).not.toBeVisible();
+      console.log('[Silent Accept] ✓ No conflict dialog appeared on Client B');
+
+      // ============ PHASE 4: Client B has A's imported state ============
+      console.log('[Silent Accept] Phase 4: Verify Client B applied the import');
+
+      await clientB.page.goto('/#/work-view');
+      await clientB.page.waitForLoadState('networkidle');
+      await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
+
+      // The pre-import shared task should be gone — replaced by the import.
+      const sharedOnB = clientB.page.locator(`task:has-text("${sharedTask}")`);
+      await expect(sharedOnB).not.toBeVisible({ timeout: 5000 });
+      console.log(
+        '[Silent Accept] ✓ Client B has imported state, pre-import data replaced',
+      );
+
+      console.log('[Silent Accept] ✓ Silent acceptance test PASSED!');
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
 });
