@@ -1043,7 +1043,8 @@
       "BTN_RESTORE_FROM_HISTORY": "Restore from History",
       "BTN_SYNC_NOW": "Sync Now",
       "C": {
-        "FORCE_UPLOAD": "Forcing an upload of your data could lead to data loss. Are you sure you want to continue?"
+        "FORCE_UPLOAD": "This will REPLACE all data on the server and on every other device with this device's local copy. Any unsynced changes on those devices will be permanently lost. Continue?",
+        "DECRYPT_OVERWRITE": "This will REPLACE the encrypted data on the server with this device's local copy and re-encrypt it with the new password. All other devices will need to re-enter the password and download the replaced data. Any unsynced changes on those devices will be permanently lost. Continue?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Please open the following link and copy the auth code provided there into the input field below.",
@@ -1092,11 +1093,11 @@
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}"
       },
       "D_DECRYPT_ERROR": {
-        "BTN_OVER_WRITE_REMOTE": "Use This Password & Overwrite Remote",
+        "BTN_OVER_WRITE_REMOTE": "Overwrite Server & Other Devices",
         "CHANGE_PW_AND_DECRYPT": "Retry Decrypt",
         "P1": "Your remote data is encrypted and decryption failed.",
         "P2_FORGOT_PW": "If you <strong>forgot your password</strong>, enter the correct password and click \"Retry Decrypt\".",
-        "P3_PW_CHANGED": "If you <strong>changed your password on another device</strong>, enter your new password and click \"Overwrite Remote\". This will upload your local data to the server.",
+        "P3_PW_CHANGED": "If you <strong>changed your password on another device</strong>, enter your new password and click <strong>Overwrite Server & Other Devices</strong>. ⚠️ This is destructive: it replaces ALL data on the server and on your other devices with this device's local copy. Any unsynced changes on those devices will be lost.",
         "PASSWORD": "Password",
         "TITLE": "Decryption Failed"
       },
@@ -1159,10 +1160,10 @@
         "WARNING": "This will replace ALL your current data with the selected backup. This action cannot be undone!"
       },
       "D_SERVER_MIGRATION_CONFIRM": {
-        "CONFIRM": "Upload Local Data",
-        "MESSAGE": "This sync server already contains data. Would you like to upload your local data to merge with it? If you skip this, some of your local changes may not sync.",
-        "SKIP": "Skip",
-        "TITLE": "Server Already Has Data"
+        "CONFIRM": "Replace Server Data",
+        "MESSAGE": "This sync server already contains data — likely from your other devices. Choosing <strong>Replace Server Data</strong> will <strong>overwrite all data on the server and on every other device</strong> with this device's local copy. This is <strong>not a merge</strong>. Choose <strong>Cancel</strong> to download the server's data instead (recommended unless you're sure this device has the newest version).",
+        "SKIP": "Cancel",
+        "TITLE": "Server Already Contains Data"
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Affected changes",
