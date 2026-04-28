@@ -364,10 +364,22 @@ const handleBulkTaskTagsChange = (
  * types and handlers in one map prevents the drift bug where a type was
  * registered but its handler wasn't (or vice versa).
  *
- * KNOWN FOLLOW-UP — `batchUpdateForProject` (plugin API) can update
- * tagIds and delete tasks within its single-action transform, so
- * sections owned by tags the plugin removed don't get pruned. Handling
- * it here requires walking the operations array, which is non-trivial.
+ * KNOWN FOLLOW-UPs:
+ *
+ * - `batchUpdateForProject` (plugin API) can update tagIds and delete
+ *   tasks within its single-action transform, so sections owned by
+ *   tags the plugin removed don't get pruned. Handling it here
+ *   requires walking the operations array, which is non-trivial.
+ *
+ * - LWW conflict-resolution (`lwwUpdateMetaReducer`) syncs
+ *   project.taskIds / tag.taskIds / parent.subTaskIds when an LWW
+ *   update changes a task's projectId / tagIds / parentId, but does
+ *   NOT touch project- or non-TODAY-tag-context section.taskIds. The
+ *   diff below catches TODAY-context drift; other contexts can leak
+ *   phantom task references until the next `dataRepair` pass clears
+ *   them. Visible impact is bounded: `undoneTasksBySection`
+ *   intersects against current task lists, so phantoms don't render —
+ *   they only bloat the op-log.
  */
 const ACTION_HANDLERS: Record<string, Handler> = {
   [TaskSharedActions.deleteTask.type]: (state, action) => {
@@ -385,10 +397,26 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     // a counterpart action: the task comes back without a section, the
     // user re-categorizes manually (mirrors how restore drops tagIds
     // for tags that no longer exist).
+    //
+    // Union payload-subTasks with state-subTasks so cleanup is robust
+    // under both threat models: (a) replay where the parent entity is
+    // already gone from state (payload carries the tree), and (b)
+    // callers who dispatch with an empty `subTasks` array (state
+    // lookup is the only signal).
     const { tasks } = action as ReturnType<typeof TaskSharedActions.moveToArchive>;
-    return handleTaskRemoval(
+    const idSet = new Set<string>();
+    for (const t of tasks) {
+      idSet.add(t.id);
+      if (t.subTasks?.length) for (const st of t.subTasks) idSet.add(st.id);
+    }
+    const stateExpanded = collectAffectedTaskIds(
       state,
       tasks.map((t) => t.id),
+    );
+    for (const id of stateExpanded) idSet.add(id);
+    return withSectionStateUpdate(
+      state,
+      cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], Array.from(idSet)),
     );
   },
   [TaskSharedActions.deleteProject.type]: (state, action) => {

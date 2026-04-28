@@ -180,6 +180,7 @@
                       <button
                         mat-icon-button
                         [matMenuTriggerFor]="sectionMenu"
+                        [attr.aria-label]="T.WW.SECTION_OPTIONS | translate"
                         (click)="$event.stopPropagation()"
                       >
                         <mat-icon>more_vert</mat-icon>

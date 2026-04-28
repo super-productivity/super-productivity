@@ -143,7 +143,10 @@ export class MarkdownPasteService {
         // inside one). The dispatches are synchronous so the whole paste
         // completes in a single tick; a 100-task paste blocks for a few ms.
         for (const section of sectionsData.sections) {
-          const sectionId = section.sectionTitle
+          // Check post-trim so headers like `## ​` (zero-width space) or
+          // pure-whitespace section titles fall through to the noSection
+          // bucket instead of creating a titleless section.
+          const sectionId = section.sectionTitle?.trim()
             ? this._sectionService.addSection(
                 section.sectionTitle,
                 workContextId,

@@ -139,8 +139,14 @@ export const sectionReducer = createReducer(
     return removal ? adapter.updateOne(removal, state) : state;
   }),
 
-  on(loadAllData, (state, { appDataComplete }) =>
-    appDataComplete.section ? (appDataComplete.section as SectionState) : state,
+  on(loadAllData, (_state, { appDataComplete }) =>
+    // SYNC_IMPORT / BACKUP_IMPORT semantics: full state replacement.
+    // Fall back to the empty initial state when the payload omits
+    // `section` (legacy backups predate the feature) so we don't keep
+    // stale local sections after an explicit import.
+    appDataComplete.section
+      ? (appDataComplete.section as SectionState)
+      : initialSectionState,
   ),
 );
 

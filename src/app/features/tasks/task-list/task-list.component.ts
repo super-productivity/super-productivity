@@ -212,7 +212,16 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // Parent tasks: allow drops to PARENT_ALLOWED_LISTS or to sections (parent-level
     // lists with a non-reserved id). Subtask drop-lists (listId === 'SUB') are
     // rejected so a top-level task can't be nested into another task's subtree.
+    const srcModelId = drag.dropContainer?.data?.listModelId;
+    const srcListIdRaw = drag.dropContainer?.data?.listId;
+    const isSrcSection = srcListIdRaw === 'PARENT' && !RESERVED_LIST_IDS.has(srcModelId);
+
     if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
+      // Reject section → BACKLOG: _move() dispatches `removeTaskFromSection`
+      // and returns without dispatching `moveProjectTaskToBacklogList`, so
+      // the task disappears from the section but is never added to backlog.
+      // Force users to first move section → today, then today → backlog.
+      if (targetModelId === 'BACKLOG' && isSrcSection) return false;
       return true;
     }
     if (targetListId !== 'PARENT') return false;
@@ -220,7 +229,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // Target is a section. Reject drops from BACKLOG: _move() treats this as
     // a pure section-add and never removes the task from project.backlogTaskIds,
     // leaving it in both lists. Force users to first move backlog → today.
-    const srcModelId = drag.dropContainer?.data?.listModelId;
     if (srcModelId === 'BACKLOG') return false;
 
     return true;

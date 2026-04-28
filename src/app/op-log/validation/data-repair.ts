@@ -1396,7 +1396,10 @@ const _repairSections = (
       continue;
     }
 
-    const taskIds = section.taskIds ?? [];
+    // Defend against malformed remote payloads where `taskIds` is not
+    // an array (truthy `?? []` would slip through and `.filter` would
+    // throw or yield garbage on a string / object value).
+    const taskIds = Array.isArray(section.taskIds) ? section.taskIds : [];
     const filtered = taskIds.filter((tid) => validTaskIds.has(tid));
     if (filtered.length !== taskIds.length) {
       droppedTaskRefs += taskIds.length - filtered.length;
