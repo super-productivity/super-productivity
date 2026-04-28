@@ -221,6 +221,26 @@ export const focusModeReducer = createReducer(
     pausedTaskId: null,
   })),
 
+  // Flowtime break offer - show break screen but don't start timer yet
+  on(a.offerFlowtimeBreak, (state, { duration, isLongBreak, pausedTaskId }) => {
+    const breakTimer: TimerState = {
+      isRunning: false,
+      startedAt: null,
+      elapsed: 0,
+      duration,
+      purpose: 'break',
+      isLongBreak: isLongBreak ?? false,
+    };
+
+    return {
+      ...state,
+      timer: breakTimer,
+      currentScreen: FocusScreen.Break,
+      mainState: FocusMainUIState.Preparation,
+      pausedTaskId: pausedTaskId ?? state.pausedTaskId,
+    };
+  }),
+
   // Timer updates - much simpler!
   on(a.tick, (state) => {
     if (!state.timer.isRunning || !state.timer.purpose) {

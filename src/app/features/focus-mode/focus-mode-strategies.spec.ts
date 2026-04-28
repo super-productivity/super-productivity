@@ -21,6 +21,7 @@ describe('FocusModeStrategies', () => {
         longerBreakDuration: 900000, // 15 minutes
         cyclesBeforeLongerBreak: 4,
       }),
+      flowtimeConfig: jasmine.createSpy().and.returnValue(null),
     });
 
     TestBed.configureTestingModule({
@@ -168,7 +169,7 @@ describe('FocusModeStrategies', () => {
 
     describe('getBreakDuration', () => {
       it('should always return null', () => {
-        const result1 = strategy.getBreakDuration();
+        const result1 = strategy.getBreakDuration(0);
 
         expect(result1).toBeNull();
       });

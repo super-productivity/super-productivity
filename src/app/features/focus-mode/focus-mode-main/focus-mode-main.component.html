@@ -225,6 +225,18 @@
             <mat-icon>settings</mat-icon>
           </button>
         }
+
+        <!-- Flowtime settings cog (Preparation + Flowtime mode) -->
+        @if (isShowFlowtimeSettings()) {
+          <button
+            mat-icon-button
+            [matTooltip]="T.F.FOCUS_MODE.FLOWTIME_SETTINGS | translate"
+            (click)="openFlowtimeSettings()"
+            class="flowtime-settings-btn"
+          >
+            <mat-icon>settings</mat-icon>
+          </button>
+        }
       </div>
 
       <!-- Overtime message -->

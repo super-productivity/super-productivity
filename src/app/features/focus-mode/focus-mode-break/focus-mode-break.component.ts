@@ -3,7 +3,7 @@ import { MatButtonModule, MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FocusModeService } from '../focus-mode.service';
-import { FocusModeMode } from '../focus-mode.model';
+import { FocusMainUIState, FocusModeMode } from '../focus-mode.model';
 import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clock-string.pipe';
 import { Store } from '@ngrx/store';
 import {
@@ -63,6 +63,11 @@ export class FocusModeBreakComponent {
   );
 
   readonly isBreakPaused = computed(() => this.focusModeService.isSessionPaused());
+  readonly isBreakOffer = computed(
+    () =>
+      !this.focusModeService.isSessionRunning() &&
+      this.focusModeService.mainState() === FocusMainUIState.Preparation,
+  );
   readonly isPomodoro = computed(
     () => this.focusModeService.mode() === FocusModeMode.Pomodoro,
   );

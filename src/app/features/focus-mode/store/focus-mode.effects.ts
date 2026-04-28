@@ -34,6 +34,7 @@ import {
   selectPomodoroConfig,
 } from '../../config/store/global-config.reducer';
 import { FocusModeConfig } from '../../config/global-config.model';
+import { FOCUS_MODE_DEFAULTS } from '../focus-mode.model';
 import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
 import {
   FocusModeMode,
@@ -436,6 +437,37 @@ export class FocusModeEffects {
         }
 
         return of(...actionsArr);
+      }),
+    ),
+  );
+
+  // Effect 3b: Offer Flowtime breaks when session is paused
+  // For Flowtime: show break offer when user pauses, allowing them to start or skip
+  offerFlowtimeBreakOnSessionPause$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(actions.pauseFocusSession),
+      withLatestFrom(
+        this.store.select(selectors.selectMode),
+        this.store.select(selectors.selectTimer),
+        this.store.select(selectFocusModeConfig),
+        this.taskService.currentTaskId$,
+      ),
+      filter(([action, mode, timer, _config, _currentTaskId]) => {
+        if (mode !== FocusModeMode.Flowtime) return false;
+        if (timer.purpose !== 'work') return false;
+        const strategy = this.strategyFactory.getStrategy(mode);
+        return strategy.shouldStartBreakAfterSession;
+      }),
+      map(([action, mode, timer]) => {
+        const strategy = this.strategyFactory.getStrategy(mode);
+        const breakInfo = strategy.getBreakDuration(timer.elapsed);
+
+        return actions.offerFlowtimeBreak({
+          elapsedMs: timer.elapsed,
+          duration: breakInfo?.duration ?? FOCUS_MODE_DEFAULTS.SHORT_BREAK_DURATION,
+          isLongBreak: breakInfo?.isLong ?? false,
+          pausedTaskId: action.pausedTaskId,
+        });
       }),
     ),
   );

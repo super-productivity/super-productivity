@@ -49,12 +49,44 @@ export class PomodoroStrategy implements FocusModeStrategy {
 
 @Injectable({ providedIn: 'root' })
 export class FlowtimeStrategy implements FocusModeStrategy {
+  private globalConfigService = inject(GlobalConfigService);
+
   readonly initialSessionDuration = 0; // Flowtime doesn't have a fixed duration
-  readonly shouldStartBreakAfterSession = false;
   readonly shouldAutoStartNextSession = false;
 
-  getBreakDuration(): null {
-    return null; // No automatic breaks in Flowtime
+  get shouldStartBreakAfterSession(): boolean {
+    // Flowtime can have breaks if configured
+    const config = this.globalConfigService.flowtimeConfig();
+    return config?.isBreakEnabled ?? false;
+  }
+
+  /**
+   * Calculate break duration based on elapsed work time
+   * @param elapsedMs elapsed work time in milliseconds
+   * @returns {duration, isLong} or null if breaks are not enabled
+   */
+  getBreakDuration(elapsedMs: number): { duration: number; isLong: boolean } | null {
+    const config = this.globalConfigService.flowtimeConfig();
+    if (!config?.isBreakEnabled) {
+      return null;
+    }
+
+    let breakDuration = FOCUS_MODE_DEFAULTS.SHORT_BREAK_DURATION;
+
+    if (config.breakMode === 'ratio' && config.breakPercentage) {
+      // Ratio-based: breakDuration = elapsedTime * (percentage / 100)
+      breakDuration = Math.round(elapsedMs * (config.breakPercentage / 100));
+    } else if (config.breakMode === 'rule' && config.breakRules?.length) {
+      // Rule-based: find matching rule
+      const matchingRule = config.breakRules.find(
+        (rule) => elapsedMs >= rule.minDuration && elapsedMs < rule.maxDuration,
+      );
+      if (matchingRule) {
+        breakDuration = matchingRule.breakDuration;
+      }
+    }
+
+    return { duration: breakDuration, isLong: false };
   }
 
   getNextScreenAfterTaskSelection(skipPreparation: boolean): {

@@ -98,6 +98,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isSyncSessionWithTracking: false,
     isStartInBackground: false,
   },
+  flowtime: {
+    isBreakEnabled: false,
+    breakMode: 'ratio',
+    breakPercentage: 20,
+    breakRules: [],
+  },
   taskWidget: {
     isEnabled: false,
     isAlwaysShow: false,

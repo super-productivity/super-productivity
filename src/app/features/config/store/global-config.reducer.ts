@@ -11,6 +11,7 @@ import {
   LocalizationConfig,
   MiscConfig,
   PomodoroConfig,
+  FlowtimeConfig,
   ReminderConfig,
   ScheduleConfig,
   ShortSyntaxConfig,
@@ -85,6 +86,10 @@ export const selectClipboardImagesConfig = createSelector(
 export const selectPomodoroConfig = createSelector(
   selectConfigFeatureState,
   (cfg): PomodoroConfig => cfg?.pomodoro ?? DEFAULT_GLOBAL_CONFIG.pomodoro,
+);
+export const selectFlowtimeConfig = createSelector(
+  selectConfigFeatureState,
+  (cfg): FlowtimeConfig => cfg?.flowtime ?? DEFAULT_GLOBAL_CONFIG.flowtime,
 );
 export const selectReminderConfig = createSelector(
   selectConfigFeatureState,
