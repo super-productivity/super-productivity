@@ -1,4 +1,4 @@
-import { createFeatureSelector, createSelector, MemoizedSelector } from '@ngrx/store';
+import { createFeatureSelector, createSelector } from '@ngrx/store';
 import { Section, SectionState } from '../section.model';
 import { selectAll, SECTION_FEATURE_NAME } from './section.reducer';
 
@@ -27,18 +27,3 @@ export const selectSectionsByContextIdMap = createSelector(
     return map;
   },
 );
-
-const EMPTY_SECTIONS: readonly Section[] = Object.freeze([]);
-
-/**
- * Per-context view: returns only the sections owned by `contextId`.
- * Built off `selectSectionsByContextIdMap` so the upstream Map allocation
- * is shared across contexts within a single emission.
- */
-export const selectSectionsForContext = (
-  contextId: string,
-): MemoizedSelector<object, readonly Section[]> =>
-  createSelector(
-    selectSectionsByContextIdMap,
-    (map): readonly Section[] => map.get(contextId) ?? EMPTY_SECTIONS,
-  );

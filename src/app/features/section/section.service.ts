@@ -2,7 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { nanoid } from 'nanoid';
 import { Observable } from 'rxjs';
-import { Section, sanitizeSectionTitle } from './section.model';
+import { map } from 'rxjs/operators';
+import { Section } from './section.model';
+import { sanitizeSectionTitle } from './section.utils';
 import { WorkContextType } from '../work-context/work-context.model';
 import {
   addSection,
@@ -12,7 +14,9 @@ import {
   updateSection,
   updateSectionOrder,
 } from './store/section.actions';
-import { selectSectionsForContext } from './store/section.selectors';
+import { selectSectionsByContextIdMap } from './store/section.selectors';
+
+const EMPTY_SECTIONS: readonly Section[] = Object.freeze([]);
 
 @Injectable({
   providedIn: 'root',
@@ -21,7 +25,9 @@ export class SectionService {
   private _store = inject(Store);
 
   getSectionsByContextId$(contextId: string): Observable<readonly Section[]> {
-    return this._store.select(selectSectionsForContext(contextId));
+    return this._store
+      .select(selectSectionsByContextIdMap)
+      .pipe(map((m) => m.get(contextId) ?? EMPTY_SECTIONS));
   }
 
   /**

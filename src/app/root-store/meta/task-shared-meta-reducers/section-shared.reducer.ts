@@ -37,7 +37,6 @@ const collectAffectedTaskIds = (
 ): string[] => {
   const taskState = state[TASK_FEATURE_NAME];
   const all = new Set<string>(primaryTaskIds);
-  if (!taskState?.entities) return Array.from(all);
   for (const id of primaryTaskIds) {
     const t = taskState.entities[id];
     if (t?.subTaskIds?.length) {
@@ -243,15 +242,13 @@ const handleRemoveFromTodayTag = (
  * the arrays.
  */
 const diffRemovedTodayTaskIds = (prev: RootState, next: RootState): string[] | null => {
+  // Caller (sectionSharedMetaReducer) guards against undefined slices,
+  // so prev/next here always have a hydrated tag slice.
   const prevTagState = prev[TAG_FEATURE_NAME];
   const nextTagState = next[TAG_FEATURE_NAME];
-  // Tag slice (or its entities map) may be undefined during early boot,
-  // hydration replay, or undo paths that operate on a partial state.
-  // Bail out safely — nothing to diff yet.
-  if (!prevTagState || !nextTagState) return null;
   if (prevTagState === nextTagState) return null;
-  const prevToday = prevTagState.entities?.[TODAY_TAG.id];
-  const nextToday = nextTagState.entities?.[TODAY_TAG.id];
+  const prevToday = prevTagState.entities[TODAY_TAG.id];
+  const nextToday = nextTagState.entities[TODAY_TAG.id];
   if (prevToday === nextToday) return null;
   const prevIds = prevToday?.taskIds;
   const nextIds = nextToday?.taskIds;
@@ -270,9 +267,6 @@ const applyTodayTagSectionCleanup = (
 ): RootState => {
   const extState = state as ExtendedState;
   const sectionState = extState[SECTION_FEATURE_NAME];
-  // Section slice may be absent during early boot — match the diff's
-  // tag-state guard rather than walk an undefined entities map.
-  if (!sectionState) return state;
   const cleaned = removeTaskIdsFromContextSections(
     sectionState,
     removedTaskIds,
@@ -469,8 +463,17 @@ export const sectionSharedMetaReducer: MetaReducer<RootState> = (
 ) => {
   return (state: RootState | undefined, action: Action): RootState => {
     if (!state) return reducer(state, action);
+    // Boot/hydration guard: skip section-side cleanup until every slice
+    // it touches is hydrated. The original crash report came through
+    // the diff path, but every action handler here also dereferences
+    // task / section / tag slices and would crash the same way on
+    // partial state. Per-handler guards are redundant once this is in.
+    const ext = state as ExtendedState;
+    if (!ext[TASK_FEATURE_NAME] || !ext[TAG_FEATURE_NAME] || !ext[SECTION_FEATURE_NAME]) {
+      return reducer(state, action);
+    }
     const handler = ACTION_HANDLERS[action.type];
-    const preState = handler ? handler(state as ExtendedState, action) : state;
+    const preState = handler ? handler(ext, action) : state;
     const next = reducer(preState, action);
     // Post-reducer TODAY_TAG.taskIds diff catches every flow that
     // removes ids from TODAY without going through a known action.

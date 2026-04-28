@@ -8,6 +8,7 @@ import {
   updateSectionOrder,
 } from './section.actions';
 import { Section, SectionState } from '../section.model';
+import { MAX_SECTION_TITLE_LENGTH } from '../section.utils';
 import { WorkContextType } from '../../work-context/work-context.model';
 
 const makeSection = (overrides: Partial<Section> = {}): Section => ({
@@ -77,16 +78,39 @@ describe('sectionReducer', () => {
       expect(next.entities['s1']?.taskIds).toEqual(['t1']);
     });
 
-    it('caps incoming title length even when the action came from sync', () => {
+    it('trims and caps incoming title length even when the action came from sync', () => {
       // Reducer-side enforcement defends against remote ops that bypass
       // the service-level sanitizer (e.g. a malicious peer's op-log entry).
       const start = stateWithSections([makeSection({ id: 's1', title: 'short' })]);
-      const longTitle = 'x'.repeat(500);
+      const longTitle = '  ' + 'x'.repeat(500) + '  ';
       const next = sectionReducer(
         start,
         updateSection({ section: { id: 's1', changes: { title: longTitle } } }),
       );
-      expect(next.entities['s1']?.title?.length).toBe(200);
+      const updated = next.entities['s1']?.title;
+      expect(updated?.length).toBe(MAX_SECTION_TITLE_LENGTH);
+      expect(updated?.startsWith(' ')).toBe(false);
+    });
+
+    it('passes the empty string through (legitimate title clear)', () => {
+      const start = stateWithSections([makeSection({ id: 's1', title: 'old' })]);
+      const next = sectionReducer(
+        start,
+        updateSection({ section: { id: 's1', changes: { title: '' } } }),
+      );
+      expect(next.entities['s1']?.title).toBe('');
+    });
+
+    it('coerces null/undefined title to "" rather than crashing or storing null', () => {
+      // A malformed remote op might ship `title: null` (or `undefined`).
+      // The Section.title contract is `string` — must never become null.
+      const start = stateWithSections([makeSection({ id: 's1', title: 'old' })]);
+      const nextNull = sectionReducer(
+        start,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        updateSection({ section: { id: 's1', changes: { title: null as any } } }),
+      );
+      expect(nextNull.entities['s1']?.title).toBe('');
     });
   });
 
@@ -99,8 +123,27 @@ describe('sectionReducer', () => {
           section: makeSection({ id: 'new', title: longTitle, taskIds: [] }),
         }),
       );
-      expect(next.entities['new']?.title?.length).toBe(200);
+      expect(next.entities['new']?.title?.length).toBe(MAX_SECTION_TITLE_LENGTH);
       expect(next.entities['new']?.title?.startsWith(' ')).toBe(false);
+    });
+
+    it('does not throw when a malformed remote op ships an undefined title', () => {
+      // Defends against `addSection({ section: { ...validShape, title: undefined } })`
+      // — the threat model the reducer-side cap was added for. The
+      // sanitizer must coerce, not throw.
+      expect(() =>
+        sectionReducer(
+          initialSectionState,
+          addSection({
+            section: makeSection({
+              id: 'new',
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              title: undefined as any,
+              taskIds: [],
+            }),
+          }),
+        ),
+      ).not.toThrow();
     });
   });
 
@@ -168,14 +211,14 @@ describe('sectionReducer', () => {
         makeSection({ id: 'b', contextId: 'p1' }),
         makeSection({ id: 'c', contextId: 'p1' }),
       ]);
-      // Only payload reorders the first slot; subsequent slots keep their ids.
+      // Partial payload: 'b' is moved to the first context-slot; the
+      // missing entries ('a', 'c') append in their original order so
+      // every section keeps a valid (and unique) slot.
       const next = sectionReducer(
         start,
         updateSectionOrder({ contextId: 'p1', ids: ['b'] }),
       );
-      // 'b' takes slot 0; remaining slots (originally 'b','c') stay 'b','c'.
-      // The 'b' duplicate must NOT appear.
-      expect(next.ids.filter((id) => id === 'b').length).toBe(1);
+      expect(next.ids).toEqual(['b', 'a', 'c']);
     });
   });
 

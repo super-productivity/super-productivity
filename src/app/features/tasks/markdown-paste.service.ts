@@ -51,11 +51,6 @@ export class MarkdownPasteService {
     return this._lastSectionResult;
   }
 
-  private _clearSectionsCache(): void {
-    this._lastSectionInput = null;
-    this._lastSectionResult = null;
-  }
-
   async handleMarkdownPaste(
     pastedText: string,
     selectedTaskId: string | null = null,
@@ -124,7 +119,8 @@ export class MarkdownPasteService {
         const isConfirmed = await dialogRef.afterClosed().toPromise();
         // Drop the cached parse result regardless of confirmation —
         // the memo is only useful for the gate→handler back-to-back call.
-        this._clearSectionsCache();
+        this._lastSectionInput = null;
+        this._lastSectionResult = null;
         if (!isConfirmed) {
           return;
         }

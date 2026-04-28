@@ -96,8 +96,6 @@ test.describe('Sections', () => {
     await page.mouse.move(sx + 10, sy + 10, { steps: 5 });
     // Smooth move to target so each `mousemove` re-evaluates drop target.
     await page.mouse.move(tx, ty, { steps: 20 });
-    // Settle on the target before release.
-    await page.mouse.move(tx, ty, { steps: 5 });
     await page.mouse.up();
   };
 
@@ -135,9 +133,9 @@ test.describe('Sections', () => {
     // section appears.
     await dialog.getByRole('button', { name: 'Save' }).click();
     // Dialog may stay open (required validation) or close without effect.
-    // Either way the section list must remain empty.
-    await page.waitForTimeout(500);
-    await expect(page.locator('.section-container')).toHaveCount(0);
+    // Either way the section list must remain empty — `toHaveCount`
+    // already polls so no separate wait is needed.
+    await expect(page.locator('.section-container')).toHaveCount(0, { timeout: 1500 });
   });
 
   test('edits an existing section title', async ({ page, workViewPage, projectPage }) => {
