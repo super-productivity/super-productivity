@@ -91,7 +91,10 @@ export interface AndroidInterface {
   dismissStartupOverlay?(): void;
 
   // added here only
-  onResume$: Subject<void>;
+  // ReplaySubject so cold-start onResume emissions arriving before the JS
+  // subscriber attaches are still delivered (relevant for tracking recovery
+  // after the WebView was killed in the background — issue #7390).
+  onResume$: ReplaySubject<void>;
   onPause$: Subject<void>;
   isInBackground$: Observable<boolean>;
   isKeyboardShown$: Subject<boolean>;
@@ -138,7 +141,7 @@ if (IS_ANDROID_WEB_VIEW) {
     throw new Error('Cannot initialize androidInterface');
   }
 
-  androidInterface.onResume$ = new Subject();
+  androidInterface.onResume$ = new ReplaySubject(1);
   androidInterface.onPause$ = new Subject();
   androidInterface.onPauseTracking$ = new Subject();
   androidInterface.onMarkTaskDone$ = new Subject();
