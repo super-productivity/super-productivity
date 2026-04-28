@@ -53,17 +53,10 @@ object WebViewCompatibilityChecker {
     }
 
     fun evaluate(context: Context): Result {
-        val packageInfo = resolvePackageInfo(context)
+        val resolvedPackageInfo = resolvePackageInfo(context)
+        val packageInfo = resolvedPackageInfo?.packageInfo
         val packageMajor =
-            packageInfo?.let { parseMajorVersion(it.versionName) ?: parseMajorVersion(it.versionCode) }
-
-        if (packageMajor != null) {
-            return buildResult(
-                majorVersion = packageMajor,
-                packageInfo = packageInfo,
-                source = VersionSource.PACKAGE,
-            )
-        }
+            packageInfo?.let { parseMajorVersion(it.versionName) ?: parseMajorVersion(it.longVersionCode) }
 
         val userAgentMajor = resolveFromUserAgent(context)
         if (userAgentMajor != null) {
@@ -71,6 +64,25 @@ object WebViewCompatibilityChecker {
                 majorVersion = userAgentMajor,
                 packageInfo = packageInfo,
                 source = VersionSource.USER_AGENT,
+                canBlockBasedOnVersion = true,
+            )
+        }
+
+        if (packageMajor != null && resolvedPackageInfo.canBlockBasedOnVersion) {
+            return buildResult(
+                majorVersion = packageMajor,
+                packageInfo = packageInfo,
+                source = VersionSource.PACKAGE,
+                canBlockBasedOnVersion = true,
+            )
+        }
+
+        if (packageMajor != null) {
+            return buildResult(
+                majorVersion = packageMajor,
+                packageInfo = packageInfo,
+                source = VersionSource.PACKAGE,
+                canBlockBasedOnVersion = false,
             )
         }
 
@@ -78,6 +90,7 @@ object WebViewCompatibilityChecker {
             majorVersion = null,
             packageInfo = packageInfo,
             source = VersionSource.UNKNOWN,
+            canBlockBasedOnVersion = false,
         )
     }
 
@@ -85,21 +98,13 @@ object WebViewCompatibilityChecker {
         majorVersion: Int?,
         packageInfo: PackageInfo?,
         source: VersionSource,
+        canBlockBasedOnVersion: Boolean,
     ): Result {
-        // Check if this is a third-party WebView with non-standard versioning
-        val isThirdPartyWebView = packageInfo?.packageName?.let { pkg ->
-            pkg !in listOf("com.google.android.webview", "com.android.webview", "com.android.chrome")
-        } ?: false
-
-        val status = when {
-            majorVersion == null -> Status.WARN
-            // For third-party WebViews with suspiciously low version numbers,
-            // be lenient and just warn instead of blocking (they may use different versioning)
-            isThirdPartyWebView && majorVersion < 50 -> Status.WARN
-            majorVersion < MIN_CHROMIUM_VERSION -> Status.BLOCK
-            majorVersion < RECOMMENDED_CHROMIUM_VERSION -> Status.WARN
-            else -> Status.OK
-        }
+        val status = statusForVersion(
+            majorVersion = majorVersion,
+            packageName = packageInfo?.packageName,
+            canBlockBasedOnVersion = canBlockBasedOnVersion,
+        )
         return Result(
             status = status,
             majorVersion = majorVersion,
@@ -109,7 +114,32 @@ object WebViewCompatibilityChecker {
         )
     }
 
-    private fun resolvePackageInfo(context: Context): PackageInfo? {
+    @VisibleForTesting
+    internal fun statusForVersion(
+        majorVersion: Int?,
+        packageName: String?,
+        canBlockBasedOnVersion: Boolean,
+    ): Status {
+        // Check if this is a third-party WebView with non-standard versioning
+        val isThirdPartyWebView = packageName?.let { pkg ->
+            pkg !in listOf("com.google.android.webview", "com.android.webview", "com.android.chrome")
+        } ?: false
+
+        return when {
+            majorVersion == null -> Status.WARN
+            // PackageManager fallback scans installed packages, not necessarily the
+            // active WebView provider. Use it for diagnostics only, never lockout.
+            !canBlockBasedOnVersion && majorVersion < RECOMMENDED_CHROMIUM_VERSION -> Status.WARN
+            // For third-party WebViews with suspiciously low version numbers,
+            // be lenient and just warn instead of blocking (they may use different versioning)
+            isThirdPartyWebView && majorVersion < 50 -> Status.WARN
+            majorVersion < MIN_CHROMIUM_VERSION -> Status.BLOCK
+            majorVersion < RECOMMENDED_CHROMIUM_VERSION -> Status.WARN
+            else -> Status.OK
+        }
+    }
+
+    private fun resolvePackageInfo(context: Context): ResolvedPackageInfo? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Why: on devices with a broken WebView provider getCurrentWebViewPackage()
             // can throw (AndroidRuntimeException / MissingWebViewPackageException /
@@ -117,7 +147,9 @@ object WebViewCompatibilityChecker {
             // FullscreenActivity's recovery. All three extend RuntimeException;
             // keep the catch narrow so non-runtime failures still surface.
             try {
-                WebView.getCurrentWebViewPackage()?.let { return it }
+                WebView.getCurrentWebViewPackage()?.let {
+                    return ResolvedPackageInfo(it, canBlockBasedOnVersion = true)
+                }
             } catch (e: RuntimeException) {
                 Log.d(TAG, "getCurrentWebViewPackage() threw; falling back to PackageManager", e)
             }
@@ -128,7 +160,7 @@ object WebViewCompatibilityChecker {
             try {
                 val info = packageInfo(pm, packageName)
                 if (info != null) {
-                    return info
+                    return ResolvedPackageInfo(info, canBlockBasedOnVersion = false)
                 }
             } catch (_: PackageManager.NameNotFoundException) {
                 // Ignore and continue
@@ -199,9 +231,14 @@ object WebViewCompatibilityChecker {
         context.startActivity(updateIntent)
     }
 
-    private val PackageInfo.versionCode: Long
+    private val PackageInfo.longVersionCode: Long
         get() = PackageInfoCompat.getLongVersionCode(this)
 
     private val CHROME_REGEX = Regex("Chrom(?:e|ium)/(\\d+)")
     private val VERSION_REGEX = Regex("Version/(\\d+)")
+
+    private data class ResolvedPackageInfo(
+        val packageInfo: PackageInfo,
+        val canBlockBasedOnVersion: Boolean,
+    )
 }
