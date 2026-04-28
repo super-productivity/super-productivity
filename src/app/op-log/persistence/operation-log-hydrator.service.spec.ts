@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
+import { TranslateService } from '@ngx-translate/core';
 import { OperationLogHydratorService } from './operation-log-hydrator.service';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { MigratableStateCache } from './schema-migration.service';
@@ -48,6 +49,7 @@ describe('OperationLogHydratorService', () => {
   let mockRecoveryService: jasmine.SpyObj<OperationLogRecoveryService>;
   let mockSyncHydrationService: jasmine.SpyObj<SyncHydrationService>;
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
+  let mockTranslateService: jasmine.SpyObj<TranslateService>;
 
   const mockState = {
     task: { entities: {}, ids: [] },
@@ -156,6 +158,11 @@ describe('OperationLogHydratorService', () => {
     ]);
     mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
     mockClientIdProvider.loadClientId.and.resolveTo('test-client');
+    mockRepairOperationService.createRepairOperation.and.resolveTo(0);
+    mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
+    mockTranslateService.instant.and.callFake((key: string | string[]) =>
+      Array.isArray(key) ? key.join(',') : key,
+    );
 
     // Default mock implementations
     mockOpLogStore.getVectorClock.and.returnValue(Promise.resolve(null));
@@ -215,6 +222,7 @@ describe('OperationLogHydratorService', () => {
         { provide: OperationLogRecoveryService, useValue: mockRecoveryService },
         { provide: SyncHydrationService, useValue: mockSyncHydrationService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        { provide: TranslateService, useValue: mockTranslateService },
       ],
     });
 
@@ -295,14 +303,13 @@ describe('OperationLogHydratorService', () => {
         expect(mockValidateStateService.validateAndRepair).toHaveBeenCalled();
       });
 
-      // SKIPPED: Repair system is disabled for debugging archive subtask loss
-      xit('should dispatch repaired state if validation repairs it', async () => {
+      it('should dispatch repaired state if validation repairs it', async () => {
         // Use mismatched schema version to trigger validation
         const snapshot = createMockSnapshot({ schemaVersion: undefined });
         const repairedState = { ...mockState, repaired: true };
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
         mockValidateStateService.validateAndRepair.and.resolveTo({
-          isValid: false,
+          isValid: true,
           wasRepaired: true,
           repairedState,
           repairSummary: { entityStateFixed: 1 } as any,
@@ -315,15 +322,14 @@ describe('OperationLogHydratorService', () => {
         );
       });
 
-      // SKIPPED: Repair system is disabled for debugging archive subtask loss
-      xit('should create repair operation when state is repaired', async () => {
+      it('should create repair operation when state is repaired', async () => {
         // Use mismatched schema version to trigger validation
         const snapshot = createMockSnapshot({ schemaVersion: undefined });
         const repairedState = { ...mockState, repaired: true };
         const repairSummary = { entityStateFixed: 1 } as any;
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
         mockValidateStateService.validateAndRepair.and.resolveTo({
-          isValid: false,
+          isValid: true,
           wasRepaired: true,
           repairedState,
           repairSummary,
@@ -335,6 +341,59 @@ describe('OperationLogHydratorService', () => {
           repairedState,
           repairSummary,
           'test-client',
+        );
+      });
+
+      it('should not persist repair when magnitude exceeds safety cap', async () => {
+        // Defense against false-positive validation flagging huge "repairs":
+        // if dataRepair claims to fix more than MAX_AUTO_REPAIR_FIXES items,
+        // skip persistence and direct the user to backups instead.
+        const snapshot = createMockSnapshot({ schemaVersion: undefined });
+        const repairedState = { ...mockState, repaired: true };
+        const repairSummary = {
+          entityStateFixed: 0,
+          orphanedEntitiesRestored: 0,
+          invalidReferencesRemoved: 100,
+          relationshipsFixed: 0,
+          structureRepaired: 0,
+          typeErrorsFixed: 0,
+        };
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockValidateStateService.validateAndRepair.and.resolveTo({
+          isValid: true,
+          wasRepaired: true,
+          repairedState,
+          repairSummary,
+        });
+
+        await service.hydrateStore();
+
+        expect(mockRepairOperationService.createRepairOperation).not.toHaveBeenCalled();
+        expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+          loadAllData({ appDataComplete: repairedState }),
+        );
+      });
+
+      it('should not persist repair when revalidation still fails', async () => {
+        // Partial-repair case: dataRepair ran but revalidation still failed.
+        // ValidateStateService already showed the "restore from backup" alert.
+        // The hydrator must NOT persist a still-invalid state as a REPAIR op.
+        const snapshot = createMockSnapshot({ schemaVersion: undefined });
+        const partiallyRepairedState = { ...mockState, repaired: true };
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockValidateStateService.validateAndRepair.and.resolveTo({
+          isValid: false,
+          wasRepaired: true,
+          repairedState: partiallyRepairedState,
+          repairSummary: { entityStateFixed: 1 } as any,
+          error: 'State still invalid after repair',
+        });
+
+        await service.hydrateStore();
+
+        expect(mockRepairOperationService.createRepairOperation).not.toHaveBeenCalled();
+        expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+          loadAllData({ appDataComplete: partiallyRepairedState }),
         );
       });
 

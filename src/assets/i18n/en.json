@@ -1091,6 +1091,10 @@
         "TITLE": "Sync Cleanup Complete",
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}"
       },
+      "D_DATA_REPAIR_TOO_LARGE": {
+        "MSG": "Detected {{count}} data inconsistencies, more than the auto-repair safety limit of {{max}}. Auto-repair was skipped to avoid unintended data loss. Please export a backup and contact support.",
+        "TITLE": "Significant Data Damage Detected"
+      },
       "D_DECRYPT_ERROR": {
         "BTN_OVER_WRITE_REMOTE": "Use This Password & Overwrite Remote",
         "CHANGE_PW_AND_DECRYPT": "Retry Decrypt",
