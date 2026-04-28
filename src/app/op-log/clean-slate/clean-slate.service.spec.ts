@@ -4,9 +4,10 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { PreMigrationBackupService } from './pre-migration-backup.service';
-import { Operation, OpType } from '../core/operation.types';
+import { Operation, OpType, OperationLogEntry } from '../core/operation.types';
 import { ActionType } from '../core/action-types.enum';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
+import { OpLog } from '../../core/log';
 
 describe('CleanSlateService', () => {
   let service: CleanSlateService;
@@ -31,6 +32,8 @@ describe('CleanSlateService', () => {
       'append',
       'setVectorClock',
       'saveStateCache',
+      'getVectorClock',
+      'getUnsynced',
     ]);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
       'generateNewClientId',
@@ -62,6 +65,8 @@ describe('CleanSlateService', () => {
     mockOpLogStore.append.and.resolveTo(1);
     mockOpLogStore.setVectorClock.and.resolveTo();
     mockOpLogStore.saveStateCache.and.resolveTo();
+    mockOpLogStore.getVectorClock.and.resolveTo(null);
+    mockOpLogStore.getUnsynced.and.resolveTo([]);
   });
 
   describe('createCleanSlate', () => {
@@ -104,6 +109,55 @@ describe('CleanSlateService', () => {
         compactedAt: jasmine.any(Number),
         schemaVersion: CURRENT_SCHEMA_VERSION,
       });
+    });
+
+    it('should log diagnostic snapshot of prior clock and unsynced ops before mutation', async () => {
+      const opLogSpy = spyOn(OpLog, 'normal');
+      mockOpLogStore.getVectorClock.and.resolveTo({
+        ['B_old']: 42,
+        ['B_other']: 7,
+      });
+      mockOpLogStore.getUnsynced.and.resolveTo([
+        {
+          seq: 1,
+          op: { opType: OpType.Create, id: 'a' } as any,
+          appliedAt: 0,
+        },
+        {
+          seq: 2,
+          op: { opType: OpType.Create, id: 'b' } as any,
+          appliedAt: 0,
+        },
+        {
+          seq: 3,
+          op: { opType: OpType.Update, id: 'c' } as any,
+          appliedAt: 0,
+        },
+      ] as OperationLogEntry[]);
+
+      await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
+
+      expect(opLogSpy).toHaveBeenCalledWith(
+        '[CleanSlate] Starting clean slate process',
+        jasmine.objectContaining({
+          reason: 'ENCRYPTION_CHANGE',
+          syncImportReason: 'PASSWORD_CHANGED',
+          priorUnsyncedCount: 3,
+          priorUnsyncedByOpType: jasmine.objectContaining({
+            [OpType.Create]: 2,
+            [OpType.Update]: 1,
+          }),
+          priorClockSize: 2,
+          priorClock: { ['B_old']: 42, ['B_other']: 7 },
+        }),
+      );
+      // Order invariant: snapshot reads must precede the destructive clear.
+      expect(mockOpLogStore.getVectorClock).toHaveBeenCalledBefore(
+        mockOpLogStore.clearAllOperations,
+      );
+      expect(mockOpLogStore.getUnsynced).toHaveBeenCalledBefore(
+        mockOpLogStore.clearAllOperations,
+      );
     });
 
     it('should work with MANUAL reason', async () => {

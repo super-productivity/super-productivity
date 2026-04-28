@@ -105,6 +105,24 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
 
       if (loadedConfig) {
         this._privateCfgInMemory = loadedConfig;
+        // Diagnostic: surface encryptKey state on every fresh disk load.
+        // The pair `(encryptKey=[empty], isEncryptionEnabled=true)` is the
+        // smoking-gun signature for a silent credential drop that bounces a
+        // long-offline client into the destructive force-overwrite recovery.
+        // Length-only redaction is intentional — never log the key itself.
+        const cfgWithEncryption = loadedConfig as {
+          encryptKey?: string;
+          isEncryptionEnabled?: boolean;
+        };
+        const encryptKeyInfo = cfgWithEncryption?.encryptKey
+          ? `[length=${cfgWithEncryption.encryptKey.length}]`
+          : '[empty]';
+        SyncLog.normal(
+          `${SyncCredentialStore.L}.load() loaded from disk`,
+          this._providerId,
+          `encryptKey=${encryptKeyInfo}`,
+          `isEncryptionEnabled=${cfgWithEncryption?.isEncryptionEnabled === true}`,
+        );
       }
 
       return loadedConfig ?? null;
