@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Section } from './section.model';
-import { sanitizeSectionTitle } from './section.utils';
+import { hasTitleChange, sanitizeSectionTitle } from './section.util';
 import { WorkContextType } from '../work-context/work-context.model';
 import {
   addSection,
@@ -56,10 +56,13 @@ export class SectionService {
   }
 
   updateSection(id: string, sectionChanges: Partial<Section>): void {
-    const changes =
-      typeof sectionChanges.title === 'string'
-        ? { ...sectionChanges, title: sanitizeSectionTitle(sectionChanges.title) }
-        : sectionChanges;
+    // Use the same key-presence check as the reducer so the service
+    // sanitizes whenever the caller intends to set a title (including
+    // edge cases like clearing it). The reducer is the authoritative
+    // line of defense; this is the local-dispatch convenience layer.
+    const changes = hasTitleChange(sectionChanges)
+      ? { ...sectionChanges, title: sanitizeSectionTitle(sectionChanges.title) }
+      : sectionChanges;
     this._store.dispatch(updateSection({ section: { id, changes } }));
   }
 

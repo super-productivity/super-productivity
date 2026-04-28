@@ -143,8 +143,11 @@ export class WorkContextMenuComponent implements OnInit {
         // Omit `message` to match the Add Tag pattern — the dialog
         // collapses its outer padding when there's no message text
         // (`dialog-prompt.scss: mat-dialog-content.isNoMsg`).
+        // Use a descriptive placeholder ("Add Section") rather than a
+        // generic "Title" so screen readers and visual users get the
+        // dialog's purpose without a separate title element.
         data: {
-          placeholder: T.G.TITLE,
+          placeholder: T.WW.ADD_SECTION_TITLE,
         },
       })
       // NOTE: do NOT pipe takeUntilDestroyed here. This component lives inside

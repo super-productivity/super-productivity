@@ -2,7 +2,7 @@ import { createReducer, on } from '@ngrx/store';
 import { createEntityAdapter, EntityAdapter, Update } from '@ngrx/entity';
 import * as SectionActions from './section.actions';
 import { Section, SectionState } from '../section.model';
-import { sanitizeSectionTitle } from '../section.utils';
+import { hasTitleChange, sanitizeSectionTitle } from '../section.util';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 
@@ -45,8 +45,8 @@ export const sectionReducer = createReducer(
     // Sanitize on key-presence, not type — `{ title: null }` from a
     // malformed peer must NOT slip through (it would corrupt the
     // entity's `title: string` contract). `sanitizeSectionTitle`
-    // coerces `null` / `undefined` to `''`.
-    if (!('title' in section.changes)) {
+    // coerces non-string values to `''`.
+    if (!hasTitleChange(section.changes)) {
       return adapter.updateOne(section, state);
     }
     return adapter.updateOne(

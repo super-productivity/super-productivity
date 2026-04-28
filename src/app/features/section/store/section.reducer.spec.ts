@@ -8,7 +8,7 @@ import {
   updateSectionOrder,
 } from './section.actions';
 import { Section, SectionState } from '../section.model';
-import { MAX_SECTION_TITLE_LENGTH } from '../section.utils';
+import { MAX_SECTION_TITLE_LENGTH } from '../section.util';
 import { WorkContextType } from '../../work-context/work-context.model';
 
 const makeSection = (overrides: Partial<Section> = {}): Section => ({
