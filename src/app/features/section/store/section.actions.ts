@@ -70,7 +70,14 @@ export const updateSectionOrder = createAction(
  * RESIDUAL: under concurrent moves of the same task to different
  * sections across devices, the task can end up in multiple sections
  * after sync because each per-section update applies independently.
- * Modelling membership as `task.sectionId` would make this atomic.
+ *
+ * FOLLOW-UP (architecture): model membership as `task.sectionId`
+ * (single field on the Task entity) instead of `Section.taskIds`. That
+ * collapses cross-section moves into a single atomic update on Task,
+ * eliminates this concurrent-duplication bug, and removes most of
+ * `section-shared.reducer.ts` plus `_repairSections` taskIds-cleanup.
+ * `Section.taskIds` would survive only as stored ordering. Out of
+ * scope for this PR — needs a migration path for existing data.
  */
 export const addTaskToSection = createAction(
   '[Section] Add Task to Section',
@@ -97,6 +104,13 @@ export const addTaskToSection = createAction(
  * section into the "no section" area. Persisted as an Update on the
  * source section so concurrent ungroups from different sections never
  * collide on a sentinel id (the prior 'NONE' approach).
+ *
+ * FOLLOW-UP (simplicity): this action duplicates a lot of
+ * `addTaskToSection`. Folding it into `addTaskToSection` with a nullable
+ * `sectionId` would drop one action, one op-log code (S6), and one
+ * reducer branch. Held back because the two actions use different
+ * opTypes (Move vs Update) and the meta-builder asymmetry would need
+ * sync-replay validation. Out of scope for this PR.
  */
 export const removeTaskFromSection = createAction(
   '[Section] Remove Task from Section',

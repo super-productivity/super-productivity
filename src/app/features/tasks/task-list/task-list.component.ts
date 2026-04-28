@@ -215,7 +215,15 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
       return true;
     }
-    return targetListId === 'PARENT';
+    if (targetListId !== 'PARENT') return false;
+
+    // Target is a section. Reject drops from BACKLOG: _move() treats this as
+    // a pure section-add and never removes the task from project.backlogTaskIds,
+    // leaving it in both lists. Force users to first move backlog → today.
+    const srcModelId = drag.dropContainer?.data?.listModelId;
+    if (srcModelId === 'BACKLOG') return false;
+
+    return true;
   };
 
   async drop(

@@ -136,6 +136,7 @@
               </collapsible>
             }
           } @else if (sections().length && !customizerService.isCustomized()) {
+            @let bySection = undoneTasksBySection();
             <div
               class="sections-wrapper"
               cdkDropList
@@ -144,7 +145,7 @@
             >
               <div class="no-section">
                 <task-list
-                  [tasks]="undoneTasksBySection().noSection"
+                  [tasks]="bySection.noSection"
                   [listId]="'PARENT'"
                   [listModelId]="'UNDONE'"
                   [noTasksMsg]="
@@ -199,7 +200,7 @@
                     </ng-container>
 
                     <task-list
-                      [tasks]="undoneTasksBySection().dict[section.id]"
+                      [tasks]="bySection.dict[section.id]"
                       [listId]="'PARENT'"
                       [listModelId]="section.id"
                     ></task-list>

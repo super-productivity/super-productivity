@@ -346,6 +346,14 @@ export const parseMarkdownTasks = (text: string): ParsedMarkdownTask[] | null =>
  * Parse markdown text to detect ATX headers (`#` to `######`) and group
  * tasks under sections. Returns `null` if no headers are present so callers
  * can fall through to a flat-task parse.
+ *
+ * FOLLOW-UP: this hand-rolled parser only treats `-`/`*` bullets as task
+ * lines and silently drops `1.`-style ordered lists. The repo already
+ * depends on `marked` (see `marked-options-factory.ts`); rewriting on
+ * top of `marked.lexer(text)` would shrink this and the two near-clones
+ * (`parseMarkdownTasks`, `parseMarkdownTasksWithStructure`) and pick up
+ * GFM task-list semantics for free. Out of scope for this PR.
+ *
  * @param text - Markdown text with potential headers and task lists
  * @returns Sections with tasks, or null if not valid markdown
  */

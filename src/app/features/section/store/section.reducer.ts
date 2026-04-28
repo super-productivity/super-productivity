@@ -1,7 +1,7 @@
 import { createReducer, on } from '@ngrx/store';
 import { createEntityAdapter, EntityAdapter, Update } from '@ngrx/entity';
 import * as SectionActions from './section.actions';
-import { Section, SectionState } from '../section.model';
+import { Section, SectionState, sanitizeSectionTitle } from '../section.model';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 
@@ -28,29 +28,71 @@ export const sectionReducer = createReducer(
   initialSectionState,
 
   on(SectionActions.addSection, (state, { section }) =>
-    adapter.addOne({ ...section, taskIds: section.taskIds ?? [] }, state),
+    adapter.addOne(
+      {
+        ...section,
+        title: sanitizeSectionTitle(section.title),
+        taskIds: section.taskIds ?? [],
+      },
+      state,
+    ),
   ),
 
   on(SectionActions.deleteSection, (state, { id }) => adapter.removeOne(id, state)),
 
-  on(SectionActions.updateSection, (state, { section }) =>
-    adapter.updateOne(section, state),
-  ),
+  on(SectionActions.updateSection, (state, { section }) => {
+    if (typeof section.changes.title !== 'string') {
+      return adapter.updateOne(section, state);
+    }
+    return adapter.updateOne(
+      {
+        ...section,
+        changes: {
+          ...section.changes,
+          title: sanitizeSectionTitle(section.changes.title),
+        },
+      },
+      state,
+    );
+  }),
 
   on(SectionActions.updateSectionOrder, (state, { contextId, ids }) => {
-    // Walk state.ids and swap each context-matching slot for the next
-    // id from the new order. Other-context sections keep their slot,
-    // so the global ids array stays stable across cross-context edits.
+    // Build the new context-section order, then splice into state.ids in
+    // place of context-matching slots. Other-context sections keep their
+    // absolute slot, so the global ids array stays stable across
+    // cross-context edits.
+    //
+    // Defensive: payload may be partial / out-of-date relative to local
+    // state (e.g. a remote client deleted a section while another
+    // reordered). We accept payload entries that still resolve to a
+    // section in this context, dedupe them, then append any context
+    // sections the payload missed (in their original relative order) so
+    // no section disappears or is duplicated.
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      const s = state.entities[id];
+      if (s && s.contextId === contextId) {
+        seen.add(id);
+        ordered.push(id);
+      }
+    }
+    for (const id of state.ids as string[]) {
+      const s = state.entities[id];
+      if (s && s.contextId === contextId && !seen.has(id)) {
+        ordered.push(id);
+      }
+    }
+
     let cursor = 0;
     let changed = false;
     const next = (state.ids as string[]).map((id) => {
       const s = state.entities[id];
-      if (s && s.contextId === contextId) {
-        const replacement = ids[cursor++];
-        if (replacement && replacement !== id) changed = true;
-        return replacement ?? id;
-      }
-      return id;
+      if (!s || s.contextId !== contextId) return id;
+      const replacement = ordered[cursor++] ?? id;
+      if (replacement !== id) changed = true;
+      return replacement;
     });
     return changed ? { ...state, ids: next } : state;
   }),

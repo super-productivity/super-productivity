@@ -151,7 +151,7 @@ export class WorkContextMenuComponent implements OnInit {
       // MatDialog cleans up its own subscription when the dialog closes.
       .afterClosed()
       .subscribe((title: string) => {
-        if (title) {
+        if (title?.trim()) {
           this._sectionService.addSection(
             title,
             this.contextId,

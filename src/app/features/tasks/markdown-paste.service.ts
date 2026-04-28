@@ -24,24 +24,6 @@ import type { MarkdownWithSections } from '../../util/parse-markdown-tasks';
 // parsers on plain-text pastes.
 const MARKDOWN_TASK_OR_HEADER_RE = /^(?:#{1,6}\s|\s*[-*]\s)/m;
 
-// Single-slot memo for the sectioned parse result. `isMarkdownTaskList`
-// runs first (paste-gate) and `handleMarkdownPaste` runs immediately
-// after with the same string — without this, the parser ran twice.
-// Keyed by string reference; falls back to a fresh parse on miss.
-let _lastSectionInput: string | null = null;
-let _lastSectionResult: MarkdownWithSections | null = null;
-
-const parseSectionsCached = (
-  text: string,
-  parse: (t: string) => MarkdownWithSections | null,
-): MarkdownWithSections | null => {
-  if (text !== _lastSectionInput) {
-    _lastSectionInput = text;
-    _lastSectionResult = parse(text);
-  }
-  return _lastSectionResult;
-};
-
 @Injectable({
   providedIn: 'root',
 })
@@ -52,6 +34,27 @@ export class MarkdownPasteService {
   private _globalConfigService = inject(GlobalConfigService);
   private _sectionService = inject(SectionService);
   private _workContextService = inject(WorkContextService);
+
+  // Single-slot memo for the sectioned parse result. `isMarkdownTaskList`
+  // runs first (paste-gate) and `handleMarkdownPaste` runs immediately
+  // after with the same string — without this, the parser ran twice.
+  // Cleared after consumption so a large clipboard payload (up to ~800KB)
+  // does not stay resident for the rest of the session.
+  private _lastSectionInput: string | null = null;
+  private _lastSectionResult: MarkdownWithSections | null = null;
+
+  private _parseSectionsCached(text: string): MarkdownWithSections | null {
+    if (text !== this._lastSectionInput) {
+      this._lastSectionInput = text;
+      this._lastSectionResult = parseMarkdownWithSections(text);
+    }
+    return this._lastSectionResult;
+  }
+
+  private _clearSectionsCache(): void {
+    this._lastSectionInput = null;
+    this._lastSectionResult = null;
+  }
 
   async handleMarkdownPaste(
     pastedText: string,
@@ -98,7 +101,7 @@ export class MarkdownPasteService {
 
     // Try to parse with sections first (for markdown with H1 headers)
     if (!selectedTaskId) {
-      const sectionsData = parseSectionsCached(pastedText, parseMarkdownWithSections);
+      const sectionsData = this._parseSectionsCached(pastedText);
       if (sectionsData) {
         // Confirm with user
         const totalTasks = sectionsData.sections.reduce(
@@ -119,6 +122,9 @@ export class MarkdownPasteService {
         });
 
         const isConfirmed = await dialogRef.afterClosed().toPromise();
+        // Drop the cached parse result regardless of confirmation —
+        // the memo is only useful for the gate→handler back-to-back call.
+        this._clearSectionsCache();
         if (!isConfirmed) {
           return;
         }
@@ -310,7 +316,7 @@ export class MarkdownPasteService {
     // Sectioned (H1+) markdown — parseMarkdownWithSections already
     // returns null for header-less input. Result is memoised so the
     // immediately-following handleMarkdownPaste reuses it.
-    if (parseSectionsCached(text, parseMarkdownWithSections)) return true;
+    if (this._parseSectionsCached(text)) return true;
 
     // Flat task list fallback
     const parsedTasks = parseMarkdownTasks(text);

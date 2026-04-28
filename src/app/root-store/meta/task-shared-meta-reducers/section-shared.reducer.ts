@@ -9,6 +9,7 @@ import { Section, SectionState } from '../../../features/section/section.model';
 import { TaskSharedActions } from '../task-shared.actions';
 import { deleteTag, deleteTags } from '../../../features/tag/store/tag.actions';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
+import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
@@ -201,30 +202,12 @@ const handleMoveToOtherProject = (
 };
 
 /**
- * A bulk "remove from TODAY" action (removeTasksFromTodayTag /
- * localRemoveOverdueFromToday) fired. TODAY is virtual — `task.tagIds`
- * doesn't contain `'TODAY'`, so `handleTaskTagsChange` won't catch it.
- * Strip the affected tasks (and their subtasks) from any TODAY-context
- * section so they don't reappear there next time the task is planned for
- * today.
- *
- * RESIDUAL GAP — the following reducers also mutate `TODAY_TAG.taskIds`
- * directly without dispatching either bulk-remove action, so a task
- * that leaves TODAY via these paths can leave a stale id in a TODAY
- * section's `taskIds`:
- *  - task-shared-scheduling.reducer.ts: scheduleTaskWithTime,
- *    reScheduleTaskWithTime (when not isSkipAutoRemoveFromToday),
- *    unscheduleTask
- *  - planner-shared.reducer.ts: planTaskForDay (when moving away from
- *    today), removeTaskFromTodayTagAndPlanner, planner cleanup paths
- *  - short-syntax-shared.reducer.ts: short-syntax day moves
- *  - task-shared-crud.reducer.ts: undo paths that re-insert/remove
- *  - lww-update.meta-reducer.ts: conflict-resolution replacements
- * Accurate detection per-action requires duplicating each reducer's
- * dueDay/dueWithTime decision logic. The clean fix is a separate
- * Phase 6.5 meta-reducer that diffs `TODAY_TAG.taskIds` pre/post the
- * inner reducer call and strips removed ids from TODAY-context
- * sections — captured for follow-up.
+ * Action-specific handler for the explicit bulk "remove from TODAY"
+ * actions. Pre-empts the post-reducer diff so callers that pass an
+ * action payload (rather than relying on inner-reducer state mutation)
+ * still get cleanup. The diff below catches the same flow when state
+ * actually changes, so the two are idempotent: applying the same
+ * removal twice is a no-op.
  */
 const handleRemoveFromTodayTag = (
   state: ExtendedState,
@@ -240,6 +223,56 @@ const handleRemoveFromTodayTag = (
       WorkContextType.TAG,
     ),
   );
+};
+
+/**
+ * Diff-based TODAY_TAG.taskIds cleanup. TODAY is virtual — `task.tagIds`
+ * never contains `'TODAY'`, so `handleTaskTagsChange` cannot catch it,
+ * and the set of reducers that mutate `TODAY_TAG.taskIds` is too broad
+ * to enumerate by action type (scheduleTaskWithTime, planTaskForDay,
+ * unscheduleTask, short-syntax day moves, undo paths, lww conflict
+ * resolution, …).
+ *
+ * Compares pre/post `TODAY_TAG.taskIds` after the inner reducer ran;
+ * any id that left TODAY is stripped from TODAY-context sections.
+ *
+ * Cheap path: short-circuits on tag-state reference equality (no tag
+ * mutation → no diff), then on TODAY entity reference equality, then on
+ * taskIds reference equality. Only when all three changed do we walk
+ * the arrays.
+ */
+const diffRemovedTodayTaskIds = (prev: RootState, next: RootState): string[] | null => {
+  const prevTagState = prev[TAG_FEATURE_NAME];
+  const nextTagState = next[TAG_FEATURE_NAME];
+  if (prevTagState === nextTagState) return null;
+  const prevToday = prevTagState.entities[TODAY_TAG.id];
+  const nextToday = nextTagState.entities[TODAY_TAG.id];
+  if (prevToday === nextToday) return null;
+  const prevIds = prevToday?.taskIds;
+  const nextIds = nextToday?.taskIds;
+  if (prevIds === nextIds || !prevIds?.length) return null;
+  const nextSet = nextIds ? new Set(nextIds) : new Set<string>();
+  const removed: string[] = [];
+  for (const id of prevIds) {
+    if (!nextSet.has(id)) removed.push(id);
+  }
+  return removed.length ? removed : null;
+};
+
+const applyTodayTagSectionCleanup = (
+  state: RootState,
+  removedTaskIds: string[],
+): RootState => {
+  const extState = state as ExtendedState;
+  const sectionState = extState[SECTION_FEATURE_NAME];
+  const cleaned = removeTaskIdsFromContextSections(
+    sectionState,
+    removedTaskIds,
+    [TODAY_TAG.id],
+    WorkContextType.TAG,
+  );
+  if (cleaned === sectionState) return state;
+  return { ...extState, [SECTION_FEATURE_NAME]: cleaned } as RootState;
 };
 
 /**
@@ -429,7 +462,17 @@ export const sectionSharedMetaReducer: MetaReducer<RootState> = (
   return (state: RootState | undefined, action: Action): RootState => {
     if (!state) return reducer(state, action);
     const handler = ACTION_HANDLERS[action.type];
-    if (!handler) return reducer(state, action);
-    return reducer(handler(state as ExtendedState, action), action);
+    const preState = handler ? handler(state as ExtendedState, action) : state;
+    const next = reducer(preState, action);
+    // Post-reducer TODAY_TAG.taskIds diff catches every flow that
+    // removes ids from TODAY without going through a known action.
+    // See diffRemovedTodayTaskIds for the residual-gap rationale.
+    const removedFromToday = diffRemovedTodayTaskIds(state, next);
+    if (!removedFromToday) return next;
+    // Also expand subtasks: a parent task can leave TODAY while its
+    // subtasks linger in section.taskIds if the section ever held them
+    // (which it shouldn't, but defend against historical data).
+    const affected = collectAffectedTaskIds(next as ExtendedState, removedFromToday);
+    return applyTodayTagSectionCleanup(next, affected);
   };
 };

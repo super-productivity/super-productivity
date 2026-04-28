@@ -76,6 +76,32 @@ describe('sectionReducer', () => {
       expect(next.entities['s1']?.title).toBe('new');
       expect(next.entities['s1']?.taskIds).toEqual(['t1']);
     });
+
+    it('caps incoming title length even when the action came from sync', () => {
+      // Reducer-side enforcement defends against remote ops that bypass
+      // the service-level sanitizer (e.g. a malicious peer's op-log entry).
+      const start = stateWithSections([makeSection({ id: 's1', title: 'short' })]);
+      const longTitle = 'x'.repeat(500);
+      const next = sectionReducer(
+        start,
+        updateSection({ section: { id: 's1', changes: { title: longTitle } } }),
+      );
+      expect(next.entities['s1']?.title?.length).toBe(200);
+    });
+  });
+
+  describe('addSection (reducer-side title cap)', () => {
+    it('trims whitespace and caps incoming title at 200 chars', () => {
+      const longTitle = '  ' + 'y'.repeat(500) + '  ';
+      const next = sectionReducer(
+        initialSectionState,
+        addSection({
+          section: makeSection({ id: 'new', title: longTitle, taskIds: [] }),
+        }),
+      );
+      expect(next.entities['new']?.title?.length).toBe(200);
+      expect(next.entities['new']?.title?.startsWith(' ')).toBe(false);
+    });
   });
 
   describe('updateSectionOrder', () => {
@@ -119,6 +145,37 @@ describe('sectionReducer', () => {
         updateSectionOrder({ contextId: 'p1', ids: ['a', 'b'] }),
       );
       expect(next).toBe(start);
+    });
+
+    it('ignores payload entries that no longer resolve to a context section', () => {
+      // Sync-replay scenario: a remote client deleted section 'b' while
+      // another reordered ['a','b','c'] → ['c','b','a']. Payload should
+      // be applied as if 'b' is absent, leaving slots that map to {a,c}.
+      const start = stateWithSections([
+        makeSection({ id: 'a', contextId: 'p1' }),
+        makeSection({ id: 'c', contextId: 'p1' }),
+      ]);
+      const next = sectionReducer(
+        start,
+        updateSectionOrder({ contextId: 'p1', ids: ['c', 'b', 'a'] }),
+      );
+      expect(next.ids).toEqual(['c', 'a']);
+    });
+
+    it('does not duplicate or wrap when payload is shorter than context slots', () => {
+      const start = stateWithSections([
+        makeSection({ id: 'a', contextId: 'p1' }),
+        makeSection({ id: 'b', contextId: 'p1' }),
+        makeSection({ id: 'c', contextId: 'p1' }),
+      ]);
+      // Only payload reorders the first slot; subsequent slots keep their ids.
+      const next = sectionReducer(
+        start,
+        updateSectionOrder({ contextId: 'p1', ids: ['b'] }),
+      );
+      // 'b' takes slot 0; remaining slots (originally 'b','c') stay 'b','c'.
+      // The 'b' duplicate must NOT appear.
+      expect(next.ids.filter((id) => id === 'b').length).toBe(1);
     });
   });
 

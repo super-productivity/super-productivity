@@ -416,7 +416,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       .afterClosed()
       .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe((newTitle: string | undefined) => {
-        if (newTitle) {
+        if (newTitle?.trim()) {
           this.sectionService.updateSection(id, { title: newTitle });
         }
       });
