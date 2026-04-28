@@ -10,41 +10,18 @@ export const SECTION_FEATURE_NAME = 'section';
 export const adapter: EntityAdapter<Section> = createEntityAdapter<Section>();
 
 export const initialSectionState: SectionState = adapter.getInitialState({
-  ids: [],
+  ids: [] as string[],
 });
 
 const removeTaskIdFromSection = (
   section: Section,
   taskId: string,
 ): Update<Section> | null => {
-  // Older persisted sections may lack taskIds entirely.
-  const taskIds = section.taskIds ?? [];
-  if (!taskIds.includes(taskId)) return null;
+  if (!section.taskIds.includes(taskId)) return null;
   return {
     id: section.id,
-    changes: { taskIds: taskIds.filter((id) => id !== taskId) },
+    changes: { taskIds: section.taskIds.filter((id) => id !== taskId) },
   };
-};
-
-const normalizeLoadedSections = (state: SectionState): SectionState => {
-  // Older persisted shapes could write `section: {}` with no ids array.
-  const ids = (state.ids as string[] | undefined) ?? [];
-  let dirty = false;
-  const entities: SectionState['entities'] = {};
-  for (const id of ids) {
-    const s = state.entities[id];
-    if (!s) continue;
-    if (!Array.isArray(s.taskIds)) {
-      entities[id] = { ...s, taskIds: [] };
-      dirty = true;
-    } else {
-      entities[id] = s;
-    }
-  }
-  if (state.ids === undefined) {
-    return { ids: [], entities };
-  }
-  return dirty ? { ...state, entities } : state;
 };
 
 export const sectionReducer = createReducer(
@@ -61,17 +38,21 @@ export const sectionReducer = createReducer(
   ),
 
   on(SectionActions.updateSectionOrder, (state, { contextId, ids }) => {
-    const idsSet = new Set(ids);
-    const otherIds = (state.ids as string[]).filter((id) => {
-      if (idsSet.has(id)) return false;
+    // Walk state.ids and swap each context-matching slot for the next
+    // id from the new order. Other-context sections keep their slot,
+    // so the global ids array stays stable across cross-context edits.
+    let cursor = 0;
+    let changed = false;
+    const next = (state.ids as string[]).map((id) => {
       const s = state.entities[id];
-      // Keep sections from other contexts in their existing positions.
-      return s ? s.contextId !== contextId : true;
+      if (s && s.contextId === contextId) {
+        const replacement = ids[cursor++];
+        if (replacement && replacement !== id) changed = true;
+        return replacement ?? id;
+      }
+      return id;
     });
-    return {
-      ...state,
-      ids: [...otherIds, ...ids],
-    };
+    return changed ? { ...state, ids: next } : state;
   }),
 
   on(
@@ -79,37 +60,23 @@ export const sectionReducer = createReducer(
     (state, { sectionId, taskId, afterTaskId, sourceSectionId }) => {
       const updates: Update<Section>[] = [];
 
-      if (sourceSectionId !== undefined) {
-        // Deterministic path: strip from the explicit source (if any).
-        // Replay produces the same result regardless of current state.
-        if (sourceSectionId && sourceSectionId !== sectionId) {
-          const src = state.entities[sourceSectionId];
-          if (src) {
-            const removal = removeTaskIdFromSection(src, taskId);
-            if (removal) updates.push(removal);
-          }
-        }
-      } else {
-        // Legacy path: caller didn't track source. Sweep for the first
-        // section that currently holds the task — a task lives in at
-        // most one section, so we can stop at the first hit.
-        for (const s of Object.values(state.entities)) {
-          if (!s || s.id === sectionId) continue;
-          const removal = removeTaskIdFromSection(s, taskId);
-          if (removal) {
-            updates.push(removal);
-            break;
-          }
+      // Strip from the explicit source (if any). Replay produces the
+      // same result regardless of current state — `null` means "task
+      // wasn't in any section" and explicitly NOT a sweep request.
+      if (sourceSectionId && sourceSectionId !== sectionId) {
+        const src = state.entities[sourceSectionId];
+        if (src) {
+          const removal = removeTaskIdFromSection(src, taskId);
+          if (removal) updates.push(removal);
         }
       }
 
       const target = state.entities[sectionId];
       if (target) {
-        const targetTaskIds = target.taskIds ?? [];
         const newTaskIds = moveItemAfterAnchor(
           taskId,
           afterTaskId ?? null,
-          targetTaskIds.includes(taskId) ? targetTaskIds : [...targetTaskIds, taskId],
+          target.taskIds.includes(taskId) ? target.taskIds : [...target.taskIds, taskId],
         );
         updates.push({ id: sectionId, changes: { taskIds: newTaskIds } });
       }
@@ -126,11 +93,8 @@ export const sectionReducer = createReducer(
   }),
 
   on(loadAllData, (state, { appDataComplete }) =>
-    appDataComplete.section
-      ? normalizeLoadedSections({ ...(appDataComplete.section as SectionState) })
-      : state,
+    appDataComplete.section ? (appDataComplete.section as SectionState) : state,
   ),
 );
 
-export const { selectIds, selectEntities, selectAll, selectTotal } =
-  adapter.getSelectors();
+export const { selectAll } = adapter.getSelectors();

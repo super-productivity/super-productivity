@@ -373,7 +373,6 @@ describe('parseMarkdownWithSections', () => {
 
   it('groups tasks under H1 headers', () => {
     const result = parseMarkdownWithSections(`# One\n- a\n- b\n# Two\n- c`);
-    expect(result?.hasHeaders).toBe(true);
     expect(result?.sections).toEqual([
       {
         sectionTitle: 'One',

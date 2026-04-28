@@ -109,6 +109,45 @@ describe('sectionSharedMetaReducer', () => {
     expect(updated.entities['s2']?.taskIds).toEqual([]);
   });
 
+  it('strips archived tasks (and their subtasks) from sections on moveToArchive', () => {
+    const state = stateWith(
+      {
+        parent: { subTaskIds: ['sub1'] },
+        sub1: { parentId: 'parent' },
+        other: {},
+      },
+      [
+        {
+          id: 's1',
+          contextId: 'p1',
+          contextType: WorkContextType.PROJECT,
+          title: 'A',
+          taskIds: ['parent', 'other'],
+        },
+        {
+          id: 's2',
+          contextId: 'p1',
+          contextType: WorkContextType.PROJECT,
+          title: 'B',
+          taskIds: ['sub1'],
+        },
+      ],
+    );
+
+    metaReducer(
+      state,
+      TaskSharedActions.moveToArchive({
+        tasks: [{ ...state[TASK_FEATURE_NAME].entities.parent, subTasks: [] } as any],
+      } as any),
+    );
+
+    const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+      SECTION_FEATURE_NAME
+    ] as SectionState;
+    expect(updated.entities['s1']?.taskIds).toEqual(['other']);
+    expect(updated.entities['s2']?.taskIds).toEqual([]);
+  });
+
   it('handles deleteTasks (bulk) across multiple sections', () => {
     const state = stateWith({ t1: {}, t2: {}, t3: {}, t4: {} }, [
       {

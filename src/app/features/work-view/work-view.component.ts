@@ -385,24 +385,6 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this.layoutService.isWorkViewScrolled.set(false);
   }
 
-  addSection(): void {
-    this._matDialog
-      .open(DialogPromptComponent, {
-        data: {
-          placeholder: T.WW.ADD_SECTION_TITLE,
-        },
-      })
-      .afterClosed()
-      .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe((title: string | undefined) => {
-        if (!title) return;
-        const contextId = this.workContextService.activeWorkContextId;
-        const contextType = this.workContextService.activeWorkContextType;
-        if (!contextId || !contextType) return;
-        this.sectionService.addSection(title, contextId, contextType);
-      });
-  }
-
   deleteSection(id: string): void {
     this._matDialog
       .open(DialogConfirmComponent, {

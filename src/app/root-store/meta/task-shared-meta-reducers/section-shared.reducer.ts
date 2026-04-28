@@ -12,7 +12,6 @@ import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
-import { ActionHandlerMap } from './task-shared-helpers';
 
 /**
  * IMPORTANT — Phase 3.5 placement is load-bearing.
@@ -28,6 +27,8 @@ import { ActionHandlerMap } from './task-shared-helpers';
 interface ExtendedState extends RootState {
   [SECTION_FEATURE_NAME]: SectionState;
 }
+
+type Handler = (state: ExtendedState, action: Action) => ExtendedState;
 
 const collectAffectedTaskIds = (
   state: ExtendedState,
@@ -55,8 +56,7 @@ const cleanupSectionTaskIds = (
 
   Object.values(sectionState.entities).forEach((s) => {
     if (!s) return;
-    // Older persisted sections may lack taskIds entirely; treat as empty.
-    const taskIds = s.taskIds ?? [];
+    const taskIds = s.taskIds;
     if (taskIds.some((id) => removedSet.has(id))) {
       updates.push({
         id: s.id,
@@ -111,7 +111,7 @@ const removeTaskIdsFromContextSections = (
     if (!s) return;
     if (s.contextType !== contextType) return;
     if (!contextIdSet.has(s.contextId)) return;
-    const ids = s.taskIds ?? [];
+    const ids = s.taskIds;
     if (!ids.some((id) => taskIdSet.has(id))) return;
     updates.push({
       id: s.id,
@@ -131,7 +131,7 @@ const withSectionStateUpdate = (
     ? state
     : ({ ...state, [SECTION_FEATURE_NAME]: next } as ExtendedState);
 
-const handleTaskDeletion = (
+const handleTaskRemoval = (
   state: ExtendedState,
   primaryTaskIds: string[],
 ): ExtendedState => {
@@ -248,19 +248,41 @@ const handleTaskTagsChange = (
   );
 };
 
-const createActionHandlers = (
-  state: ExtendedState,
-  action: Action,
-): ActionHandlerMap => ({
-  [TaskSharedActions.deleteTask.type]: () => {
+/**
+ * Single source of truth for which actions trigger section cleanup.
+ * The meta-reducer looks up the handler directly — adding an entry here
+ * is the only step needed to react to a new action type. Keeping action
+ * types and handlers in one map prevents the drift bug where a type was
+ * registered but its handler wasn't (or vice versa).
+ *
+ * KNOWN FOLLOW-UP — `batchUpdateForProject` (plugin API) can update
+ * tagIds and delete tasks within its single-action transform, so
+ * sections owned by tags the plugin removed don't get pruned. Handling
+ * it here requires walking the operations array, which is non-trivial.
+ */
+const ACTION_HANDLERS: Record<string, Handler> = {
+  [TaskSharedActions.deleteTask.type]: (state, action) => {
     const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
-    return handleTaskDeletion(state, [task.id]) as RootState;
+    return handleTaskRemoval(state, [task.id]);
   },
-  [TaskSharedActions.deleteTasks.type]: () => {
+  [TaskSharedActions.deleteTasks.type]: (state, action) => {
     const { taskIds } = action as ReturnType<typeof TaskSharedActions.deleteTasks>;
-    return handleTaskDeletion(state, taskIds) as RootState;
+    return handleTaskRemoval(state, taskIds);
   },
-  [TaskSharedActions.deleteProject.type]: () => {
+  [TaskSharedActions.moveToArchive.type]: (state, action) => {
+    // Archived tasks are pulled out of the live task store, so any
+    // section that referenced them would otherwise hold a stale id
+    // until a dataRepair pass cleared it. Restore is intentionally NOT
+    // a counterpart action: the task comes back without a section, the
+    // user re-categorizes manually (mirrors how restore drops tagIds
+    // for tags that no longer exist).
+    const { tasks } = action as ReturnType<typeof TaskSharedActions.moveToArchive>;
+    return handleTaskRemoval(
+      state,
+      tasks.map((t) => t.id),
+    );
+  },
+  [TaskSharedActions.deleteProject.type]: (state, action) => {
     const { projectId, allTaskIds } = action as ReturnType<
       typeof TaskSharedActions.deleteProject
     >;
@@ -275,33 +297,33 @@ const createActionHandlers = (
       [projectId],
       WorkContextType.PROJECT,
     );
-    if (!allTaskIds.length) return afterContextRemoval as RootState;
+    if (!allTaskIds.length) return afterContextRemoval;
     return withSectionStateUpdate(
       afterContextRemoval,
       cleanupSectionTaskIds(afterContextRemoval[SECTION_FEATURE_NAME], allTaskIds),
-    ) as RootState;
+    );
   },
-  [deleteTag.type]: () => {
+  [deleteTag.type]: (state, action) => {
     const { id } = action as ReturnType<typeof deleteTag>;
-    return handleContextDeletion(state, [id], WorkContextType.TAG) as RootState;
+    return handleContextDeletion(state, [id], WorkContextType.TAG);
   },
-  [deleteTags.type]: () => {
+  [deleteTags.type]: (state, action) => {
     const { ids } = action as ReturnType<typeof deleteTags>;
-    return handleContextDeletion(state, ids, WorkContextType.TAG) as RootState;
+    return handleContextDeletion(state, ids, WorkContextType.TAG);
   },
-  [TaskSharedActions.moveToOtherProject.type]: () => {
+  [TaskSharedActions.moveToOtherProject.type]: (state, action) => {
     const { task, targetProjectId } = action as ReturnType<
       typeof TaskSharedActions.moveToOtherProject
     >;
-    return handleMoveToOtherProject(state, task.id, targetProjectId) as RootState;
+    return handleMoveToOtherProject(state, task.id, targetProjectId);
   },
-  [TaskSharedActions.updateTask.type]: () => {
+  [TaskSharedActions.updateTask.type]: (state, action) => {
     const { task } = action as ReturnType<typeof TaskSharedActions.updateTask>;
     const tagIds = task.changes.tagIds;
-    if (!Array.isArray(tagIds)) return state as RootState;
-    return handleTaskTagsChange(state, task.id as string, tagIds) as RootState;
+    if (!Array.isArray(tagIds)) return state;
+    return handleTaskTagsChange(state, task.id as string, tagIds);
   },
-  [TaskSharedActions.updateTasks.type]: () => {
+  [TaskSharedActions.updateTasks.type]: (state, action) => {
     const { tasks } = action as ReturnType<typeof TaskSharedActions.updateTasks>;
     let next: ExtendedState = state;
     for (const u of tasks) {
@@ -309,50 +331,29 @@ const createActionHandlers = (
       if (!Array.isArray(tagIds)) continue;
       next = handleTaskTagsChange(next, u.id as string, tagIds);
     }
-    return next as RootState;
+    return next;
   },
-  [TaskSharedActions.removeTasksFromTodayTag.type]: () => {
+  [TaskSharedActions.removeTasksFromTodayTag.type]: (state, action) => {
     const { taskIds } = action as ReturnType<
       typeof TaskSharedActions.removeTasksFromTodayTag
     >;
-    return handleRemoveFromTodayTag(state, taskIds) as RootState;
+    return handleRemoveFromTodayTag(state, taskIds);
   },
-  [TaskSharedActions.localRemoveOverdueFromToday.type]: () => {
+  [TaskSharedActions.localRemoveOverdueFromToday.type]: (state, action) => {
     const { taskIds } = action as ReturnType<
       typeof TaskSharedActions.localRemoveOverdueFromToday
     >;
-    return handleRemoveFromTodayTag(state, taskIds) as RootState;
+    return handleRemoveFromTodayTag(state, taskIds);
   },
-});
-
-// Action types this meta-reducer reacts to. Looked up in O(1) so the
-// 99% of dispatches that don't match short-circuit before allocating
-// the handler dispatch table.
-const HANDLED_ACTION_TYPES: ReadonlySet<string> = new Set([
-  TaskSharedActions.deleteTask.type,
-  TaskSharedActions.deleteTasks.type,
-  TaskSharedActions.deleteProject.type,
-  deleteTag.type,
-  deleteTags.type,
-  TaskSharedActions.moveToOtherProject.type,
-  TaskSharedActions.updateTask.type,
-  TaskSharedActions.updateTasks.type,
-  TaskSharedActions.removeTasksFromTodayTag.type,
-  TaskSharedActions.localRemoveOverdueFromToday.type,
-]);
+};
 
 export const sectionSharedMetaReducer: MetaReducer<RootState> = (
   reducer: ActionReducer<RootState, Action>,
 ) => {
   return (state: RootState | undefined, action: Action): RootState => {
     if (!state) return reducer(state, action);
-    if (!HANDLED_ACTION_TYPES.has(action.type)) return reducer(state, action);
-
-    const extendedState = state as ExtendedState;
-    const handlers = createActionHandlers(extendedState, action);
-    const handler = handlers[action.type];
-    const updatedState = handler ? handler(extendedState) : extendedState;
-
-    return reducer(updatedState, action);
+    const handler = ACTION_HANDLERS[action.type];
+    if (!handler) return reducer(state, action);
+    return reducer(handler(state as ExtendedState, action), action);
   };
 };

@@ -43,7 +43,6 @@ export interface SectionWithTasks {
 
 export interface MarkdownWithSections {
   sections: SectionWithTasks[];
-  hasHeaders: boolean;
 }
 
 interface ParsedLine {
@@ -406,13 +405,12 @@ export const parseMarkdownWithSections = (text: string): MarkdownWithSections | 
 
   flushPending();
 
-  // Only return if we found headers
+  // Only return when at least one header was seen — callers treat
+  // header-less input as a flat task list and route through
+  // `parseMarkdownTasks`.
   if (!hasHeaders) {
     return null;
   }
 
-  return {
-    sections,
-    hasHeaders,
-  };
+  return { sections };
 };

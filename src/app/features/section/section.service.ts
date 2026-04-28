@@ -15,6 +15,11 @@ import {
 } from './store/section.actions';
 import { selectSectionsByContextIdMap } from './store/section.selectors';
 
+const MAX_SECTION_TITLE_LENGTH = 200;
+
+const sanitizeSectionTitle = (title: string): string =>
+  title.trim().slice(0, MAX_SECTION_TITLE_LENGTH);
+
 @Injectable({
   providedIn: 'root',
 })
@@ -28,16 +33,21 @@ export class SectionService {
   }
 
   /**
-   * Dispatches `addSection` and returns the new id synchronously. Callers
-   * that need the id (e.g. the markdown-paste flow that places tasks into
-   * the just-created section) read it from the return value — store
-   * dispatch is synchronous, so no async awaiting is needed.
+   * Dispatches `addSection` and returns the new id synchronously so
+   * callers (e.g. markdown paste) can place tasks into the just-created
+   * section without awaiting.
    */
   addSection(title: string, contextId: string, contextType: WorkContextType): string {
     const id = nanoid();
     this._store.dispatch(
       addSection({
-        section: { id, contextId, contextType, title, taskIds: [] },
+        section: {
+          id,
+          contextId,
+          contextType,
+          title: sanitizeSectionTitle(title),
+          taskIds: [],
+        },
       }),
     );
     return id;
@@ -48,7 +58,11 @@ export class SectionService {
   }
 
   updateSection(id: string, sectionChanges: Partial<Section>): void {
-    this._store.dispatch(updateSection({ section: { id, changes: sectionChanges } }));
+    const changes =
+      typeof sectionChanges.title === 'string'
+        ? { ...sectionChanges, title: sanitizeSectionTitle(sectionChanges.title) }
+        : sectionChanges;
+    this._store.dispatch(updateSection({ section: { id, changes } }));
   }
 
   updateSectionOrder(contextId: string, ids: string[]): void {
@@ -56,34 +70,31 @@ export class SectionService {
   }
 
   /**
-   * Atomic: places `taskId` into `targetSectionId` at the position implied
-   * by `afterTaskId`. Pass `sourceSectionId` (or `null` if the task wasn't
-   * in a section) so replay is deterministic — the reducer strips from
-   * the explicit source rather than searching state. Omit `sourceSectionId`
-   * for legacy callers that don't track it; the reducer falls back to a
-   * defensive sweep.
+   * Atomic: places `taskId` into `targetSectionId` at the position
+   * implied by `afterTaskId`. `sourceSectionId` MUST reflect the task's
+   * current section (or `null` if it isn't in one) so replay strips
+   * from the explicit source rather than searching state.
    */
   addTaskToSection(
     targetSectionId: string,
     taskId: string,
-    afterTaskId: string | null = null,
-    sourceSectionId?: string | null,
+    afterTaskId: string | null,
+    sourceSectionId: string | null,
   ): void {
     this._store.dispatch(
       addTaskToSection({
         sectionId: targetSectionId,
         taskId,
         afterTaskId,
-        ...(sourceSectionId !== undefined ? { sourceSectionId } : {}),
+        sourceSectionId,
       }),
     );
   }
 
   /**
-   * Removes `taskId` from `sourceSectionId`. Persisted as a single Update
-   * keyed on the source — concurrent ungroups from different sections do
-   * NOT collide (the prior `addTaskToSection({sectionId: null})` form
-   * shared a sentinel entityId).
+   * Removes `taskId` from `sourceSectionId`. Persisted as a single
+   * Update keyed on the source — concurrent ungroups from different
+   * sections do NOT collide.
    */
   removeTaskFromSection(sourceSectionId: string, taskId: string): void {
     this._store.dispatch(removeTaskFromSection({ sectionId: sourceSectionId, taskId }));

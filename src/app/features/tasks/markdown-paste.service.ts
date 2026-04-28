@@ -75,7 +75,7 @@ export class MarkdownPasteService {
     // Try to parse with sections first (for markdown with H1 headers)
     if (!selectedTaskId) {
       const sectionsData = parseMarkdownWithSections(pastedText);
-      if (sectionsData && sectionsData.hasHeaders) {
+      if (sectionsData) {
         // Confirm with user
         const totalTasks = sectionsData.sections.reduce(
           (sum: number, section) => sum + section.tasks.length,
@@ -278,13 +278,11 @@ export class MarkdownPasteService {
   }
 
   isMarkdownTaskList(text: string): boolean {
-    // Check for sections (H1 headers)
-    const sectionsData = parseMarkdownWithSections(text);
-    if (sectionsData && sectionsData.hasHeaders) {
-      return true;
-    }
+    // Sectioned (H1+) markdown — parseMarkdownWithSections already
+    // returns null for header-less input.
+    if (parseMarkdownWithSections(text)) return true;
 
-    // Check for regular task lists
+    // Flat task list fallback
     const parsedTasks = parseMarkdownTasks(text);
     return parsedTasks !== null && parsedTasks.length > 0;
   }

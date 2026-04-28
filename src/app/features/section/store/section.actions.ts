@@ -59,30 +59,26 @@ export const updateSectionOrder = createAction(
 
 /**
  * Atomically place `taskId` into `sectionId` at the position implied by
- * `afterTaskId`. The reducer enforces uniqueness:
- * - If `sourceSectionId` is a non-null string different from `sectionId`,
- *   the task is stripped from there explicitly and meta sets
- *   `entityIds: [src, dest]` so vector-clock conflict detection covers
- *   both sections. Replay is deterministic from the payload alone.
- * - If `sourceSectionId === sectionId` (intra-section reorder) or `null`
- *   (just-created task), the reducer skips the strip step and meta
- *   falls back to single-entity `entityId: sectionId`.
- * - If `sourceSectionId` is omitted entirely (legacy callers), the
- *   reducer falls back to a defensive sweep over all sections.
+ * `afterTaskId`. `sourceSectionId` is required so replay is
+ * deterministic from the payload alone:
+ * - non-null and different from `sectionId` → strip from source, meta
+ *   sets `entityIds: [src, dest]` so vector-clock conflict detection
+ *   covers both sections.
+ * - equal to `sectionId` (intra-section reorder) or `null` (just-created
+ *   task / not in any section) → no strip, meta is single-entity.
  *
- * RESIDUAL: under concurrent moves of the same task to different sections
- * across devices, the task may end up in multiple sections after sync
- * because each per-section update applies independently. A future fix
- * could either model membership as `task.sectionId` (atomic per-task) or
- * use a Phase 6.5 cleanup pass. See review notes.
+ * RESIDUAL: under concurrent moves of the same task to different
+ * sections across devices, the task can end up in multiple sections
+ * after sync because each per-section update applies independently.
+ * Modelling membership as `task.sectionId` would make this atomic.
  */
 export const addTaskToSection = createAction(
   '[Section] Add Task to Section',
   (payload: {
     sectionId: string;
     taskId: string;
-    afterTaskId?: string | null;
-    sourceSectionId?: string | null;
+    afterTaskId: string | null;
+    sourceSectionId: string | null;
   }) => ({
     ...payload,
     meta: {
