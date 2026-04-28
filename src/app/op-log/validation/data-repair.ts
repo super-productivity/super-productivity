@@ -93,6 +93,14 @@ export const dataRepair = (
     dataOut.reminders = [];
   }
 
+  // Initialize section slice if missing — legacy pf databases (pre-section
+  // feature) don't carry one, and Typia's `DataToValidate` validator
+  // requires it. Without this, `validateFull` after `dataRepair` still
+  // fails and OperationLogMigrationService aborts the migration.
+  if (!dataOut.section) {
+    dataOut.section = { ids: [], entities: {} };
+  }
+
   // NOTE: We no longer merge archiveOld into archiveYoung during repair.
   // The dual-archive architecture keeps them separate for proper age-based archiving.
 
