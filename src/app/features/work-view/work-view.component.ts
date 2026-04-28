@@ -505,14 +505,8 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     );
   }
 
-  // The sections-wrapper is part of the cdkDropListGroup, so without this
-  // predicate a task drag could drop into the section-reorder list and
-  // dropSection would interpret a Task as a Section, corrupting ordering.
-  // Section drags carry the Section via [cdkDragData]; tasks carry a Task.
-  // Discriminate on `contextType` (only present on Section) rather than
-  // `taskIds` — a Task could legitimately gain a `taskIds` field in the
-  // future (e.g. checklist tasks), but `contextType` is section-exclusive.
-  // Called on every dragOver tick — keep it allocation-free.
+  // Reject task drags into the section-reorder list (cdkDropListGroup
+  // shares targets). `contextType` is section-exclusive.
   acceptSectionDragOnly = (drag: CdkDrag): boolean => {
     const data = drag.data as Section | undefined;
     return !!data && 'contextType' in data;

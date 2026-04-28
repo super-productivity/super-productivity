@@ -2,7 +2,7 @@ import { createReducer, on } from '@ngrx/store';
 import { createEntityAdapter, EntityAdapter, Update } from '@ngrx/entity';
 import * as SectionActions from './section.actions';
 import { Section, SectionState } from '../section.model';
-import { hasTitleChange, sanitizeSectionTitle } from '../section.util';
+import { sanitizeSectionTitle } from '../section.util';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 
@@ -42,11 +42,9 @@ export const sectionReducer = createReducer(
   on(SectionActions.deleteSection, (state, { id }) => adapter.removeOne(id, state)),
 
   on(SectionActions.updateSection, (state, { section }) => {
-    // Sanitize on key-presence, not type — `{ title: null }` from a
-    // malformed peer must NOT slip through (it would corrupt the
-    // entity's `title: string` contract). `sanitizeSectionTitle`
-    // coerces non-string values to `''`.
-    if (!hasTitleChange(section.changes)) {
+    // Sanitize when title key is present (regardless of value type) so
+    // a malformed peer's `{ title: null }` cannot bypass the cap.
+    if (!Object.hasOwn(section.changes, 'title')) {
       return adapter.updateOne(section, state);
     }
     return adapter.updateOne(

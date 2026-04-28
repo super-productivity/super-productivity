@@ -14,17 +14,9 @@ import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 
-/**
- * IMPORTANT — Phase 3.5 placement is load-bearing.
- *
- * This meta-reducer reads `state.task.entities[id]` (for projectId,
- * tagIds, subTaskIds) BEFORE `taskSharedCrudMetaReducer` strips deleted
- * tasks or applies updates. If anyone moves it below Phase 4, the
- * `handleMoveToOtherProject` and `handleTaskTagsChange` handlers will
- * silently no-op because state already reflects the new values.
- *
- * The registry's validateMetaReducerOrdering() pins the position.
- */
+// Must run before taskSharedCrudMetaReducer — handlers read pre-update
+// task state to compute cleanups. Position pinned by
+// `validateMetaReducerOrdering()` in meta-reducer-registry.ts.
 interface ExtendedState extends RootState {
   [SECTION_FEATURE_NAME]: SectionState;
 }
@@ -391,18 +383,13 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     return handleTaskRemoval(state, taskIds);
   },
   [TaskSharedActions.moveToArchive.type]: (state, action) => {
-    // Archived tasks are pulled out of the live task store, so any
-    // section that referenced them would otherwise hold a stale id
-    // until a dataRepair pass cleared it. Restore is intentionally NOT
-    // a counterpart action: the task comes back without a section, the
-    // user re-categorizes manually (mirrors how restore drops tagIds
-    // for tags that no longer exist).
+    // Strip archived task ids from sections. Restore is intentionally
+    // NOT a counterpart — the task comes back without a section, mirror
+    // of how restore drops missing tagIds.
     //
-    // Union payload-subTasks with state-subTasks so cleanup is robust
-    // under both threat models: (a) replay where the parent entity is
-    // already gone from state (payload carries the tree), and (b)
-    // callers who dispatch with an empty `subTasks` array (state
-    // lookup is the only signal).
+    // Union payload-subTasks with state-derived subtasks: payload covers
+    // the replay-with-missing-state case; state covers callers who pass
+    // an empty `subTasks` array.
     const { tasks } = action as ReturnType<typeof TaskSharedActions.moveToArchive>;
     const idSet = new Set<string>();
     for (const t of tasks) {

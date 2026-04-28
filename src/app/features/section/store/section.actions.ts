@@ -58,26 +58,14 @@ export const updateSectionOrder = createAction(
 );
 
 /**
- * Atomically place `taskId` into `sectionId` at the position implied by
- * `afterTaskId`. `sourceSectionId` is required so replay is
- * deterministic from the payload alone:
- * - non-null and different from `sectionId` → strip from source, meta
- *   sets `entityIds: [src, dest]` so vector-clock conflict detection
- *   covers both sections.
- * - equal to `sectionId` (intra-section reorder) or `null` (just-created
- *   task / not in any section) → no strip, meta is single-entity.
+ * Atomically place `taskId` into `sectionId` at `afterTaskId`.
+ * `sourceSectionId` is part of the payload so replay is deterministic:
+ * different from `sectionId` → strip from source (meta covers both via
+ * `entityIds`); equal or `null` → single-entity update on `sectionId`.
  *
- * RESIDUAL: under concurrent moves of the same task to different
- * sections across devices, the task can end up in multiple sections
- * after sync because each per-section update applies independently.
- *
- * FOLLOW-UP (architecture): model membership as `task.sectionId`
- * (single field on the Task entity) instead of `Section.taskIds`. That
- * collapses cross-section moves into a single atomic update on Task,
- * eliminates this concurrent-duplication bug, and removes most of
- * `section-shared.reducer.ts` plus `_repairSections` taskIds-cleanup.
- * `Section.taskIds` would survive only as stored ordering. Out of
- * scope for this PR — needs a migration path for existing data.
+ * FOLLOW-UP: a `task.sectionId` membership model would atomize cross-
+ * section moves and obviate most of section-shared.reducer.ts. Needs a
+ * migration path for existing data — out of scope.
  */
 export const addTaskToSection = createAction(
   '[Section] Add Task to Section',

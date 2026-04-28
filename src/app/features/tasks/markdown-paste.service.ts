@@ -17,7 +17,6 @@ import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { Task } from './task.model';
 import { SectionService } from '../section/section.service';
 import { WorkContextService } from '../work-context/work-context.service';
-import type { MarkdownWithSections } from '../../util/parse-markdown-tasks';
 
 // Anchored at line start: ATX header (#…) or list-item marker (-/* with
 // optional checkbox). One-shot regex that bails before invoking the full
@@ -34,22 +33,6 @@ export class MarkdownPasteService {
   private _globalConfigService = inject(GlobalConfigService);
   private _sectionService = inject(SectionService);
   private _workContextService = inject(WorkContextService);
-
-  // Single-slot memo for the sectioned parse result. `isMarkdownTaskList`
-  // runs first (paste-gate) and `handleMarkdownPaste` runs immediately
-  // after with the same string — without this, the parser ran twice.
-  // Cleared after consumption so a large clipboard payload (up to ~800KB)
-  // does not stay resident for the rest of the session.
-  private _lastSectionInput: string | null = null;
-  private _lastSectionResult: MarkdownWithSections | null = null;
-
-  private _parseSectionsCached(text: string): MarkdownWithSections | null {
-    if (text !== this._lastSectionInput) {
-      this._lastSectionInput = text;
-      this._lastSectionResult = parseMarkdownWithSections(text);
-    }
-    return this._lastSectionResult;
-  }
 
   async handleMarkdownPaste(
     pastedText: string,
@@ -96,11 +79,10 @@ export class MarkdownPasteService {
 
     // Try to parse with sections first (for markdown with H1 headers)
     if (!selectedTaskId) {
-      const sectionsData = this._parseSectionsCached(pastedText);
+      const sectionsData = parseMarkdownWithSections(pastedText);
       if (sectionsData) {
-        // Confirm with user
         const totalTasks = sectionsData.sections.reduce(
-          (sum: number, section) => sum + section.tasks.length,
+          (sum, section) => sum + section.tasks.length,
           0,
         );
         const dialogRef = this._matDialog.open(DialogConfirmComponent, {
@@ -117,10 +99,6 @@ export class MarkdownPasteService {
         });
 
         const isConfirmed = await dialogRef.afterClosed().toPromise();
-        // Drop the cached parse result regardless of confirmation —
-        // the memo is only useful for the gate→handler back-to-back call.
-        this._lastSectionInput = null;
-        this._lastSectionResult = null;
         if (!isConfirmed) {
           return;
         }
@@ -312,10 +290,9 @@ export class MarkdownPasteService {
     // otherwise scan the whole input even for 800KB of prose.
     if (!MARKDOWN_TASK_OR_HEADER_RE.test(text)) return false;
 
-    // Sectioned (H1+) markdown — parseMarkdownWithSections already
-    // returns null for header-less input. Result is memoised so the
-    // immediately-following handleMarkdownPaste reuses it.
-    if (this._parseSectionsCached(text)) return true;
+    // Sectioned (H1+) markdown — parseMarkdownWithSections returns null
+    // for header-less input.
+    if (parseMarkdownWithSections(text)) return true;
 
     // Flat task list fallback
     const parsedTasks = parseMarkdownTasks(text);
