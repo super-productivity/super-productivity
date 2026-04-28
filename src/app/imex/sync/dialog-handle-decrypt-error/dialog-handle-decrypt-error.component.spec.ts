@@ -68,7 +68,20 @@ describe('DialogHandleDecryptErrorComponent', () => {
   });
 
   describe('updatePWAndForceUpload()', () => {
-    it('should update password, clear field, and close with isForceUpload', async () => {
+    let originalConfirm: typeof window.confirm;
+    let confirmReturn: boolean;
+
+    beforeEach(() => {
+      originalConfirm = window.confirm;
+      confirmReturn = true;
+      window.confirm = (() => confirmReturn) as typeof window.confirm;
+    });
+
+    afterEach(() => {
+      window.confirm = originalConfirm;
+    });
+
+    it('should update password, clear field, and close with isForceUpload when confirmed', async () => {
       component.passwordVal = 'new-password';
       mockSyncConfigService.updateEncryptionPassword.and.resolveTo();
 
@@ -79,6 +92,17 @@ describe('DialogHandleDecryptErrorComponent', () => {
       );
       expect(component.passwordVal).toBe('');
       expect(mockDialogRef.close).toHaveBeenCalledWith({ isForceUpload: true });
+    });
+
+    it('should abort without changes when user cancels confirmation', async () => {
+      confirmReturn = false;
+      component.passwordVal = 'new-password';
+
+      await component.updatePWAndForceUpload();
+
+      expect(mockSyncConfigService.updateEncryptionPassword).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+      expect(component.passwordVal).toBe('new-password');
     });
 
     it('should show error snack and not close on failure', async () => {
