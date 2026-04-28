@@ -285,6 +285,13 @@ finish-day-btn,
   margin-bottom: var(--s3);
 }
 
+.no-section-empty-hint {
+  color: var(--text-color-secondary);
+  font-style: italic;
+  margin: var(--s) 0;
+  text-align: center;
+}
+
 // Section header layout: title left, actions right.
 .section-container {
   ::ng-deep .collapsible-header {

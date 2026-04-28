@@ -49,7 +49,7 @@
   </span>
 </button>
 
-@if (isForProject || contextId !== TODAY_TAG_ID) {
+@if (isForProject) {
   <button
     (click)="addSection()"
     mat-menu-item

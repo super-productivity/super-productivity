@@ -143,11 +143,17 @@
               (cdkDropListDropped)="dropSection($event)"
             >
               <div class="no-section">
-                <task-list
-                  [tasks]="undoneTasksBySection().noSection"
-                  [listId]="'PARENT'"
-                  [listModelId]="'UNDONE'"
-                ></task-list>
+                @if (undoneTasksBySection().noSection.length) {
+                  <task-list
+                    [tasks]="undoneTasksBySection().noSection"
+                    [listId]="'PARENT'"
+                    [listModelId]="'UNDONE'"
+                  ></task-list>
+                } @else {
+                  <p class="no-section-empty-hint">
+                    {{ T.WW.NO_TASKS_IN_MAIN_LIST | translate }}
+                  </p>
+                }
               </div>
               @for (section of sections(); track section.id) {
                 <div
