@@ -49,15 +49,13 @@
   </span>
 </button>
 
-@if (isForProject) {
-  <button
-    (click)="addSection()"
-    mat-menu-item
-  >
-    <mat-icon>list</mat-icon>
-    <span class="text">{{ T.MH.ADD_SECTION | translate }}</span>
-  </button>
-}
+<button
+  (click)="addSection()"
+  mat-menu-item
+>
+  <mat-icon>list</mat-icon>
+  <span class="text">{{ T.MH.ADD_SECTION | translate }}</span>
+</button>
 
 <button
   (click)="openSettings()"
