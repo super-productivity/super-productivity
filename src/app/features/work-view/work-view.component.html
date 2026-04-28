@@ -76,7 +76,10 @@
         }
       </header>
 
-      <div class="task-list-wrapper">
+      <div
+        class="task-list-wrapper"
+        (contextmenu)="onBgContextMenu($event)"
+      >
         @if (!(workContextService.isHasTasksToWorkOn$ | async)) {
           <div
             @expandFade
@@ -399,5 +402,25 @@
         }
       </div>
     }
+
+    <!-- Background right-click menu: hidden trigger positioned at the
+         cursor by `onBgContextMenu`. Single source of truth for the
+         work-view-wide right-click action. -->
+    <div
+      #bgCtxMenuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="bgContextMenu"
+      style="visibility: hidden; position: fixed; height: 0; width: 0"
+      [style.left.px]="bgContextMenuX()"
+      [style.top.px]="bgContextMenuY()"
+    ></div>
+    <mat-menu #bgContextMenu="matMenu">
+      <button
+        mat-menu-item
+        (click)="addSection()"
+      >
+        <mat-icon>list</mat-icon>
+        <span>{{ T.MH.ADD_SECTION | translate }}</span>
+      </button>
+    </mat-menu>
   </div>
 }

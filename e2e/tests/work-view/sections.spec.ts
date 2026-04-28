@@ -113,6 +113,28 @@ test.describe('Sections', () => {
     await expect(sectionByTitle(page, 'My Section')).toBeVisible();
   });
 
+  test('creates a section via right-click on the work-view background', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await setupTestProject(workViewPage, projectPage);
+
+    // Right-click on the empty work-view background (the .task-list-wrapper
+    // outer container). The handler skips interactive elements but accepts
+    // bare clicks on the wrapper itself.
+    const wrapper = page.locator('.task-list-wrapper').first();
+    await wrapper.waitFor({ state: 'visible', timeout: 5000 });
+    await wrapper.click({ button: 'right', position: { x: 50, y: 50 } });
+
+    // The shared bg context menu has only one item — "Add Section" —
+    // matching the same i18n key used by the side-nav menu.
+    await page.getByRole('menuitem', { name: 'Add Section' }).click();
+    await submitPromptDialog(page, 'Right-Click Section');
+
+    await expect(sectionByTitle(page, 'Right-Click Section')).toBeVisible();
+  });
+
   test('rejects whitespace-only section titles', async ({
     page,
     workViewPage,
