@@ -107,8 +107,9 @@ describe('sectionReducer', () => {
       const start = stateWithSections([makeSection({ id: 's1', title: 'old' })]);
       const nextNull = sectionReducer(
         start,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        updateSection({ section: { id: 's1', changes: { title: null as any } } }),
+        updateSection({
+          section: { id: 's1', changes: { title: null as unknown as string } },
+        }),
       );
       expect(nextNull.entities['s1']?.title).toBe('');
     });
@@ -137,8 +138,7 @@ describe('sectionReducer', () => {
           addSection({
             section: makeSection({
               id: 'new',
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              title: undefined as any,
+              title: undefined as unknown as string,
               taskIds: [],
             }),
           }),
