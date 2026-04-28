@@ -1,11 +1,14 @@
 package com.superproductivity.superproductivity.webview
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.superproductivity.superproductivity.FullscreenActivity
 import com.superproductivity.superproductivity.R
 
 class WebViewBlockActivity : AppCompatActivity() {
@@ -13,6 +16,11 @@ class WebViewBlockActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_webview_block)
+
+        // Defense-in-depth against tapjacking: the override below is the only path to
+        // permanently disable the WebView block, so we drop touches when the window
+        // is partially obscured by an overlay app.
+        findViewById<View>(android.R.id.content).filterTouchesWhenObscured = true
 
         val minVersion = intent.getIntExtra(EXTRA_MIN_VERSION, WebViewCompatibilityChecker.MIN_CHROMIUM_VERSION)
         val detectedVersion = intent.getIntExtra(EXTRA_VERSION_MAJOR, -1)
@@ -44,6 +52,36 @@ class WebViewBlockActivity : AppCompatActivity() {
         findViewById<Button>(R.id.webview_block_close).setOnClickListener {
             finishAffinity()
         }
+
+        findViewById<Button>(R.id.webview_block_try_anyway).setOnClickListener {
+            showOverrideConfirmation(minVersion)
+        }
+    }
+
+    private fun showOverrideConfirmation(minVersion: Int) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.webview_override_warning_title)
+            .setMessage(getString(R.string.webview_override_warning_message, minVersion))
+            .setPositiveButton(R.string.webview_override_warning_continue) { _, _ ->
+                WebViewCompatibilityChecker.setBlockOverride(this, true)
+                relaunchApp()
+            }
+            .setNegativeButton(R.string.webview_override_warning_cancel, null)
+            .setCancelable(true)
+            .show()
+        dialog.window?.decorView?.filterTouchesWhenObscured = true
+    }
+
+    private fun relaunchApp() {
+        // Always launch FullscreenActivity (the manifest's MAIN/LAUNCHER) explicitly
+        // rather than via PackageManager.getLaunchIntentForPackage, which can return
+        // null in stripped Android variants and would leave the user with an empty
+        // screen after tapping confirm. FullscreenActivity itself routes via
+        // LaunchDecider to CapacitorMainActivity when appropriate.
+        val launchIntent = Intent(this, FullscreenActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        startActivity(launchIntent)
+        finish()
     }
 
     companion object {
