@@ -3,12 +3,10 @@ import { Store } from '@ngrx/store';
 import { of, Observable } from 'rxjs';
 import { FocusModeOverlayComponent } from './focus-mode-overlay.component';
 import { TaskService } from '../../tasks/task.service';
-import { BannerService } from '../../../core/banner/banner.service';
 import { FocusModeService } from '../focus-mode.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { FocusScreen, FocusModeMode } from '../focus-mode.model';
 import { cancelFocusSession, hideFocusOverlay } from '../store/focus-mode.actions';
-import { BannerId } from '../../../core/banner/banner.model';
 import {
   EnvironmentInjector,
   runInInjectionContext,
@@ -19,10 +17,10 @@ import {
 describe('FocusModeOverlayComponent', () => {
   let component: FocusModeOverlayComponent;
   let mockStore: jasmine.SpyObj<Store>;
-  let mockBannerService: jasmine.SpyObj<BannerService>;
   let mockFocusModeService: {
     currentScreen: Signal<FocusScreen>;
     isSessionRunning: Signal<boolean>;
+    isSessionPaused: Signal<boolean>;
     isBreakActive: Signal<boolean>;
     mode: Signal<FocusModeMode>;
     currentCycle: Signal<number>;
@@ -34,12 +32,12 @@ describe('FocusModeOverlayComponent', () => {
   beforeEach(() => {
     mockStore = jasmine.createSpyObj('Store', ['dispatch', 'select']);
     const mockTaskService = jasmine.createSpyObj('TaskService', ['add']);
-    mockBannerService = jasmine.createSpyObj('BannerService', ['open', 'dismiss']);
     const mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', ['cfg']);
 
     mockFocusModeService = {
       currentScreen: signal(FocusScreen.Main),
       isSessionRunning: signal(false),
+      isSessionPaused: signal(false),
       isBreakActive: signal(false),
       mode: signal(FocusModeMode.Pomodoro),
       currentCycle: signal(1),
@@ -53,7 +51,6 @@ describe('FocusModeOverlayComponent', () => {
       providers: [
         { provide: Store, useValue: mockStore },
         { provide: TaskService, useValue: mockTaskService },
-        { provide: BannerService, useValue: mockBannerService },
         { provide: FocusModeService, useValue: mockFocusModeService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
       ],
@@ -73,10 +70,6 @@ describe('FocusModeOverlayComponent', () => {
   });
 
   describe('initialization', () => {
-    it('should dismiss focus mode banner on construction', () => {
-      expect(mockBannerService.dismiss).toHaveBeenCalledWith(BannerId.FocusMode);
-    });
-
     it('should expose FocusScreen enum', () => {
       expect(component.FocusScreen).toBe(FocusScreen);
     });
@@ -99,36 +92,21 @@ describe('FocusModeOverlayComponent', () => {
   });
 
   describe('closeOverlay', () => {
+    // The header focus-button indicator now takes over once the overlay is
+    // hidden mid-session — closeOverlay just dispatches hideFocusOverlay()
+    // and the indicator surfaces automatically via isOverlayShown flipping.
     it('should dispatch hideFocusOverlay action', () => {
       component.closeOverlay();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(hideFocusOverlay());
     });
 
-    it('should open banner when session is running', () => {
+    it('should dispatch hideFocusOverlay regardless of session state', () => {
       (mockFocusModeService.isSessionRunning as any).set(true);
 
       component.closeOverlay();
 
-      expect(mockBannerService.open).toHaveBeenCalled();
       expect(mockStore.dispatch).toHaveBeenCalledWith(hideFocusOverlay());
-    });
-
-    it('should open banner when break is active', () => {
-      (mockFocusModeService.isBreakActive as any).set(true);
-
-      component.closeOverlay();
-
-      expect(mockBannerService.open).toHaveBeenCalled();
-    });
-
-    it('should not open banner when no session or break is active', () => {
-      (mockFocusModeService.isSessionRunning as any).set(false);
-      (mockFocusModeService.isBreakActive as any).set(false);
-
-      component.closeOverlay();
-
-      expect(mockBannerService.open).not.toHaveBeenCalled();
     });
   });
 

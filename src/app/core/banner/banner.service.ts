@@ -78,7 +78,7 @@ export class BannerService {
     //
     // setTimeout(() => {
     //   this.open({
-    //     id: BannerId.FocusMode,
+    //     id: BannerId.TakeABreak,
     //     type: 'ERROR',
     //     ico: 'error',
     //     msg: 'ERROR: ' + 'Something broke',

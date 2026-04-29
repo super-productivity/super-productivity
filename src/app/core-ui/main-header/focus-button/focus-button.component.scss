@@ -13,6 +13,12 @@
   align-items: center;
   height: 100%;
 }
+
 .focus-label {
   @include badge.number-badge;
+}
+
+.focus-cycle {
+  opacity: 0.7;
+  margin-right: 4px;
 }

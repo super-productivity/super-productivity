@@ -7,8 +7,6 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { FocusModeService } from '../../../features/focus-mode/focus-mode.service';
 import { MetricService } from '../../../features/metric/metric.service';
-import { Store } from '@ngrx/store';
-import { showFocusOverlay } from '../../../features/focus-mode/store/focus-mode.actions';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
 import { DateService } from '../../../core/date/date.service';
@@ -35,7 +33,6 @@ import { first } from 'rxjs/operators';
   ],
 })
 export class FocusButtonComponent {
-  private readonly _store = inject(Store);
   private readonly _metricService = inject(MetricService);
   private readonly _configService = inject(GlobalConfigService);
   private readonly _dateService = inject(DateService);
@@ -52,6 +49,7 @@ export class FocusButtonComponent {
   readonly isBreakActive = this.focusModeService.isBreakActive;
   readonly progress = this.focusModeService.progress;
   readonly mode = this.focusModeService.mode;
+  readonly currentCycle = this.focusModeService.currentCycle;
   readonly FocusModeMode = FocusModeMode;
 
   readonly focusSummaryToday = computed(() =>
@@ -103,8 +101,15 @@ export class FocusButtonComponent {
     return typeof elapsed === 'number' ? Math.max(0, elapsed) : 0;
   });
 
+  /** Cycle label (Pomodoro only) — break shows the cycle that just finished. */
+  readonly cycleLabel = computed(() => {
+    if (this.mode() !== FocusModeMode.Pomodoro) return null;
+    const cycle = this.currentCycle() || 1;
+    return this.isBreakActive() ? Math.max(1, cycle - 1) : cycle;
+  });
+
   enableFocusMode(): void {
-    this._store.dispatch(showFocusOverlay());
+    this.focusModeService.openOverlay();
   }
 
   openFocusSessionDialog(): void {
