@@ -20,6 +20,12 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
   private readonly _caldavClientService = inject(CaldavClientService);
   private readonly _caldavSyncAdapter = inject(CaldavSyncAdapterService);
 
+  // Short-lived cache so that getNewIssuesToAddToBacklog and all getSubTasks
+  // calls within the same poll cycle share a single REPORT request instead of
+  // issuing one per parent task (N+1 problem).
+  private _openTasksCache = new Map<string, { tasks: CaldavIssue[]; ts: number }>();
+  private readonly _OPEN_TASKS_CACHE_TTL_MS = 60_000;
+
   readonly providerKey = 'CALDAV' as const;
   readonly pollInterval: number = CALDAV_POLL_INTERVAL;
 
@@ -145,18 +151,18 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
 
   async getNewIssuesToAddToBacklog(
     issueProviderId: string,
-    _allExistingIssueIds: number[] | string[],
+    allExistingIssueIds: number[] | string[],
   ): Promise<CaldavIssueReduced[]> {
     const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
-    const tasks = await firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
+    const tasks = await this._getOpenTasksCached(issueProviderId, cfg);
 
     if (cfg.isAddSubTasks) {
-      const existingIds = _allExistingIssueIds as string[];
+      const existingIds = new Set(allExistingIssueIds as string[]);
       // Exclude child tasks whose parent is NOT yet in SP: they will be fetched via
       // getSubTasks() when the parent is imported, avoiding a concurrent-add race.
       // Child tasks whose parent already exists in SP are kept so _tryAddSubTask()
       // can attach them to the parent on this poll cycle.
-      return tasks.filter((t) => !t.related_to || existingIds.includes(t.related_to));
+      return tasks.filter((t) => !t.related_to || existingIds.has(t.related_to));
     }
 
     return tasks;
@@ -172,8 +178,24 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
       return [];
     }
 
-    const allTasks = await firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
-    return allTasks.filter((t) => t.related_to === issueId.toString());
+    const parentId = issueId.toString();
+    const allTasks = await this._getOpenTasksCached(issueProviderId, cfg);
+    // Guard against self-referential VTODOs (RELATED-TO:<own-uid>) which would
+    // cause a task to be added as its own sub-task and corrupt the store.
+    return allTasks.filter((t) => t.related_to === parentId && t.id !== parentId);
+  }
+
+  private async _getOpenTasksCached(
+    issueProviderId: string,
+    cfg: CaldavCfg,
+  ): Promise<CaldavIssue[]> {
+    const cached = this._openTasksCache.get(issueProviderId);
+    if (cached && Date.now() - cached.ts < this._OPEN_TASKS_CACHE_TTL_MS) {
+      return cached.tasks;
+    }
+    const tasks = await firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
+    this._openTasksCache.set(issueProviderId, { tasks, ts: Date.now() });
+    return tasks;
   }
 
   protected _apiGetById$(

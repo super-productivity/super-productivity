@@ -5,7 +5,7 @@ import { CaldavClientService } from './caldav-client.service';
 import { CaldavSyncAdapterService } from './caldav-sync-adapter.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { CaldavIssue, CaldavIssueReduced } from './caldav-issue.model';
-import { CaldavCfg } from './caldav.model';
+import { IssueProviderCaldav } from '../../issue.model';
 
 const BASE_ISSUE: CaldavIssue = {
   id: 'uid-1',
@@ -16,7 +16,9 @@ const BASE_ISSUE: CaldavIssue = {
   etag_hash: 42,
 };
 
-const BASE_CFG: CaldavCfg = {
+const BASE_CFG: IssueProviderCaldav = {
+  id: 'test-provider',
+  issueProviderKey: 'CALDAV',
   caldavUrl: 'https://cal.example.com',
   resourceName: 'tasks',
   username: 'user',
@@ -158,11 +160,9 @@ describe('CaldavCommonInterfacesService', () => {
 
     const setupTasks = (
       tasks: CaldavIssueReduced[],
-      cfg: Partial<CaldavCfg> = {},
+      cfg: Partial<IssueProviderCaldav> = {},
     ): void => {
-      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
-        of({ ...BASE_CFG, ...cfg } as any),
-      );
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of({ ...BASE_CFG, ...cfg }));
       caldavClientSpy.getOpenTasks$.and.returnValue(of(tasks));
     };
 
@@ -227,11 +227,9 @@ describe('CaldavCommonInterfacesService', () => {
 
     const setupTasks = (
       tasks: CaldavIssueReduced[],
-      cfg: Partial<CaldavCfg> = {},
+      cfg: Partial<IssueProviderCaldav> = {},
     ): void => {
-      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
-        of({ ...BASE_CFG, ...cfg } as any),
-      );
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of({ ...BASE_CFG, ...cfg }));
       caldavClientSpy.getOpenTasks$.and.returnValue(of(tasks));
     };
 
