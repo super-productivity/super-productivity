@@ -39,6 +39,7 @@ const ENTITY_STATE_KEYS: (keyof AppDataCompleteLegacy)[] = [
   'metric',
   'task',
   'taskRepeatCfg',
+  'section',
 ];
 
 export const dataRepair = (

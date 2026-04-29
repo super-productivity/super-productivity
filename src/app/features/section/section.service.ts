@@ -31,12 +31,10 @@ export class SectionService {
   }
 
   /**
-   * Dispatches `addSection` and returns the new id synchronously so
-   * callers (e.g. markdown paste) can place tasks into the just-created
-   * section without awaiting.
-   *
    * Sections are only valid for projects and the singleton TODAY tag;
-   * other tags are silently rejected.
+   * other tags are silently rejected. Returns the new id synchronously
+   * so callers can wire tasks into the just-created section without
+   * awaiting.
    */
   addSection(
     title: string,
@@ -63,12 +61,7 @@ export class SectionService {
     this._store.dispatch(deleteSection({ id }));
   }
 
-  updateSection(id: string, sectionChanges: Partial<Section>): void {
-    // The reducer is the authoritative line of defense; this is the
-    // local-dispatch convenience layer.
-    const changes = Object.hasOwn(sectionChanges, 'title')
-      ? { ...sectionChanges, title: sanitizeSectionTitle(sectionChanges.title) }
-      : sectionChanges;
+  updateSection(id: string, changes: Partial<Section>): void {
     this._store.dispatch(updateSection({ section: { id, changes } }));
   }
 
