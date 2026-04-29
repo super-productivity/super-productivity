@@ -456,6 +456,5 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
 
       flush();
     }));
-
   });
 });
