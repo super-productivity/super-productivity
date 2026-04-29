@@ -1374,7 +1374,6 @@ const _repairSections = (
   if (!sectionState?.ids?.length) return data;
 
   const validProjectIds = new Set<string>(data.project.ids as string[]);
-  const validTagIds = new Set<string>(data.tag.ids as string[]);
   const validTaskIds = new Set<string>(data.task.ids as string[]);
 
   const keptIds: string[] = [];
@@ -1386,12 +1385,14 @@ const _repairSections = (
     const section = sectionState.entities[sid];
     if (!section) continue;
 
-    // contextType === TAG with contextId === TODAY is allowed even though
-    // TODAY isn't in tag.ids (virtual tag).
+    // Sections are only valid in PROJECT contexts (with a live projectId)
+    // or the singleton TODAY tag. Custom-tag sections are rejected at
+    // dispatch boundaries; surviving ones in stored data are dropped.
+    const isValidProject =
+      section.contextType === 'PROJECT' && validProjectIds.has(section.contextId);
     const isTodayTag =
       section.contextType === 'TAG' && section.contextId === TODAY_TAG.id;
-    const ownerSet = section.contextType === 'PROJECT' ? validProjectIds : validTagIds;
-    if (!isTodayTag && !ownerSet.has(section.contextId)) {
+    if (!isValidProject && !isTodayTag) {
       droppedSections++;
       continue;
     }

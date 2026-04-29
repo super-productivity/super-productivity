@@ -1,14 +1,15 @@
 import { Action, ActionReducer } from '@ngrx/store';
 import { sectionSharedMetaReducer } from './section-shared.reducer';
 import { TaskSharedActions } from '../task-shared.actions';
-import { deleteTag, deleteTags } from '../../../features/tag/store/tag.actions';
 import { RootState } from '../../root-state';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
+import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
 import { SECTION_FEATURE_NAME } from '../../../features/section/store/section.reducer';
 import { Section, SectionState } from '../../../features/section/section.model';
 import { createBaseState, createMockTask } from './test-utils';
 import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
 
 const sectionStateOf = (sections: Section[]): SectionState => ({
   ids: sections.map((s) => s.id),
@@ -299,33 +300,6 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sA']?.taskIds).toEqual([]);
     });
 
-    it('removes a tag context section on deleteTag', () => {
-      const state = stateWith({}, [
-        {
-          id: 'sT',
-          contextId: 'tag1',
-          contextType: WorkContextType.TAG,
-          title: 'Tag section',
-          taskIds: [],
-        },
-        {
-          id: 'sP',
-          contextId: 'tag1',
-          contextType: WorkContextType.PROJECT,
-          title: 'Project with same id',
-          taskIds: [],
-        },
-      ]);
-
-      metaReducer(state, deleteTag({ id: 'tag1' } as any));
-
-      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
-        SECTION_FEATURE_NAME
-      ] as SectionState;
-      expect(updated.entities['sT']).toBeUndefined();
-      expect(updated.entities['sP']).toBeDefined();
-    });
-
     it('strips a moved task (and its subtasks) from sections in the old project only', () => {
       const state = stateWith(
         {
@@ -375,84 +349,6 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sTag']?.taskIds).toEqual(['parent']);
     });
 
-    it('strips the task from sections of tags it no longer carries (updateTask)', () => {
-      const state = stateWith({ t1: { tagIds: ['a', 'b', 'c'] } }, [
-        {
-          id: 'sa',
-          contextId: 'a',
-          contextType: WorkContextType.TAG,
-          title: 'tag a',
-          taskIds: ['t1', 'other'],
-        },
-        {
-          id: 'sb',
-          contextId: 'b',
-          contextType: WorkContextType.TAG,
-          title: 'tag b',
-          taskIds: ['t1'],
-        },
-        {
-          id: 'sc',
-          contextId: 'c',
-          contextType: WorkContextType.TAG,
-          title: 'tag c (still on the task)',
-          taskIds: ['t1'],
-        },
-      ]);
-
-      // Drop tags a and b; keep c.
-      metaReducer(
-        state,
-        TaskSharedActions.updateTask({
-          task: { id: 't1', changes: { tagIds: ['c'] } },
-        } as any),
-      );
-
-      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
-        SECTION_FEATURE_NAME
-      ] as SectionState;
-      expect(updated.entities['sa']?.taskIds).toEqual(['other']);
-      expect(updated.entities['sb']?.taskIds).toEqual([]);
-      // Still has tag c, so the section keeps the task.
-      expect(updated.entities['sc']?.taskIds).toEqual(['t1']);
-    });
-
-    it('handles bulk updateTasks with tagIds changes across multiple tasks', () => {
-      const state = stateWith({ t1: { tagIds: ['a', 'b'] }, t2: { tagIds: ['a'] } }, [
-        {
-          id: 'sa',
-          contextId: 'a',
-          contextType: WorkContextType.TAG,
-          title: 'tag a',
-          taskIds: ['t1', 't2'],
-        },
-        {
-          id: 'sb',
-          contextId: 'b',
-          contextType: WorkContextType.TAG,
-          title: 'tag b',
-          taskIds: ['t1'],
-        },
-      ]);
-
-      metaReducer(
-        state,
-        TaskSharedActions.updateTasks({
-          tasks: [
-            { id: 't1', changes: { tagIds: [] } }, // drop a + b
-            { id: 't2', changes: { title: 'rename' } }, // no tagIds change
-          ],
-        } as any),
-      );
-
-      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
-        SECTION_FEATURE_NAME
-      ] as SectionState;
-      // t1 dropped both tags → removed from sa and sb. t2 untouched.
-      expect(updated.entities['sa']?.taskIds).toEqual(['t2']);
-      expect(updated.entities['sb']?.taskIds).toEqual([]);
-    });
-
     it('updateTask without tagIds change is a no-op for sections', () => {
       const state = stateWith({ t1: { tagIds: ['a'] } }, [
         {
@@ -473,77 +369,84 @@ describe('sectionSharedMetaReducer', () => {
 
       expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
     });
-
-    it('removes tag-context sections in bulk on deleteTags', () => {
-      const state = stateWith({}, [
-        {
-          id: 's1',
-          contextId: 'a',
-          contextType: WorkContextType.TAG,
-          title: 'a',
-          taskIds: [],
-        },
-        {
-          id: 's2',
-          contextId: 'b',
-          contextType: WorkContextType.TAG,
-          title: 'b',
-          taskIds: [],
-        },
-        {
-          id: 's3',
-          contextId: 'c',
-          contextType: WorkContextType.TAG,
-          title: 'c',
-          taskIds: [],
-        },
-      ]);
-
-      metaReducer(state, deleteTags({ ids: ['a', 'c'] } as any));
-
-      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
-        SECTION_FEATURE_NAME
-      ] as SectionState;
-      expect(updated.entities['s1']).toBeUndefined();
-      expect(updated.entities['s2']).toBeDefined();
-      expect(updated.entities['s3']).toBeUndefined();
-    });
   });
 
-  describe('TODAY-tag removal cleanup', () => {
-    it('strips taskIds from TODAY-context sections on removeTasksFromTodayTag', () => {
-      const state = stateWith({ t1: {}, t2: {}, t3: {} }, [
-        {
-          id: 'today-sec',
-          contextId: 'TODAY',
-          contextType: WorkContextType.TAG,
-          title: 'Morning',
-          taskIds: ['t1', 't2', 't3'],
+  describe('TODAY-tag removal cleanup (diff-based)', () => {
+    // The metaReducer compares pre/post TODAY_TAG.taskIds and strips any
+    // ids that left TODAY from TODAY-context sections. We simulate the
+    // tag reducer's effect by having the mock return a state where
+    // TODAY's taskIds shrank.
+    const stateWithTodayTaskIds = (
+      todayTaskIds: string[],
+      tasks: Record<string, Partial<Task>>,
+      sections: Section[],
+    ): RootState & { [SECTION_FEATURE_NAME]: SectionState } => {
+      const base = stateWith(tasks, sections);
+      return {
+        ...base,
+        [TAG_FEATURE_NAME]: {
+          ...base[TAG_FEATURE_NAME],
+          entities: {
+            ...base[TAG_FEATURE_NAME].entities,
+            [TODAY_TAG.id]: {
+              ...base[TAG_FEATURE_NAME].entities[TODAY_TAG.id],
+              taskIds: todayTaskIds,
+            },
+          },
         },
-        {
-          id: 'tag-sec',
-          contextId: 'work',
-          contextType: WorkContextType.TAG,
-          title: 'Work',
-          taskIds: ['t1', 't2'],
-        },
-      ]);
+      } as any;
+    };
 
-      metaReducer(
-        state,
-        TaskSharedActions.removeTasksFromTodayTag({ taskIds: ['t1', 't3'] }) as Action,
+    const mockTagReducerRemovesFromToday = (remainingTodayTaskIds: string[]): void => {
+      mockReducer.and.callFake((s: any) => ({
+        ...s,
+        [TAG_FEATURE_NAME]: {
+          ...s[TAG_FEATURE_NAME],
+          entities: {
+            ...s[TAG_FEATURE_NAME].entities,
+            [TODAY_TAG.id]: {
+              ...s[TAG_FEATURE_NAME].entities[TODAY_TAG.id],
+              taskIds: remainingTodayTaskIds,
+            },
+          },
+        },
+      }));
+    };
+
+    it('strips taskIds that left TODAY from TODAY-context sections, leaving non-TODAY contexts alone', () => {
+      const state = stateWithTodayTaskIds(
+        ['t1', 't2', 't3'],
+        { t1: {}, t2: {}, t3: {} },
+        [
+          {
+            id: 'today-sec',
+            contextId: TODAY_TAG.id,
+            contextType: WorkContextType.TAG,
+            title: 'Morning',
+            taskIds: ['t1', 't2', 't3'],
+          },
+          {
+            id: 'project-sec',
+            contextId: 'p1',
+            contextType: WorkContextType.PROJECT,
+            title: 'Project',
+            taskIds: ['t1', 't2'],
+          },
+        ],
       );
+      mockTagReducerRemovesFromToday(['t2']);
 
-      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
-        SECTION_FEATURE_NAME
-      ] as SectionState;
+      const result = metaReducer(state, { type: '[Tag] simulated removal' } as Action);
+
+      const updated = (result as any)[SECTION_FEATURE_NAME] as SectionState;
       expect(updated.entities['today-sec']?.taskIds).toEqual(['t2']);
-      // Other tag contexts must NOT be touched.
-      expect(updated.entities['tag-sec']?.taskIds).toEqual(['t1', 't2']);
+      // Project-context sections are intentionally not touched.
+      expect(updated.entities['project-sec']?.taskIds).toEqual(['t1', 't2']);
     });
 
     it('cascades subtasks of a removed parent on TODAY removal', () => {
-      const state = stateWith(
+      const state = stateWithTodayTaskIds(
+        ['parent', 'other'],
         {
           parent: { subTaskIds: ['sub1', 'sub2'] },
           sub1: { parentId: 'parent' },
@@ -553,45 +456,19 @@ describe('sectionSharedMetaReducer', () => {
         [
           {
             id: 'today-sec',
-            contextId: 'TODAY',
+            contextId: TODAY_TAG.id,
             contextType: WorkContextType.TAG,
             title: 'Morning',
             taskIds: ['parent', 'sub1', 'other'],
           },
         ],
       );
+      mockTagReducerRemovesFromToday(['other']);
 
-      metaReducer(
-        state,
-        TaskSharedActions.removeTasksFromTodayTag({ taskIds: ['parent'] }) as Action,
-      );
+      const result = metaReducer(state, { type: '[Tag] simulated removal' } as Action);
 
-      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
-        SECTION_FEATURE_NAME
-      ] as SectionState;
+      const updated = (result as any)[SECTION_FEATURE_NAME] as SectionState;
       expect(updated.entities['today-sec']?.taskIds).toEqual(['other']);
-    });
-
-    it('also handles localRemoveOverdueFromToday', () => {
-      const state = stateWith({ t1: {}, t2: {} }, [
-        {
-          id: 'today-sec',
-          contextId: 'TODAY',
-          contextType: WorkContextType.TAG,
-          title: 'Morning',
-          taskIds: ['t1', 't2'],
-        },
-      ]);
-
-      metaReducer(
-        state,
-        TaskSharedActions.localRemoveOverdueFromToday({ taskIds: ['t1'] }) as Action,
-      );
-
-      const updated = (mockReducer.calls.mostRecent().args[0] as any)[
-        SECTION_FEATURE_NAME
-      ] as SectionState;
-      expect(updated.entities['today-sec']?.taskIds).toEqual(['t2']);
     });
   });
 });

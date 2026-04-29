@@ -467,6 +467,14 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     ) {
       return;
     }
+    // Sections are only valid for projects and the singleton TODAY tag.
+    // The menu's only action is Add Section, so suppress it elsewhere
+    // (custom tags) rather than opening an empty menu.
+    const ctxType = this.workContextService.activeWorkContextType;
+    const ctxId = this.workContextService.activeWorkContextId;
+    const isProject = ctxType === WorkContextType.PROJECT;
+    const isToday = ctxType === WorkContextType.TAG && ctxId === TODAY_TAG.id;
+    if (!isProject && !isToday) return;
     event.preventDefault();
     event.stopPropagation();
     this.bgContextMenuX.set(event.clientX);

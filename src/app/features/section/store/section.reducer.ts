@@ -2,7 +2,7 @@ import { createReducer, on } from '@ngrx/store';
 import { createEntityAdapter, EntityAdapter, Update } from '@ngrx/entity';
 import * as SectionActions from './section.actions';
 import { Section, SectionState } from '../section.model';
-import { sanitizeSectionTitle } from '../section.util';
+import { isValidSectionContext, sanitizeSectionTitle } from '../section.util';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 
@@ -28,16 +28,21 @@ const removeTaskIdFromSection = (
 export const sectionReducer = createReducer(
   initialSectionState,
 
-  on(SectionActions.addSection, (state, { section }) =>
-    adapter.addOne(
+  on(SectionActions.addSection, (state, { section }) => {
+    // Reject custom-tag sections at the reducer too — defends against
+    // remote ops from a peer running an older client that allowed them.
+    if (!isValidSectionContext(section.contextId, section.contextType)) {
+      return state;
+    }
+    return adapter.addOne(
       {
         ...section,
         title: sanitizeSectionTitle(section.title),
         taskIds: section.taskIds ?? [],
       },
       state,
-    ),
-  ),
+    );
+  }),
 
   on(SectionActions.deleteSection, (state, { id }) => adapter.removeOne(id, state)),
 

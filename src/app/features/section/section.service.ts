@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Section } from './section.model';
-import { sanitizeSectionTitle } from './section.util';
+import { isValidSectionContext, sanitizeSectionTitle } from './section.util';
 import { WorkContextType } from '../work-context/work-context.model';
 import {
   addSection,
@@ -34,8 +34,16 @@ export class SectionService {
    * Dispatches `addSection` and returns the new id synchronously so
    * callers (e.g. markdown paste) can place tasks into the just-created
    * section without awaiting.
+   *
+   * Sections are only valid for projects and the singleton TODAY tag;
+   * other tags are silently rejected.
    */
-  addSection(title: string, contextId: string, contextType: WorkContextType): string {
+  addSection(
+    title: string,
+    contextId: string,
+    contextType: WorkContextType,
+  ): string | null {
+    if (!isValidSectionContext(contextId, contextType)) return null;
     const id = nanoid();
     this._store.dispatch(
       addSection({
