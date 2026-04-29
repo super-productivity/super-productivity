@@ -148,7 +148,32 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     _allExistingIssueIds: number[] | string[],
   ): Promise<CaldavIssueReduced[]> {
     const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
-    return await firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
+    const tasks = await firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
+
+    if (cfg.isAddSubTasks) {
+      const existingIds = _allExistingIssueIds as string[];
+      // Exclude child tasks whose parent is NOT yet in SP: they will be fetched via
+      // getSubTasks() when the parent is imported, avoiding a concurrent-add race.
+      // Child tasks whose parent already exists in SP are kept so _tryAddSubTask()
+      // can attach them to the parent on this poll cycle.
+      return tasks.filter((t) => !t.related_to || existingIds.includes(t.related_to));
+    }
+
+    return tasks;
+  }
+
+  async getSubTasks(
+    issueId: string | number,
+    issueProviderId: string,
+  ): Promise<CaldavIssueReduced[]> {
+    const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
+
+    if (!cfg.isAddSubTasks) {
+      return [];
+    }
+
+    const allTasks = await firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
+    return allTasks.filter((t) => t.related_to === issueId.toString());
   }
 
   protected _apiGetById$(

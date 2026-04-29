@@ -122,6 +122,7 @@
         "CALDAV_RESOURCE": "Der Name der CalDav-Ressource (der Kalender)",
         "CALDAV_URL": "CalDav-URL (die Basis-URL)",
         "CALDAV_USER": "Ihr CalDav-Benutzername",
+        "IS_ADD_SUB_TASKS": "Importiere auch die Unteraufgaben",
         "TWO_WAY_SYNC_BOTH": "Beide (bidirektional)",
         "TWO_WAY_SYNC_NOTES": "Notizen / Beschreibung Synchronisationsrichtung",
         "TWO_WAY_SYNC_OFF": "Aus",
