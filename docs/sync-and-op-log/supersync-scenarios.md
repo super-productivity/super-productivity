@@ -263,7 +263,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **Mirrors the download path (D.1 / D.2):** the gate is unsynced pending changes, not store contents. Prompting on already-synced store data would let an old client roll back the remote import via USE_LOCAL.
 
-**User sees:** Nothing when there are no pending changes. Conflict dialog only when actual unsynced work is at risk.
+**User sees:** Nothing when there are no pending changes — the user-facing warning happened on the originating device (`D_SERVER_MIGRATION_CONFIRM` / encryption flow), see D.1. Conflict dialog only when actual unsynced work is at risk.
 
 ---
 

@@ -43,7 +43,7 @@ flowchart TD
     IS_IMPORT -->|No| CONFLICT_CHK
     IS_IMPORT -->|Yes| ENC_ONLY{Encryption-only change<br/>+ no pending ops?}
     ENC_ONLY -->|Yes| APPLY
-    ENC_ONLY -->|No| IMPORT_CONFLICT{Meaningful pending<br/>ops?<br/>TASK/PROJECT/TAG/NOTE<br/>C/U/D or full-state}
+    ENC_ONLY -->|No| IMPORT_CONFLICT{Meaningful<br/>pending ops?}
     IMPORT_CONFLICT -->|Yes| IMPORT_DLG[ImportConflictDialog:<br/>import reason shown,<br/>Use Server Data recommended]
     IMPORT_CONFLICT -->|No| APPLY_IMPORT[Apply full state replacement<br/>silently — already-synced<br/>store data is not a conflict]
     IMPORT_DLG -->|Use Server| FORCE_DL
@@ -108,6 +108,6 @@ flowchart TD
 
 - The `Enter Password` and `Decrypt Error` dialogs correspond to `DecryptNoPasswordError` and `DecryptError` respectively — they are distinct components with different options.
 - `Encryption-only change` bypass: when an incoming SYNC_IMPORT has `syncImportReason === 'PASSWORD_CHANGED'` and there are no meaningful pending ops, the dialog is skipped (data is identical, only encryption changed).
-- `IMPORT_CONFLICT` gate uses pending ops only, not store contents (`_hasMeaningfulPendingOps()`). Already-synced store data is not a conflict with the incoming SYNC_IMPORT — the user-facing warning happens on the originating device. Including store contents in the gate would let an old client pick `USE_LOCAL` and force-upload its stale pre-import state, rolling back the remote import for everyone.
+- `IMPORT_CONFLICT` gate uses pending ops only, not store contents (`_hasMeaningfulPendingOps()`). "Meaningful" = TASK/PROJECT/TAG/NOTE create/update/delete or full-state ops — config-only ops don't count. Already-synced store data is not a conflict with the incoming SYNC_IMPORT — the user-facing warning happens on the originating device. Including store contents in the gate would let an old client pick `USE_LOCAL` and force-upload its stale pre-import state, rolling back the remote import for everyone.
 - LWW tie-breaking: on equal timestamps, remote wins (server-authoritative). `moveToArchive` operations always win regardless of timestamp.
 - Re-download retry limit: max 3 resolution attempts per entity (`MAX_CONCURRENT_RESOLUTION_ATTEMPTS`); if exceeded, ops are permanently rejected.

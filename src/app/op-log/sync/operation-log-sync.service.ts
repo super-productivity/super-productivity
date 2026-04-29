@@ -154,12 +154,12 @@ export class OperationLogSyncService {
    *
    * @returns true if user has created any tasks, projects (besides INBOX), tags (besides system tags), or notes
    */
-  private _hasMeaningfulLocalData(): boolean {
+  private _hasMeaningfulStoreData(): boolean {
     const snapshot = this.stateSnapshotService.getStateSnapshot();
 
     if (!snapshot) {
       OpLog.warn(
-        'OperationLogSyncService._hasMeaningfulLocalData: Unable to get state snapshot',
+        'OperationLogSyncService._hasMeaningfulStoreData: Unable to get state snapshot',
       );
       return false; // Assume no data rather than blocking sync
     }
@@ -191,15 +191,6 @@ export class OperationLogSyncService {
     }
 
     return false;
-  }
-
-  /**
-   * Checks if there is any meaningful user data — either in the pending ops
-   * or already in the NgRx store. This combines both checks that are always
-   * used together to decide whether a conflict dialog is needed.
-   */
-  private _hasAnyMeaningfulData(pendingOps: OperationLogEntry[]): boolean {
-    return this._hasMeaningfulPendingOps(pendingOps) || this._hasMeaningfulLocalData();
   }
 
   /**
@@ -527,7 +518,8 @@ export class OperationLogSyncService {
         // The store check catches provider-switch scenarios: user switches from
         // SuperSync→Dropbox, only has a config-change op (not "meaningful"), but the
         // store is full of real data that would be overwritten by old Dropbox state.
-        const hasMeaningfulUserData = this._hasAnyMeaningfulData(unsyncedOps);
+        const hasMeaningfulUserData =
+          this._hasMeaningfulPendingOps(unsyncedOps) || this._hasMeaningfulStoreData();
 
         if (hasMeaningfulUserData) {
           // Client has meaningful user data - show conflict dialog
@@ -557,7 +549,7 @@ export class OperationLogSyncService {
 
         // CRITICAL FIX: Even if op-log is empty, check if NgRx store has meaningful data.
         // This catches data that existed before the operation-log feature was added.
-        if (isFreshClient && this._hasMeaningfulLocalData()) {
+        if (isFreshClient && this._hasMeaningfulStoreData()) {
           OpLog.warn(
             'OperationLogSyncService: Fresh client detected with meaningful local data in store. ' +
               'Throwing LocalDataConflictError for conflict resolution dialog.',
@@ -646,7 +638,7 @@ export class OperationLogSyncService {
       const isEmptyServer = result.latestServerSeq === 0;
       if (isEmptyServer) {
         const isFresh = await this.isWhollyFreshClient();
-        if (isFresh && this._hasMeaningfulLocalData()) {
+        if (isFresh && this._hasMeaningfulStoreData()) {
           OpLog.warn(
             'OperationLogSyncService: Pre-op-log client with meaningful local data on empty server. ' +
               'Creating SYNC_IMPORT via server migration to seed the server.',
@@ -681,7 +673,7 @@ export class OperationLogSyncService {
     // check if there's meaningful local data that would be overwritten.
     const isFreshClient = await this.isWhollyFreshClient();
     if (isFreshClient && result.newOps.length > 0) {
-      if (this._hasMeaningfulLocalData()) {
+      if (this._hasMeaningfulStoreData()) {
         // Local data exists — throw conflict error so the full conflict dialog is shown,
         // letting the user choose between keeping local data or using remote data.
         OpLog.warn(

@@ -1757,7 +1757,7 @@ describe('OperationLogSyncService', () => {
     });
   });
 
-  describe('_hasMeaningfulLocalData detection for first-time sync', () => {
+  describe('_hasMeaningfulStoreData detection for first-time sync', () => {
     let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
 
     beforeEach(() => {
@@ -2454,7 +2454,7 @@ describe('OperationLogSyncService', () => {
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
         piggybackedSyncImport,
       ]);
-      expect(result.kind).not.toBe('cancelled');
+      expect(result.kind).toBe('completed');
     });
 
     it('should process piggybacked SYNC_IMPORT silently when no meaningful local data', async () => {
