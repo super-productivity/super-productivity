@@ -129,12 +129,7 @@ export const createWindow = async ({
     webPreferences: {
       scrollBounce: true,
       backgroundThrottling: false,
-      // In dev mode (localhost:4200) Chromium generates CORS preflights for
-      // cross-origin CalDAV/WebDAV requests. The preflight never carries the
-      // Authorization header, so servers that require auth reject it. Disabling
-      // webSecurity in dev mode suppresses preflights, matching the behaviour of
-      // the production build.
-      webSecurity: !IS_DEV,
+      webSecurity: true,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       // make remote module work with those two settings
@@ -186,14 +181,11 @@ export const createWindow = async ({
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Headers', ['*']);
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Methods', ['*']);
 
-    // CORS preflight must return 2xx to pass the browser check. Stripping
-    // the Origin header (above) can cause some servers to respond with a
-    // non-200 status for OPTIONS, which the browser rejects even with the
-    // injected CORS headers.
-    const statusLine =
-      details.method === 'OPTIONS' && details.statusCode >= 300
-        ? 'HTTP/1.1 200 OK'
-        : undefined;
+    // CORS preflight must return 2xx to pass the browser check. Force all
+    // OPTIONS responses to 200 OK unconditionally: some servers reject
+    // preflights with 401 (auth required, < 300) or 405 (>= 300), both of
+    // which the browser rejects even with the injected CORS headers.
+    const statusLine = details.method === 'OPTIONS' ? 'HTTP/1.1 200 OK' : undefined;
 
     callback({
       responseHeaders,
