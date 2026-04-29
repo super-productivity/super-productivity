@@ -25,22 +25,6 @@ const removeTaskIdFromSection = (
   };
 };
 
-// Filter imported state through the same context guard the dispatch
-// path enforces — Typia only validates structure, so a backup from an
-// older client could otherwise smuggle custom-tag sections back in.
-const sanitizeImportedSectionState = (input: SectionState): SectionState => {
-  const ids: string[] = [];
-  const entities: SectionState['entities'] = {};
-  for (const id of input.ids as string[]) {
-    const s = input.entities[id];
-    if (!s) continue;
-    if (!isValidSectionContext(s.contextId, s.contextType)) continue;
-    ids.push(id);
-    entities[id] = s;
-  }
-  return ids.length === (input.ids as string[]).length ? input : { ids, entities };
-};
-
 export const sectionReducer = createReducer(
   initialSectionState,
 
@@ -63,15 +47,6 @@ export const sectionReducer = createReducer(
   on(SectionActions.deleteSection, (state, { id }) => adapter.removeOne(id, state)),
 
   on(SectionActions.updateSection, (state, { section }) => {
-    // No legitimate flow rewrites a section's context — reject any
-    // payload that touches contextId/contextType so a malformed peer
-    // can't morph a project section into a custom-tag one.
-    if (
-      Object.hasOwn(section.changes, 'contextId') ||
-      Object.hasOwn(section.changes, 'contextType')
-    ) {
-      return state;
-    }
     // Sanitize when title key is present (regardless of value type) so
     // a malformed peer's `{ title: null }` cannot bypass the cap.
     if (!Object.hasOwn(section.changes, 'title')) {
@@ -173,7 +148,7 @@ export const sectionReducer = createReducer(
     // `section` (legacy backups predate the feature) so we don't keep
     // stale local sections after an explicit import.
     appDataComplete.section
-      ? sanitizeImportedSectionState(appDataComplete.section as SectionState)
+      ? (appDataComplete.section as SectionState)
       : initialSectionState,
   ),
 );
