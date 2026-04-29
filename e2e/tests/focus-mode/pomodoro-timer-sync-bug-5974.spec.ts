@@ -139,7 +139,7 @@ test.describe('Bug #5974: Pomodoro timer break sync issues', () => {
       await expect(task).toHaveClass(/isCurrent/, { timeout: 5000 });
     });
 
-    test('should show banner when focus mode overlay is closed during session', async ({
+    test('should show focus button countdown when overlay is closed during session', async ({
       page,
       testPrefix,
     }) => {
@@ -151,13 +151,10 @@ test.describe('Bug #5974: Pomodoro timer break sync issues', () => {
       // Close overlay
       await closeFocusOverlay(page);
 
-      // Banner should be visible
-      const banner = page.locator('banner');
-      await expect(banner).toBeVisible({ timeout: 5000 });
-
-      // Banner should have action buttons
-      const bannerButtons = banner.locator('button');
-      await expect(bannerButtons.first()).toBeVisible({ timeout: 2000 });
+      // The header focus-button now shows the running countdown — the
+      // banner-based focus-session surface was removed.
+      const focusRunningLabel = page.locator('focus-button .focus-running-label');
+      await expect(focusRunningLabel).toBeVisible({ timeout: 5000 });
     });
 
     test('should show break screen after completing session', async ({
@@ -177,11 +174,11 @@ test.describe('Bug #5974: Pomodoro timer break sync issues', () => {
       const sessionDoneScreen = page.locator('focus-mode-session-done');
       await expect(breakScreen.or(sessionDoneScreen)).toBeVisible({ timeout: 5000 });
 
-      // Close overlay and verify banner appears
+      // Close overlay and verify the focus-button countdown surfaces.
       await closeFocusOverlay(page);
 
-      const banner = page.locator('banner');
-      await expect(banner).toBeVisible({ timeout: 5000 });
+      const focusRunningLabel = page.locator('focus-button .focus-running-label');
+      await expect(focusRunningLabel).toBeVisible({ timeout: 5000 });
     });
   });
 
