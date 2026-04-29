@@ -718,6 +718,12 @@ export class OperationLogSyncService {
       FULL_STATE_OP_TYPES.has(op.opType),
     );
     if (incomingFullStateOp) {
+      // Flush in-flight captured ops before reading pending state. Without this,
+      // an op enqueued in OperationCaptureService but not yet drained to
+      // IndexedDB would be invisible to getUnsynced(), the gate would silently
+      // accept the import, and SyncImportFilterService would then discard the
+      // just-landed op as CONCURRENT.
+      await this.writeFlushService.flushPendingWrites();
       const pendingLocalOps = await this.opLogStore.getUnsynced();
       const hasMeaningfulPending = this._hasMeaningfulPendingOps(pendingLocalOps);
 
