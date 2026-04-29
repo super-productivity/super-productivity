@@ -541,31 +541,30 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
 
       // Click sync directly so we can race the dialog vs. completion ourselves.
       // (syncAndWait() would auto-dismiss the dialog and mask the regression.)
-      // The check icon is stale from Phase 1's sync — wait for the new sync to
-      // start (icon hidden or spinner visible) before treating "icon visible"
-      // as a completion signal.
-      const checkVisibleBeforeClick = await clientB.sync.syncCheckIcon
-        .isVisible()
-        .catch(() => false);
-
       await clientB.sync.syncBtn.click();
 
-      if (checkVisibleBeforeClick) {
-        await Promise.race([
-          clientB.sync.syncCheckIcon.waitFor({ state: 'hidden', timeout: 5000 }),
-          clientB.sync.syncSpinner.waitFor({ state: 'visible', timeout: 5000 }),
-        ]).catch(() => {
-          // Fall through — sync may have been a no-op.
-        });
-      }
-
+      // Race the failure path (conflict dialog) against the success path
+      // (sync completes). Use the spinner cycle as the completion signal —
+      // it toggles per-sync, whereas syncCheckIcon may be stale from Phase 1.
+      // If the conflict dialog appears, sync blocks awaiting user input and
+      // the spinner never hides; the dialog wins the race and the test fails.
       const outcome = await Promise.race([
         clientB.sync.syncImportConflictDialog
           .waitFor({ state: 'visible', timeout: 20000 })
           .then(() => 'dialog' as const),
-        clientB.sync.syncCheckIcon
-          .waitFor({ state: 'visible', timeout: 20000 })
-          .then(() => 'complete' as const),
+        (async () => {
+          // Spinner may not appear if the sync is effectively a no-op; treat
+          // a missing spinner as "started instantly" and proceed to wait for
+          // its hidden state, which resolves immediately in that case.
+          await clientB.sync.syncSpinner
+            .waitFor({ state: 'visible', timeout: 5000 })
+            .catch(() => {});
+          await clientB.sync.syncSpinner.waitFor({
+            state: 'hidden',
+            timeout: 20000,
+          });
+          return 'complete' as const;
+        })(),
       ]).catch(() => 'timeout' as const);
 
       expect(outcome).toBe('complete');
