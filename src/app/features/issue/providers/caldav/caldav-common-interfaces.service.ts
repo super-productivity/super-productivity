@@ -23,7 +23,13 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
   // Short-lived cache so that getNewIssuesToAddToBacklog and all getSubTasks
   // calls within the same poll cycle share a single REPORT request instead of
   // issuing one per parent task (N+1 problem).
-  private _openTasksCache = new Map<string, { tasks: CaldavIssue[]; ts: number }>();
+  // We cache the Promise (not the resolved data) so that concurrent callers
+  // that arrive before the first request resolves all share the same in-flight
+  // Promise instead of each starting their own REPORT.
+  private _openTasksCache = new Map<
+    string,
+    { taskPromise: Promise<CaldavIssue[]>; ts: number }
+  >();
   private readonly _OPEN_TASKS_CACHE_TTL_MS = 60_000;
 
   readonly providerKey = 'CALDAV' as const;
@@ -185,17 +191,19 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     return allTasks.filter((t) => t.related_to === parentId && t.id !== parentId);
   }
 
-  private async _getOpenTasksCached(
+  // Non-async: Map.set runs synchronously so concurrent callers share the
+  // same in-flight Promise instead of each firing their own REPORT request.
+  private _getOpenTasksCached(
     issueProviderId: string,
     cfg: CaldavCfg,
   ): Promise<CaldavIssue[]> {
     const cached = this._openTasksCache.get(issueProviderId);
     if (cached && Date.now() - cached.ts < this._OPEN_TASKS_CACHE_TTL_MS) {
-      return cached.tasks;
+      return cached.taskPromise;
     }
-    const tasks = await firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
-    this._openTasksCache.set(issueProviderId, { tasks, ts: Date.now() });
-    return tasks;
+    const taskPromise = firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
+    this._openTasksCache.set(issueProviderId, { taskPromise, ts: Date.now() });
+    return taskPromise;
   }
 
   protected _apiGetById$(
