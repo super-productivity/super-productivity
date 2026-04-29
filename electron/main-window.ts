@@ -129,9 +129,12 @@ export const createWindow = async ({
     webPreferences: {
       scrollBounce: true,
       backgroundThrottling: false,
-      // CORS is handled at the session level via onBeforeSendHeaders (strips Origin)
-      // and onHeadersReceived (injects Access-Control-Allow-* headers)
-      webSecurity: true,
+      // In dev mode (localhost:4200) Chromium generates CORS preflights for
+      // cross-origin CalDAV/WebDAV requests. The preflight never carries the
+      // Authorization header, so servers that require auth reject it. Disabling
+      // webSecurity in dev mode suppresses preflights, matching the behaviour of
+      // the production build.
+      webSecurity: !IS_DEV,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       // make remote module work with those two settings
