@@ -95,8 +95,9 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isPlayTick: false,
     focusModeSound: 'off',
     isPauseTrackingDuringBreak: true,
-    isSyncSessionWithTracking: false,
+    autoStartFocusOnPlay: false,
     isStartInBackground: false,
+    isManualBreakStart: false,
   },
   taskWidget: {
     isEnabled: false,

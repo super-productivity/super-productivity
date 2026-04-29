@@ -7,24 +7,10 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
   help: T.GCF.FOCUS_MODE.HELP,
   items: [
     {
-      key: 'isSyncSessionWithTracking',
+      key: 'autoStartFocusOnPlay',
       type: 'checkbox',
       templateOptions: {
-        label: T.GCF.FOCUS_MODE.L_SYNC_SESSION_WITH_TRACKING,
-      },
-    },
-    {
-      key: 'isStartInBackground',
-      type: 'checkbox',
-      templateOptions: {
-        label: T.GCF.FOCUS_MODE.L_START_IN_BACKGROUND,
-      },
-    },
-    {
-      key: 'isSkipPreparation',
-      type: 'checkbox',
-      templateOptions: {
-        label: T.GCF.FOCUS_MODE.L_SKIP_PREPARATION_SCREEN,
+        label: T.GCF.FOCUS_MODE.L_AUTO_START_FOCUS_ON_PLAY,
       },
     },
     {
@@ -40,18 +26,38 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
       },
     },
     {
-      key: 'isPauseTrackingDuringBreak',
-      type: 'checkbox',
-      templateOptions: {
-        label: T.GCF.FOCUS_MODE.L_PAUSE_TRACKING_DURING_BREAK,
-      },
-    },
-    {
-      key: 'isManualBreakStart',
-      type: 'checkbox',
-      templateOptions: {
-        label: T.GCF.FOCUS_MODE.L_MANUAL_BREAK_START,
-      },
+      type: 'collapsible',
+      props: { label: T.G.ADVANCED_CFG },
+      fieldGroup: [
+        {
+          key: 'isPauseTrackingDuringBreak',
+          type: 'checkbox',
+          templateOptions: {
+            label: T.GCF.FOCUS_MODE.L_PAUSE_TRACKING_DURING_BREAK,
+          },
+        },
+        {
+          key: 'isStartInBackground',
+          type: 'checkbox',
+          templateOptions: {
+            label: T.GCF.FOCUS_MODE.L_START_IN_BACKGROUND,
+          },
+        },
+        {
+          key: 'isSkipPreparation',
+          type: 'checkbox',
+          templateOptions: {
+            label: T.GCF.FOCUS_MODE.L_SKIP_PREPARATION_SCREEN,
+          },
+        },
+        {
+          key: 'isManualBreakStart',
+          type: 'checkbox',
+          templateOptions: {
+            label: T.GCF.FOCUS_MODE.L_MANUAL_BREAK_START,
+          },
+        },
+      ],
     },
   ],
 };

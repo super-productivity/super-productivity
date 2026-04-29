@@ -2092,13 +2092,13 @@
       "FOCUS_MODE_SOUND_OFF": "Off",
       "FOCUS_MODE_SOUND_TICK": "Ticking",
       "FOCUS_MODE_SOUND_WHITE_NOISE": "White Noise",
-      "HELP": "Focus mode opens a distraction-free screen to help you focus on your current task.",
+      "HELP": "Focus mode opens a distraction-free screen to help you focus on your current task. Time tracking and the focus session timer are always kept in sync — pausing one pauses the other.",
+      "L_AUTO_START_FOCUS_ON_PLAY": "Start a focus session when I start tracking a task",
       "L_FOCUS_MODE_SOUND": "Ambient sound during focus sessions",
       "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
       "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",
-      "L_START_IN_BACKGROUND": "Start focus sessions with banner only (no overlay)",
-      "L_SYNC_SESSION_WITH_TRACKING": "Sync focus sessions with time tracking",
+      "L_START_IN_BACKGROUND": "Start focus sessions in the background (no overlay)",
       "TITLE": "Focus Mode"
     },
     "TASK_WIDGET": {

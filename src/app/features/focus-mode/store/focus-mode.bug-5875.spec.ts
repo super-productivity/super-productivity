@@ -114,7 +114,7 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
             { selector: selectors.selectLastSessionDuration, value: 0 },
             {
               selector: selectFocusModeConfig,
-              value: { isSyncSessionWithTracking: true },
+              value: {},
             },
             { selector: selectPomodoroConfig, value: { duration: 25 * 60 * 1000 } },
             { selector: selectIsFocusModeEnabled, value: true },
@@ -154,7 +154,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
     it('should dispatch skipBreak when break is running and user starts tracking', (done) => {
       // Setup: Break is running (timer.purpose === 'break', isRunning === true)
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
       });
@@ -185,7 +184,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
     it('should dispatch skipBreak when break is paused and user starts tracking', (done) => {
       // Setup: Break is paused (timer.purpose === 'break', isRunning === false)
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
       });
@@ -224,7 +222,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       // Setup: Session is running, sync is enabled, task is being tracked
       // isPauseTrackingDuringBreak must be true for this effect to fire (Bug #5954 fix)
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
       });
@@ -243,7 +240,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
     it('should dispatch setPausedTaskId before unsetCurrentTask (Bug #5737 race condition fix)', (done) => {
       // Setup: Session is running, sync is enabled, task is being tracked
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
       });
@@ -272,7 +268,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       // Break will auto-start, so autoStartBreakOnSessionComplete$ handles tracking pause
       // This effect should NOT fire to avoid double dispatch
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
         isManualBreakStart: false, // Break will auto-start
@@ -300,7 +295,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
     it('should NOT dispatch unsetCurrentTask when sync is disabled', (done) => {
       // Setup: Sync is disabled
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: false, // Sync disabled
         isSkipPreparation: false,
       });
       currentTaskId$.next('task-123');
@@ -317,7 +311,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
     it('should NOT dispatch unsetCurrentTask when no task is being tracked', (done) => {
       // Setup: No task is being tracked
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
       });
       currentTaskId$.next(null); // No task tracking
@@ -336,7 +329,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
     it('should dispatch unsetCurrentTask when Countdown session ends automatically', (done) => {
       // Setup: Countdown mode, session completes automatically, both sync settings enabled
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
       });
@@ -363,7 +355,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
     it('should dispatch unsetCurrentTask when Flowtime session ends automatically', (done) => {
       // Setup: Flowtime mode, session completes automatically, both sync settings enabled
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
       });
@@ -391,7 +382,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       // Bug #6510: When isManualBreakStart=true, tracking should continue until the user
       // manually starts a break. The break-start logic handles pausing tracking.
       store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
         isManualBreakStart: true, // User must manually start break
@@ -420,7 +410,6 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
     it('should keep tracking after auto-complete, then pause when user manually starts break via banner', (done) => {
       // Step 1: Setup Pomodoro with manual break + pause tracking + sync
       const focusModeConfig = {
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
         isManualBreakStart: true,

@@ -234,7 +234,13 @@ export type FocusModeConfig = Readonly<{
   /** @deprecated Use focusModeSound instead. Kept for backward-compat validation of old data. */
   isPlayTick?: boolean;
   isPauseTrackingDuringBreak?: boolean;
-  isSyncSessionWithTracking?: boolean;
+  /**
+   * When true, pressing the time-tracking play button on a task also starts a
+   * focus session (using the persistent mode the user last chose). The session
+   * runs quietly via the header indicator — no overlay, no preparation screen.
+   * Off by default; opt-in for users who want play = tracking + focus.
+   */
+  autoStartFocusOnPlay?: boolean;
   isStartInBackground?: boolean;
   isManualBreakStart?: boolean;
 }>;
