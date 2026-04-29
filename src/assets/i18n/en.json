@@ -607,7 +607,6 @@
       "CONFIRM_ADD_TO_SUB_TASK_NOTES": "Add the pasted Markdown list to the notes of subtask \"{{parentTaskTitle}}\"?",
       "CONFIRM_PARENT_TASKS": "Create <strong>{{tasksCount}} new tasks</strong> from the pasted Markdown list?",
       "CONFIRM_PARENT_TASKS_WITH_SUBS": "Create <strong>{{tasksCount}} new tasks and {{subTasksCount}} subtasks</strong> from the pasted Markdown list?",
-      "CONFIRM_SECTIONS": "Create {{sectionsCount}} section(s) with {{tasksCount}} task(s)?",
       "CONFIRM_SUB_TASKS": "Create {{tasksCount}} new subtasks from the pasted Markdown list?",
       "CONFIRM_SUB_TASKS_WITH_PARENT": "Create <strong>{{tasksCount}} new subtasks under \"{{parentTaskTitle}}\"</strong> from the pasted Markdown list?",
       "DIALOG_TITLE": "Pasted Markdown list detected!"

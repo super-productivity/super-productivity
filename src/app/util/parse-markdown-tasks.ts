@@ -36,15 +36,6 @@ export interface MarkdownTaskStructure {
   totalSubTasks: number;
 }
 
-export interface SectionWithTasks {
-  sectionTitle: string | null; // null for "No Section"
-  tasks: ParsedMarkdownTask[];
-}
-
-export interface MarkdownWithSections {
-  sections: SectionWithTasks[];
-}
-
 interface ParsedLine {
   indentLevel: number;
   content: string;
@@ -340,85 +331,4 @@ export const parseMarkdownTasks = (text: string): ParsedMarkdownTask[] | null =>
 
   // Return tasks only if we found at least one
   return tasks.length > 0 ? tasks : null;
-};
-
-/**
- * Parse markdown text to detect ATX headers (`#` to `######`) and group
- * tasks under sections. Returns `null` if no headers are present so callers
- * can fall through to a flat-task parse.
- *
- * FOLLOW-UP: this hand-rolled parser only treats `-`/`*` bullets as task
- * lines and silently drops `1.`-style ordered lists. The repo already
- * depends on `marked` (see `marked-options-factory.ts`); rewriting on
- * top of `marked.lexer(text)` would shrink this and the two near-clones
- * (`parseMarkdownTasks`, `parseMarkdownTasksWithStructure`) and pick up
- * GFM task-list semantics for free. Out of scope for this PR.
- *
- * @param text - Markdown text with potential headers and task lists
- * @returns Sections with tasks, or null if not valid markdown
- */
-export const parseMarkdownWithSections = (text: string): MarkdownWithSections | null => {
-  if (!text || typeof text !== 'string') {
-    return null;
-  }
-  if (text.length > MAX_INPUT_LENGTH) return null;
-
-  // Mirror splitMarkdownLines but preserve empty lines — section parsing
-  // uses them as separators.
-  const lines = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
-  const sections: SectionWithTasks[] = [];
-  let currentSection: SectionWithTasks | null = null;
-  let hasHeaders = false;
-  const pendingTaskLines: string[] = [];
-
-  // Flush pendingTaskLines into a section. If currentSection is null (i.e. we
-  // are about to enter the first header but already collected tasks above it),
-  // create a "No Section" entry at the top so those tasks aren't dropped.
-  const flushPending = (): void => {
-    if (pendingTaskLines.length === 0) return;
-    const parsedTasks = parseMarkdownTasksWithStructure(pendingTaskLines.join('\n'));
-    pendingTaskLines.length = 0;
-    if (!parsedTasks) return;
-    if (currentSection) {
-      currentSection.tasks = parsedTasks.mainTasks;
-    } else {
-      sections.unshift({ sectionTitle: null, tasks: parsedTasks.mainTasks });
-    }
-  };
-
-  const headerRegex = /^#{1,6}\s+(.+)$/;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    // Detect ATX header (#, ##, ### up to ######)
-    const headerMatch = trimmed.match(headerRegex);
-    if (headerMatch) {
-      hasHeaders = true;
-      flushPending();
-
-      currentSection = {
-        sectionTitle: headerMatch[1].trim(),
-        tasks: [],
-      };
-      sections.push(currentSection);
-    }
-    // Detect task lines
-    else if (trimmed.match(/^[-*]\s+/) || trimmed.match(/^[-*]\s*\[([ x])\]/)) {
-      pendingTaskLines.push(line);
-    }
-    // Empty lines and other content are ignored for now
-  }
-
-  flushPending();
-
-  // Only return when at least one header was seen — callers treat
-  // header-less input as a flat task list and route through
-  // `parseMarkdownTasks`.
-  if (!hasHeaders) {
-    return null;
-  }
-
-  return { sections };
 };

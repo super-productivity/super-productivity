@@ -5,7 +5,6 @@ import {
   parseMarkdownTasks,
   convertToMarkdownNotes,
   parseMarkdownTasksWithStructure,
-  parseMarkdownWithSections,
 } from '../../util/parse-markdown-tasks';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../t.const';
@@ -15,8 +14,6 @@ import { parseTimeSpentChanges } from './short-syntax';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { Task } from './task.model';
-import { SectionService } from '../section/section.service';
-import { WorkContextService } from '../work-context/work-context.service';
 
 // Anchored at line start: ATX header (#…) or list-item marker (-/* with
 // optional checkbox). One-shot regex that bails before invoking the full
@@ -31,8 +28,6 @@ export class MarkdownPasteService {
   private _taskService = inject(TaskService);
   private _store = inject(Store);
   private _globalConfigService = inject(GlobalConfigService);
-  private _sectionService = inject(SectionService);
-  private _workContextService = inject(WorkContextService);
 
   async handleMarkdownPaste(
     pastedText: string,
@@ -75,95 +70,6 @@ export class MarkdownPasteService {
         this._taskService.update(selectedTaskId, { notes: newNotes });
       }
       return;
-    }
-
-    // Try to parse with sections first (for markdown with H1 headers)
-    if (!selectedTaskId) {
-      const sectionsData = parseMarkdownWithSections(pastedText);
-      if (sectionsData) {
-        const totalTasks = sectionsData.sections.reduce(
-          (sum, section) => sum + section.tasks.length,
-          0,
-        );
-        const dialogRef = this._matDialog.open(DialogConfirmComponent, {
-          data: {
-            okTxt: T.G.CONFIRM,
-            title: T.F.MARKDOWN_PASTE.DIALOG_TITLE,
-            titleIcon: 'content_paste',
-            message: T.F.MARKDOWN_PASTE.CONFIRM_SECTIONS,
-            translateParams: {
-              sectionsCount: sectionsData.sections.length,
-              tasksCount: totalTasks,
-            },
-          },
-        });
-
-        const isConfirmed = await dialogRef.afterClosed().toPromise();
-        if (!isConfirmed) {
-          return;
-        }
-
-        const workContextId = this._workContextService.activeWorkContextId;
-        const sectionContextType = this._workContextService.activeWorkContextType;
-        if (!workContextId || !sectionContextType) {
-          return;
-        }
-
-        // ATOMICITY NOTE — paste creates one section + N tasks + M sub-tasks.
-        // Each call below dispatches a separate action and produces a separate
-        // op-log entry. A sync push that lands mid-paste can leave a partial
-        // state on remote clients (e.g. a section with no tasks). The proper
-        // fix is a single bulk action reduced atomically across the
-        // task/section/project/tag reducers — tracked as follow-up.
-        // For now we do NOT yield to the event loop between dispatches: a
-        // mid-loop yield would widen the interleave window with concurrent
-        // sync replay (CLAUDE.md item 11 yields *after* a bulk apply, not
-        // inside one). The dispatches are synchronous so the whole paste
-        // completes in a single tick; a 100-task paste blocks for a few ms.
-        for (const section of sectionsData.sections) {
-          // Check post-trim so headers like `## ​` (zero-width space) or
-          // pure-whitespace section titles fall through to the noSection
-          // bucket instead of creating a titleless section.
-          const sectionId = section.sectionTitle?.trim()
-            ? this._sectionService.addSection(
-                section.sectionTitle,
-                workContextId,
-                sectionContextType,
-              )
-            : null;
-
-          for (const task of section.tasks) {
-            const taskId = this._taskService.add(
-              task.title,
-              false,
-              {
-                isDone: task.isCompleted,
-                notes: task.notes,
-              },
-              true,
-            );
-
-            if (sectionId) {
-              this._sectionService.addTaskToSection(sectionId, taskId, null, null);
-            }
-
-            if (task.subTasks && task.subTasks.length > 0) {
-              for (const subTask of task.subTasks) {
-                const subTaskObj = this._taskService.createNewTaskWithDefaults({
-                  title: subTask.title,
-                  additional: {
-                    isDone: subTask.isCompleted,
-                    parentId: taskId,
-                    notes: subTask.notes,
-                  },
-                });
-                this._store.dispatch(addSubTask({ task: subTaskObj, parentId: taskId }));
-              }
-            }
-          }
-        }
-        return;
-      }
     }
 
     // Try to parse with structure first (for creating sub-tasks when no task selected)
@@ -290,11 +196,6 @@ export class MarkdownPasteService {
     // otherwise scan the whole input even for 800KB of prose.
     if (!MARKDOWN_TASK_OR_HEADER_RE.test(text)) return false;
 
-    // Sectioned (H1+) markdown — parseMarkdownWithSections returns null
-    // for header-less input.
-    if (parseMarkdownWithSections(text)) return true;
-
-    // Flat task list fallback
     const parsedTasks = parseMarkdownTasks(text);
     return parsedTasks !== null && parsedTasks.length > 0;
   }
