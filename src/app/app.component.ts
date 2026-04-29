@@ -60,6 +60,9 @@ import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
 import { WorkContextType } from './features/work-context/work-context.model';
+import { SectionService } from './features/section/section.service';
+import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
+import { TODAY_TAG } from './features/tag/tag.const';
 import type { WorkContextSettingsDialogData } from './features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
@@ -143,7 +146,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly layoutService = inject(LayoutService);
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
+  private _sectionService = inject(SectionService);
   readonly T = T;
+  readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
@@ -387,6 +392,20 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         entity,
       } as WorkContextSettingsDialogData,
     });
+  }
+
+  async addSection(): Promise<void> {
+    const ctxId = this.workContextService.activeWorkContextId;
+    const ctxType = this.workContextService.activeWorkContextType;
+    if (!ctxId || !ctxType) return;
+    const title = await firstValueFrom(
+      this._matDialog
+        .open(DialogPromptComponent, { data: { placeholder: T.WW.ADD_SECTION_TITLE } })
+        .afterClosed(),
+    );
+    if (typeof title === 'string' && title.trim()) {
+      this._sectionService.addSection(title, ctxId, ctxType);
+    }
   }
 
   isAppEntrance = signal(!this.isShowOnboardingPresets());

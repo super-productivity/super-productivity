@@ -120,15 +120,14 @@ test.describe('Sections', () => {
   }) => {
     await setupTestProject(workViewPage, projectPage);
 
-    // Right-click on the empty work-view background (the .task-list-wrapper
-    // outer container). The handler skips interactive elements but accepts
-    // bare clicks on the wrapper itself.
+    // The app-level bg context menu (shared with "Change Settings") only
+    // opens when the click target itself matches the allowed selectors,
+    // not on descendants. dispatchEvent fires the contextmenu directly
+    // on the wrapper so target.matches('.task-list-wrapper') holds.
     const wrapper = page.locator('.task-list-wrapper').first();
     await wrapper.waitFor({ state: 'visible', timeout: 5000 });
-    await wrapper.click({ button: 'right', position: { x: 50, y: 50 } });
+    await wrapper.dispatchEvent('contextmenu');
 
-    // The shared bg context menu has only one item — "Add Section" —
-    // matching the same i18n key used by the side-nav menu.
     await page.getByRole('menuitem', { name: 'Add Section' }).click();
     await submitPromptDialog(page, 'Right-Click Section');
 

@@ -15,8 +15,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
-import { WorkContextType } from '../work-context/work-context.model';
+import { MatMenuModule } from '@angular/material/menu';
 
 import { TaskService } from '../tasks/task.service';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
@@ -240,13 +239,6 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
   );
 
-  // Background right-click menu state (positions a hidden mat-menu
-  // trigger at the cursor; opened by `onBgContextMenu`).
-  @ViewChild('bgCtxMenuTrigger', { read: MatMenuTrigger })
-  bgCtxMenuTrigger?: MatMenuTrigger;
-  bgContextMenuX = signal(0);
-  bgContextMenuY = signal(0);
-
   isShowTimeWorkedWithoutBreak: boolean = true;
   splitInputPos: number = 100;
   T: typeof T = T;
@@ -428,58 +420,6 @@ export class WorkViewComponent implements OnInit, OnDestroy {
           this.sectionService.updateSection(id, { title: newTitle });
         }
       });
-  }
-
-  addSection(): void {
-    // Mirrors WorkContextMenuComponent.addSection — same dialog, same
-    // dispatch path. Reads context id/type from the work-context
-    // service so the menu works in projects, tags, and the Today view
-    // alike.
-    const ctxId = this.workContextService.activeWorkContextId;
-    const ctxType = this.workContextService.activeWorkContextType;
-    if (!ctxId || !ctxType) return;
-    this._matDialog
-      .open(DialogPromptComponent, {
-        data: { placeholder: T.WW.ADD_SECTION_TITLE },
-      })
-      .afterClosed()
-      .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe((title: string | undefined) => {
-        if (title?.trim()) {
-          this.sectionService.addSection(title, ctxId, ctxType as WorkContextType);
-        }
-      });
-  }
-
-  /**
-   * Open the background context menu on right-click in the work-view
-   * empty area. Skips if the user clicked on an interactive element
-   * (a task, button, input, drag handle, …) so per-element context
-   * menus and native form behavior aren't shadowed.
-   */
-  onBgContextMenu(event: MouseEvent): void {
-    const target = event.target as HTMLElement | null;
-    if (!target) return;
-    if (
-      target.closest(
-        'task, button, input, textarea, mat-form-field, [cdkDrag], .collapsible-header, .additional-btn, .drag-handle',
-      )
-    ) {
-      return;
-    }
-    // Sections are only valid for projects and the singleton TODAY tag.
-    // The menu's only action is Add Section, so suppress it elsewhere
-    // (custom tags) rather than opening an empty menu.
-    const ctxType = this.workContextService.activeWorkContextType;
-    const ctxId = this.workContextService.activeWorkContextId;
-    const isProject = ctxType === WorkContextType.PROJECT;
-    const isToday = ctxType === WorkContextType.TAG && ctxId === TODAY_TAG.id;
-    if (!isProject && !isToday) return;
-    event.preventDefault();
-    event.stopPropagation();
-    this.bgContextMenuX.set(event.clientX);
-    this.bgContextMenuY.set(event.clientY);
-    this.bgCtxMenuTrigger?.openMenu();
   }
 
   resetBreakTimer(): void {
