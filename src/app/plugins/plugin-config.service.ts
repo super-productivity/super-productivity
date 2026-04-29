@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { JSONSchema7 } from 'json-schema';
 import { PluginManifest } from './plugin-api.model';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
+import { PluginCacheService } from './plugin-cache.service';
 import { PluginLog } from '../core/log';
 import { first } from 'rxjs/operators';
 
@@ -17,6 +18,7 @@ interface PluginConfigData {
 export class PluginConfigService {
   private readonly _http = inject(HttpClient);
   private readonly _pluginUserPersistenceService = inject(PluginUserPersistenceService);
+  private readonly _pluginCacheService = inject(PluginCacheService);
 
   /**
    * Load the JSON schema configuration file for a plugin
@@ -36,11 +38,16 @@ export class PluginConfigService {
     // Build the URL to the config schema file
     let schemaUrl: string;
     if (pluginPath.startsWith('uploaded://')) {
-      // For uploaded plugins, we need to fetch from the cached files
-      // This would require extending the cache service, but for now we'll throw an error
-      throw new Error(
-        'Loading config schema for uploaded plugins is not yet implemented',
-      );
+      const pluginId = pluginPath.replace('uploaded://', '');
+      const cached = await this._pluginCacheService.getPlugin(pluginId);
+      if (!cached?.configSchema) {
+        throw new Error(`No config schema found for uploaded plugin ${manifest.id}`);
+      }
+      const schema = JSON.parse(cached.configSchema) as JSONSchema7;
+      if (!schema || typeof schema !== 'object') {
+        throw new Error('Invalid JSON schema format');
+      }
+      return schema;
     } else {
       // For regular plugins, construct the URL
       schemaUrl = `${pluginPath}/${manifest.jsonSchemaCfg}`;
