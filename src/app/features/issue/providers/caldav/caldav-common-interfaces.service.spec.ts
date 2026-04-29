@@ -248,9 +248,7 @@ describe('CaldavCommonInterfacesService', () => {
     });
 
     it('should not call getOpenTasks$ when isAddSubTasks is disabled', async () => {
-      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
-        of({ ...BASE_CFG, isAddSubTasks: false } as any),
-      );
+      setupTasks([], { isAddSubTasks: false });
 
       await service.getSubTasks('parent', PROVIDER_ID);
       expect(caldavClientSpy.getOpenTasks$).not.toHaveBeenCalled();
@@ -286,6 +284,19 @@ describe('CaldavCommonInterfacesService', () => {
       const result = await service.getSubTasks(42, PROVIDER_ID);
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('child');
+    });
+
+    it('should exclude a self-referential task (RELATED-TO:<own-uid>) to prevent store corruption', async () => {
+      // A malformed VTODO where related_to === id would cause _addSubTasks
+      // to attach a task to itself, corrupting the task tree.
+      const selfRef = makeReduced('parent', 'parent');
+      const child = makeReduced('child', 'parent');
+      setupTasks([selfRef, child], { isAddSubTasks: true });
+
+      const result = await service.getSubTasks('parent', PROVIDER_ID);
+      expect(result.map((t) => t.id)).not.toContain('parent');
+      expect(result.map((t) => t.id)).toContain('child');
+      expect(result.length).toBe(1);
     });
   });
 });
