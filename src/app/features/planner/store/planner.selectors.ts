@@ -217,13 +217,21 @@ const getPlannerDay = (
     scheduledTaskItems,
   );
 
+  // Add calendar event durations (CalDAV/ICAL events) to the total time estimate
+  const calendarEventsTime =
+    allDayEvents.reduce((acc, ev) => acc + (ev.duration || 0), 0) +
+    timedEvents.reduce((acc, ev) => acc + (ev.end - ev.start), 0);
+
+  const totalTimeEstimate = timeEstimate + calendarEventsTime;
+
   // Calculate available hours and progress percentage
   let availableHours;
   let progressPercentage;
 
   if (scheduleConfig && scheduleConfig.isWorkStartEndEnabled) {
     availableHours = calculateAvailableHours(dayDate, scheduleConfig);
-    progressPercentage = availableHours > 0 ? (timeEstimate / availableHours) * 100 : 0;
+    progressPercentage =
+      availableHours > 0 ? (totalTimeEstimate / availableHours) * 100 : 0;
   }
 
   return {
@@ -245,7 +253,7 @@ const getPlannerDay = (
     deadlineTasks,
     noStartTimeRepeatProjections,
     allDayEvents,
-    timeEstimate,
+    timeEstimate: totalTimeEstimate,
     availableHours,
     progressPercentage,
   };
