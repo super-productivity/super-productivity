@@ -106,6 +106,7 @@ const installMocks = () => {
         updateTaskWidgetEnabled: () => {},
         updateTaskWidgetOpacity: () => {},
         updateTaskWidgetTask: () => {},
+        initTaskWidgetSettingsListener: () => {},
       };
     }
 
@@ -189,7 +190,10 @@ test('initIndicator uses NativeImage for Linux tray creation and updates', () =>
   );
 
   assert.equal(traySetImageCalls.at(-1).kind, 'native-image');
-  assert.match(traySetImageCalls.at(-1).iconPath, /\/icons\/indicator\/running-anim-d\/3\.png$/);
+  assert.match(
+    traySetImageCalls.at(-1).iconPath,
+    /\/icons\/indicator\/running-anim-d\/3\.png$/,
+  );
 
   beforeQuitHandler();
 });
