@@ -99,10 +99,10 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
     // Validate URL protocol before opening to prevent file:// or javascript: abuse.
     // Echo back the state param so the renderer can match the error to the
     // pending flow (state validation in handleRedirectError).
-    let state: string | null = null;
+    let state: string | undefined;
     try {
       const parsed = new URL(url);
-      state = parsed.searchParams.get('state');
+      state = parsed.searchParams.get('state') ?? undefined;
       if (parsed.protocol !== 'https:') {
         log('Plugin OAuth: Rejected non-https auth URL:', parsed.protocol);
         mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, {
