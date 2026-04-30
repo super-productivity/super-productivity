@@ -1,5 +1,9 @@
 import { TASK_REPEAT_WEEKDAY_MAP, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import {
+  findMonthlyNthWeekdayOccurrence,
+  hasNthWeekdayAnchor,
+} from './get-nth-weekday-of-month.util';
 
 /**
  * Returns the first valid repeat occurrence on or after `cfg.startDate`.
@@ -30,8 +34,20 @@ export const getFirstRepeatOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | n
   checkDate.setHours(12, 0, 0, 0);
 
   switch (taskRepeatCfg.repeatCycle) {
+    case 'MONTHLY': {
+      if (hasNthWeekdayAnchor(taskRepeatCfg)) {
+        // Try start month first; if the Nth weekday is before startDate,
+        // advance one month.
+        return findMonthlyNthWeekdayOccurrence(taskRepeatCfg, checkDate, {
+          direction: 1,
+          maxMonths: 2,
+          accept: (candidate) => candidate >= checkDate,
+        });
+      }
+      return checkDate;
+    }
+
     case 'DAILY':
-    case 'MONTHLY':
     case 'YEARLY':
       return checkDate;
 

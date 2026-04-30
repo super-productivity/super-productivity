@@ -11,12 +11,9 @@ import { log } from 'electron-log/main';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
-import { GlobalConfigState } from '../src/app/features/config/global-config.model';
 import { release } from 'os';
 import {
-  updateTaskWidgetAlwaysShow,
-  updateTaskWidgetEnabled,
-  updateTaskWidgetOpacity,
+  initTaskWidgetSettingsListener,
   updateTaskWidgetTask,
 } from './task-widget/task-widget';
 import { getWin } from './main-window';
@@ -187,24 +184,9 @@ function initListeners(): void {
   }
   _isListenersInitialized = true;
 
-  let isTaskWidgetEnabled = false;
-  // Listen for settings updates to handle task widget enable/disable
-  ipcMain.on(IPC.UPDATE_SETTINGS, (ev, settings: GlobalConfigState) => {
-    const isTaskWidgetEnabledNew = settings?.taskWidget?.isEnabled || false;
-
-    if (isTaskWidgetEnabledNew !== isTaskWidgetEnabled) {
-      isTaskWidgetEnabled = isTaskWidgetEnabledNew;
-      updateTaskWidgetEnabled(isTaskWidgetEnabled);
-    }
-
-    if (isTaskWidgetEnabled) {
-      const opacity = settings?.taskWidget?.opacity ?? 95;
-      updateTaskWidgetOpacity(opacity);
-      updateTaskWidgetAlwaysShow(settings?.taskWidget?.isAlwaysShow || false);
-    } else {
-      updateTaskWidgetAlwaysShow(false);
-    }
-  });
+  // Task widget settings are per-instance (not synced) — handled via a
+  // dedicated IPC channel in task-widget.ts.
+  initTaskWidgetSettingsListener();
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
     if (_isRunning && tray) {

@@ -111,5 +111,19 @@
         ) | translate
       }}</span>
     </button>
+    @if (
+      workContextService.activeWorkContextType === 'PROJECT' ||
+      workContextService.activeWorkContextId === TODAY_TAG_ID
+    ) {
+      <button
+        mat-menu-item
+        (click)="addSection()"
+        class="background-menu-item"
+        style="width: 100%; overflow: hidden"
+      >
+        <mat-icon>list</mat-icon>
+        <span>{{ T.MH.ADD_SECTION | translate }}</span>
+      </button>
+    }
   </div>
 </ng-template>

@@ -499,8 +499,37 @@ export class RemoteOpsProcessingService {
         op.opType === OpType.Repair,
     );
     if (fullStateOps.length > 0) {
+      // Snapshot the receiver's prior clock and unsynced-op tally before the
+      // batch lands. After append, the receiver's state advances and we can no
+      // longer reconstruct what was about to be wiped. Captures both the prior
+      // vector clock (whose entries the SYNC_IMPORT will collapse) and the
+      // count of local unsynced user work that the SyncImportFilter will then
+      // discard — that count answers the "post-import edits failed to upload
+      // vs. dropped by the filter" question on the next incident.
+      const priorClock = await this.opLogStore.getVectorClock();
+      const priorUnsynced = await this.opLogStore.getUnsynced();
+      const priorUnsyncedByOpType = priorUnsynced.reduce<Record<string, number>>(
+        (acc, entry) => {
+          const key = entry.op.opType;
+          acc[key] = (acc[key] ?? 0) + 1;
+          return acc;
+        },
+        {},
+      );
       OpLog.log(
         `RemoteOpsProcessingService: APPLYING FULL-STATE OP(s): ${fullStateOps.map((op) => `${op.opType} from ${op.clientId}`).join(', ')}`,
+        {
+          incoming: fullStateOps.map((op) => ({
+            opType: op.opType,
+            clientId: op.clientId,
+            syncImportReason: op.syncImportReason ?? null,
+            vectorClock: op.vectorClock,
+          })),
+          priorClock: priorClock ?? null,
+          priorClockSize: priorClock ? Object.keys(priorClock).length : 0,
+          priorUnsyncedCount: priorUnsynced.length,
+          priorUnsyncedByOpType,
+        },
       );
     }
 

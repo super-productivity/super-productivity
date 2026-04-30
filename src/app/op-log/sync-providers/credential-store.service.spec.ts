@@ -1,6 +1,7 @@
 import { SyncCredentialStore } from './credential-store.service';
 import { SyncProviderId } from './provider.const';
 import { DropboxPrivateCfg } from './file-based/dropbox/dropbox';
+import { SyncLog } from '../../core/log';
 
 /**
  * Tests for SyncCredentialStore
@@ -139,6 +140,34 @@ describe('SyncCredentialStore', () => {
       const storeString = String(store);
       expect(storeString).not.toContain('SECRET_TOKEN');
       expect(storeString).not.toContain('SECRET_REFRESH');
+    });
+
+    it('should log encryptKey length but not value on disk load', async () => {
+      const sensitiveKey = 'super-secret-key-do-not-leak';
+      const cfg = {
+        accessToken: `t-${testRunId}`,
+        refreshToken: `r-${testRunId}`,
+        encryptKey: sensitiveKey,
+        isEncryptionEnabled: true,
+      } as unknown as DropboxPrivateCfg;
+      await store.setComplete(cfg);
+
+      const logSpy = spyOn(SyncLog, 'normal').and.callThrough();
+
+      // Force fresh load (bypass in-memory cache) by constructing a new instance.
+      const fresh = new SyncCredentialStore(SyncProviderId.Dropbox);
+      await fresh.load();
+
+      const allLoggedArgs = logSpy.calls
+        .allArgs()
+        .map((args) => args.map(String).join(' '));
+      const loadLine = allLoggedArgs.find((line) =>
+        line.includes('SyncCredentialStore.load() loaded from disk'),
+      );
+      expect(loadLine).withContext('disk-load diagnostic fired').toBeDefined();
+      expect(loadLine!).toContain(`encryptKey=[length=${sensitiveKey.length}]`);
+      expect(loadLine!).toContain('isEncryptionEnabled=true');
+      expect(loadLine!).not.toContain(sensitiveKey);
     });
   });
 });

@@ -17,6 +17,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ShortcutService } from './core-ui/shortcut/shortcut.service';
 import { GlobalConfigService } from './features/config/global-config.service';
+import { TaskWidgetSettingsService } from './features/config/task-widget-settings.service';
 import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
@@ -60,6 +61,9 @@ import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
 import { WorkContextType } from './features/work-context/work-context.model';
+import { SectionService } from './features/section/section.service';
+import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
+import { TODAY_TAG } from './features/tag/tag.const';
 import type { WorkContextSettingsDialogData } from './features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
@@ -133,6 +137,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _startupService = inject(StartupService);
   // Injected for side-effect: creates example tasks on first run
   private _exampleTasksService = inject(ExampleTasksService);
+  // Injected for side-effect: loads per-instance task widget settings from
+  // localStorage and pushes them to the Electron main process at app boot,
+  // before the user opens the (lazy-loaded) Settings page.
+  private _taskWidgetSettingsService = inject(TaskWidgetSettingsService);
   private _keyboardLayoutService = inject(KeyboardLayoutService);
   private _dataInitStateService = inject(DataInitStateService);
   private _materialIconsLoaderService = inject(MaterialIconsLoaderService);
@@ -143,7 +151,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly layoutService = inject(LayoutService);
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
+  private _sectionService = inject(SectionService);
   readonly T = T;
+  readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
@@ -277,16 +287,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     let taskTitle: string | null = null;
     let isSubTask = false;
 
-    // Find task element by traversing up the DOM tree
-    let element: HTMLElement | null = target;
-    while (element && !element.id.startsWith('t-')) {
-      element = element.parentElement;
+    // Find the nearest task element via the data-task-id attribute (set
+    // on the <task> host). Avoids brittle id-prefix scans that could match
+    // unrelated elements whose id happens to start with "t-".
+    const taskEl = target.closest<HTMLElement>('[data-task-id]');
+
+    if (taskEl) {
+      taskId = taskEl.getAttribute('data-task-id');
     }
 
-    if (element && element.id.startsWith('t-')) {
-      // Extract task ID from DOM id (format: "t-{taskId}")
-      taskId = element.id.substring(2);
-
+    if (taskId) {
       // Get task data to determine if it's a sub-task
       this._taskService.getByIdOnce$(taskId).subscribe((task) => {
         if (task) {
@@ -387,6 +397,20 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         entity,
       } as WorkContextSettingsDialogData,
     });
+  }
+
+  async addSection(): Promise<void> {
+    const ctxId = this.workContextService.activeWorkContextId;
+    const ctxType = this.workContextService.activeWorkContextType;
+    if (!ctxId || !ctxType) return;
+    const title = await firstValueFrom(
+      this._matDialog
+        .open(DialogPromptComponent, { data: { placeholder: T.WW.ADD_SECTION_TITLE } })
+        .afterClosed(),
+    );
+    if (typeof title === 'string' && title.trim()) {
+      this._sectionService.addSection(title, ctxId, ctxType);
+    }
   }
 
   isAppEntrance = signal(!this.isShowOnboardingPresets());

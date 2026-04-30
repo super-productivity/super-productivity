@@ -50,5 +50,19 @@ ENV TEST_MODE_CONFIRM=yes-i-understand-the-risks
 ENV CORS_ORIGINS=*
 ENV JWT_SECRET=e2e-test-secret-minimum-32-chars-long-for-security
 
-# Push schema to DB and start server
-CMD sh -c "npx prisma db push && node dist/src/index.js"
+# Push schema to DB and start server.
+# Retry `prisma db push` for up to ~30s on transient connection failures
+# (postgres can briefly bounce during first-run initdb even after the db's
+# healthcheck passes). Without this, the container exits on first P1001
+# and depends on docker's restart policy to recover, which can't be relied
+# on across compose invocations.
+#
+# Exec form is required: shell form would wrap this in an extra `/bin/sh -c`,
+# and the outer shell would expand `$(seq 1 15)` into a multi-line string that
+# busybox's ash refuses to parse inside `for ... in` ("expected do").
+#
+# `exec node ...` on success replaces the shell with node so the loop cannot
+# fall through. If all 15 attempts fail we exit 1 instead of starting the
+# server against an unmigrated DB (which would surface as confusing Prisma
+# errors at request time rather than a clean container failure).
+CMD ["sh", "-c", "for i in $(seq 1 15); do npx prisma db push && exec node dist/src/index.js; echo \"prisma db push failed (attempt $i/15), retrying in 2s...\"; sleep 2; done; echo \"prisma db push failed after 15 attempts, giving up\" >&2; exit 1"]

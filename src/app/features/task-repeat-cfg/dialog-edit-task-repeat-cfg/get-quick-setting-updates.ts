@@ -1,4 +1,6 @@
 import {
+  MonthlyWeekOfMonth,
+  MonthlyWeekday,
   RepeatQuickSetting,
   TASK_REPEAT_WEEKDAY_MAP,
   TaskRepeatCfg,
@@ -19,6 +21,14 @@ const _buildWeeklyForDay = (date: Date): Partial<TaskRepeatCfg> => {
     sunday: false,
     [weekdayStr as keyof TaskRepeatCfg]: true,
   };
+};
+
+// Switching from a day-of-week preset to a day-of-month preset must clear the
+// Nth-weekday anchor — anchor presence is the discriminator, so stale fields
+// would silently take effect.
+const DAY_OF_MONTH_RESET: Partial<TaskRepeatCfg> = {
+  monthlyWeekOfMonth: undefined,
+  monthlyWeekday: undefined,
 };
 
 /**
@@ -64,6 +74,7 @@ export const getQuickSettingUpdates = (
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
         startDate: getDbDateStr(referenceDate || today),
+        ...DAY_OF_MONTH_RESET,
       };
     }
 
@@ -73,6 +84,7 @@ export const getQuickSettingUpdates = (
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
         startDate: getDbDateStr(firstDay),
+        ...DAY_OF_MONTH_RESET,
       };
     }
 
@@ -85,6 +97,24 @@ export const getQuickSettingUpdates = (
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
         startDate: getDbDateStr(day31),
+        ...DAY_OF_MONTH_RESET,
+      };
+    }
+
+    case 'MONTHLY_NTH_WEEKDAY': {
+      // Anchors monthly recurrence to "the same Nth weekday of the month"
+      // implied by the reference date — e.g. 2026-04-29 is the 5th Wednesday,
+      // capped to 4 → "4th Wednesday of every month".
+      const ref = referenceDate || today;
+      const rawWeekOfMonth = Math.floor((ref.getDate() - 1) / 7) + 1;
+      const weekOfMonth = Math.min(rawWeekOfMonth, 4) as MonthlyWeekOfMonth;
+      const weekday = ref.getDay() as MonthlyWeekday;
+      return {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(ref),
+        monthlyWeekOfMonth: weekOfMonth,
+        monthlyWeekday: weekday,
       };
     }
 

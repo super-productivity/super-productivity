@@ -173,6 +173,53 @@ describe('getFirstRepeatOccurrence', () => {
     });
   });
 
+  describe('MONTHLY Nth weekday (issue #6040)', () => {
+    it('returns the Nth weekday in the start month when on/after startDate', () => {
+      // 2026-01-01 (Thu) is the 1st Thursday of Jan 2026 → returns Jan 1.
+      const result = getFirstRepeatOccurrence(
+        mkCfg({
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 1,
+          startDate: '2026-01-01',
+          monthlyWeekOfMonth: 1,
+          monthlyWeekday: 4,
+        }),
+      );
+      expect(result!.getFullYear()).toBe(2026);
+      expect(result!.getMonth()).toBe(0);
+      expect(result!.getDate()).toBe(1);
+    });
+
+    it('advances to next month when startDate is past the Nth weekday', () => {
+      // startDate Jan 15 2026 is past the 1st Thursday (Jan 1) → next is Feb 5.
+      const result = getFirstRepeatOccurrence(
+        mkCfg({
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 1,
+          startDate: '2026-01-15',
+          monthlyWeekOfMonth: 1,
+          monthlyWeekday: 4,
+        }),
+      );
+      expect(result!.getMonth()).toBe(1);
+      expect(result!.getDate()).toBe(5);
+    });
+
+    it('handles last weekday of the month', () => {
+      // Last Monday of Jan 2026 = Jan 26 (start matches).
+      const result = getFirstRepeatOccurrence(
+        mkCfg({
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 1,
+          startDate: '2026-01-26',
+          monthlyWeekOfMonth: -1,
+          monthlyWeekday: 1,
+        }),
+      );
+      expect(result!.getDate()).toBe(26);
+    });
+  });
+
   describe('YEARLY', () => {
     it('returns startDate', () => {
       const result = getFirstRepeatOccurrence(

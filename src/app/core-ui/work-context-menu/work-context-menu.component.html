@@ -49,6 +49,16 @@
   </span>
 </button>
 
+@if (isForProject || contextId === TODAY_TAG_ID) {
+  <button
+    (click)="addSection()"
+    mat-menu-item
+  >
+    <mat-icon>list</mat-icon>
+    <span class="text">{{ T.MH.ADD_SECTION | translate }}</span>
+  </button>
+}
+
 <button
   (click)="openSettings()"
   mat-menu-item

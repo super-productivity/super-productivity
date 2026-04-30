@@ -29,6 +29,7 @@ import {
 } from '../../core/util/vector-clock';
 import { toEntityKey } from '../util/entity-key.util';
 import { T } from '../../t.const';
+import { OpLog } from '../../core/log';
 describe('RemoteOpsProcessingService', () => {
   let service: RemoteOpsProcessingService;
   let schemaMigrationServiceSpy: jasmine.SpyObj<SchemaMigrationService>;
@@ -64,7 +65,13 @@ describe('RemoteOpsProcessingService', () => {
       'markRejected',
       'clearFullStateOps',
       'clearFullStateOpsExcept',
+      'getVectorClock',
     ]);
+    // Default: empty prior clock and no unsynced ops for the diagnostic
+    // full-state log line. Tests that exercise the SYNC_IMPORT path can
+    // override these per-test to assert the captured snapshot.
+    opLogStoreSpy.getVectorClock.and.resolveTo(null);
+    opLogStoreSpy.getUnsynced.and.resolveTo([]);
     // By default, appendBatchSkipDuplicates writes all ops (no duplicates)
     opLogStoreSpy.appendBatchSkipDuplicates.and.callFake((ops: any[]) =>
       Promise.resolve({
@@ -627,6 +634,63 @@ describe('RemoteOpsProcessingService', () => {
       await service.processRemoteOps([syncImportOp]);
 
       expect(service.detectConflicts).not.toHaveBeenCalled();
+    });
+
+    it('should log incoming full-state op shape and prior receiver state for diagnostics', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-diag',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'B_h1Wp',
+        vectorClock: { ['B_h1Wp']: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+        syncImportReason: 'PASSWORD_CHANGED',
+      };
+
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      opLogStoreSpy.getVectorClock.and.resolveTo({
+        ['A_kg5q']: 446,
+        ['B_old']: 9,
+      });
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        { seq: 99, op: { opType: OpType.Update } as any, appliedAt: 0, source: 'local' },
+      ]);
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [syncImportOp] }),
+      );
+      const opLogSpy = spyOn(OpLog, 'log').and.callThrough();
+
+      await service.processRemoteOps([syncImportOp]);
+
+      const fullStateLogCall = opLogSpy.calls
+        .allArgs()
+        .find(
+          (args) =>
+            typeof args[0] === 'string' && args[0].includes('APPLYING FULL-STATE OP'),
+        );
+      expect(fullStateLogCall)
+        .withContext('full-state diagnostic log fired')
+        .toBeDefined();
+      expect(fullStateLogCall![1]).toEqual(
+        jasmine.objectContaining({
+          incoming: jasmine.arrayContaining([
+            jasmine.objectContaining({
+              opType: OpType.SyncImport,
+              clientId: 'B_h1Wp',
+              syncImportReason: 'PASSWORD_CHANGED',
+              vectorClock: { ['B_h1Wp']: 1 },
+            }),
+          ]),
+          priorClock: { ['A_kg5q']: 446, ['B_old']: 9 },
+          priorClockSize: 2,
+          priorUnsyncedCount: 1,
+          priorUnsyncedByOpType: { [OpType.Update]: 1 },
+        }),
+      );
     });
 
     it('should skip conflict detection when BACKUP_IMPORT is in remote ops', async () => {

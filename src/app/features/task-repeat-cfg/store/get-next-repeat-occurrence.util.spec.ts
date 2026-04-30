@@ -264,6 +264,69 @@ describe('getNextRepeatOccurrence()', () => {
     });
   });
 
+  describe('MONTHLY Nth weekday (issue #6040)', () => {
+    it('returns the first Thursday of next month', () => {
+      const startDate = new Date(2026, 0, 1); // Jan 1, 2026 (Thursday)
+      const lastCreation = new Date(2026, 0, 1); // first Thu of Jan 2026 was Jan 1
+      const fromDate = new Date(2026, 0, 2);
+      const expected = new Date(2026, 1, 5); // first Thu of Feb 2026
+      const cfg = dummyRepeatable('ID-NTH-1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4, // Thursday
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+
+    it('returns the last Monday of next month', () => {
+      const startDate = new Date(2026, 0, 26); // Jan 26, 2026 (last Mon)
+      const lastCreation = new Date(2026, 0, 26);
+      const fromDate = new Date(2026, 0, 27);
+      const expected = new Date(2026, 1, 23); // last Mon of Feb 2026
+      const cfg = dummyRepeatable('ID-NTH-2', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: -1,
+        monthlyWeekday: 1, // Monday
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+
+    it('handles a month with 5 occurrences of a weekday correctly when "last" is requested', () => {
+      // March 2026 has 5 Tuesdays (3, 10, 17, 24, 31). Last = the 31st.
+      const startDate = new Date(2026, 1, 24); // last Tue of Feb 2026
+      const lastCreation = new Date(2026, 1, 24);
+      const fromDate = new Date(2026, 1, 25);
+      const expected = new Date(2026, 2, 31); // last Tue of Mar 2026
+      const cfg = dummyRepeatable('ID-NTH-4', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: -1,
+        monthlyWeekday: 2, // Tuesday
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+
+    it('respects repeatEvery > 1 (every 2 months)', () => {
+      const startDate = new Date(2026, 0, 1); // Jan 1, 2026 (1st Thu of Jan)
+      const lastCreation = new Date(2026, 0, 1);
+      const fromDate = new Date(2026, 0, 2);
+      const expected = new Date(2026, 2, 5); // 1st Thu of Mar (skip Feb)
+      const cfg = dummyRepeatable('ID-NTH-5', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 2,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4,
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+  });
+
   describe('YEARLY', () => {
     it('should return same date next year for yearly task', () => {
       const startDate = new Date(2022, 2, 15);

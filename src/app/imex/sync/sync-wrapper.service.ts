@@ -75,6 +75,21 @@ import { OperationLogStoreService } from '../../op-log/persistence/operation-log
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
+
+/**
+ * Identifies which error or UI path triggered a destructive forceUpload.
+ * Logged on every invocation so a future sync-stuck incident can be traced
+ * back to its origin without diff-archaeology.
+ */
+export type ForceUploadTriggerSource =
+  | 'LockPresentError'
+  | 'EmptyRemoteBodySPError'
+  | 'JsonParseError'
+  | 'LegacySyncFormatDetectedError'
+  | 'DialogSyncError'
+  | 'DecryptError'
+  | 'unknown';
 
 @Injectable({
   providedIn: 'root',
@@ -95,6 +110,7 @@ export class SyncWrapperService {
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
   private _wrappedProvider = inject(WrappedProviderService);
+  private _hydrationState = inject(HydrationStateService);
 
   syncState$ = this._providerManager.syncStatus$;
 
@@ -249,10 +265,16 @@ export class SyncWrapperService {
       return 'HANDLED_ERROR';
     }
     this._isSyncInProgress$.next(true);
+    // Open before any async work — see `HydrationStateService.isInSyncWindow`.
+    // Pass 0 to disable the failsafe: the `finally` block below is the
+    // authoritative close, and a slow sync (provider I/O > 2s) would
+    // otherwise expire the timer mid-sync and leave a stale-state gap.
+    this._hydrationState.openSyncWindow(0);
     // Set SYNCING status so ImmediateUploadService knows not to interfere
     this._providerManager.setSyncStatus('SYNCING');
     const result = await this._sync().finally(() => {
       this._isSyncInProgress$.next(false);
+      this._hydrationState.closeSyncWindow();
       // Safeguard: if _sync() threw or completed without setting a final status,
       // reset from SYNCING to UNKNOWN_OR_CHANGED to avoid getting stuck in SYNCING state
       if (this._providerManager.isSyncInProgress) {
@@ -600,7 +622,7 @@ export class SyncWrapperService {
           // TODO translate
           msg: T.F.SYNC.S.ERROR_DATA_IS_CURRENTLY_WRITTEN,
           type: 'ERROR',
-          actionFn: async () => this.forceUpload(),
+          actionFn: async () => this.forceUpload('LockPresentError'),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
@@ -612,7 +634,7 @@ export class SyncWrapperService {
           msg: T.F.SYNC.S.ERROR_REMOTE_FILE_EMPTY,
           type: 'ERROR',
           config: { duration: 12000 },
-          actionFn: async () => this.forceUpload(),
+          actionFn: async () => this.forceUpload('EmptyRemoteBodySPError'),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
@@ -625,7 +647,7 @@ export class SyncWrapperService {
           msg: T.F.SYNC.S.ERROR_REMOTE_FILE_CORRUPTED,
           type: 'ERROR',
           config: { duration: 12000 },
-          actionFn: async () => this.forceUpload(),
+          actionFn: async () => this.forceUpload('JsonParseError'),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
@@ -652,7 +674,7 @@ export class SyncWrapperService {
           msg: T.F.SYNC.S.LEGACY_FORMAT_DETECTED,
           type: 'ERROR',
           config: { duration: 20000 },
-          actionFn: async () => this.forceUpload(),
+          actionFn: async () => this.forceUpload('LegacySyncFormatDetectedError'),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
@@ -749,12 +771,16 @@ export class SyncWrapperService {
     }
   }
 
-  async forceUpload(): Promise<void> {
+  async forceUpload(triggerSource: ForceUploadTriggerSource = 'unknown'): Promise<void> {
     if (!this._c(this._translateService.instant(T.F.SYNC.C.FORCE_UPLOAD))) {
       return;
     }
 
-    SyncLog.log('SyncWrapperService: forceUpload called - uploading local state');
+    // Diagnostic: stamp the originating error/dialog so we can correlate
+    // "what stuck the user" with "what they recovered with" in shared logs.
+    SyncLog.log('SyncWrapperService: forceUpload called - uploading local state', {
+      triggerSource,
+    });
 
     // Block parallel syncs during force upload to prevent them from trying to
     // download/decrypt old data with a potentially different encryption key.
@@ -912,7 +938,7 @@ export class SyncWrapperService {
     firstValueFrom(dialogRef.afterClosed())
       .then(async (res: DialogSyncErrorResult) => {
         if (res === 'FORCE_UPDATE_REMOTE') {
-          await this.forceUpload();
+          await this.forceUpload('DialogSyncError');
         } else if (res === 'FORCE_UPDATE_LOCAL') {
           await this._forceDownload();
         }
@@ -1031,7 +1057,7 @@ export class SyncWrapperService {
           this.sync();
         } else if (result?.isForceUpload) {
           this._suppressEncryptionDialogs = false;
-          this.forceUpload();
+          this.forceUpload('DecryptError');
         } else {
           // User cancelled — suppress future dialogs so they can navigate to settings
           this._suppressEncryptionDialogs = true;

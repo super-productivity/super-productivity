@@ -136,7 +136,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Expected:**
 
 1. `isWhollyFreshClient()` = true
-2. `_hasMeaningfulLocalData()` = false
+2. `_hasMeaningfulStoreData()` = false
 3. Show native `confirmDialog()`: "Initial Sync — This appears to be a fresh installation. Remote data with X changes was found. Do you want to download and overwrite your local data with it?"
 4. If confirmed → download and apply all remote ops
 5. If cancelled → snackbar "Sync cancelled", no data applied
@@ -150,7 +150,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Expected:**
 
 1. `isWhollyFreshClient()` = true
-2. `_hasMeaningfulLocalData()` = true (checks for tasks, non-INBOX projects, non-system tags, notes)
+2. `_hasMeaningfulStoreData()` = true (checks for tasks, non-INBOX projects, non-system tags, notes)
 3. Throw `LocalDataConflictError`
 4. Show full conflict dialog: USE_LOCAL / USE_REMOTE / CANCEL
 5. USE_LOCAL → `forceUploadLocalState()` (creates SYNC_IMPORT)
@@ -169,7 +169,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 3. If meaningful → throw `LocalDataConflictError` → full conflict dialog
 4. If only config/system ops → proceed without dialog
 
-**Note:** This op-content check only applies to the file-based snapshot path. For SuperSync (incremental ops path), the fresh client check uses `_hasMeaningfulLocalData()` (store-based check) instead.
+**Note:** This op-content check only applies to the file-based snapshot path. For SuperSync (incremental ops path), the fresh client check uses `_hasMeaningfulStoreData()` (store-based check) instead.
 
 **User sees:** Conflict dialog only when real user data would be lost. ✓
 
@@ -184,15 +184,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Expected:**
 
 1. Download batch contains SYNC_IMPORT/BACKUP_IMPORT/REPAIR
-2. Check pending local ops → 0, BUT check `_hasMeaningfulLocalData()` → true
-3. **Show conflict dialog** with `scenario: 'INCOMING_IMPORT'` and `syncImportReason` from the incoming op
-4. Dialog recommends "Use Server Data" (primary button) since this is an incoming import
-5. USE_LOCAL → `forceUploadLocalState()` (overrides remote with local data)
-6. USE_REMOTE → `forceDownloadRemoteState()` (clears local ops, downloads from seq 0)
-7. CANCEL → return with `cancelled: true`, skip upload phase
-8. If no meaningful local data → `processRemoteOps()` applies silently (no dialog)
+2. Check pending local ops → no meaningful pending changes (`_hasMeaningfulPendingOps()` = false)
+3. **Apply silently via `processRemoteOps()`** — no dialog. Already-synced store data is not a conflict here; the SYNC_IMPORT is the new authoritative state.
+4. The reason `_hasMeaningfulStoreData()` is intentionally NOT checked: prompting an old client whose only "data" is already-synced state would let the user pick `USE_LOCAL` and force-upload that stale state as a new SYNC_IMPORT, rolling back the remote import for everyone.
+5. The dialog **does** appear only when there are unsynced pending user changes that would actually be discarded — see D.2.
 
-**User sees:** Conflict dialog explaining the reason for the remote import (encryption change, file import, etc.) with "Use Server Data" recommended. If client has no meaningful data, data is replaced seamlessly.
+**User sees:** Nothing. Data updates seamlessly to the new authoritative state. The user-facing warning happened on the originating device (`D_SERVER_MIGRATION_CONFIRM` / encryption flow), not here.
 
 ### D.2: Incoming Remote SYNC_IMPORT — Has Local Pending Ops ✓
 
@@ -257,16 +254,16 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 1. Upload completes → server returns piggybacked ops containing SYNC_IMPORT
 2. Check for SYNC_IMPORT in piggybacked ops BEFORE `processRemoteOps()`
-3. If found AND (pending local ops > 0 OR `_hasMeaningfulLocalData()` = true):
+3. If found AND `_hasMeaningfulPendingOps()` = true (unsynced TASK/PROJECT/TAG/NOTE C/U/D or full-state ops):
    - **Show conflict dialog** with `scenario: 'INCOMING_IMPORT'` and `syncImportReason` from the piggybacked op
    - USE_LOCAL → `forceUploadLocalState()` (overrides remote)
    - USE_REMOTE → `forceDownloadRemoteState()` (clears local, downloads from seq 0)
    - CANCEL → return with `cancelled: true`, callers skip post-upload logic
-4. If no meaningful local data → `processRemoteOps()` applies silently (no dialog)
+4. If no meaningful pending ops → `processRemoteOps()` applies silently (no dialog) regardless of whether the NgRx store already has user data — that data was already synced and the SYNC_IMPORT is the new authoritative state.
 
-**Previously broken:** Piggybacked SYNC_IMPORTs went directly to `processRemoteOps()` without the conflict dialog check that the download path has, silently replacing local state.
+**Mirrors the download path (D.1 / D.2):** the gate is unsynced pending changes, not store contents. Prompting on already-synced store data would let an old client roll back the remote import via USE_LOCAL.
 
-**User sees:** Conflict dialog explaining remote import detected. Same UX as download-path SYNC_IMPORT.
+**User sees:** Nothing when there are no pending changes — the user-facing warning happened on the originating device (`D_SERVER_MIGRATION_CONFIRM` / encryption flow), see D.1. Conflict dialog only when actual unsynced work is at risk.
 
 ---
 
@@ -566,7 +563,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 1. Same setup flow as I.1 (config + encryption prompt)
 2. `sync()` fires → download from server
 3. Server is empty (`latestServerSeq === 0`) AND `newOps.length === 0`
-4. Pre-op-log detection: `isWhollyFreshClient()` = true AND `_hasMeaningfulLocalData()` = true
+4. Pre-op-log detection: `isWhollyFreshClient()` = true AND `_hasMeaningfulStoreData()` = true
 5. `downloadRemoteOps()` calls `serverMigrationService.handleServerMigration()` to create a SYNC_IMPORT from local state
 6. Returns `serverMigrationHandled: true` → upload phase proceeds
 7. SYNC_IMPORT gets uploaded to server → other clients can download it
@@ -593,7 +590,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 5. Two paths depending on whether server sends snapshot or incremental ops:
    - **Snapshot path (file-based):** `isWhollyFreshClient()` = true → show `confirmDialog` with count=1 ("Remote data with 1 changes was found")
    - **Incremental ops path (SuperSync):** `isWhollyFreshClient()` = true → show `confirmDialog` with actual op count ("Remote data with N changes was found")
-6. `_hasMeaningfulLocalData()` = false (brand new client) → simple confirmation, not conflict dialog
+6. `_hasMeaningfulStoreData()` = false (brand new client) → simple confirmation, not conflict dialog
 7. If confirmed → apply all remote ops → upload phase (nothing to upload) → `IN_SYNC`
 8. If cancelled → snackbar "Sync cancelled"
 
@@ -607,7 +604,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 1. Client B: setup → server probe → correct encryption prompt (enter or create) → `sync()`
 2. Download remote ops → `isWhollyFreshClient()` = true (empty op log)
-3. `_hasMeaningfulLocalData()` = true (has tasks/projects/tags)
+3. `_hasMeaningfulStoreData()` = true (has tasks/projects/tags)
 4. Throw `LocalDataConflictError` → full conflict dialog: USE_LOCAL / USE_REMOTE / CANCEL
 5. USE_LOCAL → `forceUploadLocalState()` → creates SYNC_IMPORT, overwrites server
 6. USE_REMOTE → `forceDownloadRemoteState()` → clears local, downloads everything

@@ -158,18 +158,6 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.focusMode,
         ...appDataComplete.globalConfig.focusMode,
       },
-      taskWidget: {
-        ...DEFAULT_GLOBAL_CONFIG.taskWidget,
-        // Migrate from old 'overlayIndicator' key
-        ...(appDataComplete.globalConfig as any).overlayIndicator,
-        ...appDataComplete.globalConfig.taskWidget,
-        // Migrate deprecated misc.isOverlayIndicatorEnabled
-        ...(appDataComplete.globalConfig.misc?.isOverlayIndicatorEnabled !== undefined &&
-        appDataComplete.globalConfig.taskWidget?.isEnabled === undefined &&
-        (appDataComplete.globalConfig as any).overlayIndicator?.isEnabled === undefined
-          ? { isEnabled: appDataComplete.globalConfig.misc.isOverlayIndicatorEnabled }
-          : {}),
-      },
       sync: {
         ...incomingSyncConfig,
         syncProvider,
