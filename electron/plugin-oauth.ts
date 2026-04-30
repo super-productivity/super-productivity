@@ -96,13 +96,18 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
   ipcMain.on(IPC.PLUGIN_OAUTH_START, (_ev: unknown, { url }: { url: string }) => {
     log('Plugin OAuth: Opening system browser for auth');
 
-    // Validate URL protocol before opening to prevent file:// or javascript: abuse
+    // Validate URL protocol before opening to prevent file:// or javascript: abuse.
+    // Echo back the state param so the renderer can match the error to the
+    // pending flow (state validation in handleRedirectError).
+    let state: string | null = null;
     try {
       const parsed = new URL(url);
+      state = parsed.searchParams.get('state');
       if (parsed.protocol !== 'https:') {
         log('Plugin OAuth: Rejected non-https auth URL:', parsed.protocol);
         mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, {
           error: 'invalid_auth_url',
+          state,
         });
         cleanupServer();
         return;
@@ -110,6 +115,7 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
     } catch {
       mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, {
         error: 'invalid_auth_url',
+        state,
       });
       cleanupServer();
       return;
@@ -119,6 +125,7 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
       log('Plugin OAuth: Failed to open system browser:', err);
       mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, {
         error: 'failed_to_open_browser',
+        state,
       });
       cleanupServer();
     });

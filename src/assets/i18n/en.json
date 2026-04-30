@@ -438,6 +438,7 @@
         "OAUTH_CONNECTED": "OAuth account connected successfully.",
         "OAUTH_DISCONNECTED": "OAuth account disconnected.",
         "OAUTH_FAILED": "Authentication failed.",
+        "OAUTH_FAILED_WITH_DETAIL": "Authentication failed: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}"

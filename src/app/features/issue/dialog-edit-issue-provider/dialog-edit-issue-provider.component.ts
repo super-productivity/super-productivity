@@ -364,9 +364,12 @@ export class DialogEditIssueProviderComponent {
       });
       await this._loadDynamicOptions();
     } catch (e) {
+      IssueLog.err('OAuth connect failed', e);
+      const detail = e instanceof Error ? e.message : String(e);
       this._snackService.open({
         type: 'ERROR',
-        msg: T.F.ISSUE.S.OAUTH_FAILED,
+        msg: detail ? T.F.ISSUE.S.OAUTH_FAILED_WITH_DETAIL : T.F.ISSUE.S.OAUTH_FAILED,
+        translateParams: { detail },
       });
     } finally {
       this.isOAuthConnecting.set(false);
