@@ -20,7 +20,7 @@ import {
   TASK_FEATURE_NAME,
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
-import { Task } from '../../../features/tasks/task.model';
+import { DEFAULT_TASK, Task } from '../../../features/tasks/task.model';
 import { OpLog } from '../../../core/log';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
@@ -529,7 +529,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       }
     ).entities?.[entityId];
 
-    let updatedFeatureState;
+    let updatedFeatureState: unknown;
 
     if (!existingEntity) {
       // Entity was deleted locally but UPDATE won via LWW.
@@ -538,18 +538,44 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       OpLog.log(
         `lwwUpdateMetaReducer: Entity ${entityType}:${entityId} not found, recreating from LWW update`,
       );
+
+      // Issue #7330: An LWW Update payload from a partial-delta producer
+      // (e.g. _convertToLWWUpdatesIfNeeded fallback) can lack required fields.
+      // Calling adapter.addOne with such a payload creates an entity that fails
+      // Typia validation (e.g. task with undefined `title` / `timeSpentOnDay`),
+      // which dataRepair has no rule for, leaving the user stuck on the
+      // "Repair attempted but failed" dialog. For TASK entities we merge with
+      // DEFAULT_TASK so the recreated entity is always schema-valid.
+      //
+      // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
+      // Rationale:
+      // - Vector clocks are the authoritative conflict resolution mechanism, not `modified`
+      // - The `modified` field is used for UI display ("last edited X minutes ago")
+      // - Setting it to local time reflects when THIS client applied the winning state
+      // - The original timestamp from the winning client is preserved in entityData but
+      //   gets overwritten here because local display should show local application time
+      let entityToAdd: Record<string, unknown> = {
+        ...entityData,
+        modified: Date.now(),
+      };
+      if (entityType === 'TASK') {
+        const partialKeys: string[] = [];
+        if (entityData['title'] === undefined) partialKeys.push('title');
+        if (entityData['timeSpentOnDay'] === undefined)
+          partialKeys.push('timeSpentOnDay');
+        if (entityData['tagIds'] === undefined) partialKeys.push('tagIds');
+        if (entityData['subTaskIds'] === undefined) partialKeys.push('subTaskIds');
+        if (partialKeys.length > 0) {
+          OpLog.warn(
+            `lwwUpdateMetaReducer: TASK LWW Update payload is missing required fields ` +
+              `[${partialKeys.join(', ')}] for ${entityId} — backfilling from DEFAULT_TASK. ` +
+              `This indicates an upstream producer emitted a partial LWW Update.`,
+          );
+        }
+        entityToAdd = { ...DEFAULT_TASK, ...entityToAdd };
+      }
       updatedFeatureState = (adapter as EntityAdapter<any>).addOne(
-        {
-          ...entityData,
-          // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
-          // Rationale:
-          // - Vector clocks are the authoritative conflict resolution mechanism, not `modified`
-          // - The `modified` field is used for UI display ("last edited X minutes ago")
-          // - Setting it to local time reflects when THIS client applied the winning state
-          // - The original timestamp from the winning client is preserved in entityData but
-          //   gets overwritten here because local display should show local application time
-          modified: Date.now(),
-        } as any,
+        entityToAdd as any,
         featureState as any,
       );
     } else {

@@ -178,4 +178,89 @@ describe('autoFixTypiaErrors', () => {
       "Fixed: simpleCounter.entities['BpYFLFtlIGGgTNfZB-t2-'].countOnDay['2025-06-16'] from null to 0 for simpleCounter",
     );
   });
+
+  // Issue #7330: a partial LWW Update payload can recreate a task with
+  // required fields undefined. The meta-reducer is the primary fix; these
+  // rules ensure dataRepair can still recover any state that already
+  // contains such an entity (e.g. on disk from a prior corrupted session).
+  describe('issue #7330 — partial task entities from LWW recreate', () => {
+    it('should fix undefined task.title to ""', () => {
+      const mockData = createAppDataCompleteMock();
+      const errors = [
+        {
+          path: '$input.task.entities["rpt_partial_2026-04-29"].title',
+          expected: 'string',
+          value: undefined,
+        },
+      ];
+      (mockData as any).task = {
+        ids: ['rpt_partial_2026-04-29'],
+        entities: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'rpt_partial_2026-04-29': { id: 'rpt_partial_2026-04-29' },
+        },
+      };
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect((result as any).task.entities['rpt_partial_2026-04-29'].title).toBe('');
+    });
+
+    it('should fix undefined task.timeSpentOnDay to {}', () => {
+      const mockData = createAppDataCompleteMock();
+      const errors = [
+        {
+          path: '$input.task.entities["rpt_partial_2026-04-29"].timeSpentOnDay',
+          expected: 'Readonly<TimeSpentOnDayCopy>',
+          value: undefined,
+        },
+      ];
+      (mockData as any).task = {
+        ids: ['rpt_partial_2026-04-29'],
+        entities: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'rpt_partial_2026-04-29': { id: 'rpt_partial_2026-04-29' },
+        },
+      };
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect(
+        (result as any).task.entities['rpt_partial_2026-04-29'].timeSpentOnDay,
+      ).toEqual({});
+    });
+
+    it('should fix undefined task array fields (tagIds, subTaskIds, attachments) to []', () => {
+      const mockData = createAppDataCompleteMock();
+      const errors = [
+        {
+          path: '$input.task.entities["t1"].tagIds',
+          expected: 'Array<string>',
+          value: undefined,
+        },
+        {
+          path: '$input.task.entities["t1"].subTaskIds',
+          expected: 'Array<string>',
+          value: undefined,
+        },
+        {
+          path: '$input.task.entities["t1"].attachments',
+          expected: 'Array<TaskAttachmentCopy>',
+          value: undefined,
+        },
+      ];
+      (mockData as any).task = {
+        ids: ['t1'],
+        entities: {
+          t1: { id: 't1' },
+        },
+      };
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect((result as any).task.entities['t1'].tagIds).toEqual([]);
+      expect((result as any).task.entities['t1'].subTaskIds).toEqual([]);
+      expect((result as any).task.entities['t1'].attachments).toEqual([]);
+    });
+  });
 });

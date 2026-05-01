@@ -240,6 +240,71 @@ describe('lwwUpdateMetaReducer', () => {
       expect(updatedState[TASK_FEATURE_NAME]?.ids).toContain('new-task-from-lww');
     });
 
+    // Regression for issue #7330: a partial LWW Update payload (e.g. only the
+    // changed fields from _convertToLWWUpdatesIfNeeded fallback) used to create
+    // a task entity with `title`, `timeSpentOnDay`, `tagIds`, `subTaskIds`
+    // undefined, which then failed Typia validation and dead-ended the user
+    // on the "Repair attempted but failed" dialog.
+    it('should backfill required fields when recreating from a partial TASK LWW Update (#7330)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'rpt_partial_2026-04-29',
+        dueDay: '2026-04-29',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'rpt_partial_2026-04-29',
+        },
+      };
+
+      spyOn(OpLog, 'warn');
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TASK_FEATURE_NAME]?.entities[
+        'rpt_partial_2026-04-29'
+      ] as Task;
+
+      expect(recreated).toBeDefined();
+      // Schema-required fields are backfilled from DEFAULT_TASK
+      expect(recreated.title).toBe('');
+      expect(recreated.timeSpentOnDay).toEqual({});
+      expect(recreated.tagIds).toEqual([]);
+      expect(recreated.subTaskIds).toEqual([]);
+      expect(recreated.timeSpent).toBe(0);
+      expect(recreated.timeEstimate).toBe(0);
+      expect(recreated.isDone).toBe(false);
+      expect(recreated.attachments).toEqual([]);
+      // Fields the LWW Update did carry are preserved
+      expect(recreated.dueDay).toBe('2026-04-29');
+      // And we logged the partial-payload warning so the upstream producer
+      // can be identified from logs.
+      expect(OpLog.warn).toHaveBeenCalledWith(
+        jasmine.stringMatching(/missing required fields/),
+      );
+    });
+
+    it('should not warn when a TASK LWW Update payload is complete', () => {
+      const state = createMockState();
+      const completeAction = {
+        type: '[TASK] LWW Update',
+        id: 'complete-task',
+        title: 'Complete Task',
+        timeSpentOnDay: {},
+        tagIds: [],
+        subTaskIds: [],
+        meta: { isPersistent: true, entityType: 'TASK', entityId: 'complete-task' },
+      };
+
+      spyOn(OpLog, 'warn');
+      reducer(state, completeAction);
+
+      expect(OpLog.warn).not.toHaveBeenCalledWith(
+        jasmine.stringMatching(/missing required fields/),
+      );
+    });
+
     it('should skip update if action has no id', () => {
       const state = createMockState();
       const action = {

@@ -59,6 +59,39 @@ export const autoFixTypiaErrors = (
           OpLog.err(`Fixed: ${path} to 0 (was ${value})`);
         }
       } else if (
+        // Issue #7330: a TASK entity recreated by lwwUpdateMetaReducer from a
+        // partial LWW Update payload can be missing required scalar fields.
+        // The primary fix is in the meta-reducer; these branches are
+        // defense-in-depth so any future producer of partial task entities
+        // doesn't dead-end the user on the "Repair attempted but failed" dialog.
+        keys[0] === 'task' &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        keys[3] === 'title' &&
+        error.expected.includes('string') &&
+        value === undefined
+      ) {
+        setValueByPath(data, keys, '');
+        OpLog.err(`Fixed: ${path} from undefined to "" for task.title`);
+      } else if (
+        keys[0] === 'task' &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        keys[3] === 'timeSpentOnDay' &&
+        value === undefined
+      ) {
+        setValueByPath(data, keys, {});
+        OpLog.err(`Fixed: ${path} from undefined to {} for task.timeSpentOnDay`);
+      } else if (
+        keys[0] === 'task' &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        (keys[3] === 'tagIds' || keys[3] === 'subTaskIds' || keys[3] === 'attachments') &&
+        value === undefined
+      ) {
+        setValueByPath(data, keys, []);
+        OpLog.err(`Fixed: ${path} from undefined to [] for task.${keys[3]}`);
+      } else if (
         keys[0] === 'simpleCounter' &&
         keys[1] === 'entities' &&
         keys.length >= 5 &&
