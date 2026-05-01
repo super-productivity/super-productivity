@@ -146,7 +146,7 @@
     "@ctrl/tinycolor": "4.1.0"
   },
   "dependencies": {
-    "@capacitor/browser": "^7.0.4",
+    "@capacitor/browser": "^8.0.3",
     "@capacitor/ios": "^7.4.4",
     "@capacitor/keyboard": "^7.0.4",
     "@capacitor/status-bar": "^7.0.4",
