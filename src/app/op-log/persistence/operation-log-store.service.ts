@@ -268,8 +268,16 @@ export class OperationLogStoreService {
       }
     }
 
-    // All retries exhausted - throw custom error with context
-    throw new IndexedDBOpenError(lastError);
+    // All retries exhausted - log original error details (name + message)
+    // explicitly before wrapping, so future bug reports include the underlying
+    // cause and we can distinguish Chromium LevelDB locks from WebKit's iOS
+    // "Connection to Indexed Database server lost" (WebKit bug 273827, see
+    // issue #7415), quota errors, etc. The wrapper's `.message` already
+    // carries the formatted original detail, so logging the wrapper exposes
+    // everything we need.
+    const err = new IndexedDBOpenError(lastError);
+    Log.err('[OpLogStore] IndexedDB open failed after all retries.', err);
+    throw err;
   }
 
   private get db(): IDBPDatabase<OpLogDB> {
