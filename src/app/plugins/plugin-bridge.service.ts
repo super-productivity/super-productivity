@@ -599,7 +599,6 @@ export class PluginBridgeService implements OnDestroy {
 
       PluginLog.log('PluginBridge: Subtask added successfully', {
         taskId: createdTask.id,
-        taskData,
       });
 
       return createdTask.id;
