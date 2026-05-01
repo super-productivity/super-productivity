@@ -131,7 +131,14 @@ export class ArchiveStoreService {
       }
     }
 
-    throw new IndexedDBOpenError(lastError);
+    // Final-failure log. The wrapper's `.message` already carries the original
+    // error name + message (see IndexedDBOpenError), and `originalError`
+    // carries the raw object — so logging the wrapper exposes the underlying
+    // cause needed for diagnostics (e.g. distinguishing Chromium LevelDB locks
+    // from WebKit's iOS "Connection to Indexed Database server lost", #7415).
+    const err = new IndexedDBOpenError(lastError);
+    Log.err('[ArchiveStore] IndexedDB open failed after all retries.', err);
+    throw err;
   }
 
   private get db(): IDBPDatabase<ArchiveDBSchema> {
