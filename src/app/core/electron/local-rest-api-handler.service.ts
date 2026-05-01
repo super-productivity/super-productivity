@@ -4,6 +4,7 @@ import { TaskService } from '../../features/tasks/task.service';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { ProjectService } from '../../features/project/project.service';
+import { Project } from '../../features/project/project.model';
 import { TagService } from '../../features/tag/tag.service';
 import {
   LocalRestApiRequestPayload,
@@ -43,6 +44,17 @@ const REJECTED_TASK_FIELDS = ['parentId', 'subTaskIds'] as const;
  */
 const SUBTASK_INHERITED_FIELDS = ['projectId', 'tagIds'] as const;
 
+/** Keep project REST writes to scalar/basic fields. Task and note lists are reducer-owned. */
+const ALLOWED_PROJECT_FIELDS = new Set<string>([
+  'title',
+  'icon',
+  'isArchived',
+  'isHiddenFromMenu',
+  'isEnableBacklog',
+]);
+
+const REJECTED_PROJECT_FIELDS = ['taskIds', 'backlogTaskIds', 'noteIds'] as const;
+
 const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
   const result: Record<string, unknown> = {};
   for (const key of Object.keys(body)) {
@@ -55,6 +67,20 @@ const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
 
 const firstRejectedField = (body: Record<string, unknown>): string | undefined =>
   REJECTED_TASK_FIELDS.find((field) => field in body);
+
+const pickAllowedProjectFields = (body: Record<string, unknown>): Partial<Project> => {
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(body)) {
+    if (ALLOWED_PROJECT_FIELDS.has(key)) {
+      result[key] =
+        key === 'title' && typeof body[key] === 'string' ? body[key].trim() : body[key];
+    }
+  }
+  return result as Partial<Project>;
+};
+
+const firstRejectedProjectField = (body: Record<string, unknown>): string | undefined =>
+  REJECTED_PROJECT_FIELDS.find((field) => field in body);
 
 const getQueryParam = (
   query: Record<string, string | string[]>,
@@ -183,6 +209,14 @@ export class LocalRestApiHandlerService {
 
     if (method === 'GET' && path === '/projects') {
       return this._handleListProjects(requestId, query);
+    }
+
+    if (method === 'POST' && path === '/projects') {
+      return this._handleCreateProject(requestId, body);
+    }
+
+    if (segments[0] === 'projects' && segments[1] && segments.length >= 2) {
+      return this._handleProjectRoutes(method, segments, requestId, body);
     }
 
     if (method === 'GET' && path === '/tags') {
@@ -520,6 +554,109 @@ export class LocalRestApiHandlerService {
     return createSuccessResponse(requestId, 200, projects);
   }
 
+  private async _handleCreateProject(
+    requestId: string,
+    body: unknown,
+  ): Promise<LocalRestApiResponsePayload> {
+    if (!isRecord(body) || typeof body.title !== 'string' || !body.title.trim()) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        'Project title must be a non-empty string',
+      );
+    }
+
+    const rejected = firstRejectedProjectField(body);
+    if (rejected) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'UNSUPPORTED_FIELD',
+        `${rejected} cannot be set via project REST API`,
+      );
+    }
+
+    const projectFields = pickAllowedProjectFields(body);
+    const projectId = this._projectService.add(projectFields);
+    const createdProject = await this._getProjectById(projectId);
+    return createSuccessResponse(
+      requestId,
+      201,
+      createdProject || { id: projectId, ...projectFields },
+    );
+  }
+
+  private async _handleProjectRoutes(
+    method: string,
+    segments: string[],
+    requestId: string,
+    body: unknown,
+  ): Promise<LocalRestApiResponsePayload> {
+    const projectId = segments[1];
+
+    if (segments.length === 2) {
+      if (method === 'GET') {
+        const project = await this._getProjectById(projectId);
+        if (!project) {
+          return createErrorResponse(
+            requestId,
+            404,
+            'PROJECT_NOT_FOUND',
+            'Project not found',
+          );
+        }
+        return createSuccessResponse(requestId, 200, project);
+      }
+
+      if (method === 'PATCH') {
+        if (!isRecord(body)) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            'PATCH body must be a JSON object',
+          );
+        }
+
+        if ('title' in body && (typeof body.title !== 'string' || !body.title.trim())) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            'Project title must be a non-empty string',
+          );
+        }
+
+        const rejected = firstRejectedProjectField(body);
+        if (rejected) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'UNSUPPORTED_FIELD',
+            `${rejected} cannot be set via project REST API`,
+          );
+        }
+
+        const project = await this._getProjectById(projectId);
+        if (!project) {
+          return createErrorResponse(
+            requestId,
+            404,
+            'PROJECT_NOT_FOUND',
+            'Project not found',
+          );
+        }
+
+        this._projectService.update(projectId, pickAllowedProjectFields(body));
+        const updatedProject = await this._getProjectById(projectId);
+        return createSuccessResponse(requestId, 200, updatedProject || project);
+      }
+    }
+
+    return createErrorResponse(requestId, 404, 'NOT_FOUND', 'Route not found');
+  }
+
   private async _handleListTags(
     requestId: string,
     query: Record<string, string | string[]>,
@@ -546,6 +683,12 @@ export class LocalRestApiHandlerService {
     return (
       (await firstValueFrom(this._taskService.getByIdWithSubTaskData$(taskId))) ||
       undefined
+    );
+  }
+
+  private async _getProjectById(projectId: string): Promise<Project | undefined> {
+    return (
+      (await firstValueFrom(this._projectService.getByIdOnce$(projectId))) || undefined
     );
   }
 }

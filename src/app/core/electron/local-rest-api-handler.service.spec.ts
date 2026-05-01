@@ -45,6 +45,22 @@ describe('LocalRestApiHandlerService', () => {
     subTasks,
   });
 
+  const createMockProject = (id: string, overrides: Record<string, unknown> = {}): any =>
+    ({
+      id,
+      title: `Project ${id}`,
+      icon: 'list_alt',
+      isArchived: false,
+      isHiddenFromMenu: false,
+      isEnableBacklog: false,
+      taskIds: [],
+      backlogTaskIds: [],
+      noteIds: [],
+      advancedCfg: {},
+      theme: {},
+      ...overrides,
+    }) as any;
+
   const mockElectronApi = (): void => {
     (window as any).ea = {
       onLocalRestApiRequest: (handler: (payload: LocalRestApiRequestPayload) => void) => {
@@ -126,8 +142,10 @@ describe('LocalRestApiHandlerService', () => {
       ['add', 'update', 'remove', 'archive'],
       {
         list$: of([]),
+        getByIdOnce$: (_id: string) => of(undefined),
       },
     );
+    (projectServiceMock as any).add.and.returnValue('new-project-id');
 
     tagServiceMock = jasmine.createSpyObj(
       'TagService',
@@ -843,6 +861,135 @@ describe('LocalRestApiHandlerService', () => {
         );
 
         expect(response.body.ok).toBe(true);
+      });
+    });
+
+    describe('POST /projects', () => {
+      it('should reject unsafe list fields', async () => {
+        const createdProject = createMockProject('new-project-id', {
+          title: 'Symphony',
+          icon: 'hub',
+        });
+        Object.defineProperty(projectServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createdProject),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', {
+            body: {
+              title: '  Symphony  ',
+              icon: 'hub',
+              taskIds: ['unsafe'],
+              id: 'injected-id',
+            },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(projectServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      it('should create a project and strip unknown fields', async () => {
+        const createdProject = createMockProject('new-project-id', {
+          title: 'Symphony',
+          icon: 'hub',
+        });
+        Object.defineProperty(projectServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createdProject),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', {
+            body: {
+              title: '  Symphony  ',
+              icon: 'hub',
+              unknownField: 'ignored',
+            },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(201);
+        expect(projectServiceMock.add).toHaveBeenCalledWith({
+          title: 'Symphony',
+          icon: 'hub',
+        });
+        expect((response.body as any).data).toEqual(createdProject);
+      });
+
+      it('should return 400 for missing title', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', { body: { icon: 'hub' } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+      });
+
+      it('should return 400 for empty title', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', { body: { title: '   ' } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+      });
+    });
+
+    describe('PATCH /projects/:id', () => {
+      it('should update an existing project', async () => {
+        const existingProject = createMockProject('project-1', { title: 'Old' });
+        Object.defineProperty(projectServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(existingProject),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/projects/project-1', {
+            body: { title: '  New  ', icon: 'hub', unknownField: 'ignored' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(200);
+        expect(projectServiceMock.update).toHaveBeenCalledWith('project-1', {
+          title: 'New',
+          icon: 'hub',
+        });
+      });
+
+      it('should return 404 for non-existent project', async () => {
+        Object.defineProperty(projectServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(undefined),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/projects/missing', { body: { title: 'New' } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(404);
+        expect((response.body as any).error.code).toBe('PROJECT_NOT_FOUND');
+      });
+
+      it('should reject unsafe list fields', async () => {
+        const existingProject = createMockProject('project-1');
+        Object.defineProperty(projectServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(existingProject),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/projects/project-1', {
+            body: { taskIds: ['unsafe'] },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(projectServiceMock.update).not.toHaveBeenCalled();
       });
     });
   });
