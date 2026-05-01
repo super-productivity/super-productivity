@@ -21,7 +21,8 @@ The `docs/wiki/` directory is the manually curated, human-focused wiki that ship
 | New theming hook or theme variable change                            | `3.09-Theming.md`                                                              |
 | Web vs desktop capability differences                                | `3.05-Web-App-vs-Desktop.md`                                                   |
 
-If a change does not map to any of the above and is purely internal (refactor, test, perf, build), no wiki update is needed.
+If a change is purely internal (eg. refactor, test, perf, build), no wiki update is needed.
+Some subsystems may be so specific that code comments alone would suffice; in this case no wiki update is needed unless it directly contradicts what has already been written.
 
 ## How to write wiki content
 
@@ -43,4 +44,4 @@ Wiki notes are linted in CI before being synced to GitHub Wiki. See [`docs/wiki/
 
 ## Developer-facing docs
 
-The wiki is for end users. Developer-facing docs (`docs/styling-guide.md`, `docs/sync-and-op-log/`, `docs/plugin-development.md`, `ARCHITECTURE-DECISIONS.md`) follow the same "update alongside the code" rule when their subject changes.
+The wiki is for both end-users and developers. There are still developer-facing docs (`docs/styling-guide.md`, `docs/sync-and-op-log/`, `docs/plugin-development.md`, `ARCHITECTURE-DECISIONS.md`) which are either too old or too new to have been considered for integration into the wiki. Regardless, follow the same "update alongside the code" rule when those notes requires changes and point out when they can be integrated into the main wiki. Never refactor them into the new wiki without warning as some devs may be relying on them in their current location.
