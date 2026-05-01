@@ -199,7 +199,7 @@
     "@eslint/js": "^9.39.2",
     "@fontsource/open-sans": "^5.2.7",
     "@nextcloud/cdav-library": "^1.5.3",
-    "@ngrx/effects": "^21.0.1",
+    "@ngrx/effects": "^21.1.0",
     "@ngrx/entity": "^21.0.1",
     "@ngrx/schematics": "^21.0.1",
     "@ngrx/store": "21.0.1",
