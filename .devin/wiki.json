@@ -1,0 +1,27 @@
+{
+  "repo_notes": [
+    {
+      "content": "CRITICAL: The docs/wiki subdirectory contains manually curated user-facing documentation and should NOT be used as a source for generating technical code documentation. This wiki content is external documentation for end users, not part of the codebase to analyze. When generating the main wiki pages, completely exclude and ignore the docs/wiki directory.",
+      "author": "zenoprax"
+    },
+    {
+      "content": "Focus all technical documentation on the actual source code implementation in src/, electron/, packages/, e2e/, and related implementation directories. The main documentation should cover: Angular application structure in src/app/, Electron desktop integration in electron/, shared packages in packages/, end-to-end tests in e2e/, and build/deployment configuration. Exclude docs/wiki entirely from code analysis.",
+      "author": "zenoprax"
+    }
+  ],
+  "pages": [
+    {
+      "title": "Wiki Drift Analysis",
+      "purpose": "Compare the actual code implementation and behavior in src/, electron/, packages/, and related directories with the descriptions and claims in the manually maintained docs/wiki subdirectory. Identify discrepancies between what the wiki documents versus what the code actually implements. Report on: features documented in wiki that don't exist in code, features in code not documented in wiki, outdated information in wiki, incorrect behavioral descriptions, and any other drift. This is a quality assurance page for periodic manual review to maintain wiki accuracy.",
+      "parent": null,
+      "page_notes": [
+        {
+          "content": "This page should specifically analyze docs/wiki content and compare it against actual code behavior. Focus on finding concrete examples of drift such as: UI elements described in wiki that don't match actual implementation, configuration options documented differently than they work in code, workflow descriptions that are outdated, and feature capabilities that have changed."
+        },
+        {
+          "content": "Organize findings by category: Missing Features (in wiki but not in code), Undocumented Features (in code but not in wiki), Behavioral Discrepancies (works differently than documented), Outdated Information (was accurate but no longer is), and Configuration Drift (settings/options that have changed)."
+        }
+      ]
+    }
+  ]
+}
