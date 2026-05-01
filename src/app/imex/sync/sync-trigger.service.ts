@@ -33,6 +33,7 @@ import { ipcResume$, ipcSuspend$ } from '../../core/ipc-events';
 import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncLog } from '../../core/log';
+import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderId } from '../../op-log/sync-exports';
 
@@ -48,6 +49,7 @@ export class SyncTriggerService {
   private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _idleService = inject(IdleService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
+  private readonly _hydrationState = inject(HydrationStateService);
 
   constructor() {
     // When sync is disabled, set initialSyncDone immediately so UI shows
@@ -57,6 +59,18 @@ export class SyncTriggerService {
         this.setInitialSyncDone(true);
       }
     });
+
+    // Open the sync window directly on every resume source, bypassing the
+    // gated `getSyncTrigger$()` chain (which is only subscribed once
+    // dataInitState + config are ready). This handles the cold-start edge
+    // case where a resume arrives before the trigger pipeline is wired.
+    // The failsafe in `openSyncWindow()` cleans up if no sync follows.
+    if (IS_ANDROID_WEB_VIEW) {
+      androidInterface.onResume$.subscribe(() => this._hydrationState.openSyncWindow());
+    }
+    if (IS_ELECTRON) {
+      ipcResume$.subscribe(() => this._hydrationState.openSyncWindow());
+    }
   }
 
   // Note: This was previously connected to PFAPI's onLocalMetaUpdate$, which was a no-op.
@@ -254,7 +268,17 @@ export class SyncTriggerService {
         );
     return merge(
       // once immediately
-      _immediateSyncTrigger$.pipe(tap((v) => SyncLog.log('immediate sync trigger', v))),
+      _immediateSyncTrigger$.pipe(
+        tap((v) => {
+          SyncLog.log('immediate sync trigger', v);
+          // Open BEFORE the downstream debounceTime(100) so the resume → DAY_CHANGE
+          // → TODAY_TAG repair cascade (which fires inside that 100ms) sees the
+          // window already open and is suppressed by skipDuringSyncWindow().
+          // Failsafe in openSyncWindow() handles triggers that get debounced/
+          // throttled out before reaching SyncWrapperService.sync().
+          this._hydrationState.openSyncWindow();
+        }),
+      ),
 
       // and once we reset the sync interval for all other triggers
       // we do this to reset the audit time to avoid sync checks in short succession

@@ -85,6 +85,9 @@ export const isRelatedModelDataValid = (d: AppDataComplete): boolean => {
     return false;
   }
 
+  // Section orphans (missing context, stale taskIds) are repaired by
+  // `repairSections` in data-repair.ts; no separate validation step.
+
   return true;
 };
 

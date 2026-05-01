@@ -9,6 +9,8 @@ import {
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
+import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
+import { TaskWidgetConfig } from '../../features/config/global-config.model';
 import {
   GLOBAL_GENERAL_FORM_CONFIG,
   GLOBAL_IMEX_FORM_CONFIG,
@@ -19,6 +21,7 @@ import {
 } from '../../features/config/global-config-form-config.const';
 import {
   ConfigFormConfig,
+  GlobalConfigFormSectionKey,
   GlobalConfigSectionKey,
   GlobalConfigState,
   GlobalSectionConfig,
@@ -91,6 +94,7 @@ export class ConfigPageComponent implements OnInit {
 
   readonly configService = inject(GlobalConfigService);
   readonly syncSettingsService = inject(SyncConfigService);
+  readonly taskWidgetSettingsService = inject(TaskWidgetSettingsService);
 
   T: typeof T = T;
 
@@ -271,15 +275,24 @@ export class ConfigPageComponent implements OnInit {
   }
 
   async saveGlobalCfg($event: {
-    sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey;
+    sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey;
     config: Record<string, unknown>;
   }): Promise<void> {
     const config = $event.config;
-    const sectionKey = $event.sectionKey as GlobalConfigSectionKey;
+    const formSectionKey = $event.sectionKey;
 
-    if (!sectionKey || !config) {
+    if (!formSectionKey || !config) {
       throw new Error('Not enough data');
     }
+
+    // taskWidget is per-instance (not synced) — handled by a dedicated service
+    if (formSectionKey === 'taskWidget') {
+      this.taskWidgetSettingsService.update(config as Partial<TaskWidgetConfig>);
+      return;
+    }
+
+    // From here on we know it's a real GlobalConfigState section.
+    const sectionKey = formSectionKey as GlobalConfigSectionKey;
 
     // Check if user is trying to enable an experimental feature
     const currentAppFeatures = this.globalCfg?.appFeatures;
@@ -357,8 +370,11 @@ export class ConfigPageComponent implements OnInit {
   }
 
   getGlobalCfgSection(
-    sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey,
+    sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey,
   ): GlobalSectionConfig {
+    if (sectionKey === 'taskWidget') {
+      return this.taskWidgetSettingsService.settings() as GlobalSectionConfig;
+    }
     return (this.globalCfg as unknown as Record<string, GlobalSectionConfig>)[sectionKey];
   }
 

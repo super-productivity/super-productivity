@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 /**
  * Diagnostic harness for issue #7330 — "Sync conflict error on Windows after
  * hibernate". The goal is NOT to prove a preformed theory but to surface WHICH

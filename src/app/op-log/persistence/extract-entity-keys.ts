@@ -25,6 +25,7 @@ export const extractEntityKeysFromState = (state: AppStateSnapshot): string[] =>
     { key: 'SIMPLE_COUNTER', state: state.simpleCounter as EntityState },
     { key: 'TASK_REPEAT_CFG', state: state.taskRepeatCfg as EntityState },
     { key: 'METRIC', state: state.metric as EntityState },
+    { key: 'SECTION', state: state.section as EntityState },
   ];
 
   for (const { key, state: entityState } of entityStates) {

@@ -14,6 +14,7 @@ describe('HydrationStateService', () => {
     // Ensure clean state - meta-reducer flag may be dirty from previous tests
     service.endApplyingRemoteOps();
     service.clearPostSyncCooldown();
+    service.closeSyncWindow();
   });
 
   describe('initial state', () => {
@@ -194,6 +195,104 @@ describe('HydrationStateService', () => {
         expect(service.isInSyncWindow()).toBeFalse();
         done();
       }, 100);
+    });
+  });
+
+  describe('explicit sync window', () => {
+    // Regression coverage for the I_RESUME_APP gap (see `isInSyncWindow` JSDoc).
+    it('should set isInSyncWindow to true when openSyncWindow is called', () => {
+      expect(service.isInSyncWindow()).toBeFalse();
+
+      service.openSyncWindow();
+
+      expect(service.isInSyncWindow()).toBeTrue();
+    });
+
+    it('should clear isInSyncWindow when closeSyncWindow is called', () => {
+      service.openSyncWindow();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      service.closeSyncWindow();
+
+      expect(service.isInSyncWindow()).toBeFalse();
+    });
+
+    it('should stay open across openSyncWindow → applying → close', () => {
+      service.openSyncWindow();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      service.startApplyingRemoteOps();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      service.endApplyingRemoteOps();
+      // closeSyncWindow hasn't been called yet — still open
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      service.closeSyncWindow();
+      expect(service.isInSyncWindow()).toBeFalse();
+    });
+
+    it('closeSyncWindow is idempotent when no window is open', () => {
+      expect(service.isInSyncWindow()).toBeFalse();
+      expect(() => service.closeSyncWindow()).not.toThrow();
+      expect(service.isInSyncWindow()).toBeFalse();
+    });
+
+    it('failsafe auto-closes the window if closeSyncWindow is never called', (done) => {
+      service.openSyncWindow(50); // 50ms failsafe for fast test
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      setTimeout(() => {
+        expect(service.isInSyncWindow()).toBeFalse();
+        done();
+      }, 100);
+    });
+
+    it('closeSyncWindow cancels a pending failsafe', (done) => {
+      service.openSyncWindow(50);
+      service.closeSyncWindow();
+      expect(service.isInSyncWindow()).toBeFalse();
+
+      // Wait past failsafe; should remain closed
+      setTimeout(() => {
+        expect(service.isInSyncWindow()).toBeFalse();
+        done();
+      }, 100);
+    });
+
+    it('failsafeMs=0 skips the failsafe entirely', (done) => {
+      // Simulates `SyncWrapperService.sync()` opening the window without a
+      // wall-clock timer because its `finally` is authoritative. The window
+      // must stay open until explicitly closed, regardless of duration.
+      service.openSyncWindow(0);
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      // After what would have been the default failsafe interval, the window
+      // must still be open.
+      setTimeout(() => {
+        expect(service.isInSyncWindow()).toBeTrue();
+        service.closeSyncWindow();
+        expect(service.isInSyncWindow()).toBeFalse();
+        done();
+      }, 50);
+    });
+
+    it('reopening restarts the failsafe', (done) => {
+      service.openSyncWindow(50);
+      // Re-open with a longer failsafe before the first one fires
+      setTimeout(() => service.openSyncWindow(200), 25);
+
+      // At 80ms the original 50ms timer would have fired but the new 200ms
+      // timer (started at 25ms, fires at 225ms) still holds the window open
+      setTimeout(() => {
+        expect(service.isInSyncWindow()).toBeTrue();
+      }, 80);
+
+      // At 250ms the second timer should have fired
+      setTimeout(() => {
+        expect(service.isInSyncWindow()).toBeFalse();
+        done();
+      }, 280);
     });
   });
 

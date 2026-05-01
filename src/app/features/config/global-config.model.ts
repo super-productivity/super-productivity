@@ -279,7 +279,10 @@ export type GlobalConfigState = Readonly<{
   schedule: ScheduleConfig;
   dominaMode: DominaModeConfig;
   focusMode: FocusModeConfig;
-  taskWidget?: TaskWidgetConfig;
+  // NOTE: taskWidget is intentionally NOT part of GlobalConfigState — it is a
+  // per-instance setting persisted in localStorage (see TaskWidgetSettingsService)
+  // because OS behavior (window dragging/resizing, transparency) varies enough
+  // between Mac/Linux/Windows that syncing it across devices is undesirable.
   clipboardImages?: ClipboardImagesConfig;
 
   sync: SyncConfig;
@@ -287,6 +290,13 @@ export type GlobalConfigState = Readonly<{
 }>;
 
 export type GlobalConfigSectionKey = keyof GlobalConfigState | 'EMPTY';
+
+// 'taskWidget' isn't on GlobalConfigState (it's per-instance, see above), but
+// the form layer still uses this key in form configs and the config-page save
+// handler. Kept separate from `GlobalConfigSectionKey` so it cannot leak into
+// `updateGlobalConfigSection` action payloads (which would create phantom ops
+// in the sync log).
+export type GlobalConfigFormSectionKey = GlobalConfigSectionKey | 'taskWidget';
 
 export type GlobalSectionConfig =
   | MiscConfig
@@ -317,7 +327,7 @@ export type CustomCfgSection =
 // Intermediate model
 export interface ConfigFormSection<FormModel> {
   title: string;
-  key: GlobalConfigSectionKey | ProjectCfgFormKey;
+  key: GlobalConfigFormSectionKey | ProjectCfgFormKey;
   help?: string;
   helpArr?: { h?: string; p: string; p2?: string; p3?: string; p4?: string }[];
   customSection?: CustomCfgSection;

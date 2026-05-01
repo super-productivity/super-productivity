@@ -75,6 +75,7 @@ import { OperationLogStoreService } from '../../op-log/persistence/operation-log
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 
 /**
  * Identifies which error or UI path triggered a destructive forceUpload.
@@ -109,6 +110,7 @@ export class SyncWrapperService {
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
   private _wrappedProvider = inject(WrappedProviderService);
+  private _hydrationState = inject(HydrationStateService);
 
   syncState$ = this._providerManager.syncStatus$;
 
@@ -263,10 +265,16 @@ export class SyncWrapperService {
       return 'HANDLED_ERROR';
     }
     this._isSyncInProgress$.next(true);
+    // Open before any async work — see `HydrationStateService.isInSyncWindow`.
+    // Pass 0 to disable the failsafe: the `finally` block below is the
+    // authoritative close, and a slow sync (provider I/O > 2s) would
+    // otherwise expire the timer mid-sync and leave a stale-state gap.
+    this._hydrationState.openSyncWindow(0);
     // Set SYNCING status so ImmediateUploadService knows not to interfere
     this._providerManager.setSyncStatus('SYNCING');
     const result = await this._sync().finally(() => {
       this._isSyncInProgress$.next(false);
+      this._hydrationState.closeSyncWindow();
       // Safeguard: if _sync() threw or completed without setting a final status,
       // reset from SYNCING to UNKNOWN_OR_CHANGED to avoid getting stuck in SYNCING state
       if (this._providerManager.isSyncInProgress) {

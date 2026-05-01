@@ -99,11 +99,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isStartInBackground: false,
     isManualBreakStart: false,
   },
-  taskWidget: {
-    isEnabled: false,
-    isAlwaysShow: false,
-    opacity: 95,
-  },
   clipboardImages: {
     imagePath: null,
   },

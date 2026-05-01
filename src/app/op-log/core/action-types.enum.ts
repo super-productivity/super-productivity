@@ -132,6 +132,14 @@ export enum ActionType {
   REPEAT_CFG_DELETE_INSTANCE = '[TaskRepeatCfg] Delete Single Instance',
   REPEAT_CFG_UPSERT = '[TaskRepeatCfg] Upsert TaskRepeatCfg',
 
+  // Section actions (S)
+  SECTION_ADD = '[Section] Add Section',
+  SECTION_DELETE = '[Section] Delete Section',
+  SECTION_UPDATE = '[Section] Update Section',
+  SECTION_UPDATE_ORDER = '[Section] Update Section Order',
+  SECTION_ADD_TASK = '[Section] Add Task to Section',
+  SECTION_REMOVE_TASK = '[Section] Remove Task from Section',
+
   // SimpleCounter actions (S)
   COUNTER_ADD = '[SimpleCounter] Add SimpleCounter',
   COUNTER_UPDATE = '[SimpleCounter] Update SimpleCounter',

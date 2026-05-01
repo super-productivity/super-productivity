@@ -19,9 +19,18 @@ export type RepeatQuickSetting =
   | 'MONTHLY_CURRENT_DATE'
   | 'MONTHLY_FIRST_DAY'
   | 'MONTHLY_LAST_DAY'
+  | 'MONTHLY_NTH_WEEKDAY'
   | 'MONDAY_TO_FRIDAY'
   | 'YEARLY_CURRENT_DATE'
   | 'CUSTOM';
+
+// MONTHLY Nth-weekday anchor (issue #6040). Both fields together form an
+// anchor like "first Thursday" or "last Monday"; either field absent /
+// out-of-range falls back to legacy day-of-month recurrence.
+// 1..4 = 1st through 4th occurrence; -1 = last occurrence in the month
+export type MonthlyWeekOfMonth = 1 | 2 | 3 | 4 | -1;
+// 0 = Sunday … 6 = Saturday (matches Date.getDay() and TASK_REPEAT_WEEKDAY_MAP)
+export type MonthlyWeekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface TaskRepeatCfgCopy {
   id: string;
@@ -55,6 +64,13 @@ export interface TaskRepeatCfgCopy {
   friday?: boolean;
   saturday?: boolean;
   sunday?: boolean;
+
+  // MONTHLY-only: when both fields are set and in range, the recurrence
+  // anchors to the Nth weekday of each month instead of the numeric day.
+  // Anchor presence is the discriminator — there is no separate mode field.
+  // Issue #6040.
+  monthlyWeekOfMonth?: MonthlyWeekOfMonth;
+  monthlyWeekday?: MonthlyWeekday;
 
   // advanced
   notes: string | undefined;

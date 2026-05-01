@@ -281,21 +281,27 @@
 }
 
 .title {
+  --title-padding-y: 6px;
+  --title-line-height: 1.4em;
+
   font-size: 14px;
-  @include truncateText();
   flex: 1 1 auto;
-  padding: 6px;
+  min-width: 0;
+  padding: var(--title-padding-y) 6px;
+  box-sizing: border-box;
   font-weight: 400;
   line-height: 1.4;
   max-height: 100%;
+  overflow: hidden;
   text-align: left;
-  column-width: 250px;
 
   @include mq(xs, max) {
-    column-width: 120px;
+    --title-padding-y: var(--s-half);
+    --title-line-height: 1.3em;
+
     font-size: 11px;
     line-height: 1.3;
-    padding: var(--s-half);
+    padding: var(--title-padding-y);
   }
 
   @include mq(xxs, max) {
@@ -303,14 +309,36 @@
   }
 
   :host.very-short-event & {
+    max-height: 100%;
     padding: 1px 6px var(--s-quarter);
+  }
+
+  // Keep padding off the clamped element. Padding on a line-clamped box can
+  // reveal a sliver of the next hidden line in Chromium.
+  .title-text {
+    display: -webkit-box;
+    max-height: calc(var(--title-line-clamp, 1) * var(--title-line-height));
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--title-line-clamp, 1);
+    line-clamp: var(--title-line-clamp, 1);
+  }
+
+  :host.very-short-event & .title-text {
+    display: block;
+    @include truncateText();
   }
 
   :host.SplitTaskContinued &,
   :host.RepeatProjectionSplitContinued &,
   :host.SplitTaskContinuedLast &,
   :host.RepeatProjectionSplitContinuedLast & {
-    line-clamp: 1;
+    .title-text {
+      -webkit-line-clamp: 1;
+      line-clamp: 1;
+    }
   }
 
   // Override inherited pointer-events: none from :host > * so links are clickable.

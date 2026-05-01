@@ -99,6 +99,13 @@ export const CALDAV_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderCaldav>[]
           type: 'text',
         },
       },
+      {
+        key: 'isAddSubTasks',
+        type: 'checkbox',
+        props: {
+          label: T.F.CALDAV.FORM.IS_ADD_SUB_TASKS,
+        },
+      },
     ],
   },
   ...TWO_WAY_SYNC_FORM_FIELDS,

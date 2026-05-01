@@ -62,27 +62,32 @@
 </div>
 <!-- -->
 
-<div class="title">
-  <!--  {{ se().data['plannedForDay'] }}-->
-  <!--  {{ scheduledClockStr }}-->
-  <!--  {{se().id}} __ {{se().data?.id}} __-->
-  <!-- -->
-
-  @if (
-    se().type === SVEType.SplitTaskContinuedLast ||
-    se().type === SVEType.SplitTaskContinued ||
-    se().type === SVEType.RepeatProjectionSplitContinued ||
-    se().type === SVEType.RepeatProjectionSplitContinuedLast
-  ) {
-    ...
+<div
+  #titleEl
+  class="title"
+>
+  <span class="title-text">
+    <!--  {{ se().data['plannedForDay'] }}-->
+    <!--  {{ scheduledClockStr }}-->
+    <!--  {{se().id}} __ {{se().data?.id}} __-->
     <!-- -->
-  } @else {
-    @if (titleHasLinks()) {
-      <span [innerHTML]="title() | renderLinks"></span>
+
+    @if (
+      se().type === SVEType.SplitTaskContinuedLast ||
+      se().type === SVEType.SplitTaskContinued ||
+      se().type === SVEType.RepeatProjectionSplitContinued ||
+      se().type === SVEType.RepeatProjectionSplitContinuedLast
+    ) {
+      ...
+      <!-- -->
     } @else {
-      {{ title() }}
+      @if (titleHasLinks()) {
+        <span [innerHTML]="title() | renderLinks"></span>
+      } @else {
+        {{ title() }}
+      }
     }
-  }
+  </span>
 </div>
 
 @if (task()) {

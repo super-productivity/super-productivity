@@ -109,6 +109,7 @@ describe('WorkViewComponent', () => {
               estimateRemainingToday$: of(0),
               workingToday$: of(0),
               isTodayList$: of(false),
+              activeWorkContextId$: of(null),
               activeWorkContextTypeAndId$: of({
                 activeType: 'TAG',
                 activeId: 'TODAY',

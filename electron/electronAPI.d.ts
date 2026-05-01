@@ -2,6 +2,7 @@ import { IpcRendererEvent } from 'electron';
 import {
   GlobalConfigState,
   TakeABreakConfig,
+  TaskWidgetConfig,
 } from '../src/app/features/config/global-config.model';
 import { KeyboardConfig } from '../src/app/features/config/keyboard-config.model';
 import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
@@ -172,6 +173,8 @@ export interface ElectronAPI {
   sendAppSettingsToElectron(globalCfg: GlobalConfigState): void;
 
   sendSettingsUpdate(globalCfg: GlobalConfigState): void;
+
+  updateTaskWidgetSettings(cfg: TaskWidgetConfig): void;
 
   updateTitleBarDarkMode(isDarkMode: boolean): void;
 
