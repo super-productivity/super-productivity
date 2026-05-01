@@ -238,7 +238,7 @@
         position: relative;
         display: inline-block;
         // prevent overflow for looooong words
-        word-break: break-word;
+        overflow-wrap: anywhere;
 
         &:before {
           content: '•';
