@@ -86,6 +86,11 @@ class FullscreenActivity : AppCompatActivity() {
             return
         }
 
+        // We made it past the pre-flight version check and the WebView is alive.
+        // Persist the detected version so a transient mis-read on a later launch
+        // can't lock the user out, and clear any prior user override if healthy.
+        WebViewCompatibilityChecker.recordSuccessfulLoad(this, compatibility.majorVersion)
+
         // FOR TESTING HTML INPUTS QUICKLY
 ////        webView = (application as App).wv
 //        webView = WebHelper().instanceView(this)

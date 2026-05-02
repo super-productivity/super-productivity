@@ -53,6 +53,7 @@ interface PluginConfigData {
             [form]="form"
             [fields]="fields"
             [model]="model"
+            (modelChange)="model = $event"
           ></formly-form>
         </form>
       }

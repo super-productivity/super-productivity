@@ -111,9 +111,6 @@ jobs:
       - name: Build Frontend & Electron
         run: npm run build
 
-      - name: Install Snapcraft
-        uses: samuelmeuli/action-snapcraft@fceeb3c308e76f3487e72ef608618de625fb7fe8 # v3
-
       - name: Build/Release Electron app
         uses: johannesjo/action-electron-builder@9ea9e2d991c97668843d57337848e3e2b1ffab3d # v1
         with:
@@ -124,13 +121,26 @@ jobs:
       # rename to possibly fix release issue
       - run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;
       # Release to edge if no tag and to candidate if tag
+      # Uses Canonical's official snapcraft container instead of `sudo snap
+      # install snapcraft --classic` on the runner, which has been a recurring
+      # source of "unable to contact snap store" failures.
       - #otherwise it would be executed twice
         if: false == startsWith(github.ref, 'refs/tags/v')
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
-          max_attempts: 2
-          timeout_minutes: 11
-          command: snapcraft upload .tmp/app-builds/sp.snap --release edge
+          max_attempts: 3
+          timeout_minutes: 15
+          retry_wait_seconds: 60
+          command: |
+            docker run --rm \
+              -v "$PWD/.tmp/app-builds:/work" \
+              -w /work \
+              -e SNAPCRAFT_STORE_CREDENTIALS \
+              -e SNAPCRAFT_HAS_TTY=true \
+              ghcr.io/canonical/snapcraft:8_core24 \
+              snapcraft upload sp.snap --release edge
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
       #      - run: snapcraft push .tmp/app-builds/sp.snap --release candidate
       #        if: startsWith(github.ref, 'refs/tags/v')
   #      - run: snapcraft promote superproductivity --from-channel latest/edge --to-channel latest/candidate --yes

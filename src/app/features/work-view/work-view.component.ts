@@ -3,6 +3,7 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
+  DestroyRef,
   effect,
   ElementRef,
   afterNextRender,
@@ -13,7 +14,12 @@ import {
   signal,
   ViewChild,
 } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { MatMenuModule } from '@angular/material/menu';
+
 import { TaskService } from '../tasks/task.service';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
@@ -30,14 +36,24 @@ import {
 } from 'rxjs';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
+import { of } from 'rxjs';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-project-change.ani';
 import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
 import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { CdkDropListGroup } from '@angular/cdk/drag-drop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { SectionService } from '../section/section.service';
+import { Section } from '../section/section.model';
+import {
+  CdkDrag,
+  CdkDragDrop,
+  CdkDragHandle,
+  CdkDropList,
+  CdkDropListGroup,
+  moveItemInArray,
+} from '@angular/cdk/drag-drop';
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
@@ -82,6 +98,9 @@ import { recordSearchNavDebug } from '../../util/search-nav-debug';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CdkDropListGroup,
+    CdkDropList,
+    CdkDrag,
+    CdkDragHandle,
     CdkScrollable,
     MatTooltip,
     MatIcon,
@@ -95,6 +114,7 @@ import { recordSearchNavDebug } from '../../util/search-nav-debug';
     TranslatePipe,
     CollapsibleComponent,
     CommonModule,
+    MatMenuModule,
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
@@ -107,6 +127,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   taskService = inject(TaskService);
   takeABreakService = inject(TakeABreakService);
   layoutService = inject(LayoutService);
+  sectionService = inject(SectionService);
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
   private _activatedRoute = inject(ActivatedRoute);
@@ -115,6 +136,8 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _store = inject(Store);
   private _snackService = inject(SnackService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _matDialog = inject(MatDialog);
+  private _destroyRef = inject(DestroyRef);
 
   isFinishDayEnabled = computed(
     () => this._globalConfigService.appFeatures().isFinishDayEnabled,
@@ -169,6 +192,48 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     () =>
       !this.customizerService.isCustomized() && this.repeatCfgsForContext().length > 0,
   );
+
+  // Section Logic
+  sections = toSignal(
+    this.workContextService.activeWorkContextId$.pipe(
+      switchMap((id) =>
+        id
+          ? this.sectionService.getSectionsByContextId$(id)
+          : of([] as readonly Section[]),
+      ),
+    ),
+    { initialValue: [] as readonly Section[] },
+  );
+
+  undoneTasksBySection = computed(() => {
+    const tasks = this.undoneTasks();
+    const sections = this.sections();
+
+    if (!sections.length) {
+      return { dict: {} as Record<string, TaskWithSubTasks[]>, noSection: tasks };
+    }
+
+    // Build sectionId-by-taskId in O(m) where m = total taskIds across sections.
+    const sectionByTaskId = new Map<string, string>();
+    for (const s of sections) {
+      for (const tId of s.taskIds ?? []) sectionByTaskId.set(tId, s.id);
+    }
+
+    const dict: Record<string, TaskWithSubTasks[]> = {};
+    for (const s of sections) dict[s.id] = [];
+    const noSection: TaskWithSubTasks[] = [];
+
+    for (const task of tasks) {
+      const sId = sectionByTaskId.get(task.id);
+      if (sId) {
+        dict[sId].push(task);
+      } else {
+        noSection.push(task);
+      }
+    }
+
+    return { dict, noSection };
+  });
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -324,6 +389,39 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this.layoutService.isWorkViewScrolled.set(false);
   }
 
+  deleteSection(id: string): void {
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        data: {
+          message: T.CONFIRM.DELETE_SECTION,
+        },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((isConfirm: boolean) => {
+        if (isConfirm) {
+          this.sectionService.deleteSection(id);
+        }
+      });
+  }
+
+  editSection(id: string, title: string): void {
+    this._matDialog
+      .open(DialogPromptComponent, {
+        data: {
+          placeholder: T.WW.ADD_SECTION_TITLE,
+          txtValue: title,
+        },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((newTitle: string | undefined) => {
+        if (newTitle?.trim()) {
+          this.sectionService.updateSection(id, { title: newTitle });
+        }
+      });
+  }
+
   resetBreakTimer(): void {
     this.takeABreakService.resetTimer();
   }
@@ -353,6 +451,23 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         taskIds: overdueTasks.map((t) => t.id),
       }),
     );
+  }
+
+  // Reject task drags into the section-reorder list (cdkDropListGroup
+  // shares targets). `contextType` is section-exclusive.
+  acceptSectionDragOnly = (drag: CdkDrag): boolean => {
+    const data = drag.data as Section | undefined;
+    return !!data && 'contextType' in data;
+  };
+
+  dropSection(event: CdkDragDrop<Section[]>): void {
+    if (event.previousIndex === event.currentIndex) return;
+    const contextId = this.workContextService.activeWorkContextId;
+    if (!contextId) return;
+
+    const ids = this.sections().map((s) => s.id);
+    moveItemInArray(ids, event.previousIndex, event.currentIndex);
+    this.sectionService.updateSectionOrder(contextId, ids);
   }
 
   private _initScrollTracking(): void {

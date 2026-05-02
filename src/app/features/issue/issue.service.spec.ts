@@ -73,6 +73,7 @@ describe('IssueService', () => {
       'moveToCurrentWorkContext',
       'add',
       'addAndSchedule',
+      'addSubTaskTo',
       'restoreTask',
     ]);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
@@ -398,6 +399,100 @@ describe('IssueService', () => {
       const addCall = taskServiceSpy.add.calls.mostRecent();
       const taskData = addCall.args[2] as Partial<Task>;
       expect(taskData.notes).toBe('Provider-set notes');
+    });
+  });
+
+  describe('addTaskFromIssue - CalDAV sub-task / archived-parent path', () => {
+    const caldavIssue = {
+      id: 'child-uid',
+      title: 'Child Task',
+      related_to: 'parent-uid',
+    };
+    let caldavServiceMock: jasmine.SpyObj<CaldavCommonInterfacesService>;
+
+    beforeEach(() => {
+      caldavServiceMock = service.ISSUE_SERVICE_MAP[
+        'CALDAV'
+      ] as jasmine.SpyObj<CaldavCommonInterfacesService>;
+      (caldavServiceMock as any).getAddTaskData = () => ({
+        title: 'Child Task',
+        related_to: 'parent-uid',
+      });
+      (caldavServiceMock as any).getSubTasks = jasmine
+        .createSpy('getSubTasks')
+        .and.resolveTo([]);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({ defaultProjectId: 'proj-1', defaultTagIds: [] } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+        configurable: true,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+        configurable: true,
+      });
+    });
+
+    it('should add child as a top-level task when parent is archived', async () => {
+      // child-uid: not in SP → returns null (so it gets added fresh)
+      // parent-uid: in archive → _tryAddSubTask returns undefined → fallback to top-level
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.callFake(async (id: string) => {
+        if (id === 'parent-uid') {
+          return {
+            task: { id: 'parent-task-id', parentId: null } as any,
+            subTasks: null,
+            isFromArchive: true,
+          };
+        }
+        return null;
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.add).toHaveBeenCalled();
+      expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    });
+
+    it('should add child as top-level task when parent is not in SP yet', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.add).toHaveBeenCalled();
+      expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    });
+
+    it('should call addSubTaskTo once per child even when provider returns duplicates', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('parent-task-id');
+      taskServiceSpy.addSubTaskTo.and.returnValue('sub-id');
+
+      // Provider returns the same child twice (malformed data).
+      // _addSubTasks iterates the list verbatim, so addSubTaskTo fires once per entry.
+      // The duplicate-prevention guard is at the addTaskFromIssue level (checkForTaskWithIssueEverywhere),
+      // not inside _addSubTasks — this test documents the current expected call count.
+      const duplicate = { id: 'child-uid', title: 'Child Task' };
+      (caldavServiceMock as any).getSubTasks = jasmine
+        .createSpy('getSubTasks')
+        .and.resolveTo([duplicate, duplicate]);
+
+      await service.addTaskFromIssue({
+        issueDataReduced: { id: 'parent-uid', title: 'Parent Task' } as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledTimes(2);
     });
   });
 

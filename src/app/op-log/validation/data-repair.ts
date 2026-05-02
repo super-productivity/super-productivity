@@ -39,6 +39,7 @@ const ENTITY_STATE_KEYS: (keyof AppDataCompleteLegacy)[] = [
   'metric',
   'task',
   'taskRepeatCfg',
+  'section',
 ];
 
 export const dataRepair = (
@@ -93,6 +94,14 @@ export const dataRepair = (
     dataOut.reminders = [];
   }
 
+  // Initialize section slice if missing — legacy pf databases (pre-section
+  // feature) don't carry one, and Typia's `DataToValidate` validator
+  // requires it. Without this, `validateFull` after `dataRepair` still
+  // fails and OperationLogMigrationService aborts the migration.
+  if (!dataOut.section) {
+    dataOut.section = { ids: [], entities: {} };
+  }
+
   // NOTE: We no longer merge archiveOld into archiveYoung during repair.
   // The dual-archive architecture keeps them separate for proper age-based archiving.
 
@@ -116,12 +125,14 @@ export const dataRepair = (
   dataOut = _fixInvalidDueDateStrings(dataOut, summary);
   dataOut = _fixTaskRepeatMissingWeekday(dataOut, summary);
   dataOut = _fixTaskRepeatCfgInvalidQuickSetting(dataOut, summary);
+  dataOut = _stripLegacyMonthlyMode(dataOut, summary);
   dataOut = _createInboxProjectIfNecessary(dataOut, summary);
   dataOut = _fixOrphanedNotes(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromTasks(dataOut, summary);
   dataOut = _removeNonExistentTagsFromTasks(dataOut, summary);
   dataOut = _addInboxProjectIdIfNecessary(dataOut, summary);
   dataOut = _repairMenuTree(dataOut, summary);
+  dataOut = _repairSections(dataOut, summary);
   dataOut = autoFixTypiaErrors(dataOut, errors);
   summary.typeErrorsFixed = errors.length;
 
@@ -242,6 +253,7 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (
       'MONTHLY_CURRENT_DATE',
       'MONTHLY_FIRST_DAY',
       'MONTHLY_LAST_DAY',
+      'MONTHLY_NTH_WEEKDAY',
     ];
     Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
       const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;
@@ -258,6 +270,36 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (
       }
     });
   }
+  return data;
+};
+
+// Issue #6040 follow-up: an earlier development build of the Nth-weekday
+// feature persisted a `monthlyMode` discriminator that has since been
+// dropped. Anchor presence is now the sole source of truth, but a cfg
+// stored as `{monthlyMode: 'DAY_OF_MONTH', monthlyWeekOfMonth: …, monthlyWeekday: …}`
+// would silently flip to NTH-weekday behavior on upgrade. Clear stale
+// anchors when the legacy mode said day-of-month, and strip the field.
+const _stripLegacyMonthlyMode = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  if (!data.taskRepeatCfg?.entities) {
+    return data;
+  }
+  Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
+    const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy & {
+      monthlyMode?: string;
+    };
+    if (!('monthlyMode' in cfg)) {
+      return;
+    }
+    if (cfg.monthlyMode === 'DAY_OF_MONTH') {
+      cfg.monthlyWeekOfMonth = undefined;
+      cfg.monthlyWeekday = undefined;
+    }
+    delete cfg.monthlyMode;
+    summary.entityStateFixed++;
+  });
   return data;
 };
 
@@ -1354,5 +1396,68 @@ const _repairMenuTree = (
     summary.structureRepaired++;
   }
 
+  return data;
+};
+
+const _repairSections = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  const sectionState = data.section;
+  if (!sectionState?.ids?.length) return data;
+
+  const validProjectIds = new Set<string>(data.project.ids as string[]);
+  const validTaskIds = new Set<string>(data.task.ids as string[]);
+
+  const keptIds: string[] = [];
+  const newEntities: typeof sectionState.entities = {};
+  let droppedSections = 0;
+  let droppedTaskRefs = 0;
+
+  for (const sid of sectionState.ids as string[]) {
+    const section = sectionState.entities[sid];
+    if (!section) continue;
+
+    // Sections are only valid in PROJECT contexts (with a live projectId)
+    // or the singleton TODAY tag. Custom-tag sections are rejected at
+    // dispatch boundaries; surviving ones in stored data are dropped.
+    const isValidProject =
+      section.contextType === 'PROJECT' && validProjectIds.has(section.contextId);
+    const isTodayTag =
+      section.contextType === 'TAG' && section.contextId === TODAY_TAG.id;
+    if (!isValidProject && !isTodayTag) {
+      droppedSections++;
+      continue;
+    }
+
+    // Defend against malformed remote payloads where `taskIds` is not
+    // an array (truthy `?? []` would slip through and `.filter` would
+    // throw or yield garbage on a string / object value).
+    const taskIds = Array.isArray(section.taskIds) ? section.taskIds : [];
+    const filtered = taskIds.filter((tid) => validTaskIds.has(tid));
+    if (filtered.length !== taskIds.length) {
+      droppedTaskRefs += taskIds.length - filtered.length;
+      newEntities[sid] = { ...section, taskIds: filtered };
+    } else {
+      newEntities[sid] = section;
+    }
+    keptIds.push(sid);
+  }
+
+  if (droppedSections === 0 && droppedTaskRefs === 0) return data;
+
+  data.section = { ids: keptIds, entities: newEntities };
+  if (droppedSections > 0) {
+    OpLog.warn(
+      `[data-repair] Removed ${droppedSections} section(s) with missing project/tag`,
+    );
+    summary.invalidReferencesRemoved += droppedSections;
+  }
+  if (droppedTaskRefs > 0) {
+    OpLog.warn(
+      `[data-repair] Removed ${droppedTaskRefs} stale task reference(s) from sections`,
+    );
+    summary.invalidReferencesRemoved += droppedTaskRefs;
+  }
   return data;
 };

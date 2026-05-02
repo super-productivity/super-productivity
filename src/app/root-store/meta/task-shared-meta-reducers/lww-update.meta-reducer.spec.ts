@@ -8,7 +8,9 @@ import { Task } from '../../../features/tasks/task.model';
 import { Project } from '../../../features/project/project.model';
 import { Tag } from '../../../features/tag/tag.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { INBOX_PROJECT } from '../../../features/project/project.const';
 import { OpLog } from '../../../core/log';
+import { appDataValidators } from '../../../op-log/validation/validation-fn';
 import { CONFIG_FEATURE_NAME } from '../../../features/config/store/global-config.reducer';
 import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
@@ -98,8 +100,9 @@ describe('lwwUpdateMetaReducer', () => {
         lastCurrentTaskId: null,
       },
       [PROJECT_FEATURE_NAME]: {
-        ids: [PROJECT_ID],
+        ids: [INBOX_PROJECT.id, PROJECT_ID],
         entities: {
+          [INBOX_PROJECT.id]: createMockProject({ id: INBOX_PROJECT.id }),
           [PROJECT_ID]: createMockProject(),
         },
       },
@@ -240,6 +243,224 @@ describe('lwwUpdateMetaReducer', () => {
       expect(updatedState[TASK_FEATURE_NAME]?.ids).toContain('new-task-from-lww');
     });
 
+    // Regression for issue #7330: a partial LWW Update payload (e.g. only the
+    // changed fields from _convertToLWWUpdatesIfNeeded fallback) used to create
+    // a task entity with `title`, `timeSpentOnDay`, `tagIds`, `subTaskIds`
+    // undefined, which then failed Typia validation and dead-ended the user
+    // on the "Repair attempted but failed" dialog.
+    it('should backfill required fields when recreating from a partial TASK LWW Update (#7330)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'rpt_partial_2026-04-29',
+        dueDay: '2026-04-29',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'rpt_partial_2026-04-29',
+        },
+      };
+
+      spyOn(OpLog, 'warn');
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TASK_FEATURE_NAME]?.entities[
+        'rpt_partial_2026-04-29'
+      ] as Task;
+
+      expect(recreated).toBeDefined();
+      // Schema-required fields are backfilled from DEFAULT_TASK
+      expect(recreated.title).toBe('');
+      expect(recreated.timeSpentOnDay).toEqual({});
+      expect(recreated.tagIds).toEqual([]);
+      expect(recreated.subTaskIds).toEqual([]);
+      expect(recreated.timeSpent).toBe(0);
+      expect(recreated.timeEstimate).toBe(0);
+      expect(recreated.isDone).toBe(false);
+      expect(recreated.attachments).toEqual([]);
+      // Fields the LWW Update did carry are preserved
+      expect(recreated.dueDay).toBe('2026-04-29');
+      // And we logged the partial-payload warning so the upstream producer
+      // can be identified from logs.
+      expect(OpLog.warn).toHaveBeenCalledWith(
+        jasmine.stringMatching(/missing required fields/),
+      );
+    });
+
+    // #7330 follow-up: DEFAULT_TASK Omits projectId (since it varies per task),
+    // so the basic merge leaves projectId undefined when the LWW payload is partial.
+    // TaskCopy declares projectId as required, so Typia validation still fails.
+    // Backfill with INBOX_PROJECT.id (the safe default for orphan tasks).
+    it('should backfill projectId to INBOX_PROJECT.id when partial TASK LWW Update lacks it (#7330)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'rpt_no_project_2026-04-29',
+        dueDay: '2026-04-29',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'rpt_no_project_2026-04-29',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TASK_FEATURE_NAME]?.entities[
+        'rpt_no_project_2026-04-29'
+      ] as Task;
+
+      expect(recreated).toBeDefined();
+      expect(recreated.projectId).toBe('INBOX_PROJECT');
+    });
+
+    // #7330 follow-up #2: a producer that emits `title: null` (rather than
+    // omitting it) used to slip past the partial-keys check (=== undefined)
+    // AND have `null` overwrite the DEFAULT_TASK default in the spread.
+    // Both null and undefined must be treated as "missing" for the recreate
+    // path so Typia validation passes downstream.
+    it('should treat null required fields as missing and backfill from defaults', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'partial_with_nulls',
+        title: null,
+        timeSpentOnDay: null,
+        tagIds: null,
+        subTaskIds: null,
+        attachments: null,
+        projectId: null,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'partial_with_nulls',
+        },
+      };
+
+      spyOn(OpLog, 'warn');
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TASK_FEATURE_NAME]?.entities[
+        'partial_with_nulls'
+      ] as Task;
+
+      expect(recreated.title).toBe('');
+      expect(recreated.timeSpentOnDay).toEqual({});
+      expect(recreated.tagIds).toEqual([]);
+      expect(recreated.subTaskIds).toEqual([]);
+      expect(recreated.attachments).toEqual([]);
+      expect(recreated.projectId).toBe('INBOX_PROJECT');
+      expect(OpLog.warn).toHaveBeenCalledWith(
+        jasmine.stringMatching(/missing required fields/),
+      );
+    });
+
+    // #7330 follow-up #2: an LWW Update payload with explicit `undefined`
+    // values (e.g. from the field sanitization at lines 561-563) must not
+    // overwrite a backfilled default. Spread does not skip undefined, so we
+    // must strip them before merging with defaults.
+    it('should strip undefined-valued fields so defaults survive the merge', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'partial_with_undefineds',
+        title: undefined,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'partial_with_undefineds',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TASK_FEATURE_NAME]?.entities[
+        'partial_with_undefineds'
+      ] as Task;
+
+      expect(recreated.title).toBe('');
+    });
+
+    // #7330 follow-up #2: existing code at task-shared-lifecycle.reducer.ts:110
+    // already treats INBOX_PROJECT as not-guaranteed-present. The recreate
+    // path must mirror that: if INBOX_PROJECT is missing from state, fall
+    // back to the first available project so the recreated task is not
+    // referencing a non-existent project.
+    it('should fall back to first available project when INBOX_PROJECT is missing', () => {
+      const state = createMockState();
+      // Replace projects: no INBOX_PROJECT, only another project
+      state[PROJECT_FEATURE_NAME] = {
+        ids: ['some-other-project'],
+        entities: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'some-other-project': createMockProject({ id: 'some-other-project' }),
+        },
+      } as never;
+
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'orphan-task',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: 'orphan-task' },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TASK_FEATURE_NAME]?.entities['orphan-task'] as Task;
+
+      expect(recreated.projectId).toBe('some-other-project');
+    });
+
+    it('should preserve projectId when partial TASK LWW Update carries one', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'partial_with_project',
+        projectId: 'some-other-project',
+        dueDay: '2026-04-29',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'partial_with_project',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TASK_FEATURE_NAME]?.entities[
+        'partial_with_project'
+      ] as Task;
+
+      expect(recreated.projectId).toBe('some-other-project');
+    });
+
+    it('should not warn when a TASK LWW Update payload is complete', () => {
+      const state = createMockState();
+      const completeAction = {
+        type: '[TASK] LWW Update',
+        id: 'complete-task',
+        title: 'Complete Task',
+        timeSpentOnDay: {},
+        tagIds: [],
+        subTaskIds: [],
+        attachments: [],
+        projectId: 'INBOX_PROJECT',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: 'complete-task' },
+      };
+
+      spyOn(OpLog, 'warn');
+      reducer(state, completeAction);
+
+      expect(OpLog.warn).not.toHaveBeenCalledWith(
+        jasmine.stringMatching(/missing required fields/),
+      );
+    });
+
     it('should skip update if action has no id', () => {
       const state = createMockState();
       const action = {
@@ -255,6 +476,121 @@ describe('lwwUpdateMetaReducer', () => {
         jasmine.stringMatching(/Entity data has no id/),
       );
       expect(mockReducer).toHaveBeenCalledWith(state, action);
+    });
+
+    // #7330 integration: drive the recreate path with the worst-case partial
+    // payload shape that _convertToLWWUpdatesIfNeeded emits (just `{id}` plus
+    // remote-changed fields), then run the resulting TaskState through the
+    // real Typia validator (`appDataValidators.task`). This is the proof the
+    // user's "Repair attempted but failed" dialog cannot fire from this
+    // upstream path: Typia must accept the recreated entity.
+    it('produces a Typia-valid TaskState when recreating from a producer-shape partial payload (#7330)', () => {
+      // Empty initial state so only the recreated entity is under test.
+      // (createMockState's `createMockTask` uses `null` for several fields that
+      // TaskCopy declares as `string | undefined`, so it would taint validation.)
+      const emptyState: Partial<RootState> = {
+        [TASK_FEATURE_NAME]: {
+          ids: [],
+          entities: {},
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+          lastCurrentTaskId: null,
+        },
+        [PROJECT_FEATURE_NAME]: { ids: [], entities: {} },
+        [TAG_FEATURE_NAME]: { ids: [], entities: {} },
+        [appStateFeatureKey]: {
+          todayStr: getDbDateStr(),
+          startOfNextDayDiffMs: 0,
+        },
+      } as Partial<RootState>;
+
+      // The producer's flat-payload fallback (conflict-resolution.service.ts
+      // ~line 888) emits exactly this shape: payload becomes the action, with
+      // only the remote UPDATE's changed fields populated.
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'rpt_producer_shape_2026-04-29',
+        // Only the field the remote UPDATE changed:
+        dueDay: '2026-04-29',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'rpt_producer_shape_2026-04-29',
+        },
+      };
+
+      reducer(emptyState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const taskState = updatedState[TASK_FEATURE_NAME];
+
+      const result = appDataValidators.task(taskState as never);
+      if (!result.success) {
+        // Surface the typia errors so any future regression is debuggable.
+        fail(
+          `TaskState failed Typia validation: ${JSON.stringify((result as any).errors)}`,
+        );
+      }
+      expect(result.success).toBe(true);
+    });
+
+    // #7330 follow-up: the same partial-payload recreate path can fire for any
+    // adapter entity type. Generalize the DEFAULT_* merge so PROJECT/TAG/etc.
+    // are protected with the same defense-in-depth as TASK.
+    it('should backfill required fields when recreating from a partial PROJECT LWW Update', () => {
+      const state = createMockState();
+      const action = {
+        type: '[PROJECT] LWW Update',
+        id: 'recreated-project',
+        title: 'Recreated Project',
+        meta: {
+          isPersistent: true,
+          entityType: 'PROJECT',
+          entityId: 'recreated-project',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[PROJECT_FEATURE_NAME]?.entities[
+        'recreated-project'
+      ] as Project;
+
+      expect(recreated).toBeDefined();
+      expect(recreated.title).toBe('Recreated Project');
+      // Backfilled from DEFAULT_PROJECT
+      expect(recreated.taskIds).toEqual([]);
+      expect(recreated.backlogTaskIds).toEqual([]);
+      expect(recreated.noteIds).toEqual([]);
+      expect(recreated.isHiddenFromMenu).toBe(false);
+      expect(recreated.isArchived).toBe(false);
+    });
+
+    it('should backfill required fields when recreating from a partial TAG LWW Update', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TAG] LWW Update',
+        id: 'recreated-tag',
+        title: 'Recreated Tag',
+        meta: {
+          isPersistent: true,
+          entityType: 'TAG',
+          entityId: 'recreated-tag',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TAG_FEATURE_NAME]?.entities['recreated-tag'] as Tag;
+
+      expect(recreated).toBeDefined();
+      expect(recreated.title).toBe('Recreated Tag');
+      // Backfilled from DEFAULT_TAG
+      expect(recreated.taskIds).toEqual([]);
     });
   });
 

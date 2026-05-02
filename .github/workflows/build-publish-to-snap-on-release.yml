@@ -8,17 +8,25 @@ on:
 jobs:
   snap-release:
     runs-on: ubuntu-latest
+    # Run snapcraft from Canonical's official container so we don't depend on
+    # `sudo snap install snapcraft --classic` working on the runner — that path
+    # has been a recurring source of "unable to contact snap store" failures.
+    container:
+      image: ghcr.io/canonical/snapcraft:8_core24
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+      SNAPCRAFT_HAS_TTY: 'true' # Workaround for https://github.com/snapcore/snapcraft/issues/4439
 
     if: '!github.event.release.prerelease'
 
     steps:
-      - name: Install Snapcraft
-        uses: samuelmeuli/action-snapcraft@fceeb3c308e76f3487e72ef608618de625fb7fe8 # v3
-      - run: yes | snapcraft promote superproductivity --from-channel latest/edge --to-channel latest/stable
-        env: # Workaround for https://github.com/snapcore/snapcraft/issues/4439
-          SNAPCRAFT_HAS_TTY: 'true'
+      - name: Promote edge → stable
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          max_attempts: 5
+          timeout_minutes: 10
+          retry_wait_seconds: 60
+          command: yes | snapcraft promote superproductivity --from-channel latest/edge --to-channel latest/stable
 #      - uses: actions/setup-node@v3
 #        with:
 #          node-version: 20

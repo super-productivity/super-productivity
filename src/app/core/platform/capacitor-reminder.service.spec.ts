@@ -4,6 +4,7 @@ import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/w
 import { CapacitorReminderService } from './capacitor-reminder.service';
 import { CapacitorPlatformService } from './capacitor-platform.service';
 import { CapacitorNotificationService } from './capacitor-notification.service';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
 describe('CapacitorReminderService', () => {
   let service: CapacitorReminderService;
@@ -129,6 +130,56 @@ describe('CapacitorReminderService', () => {
     it('should return true on non-Android platforms', async () => {
       const result = await service.ensureExactAlarmPermission();
       expect(result).toBe(true);
+    });
+  });
+
+  describe('legacy Android WebView path (issue #7408)', () => {
+    let legacyService: CapacitorReminderService;
+    let checkExactAlarmSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      const nativePlatformSpy = jasmine.createSpyObj(
+        'CapacitorPlatformService',
+        ['hasCapability', 'isIOS'],
+        {
+          platform: 'android',
+          isNative: true,
+          isMobile: true,
+          capabilities: { scheduledNotifications: true },
+        },
+      );
+      checkExactAlarmSpy = spyOn(
+        LocalNotificationsWeb.prototype,
+        'checkExactNotificationSetting',
+      );
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          CapacitorReminderService,
+          provideMockStore(),
+          { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
+          { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
+          // Override the WebView discriminator via DI; `Capacitor.isNativePlatform()`
+          // is naturally false in the test environment, so the legacy-path
+          // condition `_isAndroidWebView && !Capacitor.isNativePlatform()` evaluates true.
+          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
+        ],
+      });
+      legacyService = TestBed.inject(CapacitorReminderService);
+    });
+
+    it('ensurePermissions short-circuits without consulting Capacitor', async () => {
+      // The whole point of issue #7408: avoid the broken Web Notifications API
+      // fallback. We must NOT delegate to _notificationService here.
+      const result = await legacyService.ensurePermissions();
+      expect(result).toBe(true);
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+
+    it('ensureExactAlarmPermission short-circuits without consulting Capacitor', async () => {
+      const result = await legacyService.ensureExactAlarmPermission();
+      expect(result).toBe(true);
+      expect(checkExactAlarmSpy).not.toHaveBeenCalled();
     });
   });
 

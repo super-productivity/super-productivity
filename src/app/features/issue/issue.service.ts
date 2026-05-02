@@ -585,14 +585,22 @@ export class IssueService {
 
     let taskId: string | undefined;
 
+    // parentTaskId is the SP task under which _addSubTasks should attach children.
+    // When the task is added as a sub-task, this is the root SP parent (not the
+    // newly-added sub-task itself) so that CalDAV grandchildren are flattened to
+    // the same nesting level instead of creating unsupported grandchildren.
+    let subTaskParentId: string | undefined;
+
     if (related_to) {
-      taskId = await this._tryAddSubTask({
+      const subTaskResult = await this._tryAddSubTask({
         title: title as string,
         taskData,
         issueParentId: related_to,
         issueProviderId,
         issueProviderKey,
       });
+      taskId = subTaskResult?.taskId;
+      subTaskParentId = subTaskResult?.parentTaskId;
     }
 
     // add new task (also fallback when parent id of subtask is not found)
@@ -608,15 +616,17 @@ export class IssueService {
         );
       }
 
-      // Handle subtasks if provider supports it
-      if (this._getService(issueProviderKey)?.getSubTasks && taskId) {
-        await this._addSubTasks(
-          issueDataReduced,
-          taskId,
-          issueProviderId,
-          issueProviderKey,
-        );
-      }
+      subTaskParentId = taskId;
+    }
+
+    // Handle subtasks if provider supports it
+    if (this._getService(issueProviderKey)?.getSubTasks && subTaskParentId) {
+      await this._addSubTasks(
+        issueDataReduced,
+        subTaskParentId,
+        issueProviderId,
+        issueProviderKey,
+      );
     }
 
     return taskId;
@@ -674,23 +684,30 @@ export class IssueService {
     issueParentId: string;
     issueProviderId: string;
     issueProviderKey: IssueProviderKey;
-  }): Promise<string | undefined> {
+  }): Promise<{ taskId: string; parentTaskId: string } | undefined> {
     const parentTask = await this._taskService.checkForTaskWithIssueEverywhere(
       issueParentId,
       issueProviderKey,
       issueProviderId,
     );
 
-    if (parentTask) {
-      const subTaskData = { title, ...taskData } as Partial<TaskCopy>;
-      // Ensure invariants for sub-tasks as well
-      if (subTaskData.dueWithTime) {
-        subTaskData.dueDay = undefined;
-      }
-      return this._taskService.addSubTaskTo(parentTask.task.id, subTaskData);
+    // Archived parents cannot receive new sub-tasks (the reducer no-ops silently).
+    // Fall through so the child is added as a top-level task instead.
+    if (!parentTask || parentTask.isFromArchive) {
+      return undefined;
     }
 
-    return undefined;
+    const subTaskData = { title, ...taskData } as Partial<TaskCopy>;
+    if (subTaskData.dueWithTime) {
+      subTaskData.dueDay = undefined;
+    }
+
+    // SP supports only one nesting level. If the resolved parent is itself a
+    // sub-task (has a parentId), attach to its root parent so the new task
+    // becomes a sibling of the parent rather than a grandchild.
+    const effectiveParentId = parentTask.task.parentId || parentTask.task.id;
+    const taskId = await this._taskService.addSubTaskTo(effectiveParentId, subTaskData);
+    return { taskId, parentTaskId: effectiveParentId };
   }
 
   private async _checkAndHandleIssueAlreadyAdded(

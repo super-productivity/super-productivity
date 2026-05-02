@@ -17,6 +17,8 @@ import { WorkContextService } from '../../features/work-context/work-context.ser
 import { Router, RouterLink, RouterModule } from '@angular/router';
 
 import { ProjectService } from '../../features/project/project.service';
+import { SectionService } from '../../features/section/section.service';
+import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { MatMenuItem } from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
@@ -41,6 +43,7 @@ export class WorkContextMenuComponent implements OnInit {
   private _matDialog = inject(MatDialog);
   private _tagService = inject(TagService);
   private _projectService = inject(ProjectService);
+  private _sectionService = inject(SectionService);
   private _workContextService = inject(WorkContextService);
   private _router = inject(Router);
   private _snackService = inject(SnackService);
@@ -132,6 +135,35 @@ export class WorkContextMenuComponent implements OnInit {
       });
       console.error(err);
     }
+  }
+
+  addSection(): void {
+    this._matDialog
+      .open(DialogPromptComponent, {
+        // Omit `message` to match the Add Tag pattern — the dialog
+        // collapses its outer padding when there's no message text
+        // (`dialog-prompt.scss: mat-dialog-content.isNoMsg`).
+        // Use a descriptive placeholder ("Add Section") rather than a
+        // generic "Title" so screen readers and visual users get the
+        // dialog's purpose without a separate title element.
+        data: {
+          placeholder: T.WW.ADD_SECTION_TITLE,
+        },
+      })
+      // NOTE: do NOT pipe takeUntilDestroyed here. This component lives inside
+      // a <mat-menu>; the menu (and component) is destroyed the moment the
+      // dialog opens, which would unsubscribe before afterClosed() emits.
+      // MatDialog cleans up its own subscription when the dialog closes.
+      .afterClosed()
+      .subscribe((title: string) => {
+        if (title?.trim()) {
+          this._sectionService.addSection(
+            title,
+            this.contextId,
+            this.isForProject ? WorkContextType.PROJECT : WorkContextType.TAG,
+          );
+        }
+      });
   }
 
   protected readonly INBOX_PROJECT = INBOX_PROJECT;

@@ -1,10 +1,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  AfterViewInit,
   computed,
   ElementRef,
   inject,
   input,
+  NgZone,
+  OnDestroy,
   signal,
   viewChild,
 } from '@angular/core';
@@ -60,6 +63,7 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[title]': 'hoverTitle()',
     '[class]': 'cssClass()',
     '[style]': 'style()',
+    '[style.--title-line-clamp]': '_titleLineClamp()',
     '[style.--project-color]': 'projectColor()',
     '[style.height]': '_resizeHeight()',
     '(click)': 'clickHandler($event)',
@@ -74,13 +78,14 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     },
   ],
 })
-export class ScheduleEventComponent {
+export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   private _store = inject(Store);
   private _elRef = inject(ElementRef);
   private _matDialog = inject(MatDialog);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _taskService = inject(TaskService);
   private _calEventActions = inject(CalendarEventActionsService);
+  private _ngZone = inject(NgZone);
   readonly titleHasLinks = computed(() => {
     const t = this.title();
     return !!t && hasLinkHints(t);
@@ -102,9 +107,13 @@ export class ScheduleEventComponent {
   });
 
   readonly calMenuTrigger = viewChild('calMenuTrigger', { read: MatMenuTrigger });
+  private readonly _titleEl = viewChild<ElementRef<HTMLElement>>('titleEl');
 
   protected readonly SVEType = SVEType;
   private _isBeingSubmitted = false;
+  private _resizeObserver?: ResizeObserver;
+  private _measureRafId?: number;
+  readonly _titleLineClamp = signal(1);
 
   // Computed signals for derived state
   readonly se = computed(() => this.event());
@@ -225,6 +234,59 @@ export class ScheduleEventComponent {
         : '') + style
     );
   });
+
+  ngAfterViewInit(): void {
+    const hostEl = this._elRef.nativeElement as HTMLElement;
+    const titleEl = this._titleEl()?.nativeElement;
+    if (!titleEl) {
+      return;
+    }
+
+    this._ngZone.runOutsideAngular(() => {
+      this._resizeObserver = new ResizeObserver(() =>
+        this._scheduleTitleLineClampUpdate(),
+      );
+      this._resizeObserver.observe(hostEl);
+      this._scheduleTitleLineClampUpdate();
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this._measureRafId !== undefined) {
+      cancelAnimationFrame(this._measureRafId);
+    }
+    this._resizeObserver?.disconnect();
+  }
+
+  private _scheduleTitleLineClampUpdate(): void {
+    if (this._measureRafId !== undefined) {
+      return;
+    }
+
+    this._measureRafId = requestAnimationFrame(() => {
+      this._measureRafId = undefined;
+      this._updateTitleLineClamp();
+    });
+  }
+
+  private _updateTitleLineClamp(): void {
+    const hostEl = this._elRef.nativeElement as HTMLElement;
+    const titleEl = this._titleEl()?.nativeElement;
+    if (!titleEl) {
+      return;
+    }
+
+    const styles = getComputedStyle(titleEl);
+    const lineHeight = parseFloat(styles.lineHeight);
+    const paddingTop = parseFloat(styles.paddingTop);
+    const paddingBottom = parseFloat(styles.paddingBottom);
+    const availableTitleHeight = hostEl.clientHeight - paddingTop - paddingBottom;
+    const lineClamp = Math.max(1, Math.floor(availableTitleHeight / lineHeight));
+
+    if (Number.isFinite(lineClamp) && lineClamp !== this._titleLineClamp()) {
+      this._ngZone.run(() => this._titleLineClamp.set(lineClamp));
+    }
+  }
 
   private readonly _projectId = computed(() => this.task()?.projectId || null);
 

@@ -1,9 +1,5 @@
 @use '../../../../styles/_globals.scss' as *;
 
-// Angular Material icon-button footprint; referenced by the --control-offset
-// formula so top/bottom icons sit flush against the digits.
-$mat-icon-btn-size: 40px;
-
 :host {
   position: absolute;
   top: 0;
@@ -160,23 +156,17 @@ $mat-icon-btn-size: 40px;
   margin-bottom: var(--s2);
 
   // Sizing tokens — scoped here so both .clock-face and the overlayed
-  // duration slider can share the same diameter.
+  // duration slider can share the same diameter. --control-offset is the
+  // distance the in-circle controls (pause/done/+/-) sit from the rim;
+  // larger circles allow tucking them slightly further inward.
   --clock-face-size: 175px;
-  --clock-time-size: 44px;
+  --clock-time-size: 34px;
+  --control-offset: 10px;
 
-  @media (min-height: 800px) and (min-width: 500px) {
-    --clock-face-size: 225px;
-    --clock-time-size: 58px;
-  }
-
-  @media (min-height: 900px) and (min-width: 600px) {
-    --clock-face-size: 280px;
-    --clock-time-size: 72px;
-  }
-
-  @media (max-height: 500px) {
-    --clock-face-size: 110px;
-    --clock-time-size: 28px;
+  @media (min-height: 600px) and (min-width: 600px) {
+    --clock-face-size: 282px;
+    --clock-time-size: 68px;
+    --control-offset: 20px;
   }
 
   &__content {
@@ -247,7 +237,14 @@ breathing-dot {
   // shift width or vertical metrics mid-session.
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  @include center;
+  // Optical centering: Roboto Bold digits sit slightly below the line-box
+  // center, so a plain 50/50 translate looks bottom-heavy. Nudging up by
+  // ~4% of the font-size brings the digits to the visual middle of the
+  // clock face (~3px at 72px, scales with breakpoint).
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% - 0.05em));
 }
 
 .overtime-msg {
@@ -292,15 +289,9 @@ breathing-dot {
   display: grid;
   place-items: center;
   text-align: center;
-  // Sit the top/bottom icon buttons just outside the digits (≈4px visual gap),
-  // falling back to --s when the circle is too small for that to fit.
-  // Subtract the icon-button size + 4px breathing room from the free half.
-  --control-offset: max(
-    var(--s),
-    calc(
-      (var(--clock-face-size) - var(--clock-time-size)) / 2 - #{$mat-icon-btn-size} - 4px
-    )
-  );
+  // --control-offset declared on .clock-display so it can be tuned per
+  // breakpoint. The earlier formula derived it from font-size and ended up
+  // pushing controls over the digits at larger sizes. See #7403.
 
   &:hover button {
     opacity: 1;
@@ -487,7 +478,7 @@ breathing-dot {
       color: inherit;
       border: none;
       box-sizing: border-box;
-      word-wrap: break-word;
+      overflow-wrap: break-word;
       display: block;
       resize: none;
       min-height: 60px;

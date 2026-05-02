@@ -7,23 +7,44 @@ import { map, startWith, switchMap } from 'rxjs/operators';
   providedIn: 'root',
 })
 export class DropListService {
-  dropLists = new BehaviorSubject<CdkDropList[]>([]);
+  // Coalesce burst register/unregister calls (e.g. dozens of sections
+  // mounting in one CD pass) into a single downstream emission via a
+  // microtask flush. `cdkDropListConnectedTo` rebuilds its sibling
+  // graph per emission, so without this every list mount would be
+  // O(L²) total.
+  readonly dropLists = new BehaviorSubject<CdkDropList[]>([]);
+
   blockAniTrigger$ = new Subject<void>();
   isBlockAniAfterDrop$ = this.blockAniTrigger$.pipe(
     switchMap(() => merge(of(true), timer(1200).pipe(map(() => false)))),
     startWith(false),
   );
 
+  private _list: CdkDropList[] = [];
+  private _flushScheduled = false;
+
   registerDropList(dropList: CdkDropList, isSubTaskList = false): void {
     if (isSubTaskList) {
-      this.dropLists.next([dropList, ...this.dropLists.getValue()]);
+      this._list.unshift(dropList);
     } else {
-      this.dropLists.next([...this.dropLists.getValue(), dropList]);
+      this._list.push(dropList);
     }
-    // Log.log(this.dropLists.getValue());
+    this._scheduleFlush();
   }
 
   unregisterDropList(dropList: CdkDropList): void {
-    this.dropLists.next(this.dropLists.getValue().filter((dl) => dl !== dropList));
+    const idx = this._list.indexOf(dropList);
+    if (idx === -1) return;
+    this._list.splice(idx, 1);
+    this._scheduleFlush();
+  }
+
+  private _scheduleFlush(): void {
+    if (this._flushScheduled) return;
+    this._flushScheduled = true;
+    queueMicrotask(() => {
+      this._flushScheduled = false;
+      this.dropLists.next(this._list.slice());
+    });
   }
 }

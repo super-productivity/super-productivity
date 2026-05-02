@@ -57,7 +57,7 @@
   flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   font-size: var(--planner-font-size-mobile);
 
   @include mq(xs) {

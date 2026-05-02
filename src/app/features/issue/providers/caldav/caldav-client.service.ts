@@ -155,8 +155,24 @@ export class CaldavClientService {
       location: todo.getFirstPropertyValue('location') as string,
       labels: categories,
       etag_hash: this._hashEtag(task.etag),
-      related_to: (todo.getFirstPropertyValue('related-to') as string) || undefined,
+      related_to: CaldavClientService._getParentRelatedTo(todo),
     };
+  }
+
+  /**
+   * Returns the UID referenced by the first RELATED-TO property whose RELTYPE
+   * parameter is absent or explicitly set to PARENT (RFC 5545 §3.8.4.5).
+   * CHILD and SIBLING relations are ignored so we never invert the hierarchy.
+   */
+  private static _getParentRelatedTo(todo: any): string | undefined {
+    const props = todo.getAllProperties('related-to') as any[];
+    for (const prop of props) {
+      const reltype = (prop.getParameter('reltype') as string | null) ?? 'PARENT';
+      if (reltype.toUpperCase() === 'PARENT') {
+        return (prop.getFirstValue() as string) || undefined;
+      }
+    }
+    return undefined;
   }
 
   private static _hashEtag(etag: string): number {

@@ -6,6 +6,10 @@ import { getDiffInWeeks } from '../../../util/get-diff-in-weeks';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creation-day.util';
 import { getEffectiveRepeatStartDate } from './get-effective-repeat-start-date.util';
+import {
+  findMonthlyNthWeekdayOccurrence,
+  hasNthWeekdayAnchor,
+} from './get-nth-weekday-of-month.util';
 import { Log } from '../../../core/log';
 
 export const getNextRepeatOccurrence = (
@@ -78,6 +82,22 @@ export const getNextRepeatOccurrence = (
 
     case 'MONTHLY': {
       const maxMonthsToCheck = 24; // 2 years
+
+      if (hasNthWeekdayAnchor(taskRepeatCfg)) {
+        return findMonthlyNthWeekdayOccurrence(taskRepeatCfg, checkDate, {
+          direction: 1,
+          maxMonths: maxMonthsToCheck,
+          accept: (candidate, cursor) => {
+            const diffInMonth = getDiffInMonth(startDateDate, cursor);
+            return (
+              candidate >= checkDate &&
+              diffInMonth >= 0 &&
+              diffInMonth % taskRepeatCfg.repeatEvery === 0
+            );
+          },
+        });
+      }
+
       const dayOfMonthRepeat = startDateDate.getDate();
 
       // Handle month-end dates properly

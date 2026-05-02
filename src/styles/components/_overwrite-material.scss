@@ -385,3 +385,7 @@ mat-tooltip-component {
     pointer-events: auto;
   }
 }
+
+.mat-expansion-panel-header {
+  --mat-expansion-header-expanded-state-height: 48px;
+}

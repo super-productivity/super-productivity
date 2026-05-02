@@ -178,6 +178,48 @@ describe('getQuickSettingUpdates', () => {
     });
   });
 
+  describe('MONTHLY_NTH_WEEKDAY (issue #6040)', () => {
+    it('infers ordinal and weekday from referenceDate', () => {
+      // 2026-01-12 is the 2nd Monday of Jan 2026.
+      const ref = new Date(2026, 0, 12);
+      const result = getQuickSettingUpdates('MONTHLY_NTH_WEEKDAY', ref);
+      expect(result).toBeDefined();
+      expect(result!.repeatCycle).toBe('MONTHLY');
+      expect(result!.repeatEvery).toBe(1);
+      expect(result!.monthlyWeekOfMonth).toBe(2);
+      expect(result!.monthlyWeekday).toBe(1); // Monday
+      expect(result!.startDate).toBe(getDbDateStr(ref));
+    });
+
+    it('caps the ordinal at 4 when start date is the 5th occurrence', () => {
+      // 2026-01-29 is the 5th Thursday of Jan 2026 — capped to "4th".
+      const ref = new Date(2026, 0, 29);
+      const result = getQuickSettingUpdates('MONTHLY_NTH_WEEKDAY', ref);
+      expect(result!.monthlyWeekOfMonth).toBe(4);
+      expect(result!.monthlyWeekday).toBe(4); // Thursday
+    });
+  });
+
+  describe('day-of-month presets clear NTH_WEEKDAY anchors', () => {
+    it('MONTHLY_CURRENT_DATE explicitly clears the Nth-weekday anchor fields', () => {
+      const result = getQuickSettingUpdates('MONTHLY_CURRENT_DATE');
+      expect(result!.monthlyWeekOfMonth).toBeUndefined();
+      expect(result!.monthlyWeekday).toBeUndefined();
+    });
+
+    it('MONTHLY_FIRST_DAY explicitly clears the Nth-weekday anchor fields', () => {
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
+      expect(result!.monthlyWeekOfMonth).toBeUndefined();
+      expect(result!.monthlyWeekday).toBeUndefined();
+    });
+
+    it('MONTHLY_LAST_DAY explicitly clears the Nth-weekday anchor fields', () => {
+      const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
+      expect(result!.monthlyWeekOfMonth).toBeUndefined();
+      expect(result!.monthlyWeekday).toBeUndefined();
+    });
+  });
+
   describe('CUSTOM', () => {
     it('should return undefined', () => {
       const result = getQuickSettingUpdates('CUSTOM');

@@ -284,7 +284,12 @@ export class DialogEditTaskRepeatCfgComponent {
       }
     }
 
-    const finalRepeatCfg = this.repeatCfg();
+    // The form uses `null` as the "(Day of month)" sentinel on the
+    // monthlyWeekOfMonth select. Persisted cfgs use `undefined` for absent
+    // optional fields (project convention). Normalize at the boundary so
+    // existing day-of-month cfgs don't produce spurious change diffs and the
+    // op-log stays consistent with the model type.
+    const finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
 
     if (this.isEdit()) {
       const initial = this.repeatCfgInitial();
@@ -314,6 +319,13 @@ export class DialogEditTaskRepeatCfgComponent {
       );
       this.close();
     }
+  }
+
+  private _normalizeMonthlyAnchor<T extends { monthlyWeekOfMonth?: unknown }>(cfg: T): T {
+    if (cfg.monthlyWeekOfMonth === null) {
+      return { ...cfg, monthlyWeekOfMonth: undefined };
+    }
+    return cfg;
   }
 
   remove(): void {

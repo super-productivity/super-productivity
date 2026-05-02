@@ -4,6 +4,15 @@ import { setIsApplyingRemoteOps } from '../capture/operation-capture.meta-reduce
 import { POST_SYNC_COOLDOWN_MS } from '../core/operation-log.const';
 
 /**
+ * Failsafe for the explicit sync window. Triggers can be debounced, throttled,
+ * or dropped (e.g. exhaustMap busy) before reaching `SyncWrapperService.sync()`,
+ * meaning `closeSyncWindow()` may never run. The timer guarantees the window
+ * cannot stay open indefinitely. 2s is well past the typical handoff to
+ * `_isApplyingRemoteOps` while keeping the silent-drop window short.
+ */
+const SYNC_WINDOW_FAILSAFE_MS = 2000;
+
+/**
  * Tracks whether the application is currently applying remote operations
  * (hydration replay or sync). This allows selector-based effects to skip
  * processing during these phases.
@@ -54,20 +63,28 @@ import { POST_SYNC_COOLDOWN_MS } from '../core/operation-log.const';
 export class HydrationStateService {
   private _isApplyingRemoteOps = signal(false);
   private _isInPostSyncCooldown = signal(false);
+  private _isSyncWindowOpen = signal(false);
   private _cooldownTimer: ReturnType<typeof setTimeout> | null = null;
+  private _syncWindowFailsafeTimer: ReturnType<typeof setTimeout> | null = null;
   /**
-   * Computed signal: true when in the extended sync window where selector-based
-   * effects that modify shared state (like TODAY_TAG) should be suppressed.
+   * True when selector-based effects that modify shared state (e.g. TODAY_TAG
+   * repair) should be suppressed. Three phases contribute:
    *
-   * This includes:
-   * - During remote op application (isApplyingRemoteOps)
-   * - During post-sync cooldown period
+   * 1. **Open**: `openSyncWindow()` is called by `SyncTriggerService` the
+   *    moment a sync is triggered (e.g. `I_RESUME_APP`), *before* the trigger
+   *    pipeline's `debounceTime(100)`. Closes the race on app resume where
+   *    the visibility-change → DAY_CHANGE → TODAY_TAG-repair cascade fires
+   *    inside that debounce window and emits ops on stale local state.
+   * 2. **Applying**: remote ops are being replayed into the store.
+   * 3. **Cooldown**: short post-sync window for state to settle.
    *
-   * Use `skipDuringSyncWindow()` operator for effects that should be
-   * suppressed during this extended window.
+   * Use `skipDuringSyncWindow()` (drop) or `waitForSyncWindow()` (defer).
    */
   isInSyncWindow = computed(
-    () => this._isApplyingRemoteOps() || this._isInPostSyncCooldown(),
+    () =>
+      this._isSyncWindowOpen() ||
+      this._isApplyingRemoteOps() ||
+      this._isInPostSyncCooldown(),
   );
 
   /**
@@ -143,5 +160,40 @@ export class HydrationStateService {
       this._cooldownTimer = null;
     }
     this._isInPostSyncCooldown.set(false);
+  }
+
+  /**
+   * Opens the sync window. Restartable: each call resets the failsafe timer.
+   *
+   * Failsafe ensures the window auto-closes if no `closeSyncWindow()` follows
+   * (e.g. trigger debounced, throttled, or dropped before reaching `sync()`).
+   *
+   * Pass `failsafeMs: 0` to skip the timer entirely. Use this when the caller
+   * has its own deterministic close path (`SyncWrapperService.sync()`'s
+   * `finally` block) and the timer would otherwise close the window
+   * prematurely during a slow sync (longer than the default 2s).
+   */
+  openSyncWindow(failsafeMs: number = SYNC_WINDOW_FAILSAFE_MS): void {
+    this._isSyncWindowOpen.set(true);
+
+    if (this._syncWindowFailsafeTimer) {
+      clearTimeout(this._syncWindowFailsafeTimer);
+      this._syncWindowFailsafeTimer = null;
+    }
+    if (failsafeMs > 0) {
+      this._syncWindowFailsafeTimer = setTimeout(() => {
+        this._isSyncWindowOpen.set(false);
+        this._syncWindowFailsafeTimer = null;
+      }, failsafeMs);
+    }
+  }
+
+  /** Closes the sync window and clears the failsafe timer. */
+  closeSyncWindow(): void {
+    if (this._syncWindowFailsafeTimer) {
+      clearTimeout(this._syncWindowFailsafeTimer);
+      this._syncWindowFailsafeTimer = null;
+    }
+    this._isSyncWindowOpen.set(false);
   }
 }

@@ -25,6 +25,7 @@ import {
   moveProjectTaskToBacklogList,
   moveProjectTaskToRegularList,
 } from '../../project/store/project.actions';
+import { SectionService } from '../../section/section.service';
 import { moveSubTask } from '../store/task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { WorkContextService } from '../../work-context/work-context.service';
@@ -46,9 +47,32 @@ import { dragDelayForTouch } from '../../../util/input-intent';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
+
+// Reserved list ids — anything else in a PARENT-level list is treated as a
+// section id. Subtask drop-lists (listId === 'SUB') use parent task ids as
+// their listModelId, so the section check must additionally key on listId.
+//
+// RESERVED_LIST_IDS includes LATER_TODAY because section detection runs in
+// _move() AFTER the LATER_TODAY short-circuit; treating LATER_TODAY as a
+// section would otherwise create one if the short-circuit ever moves.
+// PARENT_ALLOWED_LISTS deliberately omits LATER_TODAY — enterPredicate must
+// reject parent drops onto LATER_TODAY at the drag layer (see line ~190).
+//
+// `satisfies DropListModelSource[]` validates each entry against the union
+// (catches typos / removed variants) without narrowing the Set's value
+// type, which would force a cast at every `.has(target as string)` call.
+const RESERVED_LIST_IDS = new Set<string>([
+  'DONE',
+  'UNDONE',
+  'OVERDUE',
+  'BACKLOG',
+  'LATER_TODAY',
+  'ADD_TASK_PANEL',
+] satisfies DropListModelSource[]);
 const PARENT_ALLOWED_LISTS = ['DONE', 'UNDONE', 'OVERDUE', 'BACKLOG', 'ADD_TASK_PANEL'];
 
 export interface DropModelDataForList {
+  listId: TaskListId;
   listModelId: ListModelId;
   allTasks: TaskWithSubTasks[];
   filteredTasks: TaskWithSubTasks[];
@@ -73,6 +97,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _taskService = inject(TaskService);
   private _workContextService = inject(WorkContextService);
   private _store = inject(Store);
+  private _sectionService = inject(SectionService);
   private _issueService = inject(IssueService);
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
@@ -99,6 +124,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   currentTaskId = toSignal(this._taskService.currentTaskId$);
   dropModelDataForList = computed<DropModelDataForList>(() => {
     return {
+      listId: this.listId(),
       listModelId: this.listModelId(),
       allTasks: this.tasks(),
       filteredTasks: this.filteredTasks(),
@@ -150,6 +176,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // TODO this gets called very often for nested lists. Maybe there are possibilities to optimize
     const task = drag.data;
     const targetModelId = drop.data.listModelId;
+    const targetListId = drop.data.listId;
     const isSubtask = !!task.parentId;
 
     if (targetModelId === 'OVERDUE' || targetModelId === 'LATER_TODAY') {
@@ -173,18 +200,38 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         return false;
       }
 
-      // Subtasks can move within subtask lists (where listModelId is a task ID)
-      if (!PARENT_ALLOWED_LISTS.includes(targetModelId)) {
+      // Subtasks may drop into another subtask list (listId === 'SUB' with a
+      // task id as listModelId). Reject section drop-lists (listId === 'PARENT'
+      // with a non-reserved id) — section.taskIds is parent-only.
+      if (targetListId === 'SUB' && !PARENT_ALLOWED_LISTS.includes(targetModelId)) {
         return true;
       }
       return false;
     }
 
-    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS
+    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS or to sections (parent-level
+    // lists with a non-reserved id). Subtask drop-lists (listId === 'SUB') are
+    // rejected so a top-level task can't be nested into another task's subtree.
+    const srcModelId = drag.dropContainer?.data?.listModelId;
+    const srcListIdRaw = drag.dropContainer?.data?.listId;
+    const isSrcSection = srcListIdRaw === 'PARENT' && !RESERVED_LIST_IDS.has(srcModelId);
+
     if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
+      // Reject section → BACKLOG: _move() dispatches `removeTaskFromSection`
+      // and returns without dispatching `moveProjectTaskToBacklogList`, so
+      // the task disappears from the section but is never added to backlog.
+      // Force users to first move section → today, then today → backlog.
+      if (targetModelId === 'BACKLOG' && isSrcSection) return false;
       return true;
     }
-    return false;
+    if (targetListId !== 'PARENT') return false;
+
+    // Target is a section. Reject drops from BACKLOG: _move() treats this as
+    // a pure section-add and never removes the task from project.backlogTaskIds,
+    // leaving it in both lists. Force users to first move backlog → today.
+    if (srcModelId === 'BACKLOG') return false;
+
+    return true;
   };
 
   async drop(
@@ -272,6 +319,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       draggedTask.id,
       srcListData.listModelId,
       targetListData.listModelId,
+      srcListData.listId,
+      targetListData.listId,
       newIds.map((p) => p.id),
     );
 
@@ -297,6 +346,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     taskId: string,
     src: DropListModelSource | string,
     target: DropListModelSource | string,
+    srcListId: TaskListId,
+    targetListId: TaskListId,
     newOrderedIds: string[],
   ): void {
     const isSrcRegularList = src === 'DONE' || src === 'UNDONE';
@@ -306,6 +357,36 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // Handle LATER_TODAY - prevent any moves to or from this list
     if (src === 'LATER_TODAY' || target === 'LATER_TODAY') {
       return;
+    }
+
+    if (workContextId) {
+      // Section drop-lists are PARENT-level lists whose listModelId is a
+      // section id (anything that isn't one of the reserved keywords).
+      // Subtask drop-lists (listId === 'SUB') also use non-reserved
+      // listModelIds (parent task ids) — those must NOT be treated as
+      // sections, otherwise a subtask drag would dispatch addTaskToSection
+      // instead of moveSubTask.
+      const targetIsSection = targetListId === 'PARENT' && !RESERVED_LIST_IDS.has(target);
+      const srcIsSection = srcListId === 'PARENT' && !RESERVED_LIST_IDS.has(src);
+
+      if (targetIsSection) {
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        // Pass the source section explicitly so replay is deterministic.
+        // `null` means the task wasn't in a section before the drag.
+        const sourceSectionId = srcIsSection ? (src as string) : null;
+        this._sectionService.addTaskToSection(
+          target as string,
+          taskId,
+          afterTaskId,
+          sourceSectionId,
+        );
+        return;
+      }
+      if (srcIsSection) {
+        // Dragged out of a section into the no-section area.
+        this._sectionService.removeTaskFromSection(src as string, taskId);
+        return;
+      }
     }
 
     if (isSrcRegularList && isTargetRegularList) {
