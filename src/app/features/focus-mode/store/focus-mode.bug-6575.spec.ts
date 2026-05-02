@@ -74,12 +74,12 @@ describe('FocusMode Bug #6575: unPauseFocusSession should restore InProgress sta
     expect(result.currentScreen).toBe(FocusScreen.Main);
   });
 
-  it('should NOT change mainState when resuming a paused break session', () => {
+  it('should restore mainState to InProgress when resuming a paused break session', () => {
     const pausedState = createPausedBreakState();
     const result = focusModeReducer(pausedState, a.unPauseFocusSession());
 
-    // Break sessions don't need InProgress mainState
-    expect(result.mainState).toBe(FocusMainUIState.Preparation);
+    // Break sessions now also restore InProgress mainState
+    expect(result.mainState).toBe(FocusMainUIState.InProgress);
     expect(result.timer.isRunning).toBe(true);
     expect(result.timer.purpose).toBe('break');
   });

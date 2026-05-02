@@ -136,19 +136,6 @@ export class DialogFlowtimeSettingsComponent {
         },
       },
       fieldArray: {
-        validators: {
-          minMaxDuration: {
-            expression: (control: AbstractControl<FlowtimeBreakRuleInMinutes>) => {
-              const val = control.value;
-              if (!val || val.maxDuration === null || val.maxDuration === undefined) {
-                return true;
-              }
-              return val.minDuration <= val.maxDuration;
-            },
-            message: () =>
-              this._translateService.instant(T.F.FOCUS_MODE.FLOWTIME_VALIDATION_MIN_MAX),
-          },
-        },
         fieldGroup: [
           {
             key: 'minDuration',
@@ -168,6 +155,18 @@ export class DialogFlowtimeSettingsComponent {
               type: 'number',
               min: 1,
               required: true,
+            },
+            validators: {
+              minMaxDuration: {
+                expression: (control: AbstractControl) => {
+                  const min = control.parent?.get('minDuration')?.value;
+                  const max = control.value;
+                  return max === null || max === undefined || max >= min;
+                },
+                message: this._translateService.instant(
+                  T.F.FOCUS_MODE.FLOWTIME_VALIDATION_MIN_MAX,
+                ),
+              },
             },
           },
           {
@@ -217,36 +216,26 @@ export class DialogFlowtimeSettingsComponent {
       this.form.markAllAsTouched();
       return;
     }
-
     const currentModel = this.model();
-    // Sort rules by minDuration
-    const sortedRules = [...(currentModel.breakRules ?? [])].sort(
-      (a, b) => (a.minDuration ?? 0) - (b.minDuration ?? 0),
-    );
-
-    // Ensure max >= min for each rule (if max is not null)
-    for (const rule of sortedRules) {
-      if (
-        rule.maxDuration !== null &&
-        rule.maxDuration !== undefined &&
-        rule.maxDuration < (rule.minDuration ?? 0)
-      ) {
-        rule.maxDuration = rule.minDuration ?? 0;
-      }
-    }
-
     const flowtimeConfig: FlowtimeConfig = {
       isBreakEnabled: currentModel.isBreakEnabled,
       breakMode: currentModel.breakMode,
       breakPercentage: currentModel.breakPercentage,
-      breakRules: sortedRules.map((rule: FlowtimeBreakRuleInMinutes) => ({
-        minDuration: Math.round((rule.minDuration ?? 0) * 60000),
-        maxDuration:
-          rule.maxDuration === null || rule.maxDuration === undefined
-            ? null
-            : Math.round(rule.maxDuration * 60000),
-        breakDuration: Math.round((rule.breakDuration ?? 0) * 60000),
-      })),
+      breakRules: [...(currentModel.breakRules ?? [])]
+        .sort((a, b) => (a.minDuration ?? 0) - (b.minDuration ?? 0))
+        .map((rule: FlowtimeBreakRuleInMinutes) => {
+          const min = rule.minDuration ?? 0;
+          let max = rule.maxDuration;
+          if (max !== null && max !== undefined && max < min) {
+            max = min;
+          }
+          return {
+            minDuration: Math.round(min * 60000),
+            maxDuration:
+              max === null || max === undefined ? null : Math.round(max * 60000),
+            breakDuration: Math.round((rule.breakDuration ?? 0) * 60000),
+          };
+        }),
     };
 
     this._globalConfigService.updateSection('flowtime', flowtimeConfig, true);

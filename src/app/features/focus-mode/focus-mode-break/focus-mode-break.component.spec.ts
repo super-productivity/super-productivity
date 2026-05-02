@@ -8,6 +8,7 @@ import {
   pauseFocusSession,
   unPauseFocusSession,
   exitBreakToPlanning,
+  startBreak,
 } from '../store/focus-mode.actions';
 import {
   EnvironmentInjector,
@@ -18,6 +19,7 @@ import {
 import { T } from '../../../t.const';
 import { of } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
+import { FocusMainUIState, FocusModeMode } from '../focus-mode.model';
 
 describe('FocusModeBreakComponent', () => {
   let component: FocusModeBreakComponent;
@@ -28,6 +30,10 @@ describe('FocusModeBreakComponent', () => {
     progress: Signal<number>;
     isBreakLong: Signal<boolean>;
     isSessionPaused: Signal<boolean>;
+    isSessionRunning: Signal<boolean>;
+    mainState: Signal<FocusMainUIState>;
+    mode: Signal<FocusModeMode>;
+    sessionDuration: Signal<number>;
   };
   let environmentInjector: EnvironmentInjector;
   const mockPausedTaskId = 'test-task-id';
@@ -45,6 +51,10 @@ describe('FocusModeBreakComponent', () => {
       progress: signal(0.5),
       isBreakLong: signal(false),
       isSessionPaused: signal(false),
+      isSessionRunning: signal(false),
+      mainState: signal(FocusMainUIState.InProgress),
+      mode: signal(FocusModeMode.Pomodoro),
+      sessionDuration: signal(300000),
     };
 
     TestBed.configureTestingModule({
@@ -134,10 +144,26 @@ describe('FocusModeBreakComponent', () => {
   });
 
   describe('resumeBreak', () => {
-    it('should dispatch unPauseFocusSession action', () => {
+    it('should dispatch unPauseFocusSession action when it is a normal resume', () => {
+      (mockFocusModeService.mainState as any).set(FocusMainUIState.InProgress);
       component.resumeBreak();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(unPauseFocusSession());
+    });
+
+    it('should dispatch startBreak action when it is a break offer', () => {
+      (mockFocusModeService.mainState as any).set(FocusMainUIState.BreakOffer);
+      (mockFocusModeService.isSessionRunning as any).set(false);
+
+      component.resumeBreak();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        startBreak({
+          duration: 300000,
+          isLongBreak: false,
+          pausedTaskId: mockPausedTaskId,
+        }),
+      );
     });
   });
 

@@ -12,6 +12,7 @@ import {
   pauseFocusSession,
   resetCycles,
   skipBreak,
+  startBreak,
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
 import { selectPausedTaskId } from '../store/focus-mode.selectors';
@@ -93,7 +94,17 @@ export class FocusModeBreakComponent {
   }
 
   resumeBreak(): void {
-    this._store.dispatch(unPauseFocusSession());
+    if (this.isBreakOffer()) {
+      this._store.dispatch(
+        startBreak({
+          duration: this.focusModeService.sessionDuration(),
+          isLongBreak: this.focusModeService.isBreakLong(),
+          pausedTaskId: this._pausedTaskId(),
+        }),
+      );
+    } else {
+      this._store.dispatch(unPauseFocusSession());
+    }
   }
 
   resetCycles(): void {
