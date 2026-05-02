@@ -1480,7 +1480,7 @@
         "CREATE_NEW_TAGS": "Create new tags",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
-        "PLACEHOLDER_CREATE": "A task title #tag @16:00",
+        "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m ",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
         "REPEAT_BUTTON": "Repeat",
         "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
