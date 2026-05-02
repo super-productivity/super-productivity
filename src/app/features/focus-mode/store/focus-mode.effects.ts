@@ -464,7 +464,6 @@ export class FocusModeEffects {
         }
 
         return actions.offerFlowtimeBreak({
-          elapsedMs: timer.elapsed,
           duration: breakInfo.duration,
           isLongBreak: breakInfo.isLong,
           pausedTaskId: action.pausedTaskId,

@@ -66,7 +66,7 @@ export class FocusModeBreakComponent {
   readonly isBreakOffer = computed(
     () =>
       !this.focusModeService.isSessionRunning() &&
-      this.focusModeService.mainState() === FocusMainUIState.Preparation,
+      this.focusModeService.mainState() === FocusMainUIState.BreakOffer,
   );
   readonly isPomodoro = computed(
     () => this.focusModeService.mode() === FocusModeMode.Pomodoro,

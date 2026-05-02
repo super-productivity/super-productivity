@@ -67,7 +67,6 @@ export const exitBreakToPlanning = createAction(
 export const offerFlowtimeBreak = createAction(
   '[FocusMode] Offer Flowtime Break',
   props<{
-    elapsedMs: number;
     duration: number;
     isLongBreak?: boolean;
     pausedTaskId?: string | null;

@@ -227,6 +227,30 @@ describe('FocusModeStrategies', () => {
         });
       });
 
+      it('should calculate rule-based break correctly on boundaries', () => {
+        (mockGlobalConfigService.flowtimeConfig as jasmine.Spy).and.returnValue({
+          isBreakEnabled: true,
+          breakMode: 'rule',
+          breakRules: [
+            { minDuration: 0, maxDuration: 60000, breakDuration: 5000 },
+            { minDuration: 60000, maxDuration: 120000, breakDuration: 10000 },
+          ],
+        });
+
+        // Exact upper bound should match the rule that defines it as a max duration
+        // because of the <= check (so 60000 matches the first rule)
+        expect(strategy.getBreakDuration(60000)).toEqual({
+          duration: 5000,
+          isLong: false,
+        });
+
+        // Values slightly over should fall into the next bucket
+        expect(strategy.getBreakDuration(60001)).toEqual({
+          duration: 10000,
+          isLong: false,
+        });
+      });
+
       it('should return null when no rule matches', () => {
         (mockGlobalConfigService.flowtimeConfig as jasmine.Spy).and.returnValue({
           isBreakEnabled: true,

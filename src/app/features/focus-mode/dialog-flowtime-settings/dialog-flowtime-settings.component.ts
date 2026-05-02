@@ -5,13 +5,13 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { AbstractControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatDialogRef, MatDialogTitle, MatDialogContent } from '@angular/material/dialog';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { T } from '../../../t.const';
-import { FlowtimeConfig } from '../../config/global-config.model';
-import { TranslatePipe } from '@ngx-translate/core';
+import { FlowtimeBreakRule, FlowtimeConfig } from '../../config/global-config.model';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -63,6 +63,7 @@ interface FlowtimeFormModel {
 export class DialogFlowtimeSettingsComponent {
   private readonly _dialogRef = inject(MatDialogRef<DialogFlowtimeSettingsComponent>);
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _translateService = inject(TranslateService);
   private readonly _defaultRuleInMinutes: FlowtimeBreakRuleInMinutes = {
     minDuration: 0,
     maxDuration: 25,
@@ -134,30 +135,18 @@ export class DialogFlowtimeSettingsComponent {
           breakDuration: 5,
         },
       },
-      validators: {
-        validation: [
-          {
-            name: 'minMaxDuration',
-            options: {
-              errorPath: 'maxDuration',
-            },
-          },
-        ],
-      },
       fieldArray: {
         validators: {
           minMaxDuration: {
-            expression: (control: any) => {
-              if (
-                !control.value ||
-                control.value.maxDuration === null ||
-                control.value.maxDuration === undefined
-              ) {
+            expression: (control: AbstractControl<FlowtimeBreakRuleInMinutes>) => {
+              const val = control.value;
+              if (!val || val.maxDuration === null || val.maxDuration === undefined) {
                 return true;
               }
-              return control.value.minDuration <= control.value.maxDuration;
+              return val.minDuration <= val.maxDuration;
             },
-            message: () => 'Max duration must be greater than or equal to Min duration',
+            message: () =>
+              this._translateService.instant(T.F.FOCUS_MODE.FLOWTIME_VALIDATION_MIN_MAX),
           },
         },
         fieldGroup: [
@@ -205,12 +194,14 @@ export class DialogFlowtimeSettingsComponent {
       breakRules: [],
     };
 
-    const breakRulesInMinutes = (flowtime.breakRules ?? []).map((rule) => ({
-      minDuration: Math.round(rule.minDuration / 60000),
-      maxDuration:
-        rule.maxDuration === null ? null : Math.round(rule.maxDuration / 60000),
-      breakDuration: Math.round(rule.breakDuration / 60000),
-    }));
+    const breakRulesInMinutes = (flowtime.breakRules ?? []).map(
+      (rule: FlowtimeBreakRule) => ({
+        minDuration: Math.round(rule.minDuration / 60000),
+        maxDuration:
+          rule.maxDuration === null ? null : Math.round(rule.maxDuration / 60000),
+        breakDuration: Math.round(rule.breakDuration / 60000),
+      }),
+    );
 
     this.model.set({
       ...flowtime,

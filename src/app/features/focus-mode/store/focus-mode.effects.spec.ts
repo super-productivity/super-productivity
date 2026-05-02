@@ -672,7 +672,6 @@ describe('FocusModeEffects', () => {
         effects.offerFlowtimeBreakOnSessionEnd$.pipe(take(1)).subscribe((action) => {
           expect(action).toEqual(
             actions.offerFlowtimeBreak({
-              elapsedMs: 1500000,
               duration: 300000,
               isLongBreak: false,
               pausedTaskId: 'task-123',

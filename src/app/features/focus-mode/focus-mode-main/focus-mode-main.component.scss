@@ -31,31 +31,9 @@ $mat-icon-btn-size: 40px;
   max-width: 600px;
 }
 
-// Pomodoro settings cog — lives inside the clock face during prep (Pomodoro
-// mode only), centered at the bottom. Fades in on hover like the other
-// in-circle controls.
-.pomodoro-settings-btn {
+.mode-settings-btn {
   position: absolute;
   bottom: calc(var(--clock-face-size) * 0.05);
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: var(--muted-opacity);
-  transition: var(--transition-standard);
-  pointer-events: auto;
-
-  &:hover,
-  .clock-face:hover & {
-    opacity: 1;
-  }
-
-  @media (hover: none) and (pointer: coarse) {
-    opacity: 1;
-  }
-}
-
-.flowtime-settings-btn {
-  position: absolute;
-  bottom: calc(var(--clock-face-size) * 0.1);
   left: 50%;
   transform: translateX(-50%);
   opacity: var(--muted-opacity);

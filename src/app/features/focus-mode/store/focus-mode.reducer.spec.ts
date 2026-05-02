@@ -342,14 +342,13 @@ describe('FocusModeReducer', () => {
 
     it('offerFlowtimeBreak should switch currentScreen to Break and set break timer', () => {
       const action = a.offerFlowtimeBreak({
-        elapsedMs: 1500000,
         duration: 5000,
         isLongBreak: false,
       });
       const result = focusModeReducer(initialState, action);
 
       expect(result.currentScreen).toBe(FocusScreen.Break);
-      expect(result.mainState).toBe(FocusMainUIState.Preparation);
+      expect(result.mainState).toBe(FocusMainUIState.BreakOffer);
       expect(result.timer.isRunning).toBe(false);
       expect(result.timer.elapsed).toBe(0);
       expect(result.timer.purpose).toBe('break');
