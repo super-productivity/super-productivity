@@ -31,7 +31,7 @@ jobs:
         with:
           categories: ''
           close-reason: 'OUTDATED'
-          close-unanswered: 'false'
+          close-unanswered: 'true'
           days-before-close: '${{ env.DAYS_BEFORE_CLOSE}}'
           dry-run: ${{ env.DRY_RUN }}
           exempt-labels: 'documentation gap'
@@ -50,7 +50,7 @@ jobs:
         with:
           categories: 'Q&A'
           close-reason: 'RESOLVED'
-          close-unanswered: 'true'
+          close-unanswered: 'false'
           days-before-close: '${{ env.DAYS_BEFORE_CLOSE}}'
           dry-run: ${{ env.DRY_RUN }}
           exempt-labels: 'documentation gap'
