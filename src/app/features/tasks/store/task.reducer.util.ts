@@ -135,22 +135,27 @@ export const updateDoneOnForTask = (
   const isToDone = upd.changes.isDone === true;
   const isToUnDone = upd.changes.isDone === false;
   if (isToDone || isToUnDone) {
-    const changes = {
-      ...(isToDone
-        ? { doneOn: Date.now(), dueDay: todayStr, dueWithTime: undefined }
-        : {}),
-      ...(isToUnDone ? { doneOn: undefined } : {}),
-    };
-    return taskAdapter.updateOne(
-      {
-        id: task.id,
-        changes,
-      },
-      state,
-    );
-  } else {
-    return state;
+    if (isToDone) {
+      const doneOn = Date.now();
+
+      // Clear dueWithTime only if task is completed before scheduled time
+      const shouldClearDueWithTime = task.dueWithTime && doneOn < task.dueWithTime;
+
+      const changes: Partial<Task> = {
+        doneOn,
+        dueDay: todayStr,
+        ...(shouldClearDueWithTime ? { dueWithTime: undefined } : {}),
+      };
+
+      return taskAdapter.updateOne({ id: task.id, changes }, state);
+    } else if (isToUnDone) {
+      return taskAdapter.updateOne(
+        { id: task.id, changes: { doneOn: undefined } },
+        state,
+      );
+    }
   }
+  return state;
 };
 
 export const updateStartDateForRepeatableTask = (
