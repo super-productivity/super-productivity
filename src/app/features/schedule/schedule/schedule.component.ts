@@ -68,6 +68,9 @@ export class ScheduleComponent {
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
 
+  // Toggle for showing done tasks in schedule view
+  showDoneTasks = signal<boolean>(false);
+
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);
 
@@ -191,6 +194,7 @@ export class ScheduleComponent {
       contextNow: this._contextNow(),
       realNow: Date.now(), // Always use actual current time for "current week" calculation
       currentTaskId: this.taskService.currentTaskId() ?? null,
+      showDoneTasks: this.showDoneTasks(),
     });
   });
 
@@ -294,6 +298,10 @@ export class ScheduleComponent {
   selectTimeView(view: 'week' | 'month'): void {
     this.layoutService.selectedTimeView.set(view);
     localStorage.setItem(LS.SELECTED_TIME_VIEW, view);
+  }
+
+  toggleShowDoneTasks(): void {
+    this.showDoneTasks.update((v) => !v);
   }
 
   private getTimeView(): 'week' | 'month' {

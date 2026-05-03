@@ -55,6 +55,17 @@
   </div>
 
   <div class="title">{{ headerTitle() }}</div>
+
+  <button
+    mat-icon-button
+    class="show-done-tasks-btn"
+    [class.active]="showDoneTasks()"
+    (click)="toggleShowDoneTasks()"
+    matTooltip="Show Done Tasks"
+    aria-label="Toggle done tasks visibility"
+  >
+    <mat-icon>checklist</mat-icon>
+  </button>
 </div>
 
 <div

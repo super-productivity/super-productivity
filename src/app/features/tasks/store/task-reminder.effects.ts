@@ -101,8 +101,10 @@ export class TaskReminderEffects {
               }
             }
 
+            // Use dismissReminderOnly instead of unscheduleTask to preserve dueWithTime
+            // This allows done tasks to remain visible in Schedule view when toggled on
             this._store.dispatch(
-              TaskSharedActions.unscheduleTask({
+              TaskSharedActions.dismissReminderOnly({
                 id: task.id,
               }),
             );

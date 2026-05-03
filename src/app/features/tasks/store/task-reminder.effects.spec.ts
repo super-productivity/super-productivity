@@ -221,7 +221,7 @@ describe('TaskReminderEffects', () => {
   // The isMoveToBacklog flag is now handled atomically in the reducer for atomic consistency
 
   describe('unscheduleDoneTask$', () => {
-    it('should dispatch unscheduleTask when completing task with reminder', () => {
+    it('should dispatch dismissReminderOnly when completing task with reminder (preserves dueWithTime)', () => {
       const action = TaskSharedActions.updateTask({
         task: { id: 'task-1', changes: { isDone: true } },
       });
@@ -232,7 +232,7 @@ describe('TaskReminderEffects', () => {
       effects.unscheduleDoneTask$.subscribe();
 
       expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.unscheduleTask({ id: 'task-1' }),
+        TaskSharedActions.dismissReminderOnly({ id: 'task-1' }),
       );
     });
 

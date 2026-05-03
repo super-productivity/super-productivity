@@ -4,6 +4,7 @@ import {
   selectActiveWorkContext,
   selectStartableTasksForActiveContext,
   selectTimelineTasks,
+  selectTimelineTasksIncludeDone,
   selectTodayTaskIds,
   selectTodayTagRepair,
   selectTrackableTasksActiveContextFirst,
@@ -293,7 +294,7 @@ describe('workContext selectors', () => {
   });
 
   describe('selectTimelineTasks', () => {
-    it('should include done tasks with dueWithTime in planned', () => {
+    it('should NOT include done tasks with dueWithTime in planned (filters done tasks)', () => {
       const P = {
         id: 'P',
         subTaskIds: ['SUB1', 'SUB_S'],
@@ -320,7 +321,7 @@ describe('workContext selectors', () => {
       const result = selectTimelineTasks.projector([SUB1.id, SUB_S.id], taskState);
       expect(result).toEqual({
         unPlanned: [],
-        planned: [SUB_S],
+        planned: [], // done tasks are filtered out
       } as any);
     });
 
@@ -389,6 +390,48 @@ describe('workContext selectors', () => {
 
       expect(result.planned.length).toBe(1);
       expect(result.planned[0].id).toBe('withDueTime');
+    });
+  });
+
+  describe('selectTimelineTasksIncludeDone', () => {
+    it('should include done tasks with dueWithTime in planned', () => {
+      const doneTask = {
+        id: 'doneTask',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: true,
+        dueWithTime: 1234,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const undoneTask = {
+        id: 'undoneTask',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: false,
+        dueWithTime: 5678,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const taskState = fakeEntityStateFromArray([doneTask, undoneTask]) as any;
+      const result = selectTimelineTasksIncludeDone.projector([], taskState);
+      expect(result.planned.length).toBe(2);
+      expect(result.planned.map((t) => t.id)).toEqual(
+        jasmine.arrayContaining(['doneTask', 'undoneTask']),
+      );
+    });
+
+    it('should include undone tasks with dueWithTime in planned', () => {
+      const task = {
+        id: 'task1',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: false,
+        dueWithTime: 5678,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const taskState = fakeEntityStateFromArray([task]) as any;
+      const result = selectTimelineTasksIncludeDone.projector([task.id], taskState);
+      expect(result.planned.length).toBe(1);
+      expect(result.planned[0].id).toBe('task1');
     });
   });
 
