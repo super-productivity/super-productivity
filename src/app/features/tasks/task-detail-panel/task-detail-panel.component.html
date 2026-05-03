@@ -5,6 +5,7 @@
       (valueEdited)="updateTaskTitleIfChanged($event.wasChanged, $event.newVal)"
       [value]="task().title || ''"
       class="task-title"
+      #taskTitleField
     ></task-title>
     <!--    <button mat-icon-button>-->
     <!--      <mat-icon>more_vert</mat-icon>-->
