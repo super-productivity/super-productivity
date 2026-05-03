@@ -28,7 +28,7 @@
       matTooltip="Show Done Tasks"
       aria-label="Toggle done tasks visibility"
     >
-      <mat-icon>{{ showDoneTasks() ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+      <mat-icon>check_box</mat-icon>
     </button>
   </div>
 
@@ -36,7 +36,6 @@
     <button
       mat-icon-button
       (click)="goToPreviousPeriod()"
-      [disabled]="isViewingToday()"
       [attr.aria-label]="isMonthView() ? 'Go to previous month' : 'Go to previous week'"
       [matTooltip]="isMonthView() ? 'Previous Month' : 'Previous Week'"
     >
