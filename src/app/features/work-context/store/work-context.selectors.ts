@@ -369,10 +369,8 @@ export const selectTimelineTasks = createSelector(
       .map((id) => s.entities[id])
       .filter((t): t is Task => !!t)
       .forEach((t) => {
-        if (!t.isDone) {
-          if (t.dueWithTime) {
-            allPlannedTasks.push(t as TaskWithDueTime);
-          }
+        if (t.dueWithTime) {
+          allPlannedTasks.push(t as TaskWithDueTime);
         }
       });
     // Use Set for O(1) lookup instead of O(n) .includes() in filter

@@ -293,7 +293,7 @@ describe('workContext selectors', () => {
   });
 
   describe('selectTimelineTasks', () => {
-    it('should not show done tasks', () => {
+    it('should include done tasks with dueWithTime in planned', () => {
       const P = {
         id: 'P',
         subTaskIds: ['SUB1', 'SUB_S'],
@@ -320,8 +320,23 @@ describe('workContext selectors', () => {
       const result = selectTimelineTasks.projector([SUB1.id, SUB_S.id], taskState);
       expect(result).toEqual({
         unPlanned: [],
-        planned: [],
+        planned: [SUB_S],
       } as any);
+    });
+
+    it('should include undone tasks with dueWithTime in planned', () => {
+      const task = {
+        id: 'task1',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: false,
+        dueWithTime: 5678,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const taskState = fakeEntityStateFromArray([task]) as any;
+      const result = selectTimelineTasks.projector([task.id], taskState);
+      expect(result.planned.length).toBe(1);
+      expect(result.planned[0].id).toBe('task1');
     });
 
     it('should handle missing task entities gracefully (issue #6014)', () => {
