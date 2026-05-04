@@ -547,7 +547,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
     expect(result[0].progressPercentage).toBe(25);
   });
 
-  it('should include all-day event durations in timeEstimate', () => {
+  it('should NOT include all-day event durations in timeEstimate', () => {
     const scheduleConfig = {
       isWorkStartEndEnabled: true,
       workStart: '09:00',
@@ -589,8 +589,9 @@ describe('Planner Selectors - selectPlannerDays', () => {
       0,
     );
 
-    // timeEstimate should include the all-day event duration (86400000 ms = 24 hours)
-    expect(result[0].timeEstimate).toBe(86400000);
+    // timeEstimate should NOT include all-day events (they use raw 24h duration)
+    // so it should be 0 when there are no timed events
+    expect(result[0].timeEstimate).toBe(0);
   });
 
   it('should combine task time estimates with calendar event durations', () => {

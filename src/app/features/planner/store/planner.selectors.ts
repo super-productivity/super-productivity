@@ -218,9 +218,11 @@ const getPlannerDay = (
   );
 
   // Add calendar event durations (CalDAV/ICAL events) to the total time estimate
-  const calendarEventsTime =
-    allDayEvents.reduce((acc, ev) => acc + (ev.duration || 0), 0) +
-    timedEvents.reduce((acc, ev) => acc + (ev.end - ev.start), 0);
+  // Only count timed events, not all-day events (which use raw 24h duration)
+  const calendarEventsTime = timedEvents.reduce(
+    (acc, ev) => acc + (ev.end - ev.start),
+    0,
+  );
 
   const totalTimeEstimate = timeEstimate + calendarEventsTime;
 
