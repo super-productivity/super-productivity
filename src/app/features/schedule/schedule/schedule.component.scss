@@ -57,6 +57,34 @@
   @include extraBorder('-top');
   @include extraBorder('-bottom');
 
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to left, var(--bg), transparent);
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.3s;
+  }
+
+  &.scrolled-to-end::after {
+    opacity: 0;
+  }
+
   .title {
     margin-left: auto;
     padding-right: var(--s);
@@ -66,6 +94,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex-shrink: 0;
 
     @include mq(xs, max) {
       font-size: 14px;
