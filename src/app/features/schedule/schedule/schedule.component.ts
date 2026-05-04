@@ -71,6 +71,9 @@ export class ScheduleComponent {
   // Toggle for showing done tasks in schedule view
   showDoneTasks = signal<boolean>(false);
 
+  // Track if nav is scrolled to end for gradient fade effect
+  isScrolledToEnd = signal<boolean>(false);
+
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);
 
@@ -291,6 +294,12 @@ export class ScheduleComponent {
 
   toggleShowDoneTasks(): void {
     this.showDoneTasks.update((v) => !v);
+  }
+
+  onNavScroll(event: Event): void {
+    const element = event.target as HTMLElement;
+    const isAtEnd = element.scrollWidth - element.scrollLeft <= element.clientWidth + 10;
+    this.isScrolledToEnd.set(isAtEnd);
   }
 
   private getTimeView(): 'week' | 'month' {

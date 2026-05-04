@@ -752,4 +752,65 @@ describe('ScheduleComponent', () => {
       expect(weeks).toBe(2);
     });
   });
+
+  describe('Navigation scroll behavior', () => {
+    it('should initialize isScrolledToEnd as false', () => {
+      expect(component.isScrolledToEnd()).toBe(false);
+    });
+
+    it('should set isScrolledToEnd to true when scrolled to end', () => {
+      const navElement = fixture.nativeElement.querySelector('.schedule-nav-controls');
+
+      Object.defineProperty(navElement, 'scrollWidth', {
+        value: 1000,
+        configurable: true,
+      });
+      Object.defineProperty(navElement, 'clientWidth', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(navElement, 'scrollLeft', {
+        value: 495,
+        writable: true,
+        configurable: true,
+      });
+
+      navElement.dispatchEvent(new Event('scroll'));
+      fixture.detectChanges();
+
+      expect(component.isScrolledToEnd()).toBe(true);
+    });
+
+    it('should set isScrolledToEnd to false when not scrolled to end', () => {
+      const navElement = fixture.nativeElement.querySelector('.schedule-nav-controls');
+
+      Object.defineProperty(navElement, 'scrollWidth', {
+        value: 1000,
+        configurable: true,
+      });
+      Object.defineProperty(navElement, 'clientWidth', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(navElement, 'scrollLeft', {
+        value: 100,
+        writable: true,
+        configurable: true,
+      });
+
+      navElement.dispatchEvent(new Event('scroll'));
+      fixture.detectChanges();
+
+      expect(component.isScrolledToEnd()).toBe(false);
+    });
+
+    it('should apply scrolled-to-end class when scrolled to end', () => {
+      const navElement = fixture.nativeElement.querySelector('.schedule-nav-controls');
+
+      component.isScrolledToEnd.set(true);
+      fixture.detectChanges();
+
+      expect(navElement.classList.contains('scrolled-to-end')).toBe(true);
+    });
+  });
 });

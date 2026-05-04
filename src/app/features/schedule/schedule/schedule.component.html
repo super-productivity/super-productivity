@@ -1,4 +1,8 @@
-<div class="schedule-nav-controls">
+<div
+  class="schedule-nav-controls"
+  (scroll)="onNavScroll($event)"
+  [class.scrolled-to-end]="isScrolledToEnd()"
+>
   <div class="week-month-selector">
     <button
       mat-icon-button
