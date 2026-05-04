@@ -49,7 +49,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isMinimizeToTray: false,
     isLocalRestApiEnabled: false,
     isTrayShowCurrentCountdown: true,
-    startOfNextDay: 0,
+    startOfNextDay: '00:00',
     isDisableAnimations: false,
     isDisableCelebration: false,
     isShowProductivityTipLonger: false,

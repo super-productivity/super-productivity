@@ -52,14 +52,15 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
     {
       key: 'startOfNextDay',
       type: 'input',
-      defaultValue: 0,
+      defaultValue: '00:00',
       templateOptions: {
         required: true,
         label: T.GCF.MISC.START_OF_NEXT_DAY,
         description: T.GCF.MISC.START_OF_NEXT_DAY_HINT,
-        type: 'number',
-        min: 0,
-        max: 23,
+        type: 'text',
+        pattern: '^([01]\\d|2[0-3]):([0-5]\\d)$',
+        maxLength: 5,
+        minLength: 4,
       },
     },
     {

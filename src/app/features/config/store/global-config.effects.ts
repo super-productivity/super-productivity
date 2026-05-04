@@ -115,7 +115,9 @@ export class GlobalConfigEffects {
       filter(({ sectionKey }) => sectionKey === 'misc'),
       filter(
         ({ sectionCfg }) =>
-          sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
+          sectionCfg &&
+          (typeof (sectionCfg as MiscConfig).startOfNextDay === 'number' ||
+            typeof (sectionCfg as MiscConfig).startOfNextDay === 'string'),
       ),
       withLatestFrom(this._store.select(selectAllTasks)),
       switchMap(([{ sectionCfg }, allTasks]) => {
