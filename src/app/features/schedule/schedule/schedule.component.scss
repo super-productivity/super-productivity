@@ -118,7 +118,6 @@
     display: flex;
     margin-left: var(--s);
     border-radius: var(--card-border-radius);
-    overflow: hidden;
     box-shadow: var(--whiteframe-shadow-2dp);
   }
 
@@ -126,6 +125,23 @@
     border: none;
     border-radius: 0;
     transition: var(--transition-standard);
+
+    &:first-child {
+      border-radius: var(--card-border-radius) 0 0 var(--card-border-radius);
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+
+      @include darkTheme() {
+        border-right-color: var(--c-light-10);
+      }
+    }
+
+    &:last-child {
+      border-radius: 0 var(--card-border-radius) var(--card-border-radius) 0;
+    }
+
+    &:only-child {
+      border-radius: var(--card-border-radius);
+    }
 
     @include lightTheme() {
       &.active {
@@ -145,14 +161,6 @@
       &.active {
         background: var(--c-primary);
         color: white;
-      }
-    }
-
-    &:first-child {
-      border-right: 1px solid rgba(255, 255, 255, 0.2);
-
-      @include darkTheme() {
-        border-right-color: var(--c-light-10);
       }
     }
   }
