@@ -17,6 +17,7 @@ import {
   DEFAULT_CALENDAR_CFG,
 } from '../issue/providers/calendar/calendar.const';
 import { SnackService } from '../../core/snack/snack.service';
+import { firstValueFrom } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { getDbDateStr } from '../../util/get-db-date-str';
@@ -616,6 +617,58 @@ END:VCALENDAR`;
   });
 
   describe('requestEvents$', () => {
+    // iCal fixture with an event ~10 days in the future (from 2026-05-04),
+    // within the 31-day window used by requestEventsForSchedule$.
+    // async tests are used because fakeAsync does not resolve dynamic import().
+    const MOCK_ICAL_NEAR_FUTURE = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART:20260514T100000Z
+DTEND:20260514T110000Z
+SUMMARY:Near Future Test Event
+UID:near-future-1
+END:VEVENT
+END:VCALENDAR`;
+
+    describe('isReferenceCalendar stamping', () => {
+      it('should stamp isReferenceCalendar: true on every event when provider is a reference calendar', async () => {
+        const refProvider = createMockProvider({ isReferenceCalendar: true });
+
+        const resultPromise = firstValueFrom(
+          service.requestEventsForSchedule$(refProvider),
+        );
+        httpMock.expectOne(refProvider.icalUrl).flush(MOCK_ICAL_NEAR_FUTURE);
+        const result = await resultPromise;
+
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => expect((ev as any).isReferenceCalendar).toBe(true));
+      });
+
+      it('should not set isReferenceCalendar on events from a regular provider', async () => {
+        const normalProvider = createMockProvider({ isReferenceCalendar: false });
+
+        const resultPromise = firstValueFrom(
+          service.requestEventsForSchedule$(normalProvider),
+        );
+        httpMock.expectOne(normalProvider.icalUrl).flush(MOCK_ICAL_NEAR_FUTURE);
+        const result = await resultPromise;
+
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => expect((ev as any).isReferenceCalendar).toBeFalsy());
+      });
+
+      it('should not set isReferenceCalendar when provider flag is absent', async () => {
+        const provider = createMockProvider();
+
+        const resultPromise = firstValueFrom(service.requestEventsForSchedule$(provider));
+        httpMock.expectOne(provider.icalUrl).flush(MOCK_ICAL_NEAR_FUTURE);
+        const result = await resultPromise;
+
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => expect((ev as any).isReferenceCalendar).toBeFalsy());
+      });
+    });
+
     it('should fetch events from provider URL', fakeAsync(() => {
       const mockProvider = createMockProvider();
 
