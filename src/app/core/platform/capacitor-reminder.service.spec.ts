@@ -3,7 +3,10 @@ import { provideMockStore } from '@ngrx/store/testing';
 import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/web';
 import { CapacitorReminderService } from './capacitor-reminder.service';
 import { CapacitorPlatformService } from './capacitor-platform.service';
-import { CapacitorNotificationService } from './capacitor-notification.service';
+import {
+  CapacitorNotificationService,
+  REMINDER_ACTION_TYPE_ID,
+} from './capacitor-notification.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
 describe('CapacitorReminderService', () => {
@@ -261,6 +264,74 @@ describe('CapacitorReminderService', () => {
           notifications: [
             jasmine.objectContaining({
               sound: 'default',
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should include reminder actions for explicit iOS task reminders', async () => {
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'TASK',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [
+            jasmine.objectContaining({
+              actionTypeId: REMINDER_ACTION_TYPE_ID,
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should include reminder actions and metadata for explicit iOS deadline reminders', async () => {
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1_deadline',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'DEADLINE',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [
+            jasmine.objectContaining({
+              actionTypeId: REMINDER_ACTION_TYPE_ID,
+              extra: jasmine.objectContaining({
+                reminderId: 'task-1_deadline',
+                relatedId: 'task-1',
+                reminderType: 'DEADLINE',
+              }),
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should not include reminder actions for due-date notifications', async () => {
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'DUE_DATE',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [
+            jasmine.objectContaining({
+              actionTypeId: undefined,
             }),
           ],
         }),

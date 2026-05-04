@@ -49,7 +49,6 @@ import { Section } from '../section/section.model';
 import {
   CdkDrag,
   CdkDragDrop,
-  CdkDragHandle,
   CdkDropList,
   CdkDropListGroup,
   moveItemInArray,
@@ -84,6 +83,7 @@ import {
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
 import { recordSearchNavDebug } from '../../util/search-nav-debug';
+import { dragDelayForTouch } from '../../util/input-intent';
 
 @Component({
   selector: 'work-view',
@@ -100,7 +100,6 @@ import { recordSearchNavDebug } from '../../util/search-nav-debug';
     CdkDropListGroup,
     CdkDropList,
     CdkDrag,
-    CdkDragHandle,
     CdkScrollable,
     MatTooltip,
     MatIcon,
@@ -138,6 +137,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
   private _destroyRef = inject(DestroyRef);
+  protected readonly dragDelayForTouch = dragDelayForTouch;
 
   isFinishDayEnabled = computed(
     () => this._globalConfigService.appFeatures().isFinishDayEnabled,

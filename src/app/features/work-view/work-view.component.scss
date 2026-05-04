@@ -248,14 +248,15 @@ finish-day-btn,
 :host ::ng-deep .collapsible-header {
   font-size: 16px;
   margin-top: 0;
-  padding: 12px var(--s);
-  justify-content: center;
+  min-height: var(--bar-height);
+  padding: 0 var(--s);
+  justify-content: flex-start;
   border-bottom: 2px solid transparent;
 
   .collapsible-title {
-    flex-grow: 0;
-    margin-left: -10px;
+    flex-grow: 1;
     opacity: 0.8;
+    text-align: left;
   }
 }
 
@@ -287,26 +288,6 @@ finish-day-btn,
 
 // Section header layout: title left, actions right.
 .section-container {
-  ::ng-deep .collapsible-header {
-    justify-content: space-between;
-  }
-
-  ::ng-deep .collapsible-title {
-    text-align: left;
-    // ensure title takes available space to push actions to right
-    flex-grow: 1;
-  }
-
-  .drag-handle {
-    display: inline-flex;
-    align-items: center;
-    cursor: move;
-    margin-right: var(--s);
-    color: var(--text-color-secondary);
-    opacity: 0;
-    transition: opacity var(--transition-duration-m) ease;
-  }
-
   // Style the action-slot menu trigger only — narrow scope avoids leaking
   // resets into <task-list> descendants. The collapsible projects content
   // via `[actions]`, which lands inside `.collapsible-header`; the next
@@ -323,7 +304,6 @@ finish-day-btn,
   // Reveal on hover/focus on devices with hover capability.
   &:hover,
   &:focus-within {
-    .drag-handle,
     ::ng-deep > collapsible > .collapsible-header > button[mat-icon-button] {
       opacity: 1;
     }
@@ -331,7 +311,6 @@ finish-day-btn,
 
   // Touch-only devices have no hover — keep controls always visible.
   :host-context(.isTouchOnly) & {
-    .drag-handle,
     ::ng-deep > collapsible > .collapsible-header > button[mat-icon-button] {
       opacity: 1;
     }

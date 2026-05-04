@@ -10,10 +10,11 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { ReminderConfig } from '../../config/global-config.model';
 import {
   selectAllTasksWithReminder,
+  selectAllTasksWithDeadlineReminder,
   selectUndoneTasksWithDueDayNoReminder,
 } from '../../tasks/store/task.selectors';
 import { generateNotificationId } from '../../android/android-notification-id.util';
-import { TaskWithReminder } from '../../tasks/task.model';
+import { Task, TaskWithReminder } from '../../tasks/task.model';
 
 // Matches the internal DELAY_SCHEDULE in the effects file.
 const EFFECT_DELAY_MS = 5000;
@@ -82,6 +83,10 @@ describe('MobileNotificationEffects', () => {
     it('should have scheduleDueDateNotifications$ as false on non-native', () => {
       expect(effects.scheduleDueDateNotifications$).toBe(false);
     });
+
+    it('should have scheduleDeadlineNotifications$ as false on non-native', () => {
+      expect(effects.scheduleDeadlineNotifications$).toBe(false);
+    });
   });
 
   describe('on native platform — disableReminders gating', () => {
@@ -124,6 +129,7 @@ describe('MobileNotificationEffects', () => {
             initialState: {},
             selectors: [
               { selector: selectAllTasksWithReminder, value: [] },
+              { selector: selectAllTasksWithDeadlineReminder, value: [] },
               { selector: selectUndoneTasksWithDueDayNoReminder, value: [] },
             ],
           }),
@@ -237,6 +243,7 @@ describe('MobileNotificationEffects', () => {
             initialState: {},
             selectors: [
               { selector: selectAllTasksWithReminder, value: [] },
+              { selector: selectAllTasksWithDeadlineReminder, value: [] },
               {
                 selector: selectUndoneTasksWithDueDayNoReminder,
                 value: [futureDueTask('x')],
@@ -273,6 +280,151 @@ describe('MobileNotificationEffects', () => {
       tick(EFFECT_DELAY_MS + 1);
 
       expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
+    }));
+  });
+
+  describe('on native platform — deadline reminders', () => {
+    let reminderServiceSpy: jasmine.SpyObj<CapacitorReminderService>;
+    let cfg$: BehaviorSubject<TestCfg>;
+    let store: MockStore;
+
+    const buildCfg = (overrides: Partial<ReminderConfig> = {}): TestCfg => ({
+      reminder: {
+        disableReminders: false,
+        notifyOnDueDate: true,
+        dueDateNotificationHour: 9,
+        ...overrides,
+      },
+    });
+
+    const futureDeadlineTask = (id: string): Task =>
+      ({
+        id,
+        title: `task ${id}`,
+        deadlineRemindAt: Date.now() + 600_000,
+      }) as Task;
+
+    const pastDeadlineTask = (id: string): Task =>
+      ({
+        id,
+        title: `task ${id}`,
+        deadlineRemindAt: Date.now() - 600_000,
+      }) as Task;
+
+    beforeEach(() => {
+      reminderServiceSpy = jasmine.createSpyObj('CapacitorReminderService', [
+        'ensurePermissions',
+        'scheduleReminder',
+        'cancelReminder',
+      ]);
+      reminderServiceSpy.ensurePermissions.and.resolveTo(true);
+      reminderServiceSpy.scheduleReminder.and.resolveTo();
+      reminderServiceSpy.cancelReminder.and.resolveTo();
+
+      cfg$ = new BehaviorSubject<TestCfg>(buildCfg());
+
+      platformService = jasmine.createSpyObj(
+        'CapacitorPlatformService',
+        ['isIOS', 'isAndroid'],
+        { platform: 'ios', isNative: true },
+      );
+      platformService.isIOS.and.returnValue(true);
+
+      TestBed.configureTestingModule({
+        imports: [EffectsModule.forRoot([])],
+        providers: [
+          MobileNotificationEffects,
+          provideMockStore({
+            initialState: {},
+            selectors: [
+              { selector: selectAllTasksWithReminder, value: [] },
+              {
+                selector: selectAllTasksWithDeadlineReminder,
+                value: [futureDeadlineTask('d1')],
+              },
+              { selector: selectUndoneTasksWithDueDayNoReminder, value: [] },
+            ],
+          }),
+          {
+            provide: SnackService,
+            useValue: jasmine.createSpyObj('SnackService', ['open']),
+          },
+          { provide: CapacitorReminderService, useValue: reminderServiceSpy },
+          { provide: CapacitorPlatformService, useValue: platformService },
+          { provide: GlobalConfigService, useValue: { cfg$: cfg$.asObservable() } },
+        ],
+      });
+
+      store = TestBed.inject(MockStore);
+    });
+
+    const subscribeDeadlineNotifications = (): void => {
+      effects = TestBed.inject(MobileNotificationEffects);
+      (
+        effects.scheduleDeadlineNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
+    };
+
+    it('schedules explicit deadline reminders', fakeAsync(() => {
+      subscribeDeadlineNotifications();
+
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({
+          notificationId: generateNotificationId('d1_deadline'),
+          reminderId: 'd1_deadline',
+          relatedId: 'd1',
+          title: 'task d1',
+          reminderType: 'DEADLINE',
+        }),
+      );
+    }));
+
+    it('cancels previously scheduled deadline reminders when disabled', fakeAsync(() => {
+      subscribeDeadlineNotifications();
+
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+
+      cfg$.next(buildCfg({ disableReminders: true }));
+      tick(1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledOnceWith(
+        generateNotificationId('d1_deadline'),
+      );
+    }));
+
+    it('cancels deadline reminders removed from the selector result', fakeAsync(() => {
+      subscribeDeadlineNotifications();
+
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+
+      store.overrideSelector(selectAllTasksWithDeadlineReminder, []);
+      store.refreshState();
+      tick(1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledOnceWith(
+        generateNotificationId('d1_deadline'),
+      );
+    }));
+
+    it('cancels a tracked deadline reminder when its new timestamp is in the past', fakeAsync(() => {
+      subscribeDeadlineNotifications();
+
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+
+      store.overrideSelector(selectAllTasksWithDeadlineReminder, [
+        pastDeadlineTask('d1'),
+      ]);
+      store.refreshState();
+      tick(1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledOnceWith(
+        generateNotificationId('d1_deadline'),
+      );
     }));
   });
 });
