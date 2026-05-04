@@ -14,7 +14,16 @@
     <mat-icon class="collapsible-additional-icon">{{ icon }} </mat-icon>
   }
 
-  <div class="collapsible-title">{{ title() }}</div>
+  @if (isTitleDragHandle()) {
+    <div
+      class="collapsible-title is-drag-handle"
+      cdkDragHandle
+    >
+      {{ title() }}
+    </div>
+  } @else {
+    <div class="collapsible-title">{{ title() }}</div>
+  }
 
   <ng-content select="[actions]"></ng-content>
 

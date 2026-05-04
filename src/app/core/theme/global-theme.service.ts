@@ -56,6 +56,15 @@ const NavigationBar = registerPlugin<NavigationBarPlugin>('NavigationBar');
 
 export type DarkModeCfg = 'dark' | 'light' | 'system';
 
+const CSS_VAR_KEYBOARD_HEIGHT = '--keyboard-height';
+const CSS_VAR_KEYBOARD_OVERLAY_OFFSET = '--keyboard-overlay-offset';
+const CSS_VAR_VISUAL_VIEWPORT_HEIGHT = '--visual-viewport-height';
+const CSS_VAR_SAFE_AREA_TOP = '--safe-area-inset-top';
+const CSS_VAR_SAFE_AREA_BOTTOM = '--safe-area-inset-bottom';
+const CSS_VAR_SAFE_AREA_LEFT = '--safe-area-inset-left';
+const CSS_VAR_SAFE_AREA_RIGHT = '--safe-area-inset-right';
+const VIEWPORT_RESIZE_EPSILON_PX = 1;
+
 @Injectable({ providedIn: 'root' })
 export class GlobalThemeService {
   private document = inject<Document>(DOCUMENT);
@@ -78,6 +87,10 @@ export class GlobalThemeService {
   private _hasInitialized = false;
   private _keyboardListenerHandles: PluginListenerHandle[] = [];
   private _focusinListener: ((event: FocusEvent) => void) | null = null;
+  private _visualViewportResizeListener: (() => void) | null = null;
+  private _iosKeyboardHeight = 0;
+  private _iosViewportHeightBeforeKeyboard = 0;
+  private _iosViewportChangeRaf: number | null = null;
 
   private _isCustomWindowTitleBarEnabled(): boolean {
     const misc = this._globalConfigService.misc();
@@ -477,26 +490,51 @@ export class GlobalThemeService {
   private _initIOSKeyboardHandling(): void {
     // Show the native iOS accessory bar ("Done" button) above the keyboard
     Keyboard.setAccessoryBarVisible({ isVisible: true });
+    this._updateIOSKeyboardViewportVars();
+
+    if (window.visualViewport) {
+      this._visualViewportResizeListener = (): void => {
+        this._updateIOSKeyboardViewportVars();
+      };
+      window.visualViewport.addEventListener(
+        'resize',
+        this._visualViewportResizeListener,
+        { passive: true },
+      );
+    }
 
     Keyboard.addListener('keyboardWillShow', (info: KeyboardInfo) => {
       Log.log('iOS keyboard will show', info);
+      if (!this.document.body.classList.contains(BodyClass.isKeyboardVisible)) {
+        this._iosViewportHeightBeforeKeyboard = window.innerHeight;
+      }
+      this._iosKeyboardHeight = info.keyboardHeight;
       this.document.body.classList.add(BodyClass.isKeyboardVisible);
       // Set CSS variable for keyboard height to adjust layout
       this.document.documentElement.style.setProperty(
-        '--keyboard-height',
+        CSS_VAR_KEYBOARD_HEIGHT,
         `${info.keyboardHeight}px`,
       );
+      this._updateIOSKeyboardViewportVars();
     }).then((handle) => this._keyboardListenerHandles.push(handle));
 
     // Use keyboardDidShow for scroll (after animation completes)
     Keyboard.addListener('keyboardDidShow', () => {
+      this._updateIOSKeyboardViewportVars();
       this._scrollActiveInputIntoView();
     }).then((handle) => this._keyboardListenerHandles.push(handle));
 
     Keyboard.addListener('keyboardWillHide', () => {
       Log.log('iOS keyboard will hide');
+      this._iosKeyboardHeight = 0;
+      this._iosViewportHeightBeforeKeyboard = 0;
       this.document.body.classList.remove(BodyClass.isKeyboardVisible);
-      this.document.documentElement.style.setProperty('--keyboard-height', '0px');
+      this.document.documentElement.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, '0px');
+      this.document.documentElement.style.setProperty(
+        CSS_VAR_KEYBOARD_OVERLAY_OFFSET,
+        '0px',
+      );
+      this._updateIOSKeyboardViewportVars();
     }).then((handle) => this._keyboardListenerHandles.push(handle));
 
     // Also handle focus changes while keyboard is already visible
@@ -519,9 +557,79 @@ export class GlobalThemeService {
     // Cleanup listeners on destroy
     this._destroyRef.onDestroy(() => {
       this._keyboardListenerHandles.forEach((handle) => handle.remove());
+      if (this._visualViewportResizeListener && window.visualViewport) {
+        window.visualViewport.removeEventListener(
+          'resize',
+          this._visualViewportResizeListener,
+        );
+      }
+      if (this._iosViewportChangeRaf !== null) {
+        window.cancelAnimationFrame(this._iosViewportChangeRaf);
+      }
       if (this._focusinListener) {
         this.document.removeEventListener('focusin', this._focusinListener);
       }
+    });
+  }
+
+  private _updateIOSKeyboardViewportVars(): void {
+    const root = this.document.documentElement;
+    const visualViewportHeight = window.visualViewport?.height;
+    const baseHeight = this._iosViewportHeightBeforeKeyboard || window.innerHeight;
+    const isKeyboardVisible = this._iosKeyboardHeight > 0;
+    const isVisualViewportAlreadyResized = this._isVisualViewportResizedForKeyboard(
+      isKeyboardVisible,
+      baseHeight,
+      visualViewportHeight,
+    );
+    const height = isKeyboardVisible
+      ? this._getKeyboardAdjustedViewportHeight(baseHeight, visualViewportHeight)
+      : (visualViewportHeight ?? window.innerHeight);
+
+    root.style.setProperty(CSS_VAR_VISUAL_VIEWPORT_HEIGHT, `${Math.max(0, height)}px`);
+    root.style.setProperty(
+      CSS_VAR_KEYBOARD_OVERLAY_OFFSET,
+      `${isKeyboardVisible && !isVisualViewportAlreadyResized ? this._iosKeyboardHeight : 0}px`,
+    );
+    this._notifyIOSViewportChange();
+  }
+
+  private _getKeyboardAdjustedViewportHeight(
+    baseHeight: number,
+    visualViewportHeight?: number,
+  ): number {
+    const keyboardAdjustedHeight = baseHeight - this._iosKeyboardHeight;
+
+    if (
+      this._isVisualViewportResizedForKeyboard(true, baseHeight, visualViewportHeight)
+    ) {
+      return visualViewportHeight;
+    }
+
+    return keyboardAdjustedHeight;
+  }
+
+  private _isVisualViewportResizedForKeyboard(
+    isKeyboardVisible: boolean,
+    baseHeight: number,
+    visualViewportHeight?: number,
+  ): visualViewportHeight is number {
+    return (
+      isKeyboardVisible &&
+      visualViewportHeight !== undefined &&
+      visualViewportHeight < baseHeight - VIEWPORT_RESIZE_EPSILON_PX
+    );
+  }
+
+  private _notifyIOSViewportChange(): void {
+    if (this._iosViewportChangeRaf !== null) {
+      return;
+    }
+
+    this._iosViewportChangeRaf = window.requestAnimationFrame(() => {
+      this._iosViewportChangeRaf = null;
+      // Connected CDK overlays listen to viewport resize events via ViewportRuler.
+      window.dispatchEvent(new Event('resize'));
     });
   }
 
@@ -564,10 +672,10 @@ export class GlobalThemeService {
       left: number;
     }): void => {
       const root = this.document.documentElement;
-      root.style.setProperty('--safe-area-inset-top', `${insets.top}px`);
-      root.style.setProperty('--safe-area-inset-bottom', `${insets.bottom}px`);
-      root.style.setProperty('--safe-area-inset-left', `${insets.left}px`);
-      root.style.setProperty('--safe-area-inset-right', `${insets.right}px`);
+      root.style.setProperty(CSS_VAR_SAFE_AREA_TOP, `${insets.top}px`);
+      root.style.setProperty(CSS_VAR_SAFE_AREA_BOTTOM, `${insets.bottom}px`);
+      root.style.setProperty(CSS_VAR_SAFE_AREA_LEFT, `${insets.left}px`);
+      root.style.setProperty(CSS_VAR_SAFE_AREA_RIGHT, `${insets.right}px`);
     };
 
     SafeArea.getSafeAreaInsets().then(({ insets }) => applyInsets(insets));
@@ -576,9 +684,9 @@ export class GlobalThemeService {
   }
 
   /**
-   * Monkey-patch CDK's viewport rect calculation to include safe area insets.
-   * This makes connected overlays (menus, selects) stay within the safe area
-   * instead of extending behind the status bar or home indicator.
+   * Monkey-patch CDK's viewport rect calculation to include native mobile insets.
+   * This keeps connected overlays (menus, selects, autocomplete panels) above
+   * the safe areas and the iOS keyboard when the WebView does not shrink.
    */
   private _patchCdkViewportForSafeArea(): void {
     const proto = FlexibleConnectedPositionStrategy.prototype as any;
@@ -594,14 +702,20 @@ export class GlobalThemeService {
     } {
       const rect = original.call(this);
       const style = getComputedStyle(doc.documentElement);
-      const safeTop = parseInt(style.getPropertyValue('--safe-area-inset-top'), 10) || 0;
+      const safeTop = parseInt(style.getPropertyValue(CSS_VAR_SAFE_AREA_TOP), 10) || 0;
       const safeBottom =
-        parseInt(style.getPropertyValue('--safe-area-inset-bottom'), 10) || 0;
+        parseInt(style.getPropertyValue(CSS_VAR_SAFE_AREA_BOTTOM), 10) || 0;
+      const keyboardOverlayOffset =
+        doc.body.classList.contains(BodyClass.isIOS) &&
+        doc.body.classList.contains(BodyClass.isKeyboardVisible)
+          ? parseInt(style.getPropertyValue(CSS_VAR_KEYBOARD_OVERLAY_OFFSET), 10) || 0
+          : 0;
+      const bottomInset = safeBottom + keyboardOverlayOffset;
       return {
         ...rect,
         top: rect.top + safeTop,
-        bottom: rect.bottom - safeBottom,
-        height: rect.height - safeTop - safeBottom,
+        bottom: rect.bottom - bottomInset,
+        height: rect.height - safeTop - bottomInset,
       };
     };
   }

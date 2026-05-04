@@ -10,7 +10,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { filter, map, startWith } from 'rxjs/operators';
+import { filter, map } from 'rxjs/operators';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
 import { TaskViewCustomizerService } from '../../../features/task-view-customizer/task-view-customizer.service';
 import { TaskViewCustomizerPanelComponent } from '../../../features/task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
@@ -182,65 +182,39 @@ export class PageTitleComponent {
     this._workContextService.activeWorkContextTypeAndId$,
   );
 
-  // Route detection observables
-  private _isScheduleSection$ = this._router.events.pipe(
+  // Single source for the current URL path — all route-derived signals compute off this.
+  // Query and fragment are stripped so end-anchored matchers work for e.g. `/config#plugins`.
+  private _url$ = this._router.events.pipe(
     filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-    map((event) => !!event.urlAfterRedirects.match(/(schedule)$/)),
-    startWith(!!this._router.url.match(/(schedule)$/)),
+    map((event) => event.urlAfterRedirects.split(/[?#]/, 1)[0]),
   );
-  isScheduleSection = toSignal(this._isScheduleSection$, { initialValue: false });
+  private _url = toSignal(this._url$, {
+    initialValue: this._router.url.split(/[?#]/, 1)[0],
+  });
 
-  private _isPlannerSection$ = this._router.events.pipe(
-    filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-    map((event) => !!event.urlAfterRedirects.match(/(planner)$/)),
-    startWith(!!this._router.url.match(/(planner)$/)),
-  );
-  isPlannerSection = toSignal(this._isPlannerSection$, { initialValue: false });
+  // Routes that get their own title and have no work-context menu.
+  // Order is irrelevant — patterns are mutually exclusive end-anchors.
+  private static readonly _ROUTE_TITLE_KEYS: ReadonlyArray<readonly [RegExp, string]> = [
+    [/schedule$/, T.MH.SCHEDULE],
+    [/planner$/, T.MH.PLANNER],
+    [/boards$/, T.MH.BOARDS],
+    [/habits$/, T.MH.HABITS],
+    [/search$/, T.MH.SEARCH],
+    [/scheduled-list$/, T.MH.ALL_PLANNED_LIST],
+    [/donate$/, T.MH.DONATE],
+    [/config$/, T.PS.GLOBAL_SETTINGS],
+  ];
 
-  private _isBoardsSection$ = this._router.events.pipe(
-    filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-    map((event) => !!event.urlAfterRedirects.match(/(boards)$/)),
-    startWith(!!this._router.url.match(/(boards)$/)),
-  );
-  isBoardsSection = toSignal(this._isBoardsSection$, { initialValue: false });
-
-  private _isWorkViewPage$ = this._router.events.pipe(
-    filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-    map((event) => !!event.urlAfterRedirects.match(/tasks$/)),
-    startWith(!!this._router.url.match(/tasks$/)),
-  );
-  isWorkViewPage = toSignal(this._isWorkViewPage$, { initialValue: false });
-
-  private _isHabitsSection$ = this._router.events.pipe(
-    filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-    map((event) => !!event.urlAfterRedirects.match(/(habits)$/)),
-    startWith(!!this._router.url.match(/(habits)$/)),
-  );
-  isHabitsSection = toSignal(this._isHabitsSection$, { initialValue: false });
-
-  isSpecialSection = computed(
-    () =>
-      this.isPlannerSection() ||
-      this.isScheduleSection() ||
-      this.isBoardsSection() ||
-      this.isHabitsSection(),
+  private _routeTitleKey = computed(
+    () => PageTitleComponent._ROUTE_TITLE_KEYS.find(([re]) => re.test(this._url()))?.[1],
   );
 
-  // Override title for special routes
+  isSpecialSection = computed(() => !!this._routeTitleKey());
+  isWorkViewPage = computed(() => /tasks$/.test(this._url()));
+
   displayTitle = computed(() => {
-    if (this.isScheduleSection()) {
-      return this._translateService.instant(T.MH.SCHEDULE);
-    }
-    if (this.isPlannerSection()) {
-      return this._translateService.instant(T.MH.PLANNER);
-    }
-    if (this.isBoardsSection()) {
-      return this._translateService.instant(T.MH.BOARDS);
-    }
-    if (this.isHabitsSection()) {
-      return this._translateService.instant(T.MH.HABITS);
-    }
-    return this.activeWorkContextTitle();
+    const key = this._routeTitleKey();
+    return key ? this._translateService.instant(key) : this.activeWorkContextTitle();
   });
 
   private _isXxxs$ = this._breakpointObserver.observe('(max-width: 350px)');

@@ -52,7 +52,7 @@ th {
   td,
   th {
     padding: var(--s-half) var(--s-half);
-    word-break: break-word;
+    overflow-wrap: anywhere;
     min-width: auto;
 
     &:first-child {

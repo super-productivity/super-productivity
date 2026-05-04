@@ -1,0 +1,10 @@
+- mount build dir to /project so snapcraft container finds sp.snap
+- update package-lock.json
+- unbreak task-shortcut recovery specs from layout-spec pollution
+- recover focusedTaskId when shortcut fires on a focused task
+- drop redundant 'snapcraft' arg from snapcraft-rocks docker call
+- drag-drop puts tasks at the right slot (#7452)
+- focus next task after moving to another project
+- register SECTION in op-log entity registry
+- break long unbreakable words in task titles
+- hide section controls until hover on non-touch

@@ -27,7 +27,7 @@
 }
 <!-- -->
 @if (isShowFocusOverlay()) {
-  @defer {
+  @defer (on immediate) {
     <focus-mode-overlay @warp></focus-mode-overlay>
   }
 } @else {

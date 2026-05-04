@@ -115,6 +115,9 @@ const ALLOWED_HOSTS = new Set([
   'localhost',
 ]);
 
+const isForceEnabledForDev = (): boolean =>
+  process.env.NODE_ENV === 'DEV' && process.env.SP_FORCE_LOCAL_REST_API === '1';
+
 const handleHttpRequest = async (
   req: IncomingMessage,
   res: ServerResponse,
@@ -221,6 +224,12 @@ export const initLocalRestApi = (): void => {
     isListening = false;
     warn('[local-rest-api] Server error', error);
   });
+
+  if (isForceEnabledForDev()) {
+    warn('[local-rest-api] Enabled by SP_FORCE_LOCAL_REST_API=1 for DEV runtime');
+    isEnabled = true;
+    startServer();
+  }
 };
 
 const startServer = (): void => {
@@ -253,7 +262,8 @@ const stopServer = (): void => {
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
-  const nextEnabled = !!cfg.misc.isLocalRestApiEnabled;
+  const isForcedForDev = isForceEnabledForDev();
+  const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
   if (nextEnabled === isEnabled) {
     if (nextEnabled && !isListening) {
       startServer();

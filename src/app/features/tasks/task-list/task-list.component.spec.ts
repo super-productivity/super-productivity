@@ -13,6 +13,7 @@ import { of } from 'rxjs';
 import { TaskWithSubTasks } from '../task.model';
 import { SectionService } from '../../section/section.service';
 import { moveSubTask } from '../store/task.actions';
+import { WorkContextType } from '../../work-context/work-context.model';
 
 describe('TaskListComponent', () => {
   let component: TaskListComponent;
@@ -402,12 +403,18 @@ describe('TaskListComponent', () => {
       expect(args[2]).toBeNull();
     });
 
-    it('routes a section -> no-section drag to removeTaskFromSection', () => {
-      callMove('task1', 'section-from', 'UNDONE', 'PARENT', 'PARENT');
+    it('routes a section -> no-section drag to removeTaskFromSection with workContext anchor', () => {
+      callMove('task1', 'section-from', 'UNDONE', 'PARENT', 'PARENT', [
+        'before-anchor',
+        'task1',
+      ]);
 
       expect(sectionServiceMock.removeTaskFromSection).toHaveBeenCalledWith(
         'section-from',
         'task1',
+        'test-context',
+        WorkContextType.TAG,
+        'before-anchor',
       );
       expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
     });

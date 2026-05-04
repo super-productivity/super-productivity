@@ -1072,6 +1072,19 @@ export class PluginService implements OnDestroy {
         }
       }
 
+      // Extract config schema if specified in manifest
+      let configSchema: string | undefined;
+      if (manifest.jsonSchemaCfg && extractedFiles[manifest.jsonSchemaCfg]) {
+        const schemaBytes = extractedFiles[manifest.jsonSchemaCfg];
+        if (schemaBytes.length <= MAX_PLUGIN_MANIFEST_SIZE) {
+          configSchema = new TextDecoder().decode(schemaBytes);
+        } else {
+          PluginLog.err(
+            `Plugin config schema ${manifest.jsonSchemaCfg} is too large, skipping`,
+          );
+        }
+      }
+
       // Analyze plugin code (informational only - KISS approach)
       const codeAnalysis = this._pluginSecurity.analyzePluginCode(pluginCode, manifest);
       if (codeAnalysis.warnings.length > 0) {
@@ -1106,6 +1119,8 @@ export class PluginService implements OnDestroy {
         pluginCode,
         indexHtml || undefined,
         iconContent || undefined,
+        undefined,
+        configSchema,
       );
 
       // Store index.html content if it exists

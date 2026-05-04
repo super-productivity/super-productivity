@@ -83,6 +83,7 @@ describe('LayoutService', () => {
       Object.defineProperty(document, 'activeElement', {
         value: mockTaskElement,
         writable: true,
+        configurable: true,
       });
 
       // Show add task bar
@@ -143,6 +144,7 @@ describe('LayoutService', () => {
       Object.defineProperty(document, 'activeElement', {
         value: mockTaskElement,
         writable: true,
+        configurable: true,
       });
 
       // Show add task bar (which stores the focused element)
@@ -169,6 +171,7 @@ describe('LayoutService', () => {
       Object.defineProperty(document, 'activeElement', {
         value: nonTaskElement,
         writable: true,
+        configurable: true,
       });
 
       // Show add task bar
@@ -193,6 +196,7 @@ describe('LayoutService', () => {
       Object.defineProperty(document, 'activeElement', {
         value: mockTaskElement,
         writable: true,
+        configurable: true,
       });
 
       // Show add task bar (which stores the focused element)
@@ -219,6 +223,7 @@ describe('LayoutService', () => {
       Object.defineProperty(document, 'activeElement', {
         value: mockTaskElement,
         writable: true,
+        configurable: true,
       });
 
       service.showAddTaskBar();

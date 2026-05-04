@@ -26,6 +26,7 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 // If CDK changes these class names we only need to adjust the helpers below.
 const CDK_OVERLAY_CONTAINER_CLASS = 'cdk-overlay-container';
 const CDK_OVERLAY_PANE_CLASS = 'cdk-overlay-pane';
+const MAT_TOOLTIP_PANEL_CLASS = 'mat-mdc-tooltip-panel';
 
 @Injectable({
   providedIn: 'root',
@@ -244,7 +245,9 @@ export class ShortcutService {
     // NOTE: All CDK class name knowledge is encapsulated here to ease future updates.
     return Array.from(containerEl.children).some((child) => {
       return (
-        child.classList.contains(CDK_OVERLAY_PANE_CLASS) && child.childElementCount > 0
+        child.classList.contains(CDK_OVERLAY_PANE_CLASS) &&
+        child.childElementCount > 0 &&
+        !child.classList.contains(MAT_TOOLTIP_PANEL_CLASS)
       );
     });
   }

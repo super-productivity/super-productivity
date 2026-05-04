@@ -14,20 +14,20 @@ body:
       required: true
 
   - type: textarea
-    id: expected-behavior
-    attributes:
-      label: Expected Behavior
-      description: Tell us what should happen.
-      placeholder: "e.g. When I click the 'Save' button, the data should be saved without errors."
-    validations:
-      required: true
-
-  - type: textarea
     id: current-behavior
     attributes:
       label: Current Behavior
       description: Tell us what happens instead of the expected behavior.
       placeholder: "e.g. When I click the 'Save' button, the application crashes / nothing happens / an error message appears."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: Tell us what should happen.
+      placeholder: "e.g. When I click the 'Save' button, the data should be saved without errors."
     validations:
       required: true
 
@@ -69,9 +69,8 @@ body:
   - type: checkboxes
     id: docs-impact
     attributes:
-      label: documentation gap
+      label: Documentation
       description: Optionally, indicate whether documentation updates are needed.
       options:
         - label: The documentation/[wiki](https://github.com/super-productivity/super-productivity/wiki) is unclear or incorrect for this case.
         - label: There should be a note added to the documentation/[wiki](https://github.com/super-productivity/super-productivity/wiki) for this case.
-        - label: I can help improve the documentation.
