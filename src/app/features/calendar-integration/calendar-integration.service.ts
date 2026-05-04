@@ -333,6 +333,11 @@ export class CalendarIntegrationService {
             calProvider.icalUrl,
           ),
         ),
+        map((events) =>
+          calProvider.isReferenceCalendar
+            ? events.map((ev) => ({ ...ev, isReferenceCalendar: true as const }))
+            : events,
+        ),
         catchError((err) => {
           Log.err(err);
           if (err instanceof NotIcalResponseError) {

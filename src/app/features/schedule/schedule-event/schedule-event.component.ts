@@ -10,6 +10,7 @@ import {
   OnDestroy,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { CdkDrag } from '@angular/cdk/drag-drop';
@@ -107,6 +108,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   });
 
   readonly calMenuTrigger = viewChild('calMenuTrigger', { read: MatMenuTrigger });
+  private readonly _calMenuItems = viewChildren(MatMenuItem);
   private readonly _titleEl = viewChild<ElementRef<HTMLElement>>('titleEl');
 
   protected readonly SVEType = SVEType;
@@ -214,6 +216,10 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
 
     if (this._isResizing()) {
       addClass += ' is-resizing';
+    }
+
+    if (this.isReferenceCalendar()) {
+      addClass += ' is-reference-calendar';
     }
 
     return evt.type + '  ' + addClass;
@@ -369,7 +375,9 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
         },
       });
     } else if (evt.type === SVEType.CalendarEvent) {
-      this.calMenuTrigger()?.openMenu();
+      if (this._calMenuItems().length) {
+        this.calMenuTrigger()?.openMenu();
+      }
     }
   }
 
@@ -377,6 +385,12 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     const evt = this.se();
     if (evt.type !== SVEType.CalendarEvent) return false;
     return this._calEventActions.isPluginEvent(evt.data as ScheduleFromCalendarEvent);
+  });
+
+  readonly isReferenceCalendar = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return !!(evt.data as ScheduleFromCalendarEvent).isReferenceCalendar;
   });
 
   async openCalendarEventLink(): Promise<void> {

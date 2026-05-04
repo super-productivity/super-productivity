@@ -31,4 +31,9 @@ export interface CalendarIntegrationEvent {
    * For plugin calendar events, this is passed through from PluginSearchResult.dueWithTime.
    */
   dueWithTime?: number;
+  /**
+   * When true, this event comes from a reference calendar and is shown for
+   * informational context only. Task-creation actions are hidden in the UI.
+   */
+  isReferenceCalendar?: boolean;
 }

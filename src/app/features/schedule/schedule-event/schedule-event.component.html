@@ -122,20 +122,22 @@
         {{ T.F.CALENDARS.CONTEXT_MENU.RESCHEDULE | translate }}
       </button>
     }
-    <button
-      mat-menu-item
-      (click)="createCalendarEventAsTask()"
-    >
-      <mat-icon>add</mat-icon>
-      {{ T.F.CALENDARS.CONTEXT_MENU.CREATE_TASK | translate }}
-    </button>
-    <button
-      mat-menu-item
-      (click)="hideCalendarEvent()"
-    >
-      <mat-icon>visibility_off</mat-icon>
-      {{ T.G.HIDE | translate }}
-    </button>
+    @if (!isReferenceCalendar()) {
+      <button
+        mat-menu-item
+        (click)="createCalendarEventAsTask()"
+      >
+        <mat-icon>add</mat-icon>
+        {{ T.F.CALENDARS.CONTEXT_MENU.CREATE_TASK | translate }}
+      </button>
+      <button
+        mat-menu-item
+        (click)="hideCalendarEvent()"
+      >
+        <mat-icon>visibility_off</mat-icon>
+        {{ T.G.HIDE | translate }}
+      </button>
+    }
     @if (isCalendarEventFromPlugin()) {
       <button
         mat-menu-item

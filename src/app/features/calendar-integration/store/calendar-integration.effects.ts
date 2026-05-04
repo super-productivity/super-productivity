@@ -109,13 +109,14 @@ export class CalendarIntegrationEffects {
                         // this._issueService.addTaskFromIssue()
                       }
 
-                      const eventsToShowBannerFor = allEventsToday.filter((calEv) =>
-                        isCalenderEventDue(
-                          calEv,
-                          calProvider,
-                          this._calendarIntegrationService.skippedEventIds$.getValue(),
-                          now,
-                        ),
+                      const eventsToShowBannerFor = allEventsToday.filter(
+                        (calEv) =>
+                          isCalenderEventDue(
+                            calEv,
+                            calProvider,
+                            this._calendarIntegrationService.skippedEventIds$.getValue(),
+                            now,
+                          ) && !calEv.isReferenceCalendar,
                       );
                       eventsToShowBannerFor.forEach((calEv) => {
                         this._addEvToShow(calEv, calProvider);

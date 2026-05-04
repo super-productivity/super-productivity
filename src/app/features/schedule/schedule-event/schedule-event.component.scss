@@ -122,6 +122,18 @@
     @include extraBorder('-left');
   }
 
+  &.CalendarEvent.is-reference-calendar {
+    border-style: solid;
+    opacity: 0.55;
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      rgba(128, 128, 128, 0.08) 4px,
+      rgba(128, 128, 128, 0.08) 8px
+    );
+  }
+
   &.ScheduledRepeatProjection .ico {
     color: var(--c-primary);
   }

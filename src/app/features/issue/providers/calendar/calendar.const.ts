@@ -23,6 +23,7 @@ export const DEFAULT_CALENDAR_CFG: CalendarProviderCfg = {
   isEnabled: false,
   icalUrl: '',
   isAutoImportForCurrentDay: false,
+  isReferenceCalendar: false,
   checkUpdatesEvery: 2 * 60 * 60000,
   showBannerBeforeThreshold: 2 * 60 * 60000,
   isDisabledForWebApp: false,
@@ -88,6 +89,14 @@ export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
         // TODO translation
         // label: T.GCF.CALENDARS.CAL_PATH,
         label: 'Auto import events as tasks for current day',
+      },
+    },
+    {
+      type: 'checkbox',
+      key: 'isReferenceCalendar',
+      templateOptions: {
+        // TODO translation
+        label: 'Reference calendar (display only, no task creation)',
       },
     },
     {
