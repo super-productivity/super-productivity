@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
+import { of } from 'rxjs';
 import { DateService } from '../../../core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
@@ -53,6 +54,7 @@ describe('TaskComponent shortcut handling', () => {
         'addSubTaskTo',
         'setSelectedId',
         'toggleSubTaskMode',
+        'showSubTasks',
         'toggleDoneWithAnimation',
         'moveUp',
         'moveDown',
@@ -60,12 +62,22 @@ describe('TaskComponent shortcut handling', () => {
         'moveToBottom',
         'setCurrentId',
         'pauseCurrent',
+        'getByIdWithSubTaskData$',
       ],
       {
         currentTaskId: signal<string | null>(null),
         selectedTaskId: signal<string | null>(null),
         todayListSet: signal<Set<string>>(new Set<string>()),
       },
+    );
+    taskServiceSpy.getByIdWithSubTaskData$.and.returnValue(
+      of({
+        ...DEFAULT_TASK,
+        id: 'parent-1',
+        title: 'Parent',
+        subTasks: [],
+        subTaskIds: [],
+      } as unknown as TaskWithSubTasks),
     );
 
     await TestBed.configureTestingModule({
@@ -213,7 +225,24 @@ describe('TaskComponent shortcut handling', () => {
     expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
   });
 
-  it('expands hidden subtasks before adding when the parent has them collapsed', () => {
+  it('expands hidden subtasks before adding when the parent has HideAll set', () => {
+    const parent = {
+      ...createTopLevelTask('Parent'),
+      _hideSubTasksMode: 2,
+    } as TaskWithSubTasks;
+    fixture.componentRef.setInput('task', parent);
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Parent',
+      wasChanged: false,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.showSubTasks).toHaveBeenCalledWith('top-1');
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
+  });
+
+  it('does not expand subtasks when only HideDone is set (new task is not done)', () => {
     const parent = {
       ...createTopLevelTask('Parent'),
       _hideSubTasksMode: 1,
@@ -226,11 +255,11 @@ describe('TaskComponent shortcut handling', () => {
       submitTrigger: 'modEnter',
     });
 
-    expect(taskServiceSpy.toggleSubTaskMode).toHaveBeenCalledWith('top-1', false, false);
+    expect(taskServiceSpy.showSubTasks).not.toHaveBeenCalled();
     expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
   });
 
-  it('does not toggle subtask mode when subtasks are already visible', () => {
+  it('does not expand subtasks when subtasks are already visible', () => {
     fixture.componentRef.setInput('task', createTopLevelTask('Parent'));
 
     component.updateTaskTitleIfChanged({
@@ -239,7 +268,62 @@ describe('TaskComponent shortcut handling', () => {
       submitTrigger: 'modEnter',
     });
 
-    expect(taskServiceSpy.toggleSubTaskMode).not.toHaveBeenCalled();
+    expect(taskServiceSpy.showSubTasks).not.toHaveBeenCalled();
     expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
+  });
+
+  it('focuses an existing empty child instead of spawning a new one (parent)', () => {
+    const parent = {
+      ...createTopLevelTask('Parent'),
+      subTasks: [
+        { ...DEFAULT_TASK, id: 'child-1', title: 'Filled', parentId: 'top-1' },
+        { ...DEFAULT_TASK, id: 'child-2', title: '', parentId: 'top-1' },
+      ],
+    } as TaskWithSubTasks;
+    fixture.componentRef.setInput('task', parent);
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Parent',
+      wasChanged: false,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
+
+  it('focuses an existing empty sibling instead of spawning a new one (subtask)', () => {
+    taskServiceSpy.getByIdWithSubTaskData$.and.returnValue(
+      of({
+        ...DEFAULT_TASK,
+        id: 'parent-1',
+        title: 'Parent',
+        subTasks: [
+          { ...DEFAULT_TASK, id: 'sub-1', title: 'Existing', parentId: 'parent-1' },
+          { ...DEFAULT_TASK, id: 'sub-2', title: '', parentId: 'parent-1' },
+        ],
+        subTaskIds: ['sub-1', 'sub-2'],
+      } as unknown as TaskWithSubTasks),
+    );
+    fixture.componentRef.setInput('task', createSubTask('Existing'));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Existing',
+      wasChanged: false,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
+
+  it('no-ops on Mod+Enter when current subtask is the only empty one', () => {
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: '',
+      wasChanged: false,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 });

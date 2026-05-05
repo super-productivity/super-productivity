@@ -701,7 +701,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
 
     if (submitTrigger === 'modEnter') {
-      this.addSubTask();
+      this._addSubTaskOrFocusEmpty(newVal);
       return;
     }
 
@@ -783,14 +783,63 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   addSubTask(): void {
+    this._taskService.addSubTaskTo(this.task().parentId || this.task().id);
+  }
+
+  /**
+   * Mod+Enter handler: focus an existing empty sibling subtask if one exists,
+   * otherwise create a new one. For top-level tasks, "siblings" means children.
+   * `effectiveSelfTitle` is the just-submitted title — use it instead of
+   * `task().title`, which still reflects the pre-update value within this turn.
+   */
+  private _addSubTaskOrFocusEmpty(effectiveSelfTitle: string): void {
     const t = this.task();
     const targetParentId = t.parentId || t.id;
-    // When adding to self (top-level case), make sure the subtask list is visible
-    // so the newly created task gets focused and doesn't appear hidden.
-    if (targetParentId === t.id && t._hideSubTasksMode !== undefined) {
-      this._taskService.toggleSubTaskMode(t.id, false, false);
+    const isOnParent = !t.parentId;
+    const isEmptyTitle = (title?: string): boolean => !title?.trim();
+
+    if (isOnParent) {
+      const emptyChild = t.subTasks.find((s) => isEmptyTitle(s.title));
+      if (t._hideSubTasksMode === HideSubTasksMode.HideAll) {
+        this._taskService.showSubTasks(t.id);
+      }
+      if (emptyChild) {
+        this._focusExistingTask(emptyChild.id);
+        return;
+      }
+      this._taskService.addSubTaskTo(targetParentId);
+      return;
     }
-    this._taskService.addSubTaskTo(targetParentId);
+
+    // Subtask: look up the parent's children synchronously via the store
+    this._taskService.getByIdWithSubTaskData$(targetParentId).subscribe((parent) => {
+      const emptySibling = parent.subTasks.find(
+        (s) => s.id !== t.id && isEmptyTitle(s.title),
+      );
+      if (emptySibling) {
+        this._focusExistingTask(emptySibling.id);
+        return;
+      }
+      // We're already on the only empty subtask — leave focus where it is.
+      if (isEmptyTitle(effectiveSelfTitle)) {
+        return;
+      }
+      this._taskService.addSubTaskTo(targetParentId);
+    });
+  }
+
+  private _focusExistingTask(taskId: string): void {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const taskElement = document.getElementById(`t-${taskId}`);
+        if (!taskElement) return;
+        taskElement.focus();
+        const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
+        if (taskComponent && taskComponent.task().id === taskId) {
+          taskComponent.focusTitleForEdit();
+        }
+      });
+    });
   }
 
   @throttle(200, { leading: true, trailing: false })
