@@ -167,6 +167,13 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    // Ctrl/Cmd + Enter on a focused task: smart subtask creation
+    // (focuses an existing empty subtask, else spawns a new one).
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+      this._handleTaskShortcut(focusedTaskId, 'addSubTaskOrFocusEmpty');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskAddAttachment)) {
       this._handleTaskShortcut(focusedTaskId, 'addAttachment');
       ev.preventDefault();
