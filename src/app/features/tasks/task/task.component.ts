@@ -797,32 +797,20 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const t = this.task();
     const targetParentId = t.parentId || t.id;
     const isOnParent = !t.parentId;
-    const isEmptyTitle = (title?: string): boolean => !title?.trim();
+    const isEmpty = (title?: string): boolean => !title?.trim();
 
-    if (isOnParent) {
-      const emptyChild = t.subTasks.find((s) => isEmptyTitle(s.title));
-      if (t._hideSubTasksMode === HideSubTasksMode.HideAll) {
-        this._taskService.showSubTasks(t.id);
-      }
+    if (isOnParent && t._hideSubTasksMode === HideSubTasksMode.HideAll) {
+      this._taskService.showSubTasks(t.id);
+    }
+
+    this._taskService.getByIdWithSubTaskData$(targetParentId).subscribe((parent) => {
+      const emptyChild = parent.subTasks.find((s) => s.id !== t.id && isEmpty(s.title));
       if (emptyChild) {
         this._focusExistingTask(emptyChild.id);
         return;
       }
-      this._taskService.addSubTaskTo(targetParentId);
-      return;
-    }
-
-    // Subtask: look up the parent's children synchronously via the store
-    this._taskService.getByIdWithSubTaskData$(targetParentId).subscribe((parent) => {
-      const emptySibling = parent.subTasks.find(
-        (s) => s.id !== t.id && isEmptyTitle(s.title),
-      );
-      if (emptySibling) {
-        this._focusExistingTask(emptySibling.id);
-        return;
-      }
-      // We're already on the only empty subtask — leave focus where it is.
-      if (isEmptyTitle(effectiveSelfTitle)) {
+      // Already on the only empty subtask — leave focus where it is.
+      if (!isOnParent && isEmpty(effectiveSelfTitle)) {
         return;
       }
       this._taskService.addSubTaskTo(targetParentId);

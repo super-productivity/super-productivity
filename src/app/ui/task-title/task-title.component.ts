@@ -188,27 +188,22 @@ export class TaskTitleComponent implements OnDestroy {
   // Enter/Escape to submit and blur
   handleKeyDown(ev: KeyboardEvent): void {
     ev.stopPropagation();
+
+    let trigger: SubmitTrigger | null = null;
     if (ev.key === 'Escape') {
-      // if mention list is open, Escape is handled by MentionDirective - don't blur
-      if (!this._isMentionListShown()) {
-        this._submitTrigger = 'escape';
-        this._forceBlur();
-        ev.preventDefault();
-      }
-    } else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
-      if (!this._isMentionListShown()) {
-        this._submitTrigger = 'modEnter';
-        this._forceBlur();
-        ev.preventDefault();
-      }
+      trigger = 'escape';
     } else if (ev.key === 'Enter') {
-      // if mention list is open, Enter selects from list - don't blur
-      if (!this._isMentionListShown()) {
-        this._submitTrigger = 'enter';
-        this._forceBlur();
-        ev.preventDefault();
-      }
+      trigger = ev.ctrlKey || ev.metaKey ? 'modEnter' : 'enter';
     }
+    if (!trigger) return;
+
+    // While the mention list is open, MentionDirective owns Enter (selects)
+    // and Escape (closes) — leave the textarea focused for either path.
+    if (this._isMentionListShown()) return;
+
+    this._submitTrigger = trigger;
+    this._forceBlur();
+    ev.preventDefault();
   }
 
   // Android WebView: Enter key comes through as textInput

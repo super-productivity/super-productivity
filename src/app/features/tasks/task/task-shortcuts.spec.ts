@@ -70,10 +70,12 @@ describe('TaskComponent shortcut handling', () => {
         todayListSet: signal<Set<string>>(new Set<string>()),
       },
     );
-    taskServiceSpy.getByIdWithSubTaskData$.and.returnValue(
+    // Default: any parent lookup returns an empty-subTasks shell.
+    // Individual specs may override via .and.returnValue(of({...})).
+    taskServiceSpy.getByIdWithSubTaskData$.and.callFake((id: string) =>
       of({
         ...DEFAULT_TASK,
-        id: 'parent-1',
+        id,
         title: 'Parent',
         subTasks: [],
         subTaskIds: [],
@@ -273,14 +275,19 @@ describe('TaskComponent shortcut handling', () => {
   });
 
   it('focuses an existing empty child instead of spawning a new one (parent)', () => {
-    const parent = {
-      ...createTopLevelTask('Parent'),
-      subTasks: [
-        { ...DEFAULT_TASK, id: 'child-1', title: 'Filled', parentId: 'top-1' },
-        { ...DEFAULT_TASK, id: 'child-2', title: '', parentId: 'top-1' },
-      ],
-    } as TaskWithSubTasks;
-    fixture.componentRef.setInput('task', parent);
+    taskServiceSpy.getByIdWithSubTaskData$.and.returnValue(
+      of({
+        ...DEFAULT_TASK,
+        id: 'top-1',
+        title: 'Parent',
+        subTasks: [
+          { ...DEFAULT_TASK, id: 'child-1', title: 'Filled', parentId: 'top-1' },
+          { ...DEFAULT_TASK, id: 'child-2', title: '', parentId: 'top-1' },
+        ],
+        subTaskIds: ['child-1', 'child-2'],
+      } as unknown as TaskWithSubTasks),
+    );
+    fixture.componentRef.setInput('task', createTopLevelTask('Parent'));
 
     component.updateTaskTitleIfChanged({
       newVal: 'Parent',
