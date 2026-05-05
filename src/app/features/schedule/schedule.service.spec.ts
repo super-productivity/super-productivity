@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { ScheduleService } from './schedule.service';
 import { DateService } from '../../core/date/date.service';
 import { provideMockStore } from '@ngrx/store/testing';
@@ -6,10 +7,11 @@ import { selectTimelineTasks } from '../work-context/store/work-context.selector
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTimelineConfig } from '../config/store/global-config.reducer';
 import { selectPlannerDayMap } from '../planner/store/planner.selectors';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
+import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-calendar-providers.service';
 import { TaskService } from '../tasks/task.service';
-import { ScheduleEvent } from './schedule.model';
+import { ScheduleCalendarMapEntry, ScheduleEvent } from './schedule.model';
 import { SVEType } from './schedule.const';
 
 describe('ScheduleService', () => {
@@ -590,5 +592,105 @@ describe('ScheduleService', () => {
 
       expect(result).toBe(false);
     });
+  });
+});
+
+describe('ScheduleService – calendar visibility filter', () => {
+  let service: ScheduleService;
+  let dateService: DateService;
+
+  const hiddenProviderIds = signal<string[]>([]);
+  const calendarEvents$ = new BehaviorSubject<ScheduleCalendarMapEntry[]>([]);
+
+  const makeEntry = (calProviderId: string): ScheduleCalendarMapEntry => ({
+    items: [
+      {
+        id: 'ev-' + calProviderId,
+        calProviderId,
+        issueProviderKey: 'ICAL',
+        title: 'Event',
+        start: Date.now() + 60_000,
+        duration: 3_600_000,
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    hiddenProviderIds.set([]);
+    calendarEvents$.next([]);
+
+    TestBed.configureTestingModule({
+      providers: [
+        ScheduleService,
+        DateService,
+        provideMockStore({
+          selectors: [
+            { selector: selectTimelineTasks, value: { unPlanned: [], planned: [] } },
+            {
+              selector: selectTaskRepeatCfgsWithAndWithoutStartTime,
+              value: { withStartTime: [], withoutStartTime: [] },
+            },
+            {
+              selector: selectTimelineConfig,
+              value: { isWorkStartEndEnabled: false, isLunchBreakEnabled: false },
+            },
+            { selector: selectPlannerDayMap, value: {} },
+          ],
+        }),
+        { provide: CalendarIntegrationService, useValue: { calendarEvents$ } },
+        { provide: TaskService, useValue: { currentTaskId: () => null } },
+        {
+          provide: HiddenCalendarProvidersService,
+          useValue: { hiddenProviderIds },
+        },
+      ],
+    });
+
+    service = TestBed.inject(ScheduleService);
+    dateService = TestBed.inject(DateService);
+  });
+
+  const callCreate = (): ScheduleCalendarMapEntry[] => {
+    const spy = spyOn(service, 'buildScheduleDays').and.callThrough();
+    service.createScheduleDaysWithContext({
+      daysToShow: [dateService.todayStr()],
+      contextNow: Date.now(),
+      realNow: Date.now(),
+      currentTaskId: null,
+    });
+    return (spy.calls.mostRecent().args[0].calendarEvents ??
+      []) as ScheduleCalendarMapEntry[];
+  };
+
+  it('should pass all entries through when no providers are hidden', () => {
+    calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);
+    hiddenProviderIds.set([]);
+
+    expect(callCreate().length).toBe(2);
+  });
+
+  it('should exclude the entry for a hidden provider', () => {
+    calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);
+    hiddenProviderIds.set(['provider-A']);
+
+    const passed = callCreate();
+    expect(passed.length).toBe(1);
+    expect(passed[0].items[0].calProviderId).toBe('provider-B');
+  });
+
+  it('should exclude all entries when all providers are hidden', () => {
+    calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);
+    hiddenProviderIds.set(['provider-A', 'provider-B']);
+
+    expect(callCreate().length).toBe(0);
+  });
+
+  it('should keep entries whose items array is empty (no calProviderId to match)', () => {
+    calendarEvents$.next([{ items: [] }, makeEntry('provider-A')]);
+    hiddenProviderIds.set(['provider-A']);
+
+    const passed = callCreate();
+    expect(passed.length).toBe(1);
+    expect(passed[0].items.length).toBe(0);
   });
 });
