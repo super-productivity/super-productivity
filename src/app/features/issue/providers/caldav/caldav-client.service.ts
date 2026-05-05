@@ -401,8 +401,8 @@ export class CaldavClientService {
             method,
             headers,
             data: body ?? undefined,
-          })
-            .then((res) => {
+          }).then(
+            (res) => {
               fakeXhr.status = res.status;
               fakeXhr.statusText = '';
               fakeXhr.responseText = res.data || '';
@@ -414,13 +414,14 @@ export class CaldavClientService {
               const event = { target: fakeXhr, type: 'load' };
               fakeXhr.onload?.(event);
               (eventListeners.get('load') || []).forEach((fn) => fn(event));
-            })
-            .catch((err: unknown) => {
+            },
+            (err: unknown) => {
               fakeXhr.readyState = 4;
               const event = { target: fakeXhr, type: 'error', error: err };
               fakeXhr.onerror?.(event);
               (eventListeners.get('error') || []).forEach((fn) => fn(event));
-            });
+            },
+          );
         },
 
         getResponseHeader: (name: string): string | null => {
