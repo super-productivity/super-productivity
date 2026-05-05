@@ -197,4 +197,19 @@ describe('TaskComponent shortcut handling', () => {
 
     expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
   });
+
+  it('persists the typed title before spawning a sibling on Mod+Enter', () => {
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'New subtask',
+      wasChanged: true,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.update).toHaveBeenCalledWith('sub-1', {
+      title: 'New subtask',
+    });
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
+  });
 });
