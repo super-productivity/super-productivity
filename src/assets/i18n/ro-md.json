@@ -1240,7 +1240,7 @@
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
         "LOCAL_FILE": {
-          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use Nextcloud, Dropbox, or SuperSync instead.",
+          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use SuperSync, Nextcloud, or Dropbox instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
           "L_SYNC_FOLDER_PATH": "Sync folder path"
         },
@@ -1405,7 +1405,7 @@
         "CREATED_SUCCESS": "Backup manual creat cu succes",
         "DELETE_FAILED": "Nu s-a putut șterge backup-ul",
         "DELETED_SUCCESS": "Backup șters cu succes",
-        "DESCRIPTION": "Backup-urile automate sînt create înainte de descărcarea datelor din distanță în timpul operațiilor de sincronizare. Backup-urile sînt organizate în 4 sloturi inteligente: 2 cele mai recente, 1 prima de astăzi, și 1 prima de acum un day.",
+        "DESCRIPTION": "Backup-urile automate sînt create înainte de descărcarea datelor de la distanță în timpul operațiilor de sincronizare. Backup-urile sînt organizate în 4 sloturi inteligente: 2 cele mai recente, 1 primul de azi și 1 primul de acum o zi.",
         "LAST_CHANGE_PREFIX": "Ultima schimbare:",
         "LOADING": "Se încarcă...",
         "NO_BACKUPS": "Nu există backup-uri de siguranță disponibile încă. Backup-urile sînt create automat înainte de operațiile de sincronizare.",
@@ -2507,7 +2507,7 @@
     "EVALUATE_DAY": "Evaluează ziua",
     "EXPORT_TASK_LIST": "Exportă lista de sarcini",
     "FOCUS_SUMMARY": "Sesiuni de concentrare",
-    "NO_TASKS": "Nu exsită sarcini pentru această zi",
+    "NO_TASKS": "Nu există sarcini pentru această zi",
     "PLAN_TOMORROW": "Planifică",
     "REVIEW_TASKS": "Revizuiește",
     "ROUND_5M": "Rotunjește toate sarcinile la 5 minute",
@@ -2525,7 +2525,7 @@
     "SUMMARY_FOR": "Rezumat zilnic pentru {{dayStr}}",
     "TASKS_COMPLETED": "Sarcini finalizate",
     "TIME_SPENT_AND_ESTIMATE_LABEL": "Timp petrecut / Estimat",
-    "TIME_SPENT_ESTIMATE_TITLE": "Timp petrecut: Timp total petrecut azi. Sarcinile arhivate nu sînt incluse. – Timp estimat: Timp estimat pentru sarcinile pe care le-ai lucrăt azi, scăzînd timpul deja petrecut pe ele în alte zile.",
+    "TIME_SPENT_ESTIMATE_TITLE": "Timp petrecut: Timp total petrecut azi. Sarcinile arhivate nu sînt incluse. – Timp estimat: Timp estimat pentru sarcinile pe care le-ai lucrat azi, fără timpul deja petrecut la ele în alte zile.",
     "TIME_SPENT_TODAY_BY_TAG": "Timp petrecut azi după etichetă",
     "WEEK": "Săptămînă"
   },
