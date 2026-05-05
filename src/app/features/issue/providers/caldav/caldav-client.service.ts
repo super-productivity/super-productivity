@@ -16,6 +16,19 @@ import { catchError } from 'rxjs/operators';
 import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 import { throwHandledError } from '../../../../util/throw-handled-error';
 import { IssueLog } from '../../../../core/log';
+import { registerPlugin } from '@capacitor/core';
+import { IS_ANDROID_WEB_VIEW } from '../../../../util/is-android-web-view';
+
+interface WebDavHttpPlugin {
+  request(options: {
+    url: string;
+    method: string;
+    headers?: Record<string, string>;
+    data?: string;
+  }): Promise<{ status: number; headers: Record<string, string>; data: string }>;
+}
+
+const WebDavHttp = registerPlugin<WebDavHttpPlugin>('WebDavHttp');
 
 interface ClientCache {
   client: DavClient;
@@ -307,6 +320,10 @@ export class CaldavClientService {
   }
 
   private _getXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
+    if (IS_ANDROID_WEB_VIEW) {
+      return this._getAndroidXhrProvider(cfg);
+    }
+
     // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
     function xhrProvider(): XMLHttpRequest {
       const xhr = new XMLHttpRequest();
@@ -330,6 +347,106 @@ export class CaldavClientService {
     }
 
     return xhrProvider;
+  }
+
+  // On Android WebView, XHR is blocked by CORS. We use the native WebDavHttp
+  // Capacitor plugin (OkHttp) which bypasses the WebView's CORS restrictions.
+  private _getAndroidXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
+    return (): XMLHttpRequest => {
+      const headers: Record<string, string> = {
+        'X-Requested-With': 'SuperProductivity',
+        Authorization: 'Basic ' + btoa(cfg.username + ':' + cfg.password),
+      };
+      let method = 'GET';
+      let url = '';
+      const responseHeaders: Record<string, string> = {};
+      const eventListeners = new Map<string, ((...args: unknown[]) => void)[]>();
+
+      const fakeXhr = {
+        status: 0,
+        statusText: '',
+        responseText: '',
+        response: '',
+        readyState: 0,
+        onload: null as ((event: unknown) => void) | null,
+        onerror: null as ((event: unknown) => void) | null,
+        onreadystatechange: null as ((event: unknown) => void) | null,
+
+        open: (m: string, u: string): void => {
+          method = m;
+          url = u;
+          fakeXhr.readyState = 1;
+        },
+
+        setRequestHeader: (name: string, value: string): void => {
+          headers[name] = value;
+        },
+
+        send: (body?: string | null): void => {
+          WebDavHttp.request({
+            url,
+            method,
+            headers,
+            data: body ?? undefined,
+          })
+            .then((res) => {
+              fakeXhr.status = res.status;
+              fakeXhr.statusText = '';
+              fakeXhr.responseText = res.data || '';
+              fakeXhr.response = res.data || '';
+              fakeXhr.readyState = 4;
+              if (res.headers) {
+                Object.assign(responseHeaders, res.headers);
+              }
+              const event = { target: fakeXhr, type: 'load' };
+              fakeXhr.onload?.(event);
+              (eventListeners.get('load') || []).forEach((fn) => fn(event));
+            })
+            .catch((err: unknown) => {
+              fakeXhr.readyState = 4;
+              const event = { target: fakeXhr, type: 'error', error: err };
+              fakeXhr.onerror?.(event);
+              (eventListeners.get('error') || []).forEach((fn) => fn(event));
+            });
+        },
+
+        getResponseHeader: (name: string): string | null => {
+          return responseHeaders[name.toLowerCase()] ?? null;
+        },
+
+        getAllResponseHeaders: (): string => {
+          return Object.entries(responseHeaders)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('\r\n');
+        },
+
+        addEventListener: (
+          type: string,
+          callback: (...args: unknown[]) => void,
+        ): void => {
+          if (!eventListeners.has(type)) {
+            eventListeners.set(type, []);
+          }
+          eventListeners.get(type)!.push(callback);
+        },
+
+        removeEventListener: (
+          type: string,
+          callback: (...args: unknown[]) => void,
+        ): void => {
+          const listeners = eventListeners.get(type);
+          if (listeners) {
+            const idx = listeners.indexOf(callback);
+            if (idx !== -1) listeners.splice(idx, 1);
+          }
+        },
+
+        // no-op: CapacitorHttp requests cannot be cancelled
+        abort: (): void => undefined,
+      };
+
+      return fakeXhr as unknown as XMLHttpRequest;
+    };
   }
 
   private _handleNetErr(err: unknown): never {
