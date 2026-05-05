@@ -21,6 +21,7 @@ import { AsyncPipe } from '@angular/common';
 import { Observable } from 'rxjs';
 import { MentionConfigService } from '../../features/tasks/mention-config.service';
 import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
+import { SubmitTrigger } from 'src/app/features/tasks/task.model';
 
 /**
  * Inline-editable text field for task titles.
@@ -91,14 +92,13 @@ export class TaskTitleComponent implements OnDestroy {
     newVal: string;
     wasChanged: boolean;
     blurEvent?: FocusEvent;
-    submitTrigger: 'blur' | 'escape' | 'enter' | 'modEnter';
+    submitTrigger: SubmitTrigger;
   }>();
 
   private readonly _isFocused = signal(false);
   private readonly _isEditing = signal(false);
   private _focusTimeoutId: number | undefined;
-  private _submitTrigger: 'blur' | 'escape' | 'enter' | 'modEnter' =
-    TaskTitleComponent._DEFAULT_SUBMIT_TRIGGER;
+  private _submitTrigger: SubmitTrigger = TaskTitleComponent._DEFAULT_SUBMIT_TRIGGER;
 
   updateMentionListShown(isShown: boolean): void {
     // use setTimeout to ensure blur event order doesn't interfere with mention selection

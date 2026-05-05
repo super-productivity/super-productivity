@@ -18,6 +18,7 @@ import { TaskService } from '../task.service';
 import { EMPTY, forkJoin, Subscription } from 'rxjs';
 import {
   HideSubTasksMode,
+  SubmitTrigger,
   TaskCopy,
   TaskDetailTargetPanel,
   TaskWithSubTasks,
@@ -693,7 +694,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     newVal: string;
     wasChanged: boolean;
     blurEvent?: FocusEvent;
-    submitTrigger: 'blur' | 'escape' | 'enter' | 'modEnter';
+    submitTrigger: SubmitTrigger;
   }): void {
     if (wasChanged) {
       this._taskService.update(this.task().id, { title: newVal });
@@ -708,7 +709,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     // for empty titles we remove the subtask entirely.
     if (submitTrigger === 'escape' && this.task().parentId) {
       const previousTaskEl = this._getPreviousTaskEl();
-      if (!newVal) {
+      // Only auto-delete for freshly spawned empty subtasks.
+      // If user cleared an existing title, Escape should save and keep the task.
+      if (!wasChanged && !newVal) {
         this._taskService.remove(this.task());
       }
       this._focusTaskHost(previousTaskEl);
