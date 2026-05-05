@@ -194,4 +194,34 @@ describe('TaskTitleComponent', () => {
       expect(component.isEditing()).toBe(true);
     });
   });
+
+  describe('Mod+Enter dedupe', () => {
+    const buildModEnter = (): KeyboardEvent =>
+      new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true });
+
+    it('skips blur (and emits nothing) when current and previous values are both empty', () => {
+      const blurSpy = spyOn<any>(component, '_forceBlur');
+      component.tmpValue.set('');
+      component.lastExternalValue = '';
+
+      const ev = buildModEnter();
+      const preventDefaultSpy = spyOn(ev, 'preventDefault');
+      component.handleKeyDown(ev);
+
+      expect(preventDefaultSpy).toHaveBeenCalled();
+      expect(blurSpy).not.toHaveBeenCalled();
+    });
+
+    it('triggers blur with modEnter when the title has content', () => {
+      const blurSpy = spyOn<any>(component, '_forceBlur');
+      component.tmpValue.set('Some title');
+      component.lastExternalValue = 'Some title';
+
+      component.handleKeyDown(buildModEnter());
+
+      expect(blurSpy).toHaveBeenCalledTimes(1);
+      // _submitTrigger is captured by _submit on blur; verify it was set
+      expect((component as any)._submitTrigger).toBe('modEnter');
+    });
+  });
 });

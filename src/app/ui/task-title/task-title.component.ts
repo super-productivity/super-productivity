@@ -197,9 +197,14 @@ export class TaskTitleComponent implements OnDestroy {
       }
     } else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
       if (!this._isMentionListShown()) {
+        ev.preventDefault();
+        // No-op when editing a fresh empty title — keeps the textarea focused
+        // instead of spawning a duplicate empty subtask on rapid Mod+Enter.
+        if (!this.tmpValue().trim() && !this.lastExternalValue?.trim()) {
+          return;
+        }
         this._submitTrigger = 'modEnter';
         this._forceBlur();
-        ev.preventDefault();
       }
     } else if (ev.key === 'Enter') {
       // if mention list is open, Enter selects from list - don't blur

@@ -212,4 +212,34 @@ describe('TaskComponent shortcut handling', () => {
     });
     expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
   });
+
+  it('expands hidden subtasks before adding when the parent has them collapsed', () => {
+    const parent = {
+      ...createTopLevelTask('Parent'),
+      _hideSubTasksMode: 1,
+    } as TaskWithSubTasks;
+    fixture.componentRef.setInput('task', parent);
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Parent',
+      wasChanged: false,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.toggleSubTaskMode).toHaveBeenCalledWith('top-1', false, false);
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
+  });
+
+  it('does not toggle subtask mode when subtasks are already visible', () => {
+    fixture.componentRef.setInput('task', createTopLevelTask('Parent'));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Parent',
+      wasChanged: false,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.toggleSubTaskMode).not.toHaveBeenCalled();
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
+  });
 });

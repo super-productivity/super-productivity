@@ -783,7 +783,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   addSubTask(): void {
-    this._taskService.addSubTaskTo(this.task().parentId || this.task().id);
+    const t = this.task();
+    const targetParentId = t.parentId || t.id;
+    // When adding to self (top-level case), make sure the subtask list is visible
+    // so the newly created task gets focused and doesn't appear hidden.
+    if (targetParentId === t.id && t._hideSubTasksMode !== undefined) {
+      this._taskService.toggleSubTaskMode(t.id, false, false);
+    }
+    this._taskService.addSubTaskTo(targetParentId);
   }
 
   @throttle(200, { leading: true, trailing: false })
