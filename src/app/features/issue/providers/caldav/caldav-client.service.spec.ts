@@ -149,7 +149,7 @@ describe('CaldavClientService._getXhrProvider – web platform', () => {
   });
 });
 
-describe('CaldavClientService._getAndroidXhrProvider – native platform', () => {
+describe('CaldavClientService._getNativeXhrProvider – native platform', () => {
   let svc: TestableCaldavClientService;
 
   beforeEach(() => {
@@ -169,12 +169,42 @@ describe('CaldavClientService._getAndroidXhrProvider – native platform', () =>
   afterEach(() => TestBed.resetTestingModule());
 
   const getFakeXhr = (cfg = MOCK_CFG): XMLHttpRequest =>
-    (svc as any)._getAndroidXhrProvider(cfg)();
+    (svc as any)._getNativeXhrProvider(cfg)();
 
   it('_getXhrProvider routes to native provider and returns a fake XHR', () => {
     const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);
     const xhr = factory();
     expect(xhr instanceof XMLHttpRequest).toBeFalse();
+  });
+
+  // ── cdav-library contract: onreadystatechange is the sole completion handler ──
+
+  it('fires onreadystatechange with readyState=4 on success (cdav-library v1.5.3 contract)', async () => {
+    const xhr = getFakeXhr();
+    let capturedReadyState = -1;
+    // Mirrors the pattern in @nextcloud/cdav-library/dist/index.mjs:876
+    xhr.onreadystatechange = (): void => {
+      if (xhr.readyState !== 4) return;
+      capturedReadyState = xhr.readyState;
+    };
+    xhr.open('REPORT', 'https://cal.example.com/');
+    xhr.send(null);
+    await Promise.resolve();
+    expect(capturedReadyState).toBe(4);
+  });
+
+  it('fires onreadystatechange with readyState=4 on network error', async () => {
+    svc.webDavRequestSpy.and.rejectWith(new Error('network failure'));
+    const xhr = getFakeXhr();
+    let capturedReadyState = -1;
+    xhr.onreadystatechange = (): void => {
+      if (xhr.readyState !== 4) return;
+      capturedReadyState = xhr.readyState;
+    };
+    xhr.open('REPORT', 'https://cal.example.com/');
+    xhr.send(null);
+    await Promise.resolve();
+    expect(capturedReadyState).toBe(4);
   });
 
   it('fake XHR exposes the required XHR interface', () => {
@@ -310,8 +340,47 @@ describe('CaldavClientService._getAndroidXhrProvider – native platform', () =>
     expect(() => xhr.removeEventListener('load', cb)).not.toThrow();
   });
 
+  // ── abort() ───────────────────────────────────────────────────────────────────
+
   it('abort() does not throw', () => {
     const xhr = getFakeXhr();
     expect(() => xhr.abort()).not.toThrow();
+  });
+
+  it('abort() fires onabort immediately', () => {
+    const xhr = getFakeXhr();
+    let abortFired = false;
+    (xhr as any).onabort = (): void => {
+      abortFired = true;
+    };
+    xhr.open('REPORT', 'https://cal.example.com/');
+    xhr.abort();
+    expect(abortFired).toBeTrue();
+  });
+
+  it('abort() prevents onload from firing after send() resolves', async () => {
+    const xhr = getFakeXhr();
+    let loadFired = false;
+    xhr.onload = (): void => {
+      loadFired = true;
+    };
+    xhr.open('REPORT', 'https://cal.example.com/');
+    xhr.send(null);
+    xhr.abort();
+    await Promise.resolve();
+    expect(loadFired).toBeFalse();
+  });
+
+  it('abort() prevents onreadystatechange from firing after send() resolves', async () => {
+    const xhr = getFakeXhr();
+    let rscFired = false;
+    xhr.onreadystatechange = (): void => {
+      rscFired = true;
+    };
+    xhr.open('REPORT', 'https://cal.example.com/');
+    xhr.send(null);
+    xhr.abort();
+    await Promise.resolve();
+    expect(rscFired).toBeFalse();
   });
 });

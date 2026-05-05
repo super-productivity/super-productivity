@@ -27,6 +27,27 @@ interface WebDavHttpPlugin {
   }): Promise<{ status: number; headers: Record<string, string>; data: string }>;
 }
 
+/** Subset of the XMLHttpRequest surface that @nextcloud/cdav-library v1.5.3 actually uses. */
+interface XhrLike {
+  open(method: string, url: string): void;
+  send(body?: string | null): void;
+  setRequestHeader(name: string, value: string): void;
+  getResponseHeader(name: string): string | null;
+  getAllResponseHeaders(): string;
+  addEventListener(type: string, listener: (...args: unknown[]) => void): void;
+  removeEventListener(type: string, listener: (...args: unknown[]) => void): void;
+  abort(): void;
+  status: number;
+  statusText: string;
+  responseText: string;
+  response: string;
+  readyState: number;
+  onload: ((event: unknown) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  onabort: ((event: unknown) => void) | null;
+  onreadystatechange: ((event: unknown) => void) | null;
+}
+
 const WebDavHttp = registerPlugin<WebDavHttpPlugin>('WebDavHttp');
 
 interface ClientCache {
@@ -333,7 +354,7 @@ export class CaldavClientService {
 
   private _getXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
     if (this.isNativePlatform) {
-      return this._getAndroidXhrProvider(cfg);
+      return this._getNativeXhrProvider(cfg);
     }
 
     // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
@@ -361,9 +382,10 @@ export class CaldavClientService {
     return xhrProvider;
   }
 
-  // On Android WebView, XHR is blocked by CORS. We use the native WebDavHttp
-  // Capacitor plugin (OkHttp) which bypasses the WebView's CORS restrictions.
-  private _getAndroidXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
+  // On native platforms (Android WebView, iOS WKWebView), XHR is blocked by
+  // CORS. We use the native WebDavHttp Capacitor plugin (OkHttp / URLSession)
+  // which bypasses the WebView's CORS restrictions.
+  private _getNativeXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
     return (): XMLHttpRequest => {
       const headers: Record<string, string> = {
         // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -372,18 +394,20 @@ export class CaldavClientService {
       };
       let method = 'GET';
       let url = '';
+      let aborted = false;
       const responseHeaders: Record<string, string> = {};
       const eventListeners = new Map<string, ((...args: unknown[]) => void)[]>();
 
-      const fakeXhr = {
+      const fakeXhr: XhrLike = {
         status: 0,
         statusText: '',
         responseText: '',
         response: '',
         readyState: 0,
-        onload: null as ((event: unknown) => void) | null,
-        onerror: null as ((event: unknown) => void) | null,
-        onreadystatechange: null as ((event: unknown) => void) | null,
+        onload: null,
+        onerror: null,
+        onabort: null,
+        onreadystatechange: null,
 
         open: (m: string, u: string): void => {
           method = m;
@@ -403,23 +427,32 @@ export class CaldavClientService {
             data: body ?? undefined,
           }).then(
             (res) => {
+              if (aborted) return;
               fakeXhr.status = res.status;
               fakeXhr.statusText = '';
               fakeXhr.responseText = res.data || '';
               fakeXhr.response = res.data || '';
               fakeXhr.readyState = 4;
               if (res.headers) {
-                Object.assign(responseHeaders, res.headers);
+                for (const [k, v] of Object.entries(res.headers)) {
+                  responseHeaders[k.toLowerCase()] = v;
+                }
               }
               const event = { target: fakeXhr, type: 'load' };
+              // cdav-library v1.5.3 uses onreadystatechange exclusively; fire it
+              // first so its readyState === 4 check passes, then fire onload for
+              // any other consumers.
+              fakeXhr.onreadystatechange?.(event);
               fakeXhr.onload?.(event);
-              (eventListeners.get('load') || []).forEach((fn) => fn(event));
+              [...(eventListeners.get('load') ?? [])].forEach((fn) => fn(event));
             },
             (err: unknown) => {
+              if (aborted) return;
               fakeXhr.readyState = 4;
               const event = { target: fakeXhr, type: 'error', error: err };
+              fakeXhr.onreadystatechange?.(event);
               fakeXhr.onerror?.(event);
-              (eventListeners.get('error') || []).forEach((fn) => fn(event));
+              [...(eventListeners.get('error') ?? [])].forEach((fn) => fn(event));
             },
           );
         },
@@ -455,8 +488,12 @@ export class CaldavClientService {
           }
         },
 
-        // no-op: CapacitorHttp requests cannot be cancelled
-        abort: (): void => undefined,
+        abort: (): void => {
+          aborted = true;
+          const event = { target: fakeXhr, type: 'abort' };
+          fakeXhr.onabort?.(event);
+          [...(eventListeners.get('abort') ?? [])].forEach((fn) => fn(event));
+        },
       };
 
       return fakeXhr as unknown as XMLHttpRequest;
