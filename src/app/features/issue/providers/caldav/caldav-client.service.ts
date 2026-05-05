@@ -16,8 +16,7 @@ import { catchError } from 'rxjs/operators';
 import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 import { throwHandledError } from '../../../../util/throw-handled-error';
 import { IssueLog } from '../../../../core/log';
-import { registerPlugin } from '@capacitor/core';
-import { IS_ANDROID_WEB_VIEW } from '../../../../util/is-android-web-view';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
 interface WebDavHttpPlugin {
   request(options: {
@@ -319,8 +318,21 @@ export class CaldavClientService {
     );
   }
 
+  protected get isNativePlatform(): boolean {
+    return Capacitor.isNativePlatform();
+  }
+
+  protected _webDavRequest(options: {
+    url: string;
+    method: string;
+    headers?: Record<string, string>;
+    data?: string;
+  }): Promise<{ status: number; headers: Record<string, string>; data: string }> {
+    return WebDavHttp.request(options);
+  }
+
   private _getXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
-    if (IS_ANDROID_WEB_VIEW) {
+    if (this.isNativePlatform) {
       return this._getAndroidXhrProvider(cfg);
     }
 
@@ -354,6 +366,7 @@ export class CaldavClientService {
   private _getAndroidXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
     return (): XMLHttpRequest => {
       const headers: Record<string, string> = {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         'X-Requested-With': 'SuperProductivity',
         Authorization: 'Basic ' + btoa(cfg.username + ':' + cfg.password),
       };
@@ -383,7 +396,7 @@ export class CaldavClientService {
         },
 
         send: (body?: string | null): void => {
-          WebDavHttp.request({
+          this._webDavRequest({
             url,
             method,
             headers,
