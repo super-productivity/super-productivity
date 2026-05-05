@@ -207,10 +207,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Kako i gdje ocijeniti",
-      "BTN_DONT_BOTHER": "Nemoj me više gnjaviti",
-      "TITLE": "🙈 Oprosti, ali …",
-      "TXT": "Puno bi pomogao/la projektu ako ga <strong>dobro ocijeniš, ako ti se sviđa!</strong>"
+      "A_HOW": "Kako ocijeniti",
+      "BTN_DONT_BOTHER": "Ne pitaj ponovno",
+      "BTN_FEEDBACK": "Pošalji povratnu informaciju",
+      "BTN_LATER": "Možda kasnije",
+      "BTN_RATE_APP_STORE": "Ocijeni na App Storeu",
+      "BTN_RATE_PLAY_STORE": "Ocijeni na Play Storeu",
+      "FEEDBACK_BACK": "Natrag",
+      "FEEDBACK_CONTRIBUTE": "Doprinesi projektu",
+      "FEEDBACK_CONTRIBUTE_DESC": "Kod, dizajn, prijevodi i više",
+      "FEEDBACK_PRIVATE": "Pošalji e-mail održavatelju",
+      "FEEDBACK_PRIVATE_DESC": "Pošalji privatnu poruku",
+      "FEEDBACK_PUBLIC": "Objavi na GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Drugi mogu vidjeti i odgovoriti",
+      "FEEDBACK_TITLE": "Kako želiš pomoći?",
+      "TITLE": "Sviđa ti se Super Productivity?",
+      "TXT": "To je <strong>besplatan projekt otvorenog koda</strong> koji rade entuzijasti — bez praćenja, bez oglasa. Ocjena ili kratka poruka pomaže da ga otkrije više ljudi."
     },
     "DROPBOX": {
       "S": {

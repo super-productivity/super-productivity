@@ -176,10 +176,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Hvordan og hvor du skal rangere",
-      "BTN_DONT_BOTHER": "Ikke plag meg igjen",
-      "TITLE": "🙈 Vennligst tilgi oss, men...",
-      "TXT": "Du vil hjelpe prosjektet enormt ved å <strong>gi det en god vurdering, hvis du liker det!</strong>"
+      "A_HOW": "Hvordan vurdere",
+      "BTN_DONT_BOTHER": "Ikke spør igjen",
+      "BTN_FEEDBACK": "Gi tilbakemelding",
+      "BTN_LATER": "Kanskje senere",
+      "BTN_RATE_APP_STORE": "Vurder i App Store",
+      "BTN_RATE_PLAY_STORE": "Vurder i Play Store",
+      "FEEDBACK_BACK": "Tilbake",
+      "FEEDBACK_CONTRIBUTE": "Bidra til prosjektet",
+      "FEEDBACK_CONTRIBUTE_DESC": "Kode, design, oversettelser og mer",
+      "FEEDBACK_PRIVATE": "Send e-post til vedlikeholder",
+      "FEEDBACK_PRIVATE_DESC": "Send en privat melding",
+      "FEEDBACK_PUBLIC": "Skriv på GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Andre kan se og svare",
+      "FEEDBACK_TITLE": "Hvordan vil du hjelpe?",
+      "TITLE": "Liker du Super Productivity?",
+      "TXT": "Det er et <strong>gratis prosjekt med åpen kildekode</strong> laget av entusiaster – ingen sporing, ingen reklame. En vurdering eller kort melding hjelper flere å finne det."
     },
     "DROPBOX": {
       "S": {

@@ -192,10 +192,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Cum și unde să acorzi o notă",
-      "BTN_DONT_BOTHER": "Nu mă mai deranja din nou",
-      "TITLE": "🙈 Te rog iartă-ne, dar...",
-      "TXT": "Vei ajuta proiectul enorm de mult dacă îi <strong>acorzi o notă bună, dacă îți place!</strong>"
+      "A_HOW": "Cum acorzi o notă",
+      "BTN_DONT_BOTHER": "Nu mă mai întreba",
+      "BTN_FEEDBACK": "Trimite feedback",
+      "BTN_LATER": "Poate mai târziu",
+      "BTN_RATE_APP_STORE": "Acordă o notă pe App Store",
+      "BTN_RATE_PLAY_STORE": "Acordă o notă pe Play Store",
+      "FEEDBACK_BACK": "Înapoi",
+      "FEEDBACK_CONTRIBUTE": "Contribuie la proiect",
+      "FEEDBACK_CONTRIBUTE_DESC": "Cod, design, traduceri și altele",
+      "FEEDBACK_PRIVATE": "Scrie-i întreținătorului pe e-mail",
+      "FEEDBACK_PRIVATE_DESC": "Trimite un mesaj privat",
+      "FEEDBACK_PUBLIC": "Postează pe GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Alții pot vedea și răspunde",
+      "FEEDBACK_TITLE": "Cum vrei să ajuți?",
+      "TITLE": "Îți place Super Productivity?",
+      "TXT": "Este un proiect <strong>gratuit și open-source</strong> realizat de pasionați — fără urmărire, fără reclame. O notă sau un mesaj scurt ajută mai mulți oameni să-l descopere."
     },
     "DROPBOX": {
       "S": {

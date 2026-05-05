@@ -171,10 +171,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "評価方法と場所",
-      "BTN_DONT_BOTHER": "二度と気にしないで",
-      "TITLE": "🙈 ご容赦ください、しかし...",
-      "TXT": "あなたがそれを好きなら、あなたはそれに良い評価を与えることによって、プロジェクトを大いに助けるでしょう、 <strong>!</strong>"
+      "A_HOW": "評価の方法",
+      "BTN_DONT_BOTHER": "今後表示しない",
+      "BTN_FEEDBACK": "フィードバックを送る",
+      "BTN_LATER": "あとで",
+      "BTN_RATE_APP_STORE": "App Store で評価",
+      "BTN_RATE_PLAY_STORE": "Play Store で評価",
+      "FEEDBACK_BACK": "戻る",
+      "FEEDBACK_CONTRIBUTE": "プロジェクトに貢献する",
+      "FEEDBACK_CONTRIBUTE_DESC": "コード、デザイン、翻訳など",
+      "FEEDBACK_PRIVATE": "メンテナーにメール",
+      "FEEDBACK_PRIVATE_DESC": "非公開のメッセージを送る",
+      "FEEDBACK_PUBLIC": "GitHub Discussions に投稿",
+      "FEEDBACK_PUBLIC_DESC": "他の人が見て返信できます",
+      "FEEDBACK_TITLE": "どのように協力しますか？",
+      "TITLE": "Super Productivity は気に入りましたか？",
+      "TXT": "これは有志による<strong>無料のオープンソースプロジェクト</strong>です — トラッキングも広告もありません。評価や短いメッセージが、より多くの人に届けるのに役立ちます。"
     },
     "DROPBOX": {
       "S": {
