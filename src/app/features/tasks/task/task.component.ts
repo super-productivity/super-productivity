@@ -701,7 +701,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
 
     if (submitTrigger === 'modEnter') {
-      this.addSubTask();
+      this.addSiblingSubTask();
       return;
     }
 
@@ -784,6 +784,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   addSubTask(): void {
     this._taskService.addSubTaskTo(this.task().parentId || this.task().id);
+  }
+
+  addSiblingSubTask(): void {
+    const parentId = this.task().parentId;
+
+    if (!parentId) {
+      return; // no-op for top-level
+    }
+
+    this._taskService.addSubTaskTo(parentId);
   }
 
   @throttle(200, { leading: true, trailing: false })
@@ -1187,9 +1197,13 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   private _getPreviousTaskEl(): HTMLElement | undefined {
-    const taskEls = Array.from(document.querySelectorAll('task'));
-    const currentIndex = taskEls.findIndex((el) => el === this._elementRef.nativeElement);
-    return taskEls[currentIndex - 1] as HTMLElement | undefined;
+    const currentTaskEl = this._elementRef.nativeElement as HTMLElement;
+    const enclosingListEl = currentTaskEl.closest('task-list');
+    const taskEls = Array.from(
+      (enclosingListEl ?? document).querySelectorAll('task'),
+    ) as HTMLElement[];
+    const currentIndex = taskEls.findIndex((el) => el === currentTaskEl);
+    return currentIndex > 0 ? taskEls[currentIndex - 1] : undefined;
   }
 
   private _focusTaskHost(taskEl?: HTMLElement): void {
