@@ -701,7 +701,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
 
     if (submitTrigger === 'modEnter') {
-      this.addSiblingSubTask();
+      this.addSubTask();
       return;
     }
 
@@ -784,16 +784,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   addSubTask(): void {
     this._taskService.addSubTaskTo(this.task().parentId || this.task().id);
-  }
-
-  addSiblingSubTask(): void {
-    const parentId = this.task().parentId;
-
-    if (!parentId) {
-      return; // no-op for top-level
-    }
-
-    this._taskService.addSubTaskTo(parentId);
   }
 
   @throttle(200, { leading: true, trailing: false })

@@ -15,7 +15,7 @@ import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskComponent } from './task.component';
 
-describe('Task subtask Escape delete guard', () => {
+describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
   let component: TaskComponent;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
@@ -26,6 +26,18 @@ describe('Task subtask Escape delete guard', () => {
       id: 'sub-1',
       title,
       parentId: 'parent-1',
+      projectId: 'project-1',
+      subTasks: [],
+      subTaskIds: [],
+      tagIds: [],
+    }) as TaskWithSubTasks;
+
+  const createTopLevelTask = (title: string): TaskWithSubTasks =>
+    ({
+      ...DEFAULT_TASK,
+      id: 'top-1',
+      title,
+      parentId: undefined,
       projectId: 'project-1',
       subTasks: [],
       subTaskIds: [],
@@ -160,5 +172,29 @@ describe('Task subtask Escape delete guard', () => {
 
     expect(taskServiceSpy.update).toHaveBeenCalledWith('sub-1', { title: '' });
     expect(taskServiceSpy.remove).not.toHaveBeenCalled();
+  });
+
+  it('adds a sibling subtask on Mod+Enter when editing a subtask', () => {
+    fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Existing subtask',
+      wasChanged: false,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
+  });
+
+  it('adds a child subtask on Mod+Enter when editing a top-level task', () => {
+    fixture.componentRef.setInput('task', createTopLevelTask('Top-level task'));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Top-level task',
+      wasChanged: false,
+      submitTrigger: 'modEnter',
+    });
+
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
   });
 });
