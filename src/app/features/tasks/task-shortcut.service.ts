@@ -125,7 +125,9 @@ export class TaskShortcutService {
 
     // Ctrl/Cmd+Enter on a focused (but not editing) task: same as the `a`
     // shortcut — create a new subtask. Must run before the plain-Enter
-    // "edit title" handler below.
+    // "edit title" handler below. A user-bound `togglePlay` is checked
+    // earlier (line ~74), so remapping `togglePlay` to Mod+Enter takes
+    // precedence over this hardcoded combo.
     if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
       this._handleTaskShortcut(focusedTaskId, 'addSubTask');
       ev.preventDefault();

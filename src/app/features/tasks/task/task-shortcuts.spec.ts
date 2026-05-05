@@ -11,7 +11,7 @@ import { ProjectService } from '../../project/project.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
 import { TaskFocusService } from '../task-focus.service';
-import { DEFAULT_TASK, TaskWithSubTasks } from '../task.model';
+import { DEFAULT_TASK, HideSubTasksMode, TaskWithSubTasks } from '../task.model';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskComponent } from './task.component';
@@ -230,7 +230,7 @@ describe('TaskComponent shortcut handling', () => {
   it('expands hidden subtasks before adding when the parent has HideAll set', () => {
     const parent = {
       ...createTopLevelTask('Parent'),
-      _hideSubTasksMode: 2,
+      _hideSubTasksMode: HideSubTasksMode.HideAll,
     } as TaskWithSubTasks;
     fixture.componentRef.setInput('task', parent);
 
@@ -247,7 +247,7 @@ describe('TaskComponent shortcut handling', () => {
   it('does not expand subtasks when only HideDone is set (new task is not done)', () => {
     const parent = {
       ...createTopLevelTask('Parent'),
-      _hideSubTasksMode: 1,
+      _hideSubTasksMode: HideSubTasksMode.HideDone,
     } as TaskWithSubTasks;
     fixture.componentRef.setInput('task', parent);
 
