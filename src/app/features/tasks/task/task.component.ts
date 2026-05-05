@@ -806,7 +806,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._taskService.getByIdWithSubTaskData$(targetParentId).subscribe((parent) => {
       const emptyChild = parent.subTasks.find((s) => s.id !== t.id && isEmpty(s.title));
       if (emptyChild) {
-        this._focusExistingTask(emptyChild.id);
+        this._taskService.focusTaskById(emptyChild.id, true);
         return;
       }
       // Already on the only empty subtask — leave focus where it is.
@@ -814,20 +814,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
         return;
       }
       this._taskService.addSubTaskTo(targetParentId);
-    });
-  }
-
-  private _focusExistingTask(taskId: string): void {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const taskElement = document.getElementById(`t-${taskId}`);
-        if (!taskElement) return;
-        taskElement.focus();
-        const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
-        if (taskComponent && taskComponent.task().id === taskId) {
-          taskComponent.focusTitleForEdit();
-        }
-      });
     });
   }
 

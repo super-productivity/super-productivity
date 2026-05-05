@@ -63,6 +63,7 @@ describe('TaskComponent shortcut handling', () => {
         'setCurrentId',
         'pauseCurrent',
         'getByIdWithSubTaskData$',
+        'focusTaskById',
       ],
       {
         currentTaskId: signal<string | null>(null),
