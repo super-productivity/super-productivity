@@ -57,6 +57,29 @@
   <div class="title">{{ headerTitle() }}</div>
 </div>
 
+@if (enabledCalendarProviders().length >= 1) {
+  <mat-chip-listbox
+    class="cal-filter-bar"
+    [multiple]="true"
+    aria-label="Calendar visibility"
+  >
+    @for (provider of enabledCalendarProviders(); track provider.id) {
+      <mat-chip-option
+        [selected]="!hiddenCalendarProviderIds().includes(provider.id)"
+        (click)="toggleCalendarProvider(provider.id)"
+        [matTooltip]="calProviderLabel(provider)"
+      >
+        @if (provider.color) {
+          <span
+            class="cal-color-dot"
+            [style.background]="provider.color"
+          ></span>
+        }
+      </mat-chip-option>
+    }
+  </mat-chip-listbox>
+}
+
 <div
   class="scroll-wrapper"
   [attr.data-horizontal-scroll]="shouldEnableHorizontalScroll() || null"

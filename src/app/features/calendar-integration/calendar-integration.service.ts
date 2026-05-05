@@ -334,9 +334,13 @@ export class CalendarIntegrationService {
           ),
         ),
         map((events) =>
-          calProvider.isReferenceCalendar
-            ? events.map((ev) => ({ ...ev, isReferenceCalendar: true as const }))
-            : events,
+          events.map((ev) => ({
+            ...ev,
+            ...(calProvider.isReferenceCalendar && {
+              isReferenceCalendar: true as const,
+            }),
+            ...(calProvider.color && { color: calProvider.color }),
+          })),
         ),
         catchError((err) => {
           Log.err(err);

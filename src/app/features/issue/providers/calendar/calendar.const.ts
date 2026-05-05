@@ -24,6 +24,7 @@ export const DEFAULT_CALENDAR_CFG: CalendarProviderCfg = {
   icalUrl: '',
   isAutoImportForCurrentDay: false,
   isReferenceCalendar: false,
+  color: undefined,
   checkUpdatesEvery: 2 * 60 * 60000,
   showBannerBeforeThreshold: 2 * 60 * 60000,
   isDisabledForWebApp: false,
@@ -97,6 +98,15 @@ export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
       templateOptions: {
         // TODO translation
         label: 'Reference calendar (display only, no task creation)',
+      },
+    },
+    {
+      type: 'input',
+      key: 'color',
+      templateOptions: {
+        // TODO translation
+        type: 'color',
+        label: 'Calendar color',
       },
     },
     {

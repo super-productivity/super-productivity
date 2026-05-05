@@ -119,7 +119,7 @@
   }
 
   &.CalendarEvent {
-    @include extraBorder('-left');
+    border-left: 3px solid var(--project-color, var(--extra-border-color));
   }
 
   &.CalendarEvent.is-reference-calendar {

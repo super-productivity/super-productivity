@@ -65,7 +65,7 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[class]': 'cssClass()',
     '[style]': 'style()',
     '[style.--title-line-clamp]': '_titleLineClamp()',
-    '[style.--project-color]': 'projectColor()',
+    '[style.--project-color]': 'calEventColor() || projectColor()',
     '[style.height]': '_resizeHeight()',
     '(click)': 'clickHandler($event)',
     '(contextmenu)': 'onContextMenu($event)',
@@ -298,16 +298,22 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
 
   readonly projectColor = computed(() => {
     const projectId = this._projectId();
-    if (!projectId) return '';
+    if (!projectId) return null;
     // Use store.select and convert to immediate value
-    let color = '';
+    let color: string | null = null;
     this._store
       .select(selectProjectById, { id: projectId })
       .pipe(first())
       .subscribe((project) => {
-        color = project?.theme?.primary || '';
+        color = project?.theme?.primary || null;
       });
     return color;
+  });
+
+  readonly calEventColor = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return null;
+    return (evt.data as ScheduleFromCalendarEvent).color || null;
   });
 
   readonly elementId = computed(() => {

@@ -20,6 +20,7 @@ import { selectPlannerDayMap } from '../planner/store/planner.selectors';
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTimelineConfig } from '../config/store/global-config.reducer';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
+import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-calendar-providers.service';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../tasks/task.service';
 import { startWith } from 'rxjs/operators';
@@ -32,6 +33,7 @@ export class ScheduleService {
   private _dateService = inject(DateService);
   private _store = inject(Store);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
+  private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
   private _taskService = inject(TaskService);
 
   private _timelineTasks = toSignal(this._store.select(selectTimelineTasks));
@@ -125,7 +127,12 @@ export class ScheduleService {
     const taskRepeatCfgs = this._taskRepeatCfgs();
     const timelineCfg = this._timelineConfig();
     const plannerDayMap = this._plannerDayMap();
-    const calendarEvents = this._calendarEvents();
+    const hiddenProviderIds = this._hiddenCalendarProviders.hiddenProviderIds();
+    const calendarEvents = this._calendarEvents().filter(
+      (entry) =>
+        !entry.items[0]?.calProviderId ||
+        !hiddenProviderIds.includes(entry.items[0].calProviderId),
+    );
 
     return this.buildScheduleDays({
       now: params.contextNow,
