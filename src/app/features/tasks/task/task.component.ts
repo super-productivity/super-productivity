@@ -701,7 +701,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
 
     if (submitTrigger === 'modEnter') {
-      this.addSubTaskOrFocusEmpty(newVal);
+      this._addSubTaskOrFocusEmpty(newVal);
       return;
     }
 
@@ -787,13 +787,13 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   /**
-   * Mod+Enter handler: focus an existing empty sibling subtask if one exists,
-   * otherwise create a new one. For top-level tasks, "siblings" means children.
-   * `effectiveSelfTitle` is the just-submitted title (used when called from
-   * the title editor); falls back to `task().title` when invoked from the
-   * focused-task shortcut path.
+   * Mod+Enter (in title editor): focus an existing empty sibling subtask if
+   * one exists, otherwise create a new one. For top-level tasks, "siblings"
+   * means children. `effectiveSelfTitle` is the just-submitted title — use it
+   * instead of `task().title`, which still reflects the pre-update value
+   * within this turn.
    */
-  addSubTaskOrFocusEmpty(effectiveSelfTitle: string = this.task().title): void {
+  private _addSubTaskOrFocusEmpty(effectiveSelfTitle: string): void {
     const t = this.task();
     const targetParentId = t.parentId || t.id;
     const isOnParent = !t.parentId;

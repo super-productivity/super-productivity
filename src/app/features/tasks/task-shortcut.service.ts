@@ -123,6 +123,15 @@ export class TaskShortcutService {
     // Check if the focused task's context menu is open - if so, skip arrow navigation shortcuts
     const isContextMenuOpen = this._isTaskContextMenuOpen(focusedTaskId);
 
+    // Ctrl/Cmd+Enter on a focused (but not editing) task: same as the `a`
+    // shortcut — create a new subtask. Must run before the plain-Enter
+    // "edit title" handler below.
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+      this._handleTaskShortcut(focusedTaskId, 'addSubTask');
+      ev.preventDefault();
+      return true;
+    }
+
     // Basic task actions that work through component delegation
     if (
       !isContextMenuOpen &&
@@ -164,13 +173,6 @@ export class TaskShortcutService {
     }
     if (checkKeyCombo(ev, keys.taskAddSubTask)) {
       this._handleTaskShortcut(focusedTaskId, 'addSubTask');
-      ev.preventDefault();
-      return true;
-    }
-    // Ctrl/Cmd + Enter on a focused task: smart subtask creation
-    // (focuses an existing empty subtask, else spawns a new one).
-    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
-      this._handleTaskShortcut(focusedTaskId, 'addSubTaskOrFocusEmpty');
       ev.preventDefault();
       return true;
     }
