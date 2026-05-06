@@ -79,7 +79,7 @@
   &:has(page-title [aria-expanded='true']) ::ng-deep .current-task-title {
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease-out;
+    transition: opacity var(--transition-duration-m) ease-out;
   }
 }
 
@@ -145,13 +145,27 @@ button.isActive2 {
   }
 
   // Set 20px icon sizing for buttons outside counters-action-group
-  // (add button, panel buttons, etc.) but exclude sync button
-  > button:not(.sync-btn) .mat-icon,
-  ::ng-deep > *:not(.counters-action-group):not(.sync-btn) .mat-icon {
+  // (add button, panel buttons, etc.)
+  > button:not(.sync-btn) .mat-icon:not(.sync-state-ico),
+  ::ng-deep
+    > *:not(.counters-action-group):not(.sync-btn)
+    .mat-icon:not(.sync-state-ico) {
     font-size: 20px;
     width: 20px;
     height: 20px;
     line-height: 20px;
+  }
+
+  > button.sync-btn .mat-icon:not(.sync-state-ico) {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center center;
+    backface-visibility: hidden;
   }
 }
 
@@ -257,6 +271,7 @@ page-title {
 .spin {
   animation: spin 1.5s linear infinite;
   will-change: transform;
+  transform-origin: center center;
 }
 
 @keyframes spin {
@@ -266,74 +281,6 @@ page-title {
 
   to {
     transform: rotate(-360deg) translateZ(0);
-  }
-}
-
-.week-month-selector {
-  display: flex;
-  border-radius: var(--card-border-radius);
-  overflow: hidden;
-  margin-right: calc(var(--s) * 0.25);
-  box-shadow: var(--whiteframe-shadow-2dp);
-
-  @include mq(xs) {
-    margin-right: var(--s);
-  }
-
-  @include mq(xs, max) {
-    margin-right: calc(var(--s) * 0.125);
-  }
-}
-
-.week-month-btn {
-  min-width: 48px;
-  height: 36px;
-  padding: 0 var(--s);
-  font-size: 12px;
-  font-weight: 500;
-  border: none;
-  border-radius: 0;
-  transition: var(--transition-standard);
-  cursor: pointer;
-  position: relative;
-
-  @include mq(xs, max) {
-    min-width: 40px;
-    padding: 0 calc(var(--s) * 0.75);
-    font-size: 11px;
-  }
-
-  @include lightTheme() {
-    &.active {
-      background: var(--c-primary);
-      color: white;
-      font-weight: 600;
-    }
-  }
-
-  @include darkTheme() {
-    background: var(--bg-lighter);
-    color: var(--text-color);
-
-    &:hover {
-      background: var(--dark8);
-    }
-
-    &.active {
-      background: var(--c-primary);
-      color: white;
-      font-weight: 600;
-    }
-  }
-
-  &:first-child {
-    border-right: 1px solid rgba(255, 255, 255, 0.2);
-    border-top-left-radius: var(--card-border-radius);
-    border-bottom-left-radius: var(--card-border-radius);
-
-    @include darkTheme() {
-      border-right-color: var(--c-light-10);
-    }
   }
 }
 
@@ -347,16 +294,6 @@ page-title {
 
 .sync-btn {
   position: relative;
-
-  > .mat-icon:not(.sync-state-ico) {
-    font-size: 28px;
-    width: 28px;
-    height: 28px;
-    line-height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
 }
 
 .sync-state-ico {

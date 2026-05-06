@@ -50,6 +50,20 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
   private readonly _appKey: string;
   private readonly _basePath: string;
 
+  // Cached PKCE material — the verifier paired with the URL the user is
+  // looking at. Reused across `getAuthHelper()` calls so a user who closes
+  // and reopens the auth dialog (e.g. after `shell.openExternal()` fails
+  // silently in Flatpak — issue #7139) can still exchange a code obtained
+  // from the originally-shown URL. Cached as a Promise (not the resolved
+  // value) so concurrent callers share one PKCE generation rather than
+  // racing. Cleared on successful exchange and on explicit credential clear.
+  // The Dropbox provider is a process-singleton via the providers factory,
+  // so the cache spans the user session.
+  private _pkcePromise: Promise<{
+    codeVerifier: string;
+    authUrl: string;
+  }> | null = null;
+
   public privateCfg: SyncCredentialStore<SyncProviderId.Dropbox>;
 
   constructor(cfg: DropboxCfg) {
@@ -72,6 +86,7 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
   }
 
   async clearAuthCredentials(): Promise<void> {
+    this._pkcePromise = null;
     const cfg = await this.privateCfg.load();
     if (cfg?.accessToken || cfg?.refreshToken) {
       await this.privateCfg.setComplete({ ...cfg, accessToken: '', refreshToken: '' });
@@ -86,7 +101,10 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
    * @throws RemoteFileNotFoundAPIError if the file doesn't exist
    * @throws AuthFailSPError if authentication fails
    */
-  async getFileRev(targetPath: string, localRev: string): Promise<{ rev: string }> {
+  async getFileRev(
+    targetPath: string,
+    localRev: string | null,
+  ): Promise<{ rev: string }> {
     try {
       const r = await this._api.getMetaData(this._getPath(targetPath), localRev);
       return {
@@ -272,32 +290,47 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
    * @returns Promise with auth helper object
    */
   async getAuthHelper(): Promise<SyncProviderAuthHelper> {
-    const { codeVerifier, codeChallenge } = await generatePKCECodes(128);
-
-    // Determine redirect URI based on platform (only for mobile)
     const redirectUri = this._getRedirectUri();
 
-    let authCodeUrl =
-      `${DROPBOX_AUTH_URL}` +
-      `?response_type=code&client_id=${this._appKey}` +
-      '&code_challenge_method=S256' +
-      '&token_access_type=offline' +
-      `&code_challenge=${codeChallenge}`;
-
-    // Only add redirect_uri for mobile platforms
-    if (redirectUri) {
-      authCodeUrl += `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    // Cache the in-flight Promise so concurrent callers (e.g. a double-clicked
+    // auth button) share one PKCE generation instead of racing.
+    if (!this._pkcePromise) {
+      const inFlight = (async () => {
+        const { codeVerifier, codeChallenge } = await generatePKCECodes(128);
+        let authCodeUrl =
+          `${DROPBOX_AUTH_URL}` +
+          `?response_type=code&client_id=${this._appKey}` +
+          '&code_challenge_method=S256' +
+          '&token_access_type=offline' +
+          `&code_challenge=${codeChallenge}`;
+        if (redirectUri) {
+          authCodeUrl += `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        }
+        return { codeVerifier, authUrl: authCodeUrl };
+      })();
+      // Don't poison the cache with a rejection — let a future call retry.
+      inFlight.catch(() => {
+        if (this._pkcePromise === inFlight) {
+          this._pkcePromise = null;
+        }
+      });
+      this._pkcePromise = inFlight;
     }
 
+    // Captured by closure so the success-path nulling below doesn't strand an
+    // in-flight verifyCodeChallenge call.
+    const cached = await this._pkcePromise;
     return {
-      authUrl: authCodeUrl,
-      codeVerifier,
+      authUrl: cached.authUrl,
+      codeVerifier: cached.codeVerifier,
       verifyCodeChallenge: async <T>(authCode: string) => {
-        return (await this._api.getTokensFromAuthCode(
+        const result = (await this._api.getTokensFromAuthCode(
           authCode,
-          codeVerifier,
+          cached.codeVerifier,
           redirectUri,
         )) as T;
+        this._pkcePromise = null;
+        return result;
       },
     };
   }

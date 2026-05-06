@@ -137,8 +137,14 @@ export class FocusModeEffects {
             // Bug #6726 fix: Don't pass pausedTaskId — the user already chose a new task
             return of(actions.skipBreak({ pausedTaskId: undefined }));
           }
-          // If no session active, start a new one (only from Main screen)
+          // If no session active, start a new one (only from Main screen).
+          // Bug #7384 fix: respect isSkipPreparation. When off, leave the user on
+          // the preparation screen so they must click 'Start' (and see the rocket
+          // animation), matching the manual-start flow in focus-mode-main.component.
           if (timer.purpose === null && currentScreen === FocusScreen.Main) {
+            if (!cfg?.isSkipPreparation) {
+              return EMPTY;
+            }
             const strategy = this.strategyFactory.getStrategy(mode);
             const duration = strategy.initialSessionDuration;
             return of(
@@ -183,20 +189,22 @@ export class FocusModeEffects {
   );
 
   // Sync: When focus session pauses → stop tracking
-  // Note: This effect fires AFTER the reducer runs, and the pausedTaskId is already stored
-  // in the action/reducer, so we just need to dispatch unsetCurrentTask
+  // Skip when currentTaskId is already null (pause originated from tracking stop,
+  // which already cleared it); redundant dispatch would clobber lastCurrentTaskId.
   syncSessionPauseToTracking$ = createEffect(() =>
     this.actions$.pipe(
       ofType(actions.pauseFocusSession),
       withLatestFrom(
         this.store.select(selectFocusModeConfig),
         this.store.select(selectors.selectTimer),
+        this.taskService.currentTaskId$,
       ),
       filter(
-        ([action, cfg, timer]) =>
+        ([action, cfg, timer, currentTaskId]) =>
           !!cfg?.isSyncSessionWithTracking &&
           (timer.purpose === 'work' || timer.purpose === 'break') &&
-          !!action.pausedTaskId,
+          !!action.pausedTaskId &&
+          !!currentTaskId,
       ),
       map(() => unsetCurrentTask()),
     ),

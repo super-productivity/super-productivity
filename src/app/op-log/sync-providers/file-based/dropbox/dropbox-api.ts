@@ -143,7 +143,7 @@ export class DropboxApi {
   /**
    * Retrieve metadata for a file or folder
    */
-  async getMetaData(path: string, localRev: string): Promise<DropboxFileMetadata> {
+  async getMetaData(path: string, localRev: string | null): Promise<DropboxFileMetadata> {
     try {
       const response = await this._request({
         method: 'POST',

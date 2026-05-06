@@ -6,13 +6,11 @@ import {
   OperationSyncCapable,
   SyncOperation,
 } from '../provider.interface';
+import { FILE_BASED_SYNC_CONSTANTS, FileBasedSyncData } from './file-based-sync.types';
 import {
-  FILE_BASED_SYNC_CONSTANTS,
-  FileBasedSyncData,
-  SyncDataCorruptedError,
-} from './file-based-sync.types';
-import {
+  InvalidDataSPError,
   RemoteFileNotFoundAPIError,
+  SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
 } from '../../core/errors/sync-errors';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
@@ -117,12 +115,9 @@ describe('FileBasedSyncAdapterService', () => {
     // Reset TestBed to ensure fresh service instance for each test
     // This is critical because FileBasedSyncAdapterService caches state in memory
     TestBed.resetTestingModule();
-    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 500;
   });
 
   beforeEach(() => {
-    // Eliminate real retry delays to prevent slow tests and timer accumulation
-    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 0;
     mockArchiveDbAdapter = jasmine.createSpyObj('ArchiveDbAdapter', [
       'loadArchiveYoung',
       'loadArchiveOld',
@@ -369,33 +364,30 @@ describe('FileBasedSyncAdapterService', () => {
       );
     });
 
-    it('should retry upload once when UploadRevToMatchMismatchAPIError occurs', async () => {
+    it('should throw UploadRevToMatchMismatchAPIError on genuine concurrent upload (rev changed)', async () => {
       const syncData = createMockSyncData({ syncVersion: 1 });
-      mockProvider.downloadFile.and.returnValue(
+      // Initial download: rev-1
+      mockProvider.downloadFile.and.returnValues(
         Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+        // Re-download after mismatch returns rev-2 (another client uploaded for real)
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-2' }),
+      );
+      // All upload attempts fail with rev mismatch
+      mockProvider.uploadFile.and.returnValue(
+        Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch')),
       );
 
-      // First upload fails with rev mismatch, second succeeds
-      let uploadCalls = 0;
-      mockProvider.uploadFile.and.callFake(() => {
-        uploadCalls++;
-        if (uploadCalls === 1) {
-          return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
-        }
-        return Promise.resolve({ rev: 'rev-3' });
-      });
-
-      // Download to populate cache
       await adapter.downloadOps(0);
 
       const op = createMockSyncOp();
-      const result = await adapter.uploadOps([op], 'client1');
+      // Genuine mismatch: adapter throws so next sync cycle can fix the snapshot
+      await expectAsync(adapter.uploadOps([op], 'client1')).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
 
-      // Should succeed after retry
-      expect(result.results[0].accepted).toBe(true);
-      // Upload was called twice (initial + retry)
-      expect(uploadCalls).toBe(2);
-      // Download was called twice (initial cache + re-download on retry)
+      // Only one upload attempt (no retry loop)
+      expect(mockProvider.uploadFile).toHaveBeenCalledTimes(1);
+      // Download called twice: initial cache + re-download to check rev
       expect(mockProvider.downloadFile).toHaveBeenCalledTimes(2);
     });
 
@@ -432,172 +424,6 @@ describe('FileBasedSyncAdapterService', () => {
       // Retry upload should be called with isForceOverwrite: true
       const retryCall = mockProvider.uploadFile.calls.argsFor(1);
       expect(retryCall[3]).toBe(true); // isForceOverwrite
-    });
-
-    it('should use conditional upload on retry when freshRev differs', async () => {
-      const syncData = createMockSyncData({ syncVersion: 1 });
-      // Initial download returns rev-1
-      mockProvider.downloadFile.and.returnValues(
-        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
-        // Re-download on retry returns rev-2 (different rev = real concurrent modification)
-        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-2' }),
-      );
-
-      let uploadCalls = 0;
-      mockProvider.uploadFile.and.callFake(
-        (_path: string, _dataStr: string, _rev: string | null, _force: boolean) => {
-          uploadCalls++;
-          if (uploadCalls === 1) {
-            return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
-          }
-          return Promise.resolve({ rev: 'rev-3' });
-        },
-      );
-
-      // Download to populate cache with rev-1
-      await adapter.downloadOps(0);
-
-      const op = createMockSyncOp();
-      const result = await adapter.uploadOps([op], 'client1');
-
-      expect(result.results[0].accepted).toBe(true);
-      expect(uploadCalls).toBe(2);
-
-      // Retry upload should be called with isForceOverwrite: false
-      const retryCall = mockProvider.uploadFile.calls.argsFor(1);
-      expect(retryCall[3]).toBe(false); // isForceOverwrite
-    });
-
-    describe('oldestOpSyncVersion and sv tagging in retry path', () => {
-      it('should tag retry compact ops with the correct sv (freshData.syncVersion + 1)', async () => {
-        // Existing file at syncVersion=3 with an op tagged sv=3
-        const existingData = createMockSyncData({
-          syncVersion: 3,
-          recentOps: [
-            {
-              id: 'existing-op',
-              c: 'other-client',
-              a: 'HA',
-              o: 'ADD',
-              e: 'TASK',
-              d: 'task-existing',
-              v: { otherClient: 1 },
-              t: Date.now() - 10_000,
-              s: 1,
-              p: {},
-              sv: 3,
-            },
-          ],
-        });
-
-        // First download populates cache
-        mockProvider.downloadFile.and.returnValue(
-          Promise.resolve({ dataStr: addPrefix(existingData), rev: 'rev-1' }),
-        );
-        await adapter.downloadOps(0);
-
-        // Upload: first attempt fails, retry re-downloads and succeeds
-        let uploadCallCount = 0;
-        let retryUploadedDataStr = '';
-        mockProvider.uploadFile.and.callFake(
-          (_path: string, dataStr: string, _rev: string | null, _force: boolean) => {
-            uploadCallCount++;
-            if (uploadCallCount === 1) {
-              return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
-            }
-            retryUploadedDataStr = dataStr;
-            return Promise.resolve({ rev: 'rev-3' });
-          },
-        );
-
-        // Re-download on retry returns file at syncVersion=5 (another client uploaded twice)
-        const freshData = createMockSyncData({
-          syncVersion: 5,
-          recentOps: [
-            {
-              id: 'existing-op',
-              c: 'other-client',
-              a: 'HA',
-              o: 'ADD',
-              e: 'TASK',
-              d: 'task-existing',
-              v: { otherClient: 1 },
-              t: Date.now() - 10_000,
-              s: 1,
-              p: {},
-              sv: 3,
-            },
-          ],
-        });
-        mockProvider.downloadFile.and.returnValue(
-          Promise.resolve({ dataStr: addPrefix(freshData), rev: 'rev-2' }),
-        );
-
-        const newOp = createMockSyncOp({ id: 'new-op' });
-        await adapter.uploadOps([newOp], 'client1');
-
-        const uploadedData = parseWithPrefix(retryUploadedDataStr);
-        // New op should be tagged with freshData.syncVersion + 1 = 6
-        const newCompactOp = uploadedData.recentOps.find((op: any) => op.id === 'new-op');
-        expect(newCompactOp).toBeDefined();
-        expect((newCompactOp as any).sv).toBe(6);
-        // Existing op keeps its original sv=3
-        const existingOp = uploadedData.recentOps.find(
-          (op: any) => op.id === 'existing-op',
-        );
-        expect((existingOp as any).sv).toBe(3);
-      });
-
-      it('should compute oldestOpSyncVersion from first op in merged array', async () => {
-        // Existing file has an op tagged sv=2
-        const existingData = createMockSyncData({
-          syncVersion: 3,
-          recentOps: [
-            {
-              id: 'old-op',
-              c: 'other-client',
-              a: 'HA',
-              o: 'ADD',
-              e: 'TASK',
-              d: 'task-old',
-              v: { otherClient: 1 },
-              t: Date.now() - 60_000,
-              s: 1,
-              p: {},
-              sv: 2,
-            },
-          ],
-        });
-
-        mockProvider.downloadFile.and.returnValue(
-          Promise.resolve({ dataStr: addPrefix(existingData), rev: 'rev-1' }),
-        );
-        await adapter.downloadOps(0);
-
-        let uploadCallCount = 0;
-        let retryUploadedDataStr = '';
-        mockProvider.uploadFile.and.callFake(
-          (_path: string, dataStr: string, _rev: string | null, _force: boolean) => {
-            uploadCallCount++;
-            if (uploadCallCount === 1) {
-              return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
-            }
-            retryUploadedDataStr = dataStr;
-            return Promise.resolve({ rev: 'rev-3' });
-          },
-        );
-
-        mockProvider.downloadFile.and.returnValue(
-          Promise.resolve({ dataStr: addPrefix(existingData), rev: 'rev-2' }),
-        );
-
-        const newOp = createMockSyncOp({ id: 'newer-op' });
-        await adapter.uploadOps([newOp], 'client1');
-
-        const uploadedData = parseWithPrefix(retryUploadedDataStr);
-        // oldestOpSyncVersion should be sv of first (oldest) op = 2
-        expect(uploadedData.oldestOpSyncVersion).toBe(2);
-      });
     });
 
     it('should clear cache after successful upload', async () => {
@@ -1893,6 +1719,24 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.getFileRev.and.callFake(async (path: string) => {
         if (path === FILE_BASED_SYNC_CONSTANTS.LEGACY_META_FILE)
           return { rev: 'rev-meta' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
+        /Sync format mismatch/,
+      );
+    });
+
+    it('throws LegacySyncFormatDetectedError when __meta_ exists but is unreadable (WebDAV corrupt body)', async () => {
+      // Simulate a WebDAV provider with a present-but-corrupt legacy file:
+      // downloadFile throws InvalidDataSPError for the legacy probe, but
+      // the file exists → still proves v16.x touched this target.
+      mockProvider.downloadFile.and.rejectWith(
+        new RemoteFileNotFoundAPIError('not found'),
+      );
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.LEGACY_META_FILE)
+          throw new InvalidDataSPError('empty body', path);
         throw new RemoteFileNotFoundAPIError('not found');
       });
 

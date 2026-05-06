@@ -74,7 +74,17 @@ const markTaskDone = async (
   const task = page.locator(selector).first();
   await task.waitFor({ state: 'visible', timeout: 10000 });
 
-  // Focus the task and use keyboard shortcut 'd' to toggle done
+  // Focus the task and use keyboard shortcut 'd' to toggle done.
+  // Blur any active element first: when the task host is already
+  // document.activeElement (e.g. right after addSubtask's title-commit
+  // refocuses it), .focus() is a no-op and never fires focusin, leaving
+  // focusedTaskId stale. Blurring guarantees the next focus fires events.
+  await page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active !== document.body) {
+      active.blur();
+    }
+  });
   await task.focus();
   await page.waitForTimeout(100);
   await task.press('d');

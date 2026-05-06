@@ -51,68 +51,24 @@ describe('ScheduleService', () => {
 
   describe('getDaysToShow', () => {
     it('should return correct number of days when referenceDate is null', () => {
-      // Arrange
-      const nrOfDaysToShow = 5;
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, null);
-
-      // Assert
+      const result = service.getDaysToShow(5, null);
       expect(result.length).toBe(5);
     });
 
     it('should return days starting from today when referenceDate is null', () => {
-      // Arrange
-      const nrOfDaysToShow = 3;
-      const expectedTodayStr = dateService.todayStr();
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, null);
-
-      // Assert
-      expect(result[0]).toBe(expectedTodayStr);
+      const result = service.getDaysToShow(3, null);
+      expect(result[0]).toBe(dateService.todayStr());
     });
 
-    it('should return days starting from referenceDate', () => {
-      // Arrange
-      const nrOfDaysToShow = 3;
-      const referenceDate = new Date(2028, 5, 15); // June 15, 2028
-      const expectedFirstDay = dateService.todayStr(referenceDate.getTime());
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, referenceDate);
-
-      // Assert
-      expect(result[0]).toBe(expectedFirstDay);
-      expect(result.length).toBe(3);
-    });
-
-    it('should return days starting from provided date even if today', () => {
-      // Arrange
-      const nrOfDaysToShow = 3;
-      const referenceDate = new Date();
-      const expectedFirstDay = dateService.todayStr(referenceDate.getTime());
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, referenceDate);
-
-      // Assert
-      expect(result[0]).toBe(expectedFirstDay);
-      expect(result.length).toBe(3);
-    });
-
-    it('should return consecutive days from referenceDate', () => {
-      // Arrange
-      const nrOfDaysToShow = 7;
-      // Use a future date to ensure not in current week
-      const referenceDate = new Date(2028, 0, 20); // Jan 20, 2028
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, referenceDate);
-
-      // Assert
+    it('should return days starting from referenceDate (rolling)', () => {
+      const referenceDate = new Date(2028, 5, 15); // Thu Jun 15, 2028
+      const result = service.getDaysToShow(7, referenceDate);
+      expect(result[0]).toBe(dateService.todayStr(referenceDate.getTime()));
       expect(result.length).toBe(7);
-      // Check that each day is consecutive
+    });
+
+    it('should return consecutive days', () => {
+      const result = service.getDaysToShow(7, new Date(2028, 0, 20));
       for (let i = 0; i < result.length - 1; i++) {
         const currentDay = new Date(result[i]);
         const nextDay = new Date(result[i + 1]);
@@ -123,17 +79,9 @@ describe('ScheduleService', () => {
     });
 
     it('should handle transition across months', () => {
-      // Arrange
-      const nrOfDaysToShow = 5;
-      // Use a future date to ensure not in current week
       const referenceDate = new Date(2028, 0, 30); // Jan 30, 2028
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, referenceDate);
-
-      // Assert
+      const result = service.getDaysToShow(5, referenceDate);
       expect(result.length).toBe(5);
-      // Last days should be in February
       const lastDay = new Date(result[4]);
       expect(lastDay.getMonth()).toBe(1); // February
     });

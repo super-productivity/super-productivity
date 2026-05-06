@@ -99,7 +99,7 @@
 
 <!-- Group submenu -->
 <mat-menu #groupMenu="matMenu">
-  @for (opt of OPTIONS.group.list; track opt.type) {
+  @for (opt of customizerService.availableGroupOptions(); track opt.type) {
     <button
       mat-menu-item
       (click)="customizerService.setGroup(opt)"

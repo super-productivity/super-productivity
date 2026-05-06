@@ -135,13 +135,18 @@ export class CaldavClientService {
     const categoriesProperty = todo.getAllProperties('categories')[0];
     const categories: string[] = categoriesProperty?.getValues() || [];
 
+    const dtstart = todo.getFirstPropertyValue('dtstart') as any;
+    const due = todo.getFirstPropertyValue('due') as any;
+
     return {
       id: todo.getFirstPropertyValue('uid') as string,
       completed: !!todo.getFirstPropertyValue('completed'),
       item_url: task.url,
       summary: (todo.getFirstPropertyValue('summary') as string) || '',
-      start: (todo.getFirstPropertyValue('dtstart') as any)?.toJSDate().getTime(),
-      due: (todo.getFirstPropertyValue('due') as any)?.toJSDate().getTime(),
+      start: dtstart?.toJSDate().getTime(),
+      isAllDay: dtstart ? dtstart.isDate === true : undefined,
+      due: due?.toJSDate().getTime(),
+      isDueAllDay: due ? due.isDate === true : undefined,
       note: (todo.getFirstPropertyValue('description') as string) || undefined,
       status: (todo.getFirstPropertyValue('status') as CaldavIssueStatus) || undefined,
       priority: +(todo.getFirstPropertyValue('priority') as string) || undefined,
@@ -150,8 +155,24 @@ export class CaldavClientService {
       location: todo.getFirstPropertyValue('location') as string,
       labels: categories,
       etag_hash: this._hashEtag(task.etag),
-      related_to: (todo.getFirstPropertyValue('related-to') as string) || undefined,
+      related_to: CaldavClientService._getParentRelatedTo(todo),
     };
+  }
+
+  /**
+   * Returns the UID referenced by the first RELATED-TO property whose RELTYPE
+   * parameter is absent or explicitly set to PARENT (RFC 5545 §3.8.4.5).
+   * CHILD and SIBLING relations are ignored so we never invert the hierarchy.
+   */
+  private static _getParentRelatedTo(todo: any): string | undefined {
+    const props = todo.getAllProperties('related-to') as any[];
+    for (const prop of props) {
+      const reltype = (prop.getParameter('reltype') as string | null) ?? 'PARENT';
+      if (reltype.toUpperCase() === 'PARENT') {
+        return (prop.getFirstValue() as string) || undefined;
+      }
+    }
+    return undefined;
   }
 
   private static _hashEtag(etag: string): number {

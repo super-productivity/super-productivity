@@ -130,6 +130,12 @@ describe('MetricComponent', () => {
       expect(component.allTasksMetricsService).toBe(allTasksMetricsService);
       expect(component.workContextService).toBe(workContextService);
     });
+
+    it('should request the full productivity breakdown range for chart timeframe filtering', () => {
+      expect(metricService.getProductivityBreakdown$).toHaveBeenCalledWith(
+        Number.MAX_SAFE_INTEGER,
+      );
+    });
   });
 
   describe('_isShowingAllTasks computed', () => {

@@ -66,7 +66,6 @@ import { TaskArchiveService } from '../archive/task-archive.service';
 import { INBOX_PROJECT } from '../project/project.const';
 import { selectProjectById } from '../project/store/project.selectors';
 import { Project } from '../project/project.model';
-import { getDbDateStr } from '../../util/get-db-date-str';
 import { Log } from '../../core/log';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 
@@ -338,7 +337,7 @@ export class WorkContextService {
 
   doneTodayArchived$: Observable<number> =
     this._globalTrackingIntervalService.todayDateStr$.pipe(
-      switchMap((worklogStrDate) => this.getDoneTodayInArchive(worklogStrDate)),
+      switchMap(() => this.getDoneTodayInArchive()),
     );
 
   isTodayList: boolean = false;
@@ -466,9 +465,7 @@ export class WorkContextService {
     );
   }
 
-  async getDoneTodayInArchive(
-    day: string = this._dateService.todayStr(),
-  ): Promise<number> {
+  async getDoneTodayInArchive(): Promise<number> {
     const isToday = await this.isTodayList$.pipe(first()).toPromise();
     const { activeId, activeType } = await this.activeWorkContextTypeAndId$
       .pipe(first())
@@ -480,7 +477,7 @@ export class WorkContextService {
     const tasksDoneToday: ArchiveTask[] = ids
       .map((id) => entities[id])
       .filter(
-        (t) => !!t && !t.parentId && t.doneOn && getDbDateStr(t.doneOn) === day,
+        (t) => !!t && !t.parentId && t.doneOn && this._dateService.isToday(t.doneOn),
       ) as ArchiveTask[];
 
     let tasksToConsider: ArchiveTask[] = [];

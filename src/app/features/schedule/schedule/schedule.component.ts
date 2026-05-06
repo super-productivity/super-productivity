@@ -11,12 +11,14 @@ import {
 import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
 import { debounceTime, map, startWith } from 'rxjs/operators';
+import { safeFormatDate } from '../../../util/safe-format-date';
 import { TaskService } from '../../tasks/task.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
-import { MatIconButton, MatButton } from '@angular/material/button';
+import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { LS } from 'src/app/core/persistence/storage-keys.const';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { FH } from '../schedule.const';
 import { mapScheduleDaysToScheduleEvents } from '../map-schedule-data/map-schedule-days-to-schedule-events';
@@ -24,11 +26,14 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
 import { ScheduleMonthComponent } from '../schedule-month/schedule-month.component';
 import { ScheduleService } from '../schedule.service';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { getWeekNumber } from '../../../util/get-week-number';
+import { parseDbDateStr } from '../../../util/parse-db-date-str';
 
 @Component({
   selector: 'schedule',
@@ -36,7 +41,6 @@ import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
     ScheduleWeekComponent,
     ScheduleMonthComponent,
     MatIconButton,
-    MatButton,
     MatIcon,
     MatTooltip,
     TranslatePipe,
@@ -58,6 +62,8 @@ export class ScheduleComponent {
   private _store = inject(Store);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _translate = inject(TranslateService);
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
@@ -65,16 +71,12 @@ export class ScheduleComponent {
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);
 
-  // Helper computed for UI - compares actual dates, not just null check
+  // True when today falls within the currently displayed range.
+  // Disables the "today" reset button and suppresses navigation jumps.
   isViewingToday = computed(() => {
-    const selected = this._selectedDate();
-    if (selected === null) return true;
-
-    // Compare date strings to check if selected date IS today
-    const selectedDateStr = this.scheduleService.getTodayStr(selected);
+    if (this._selectedDate() === null) return true;
     const todayStr = this._todayDateStr();
-
-    return selectedDateStr === todayStr;
+    return todayStr ? this.daysToShow().includes(todayStr) : false;
   });
 
   protected _todayDateStr = toSignal(this._globalTrackingIntervalService.todayDateStr$);
@@ -142,6 +144,25 @@ export class ScheduleComponent {
   });
 
   weeksToShow = computed(() => Math.ceil(this.daysToShow().length / 7));
+
+  headerTitle = computed(() => {
+    const days = this.daysToShow();
+    if (!days.length) return '';
+    const locale = this._dateTimeFormatService.currentLocale();
+
+    if (this.isMonthView()) {
+      const mid = parseDbDateStr(days[Math.floor(days.length / 2)]);
+      return safeFormatDate(mid, 'LLLL yyyy', locale);
+    }
+
+    const start = parseDbDateStr(days[0]);
+    const end = parseDbDateStr(days[days.length - 1]);
+    const weekNr = getWeekNumber(start); // ISO — default firstDayOfWeek=1
+    const startStr = safeFormatDate(start, 'MMM d', locale);
+    const endStr = safeFormatDate(end, 'MMM d', locale);
+    const label = this._translate.instant(T.F.WORKLOG.CMP.WEEK_NR, { nr: weekNr });
+    return `${label} · ${startStr} – ${endStr}`;
+  });
 
   firstDayOfWeek = computed(() => {
     const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
@@ -213,11 +234,13 @@ export class ScheduleComponent {
   });
 
   goToPreviousPeriod(): void {
+    // Never navigate into the past — the displayed range must include today or later
+    if (this.isViewingToday()) return;
+
     const currentDate = this._selectedDate() || new Date();
     const selectedView = this._currentTimeViewMode();
 
     if (selectedView === 'month') {
-      // Jump to first day of previous month
       const previousMonth = new Date(
         currentDate.getFullYear(),
         currentDate.getMonth() - 1,
@@ -225,13 +248,19 @@ export class ScheduleComponent {
       );
       this._selectedDate.set(previousMonth);
     } else {
-      // Week view: move backward by the number of days currently shown
-      // (automatically adapts to responsive day count: 2, 3, 5, or 7 days)
       const daysToSkip = this.daysToShow().length;
       const previousPeriod = new Date(currentDate);
       previousPeriod.setDate(currentDate.getDate() - daysToSkip);
       previousPeriod.setHours(0, 0, 0, 0);
-      this._selectedDate.set(previousPeriod);
+
+      // If going back would land on or before today, snap to "today view" (null)
+      const todayMidnight = new Date();
+      todayMidnight.setHours(0, 0, 0, 0);
+      if (previousPeriod.getTime() <= todayMidnight.getTime()) {
+        this._selectedDate.set(null);
+      } else {
+        this._selectedDate.set(previousPeriod);
+      }
     }
   }
 
@@ -262,8 +291,18 @@ export class ScheduleComponent {
     this._selectedDate.set(null); // Resets to "today" mode
   }
 
+  selectTimeView(view: 'week' | 'month'): void {
+    this.layoutService.selectedTimeView.set(view);
+    localStorage.setItem(LS.SELECTED_TIME_VIEW, view);
+  }
+
+  private getTimeView(): 'week' | 'month' {
+    const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
+    return preservedView === 'month' ? 'month' : 'week';
+  }
+
   constructor() {
-    this.layoutService.selectedTimeView.set('week');
+    this.layoutService.selectedTimeView.set(this.getTimeView());
 
     effect(() => {
       if (this.isMonthView() === false) {

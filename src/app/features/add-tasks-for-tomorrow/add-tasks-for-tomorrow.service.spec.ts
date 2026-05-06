@@ -15,6 +15,7 @@ import {
 import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
 import { selectTasksForPlannerDay } from '../planner/store/planner.selectors';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { DateService } from '../../core/date/date.service';
 
 // Helper to access private methods for testing
 type PrivateService = {
@@ -27,6 +28,7 @@ describe('AddTasksForTomorrowService', () => {
   let store: MockStore;
   let taskRepeatCfgServiceMock: jasmine.SpyObj<TaskRepeatCfgService>;
   let globalTrackingIntervalServiceMock: { todayDateStr$: BehaviorSubject<string> };
+  let dateServiceSpy: jasmine.SpyObj<DateService>;
 
   // Sample test data
   const today = new Date();
@@ -150,6 +152,17 @@ describe('AddTasksForTomorrowService', () => {
     taskRepeatCfgServiceMock.getAllUnprocessedRepeatableTasks$.and.returnValue(of([]));
     taskRepeatCfgServiceMock.createRepeatableTask.and.returnValue(Promise.resolve());
 
+    dateServiceSpy = jasmine.createSpyObj<DateService>('DateService', [
+      'getLogicalTomorrowMs',
+      'getLogicalTodayDate',
+      'todayStr',
+    ]);
+    dateServiceSpy.getLogicalTomorrowMs.and.returnValue(
+      new Date('2026-04-18T00:00:00Z').getTime(),
+    );
+    dateServiceSpy.getLogicalTodayDate.and.returnValue(new Date('2026-04-17T00:00:00Z'));
+    dateServiceSpy.todayStr.and.returnValue(todayStr);
+
     TestBed.configureTestingModule({
       providers: [
         AddTasksForTomorrowService,
@@ -158,6 +171,7 @@ describe('AddTasksForTomorrowService', () => {
           provide: GlobalTrackingIntervalService,
           useValue: globalTrackingIntervalServiceMock,
         },
+        { provide: DateService, useValue: dateServiceSpy },
         provideMockStore({
           initialState: {
             planner: {
@@ -346,6 +360,32 @@ describe('AddTasksForTomorrowService', () => {
       );
       expect(result).toBe('ADDED');
     });
+
+    it('uses the logical tomorrow (offset-aware) when creating repeat tasks', async () => {
+      // Simulate a non-zero startOfNextDay offset: logical tomorrow differs
+      // from `Date.now() + 24h`. The service must read it from DateService,
+      // not recompute it inline.
+      const logicalTomorrow = new Date('2026-04-17T23:00:00Z').getTime();
+      dateServiceSpy.getLogicalTomorrowMs.and.returnValue(logicalTomorrow);
+
+      taskRepeatCfgServiceMock.getRepeatableTasksForExactDay$.and.returnValue(
+        of([mockRepeatCfg]),
+      );
+      store.overrideSelector(selectTasksWithDueTimeForRange, []);
+      store.overrideSelector(selectTasksDueForDay, []);
+      store.overrideSelector(
+        selectTasksForPlannerDay(getDbDateStr(tomorrow.getTime())),
+        [],
+      );
+      store.overrideSelector(selectTodayTaskIds, []);
+
+      await service.addAllDueTomorrow();
+
+      expect(taskRepeatCfgServiceMock.createRepeatableTask).toHaveBeenCalledWith(
+        mockRepeatCfg,
+        logicalTomorrow,
+      );
+    });
   });
 
   describe('addAllDueToday()', () => {
@@ -470,6 +510,25 @@ describe('AddTasksForTomorrowService', () => {
         overdueMonthly,
         jasmine.any(Number),
       );
+    });
+
+    it('uses the logical today date (offset-aware) when querying unprocessed repeatables', async () => {
+      // Simulate a non-zero startOfNextDay offset: logical today differs from
+      // Date.now()-derived today. The service must read it from DateService.
+      const logicalToday = new Date('2026-04-16T23:00:00Z');
+      dateServiceSpy.getLogicalTodayDate.and.returnValue(logicalToday);
+
+      taskRepeatCfgServiceMock.getAllUnprocessedRepeatableTasks$.and.returnValue(of([]));
+      store.overrideSelector(selectTasksWithDueTimeForRange, []);
+      store.overrideSelector(selectTasksDueForDay, []);
+      store.overrideSelector(selectTasksForPlannerDay(getDbDateStr(today)), []);
+      store.overrideSelector(selectTodayTaskIds, []);
+
+      await service.addAllDueToday();
+
+      expect(
+        taskRepeatCfgServiceMock.getAllUnprocessedRepeatableTasks$,
+      ).toHaveBeenCalledWith(logicalToday.getTime());
     });
   });
 

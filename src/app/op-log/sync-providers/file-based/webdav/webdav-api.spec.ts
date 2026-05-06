@@ -4,6 +4,7 @@ import { WebdavPrivateCfg } from './webdav.model';
 import { WebDavHttpAdapter } from './webdav-http-adapter';
 import { WebdavXmlParser } from './webdav-xml-parser';
 import {
+  EmptyRemoteBodySPError,
   HttpNotOkAPIError,
   InvalidDataSPError,
   RemoteFileChangedUnexpectedly,
@@ -265,12 +266,17 @@ describe('WebdavApi', () => {
     it('should upload without expectedRev using plain PUT and return hash of uploaded data', async () => {
       const uploadData = 'new content';
       const expectedHash = md5HashSync(uploadData);
-      const mockResponse = {
-        status: 201,
-        headers: {},
-        data: '',
-      };
-      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) {
+          // PUT
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
+        }
+        // Post-upload verification GET
+        return Promise.resolve({ status: 200, headers: {}, data: uploadData });
+      });
 
       const result = await api.upload({
         path: '/test.txt',
@@ -278,9 +284,9 @@ describe('WebdavApi', () => {
         expectedRev: null,
       });
 
-      // Should only make one request (the PUT)
-      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(1);
-      expect(mockHttpAdapter.request).toHaveBeenCalledWith(
+      // PUT + verification GET
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(2);
+      expect(mockHttpAdapter.request.calls.argsFor(0)[0]).toEqual(
         jasmine.objectContaining({
           url: 'http://example.com/webdav/test.txt',
           method: 'PUT',
@@ -288,6 +294,12 @@ describe('WebdavApi', () => {
           headers: jasmine.objectContaining({
             'Content-Type': 'application/octet-stream',
           }),
+        }),
+      );
+      expect(mockHttpAdapter.request.calls.argsFor(1)[0]).toEqual(
+        jasmine.objectContaining({
+          url: 'http://example.com/webdav/test.txt',
+          method: 'GET',
         }),
       );
 
@@ -311,8 +323,12 @@ describe('WebdavApi', () => {
             data: existingContent,
           });
         }
-        // Second call: PUT to upload
-        return Promise.resolve({ status: 201, headers: {}, data: '' });
+        if (callCount === 2) {
+          // Second call: PUT to upload
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
+        }
+        // Third call: post-upload verification GET
+        return Promise.resolve({ status: 200, headers: {}, data: uploadData });
       });
 
       const result = await api.upload({
@@ -321,7 +337,7 @@ describe('WebdavApi', () => {
         expectedRev: existingHash,
       });
 
-      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(2);
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(3);
       // First call should be GET
       expect(mockHttpAdapter.request.calls.argsFor(0)[0]).toEqual(
         jasmine.objectContaining({ method: 'GET' }),
@@ -329,6 +345,10 @@ describe('WebdavApi', () => {
       // Second call should be PUT
       expect(mockHttpAdapter.request.calls.argsFor(1)[0]).toEqual(
         jasmine.objectContaining({ method: 'PUT', body: uploadData }),
+      );
+      // Third call should be the verification GET
+      expect(mockHttpAdapter.request.calls.argsFor(2)[0]).toEqual(
+        jasmine.objectContaining({ method: 'GET' }),
       );
 
       expect(result).toEqual({ rev: expectedUploadHash });
@@ -361,13 +381,20 @@ describe('WebdavApi', () => {
       );
     });
 
-    it('should skip GET check when isForceOverwrite is true', async () => {
+    it('should skip pre-upload GET check when isForceOverwrite is true but still verify', async () => {
       const uploadData = 'force overwrite content';
       const expectedHash = md5HashSync(uploadData);
 
-      mockHttpAdapter.request.and.returnValue(
-        Promise.resolve({ status: 201, headers: {}, data: '' }),
-      );
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) {
+          // PUT
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
+        }
+        // Post-upload verification GET
+        return Promise.resolve({ status: 200, headers: {}, data: uploadData });
+      });
 
       const result = await api.upload({
         path: '/test.txt',
@@ -376,10 +403,13 @@ describe('WebdavApi', () => {
         isForceOverwrite: true,
       });
 
-      // Should only make one request (the PUT), no GET
-      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(1);
+      // PUT + verification GET (no pre-upload GET because isForceOverwrite)
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(2);
       expect(mockHttpAdapter.request.calls.argsFor(0)[0]).toEqual(
         jasmine.objectContaining({ method: 'PUT' }),
+      );
+      expect(mockHttpAdapter.request.calls.argsFor(1)[0]).toEqual(
+        jasmine.objectContaining({ method: 'GET' }),
       );
       expect(result).toEqual({ rev: expectedHash });
     });
@@ -392,11 +422,15 @@ describe('WebdavApi', () => {
       mockHttpAdapter.request.and.callFake(() => {
         callCount++;
         if (callCount === 1) {
-          // GET returns 404 via RemoteFileNotFoundAPIError
+          // Pre-upload GET returns 404 via RemoteFileNotFoundAPIError
           return Promise.reject(new RemoteFileNotFoundAPIError('/test.txt'));
         }
-        // PUT succeeds
-        return Promise.resolve({ status: 201, headers: {}, data: '' });
+        if (callCount === 2) {
+          // PUT succeeds
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
+        }
+        // Post-upload verification GET
+        return Promise.resolve({ status: 200, headers: {}, data: uploadData });
       });
 
       const result = await api.upload({
@@ -405,7 +439,7 @@ describe('WebdavApi', () => {
         expectedRev: 'some-rev',
       });
 
-      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(2);
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(3);
       expect(result).toEqual({ rev: expectedHash });
     });
 
@@ -418,10 +452,12 @@ describe('WebdavApi', () => {
       // First call: PUT fails with 409
       // Second call: MKCOL to create directory succeeds
       // Third call: PUT retry succeeds
+      // Fourth call: post-upload verification GET
       const mockResponses = [
         Promise.reject(error),
         Promise.resolve({ status: 201, headers: {}, data: '' }),
         Promise.resolve({ status: 201, headers: {}, data: '' }),
+        Promise.resolve({ status: 200, headers: {}, data: uploadData }),
       ];
       let callCount = 0;
       mockHttpAdapter.request.and.callFake(() => mockResponses[callCount++]);
@@ -432,12 +468,19 @@ describe('WebdavApi', () => {
         expectedRev: null,
       });
 
-      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(3);
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(4);
       // Check MKCOL call
       expect(mockHttpAdapter.request.calls.argsFor(1)[0]).toEqual(
         jasmine.objectContaining({
           url: 'http://example.com/webdav/folder',
           method: 'MKCOL',
+        }),
+      );
+      // Check verification GET
+      expect(mockHttpAdapter.request.calls.argsFor(3)[0]).toEqual(
+        jasmine.objectContaining({
+          url: 'http://example.com/webdav/folder/test.txt',
+          method: 'GET',
         }),
       );
       expect(result).toEqual({ rev: expectedHash });
@@ -466,6 +509,129 @@ describe('WebdavApi', () => {
       ).toBeRejectedWith(jasmine.any(InvalidDataSPError));
 
       expect(mockHttpAdapter.request).not.toHaveBeenCalled();
+    });
+
+    // Issue #7300: WebDAV servers (incl. Nextcloud) do not enforce upload
+    // integrity. Silent truncation during PUT leaves a corrupt file on the
+    // server. Verification detects this via re-GET + hash compare; since
+    // truncation and concurrent overwrite are indistinguishable from the
+    // mismatch alone, both surface as RemoteFileChangedUnexpectedly so the
+    // adapter's existing re-download + retry path handles them uniformly.
+    it('should throw RemoteFileChangedUnexpectedly when remote content was truncated after PUT', async () => {
+      const uploadData = 'full payload of reasonable length';
+      const truncatedRemote = 'full payload of';
+
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
+        }
+        return Promise.resolve({
+          status: 200,
+          headers: {},
+          data: truncatedRemote,
+        });
+      });
+      mockXmlParser.validateResponseContent.and.stub();
+
+      await expectAsync(
+        api.upload({
+          path: '/sync/sync-data.json',
+          data: uploadData,
+          expectedRev: null,
+        }),
+      ).toBeRejectedWith(jasmine.any(RemoteFileChangedUnexpectedly));
+
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(2);
+      // Verification GET must include Cache-Control: no-cache
+      expect(mockHttpAdapter.request.calls.argsFor(1)[0]).toEqual(
+        jasmine.objectContaining({
+          method: 'GET',
+          headers: jasmine.objectContaining({ 'Cache-Control': 'no-cache' }),
+        }),
+      );
+    });
+
+    it('should surface underlying error when verification GET fails mid-flight', async () => {
+      const uploadData = 'content';
+      const networkError = new Error('network down');
+
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
+        }
+        return Promise.reject(networkError);
+      });
+
+      await expectAsync(
+        api.upload({
+          path: '/test.txt',
+          data: uploadData,
+          expectedRev: null,
+        }),
+      ).toBeRejectedWith(networkError);
+      // Confirm the verification GET actually ran (not short-circuited elsewhere)
+      expect(mockHttpAdapter.request).toHaveBeenCalledTimes(2);
+      expect(mockHttpAdapter.request.calls.argsFor(1)[0]).toEqual(
+        jasmine.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('should throw EmptyRemoteBodySPError when verification GET returns empty body', async () => {
+      // E.g. Capacitor bridge drops the body, proxy returns 200 with no content.
+      // Reporting this as corruption would wrongly suggest "delete sync-data.json";
+      // reporting as EmptyRemoteBody surfaces the real cause (auth/transport).
+      const uploadData = 'content';
+
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
+        }
+        return Promise.resolve({ status: 200, headers: {}, data: '' });
+      });
+
+      await expectAsync(
+        api.upload({
+          path: '/test.txt',
+          data: uploadData,
+          expectedRev: null,
+        }),
+      ).toBeRejectedWith(jasmine.any(EmptyRemoteBodySPError));
+    });
+
+    it('should reject HTML/login-page verification responses via validateResponseContent', async () => {
+      const uploadData = 'content';
+      const htmlLoginPage = '<html><body>Please sign in</body></html>';
+
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ status: 201, headers: {}, data: '' });
+        }
+        return Promise.resolve({ status: 200, headers: {}, data: htmlLoginPage });
+      });
+      mockXmlParser.validateResponseContent.and.throwError('HTML error page detected');
+
+      await expectAsync(
+        api.upload({
+          path: '/test.txt',
+          data: uploadData,
+          expectedRev: null,
+        }),
+      ).toBeRejected();
+
+      expect(mockXmlParser.validateResponseContent).toHaveBeenCalledWith(
+        htmlLoginPage,
+        '/test.txt',
+        'upload-verify',
+        'file content',
+      );
     });
   });
 
@@ -638,7 +804,8 @@ describe('WebdavApi', () => {
         if (params.method === 'PUT') {
           return Promise.resolve({ status: 201, headers: {}, data: '' });
         }
-        return Promise.resolve({ status: 200, headers: {}, data: '' });
+        // GET (post-upload verification) returns the uploaded data
+        return Promise.resolve({ status: 200, headers: {}, data: uploadData });
       });
 
       const result = await api.upload({

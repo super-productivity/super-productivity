@@ -7,7 +7,7 @@ export interface CalendarProviderCfg extends BaseIssueProviderCfg {
   isAutoImportForCurrentDay: boolean;
   icon?: string;
   checkUpdatesEvery: number;
-  showBannerBeforeThreshold: null | number;
+  showBannerBeforeThreshold: number | null | undefined;
   isDisabledForWebApp?: boolean;
 }
 

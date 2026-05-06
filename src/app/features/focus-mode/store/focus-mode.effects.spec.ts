@@ -1121,10 +1121,10 @@ describe('FocusModeEffects', () => {
   });
 
   describe('syncTrackingStartToSession$', () => {
-    it('should dispatch startFocusSession when isSyncSessionWithTracking is true and task is selected on Main screen', (done) => {
+    it('should dispatch startFocusSession when isSyncSessionWithTracking and isSkipPreparation are both true and task is selected on Main screen', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
-        isSkipPreparation: false,
+        isSkipPreparation: true,
       });
       store.overrideSelector(selectors.selectTimer, createMockTimer());
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
@@ -1145,6 +1145,33 @@ describe('FocusModeEffects', () => {
         );
         done();
       });
+    });
+
+    // Bug #7384 fix: when isSkipPreparation is OFF, sync must NOT auto-start the
+    // session — user should remain on the preparation screen and click 'Start'.
+    it('should NOT dispatch startFocusSession when isSkipPreparation is false (issue #7384)', (done) => {
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+      });
+      store.overrideSelector(selectors.selectTimer, createMockTimer());
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectCurrentScreen, FocusScreen.Main);
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      const emitted: any[] = [];
+      effects.syncTrackingStartToSession$.subscribe((action) => {
+        emitted.push(action);
+      });
+
+      currentTaskId$.next('task-123');
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        done();
+      }, 50);
     });
 
     it('should dispatch unPauseFocusSession when session is paused and task is selected', (done) => {
@@ -1304,7 +1331,7 @@ describe('FocusModeEffects', () => {
     it('should NOT re-dispatch when config changes while task is already selected', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
-        isSkipPreparation: false,
+        isSkipPreparation: true,
       });
       store.overrideSelector(selectors.selectTimer, createMockTimer());
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
@@ -1324,7 +1351,7 @@ describe('FocusModeEffects', () => {
       setTimeout(() => {
         expect(emitted.length).toBe(1);
 
-        // Toggle a config setting — should NOT re-trigger
+        // Toggle an unrelated config setting — should NOT re-trigger
         store.overrideSelector(selectFocusModeConfig, {
           isSyncSessionWithTracking: true,
           isSkipPreparation: true,
@@ -1343,7 +1370,7 @@ describe('FocusModeEffects', () => {
     it('should NOT re-dispatch when isFocusModeEnabled is toggled while task is selected', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
-        isSkipPreparation: false,
+        isSkipPreparation: true,
       });
       store.overrideSelector(selectors.selectTimer, createMockTimer());
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
@@ -1780,6 +1807,7 @@ describe('FocusModeEffects', () => {
         createMockTimer({ isRunning: false, purpose: 'work' }),
       );
       store.refreshState();
+      currentTaskId$.next('task-123');
 
       actions$ = of(actions.pauseFocusSession({ pausedTaskId: 'task-123' }));
 
@@ -1787,6 +1815,33 @@ describe('FocusModeEffects', () => {
         expect(action.type).toEqual('[Task] UnsetCurrentTask');
         done();
       });
+    });
+
+    // Skip the redundant unsetCurrentTask when current task is already null —
+    // otherwise the no-op dispatch would clobber lastCurrentTaskId in the reducer.
+    it('should NOT dispatch when currentTaskId is already null', (done) => {
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+      });
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({ isRunning: false, purpose: 'work' }),
+      );
+      store.refreshState();
+      currentTaskId$.next(null);
+
+      actions$ = of(actions.pauseFocusSession({ pausedTaskId: 'task-123' }));
+
+      let emitted = false;
+      effects.syncSessionPauseToTracking$.subscribe(() => {
+        emitted = true;
+      });
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
     });
 
     it('should NOT dispatch when pausedTaskId is null', (done) => {
@@ -1848,6 +1903,7 @@ describe('FocusModeEffects', () => {
         createMockTimer({ isRunning: false, purpose: 'break' }),
       );
       store.refreshState();
+      currentTaskId$.next('task-123');
 
       actions$ = of(actions.pauseFocusSession({ pausedTaskId: 'task-123' }));
 

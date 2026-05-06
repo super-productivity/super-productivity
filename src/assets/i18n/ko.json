@@ -160,10 +160,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "평가 방법 및 위치",
-      "BTN_DONT_BOTHER": "다시는 나를 괴롭히지 마라",
-      "TITLE": "🙈 부디 용서해 주세요만...",
-      "TXT": "당신이 그것을 좋아한다면 <strong>좋은 평가를 주면 프로젝트에 엄청난 도움이 될 것입니다!</strong>"
+      "A_HOW": "평가하는 방법",
+      "BTN_DONT_BOTHER": "다시 묻지 않기",
+      "BTN_FEEDBACK": "피드백 보내기",
+      "BTN_LATER": "나중에",
+      "BTN_RATE_APP_STORE": "App Store에서 평가",
+      "BTN_RATE_PLAY_STORE": "Play Store에서 평가",
+      "FEEDBACK_BACK": "뒤로",
+      "FEEDBACK_CONTRIBUTE": "프로젝트에 기여하기",
+      "FEEDBACK_CONTRIBUTE_DESC": "코드, 디자인, 번역 등",
+      "FEEDBACK_PRIVATE": "관리자에게 이메일",
+      "FEEDBACK_PRIVATE_DESC": "비공개 메시지 보내기",
+      "FEEDBACK_PUBLIC": "GitHub Discussions에 게시",
+      "FEEDBACK_PUBLIC_DESC": "다른 사람이 보고 답글 가능",
+      "FEEDBACK_TITLE": "어떻게 도와주시겠어요?",
+      "TITLE": "Super Productivity가 마음에 드시나요?",
+      "TXT": "<strong>무료 오픈소스 프로젝트</strong>로 애호가들이 만들었습니다 — 추적도 광고도 없습니다. 평가나 짧은 메시지가 더 많은 사람들이 이 앱을 발견하는 데 도움이 됩니다."
     },
     "DROPBOX": {
       "S": {
@@ -929,7 +941,7 @@
         "LOCAL_REMOTE": "로컬-> 원격",
         "NEVER": "결코",
         "REMOTE": "원격",
-        "TEXT": "<p>Dropbox에서 업데이트. 로컬 및 원격 데이터가 모두 수정 된 것 같습니다.</p>",
+        "TEXT": "<p>원격에서 업데이트. 로컬 및 원격 데이터가 모두 수정 된 것 같습니다.</p>",
         "TIMESTAMP": "타임 스탬프",
         "TITLE": "동기화: 데이터 충돌",
         "USE_LOCAL": "로컬 사용",
@@ -1862,7 +1874,8 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "가져오려는 Super Productivity 백업 JSON 파일의 전체 URL을 입력하세요.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "URL에서 가져오기",
     "OPEN_IMPORT_FROM_URL_DIALOG": "URL에서 가져오기",
-    "PRIVACY_EXPORT": "익명화된 데이터 내보내기(디버깅을 위해 contact@super-productivity.com 으로 보내기)",
+    "PRIVACY_EXPORT": "데이터 내보내기(익명화됨)",
+    "PRIVACY_EXPORT_DESCRIPTION": "익명화된 데이터 내보내기(디버깅을 위해 contact@super-productivity.com 으로 보내기)",
     "S_BACKUP_DOWNLOADED": "백업은 안드로이드 문서 폴더에 다운로드되었습니다.",
     "S_ERR_IMPORT_FAILED": "데이터 가져오기 실패",
     "S_ERR_INVALID_DATA": "가져 오기 실패 : 잘못된 JSON",

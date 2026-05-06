@@ -10,36 +10,36 @@
 
 ## Anti-Patterns
 
-| Avoid | Do Instead |
-|-------|-----------|
-| Hardcoded colors (`#fff`, `red`) | CSS variables (`--text-color`, `--card-bg`, `--color-danger`) |
-| Hardcoded spacing (`16px`, `1rem`) | Spacing variables (`--s2`, `--s`, `--s-half`) |
-| Hardcoded shadows | Elevation variables (`--whiteframe-shadow-*dp`, `--md-sys-level*`) |
-| Hardcoded transitions/durations | Transition variables (`--transition-standard`, `--transition-duration-*`) |
-| Custom z-index values | Z-index variables (`--z-main-header`, `--z-backdrop`, etc.) |
-| New styled elements without checking | Check `src/app/ui/` for existing reusable components first |
+| Avoid                                | Do Instead                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| Hardcoded colors (`#fff`, `red`)     | CSS variables (`--text-color`, `--card-bg`, `--color-danger`)             |
+| Hardcoded spacing (`16px`, `1rem`)   | Spacing variables (`--s2`, `--s`, `--s-half`)                             |
+| Hardcoded shadows                    | Elevation variables (`--whiteframe-shadow-*dp`, `--md-sys-level*`)        |
+| Hardcoded transitions/durations      | Transition variables (`--transition-standard`, `--transition-duration-*`) |
+| Custom z-index values                | Z-index variables (`--z-main-header`, `--z-backdrop`, etc.)               |
+| New styled elements without checking | Check `src/app/ui/` for existing reusable components first                |
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/styles/_css-variables.scss` | All CSS custom properties (design tokens) |
-| `src/styles/themes.scss` | Material theme setup + utility classes |
-| `src/styles/page.scss` | Global page/body styles |
-| `src/styles/util.scss` | Utility classes |
-| `src/styles/components/` | Global component styles (Material overrides, shared patterns) |
-| `src/styles/mixins/` | Reusable SCSS mixins |
-| `src/app/ui/` | 40+ reusable Angular UI components |
+| File                             | Purpose                                                       |
+| -------------------------------- | ------------------------------------------------------------- |
+| `src/styles/_css-variables.scss` | All CSS custom properties (design tokens)                     |
+| `src/styles/themes.scss`         | Material theme setup + utility classes                        |
+| `src/styles/page.scss`           | Global page/body styles                                       |
+| `src/styles/util.scss`           | Utility classes                                               |
+| `src/styles/components/`         | Global component styles (Material overrides, shared patterns) |
+| `src/styles/mixins/`             | Reusable SCSS mixins                                          |
+| `src/app/ui/`                    | 40+ reusable Angular UI components                            |
 
 ## Spacing Variables (8px Grid)
 
-| Variable | Value | Variable | Value |
-|----------|-------|----------|-------|
-| `--s-quarter` | 2px | `--s4` | 32px |
-| `--s-half` | 4px | `--s5` | 40px |
-| `--s` | 8px | `--s6` | 48px |
-| `--s2` | 16px | `--s7` | 56px |
-| `--s3` | 24px | `--s8` | 64px |
+| Variable      | Value | Variable | Value |
+| ------------- | ----- | -------- | ----- |
+| `--s-quarter` | 2px   | `--s4`   | 32px  |
+| `--s-half`    | 4px   | `--s5`   | 40px  |
+| `--s`         | 8px   | `--s6`   | 48px  |
+| `--s2`        | 16px  | `--s7`   | 56px  |
+| `--s3`        | 24px  | `--s8`   | 64px  |
 
 ```scss
 // ✅ Good
@@ -53,13 +53,13 @@ gap: 4px;
 
 ## Color Variables
 
-| Use case | Variables |
-|----------|----------|
-| Text | `--text-color`, `--text-color-muted`, `--text-color-most-intense` |
-| Backgrounds | `--bg`, `--card-bg`, `--task-c-bg`, `--sub-task-c-bg` |
-| Semantic | `--color-success` (#4caf50), `--color-warning` (#ff9800), `--color-danger` (#f44336) |
-| Material palette | `--palette-primary-500`, `--palette-accent-500`, `--palette-warn-500` (100–900) |
-| Overlays | `--c-dark-10` through `--c-dark-90`, `--c-light-05` through `--c-light-90` |
+| Use case           | Variables                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| Text               | `--text-color`, `--text-color-muted`, `--text-color-most-intense`                                  |
+| Backgrounds        | `--bg`, `--card-bg`, `--task-c-bg`, `--sub-task-c-bg`                                              |
+| Semantic           | `--color-success` (#4caf50), `--color-warning` (#ff9800), `--color-danger` (#f44336)               |
+| Material palette   | `--palette-primary-500`, `--palette-accent-500`, `--palette-warn-500` (100–900)                    |
+| Overlays           | `--c-dark-10` through `--c-dark-90`, `--c-light-05` through `--c-light-90`                         |
 | Alpha coefficients | `--border-alpha` (0.12), `--overlay-alpha` (0.1), `--muted-alpha` (0.6), `--separator-alpha` (0.3) |
 
 ### Theme-Specific Values
@@ -72,8 +72,12 @@ Dark elevation colors: `--dark0` (rgb(0,0,0)) through `--dark24` (rgb(56,56,56))
 ### Theme-Specific Overrides in Components
 
 ```scss
-@include darkTheme() { /* dark-only styles */ }
-@include lightTheme() { /* light-only styles */ }
+@include darkTheme() {
+  /* dark-only styles */
+}
+@include lightTheme() {
+  /* light-only styles */
+}
 ```
 
 Mixins are in `src/styles/mixins/_theming.scss`.
@@ -85,50 +89,73 @@ Mixins are in `src/styles/mixins/_theming.scss`.
 
 ## Transitions & Animations
 
-| Type | Variables |
-|------|----------|
-| Shorthands | `--transition-fast`, `--transition-standard`, `--transition-enter`, `--transition-leave` |
-| Durations | `--transition-duration-xs` (90ms), `-s` (200ms), `-m` (250ms), `-l` (375ms) |
-| Timing | `--ani-standard-timing`, `--ani-enter-timing`, `--ani-leave-timing`, `--ani-sharp-timing` |
+| Type       | Variables                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| Shorthands | `--transition-fast`, `--transition-standard`, `--transition-enter`, `--transition-leave`                           |
+| Durations  | `--transition-duration-xs` (90ms), `-s` (150ms), `-m` (225ms), `-l` (375ms)                                        |
+| Additional | `--transition-duration-enter` (225ms), `--transition-duration-leave` (195ms), `--page-transition-duration` (225ms) |
+| Timing     | `--ani-standard-timing`, `--ani-enter-timing`, `--ani-leave-timing`, `--ani-sharp-timing`                          |
+
+When migrating hardcoded durations, pick the nearest bucket — up to ~15% drift is acceptable for UI transitions.
+
+## Focus Ring
+
+Keyboard-accessibility tokens for custom interactive elements. Material components keep their own focus treatment; use these for non-Material buttons, cards, and custom controls.
+
+| Variable              | Value                        |
+| --------------------- | ---------------------------- |
+| `--focus-ring-width`  | 2px                          |
+| `--focus-ring-offset` | 2px                          |
+| `--focus-ring-color`  | `var(--palette-primary-500)` |
+
+Quickest adoption — add the `.focus-ring` utility class from `util.scss`, which applies an `outline` on `:focus-visible` only (so it doesn't fire on mouse clicks).
+
+```scss
+// opt-in per-element
+.my-button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+```
 
 ## Z-Index Layers
 
-| Variable | Value | Purpose |
-|----------|-------|---------|
-| `--z-check-done` | 11 | Task done checkbox |
-| `--z-main-header` | 12 | Main header |
-| `--z-task-title-focus` | 32 | Focused task title |
-| `--z-mobile-bottom-nav` | 50 | Mobile bottom navigation |
-| `--z-side-nav` | 60 | Side navigation |
-| `--z-backdrop` | 222 | Backdrop overlay |
-| `--z-add-task-bar` | 999 | Add task bar |
-| `--z-search-bar` | 999 | Search bar |
-| `--z-tour` | 1001 | Tour overlay |
+| Variable                | Value | Purpose                  |
+| ----------------------- | ----- | ------------------------ |
+| `--z-check-done`        | 11    | Task done checkbox       |
+| `--z-main-header`       | 12    | Main header              |
+| `--z-task-title-focus`  | 32    | Focused task title       |
+| `--z-mobile-bottom-nav` | 50    | Mobile bottom navigation |
+| `--z-side-nav`          | 60    | Side navigation          |
+| `--z-backdrop`          | 222   | Backdrop overlay         |
+| `--z-add-task-bar`      | 999   | Add task bar             |
+| `--z-search-bar`        | 999   | Search bar               |
+| `--z-tour`              | 1001  | Tour overlay             |
 
 ## Layout Variables
 
-| Variable | Value | Notes |
-|----------|-------|-------|
+| Variable                | Value | Notes              |
+| ----------------------- | ----- | ------------------ |
 | `--component-max-width` | 800px | 900–1000px on iPad |
-| `--side-nav-width` | 200px | |
-| `--side-nav-width-l` | 400px | |
-| `--bar-height-large` | 56px | |
-| `--bar-height` | 48px | |
-| `--bar-height-small` | 40px | |
+| `--side-nav-width`      | 200px |                    |
+| `--side-nav-width-l`    | 400px |                    |
+| `--bar-height-large`    | 56px  |                    |
+| `--bar-height`          | 48px  |                    |
+| `--bar-height-small`    | 40px  |                    |
 
 ## Responsive Breakpoints
 
 Available as CSS vars (`--layout-xxxs` through `--layout-xl`) and as SCSS mixins in `src/styles/mixins/_media-queries.scss`:
 
-| Breakpoint | Value |
-|------------|-------|
-| `xxxs` | 398px |
-| `xxs` | 450px |
-| `xs` | 600px |
-| `s` | 800px |
-| `m` | 1000px |
-| `l` | 1200px |
-| `xl` | 2000px |
+| Breakpoint | Value  |
+| ---------- | ------ |
+| `xxxs`     | 398px  |
+| `xxs`      | 450px  |
+| `xs`       | 600px  |
+| `s`        | 800px  |
+| `m`        | 1000px |
+| `l`        | 1200px |
+| `xl`       | 2000px |
 
 ## Utility Classes
 

@@ -18,16 +18,6 @@
       [ariaLabel]="T.F.FOCUS_MODE.SELECT_MODE | translate"
       (selectionChange)="selectMode($event)"
     ></segmented-button-group>
-    @if (isShowPomodoroSettings()) {
-      <button
-        mat-icon-button
-        [matTooltip]="T.F.FOCUS_MODE.POMODORO_SETTINGS | translate"
-        (click)="openPomodoroSettings()"
-        class="pomodoro-settings-btn"
-      >
-        <mat-icon>settings</mat-icon>
-      </button>
-    }
   </div>
 }
 
@@ -101,7 +91,10 @@
 
   <!-- Clock Display -->
   <div class="clock-display">
-    <div class="clock-display__content">
+    <div
+      class="clock-display__content"
+      [class.is-duration-slider-active]="isShowDurationSlider()"
+    >
       <div
         class="clock-face"
         [@modeSwitchFade]="mode()"
@@ -220,6 +213,18 @@
             </button>
           }
         </div>
+
+        <!-- Pomodoro settings cog (Preparation + Pomodoro mode) -->
+        @if (isShowPomodoroSettings()) {
+          <button
+            mat-icon-button
+            [matTooltip]="T.F.FOCUS_MODE.POMODORO_SETTINGS | translate"
+            (click)="openPomodoroSettings()"
+            class="pomodoro-settings-btn"
+          >
+            <mat-icon>settings</mat-icon>
+          </button>
+        }
       </div>
 
       <!-- Overtime message -->

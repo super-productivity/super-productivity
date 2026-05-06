@@ -191,8 +191,14 @@ export class SuperSyncPage extends BasePage {
       //    piggybacked ops in the response, causing data to sync between clients
       //    outside of explicit syncAndWait(). Set here (not in createSimulatedClient)
       //    so tests using enableWebSocket:true still get immediate uploads.
+      // 3. Block WsTriggeredDownloadService: Even when routeWebSocket() closes the
+      //    connection, a WS notification can slip through the moment the connection
+      //    opens (before it's closed). Setting __SP_E2E_BLOCK_WS_DOWNLOAD ensures
+      //    WsTriggeredDownloadService ignores any such notifications, preventing
+      //    uncontrolled background syncs that race with explicit syncAndWait() calls.
       await this.page.evaluate(() => {
         (globalThis as any).__SP_E2E_BLOCK_IMMEDIATE_UPLOAD = true;
+        (globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = true;
       });
     }
 
@@ -325,7 +331,7 @@ export class SuperSyncPage extends BasePage {
     await this.page.waitForTimeout(1000);
 
     // Define locators for dialogs we might see
-    const configDialog = this.page.locator('dialog-sync-initial-cfg');
+    const configDialog = this.page.locator('dialog-sync-cfg');
     const passwordDialog = this.page.locator('dialog-enter-encryption-password');
     const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
 
@@ -897,7 +903,7 @@ export class SuperSyncPage extends BasePage {
         }
 
         // Client B: legacy password dialog (dialog-enter-encryption-password vs
-        // dialog-sync-initial-cfg password prompt)
+        // dialog-sync-cfg password prompt)
         const legacyPwVisible = await passwordDialog.isVisible().catch(() => false);
         if (legacyPwVisible) {
           console.log('[SuperSyncPage] Password dialog — entering password');
@@ -1829,6 +1835,15 @@ export class SuperSyncPage extends BasePage {
    * @param newPassword - The new encryption password
    */
   async changeEncryptionPassword(newPassword: string): Promise<void> {
+    // Capture the sync check icon state BEFORE we start. If a previous
+    // syncAndWait() left the check icon visible, the final wait at the end of
+    // this method would see a stale icon and return before the server wipe +
+    // re-upload completes — causing a race where the next client starts
+    // syncing against partially-uploaded server state.
+    const checkVisibleBeforeOperation = await this.syncCheckIcon
+      .isVisible()
+      .catch(() => false);
+
     // Open sync settings via right-click
     // Use noWaitAfter to prevent blocking on Angular hash navigation
     await this.syncBtn.click({ button: 'right', noWaitAfter: true });
@@ -1934,18 +1949,32 @@ export class SuperSyncPage extends BasePage {
       }
     }
 
-    // Wait for password change operation to complete (server wipe + re-upload)
-    const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
-    if (!checkAlreadyVisible) {
-      const spinnerVisible = await this.syncSpinner
-        .waitFor({ state: 'visible', timeout: 5000 })
-        .then(() => true)
-        .catch(() => false);
-      if (spinnerVisible) {
-        await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
-      }
-      await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+    // Wait for password change operation to complete (server wipe + re-upload).
+    //
+    // If the check icon was visible BEFORE we opened the settings dialog, it's
+    // stale from a previous sync — we must first wait for it to disappear (new
+    // sync cycle started) or the spinner to appear, before waiting for the
+    // check icon to reappear (new sync completed). Without this, we'd return
+    // immediately against a stale icon and race the server re-upload.
+    if (checkVisibleBeforeOperation) {
+      await Promise.race([
+        this.syncCheckIcon.waitFor({ state: 'hidden', timeout: 5000 }),
+        this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 }),
+      ]).catch(() => {
+        // Neither happened within 5s — the password change may not have
+        // triggered a re-sync (rare). Fall through and rely on the final
+        // check-icon wait below.
+      });
     }
+
+    const spinnerVisible = await this.syncSpinner
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    if (spinnerVisible) {
+      await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
+    }
+    await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
   }
 
   /**

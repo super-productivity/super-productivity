@@ -14,6 +14,15 @@
 
   > button {
     min-height: 50px;
+    height: auto;
+    padding-top: var(--s-half);
+    padding-bottom: var(--s-half);
+
+    // allow long provider names to wrap rather than overflow the button (#7331)
+    ::ng-deep .mdc-button__label {
+      white-space: normal;
+      line-height: 1.2;
+    }
   }
 }
 

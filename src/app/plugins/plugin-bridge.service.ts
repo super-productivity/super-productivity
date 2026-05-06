@@ -31,6 +31,9 @@ import { snackCfgToSnackParams } from './plugin-api-mapper';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
 import { addSubTask } from '../features/tasks/store/task.actions';
+import { parseTimeSpentChanges } from '../features/tasks/short-syntax';
+import { GlobalConfigService } from '../features/config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import { nanoid } from 'nanoid';
 import { WorkContextService } from '../features/work-context/work-context.service';
@@ -79,6 +82,7 @@ import {
   upsertSimpleCounter,
 } from '../features/simple-counter/store/simple-counter.actions';
 import { getDbDateStr } from '../util/get-db-date-str';
+import { DataInitService } from '../core/data-init/data-init.service';
 
 /**
  * PluginBridge acts as an intermediary layer between plugins and the main application services.
@@ -113,6 +117,8 @@ export class PluginBridgeService implements OnDestroy {
   private _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
   private _pluginHttpService = inject(PluginHttpService);
   private _pluginOAuthBridge = inject(PluginOAuthBridgeService);
+  private _dataInitService = inject(DataInitService);
+  private _globalConfigService = inject(GlobalConfigService);
 
   // Track header buttons registered by plugins
   private readonly _headerButtons = signal<PluginHeaderBtnCfg[]>([]);
@@ -487,6 +493,10 @@ export class PluginBridgeService implements OnDestroy {
     return contextTasks || [];
   }
 
+  async reInitData(): Promise<void> {
+    PluginLog.log('PluginBridge: Re-initializing app data');
+    await this._dataInitService.reInit();
+  }
   /**
    * Update a task
    */
@@ -559,15 +569,22 @@ export class PluginBridgeService implements OnDestroy {
 
     let createdTask: Task;
     if (taskData.parentId) {
-      // For subtasks, we need to use the addSubTask action to properly update parent
+      // For subtasks, we need to use the addSubTask action to properly update parent.
+      // Short-syntax (e.g. "15m") is normally applied by ShortSyntaxEffects, but that
+      // effect only listens to `addTask`/`updateTask` — not `addSubTask`. So the
+      // bridge has to parse subtask titles itself, mirroring MarkdownPasteService.
+      // Tags/projects are intentionally not parsed: subtasks always inherit them
+      // from the parent (see addSubTask reducer).
+      const subTaskTitleProps = this._parseSubTaskTitleTimeProps(taskData.title);
       const newTask = this._taskService.createNewTaskWithDefaults({
-        title: taskData.title,
+        title: subTaskTitleProps.title,
         additional: {
           notes: taskData.notes || '',
           timeEstimate: taskData.timeEstimate || 0,
           isDone: (taskData as { isDone?: boolean }).isDone || false,
           tagIds: [], // Subtasks don't have tags
           projectId: taskData.projectId || undefined,
+          ...subTaskTitleProps.timeProps,
         },
       });
 
@@ -582,7 +599,6 @@ export class PluginBridgeService implements OnDestroy {
 
       PluginLog.log('PluginBridge: Subtask added successfully', {
         taskId: createdTask.id,
-        taskData,
       });
 
       return createdTask.id;
@@ -1209,6 +1225,25 @@ export class PluginBridgeService implements OnDestroy {
   /**
    * Validate that referenced project, tags, and parent task exist
    */
+  // Mirrors MarkdownPasteService._parseTimeProps: respects the user's
+  // shortSyntax.isEnableDue config, returns the cleaned title and any parsed
+  // time fields. Used for subtasks because `addSubTask` doesn't trigger the
+  // ShortSyntaxEffects pipeline.
+  private _parseSubTaskTitleTimeProps(originalTitle: string): {
+    title: string;
+    timeProps: Partial<TaskCopy>;
+  } {
+    const shortSyntaxConfig =
+      this._globalConfigService.cfg()?.shortSyntax ?? DEFAULT_GLOBAL_CONFIG.shortSyntax;
+    if (!shortSyntaxConfig.isEnableDue) {
+      return { title: originalTitle, timeProps: {} };
+    }
+    const { title: cleanedTitle, ...timeProps } = parseTimeSpentChanges({
+      title: originalTitle,
+    });
+    return { title: cleanedTitle ?? originalTitle, timeProps };
+  }
+
   private async _validateTaskReferences(
     projectId?: string | null,
     tagIds?: string[],

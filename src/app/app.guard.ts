@@ -16,6 +16,7 @@ import { Store } from '@ngrx/store';
 import { selectIsOverlayShown } from './features/focus-mode/store/focus-mode.selectors';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
+import { DefaultStartPage } from './features/config/default-start-page.const';
 import { TODAY_TAG } from './features/tag/tag.const';
 import { INBOX_PROJECT } from './features/project/project.const';
 
@@ -107,8 +108,12 @@ export class ValidProjectIdGuard {
 @Injectable({ providedIn: 'root' })
 export class DefaultStartPageGuard {
   private _globalConfigService = inject(GlobalConfigService);
+  private _projectService = inject(ProjectService);
   private _dataInitStateService = inject(DataInitStateService);
   private _router = inject(Router);
+
+  private readonly _todayUrl = (): UrlTree =>
+    this._router.parseUrl(`/tag/${TODAY_TAG.id}/tasks`);
 
   canActivate(
     next: ActivatedRouteSnapshot,
@@ -117,15 +122,56 @@ export class DefaultStartPageGuard {
     return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
       concatMap(() => this._globalConfigService.misc$),
       take(1),
-      map((miscCfg) => {
-        const TODAY = 0;
-        const INBOX = 1;
-        if ((miscCfg?.defaultStartPage ?? TODAY) === INBOX) {
-          return this._router.parseUrl(`/project/${INBOX_PROJECT.id}/tasks`);
-        } else {
-          return this._router.parseUrl(`/tag/${TODAY_TAG.id}/tasks`);
-        }
-      }),
+      concatMap((miscCfg) => this._resolve(miscCfg?.defaultStartPage)),
     );
+  }
+
+  private _resolve(startPage: number | string | undefined): Observable<UrlTree> {
+    if (typeof startPage === 'string' && startPage.length > 0) {
+      // Project id. Fall back to Today if the project is missing, archived,
+      // or hidden from the menu — same cases where the dropdown omits it.
+      return this._projectService.getByIdOnce$(startPage).pipe(
+        catchError((err) => {
+          Log.warn(
+            `DefaultStartPageGuard: failed to look up project '${startPage}'`,
+            err,
+          );
+          return of(undefined);
+        }),
+        map((project) =>
+          project && !project.isArchived && !project.isHiddenFromMenu
+            ? this._router.parseUrl(`/project/${startPage}/tasks`)
+            : this._todayUrl(),
+        ),
+      );
+    }
+
+    const appFeatures = this._globalConfigService.appFeatures();
+    switch (startPage ?? DefaultStartPage.Today) {
+      case DefaultStartPage.Inbox:
+        // Legacy numeric value preserved for old configs.
+        return of(this._router.parseUrl(`/project/${INBOX_PROJECT.id}/tasks`));
+      case DefaultStartPage.Planner:
+        return of(
+          appFeatures.isPlannerEnabled
+            ? this._router.parseUrl('/planner')
+            : this._todayUrl(),
+        );
+      case DefaultStartPage.Schedule:
+        return of(
+          appFeatures.isSchedulerEnabled
+            ? this._router.parseUrl('/schedule')
+            : this._todayUrl(),
+        );
+      case DefaultStartPage.Boards:
+        return of(
+          appFeatures.isBoardsEnabled
+            ? this._router.parseUrl('/boards')
+            : this._todayUrl(),
+        );
+      case DefaultStartPage.Today:
+      default:
+        return of(this._todayUrl());
+    }
   }
 }

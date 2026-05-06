@@ -7,6 +7,11 @@
   <string name="webview_block_provider">Provider package: %1$s</string>
   <string name="webview_block_update">Update WebView</string>
   <string name="webview_block_close">Close app</string>
+  <string name="webview_block_try_anyway">Try anyway (not recommended)</string>
+  <string name="webview_override_warning_title">Continue at your own risk</string>
+  <string name="webview_override_warning_message">Your Android System WebView appears to be older than version %1$d.\n\nIf the version reported above is correct, continuing may cause:\n• The app to crash or fail to load\n• Data to render incorrectly or not at all\n• Sync errors and possible data loss\n\nVersion detection is occasionally wrong on certain devices. If you are sure your WebView is up to date, you can continue — but please update Android System WebView from the Play Store first whenever possible.</string>
+  <string name="webview_override_warning_continue">I understand the risk, continue</string>
+  <string name="webview_override_warning_cancel">Cancel</string>
 
   <!-- Share intent -->
   <string name="share_received">Content received, creating task\u2026</string>

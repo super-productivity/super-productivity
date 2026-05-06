@@ -27,6 +27,13 @@ import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { limitVectorClockSize } from '../../core/util/vector-clock';
+import { IS_ELECTRON } from '../../app.constants';
+
+/**
+ * sessionStorage key used to track auto-reload attempts after IndexedDB backing store errors.
+ * Exported for use in tests.
+ */
+export const IDB_OPEN_ERROR_RELOAD_KEY = 'sp_idb_open_reload_attempt';
 
 /**
  * Handles the hydration (loading) of the application state from the operation log
@@ -117,6 +124,7 @@ export class OperationLogHydratorService {
           'OperationLogHydratorService: Snapshot is invalid/corrupted. Attempting recovery...',
         );
         await this.recoveryService.attemptRecovery();
+        sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
         return;
       }
 
@@ -280,6 +288,7 @@ export class OperationLogHydratorService {
           OpLog.normal(
             'OperationLogHydratorService: Fresh install detected. No data to load.',
           );
+          sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
           return;
         }
 
@@ -362,6 +371,11 @@ export class OperationLogHydratorService {
       // Retry any failed remote ops from previous conflict resolution attempts
       // Now that state is fully hydrated, dependencies might be resolved
       await this.retryFailedRemoteOps();
+
+      // Clear the auto-reload guard so that a fresh backing-store error in the same
+      // tab session gets the auto-reload treatment again rather than going straight
+      // to the manual recovery dialog.
+      sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
     } catch (e) {
       OpLog.err('OperationLogHydratorService: Error during hydration', e);
 
@@ -658,6 +672,32 @@ export class OperationLogHydratorService {
         ? error.originalError.message
         : String(error.originalError);
 
+    // Hoist platform detection — used in both branches below to avoid computing twice
+    const isFlatpak = IS_ELECTRON && window.ea?.isFlatpak?.();
+    const isSnap = !isFlatpak && IS_ELECTRON && window.ea?.isSnap?.();
+
+    // For backing-store errors (common during Linux session startup with autostart),
+    // auto-reload once after the user dismisses the dialog. By the time the dialog
+    // is dismissed the OS / Flatpak sandbox will usually have finished initializing.
+    // A sessionStorage counter prevents an infinite reload loop on genuine errors.
+    if (error.isBackingStoreError) {
+      const reloadCount = +(sessionStorage.getItem(IDB_OPEN_ERROR_RELOAD_KEY) || '0');
+      if (reloadCount === 0) {
+        // Silent auto-reload on first occurrence — most likely a transient startup
+        // timing issue (Flatpak sandbox not ready, stale LOCK file). The user is
+        // typically not watching (autostart scenario), so a blocking dialog requiring
+        // a click before the reload is unnecessary friction. If the reload fixes it,
+        // the user never needs to know. If it fails again, the dialog below runs.
+        OpLog.warn(
+          'IndexedDB backing-store error on first attempt — triggering silent auto-reload',
+        );
+        sessionStorage.setItem(IDB_OPEN_ERROR_RELOAD_KEY, '1');
+        this._triggerReload();
+        return;
+      }
+    }
+
+    // Second failure, or non-backing-store error: show full manual recovery instructions.
     let message =
       'Database Error - Cannot Load Data\n\n' +
       'Super Productivity cannot open its database. ' +
@@ -671,7 +711,11 @@ export class OperationLogHydratorService {
         'Recovery steps:\n' +
         '1. Close ALL browser tabs and windows\n' +
         '2. Restart the app\n' +
-        '3. If using Linux Snap, try: snap set core experimental.refresh-app-awareness=true\n' +
+        (isFlatpak
+          ? '3. If using Linux Flatpak with autostart, try disabling autostart and launching manually\n'
+          : isSnap
+            ? '3. If using Linux Snap, try: snap set core experimental.refresh-app-awareness=true\n'
+            : '3. If using Linux with autostart, try disabling autostart and launching manually\n') +
         '4. If issue persists, check available disk space\n\n';
     }
 
@@ -681,5 +725,17 @@ export class OperationLogHydratorService {
       '(Check browser console for full error details)';
 
     alertDialog(message);
+  }
+
+  /**
+   * Triggers an app reload. Uses Electron IPC in Electron context, browser reload otherwise.
+   * Extracted as a method to allow spying in unit tests.
+   */
+  private _triggerReload(): void {
+    if (IS_ELECTRON) {
+      window.ea.reloadMainWin();
+    } else {
+      window.location.reload();
+    }
   }
 }

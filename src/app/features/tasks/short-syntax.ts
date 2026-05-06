@@ -555,6 +555,14 @@ const parseUrlAttachments = (
     // In extract mode: replace markdown links with display text, remove plain URLs
     cleanedTitle = markdownUrls.length > 0 ? titleWithoutMarkdown : task.title;
     cleanedTitle = removeUrlsFromTitle(cleanedTitle, plainUrlMatches);
+
+    // If the title is empty after extracting URLs, use a URL basename as
+    // the task name so pasting a bare URL results in a meaningful title.
+    // Use allUrls (not newAttachments) because the pasted URL may already
+    // exist as an attachment, in which case newAttachments would be empty.
+    if (!cleanedTitle && allUrls.length > 0) {
+      cleanedTitle = _baseNameForUrl(allUrls[0]) || cleanedTitle;
+    }
   }
 
   // Return undefined if nothing changed

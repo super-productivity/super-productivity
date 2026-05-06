@@ -18,9 +18,10 @@
           <div
             (click)="editFullscreen($event)"
             class="markdown-preview"
-          >
-            {{ isLongNote ? resolvedShortenedContent() : resolvedContent() }}
-          </div>
+            [innerHTML]="
+              (isLongNote ? resolvedShortenedContent() : resolvedContent()) | renderLinks
+            "
+          ></div>
         } @else {
           <div
             (click)="editFullscreen($event)"
@@ -117,6 +118,11 @@
             (click)="moveNoteToProject(project.id)"
             mat-menu-item
           >
+            <mat-icon
+              [style.color]="project.theme.primary"
+              class="tag-ico"
+              >{{ project.icon || 'list' }}</mat-icon
+            >
             {{ project.title }}
           </button>
         }

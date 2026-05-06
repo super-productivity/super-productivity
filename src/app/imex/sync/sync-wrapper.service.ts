@@ -19,7 +19,10 @@ import {
   MissingRefreshTokenAPIError,
   HttpNotOkAPIError,
   EmptyRemoteBodySPError,
+  JsonParseError,
   LegacySyncFormatDetectedError,
+  SyncDataCorruptedError,
+  UploadRevToMatchMismatchAPIError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { SyncConfig } from '../../features/config/global-config.model';
@@ -72,6 +75,21 @@ import { OperationLogStoreService } from '../../op-log/persistence/operation-log
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
+
+/**
+ * Identifies which error or UI path triggered a destructive forceUpload.
+ * Logged on every invocation so a future sync-stuck incident can be traced
+ * back to its origin without diff-archaeology.
+ */
+export type ForceUploadTriggerSource =
+  | 'LockPresentError'
+  | 'EmptyRemoteBodySPError'
+  | 'JsonParseError'
+  | 'LegacySyncFormatDetectedError'
+  | 'DialogSyncError'
+  | 'DecryptError'
+  | 'unknown';
 
 @Injectable({
   providedIn: 'root',
@@ -92,6 +110,7 @@ export class SyncWrapperService {
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
   private _wrappedProvider = inject(WrappedProviderService);
+  private _hydrationState = inject(HydrationStateService);
 
   syncState$ = this._providerManager.syncStatus$;
 
@@ -246,10 +265,16 @@ export class SyncWrapperService {
       return 'HANDLED_ERROR';
     }
     this._isSyncInProgress$.next(true);
+    // Open before any async work — see `HydrationStateService.isInSyncWindow`.
+    // Pass 0 to disable the failsafe: the `finally` block below is the
+    // authoritative close, and a slow sync (provider I/O > 2s) would
+    // otherwise expire the timer mid-sync and leave a stale-state gap.
+    this._hydrationState.openSyncWindow(0);
     // Set SYNCING status so ImmediateUploadService knows not to interfere
     this._providerManager.setSyncStatus('SYNCING');
     const result = await this._sync().finally(() => {
       this._isSyncInProgress$.next(false);
+      this._hydrationState.closeSyncWindow();
       // Safeguard: if _sync() threw or completed without setting a final status,
       // reset from SYNCING to UNKNOWN_OR_CHANGED to avoid getting stuck in SYNCING state
       if (this._providerManager.isSyncInProgress) {
@@ -566,14 +591,14 @@ export class SyncWrapperService {
             msg: T.F.SYNC.S.AUTH_TOKEN_REJECTED,
             translateParams: { reason: error.message },
             type: 'ERROR',
-            actionFn: () => this._openSyncInitialCfgDialog(),
+            actionFn: () => this._openSyncCfgDialog(),
             actionStr: T.F.SYNC.S.BTN_CONFIGURE,
           });
         } else {
           this._snackService.open({
             msg: T.F.SYNC.S.INCOMPLETE_CFG,
             type: 'ERROR',
-            actionFn: () => this._openSyncInitialCfgDialog(),
+            actionFn: () => this._openSyncCfgDialog(),
             actionStr: T.F.SYNC.S.BTN_CONFIGURE,
           });
         }
@@ -597,19 +622,59 @@ export class SyncWrapperService {
           // TODO translate
           msg: T.F.SYNC.S.ERROR_DATA_IS_CURRENTLY_WRITTEN,
           type: 'ERROR',
-          actionFn: async () => this.forceUpload(),
+          actionFn: async () => this.forceUpload('LockPresentError'),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof EmptyRemoteBodySPError) {
-        // Remote file returned empty body (e.g. Koofr WebDAV corrupted file).
-        // Force overwrite is safe here: local data is intact, remote is empty.
+        // Remote file returned an empty body (e.g. Koofr WebDAV corrupted file).
+        // Force overwrite is safe: local data is intact, remote is empty.
         this._providerManager.setSyncStatus('ERROR');
         this._snackService.open({
           msg: T.F.SYNC.S.ERROR_REMOTE_FILE_EMPTY,
           type: 'ERROR',
           config: { duration: 12000 },
-          actionFn: async () => this.forceUpload(),
+          actionFn: async () => this.forceUpload('EmptyRemoteBodySPError'),
+          actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof JsonParseError) {
+        // Remote JSON is unparseable (e.g. truncated write, encoding issue).
+        // Force overwrite is safe: local data is intact, remote cannot be parsed.
+        // Issues: #5574, #4616.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.ERROR_REMOTE_FILE_CORRUPTED,
+          type: 'ERROR',
+          config: { duration: 12000 },
+          actionFn: async () => this.forceUpload('JsonParseError'),
+          actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof SyncDataCorruptedError) {
+        // Remote file format version is incompatible (could be older or newer than local).
+        // Do NOT offer force-upload: if remote is newer, overwriting would destroy newer data.
+        // Users should ensure all devices run the same app version.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          type: 'ERROR',
+          config: { duration: 12000 },
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof LegacySyncFormatDetectedError) {
+        // Remote has v16.x pfapi files (__meta_) but no sync-data.json. Usual cause:
+        // an old device still writing the legacy format, which would silently diverge
+        // from this client. Force-overwrite is offered as an escape hatch for the
+        // stale-__meta_ case (successful migration but old files never cleaned up);
+        // it drops any remaining v16 data in favor of the current local state.
+        // Issues: #5964, #6174.
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.LEGACY_FORMAT_DETECTED,
+          type: 'ERROR',
+          config: { duration: 20000 },
+          actionFn: async () => this.forceUpload('LegacySyncFormatDetectedError'),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
@@ -673,20 +738,22 @@ export class SyncWrapperService {
           },
         });
         return 'HANDLED_ERROR';
-      } else if (error instanceof LegacySyncFormatDetectedError) {
-        this._providerManager.setSyncStatus('ERROR');
-        this._snackService.open({
-          msg: T.F.SYNC.S.LEGACY_FORMAT_DETECTED,
-          type: 'ERROR',
-          config: { duration: 20000 },
-        });
-        return 'HANDLED_ERROR';
       } else if (this._isPermissionError(error)) {
         this._snackService.open({
           msg: this._getPermissionErrorMessage(),
           type: 'ERROR',
           config: { duration: 12000 },
         });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof UploadRevToMatchMismatchAPIError) {
+        // Another client uploaded between our download and upload — self-healing.
+        // The next sync cycle will download their ops first, then upload successfully.
+        // Do not show an error snackbar; just mark as UNKNOWN_OR_CHANGED so the
+        // next sync cycle triggers and resolves the state.
+        SyncLog.log(
+          'SyncWrapperService: Concurrent upload detected, will retry on next sync cycle',
+        );
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return 'HANDLED_ERROR';
       } else {
         this._providerManager.setSyncStatus('ERROR');
@@ -704,12 +771,16 @@ export class SyncWrapperService {
     }
   }
 
-  async forceUpload(): Promise<void> {
+  async forceUpload(triggerSource: ForceUploadTriggerSource = 'unknown'): Promise<void> {
     if (!this._c(this._translateService.instant(T.F.SYNC.C.FORCE_UPLOAD))) {
       return;
     }
 
-    SyncLog.log('SyncWrapperService: forceUpload called - uploading local state');
+    // Diagnostic: stamp the originating error/dialog so we can correlate
+    // "what stuck the user" with "what they recovered with" in shared logs.
+    SyncLog.log('SyncWrapperService: forceUpload called - uploading local state', {
+      triggerSource,
+    });
 
     // Block parallel syncs during force upload to prevent them from trying to
     // download/decrypt old data with a potentially different encryption key.
@@ -774,20 +845,20 @@ export class SyncWrapperService {
   async configuredAuthForSyncProviderIfNecessary(
     providerId: SyncProviderId,
     force = false,
-  ): Promise<{ wasConfigured: boolean; authAttempted: boolean }> {
+  ): Promise<{ wasConfigured: boolean }> {
     const provider = await this._providerManager.getProviderById(providerId);
 
     if (!provider) {
-      return { wasConfigured: false, authAttempted: false };
+      return { wasConfigured: false };
     }
 
     if (!provider.getAuthHelper) {
-      return { wasConfigured: false, authAttempted: false };
+      return { wasConfigured: false };
     }
 
     if (!force && (await provider.isReady())) {
       SyncLog.warn('Provider already configured');
-      return { wasConfigured: false, authAttempted: false };
+      return { wasConfigured: false };
     }
 
     try {
@@ -816,9 +887,9 @@ export class SyncWrapperService {
           setTimeout(() => {
             this.sync();
           }, 1000);
-          return { wasConfigured: true, authAttempted: true };
+          return { wasConfigured: true };
         } else {
-          return { wasConfigured: false, authAttempted: true };
+          return { wasConfigured: false };
         }
       }
     } catch (error) {
@@ -832,19 +903,19 @@ export class SyncWrapperService {
         type: 'ERROR',
         config: { duration: 0 },
       });
-      return { wasConfigured: false, authAttempted: true };
+      return { wasConfigured: false };
     }
-    return { wasConfigured: false, authAttempted: false };
+    return { wasConfigured: false };
   }
 
   /**
    * Handle incoherent timestamps dialog with proper async error handling.
    * Uses fire-and-forget pattern but logs errors instead of swallowing them.
    */
-  private async _openSyncInitialCfgDialog(): Promise<void> {
-    const { DialogSyncInitialCfgComponent } =
-      await import('./dialog-sync-initial-cfg/dialog-sync-initial-cfg.component');
-    this._matDialog.open(DialogSyncInitialCfgComponent);
+  private async _openSyncCfgDialog(): Promise<void> {
+    const { DialogSyncCfgComponent } =
+      await import('./dialog-sync-cfg/dialog-sync-cfg.component');
+    this._matDialog.open(DialogSyncCfgComponent);
   }
 
   private _handleIncoherentTimestampsDialog(): void {
@@ -867,7 +938,7 @@ export class SyncWrapperService {
     firstValueFrom(dialogRef.afterClosed())
       .then(async (res: DialogSyncErrorResult) => {
         if (res === 'FORCE_UPDATE_REMOTE') {
-          await this.forceUpload();
+          await this.forceUpload('DialogSyncError');
         } else if (res === 'FORCE_UPDATE_LOCAL') {
           await this._forceDownload();
         }
@@ -986,7 +1057,7 @@ export class SyncWrapperService {
           this.sync();
         } else if (result?.isForceUpload) {
           this._suppressEncryptionDialogs = false;
-          this.forceUpload();
+          this.forceUpload('DecryptError');
         } else {
           // User cancelled — suppress future dialogs so they can navigate to settings
           this._suppressEncryptionDialogs = true;
@@ -1247,7 +1318,7 @@ export class SyncWrapperService {
 
   private _openConflictDialog$(
     conflictData: ConflictData,
-  ): Observable<DialogConflictResolutionResult> {
+  ): Observable<DialogConflictResolutionResult | undefined> {
     if (this.lastConflictDialog) {
       this.lastConflictDialog.close();
     }
@@ -1256,10 +1327,11 @@ export class SyncWrapperService {
       disableClose: true,
       data: conflictData,
     });
-    // disableClose: true ensures the dialog always closes with a result
-    return this.lastConflictDialog
-      .afterClosed()
-      .pipe(filter((r): r is DialogConflictResolutionResult => r !== undefined));
+    // disableClose blocks ESC/backdrop, but a programmatic close (iOS app
+    // lifecycle, navigation, or re-entry calling close()) emits `undefined`.
+    // Forward it as-is so _handleLocalDataConflict treats it as cancellation;
+    // filtering it would leave firstValueFrom() to throw EmptyError (issue #7339).
+    return this.lastConflictDialog.afterClosed();
   }
 
   /**

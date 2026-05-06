@@ -885,19 +885,20 @@ export class ConflictResolutionService {
           };
         }
 
-        // Fallback: can't get base entity — the LWW Update keeps the original
-        // UPDATE payload which may lack a top-level `id`, causing lwwUpdateMetaReducer
-        // to skip the update. This is the pre-existing behavior; the merged-entity
-        // path above is the fix. Log with payload shape for diagnostics.
-        OpLog.error(
+        // Fallback: no full base entity available. Returning the op unchanged
+        // is equivalent to rewriting actionType to LWW Update — both no-op at
+        // the consumer because the payload lacks a top-level id (the LWW path
+        // would bail at lwwUpdateMetaReducer's missing-id guard). The locally
+        // deleted entity stays deleted; remote UPDATE changes are dropped.
+        // Logged so the consumer's RECREATE_FALLBACK warn (which fires only
+        // from the happy-path partial-baseEntity case above) is not the only
+        // signal a partial-payload producer ran.
+        OpLog.warn(
           `ConflictResolutionService: Cannot extract base entity from local DELETE for ` +
-            `${remoteOp.entityType}:${remoteOp.entityId}. LWW Update may have incomplete data. ` +
+            `${remoteOp.entityType}:${remoteOp.entityId}. Falling back: entity stays deleted. ` +
             `Local DELETE payload keys: ${localDeleteOp ? JSON.stringify(Object.keys(extractActionPayload(localDeleteOp.payload))) : 'N/A'}`,
         );
-        return {
-          ...remoteOp,
-          actionType: toLwwUpdateActionType(remoteOp.entityType),
-        };
+        return remoteOp;
       }
       return remoteOp;
     });

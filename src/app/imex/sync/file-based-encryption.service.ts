@@ -74,11 +74,7 @@ export class FileBasedEncryptionService {
 
     const state = await this._stateSnapshotService.getStateSnapshotAsync();
     const vectorClock = await this._vectorClockService.getCurrentVectorClock();
-    const clientId = await this._clientIdProvider.loadClientId();
-
-    if (!clientId) {
-      throw new Error('Client ID not available');
-    }
+    const clientId = await this._clientIdProvider.getOrGenerateClientId();
 
     const existingCfg = await fileProvider.privateCfg.load();
 

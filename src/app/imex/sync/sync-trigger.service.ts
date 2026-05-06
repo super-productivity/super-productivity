@@ -33,6 +33,7 @@ import { ipcResume$, ipcSuspend$ } from '../../core/ipc-events';
 import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncLog } from '../../core/log';
+import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderId } from '../../op-log/sync-exports';
 
@@ -48,6 +49,7 @@ export class SyncTriggerService {
   private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _idleService = inject(IdleService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
+  private readonly _hydrationState = inject(HydrationStateService);
 
   constructor() {
     // When sync is disabled, set initialSyncDone immediately so UI shows
@@ -57,6 +59,23 @@ export class SyncTriggerService {
         this.setInitialSyncDone(true);
       }
     });
+
+    // Open the sync window directly on every resume source, bypassing the
+    // gated `getSyncTrigger$()` chain (which is only subscribed once
+    // dataInitState + config are ready). This handles the cold-start edge
+    // case where a resume arrives before the trigger pipeline is wired.
+    // The failsafe in `openSyncWindow()` cleans up if no sync follows.
+    if (IS_ANDROID_WEB_VIEW) {
+      androidInterface.onResume$.subscribe(() => this._hydrationState.openSyncWindow());
+    }
+    if (IS_ELECTRON) {
+      ipcResume$.subscribe(() => this._hydrationState.openSyncWindow());
+    }
+    // Open synchronously on visibilitychange — bridged onResume$ on Android
+    // arrives ~100ms later, after the DAY_CHANGE → TODAY_TAG repair cascade.
+    fromEvent(document, 'visibilitychange')
+      .pipe(filter(() => document.visibilityState === 'visible'))
+      .subscribe(() => this._hydrationState.openSyncWindow());
   }
 
   // Note: This was previously connected to PFAPI's onLocalMetaUpdate$, which was a no-op.
@@ -87,12 +106,11 @@ export class SyncTriggerService {
           )
         : // FALLBACK we check if there was any kind of user interaction
           // (otherwise sync might never be checked if there are no local data changes)
+          // NOTE: visibilitychange is handled separately by _visibilityHiddenTrigger$ —
+          // not throttled, so backgrounding always attempts a sync.
           IS_TOUCH_PRIMARY
-          ? merge(
-              fromEvent(window, 'touchstart'),
-              fromEvent(document, 'visibilitychange'),
-            ).pipe(
-              mapTo('I_MOUSE_TOUCH_MOVE_OR_VISIBILITYCHANGE'),
+          ? fromEvent(window, 'touchstart').pipe(
+              mapTo('I_TOUCH_ACTIVITY'),
               throttleTime(USER_ACTIVITY_SYNC_THROTTLE_TIME),
             )
           : fromEvent(window, 'focus').pipe(
@@ -132,6 +150,16 @@ export class SyncTriggerService {
     filter((isOnline) => isOnline),
     mapTo('I_IS_ONLINE'),
   );
+
+  // Fires when the page becomes hidden (tab switch, app backgrounding, close).
+  // Not throttled — a "last chance before close" trigger should always attempt a sync.
+  // Electron uses execBeforeCloseService (IPC-level blocking close) instead.
+  private _visibilityHiddenTrigger$: Observable<string | never> = !IS_ELECTRON
+    ? fromEvent(document, 'visibilitychange').pipe(
+        filter(() => document.visibilityState === 'hidden'),
+        mapTo('I_VISIBILITY_HIDDEN'),
+      )
+    : EMPTY;
 
   // OTHER INITIAL SYNC STUFF
   // ------------------------
@@ -234,17 +262,28 @@ export class SyncTriggerService {
           this._isOnlineTrigger$,
           this._onIdleTrigger$,
           this._onElectronResumeTrigger$,
+          this._visibilityHiddenTrigger$,
           // Periodic interval timer: fires every syncInterval ms to detect external file
           // changes (e.g. Syncthing on Linux) even without user activity.
           // Only for file-based providers — SuperSync uses WebSocket push and doesn't need polling.
-          // Fixes: Linux auto-sync ignoring interval (#4783)
+          // Fixes: Linux auto-sync ignoring interval (#4783), Dropbox sync gaps (#7144)
           ...(useIntervalTimer
             ? [timer(syncInterval, syncInterval).pipe(mapTo('I_INTERVAL_TIMER'))]
             : []),
         );
     return merge(
       // once immediately
-      _immediateSyncTrigger$.pipe(tap((v) => SyncLog.log('immediate sync trigger', v))),
+      _immediateSyncTrigger$.pipe(
+        tap((v) => {
+          SyncLog.log('immediate sync trigger', v);
+          // Open BEFORE the downstream debounceTime(100) so the resume → DAY_CHANGE
+          // → TODAY_TAG repair cascade (which fires inside that 100ms) sees the
+          // window already open and is suppressed by skipDuringSyncWindow().
+          // Failsafe in openSyncWindow() handles triggers that get debounced/
+          // throttled out before reaching SyncWrapperService.sync().
+          this._hydrationState.openSyncWindow();
+        }),
+      ),
 
       // and once we reset the sync interval for all other triggers
       // we do this to reset the audit time to avoid sync checks in short succession

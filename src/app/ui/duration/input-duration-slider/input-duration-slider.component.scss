@@ -23,7 +23,7 @@ $this-dot-size: 14px;
 
   @for $i from 1 through $item-count {
     &:nth-of-type(#{$i}) {
-      transform: rotate($rot * 1deg) translate($circle-size * 0.5);
+      transform: rotate($rot * 1deg) translate(calc(#{$circle-size} / 2));
     }
 
     $rot: $rot + $angle;
@@ -31,11 +31,15 @@ $this-dot-size: 14px;
 }
 
 :host {
+  // NOTE: do NOT declare --input-duration-slider-size here — an own
+  // declaration on :host would shadow any inherited override from a parent
+  // (e.g. focus-mode sizing the slider to the clock face). Fallbacks at each
+  // use site provide the default.
   overflow: hidden;
   display: block;
   user-select: none;
-  width: $this-size + $this-margin * 2;
-  min-width: $this-size + $this-margin * 2;
+  width: calc(var(--input-duration-slider-size, #{$this-size}) + #{$this-margin * 2});
+  min-width: calc(var(--input-duration-slider-size, #{$this-size}) + #{$this-margin * 2});
   color: var(--text-color);
   &.is-dragging .circle {
     cursor: grabbing;
@@ -55,8 +59,8 @@ $this-dot-size: 14px;
 
 .circle {
   margin: $this-margin;
-  width: $this-size;
-  height: $this-size;
+  width: var(--input-duration-slider-size, #{$this-size});
+  height: var(--input-duration-slider-size, #{$this-size});
   border-radius: 100%;
   position: relative;
   box-shadow: 1px 2px 2px 0 rgba(0, 0, 0, 0.26);
@@ -93,8 +97,8 @@ $this-dot-size: 14px;
     right: 0;
     left: 0;
     bottom: 0;
-    width: $this-size;
-    height: $this-size;
+    width: var(--input-duration-slider-size, #{$this-size});
+    height: var(--input-duration-slider-size, #{$this-size});
     z-index: 4;
     pointer-events: none;
   }
@@ -106,7 +110,11 @@ $this-dot-size: 14px;
     border-radius: 100%;
     cursor: grabbing;
     background: var(--palette-primary-300);
-    @include onCircle(12, $this-size - $this-circle-width, $this-dot-size);
+    @include onCircle(
+      12,
+      calc(var(--input-duration-slider-size, #{$this-size}) - #{$this-circle-width}),
+      $this-dot-size
+    );
   }
 }
 
@@ -175,8 +183,10 @@ $this-stroke-width: 4px;
 .value {
   width: 100%;
   text-align: center;
-  font-size: 16px;
-  line-height: 16px;
+  // Default matches historical 16px; parent can override via
+  // --input-duration-slider-value-size (e.g. focus-mode scales with the circle).
+  font-size: var(--input-duration-slider-value-size, 16px);
+  line-height: 1;
   padding: 0;
   cursor: text;
   transition: all var(--transition-duration-m) var(--ani-leave-timing);

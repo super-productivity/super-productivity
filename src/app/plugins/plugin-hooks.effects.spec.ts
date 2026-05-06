@@ -6,7 +6,7 @@ import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { PluginService } from './plugin.service';
 import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../features/planner/store/planner.actions';
-import { Task, TaskCopy } from '../features/tasks/task.model';
+import { TaskWithSubTasks } from '../features/tasks/task.model';
 import { PluginHooks } from './plugin-api.model';
 import {
   selectCurrentTask,
@@ -20,13 +20,14 @@ describe('PluginHooksEffects', () => {
   let pluginServiceMock: jasmine.SpyObj<PluginService>;
   let store: MockStore;
 
-  const createMockTask = (overrides: Partial<Task> = {}): Task =>
+  const createMockTask = (overrides: Partial<TaskWithSubTasks> = {}): TaskWithSubTasks =>
     ({
       id: 'task-123',
       title: 'Test Task',
       projectId: null,
       tagIds: [],
       subTaskIds: [],
+      subTasks: [],
       parentId: null,
       timeSpentOnDay: {},
       timeSpent: 0,
@@ -48,9 +49,9 @@ describe('PluginHooksEffects', () => {
       created: Date.now(),
       _showSubTasksMode: 2,
       ...overrides,
-    }) as Task;
+    }) as TaskWithSubTasks;
 
-  let mockTask: Task;
+  let mockTask: TaskWithSubTasks;
 
   beforeEach(() => {
     mockTask = createMockTask();
@@ -170,11 +171,32 @@ describe('PluginHooksEffects', () => {
       });
     });
 
+    it('should dispatch TASK_UPDATE hook on moveToOtherProject action', (done) => {
+      const targetProjectId = 'project-456';
+      actions$ = of(
+        TaskSharedActions.moveToOtherProject({
+          task: mockTask,
+          targetProjectId,
+        }),
+      );
+
+      effects.taskUpdate$.subscribe(() => {
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.TASK_UPDATE,
+          jasmine.objectContaining({
+            taskId: mockTask.id,
+            changes: { projectId: targetProjectId },
+          }),
+        );
+        done();
+      });
+    });
+
     it('should dispatch TASK_UPDATE hook on planTaskForDay action', (done) => {
       const day = '2024-01-15';
       actions$ = of(
         PlannerActions.planTaskForDay({
-          task: mockTask as TaskCopy,
+          task: mockTask,
           day,
         }),
       );
@@ -195,7 +217,7 @@ describe('PluginHooksEffects', () => {
       const newDay = '2024-01-16';
       actions$ = of(
         PlannerActions.transferTask({
-          task: mockTask as TaskCopy,
+          task: mockTask,
           prevDay: '2024-01-15',
           newDay,
           targetIndex: 0,

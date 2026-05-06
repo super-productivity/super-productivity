@@ -46,49 +46,86 @@
   }
 }
 
-header {
-  display: flex;
-  flex-direction: column;
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
-  @include extraBorder('-top');
-  @include extraBorder('-bottom');
-  box-shadow: var(--whiteframe-shadow-1dp);
-  z-index: 10;
-  color: var(--text-color);
-  background: var(--bg-lighter);
-  // to account for scrollbar
-  padding-right: $schedule-header-scrollbar-padding;
-}
-
 .schedule-nav-controls {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: var(--s);
+  min-height: 48px;
+  color: var(--text-color);
+  background: transparent;
+  padding-right: $schedule-header-scrollbar-padding;
+  @include extraBorder('-top');
   @include extraBorder('-bottom');
-  background: var(--bg-lighter);
-  flex-wrap: nowrap;
-  //min-height: 48px;
+
+  .title {
+    margin-left: auto;
+    padding-right: var(--s);
+    font-weight: 600;
+    font-size: 18px;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    @include mq(xs, max) {
+      font-size: 14px;
+    }
+  }
 
   button {
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-
-  button[mat-button] {
-    min-width: fit-content;
-    padding: 0 12px;
-  }
-
-  button[mat-icon-button] {
     flex-shrink: 0;
   }
 
   mat-icon {
     flex-shrink: 0;
+  }
+
+  .date-nav-group {
+    display: flex;
+    align-items: center;
+  }
+
+  .week-month-selector {
+    display: flex;
+    margin-left: var(--s);
+    border-radius: var(--card-border-radius);
+    overflow: hidden;
+    box-shadow: var(--whiteframe-shadow-2dp);
+  }
+
+  .week-month-btn {
+    border: none;
+    border-radius: 0;
+    transition: var(--transition-standard);
+
+    @include lightTheme() {
+      &.active {
+        background: var(--c-primary);
+        color: white;
+      }
+    }
+
+    @include darkTheme() {
+      background: var(--bg-lighter);
+      color: var(--text-color);
+
+      &:hover {
+        background: var(--dark8);
+      }
+
+      &.active {
+        background: var(--c-primary);
+        color: white;
+      }
+    }
+
+    &:first-child {
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+
+      @include darkTheme() {
+        border-right-color: var(--c-light-10);
+      }
+    }
   }
 }
 
@@ -129,35 +166,4 @@ header {
 .day-day {
   display: inline;
   font-weight: 100;
-}
-
-.days.month-view {
-  display: block;
-  grid-template-columns: none;
-
-  .month-header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 6px var(--s2);
-
-    .month-title {
-      font-size: 20px;
-      font-weight: 600;
-
-      @include mq(xs, max) {
-        font-size: 16px;
-        margin-bottom: 3px;
-      }
-    }
-  }
-
-  @include mq(xs, max) {
-    padding-bottom: 3px;
-
-    .month-header {
-      padding: 6px 12px;
-    }
-  }
 }

@@ -757,14 +757,19 @@ export class TaskService {
       }),
     );
 
-    this._focusNewlyCreatedTask(task.id, !task.title?.trim().length);
+    this.focusTaskById(task.id, !task.title?.trim().length);
 
     return task.id;
   }
 
-  private _focusNewlyCreatedTask(taskId: string, shouldStartEditing: boolean): void {
-    // Use double-RAF to ensure Angular has completed rendering after change detection.
-    // First RAF queues after the current frame, second RAF runs after the render.
+  /**
+   * Focus a task element by id, deferred via double-RAF so it runs after
+   * Angular renders the next frame. When `shouldStartEditing` is true and
+   * the task's title is empty at the time of focus, also enter title edit
+   * mode. Used both by newly-created tasks and by callers that want to
+   * focus an existing task (e.g. an empty sibling on Mod+Enter).
+   */
+  focusTaskById(taskId: string, shouldStartEditing: boolean): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const taskElement = document.getElementById(`t-${taskId}`);
@@ -849,31 +854,34 @@ export class TaskService {
   }
 
   async moveToArchive(tasks: TaskWithSubTasks | TaskWithSubTasks[]): Promise<void> {
-    // Add comprehensive validation and logging
     if (!tasks) {
-      console.error('[TaskService] moveToArchive called with null/undefined tasks');
+      TaskLog.err('[TaskService] moveToArchive called with null/undefined tasks');
       return;
     }
 
     if (!Array.isArray(tasks)) {
-      console.warn('[TaskService] moveToArchive converting single task to array', tasks);
+      TaskLog.warn('[TaskService] moveToArchive converting single task to array', {
+        id: tasks.id,
+      });
       tasks = [tasks];
     }
 
-    // Double-check it's an array after conversion
-    if (!Array.isArray(tasks)) {
-      console.error('[TaskService] Failed to convert tasks to array:', tasks);
-      throw new Error('moveToArchive: tasks could not be converted to array');
+    if (!tasks.length) {
+      TaskLog.log('[TaskService] No tasks to archive');
+      return;
     }
 
     TaskLog.log('[TaskService] moveToArchive called with:', {
       count: tasks.length,
-      taskIds: tasks.map((t) => t?.id || 'undefined'),
+      taskIds: tasks.map((t) => t?.id),
       tasksType: typeof tasks,
       isArray: Array.isArray(tasks),
     });
 
-    // NOTE: we only update real parents since otherwise we move sub-tasks without their parent into the archive
+    // NOTE: malformed tasks (missing/invalid ids) are dropped inside archive.service
+    // via sanitizeTasksForArchiving, which also covers writeTasksToArchiveForRemoteSync.
+    // We only update real parents here since otherwise we'd move sub-tasks without
+    // their parent into the archive.
     const subTasks = tasks.filter((t) => t?.parentId);
     const parentTasks = tasks.filter((t) => t && !t.parentId);
 

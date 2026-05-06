@@ -20,11 +20,13 @@ import { first, mapTo, switchMap } from 'rxjs/operators';
 import { fromEvent, merge, Observable, of } from 'rxjs';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
+import { TODAY_TAG } from '../../features/tag/tag.const';
 
 // NOTE: Relying on Angular CDK overlay CSS class names keeps shortcut suppression simple.
 // If CDK changes these class names we only need to adjust the helpers below.
 const CDK_OVERLAY_CONTAINER_CLASS = 'cdk-overlay-container';
 const CDK_OVERLAY_PANE_CLASS = 'cdk-overlay-pane';
+const MAT_TOOLTIP_PANEL_CLASS = 'mat-mdc-tooltip-panel';
 
 @Injectable({
   providedIn: 'root',
@@ -135,7 +137,7 @@ export class ShortcutService {
         });
       });
     } else if (checkKeyCombo(ev, keys.goToTimeline)) {
-      this._router.navigate(['/timeline']);
+      this._router.navigate(['/tag/' + TODAY_TAG.id + '/tasks']);
     } else if (checkKeyCombo(ev, keys.goToSettings)) {
       this._router.navigate(['/config']);
     } else if (checkKeyCombo(ev, keys.goToScheduledView)) {
@@ -243,7 +245,9 @@ export class ShortcutService {
     // NOTE: All CDK class name knowledge is encapsulated here to ease future updates.
     return Array.from(containerEl.children).some((child) => {
       return (
-        child.classList.contains(CDK_OVERLAY_PANE_CLASS) && child.childElementCount > 0
+        child.classList.contains(CDK_OVERLAY_PANE_CLASS) &&
+        child.childElementCount > 0 &&
+        !child.classList.contains(MAT_TOOLTIP_PANEL_CLASS)
       );
     });
   }

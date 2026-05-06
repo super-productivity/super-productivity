@@ -37,6 +37,7 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 import { confirmDialog } from '../../util/native-dialogs';
+import { compareVectorClocks, isVectorClockEmpty } from '../../core/util/vector-clock';
 
 /**
  * Type guard for NgRx entity state (has an `ids` array).
@@ -153,12 +154,12 @@ export class OperationLogSyncService {
    *
    * @returns true if user has created any tasks, projects (besides INBOX), tags (besides system tags), or notes
    */
-  private _hasMeaningfulLocalData(): boolean {
+  private _hasMeaningfulStoreData(): boolean {
     const snapshot = this.stateSnapshotService.getStateSnapshot();
 
     if (!snapshot) {
       OpLog.warn(
-        'OperationLogSyncService._hasMeaningfulLocalData: Unable to get state snapshot',
+        'OperationLogSyncService._hasMeaningfulStoreData: Unable to get state snapshot',
       );
       return false; // Assume no data rather than blocking sync
     }
@@ -190,15 +191,6 @@ export class OperationLogSyncService {
     }
 
     return false;
-  }
-
-  /**
-   * Checks if there is any meaningful user data — either in the pending ops
-   * or already in the NgRx store. This combines both checks that are always
-   * used together to decide whether a conflict dialog is needed.
-   */
-  private _hasAnyMeaningfulData(pendingOps: OperationLogEntry[]): boolean {
-    return this._hasMeaningfulPendingOps(pendingOps) || this._hasMeaningfulLocalData();
   }
 
   /**
@@ -306,13 +298,13 @@ export class OperationLogSyncService {
         const pendingOps = await this.opLogStore.getUnsynced();
         const hasMeaningfulPending = this._hasMeaningfulPendingOps(pendingOps);
 
-        // Skip the conflict dialog for password-change SYNC_IMPORTs when there are no
-        // meaningful pending ops. The data is identical, only the encryption changed.
-        const isEncryptionOnlyChange =
-          piggybackedFullStateOp.syncImportReason === 'PASSWORD_CHANGED' &&
-          !hasMeaningfulPending;
-
-        if (!isEncryptionOnlyChange && this._hasAnyMeaningfulData(pendingOps)) {
+        // Existing synced store data is not a conflict here. Prompt only when
+        // local pending user changes would be discarded; otherwise an old client
+        // can accidentally force-upload stale state over the remote import.
+        // (PASSWORD_CHANGED SYNC_IMPORTs without pending ops also fall through
+        // to silent acceptance via this gate — the data is identical, only the
+        // encryption changed.)
+        if (hasMeaningfulPending) {
           OpLog.warn(
             `OperationLogSyncService: Piggybacked ${piggybackedFullStateOp.opType} from client ${piggybackedFullStateOp.clientId} ` +
               `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
@@ -341,6 +333,12 @@ export class OperationLogSyncService {
             hasMorePiggyback: false,
             rejectedOps: [],
           };
+        } else {
+          OpLog.normal(
+            `OperationLogSyncService: Accepting piggybacked ${piggybackedFullStateOp.opType} from client ` +
+              `${piggybackedFullStateOp.clientId} without conflict dialog; ` +
+              `${pendingOps.length} pending op(s), no meaningful pending user changes.`,
+          );
         }
       }
 
@@ -460,6 +458,52 @@ export class OperationLogSyncService {
     // we receive the complete application state in snapshotState. This must be hydrated
     // directly instead of processing incremental ops (which are already reflected in the state).
     if (result.snapshotState) {
+      // Issue #7339: a file-based snapshot whose vector clock is dominated by the
+      // local clock contains nothing the local client doesn't already have. Hydrating
+      // would discard local-only ops and a conflict dialog has nothing to resolve.
+      // Without this short-circuit, FileBasedSyncAdapter's snapshot-replacement gap
+      // detection re-fires every sync for clients that haven't uploaded their own
+      // snapshot, trapping them in a perpetual conflict-dialog loop.
+      //
+      // Both clocks must be non-empty for the comparison to be meaningful: an empty
+      // remote clock would compare EQUAL to a fresh local client and incorrectly skip
+      // hydrating a snapshot that may carry real state from a legacy file.
+      if (result.snapshotVectorClock && !isVectorClockEmpty(result.snapshotVectorClock)) {
+        const localClock = await this.opLogStore.getVectorClock();
+        if (!isVectorClockEmpty(localClock)) {
+          const cmp = compareVectorClocks(localClock, result.snapshotVectorClock);
+          if (cmp === 'EQUAL' || cmp === 'GREATER_THAN') {
+            OpLog.normal(
+              `OperationLogSyncService: Local vector clock ${cmp} remote snapshot — ` +
+                'skipping snapshot hydration (local already has all remote data).',
+            );
+            // Deliberately do NOT call appendBatchSkipDuplicates(result.newOps).
+            // VectorClockService.getEntityFrontier() builds per-entity frontiers
+            // by iterating the op log in seq order with last-write-wins semantics.
+            // Appending historical remote ops at the current tail would regress
+            // the frontier for any entity where local already has newer ops,
+            // which then lets future remote ops be classified as non-conflicting
+            // and silently overwrite local changes.
+            //
+            // The trade-off: those ops keep coming back in result.newOps on each
+            // sync until the file's snapshot advances or the user uploads their
+            // own snapshot. They are never re-applied to state, because (a) the
+            // dominate-check skips state mutation, and (b) the regular hydration
+            // path replaces state wholesale from snapshotState, not by replaying
+            // individual ops. So the cost is bounded re-download bandwidth, not
+            // data corruption.
+            if (result.latestServerSeq !== undefined) {
+              await syncProvider.setLastServerSeq(result.latestServerSeq);
+            }
+            return {
+              kind: 'no_new_ops',
+              allOpClocks: result.allOpClocks,
+              snapshotVectorClock: result.snapshotVectorClock,
+            };
+          }
+        }
+      }
+
       OpLog.normal(
         'OperationLogSyncService: Received snapshotState from file-based sync. Hydrating...',
       );
@@ -474,7 +518,8 @@ export class OperationLogSyncService {
         // The store check catches provider-switch scenarios: user switches from
         // SuperSync→Dropbox, only has a config-change op (not "meaningful"), but the
         // store is full of real data that would be overwritten by old Dropbox state.
-        const hasMeaningfulUserData = this._hasAnyMeaningfulData(unsyncedOps);
+        const hasMeaningfulUserData =
+          this._hasMeaningfulPendingOps(unsyncedOps) || this._hasMeaningfulStoreData();
 
         if (hasMeaningfulUserData) {
           // Client has meaningful user data - show conflict dialog
@@ -504,7 +549,7 @@ export class OperationLogSyncService {
 
         // CRITICAL FIX: Even if op-log is empty, check if NgRx store has meaningful data.
         // This catches data that existed before the operation-log feature was added.
-        if (isFreshClient && this._hasMeaningfulLocalData()) {
+        if (isFreshClient && this._hasMeaningfulStoreData()) {
           OpLog.warn(
             'OperationLogSyncService: Fresh client detected with meaningful local data in store. ' +
               'Throwing LocalDataConflictError for conflict resolution dialog.',
@@ -593,7 +638,7 @@ export class OperationLogSyncService {
       const isEmptyServer = result.latestServerSeq === 0;
       if (isEmptyServer) {
         const isFresh = await this.isWhollyFreshClient();
-        if (isFresh && this._hasMeaningfulLocalData()) {
+        if (isFresh && this._hasMeaningfulStoreData()) {
           OpLog.warn(
             'OperationLogSyncService: Pre-op-log client with meaningful local data on empty server. ' +
               'Creating SYNC_IMPORT via server migration to seed the server.',
@@ -628,7 +673,7 @@ export class OperationLogSyncService {
     // check if there's meaningful local data that would be overwritten.
     const isFreshClient = await this.isWhollyFreshClient();
     if (isFreshClient && result.newOps.length > 0) {
-      if (this._hasMeaningfulLocalData()) {
+      if (this._hasMeaningfulStoreData()) {
         // Local data exists — throw conflict error so the full conflict dialog is shown,
         // letting the user choose between keeping local data or using remote data.
         OpLog.warn(
@@ -673,16 +718,22 @@ export class OperationLogSyncService {
       FULL_STATE_OP_TYPES.has(op.opType),
     );
     if (incomingFullStateOp) {
+      // Flush in-flight captured ops before reading pending state. Without this,
+      // an op enqueued in OperationCaptureService but not yet drained to
+      // IndexedDB would be invisible to getUnsynced(), the gate would silently
+      // accept the import, and SyncImportFilterService would then discard the
+      // just-landed op as CONCURRENT.
+      await this.writeFlushService.flushPendingWrites();
       const pendingLocalOps = await this.opLogStore.getUnsynced();
       const hasMeaningfulPending = this._hasMeaningfulPendingOps(pendingLocalOps);
 
-      // Skip the conflict dialog for password-change SYNC_IMPORTs when there are no
-      // meaningful pending ops. The data is identical, only the encryption changed.
-      const isEncryptionOnlyChange =
-        incomingFullStateOp.syncImportReason === 'PASSWORD_CHANGED' &&
-        !hasMeaningfulPending;
-
-      if (!isEncryptionOnlyChange && this._hasAnyMeaningfulData(pendingLocalOps)) {
+      // Existing synced store data is not a conflict here. Prompt only when
+      // local pending user changes would be discarded; otherwise an old client
+      // can accidentally force-upload stale state over the remote import.
+      // (PASSWORD_CHANGED SYNC_IMPORTs without pending ops also fall through
+      // to silent acceptance via this gate — the data is identical, only the
+      // encryption changed.)
+      if (hasMeaningfulPending) {
         OpLog.warn(
           `OperationLogSyncService: Incoming ${incomingFullStateOp.opType} from client ${incomingFullStateOp.clientId} ` +
             `with ${pendingLocalOps.length} pending local ops. Showing conflict dialog.`,
@@ -702,6 +753,12 @@ export class OperationLogSyncService {
           return { kind: 'cancelled' };
         }
         return { kind: 'no_new_ops' };
+      } else {
+        OpLog.normal(
+          `OperationLogSyncService: Accepting incoming ${incomingFullStateOp.opType} from client ` +
+            `${incomingFullStateOp.clientId} without conflict dialog; ` +
+            `${pendingLocalOps.length} pending op(s), no meaningful pending user changes.`,
+        );
       }
     }
 

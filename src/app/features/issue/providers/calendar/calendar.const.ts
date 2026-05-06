@@ -73,14 +73,6 @@ export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
     {
       type: 'duration',
       key: 'showBannerBeforeThreshold',
-      hooks: {
-        onInit: (field) => {
-          IssueLog.log(field?.formControl?.value);
-          if (!field?.formControl?.value && field?.formControl?.value !== null) {
-            field?.formControl?.setValue(2 * 60 * 60000);
-          }
-        },
-      },
       templateOptions: {
         required: false,
         isAllowSeconds: true,

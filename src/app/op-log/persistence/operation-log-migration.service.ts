@@ -19,6 +19,10 @@ import { uuidv7 } from '../../util/uuid-v7';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { AppDataComplete } from '../model/model-config';
+import {
+  MIGRATION_BACKUP_PREFIX,
+  getBackupTimestamp,
+} from '../../../../electron/shared-with-frontend/get-backup-timestamp';
 
 /**
  * Service to check for valid operation log state during startup and migrate
@@ -185,8 +189,7 @@ export class OperationLogMigrationService {
     this._setStatus(dialogRef, 'backup');
 
     const legacyData = await this.legacyPfDb.loadAllEntityData();
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `sp-pre-migration-backup-${timestamp}.json`;
+    const filename = `${MIGRATION_BACKUP_PREFIX}_${getBackupTimestamp()}.json`;
 
     await download(filename, JSON.stringify(legacyData));
     OpLog.normal(`OperationLogMigrationService: Backup created: ${filename}`);

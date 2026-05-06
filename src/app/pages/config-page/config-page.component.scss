@@ -7,10 +7,6 @@
     max-width: 100%;
   }
 
-  .settings-title {
-    margin-bottom: var(--s2);
-  }
-
   .settings-tabs {
     // Prevent focus-induced scroll jumps: Material tab body containers default to
     // overflow:auto/hidden, which makes the browser's focus-scrolling algorithm
@@ -103,6 +99,63 @@
     .keyboard-settings {
       display: none;
     }
+  }
+}
+
+.sync-summary {
+  padding: var(--s2);
+
+  &__intro {
+    margin: 0 0 var(--s2);
+    color: var(--text-color-muted);
+  }
+
+  &__status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s2);
+    margin-bottom: var(--s2);
+  }
+
+  &__provider {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-half);
+    font-weight: 500;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  &__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-half);
+    padding: var(--s-half) var(--s);
+    border: 1px solid var(--divider-color);
+    border-radius: 999px;
+    font-size: 12px;
+
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    &--warn {
+      border-color: var(--color-warning);
+      color: var(--color-warning);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s);
   }
 }
 

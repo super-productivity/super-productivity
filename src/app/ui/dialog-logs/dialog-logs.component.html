@@ -1,0 +1,48 @@
+<h1 mat-dialog-title>{{ T.DIALOG_LOGS.TITLE | translate }}</h1>
+
+<mat-dialog-content>
+  <p class="hint">{{ T.DIALOG_LOGS.HINT | translate }}</p>
+  <textarea
+    class="logs-textarea"
+    readonly
+    spellcheck="false"
+    [value]="data.logs"
+  ></textarea>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <div class="wrap-buttons">
+    <button
+      (click)="close()"
+      class="btn"
+      mat-button
+      type="button"
+    >
+      <mat-icon>close</mat-icon>
+      {{ T.G.CLOSE | translate }}
+    </button>
+
+    @if (isNative) {
+      <button
+        (click)="shareFile()"
+        class="btn"
+        mat-button
+        type="button"
+      >
+        <mat-icon>share</mat-icon>
+        {{ T.DIALOG_LOGS.SHARE_FILE | translate }}
+      </button>
+    }
+
+    <button
+      (click)="copy()"
+      class="btn submit-button"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>content_copy</mat-icon>
+      {{ T.DIALOG_LOGS.COPY | translate }}
+    </button>
+  </div>
+</mat-dialog-actions>

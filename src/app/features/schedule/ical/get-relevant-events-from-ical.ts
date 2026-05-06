@@ -1,6 +1,7 @@
 import { CalendarIntegrationEvent } from '../../calendar-integration/calendar-integration.model';
 import { Log } from '../../../core/log';
 import { loadIcalModule } from './ical-lazy-loader';
+import { isLikelyIcal, NotIcalResponseError } from './is-likely-ical';
 
 type ICalModule = any;
 
@@ -185,6 +186,13 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
   endTimestamp: number,
   icalUrl?: string,
 ): Promise<CalendarIntegrationEvent[]> => {
+  // Reject obviously non-iCal payloads up front (e.g. HTML redirect pages from
+  // revoked Office365 share links — issue #5355). Without this, ICAL.parse
+  // throws a cryptic error deep in its state machine.
+  if (!isLikelyIcal(icalData)) {
+    throw new NotIcalResponseError();
+  }
+
   const ICAL = await loadIcalModule();
   let calendarIntegrationEvents: CalendarIntegrationEvent[] = [];
 

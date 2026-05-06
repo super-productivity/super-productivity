@@ -6,8 +6,10 @@ import android.content.Intent
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
+import android.util.AndroidRuntimeException
 import android.util.Log
 import android.view.View
+import android.view.WindowManager
 import android.webkit.JsResult
 import android.webkit.ServiceWorkerClient
 import android.webkit.ServiceWorkerController
@@ -72,7 +74,22 @@ class FullscreenActivity : AppCompatActivity() {
             return
         }
 
-        initWebView()
+        if (!initWebView()) {
+            // Reuse the already-computed compatibility info so the block screen
+            // keeps the detected WebView provider/version (useful when a user
+            // on a buggy beta channel needs to identify which package to swap).
+            WebViewBlockActivity.present(
+                this,
+                compatibility.copy(status = WebViewCompatibilityChecker.Status.BLOCK),
+            )
+            finish()
+            return
+        }
+
+        // We made it past the pre-flight version check and the WebView is alive.
+        // Persist the detected version so a transient mis-read on a later launch
+        // can't lock the user out, and clear any prior user override if healthy.
+        WebViewCompatibilityChecker.recordSuccessfulLoad(this, compatibility.majorVersion)
 
         // FOR TESTING HTML INPUTS QUICKLY
 ////        webView = (application as App).wv
@@ -118,14 +135,18 @@ class FullscreenActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
         // Save scoped storage permission on Android 10+
         storageHelper.onSaveInstanceState(outState)
-        webView.saveState(outState)
+        if (::webView.isInitialized) {
+            webView.saveState(outState)
+        }
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         // Restore scoped storage permission on Android 10+
         super.onRestoreInstanceState(savedInstanceState)
         storageHelper.onRestoreInstanceState(savedInstanceState)
-        webView.restoreState(savedInstanceState);
+        if (::webView.isInitialized) {
+            webView.restoreState(savedInstanceState)
+        }
     }
 
     override fun onPause() {
@@ -151,8 +172,21 @@ class FullscreenActivity : AppCompatActivity() {
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
-    private fun initWebView() {
-        webView = WebHelper().instanceView(this)
+    private fun initWebView(): Boolean {
+        try {
+            webView = WebHelper().instanceView(this)
+        } catch (e: AndroidRuntimeException) {
+            // WebViewFactory.getProvider throws AndroidRuntimeException (incl.
+            // MissingWebViewPackageException) when the system WebView package
+            // is broken, missing, or a buggy beta channel fails factory init.
+            Log.e("SP-WebView", "Failed to instantiate WebView", e)
+            return false
+        } catch (e: IllegalStateException) {
+            // WebChromium factory can throw IllegalStateException mid-init on
+            // certain devices (e.g. "Already registered a list of actions").
+            Log.e("SP-WebView", "Failed to instantiate WebView", e)
+            return false
+        }
         if (BuildConfig.DEBUG) {
             Toast.makeText(this, "DEBUG: $appUrl", Toast.LENGTH_SHORT).show()
 //            webView.clearCache(true)
@@ -201,15 +235,31 @@ class FullscreenActivity : AppCompatActivity() {
                 result: JsResult
             ): Boolean {
                 Log.v("TW", "onJsAlert")
-                val builder: AlertDialog.Builder = AlertDialog.Builder(this@FullscreenActivity)
-                builder.setMessage(message)
-                    .setNeutralButton("OK") { dialog, _ ->
-                        dialog.dismiss()
-                    }
-                    .create()
-                    .show()
-                result.cancel()
-                return super.onJsAlert(view, url, message, result)
+                if (isFinishing || isDestroyed) {
+                    result.cancel()
+                    return true
+                }
+                var handled = false
+                try {
+                    AlertDialog.Builder(this@FullscreenActivity)
+                        .setMessage(message)
+                        .setNeutralButton(android.R.string.ok) { _, _ ->
+                            handled = true
+                            result.confirm()
+                        }
+                        .setOnDismissListener { if (!handled) result.cancel() }
+                        .create()
+                        .show()
+                } catch (e: WindowManager.BadTokenException) {
+                    // Activity window token invalid between isFinishing check
+                    // and show() (e.g. onDestroy scheduled by the system).
+                    Log.w("TW", "onJsAlert: window token invalid", e)
+                    if (!handled) result.cancel()
+                } catch (e: IllegalStateException) {
+                    Log.w("TW", "onJsAlert: illegal state", e)
+                    if (!handled) result.cancel()
+                }
+                return true
             }
 
             override fun onJsConfirm(
@@ -218,19 +268,44 @@ class FullscreenActivity : AppCompatActivity() {
                 message: String,
                 result: JsResult
             ): Boolean {
-                AlertDialog.Builder(this@FullscreenActivity)
-                    .setMessage(message)
-                    .setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }
-                    .setNegativeButton(android.R.string.cancel) { _, _ -> result.cancel() }
-                    .create()
-                    .show()
+                if (isFinishing || isDestroyed) {
+                    result.cancel()
+                    return true
+                }
+                var handled = false
+                try {
+                    AlertDialog.Builder(this@FullscreenActivity)
+                        .setMessage(message)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            handled = true
+                            result.confirm()
+                        }
+                        .setNegativeButton(android.R.string.cancel) { _, _ ->
+                            handled = true
+                            result.cancel()
+                        }
+                        .setOnDismissListener { if (!handled) result.cancel() }
+                        .create()
+                        .show()
+                } catch (e: WindowManager.BadTokenException) {
+                    Log.w("TW", "onJsConfirm: window token invalid", e)
+                    if (!handled) result.cancel()
+                } catch (e: IllegalStateException) {
+                    Log.w("TW", "onJsConfirm: illegal state", e)
+                    if (!handled) result.cancel()
+                }
                 return true
             }
         }
+        return true
     }
 
 
     private fun callJSInterfaceFunctionIfExists(fnName: String, objectPath: String, fnParam: String = "") {
+        if (!::javaScriptInterface.isInitialized) {
+            Log.w("TW", "javaScriptInterface not initialized yet. Skipping JS call.")
+            return
+        }
         val fnFullName = "window.$WINDOW_INTERFACE_PROPERTY.$objectPath.$fnName"
         val fullObjectPath = "window.$WINDOW_INTERFACE_PROPERTY.$objectPath"
         javaScriptInterface.callJavaScriptFunction("if($fullObjectPath && $fnFullName)$fnFullName($fnParam)")
@@ -238,8 +313,8 @@ class FullscreenActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        Log.v("TW", "onBackPressed ${webView.canGoBack().toString()}")
-        if (webView.canGoBack()) {
+        if (::webView.isInitialized && webView.canGoBack()) {
+            Log.v("TW", "onBackPressed canGoBack=true")
             webView.goBack()
         } else {
             super.onBackPressed()

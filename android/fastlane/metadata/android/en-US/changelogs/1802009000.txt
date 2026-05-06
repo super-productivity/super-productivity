@@ -1,0 +1,9 @@
+- treat unreadable legacy __meta_ as legacy detected
+- extract rewriteTagIdsForPanel helper
+- route specialUse FGS through ServiceCompat helper
+- guard broken WebView package probe
+- navigate Shift+T to Today tag directly
+- restore plural for collapse/expand sub-task labels
+- narrow broad catch clauses so unknown failures surface in Play Console
+- centralize startOfNextDay offset behind DateService
+- clarify keyboard shortcut labels (#7101)

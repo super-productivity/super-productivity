@@ -1,0 +1,9 @@
+- stub dialog template to avoid rendering child deps
+- stub WorkContextService to fix ScannedActionsSubject error
+- move TestBed.inject after overrideProvider
+- sync plugin lockfiles after vite-plugin bump to ^6.4.2
+- address code review feedback for deadline fixes
+- make amber deadline badge actually render
+- color deadline badge amber within 2 days of the deadline
+- clear unhandled deadline reminders on dialog close
+- trigger recompute for week-view headerTitle spec

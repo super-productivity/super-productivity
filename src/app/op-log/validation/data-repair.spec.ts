@@ -593,6 +593,49 @@ describe('dataRepair()', () => {
         },
       });
     });
+
+    it('taskArchive with malformed undefined entity', () => {
+      expect(
+        dataRepair({
+          ...mock,
+          archiveYoung: {
+            lastTimeTrackingFlush: 0,
+            timeTracking: mock.archiveYoung.timeTracking,
+            task: {
+              ids: ['VALID_TASK', null],
+              entities: {
+                VALID_TASK: {
+                  ...DEFAULT_TASK,
+                  id: 'VALID_TASK',
+                  projectId: FAKE_PROJECT_ID,
+                },
+                undefined: {
+                  isDone: true,
+                  doneOn: 1775783824920,
+                  subTasks: [],
+                },
+              },
+            } as any,
+          },
+        }).data,
+      ).toEqual({
+        ...mock,
+        archiveYoung: {
+          lastTimeTrackingFlush: 0,
+          timeTracking: mock.archiveYoung.timeTracking,
+          task: {
+            ids: ['VALID_TASK'],
+            entities: {
+              VALID_TASK: {
+                ...DEFAULT_TASK,
+                id: 'VALID_TASK',
+                projectId: FAKE_PROJECT_ID,
+              },
+            },
+          } as any,
+        },
+      });
+    });
   });
 
   it('should restore missing tasks from taskArchive if available', () => {

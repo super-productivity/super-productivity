@@ -1,3 +1,5 @@
+@use '../../../../styles/_globals.scss' as *;
+
 .focus-mode-break {
   display: flex;
   flex-direction: column;
@@ -37,6 +39,14 @@
 
 .button-row {
   display: flex;
-  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s2);
   align-items: center;
+}
+
+.reset-cycles-btn {
+  @include mq(xs, max) {
+    display: none;
+  }
 }

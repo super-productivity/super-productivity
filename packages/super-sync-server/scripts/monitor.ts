@@ -114,6 +114,19 @@ interface EngagedUserRow {
   ops_count: bigint;
 }
 
+interface ActiveCountsRow {
+  active_24h: bigint;
+  active_7d: bigint;
+  active_30d: bigint;
+}
+
+interface ActiveDeviceUserRow {
+  id: number;
+  email: string;
+  devices: bigint;
+  last_seen: bigint;
+}
+
 // --- Snapshot types for JSONL history ---
 
 interface UsageSnapshotUser {
@@ -208,25 +221,29 @@ const showStats = async (): Promise<void> => {
   }
 };
 
-const showUsage = async (
-  saveHistory = true,
-  showFullEmails = false,
-): Promise<void> => {
+const showUsage = async (saveHistory = true, showFullEmails = false): Promise<void> => {
   console.log('\n--- User Storage Usage (Top 20) ---');
   try {
-    // Calculate size of operations and snapshot data per user
+    // Aggregate per-user op size in a single pass; correlated subqueries here
+    // scan the full operations table per user and hang on large DBs.
     const users: UserStorageRow[] = await prisma.$queryRaw`
+      WITH ops_per_user AS (
+        SELECT
+          user_id,
+          SUM(pg_column_size(payload))::bigint AS ops_bytes,
+          COUNT(*)::bigint AS ops_count
+        FROM operations
+        GROUP BY user_id
+      )
       SELECT
         u.id,
         u.email,
-        COALESCE((SELECT SUM(pg_column_size(o.payload)) FROM operations o WHERE o.user_id = u.id), 0) as ops_bytes,
-        COALESCE((SELECT COUNT(*) FROM operations o WHERE o.user_id = u.id), 0) as ops_count,
+        COALESCE(o.ops_bytes, 0) as ops_bytes,
+        COALESCE(o.ops_count, 0) as ops_count,
         COALESCE(LENGTH(s.snapshot_data), 0) as snapshot_bytes,
-        (
-          COALESCE((SELECT SUM(pg_column_size(o.payload)) FROM operations o WHERE o.user_id = u.id), 0) +
-          COALESCE(LENGTH(s.snapshot_data), 0)
-        ) as total_bytes
+        (COALESCE(o.ops_bytes, 0) + COALESCE(LENGTH(s.snapshot_data), 0)) as total_bytes
       FROM users u
+      LEFT JOIN ops_per_user o ON o.user_id = u.id
       LEFT JOIN user_sync_state s ON u.id = s.user_id
       ORDER BY total_bytes DESC
       LIMIT 20;
@@ -748,6 +765,67 @@ const showActiveUsers = async (args: string[]): Promise<void> => {
   }
 };
 
+// Fast variant of active-users that touches only sync_devices + users.
+// Avoids the operations table entirely so it stays fast on large DBs.
+const showActiveUsersQuick = async (args: string[]): Promise<void> => {
+  console.log('\n--- Active Users (quick: sync_devices only) ---');
+  try {
+    const showFullEmails = args.includes('--unmask');
+    const limit = parseIntArg(args, '--limit', 50);
+    const displayEmail = (email: string): string =>
+      showFullEmails ? email : maskEmail(email);
+
+    const now = Date.now();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const since24h = BigInt(now - ONE_DAY);
+    const since7d = BigInt(now - 7 * ONE_DAY);
+    const since30d = BigInt(now - 30 * ONE_DAY);
+
+    const counts: ActiveCountsRow[] = await prisma.$queryRaw`
+      SELECT
+        COUNT(DISTINCT user_id) FILTER (WHERE last_seen_at > ${since24h}) AS active_24h,
+        COUNT(DISTINCT user_id) FILTER (WHERE last_seen_at > ${since7d})  AS active_7d,
+        COUNT(DISTINCT user_id) FILTER (WHERE last_seen_at > ${since30d}) AS active_30d
+      FROM sync_devices;
+    `;
+    const c = counts[0];
+    console.log(`  Last 24 hours: ${Number(c?.active_24h ?? 0)}`);
+    console.log(`  Last 7 days:   ${Number(c?.active_7d ?? 0)}`);
+    console.log(`  Last 30 days:  ${Number(c?.active_30d ?? 0)}`);
+
+    const users: ActiveDeviceUserRow[] = await prisma.$queryRaw`
+      SELECT
+        u.id,
+        u.email,
+        COUNT(DISTINCT d.client_id) AS devices,
+        MAX(d.last_seen_at) AS last_seen
+      FROM sync_devices d
+      JOIN users u ON u.id = d.user_id
+      WHERE d.last_seen_at > ${since7d}
+      GROUP BY u.id, u.email
+      ORDER BY MAX(d.last_seen_at) DESC
+      LIMIT ${limit};
+    `;
+
+    if (users.length === 0) {
+      console.log('\nNo users active in the last 7 days.');
+      return;
+    }
+
+    console.log(`\n--- Top ${users.length} users by last device activity (7d) ---`);
+    console.table(
+      users.map((u) => ({
+        ID: u.id,
+        Email: displayEmail(u.email),
+        Devices: Number(u.devices),
+        'Last Seen': new Date(Number(u.last_seen)).toLocaleString(),
+      })),
+    );
+  } catch (error) {
+    console.error('Error fetching active users (quick):', error);
+  }
+};
+
 const main = async (): Promise<void> => {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -773,6 +851,9 @@ const main = async (): Promise<void> => {
       case 'active-users':
         await showActiveUsers(args);
         break;
+      case 'active-users-quick':
+        await showActiveUsersQuick(args);
+        break;
       default:
         console.log('SuperSync Monitor CLI');
         console.log('Usage: npm run monitor -- <command> [flags]');
@@ -785,6 +866,10 @@ const main = async (): Promise<void> => {
         console.log('  active-users   Show active user counts and recent activity');
         console.log('    --threshold <n> Engaged users day threshold (default 3)');
         console.log('    --limit <n>    Recently active users limit (default 30)');
+        console.log(
+          '  active-users-quick  Fast active-user listing (sync_devices only; skips operations)',
+        );
+        console.log('    --limit <n>    Top users limit (default 50)');
         console.log('  logs           Show server logs');
         console.log('    --tail <n>     Show last n lines (default 100)');
         console.log('    --search "s"   Filter logs by term');

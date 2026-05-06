@@ -91,6 +91,31 @@ describe('compression-handler', () => {
         decompressGzipFromString('!!!completely-broken-data!!!'),
       ).toBeRejectedWithError(DecompressError);
     });
+
+    // Issue #7300: opaque "compressed Input was truncated" browser errors
+    // must be translated into actionable guidance directing the user to
+    // delete the corrupt remote file.
+    it('surfaces recovery guidance in DecompressError message for truncated gzip', async () => {
+      const original = JSON.stringify({ task: 'test', data: 'x'.repeat(1024) });
+      const compressed = await compressWithGzipToString(original);
+      // Remove the gzip footer (last few bytes in base64) to simulate a
+      // truncated remote file. The underlying DecompressionStream will throw
+      // "compressed Input was truncated" or similar.
+      const truncLen = compressed.length - (compressed.length % 4 || 4);
+      const truncated = compressed.slice(0, truncLen - 4); // drop a full 4-char group
+
+      let caught: unknown;
+      try {
+        await decompressGzipFromString(truncated);
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(DecompressError);
+      const message = (caught as Error).message.toLowerCase();
+      // Truncation branch must have fired: guidance names the file to delete.
+      expect(message).toContain('sync-data.json');
+      expect(message).toContain('delete');
+    });
   });
 
   describe('compressWithGzip (binary)', () => {

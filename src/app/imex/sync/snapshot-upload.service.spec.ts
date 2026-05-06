@@ -17,7 +17,10 @@ describe('SnapshotUploadService', () => {
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
-  let mockClientIdProvider: { loadClientId: jasmine.Spy };
+  let mockClientIdProvider: {
+    loadClientId: jasmine.Spy;
+    getOrGenerateClientId: jasmine.Spy;
+  };
   let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
   let mockSyncProvider: jasmine.SpyObj<
     SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
@@ -70,6 +73,9 @@ describe('SnapshotUploadService', () => {
 
     mockClientIdProvider = {
       loadClientId: jasmine.createSpy('loadClientId').and.resolveTo('test-client-id'),
+      getOrGenerateClientId: jasmine
+        .createSpy('getOrGenerateClientId')
+        .and.resolveTo('test-client-id'),
     };
 
     mockEncryptionService = jasmine.createSpyObj('OperationEncryptionService', [
@@ -138,11 +144,13 @@ describe('SnapshotUploadService', () => {
       expect(result.existingCfg).toEqual({ encryptKey: 'test' } as any);
     });
 
-    it('should throw when client ID is not available', async () => {
-      mockClientIdProvider.loadClientId.and.resolveTo(null);
-      await expectAsync(service.gatherSnapshotData()).toBeRejectedWithError(
-        'Client ID not available',
-      );
+    it('should regenerate client ID when getOrGenerateClientId is used', async () => {
+      mockClientIdProvider.getOrGenerateClientId.and.resolveTo('B_regen');
+
+      const result = await service.gatherSnapshotData();
+
+      expect(mockClientIdProvider.getOrGenerateClientId).toHaveBeenCalled();
+      expect(result.clientId).toBe('B_regen');
     });
   });
 

@@ -13,6 +13,7 @@ import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model
 import * as path from 'path';
 import { error, log } from 'electron-log/main';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
+import { getBackupTimestamp } from './shared-with-frontend/get-backup-timestamp';
 
 export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
 export const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
@@ -67,7 +68,7 @@ function backupData(ev: IpcMainEvent, data: AppDataCompleteLegacy): void {
   if (!existsSync(BACKUP_DIR)) {
     mkdirSync(BACKUP_DIR);
   }
-  const filePath = `${BACKUP_DIR}/${getDateStr()}.json`;
+  const filePath = `${BACKUP_DIR}/${getBackupTimestamp()}.json`;
 
   try {
     const backup = JSON.stringify(data);
@@ -77,18 +78,6 @@ function backupData(ev: IpcMainEvent, data: AppDataCompleteLegacy): void {
     log('Error while backing up');
     error(e);
   }
-}
-
-// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function getDateStr(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const MM = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const HH = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  return `${yyyy}-${MM}-${dd}_${HH}${mm}${ss}`;
 }
 
 const KEEP_RECENT = 30;

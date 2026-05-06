@@ -1,0 +1,212 @@
+name: Electron Packaging Smoke Test
+
+# Validates the packaged Electron app — not just that sources compile.
+#
+# Catches bugs where code works at source level (tsc succeeds, `npm start`
+# runs fine from loose files) but the production app.asar is missing a
+# file that the main process require()s at startup. See #7320 for the
+# motivating incident: electron/backup.ts imported from ../src/app/util/
+# and the compiled dep was omitted from the electron-builder files glob,
+# so every 18.2.7 binary crashed on launch.
+#
+# PRs run the cheap static check (~10s after the build) — paths filter
+# excludes docs, translations, and platform-specific trees but still covers
+# src/**, because #7320's root cause lived under src/app/util/. The full
+# launch-under-xvfb smoke test runs on merge to master, release tags, and
+# manual dispatch — stronger signal but needs xvfb setup + ~30s of wait.
+
+on:
+  pull_request:
+    branches: [master, main]
+    # Trigger broadly — #7320's root cause was a file under src/app/util/
+    # that electron/ imported, so narrowing to electron/** would have let
+    # the exact bug this workflow exists to prevent slip through again.
+    # Translation-only edits and non-code trees are excluded to keep
+    # unrelated PRs cheap.
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - '!src/assets/i18n/**'
+      - '!android/**'
+      - '!ios/**'
+      - '!.github/ISSUE_TEMPLATE/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/electron-smoke.yml'
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-packaged-app:
+    name: Linux Packaged Electron App
+    runs-on: ubuntu-latest
+    env:
+      UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
+      UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+
+      - name: Check out Git repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      # Work around npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node22-
+
+      - name: Install npm packages
+        run: npm i
+
+      - run: npm run env
+
+      - name: Build frontend (production es6)
+        run: npm run buildFrontend:prod:es6
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+
+      - name: Build electron main process
+        run: npm run electron:build
+
+      - name: Package electron app (linux dir, unpacked)
+        # --linux dir produces linux-unpacked/ with the real app.asar but
+        # skips AppImage/deb/snap/rpm — cheap and enough to exercise the
+        # same packaging pipeline release uses.
+        run: npx electron-builder --linux dir --publish never
+
+      - name: Verify require() targets in app.asar
+        run: |
+          ASAR=.tmp/app-builds/linux-unpacked/resources/app.asar
+          if [ ! -f "$ASAR" ]; then
+            echo "::error::Packaged app.asar not found at $ASAR"
+            ls -la .tmp/app-builds/ || true
+            exit 1
+          fi
+          node tools/verify-electron-requires.js "$ASAR"
+
+      - name: Install xvfb
+        if: github.event_name != 'pull_request'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Smoke test — launch packaged app
+        if: github.event_name != 'pull_request'
+        run: |
+          set -uo pipefail
+
+          UNPACKED=.tmp/app-builds/linux-unpacked
+          # afterPack.js renames the real binary to superproductivity-bin and
+          # installs a shell wrapper at superproductivity. Launch the wrapper
+          # so the smoke test exercises the exact entry path users hit.
+          BIN="$UNPACKED/superproductivity"
+          if [ ! -x "$BIN" ]; then
+            echo "::error::Expected launcher at $BIN not found or not executable"
+            ls -la "$UNPACKED" || true
+            exit 1
+          fi
+
+          # Keep the log inside the workspace so upload-artifact can find it
+          # when a step fails. /tmp is accessible but fragile across runner
+          # images and upload-artifact glob evaluation.
+          mkdir -p .tmp/smoke
+          LOG=.tmp/smoke/launch.log
+          : > "$LOG"
+
+          echo "Launching $BIN under xvfb (log: $LOG)"
+          # Electron flags:
+          #   --no-sandbox: chrome-sandbox needs setuid root, not set on runners
+          #   --disable-gpu: no GPU on the runner
+          #   --disable-dev-shm-usage: /dev/shm is small in GH-hosted containers,
+          #     and Chromium/Electron can die with shared-memory errors without it
+          # Xvfb flags:
+          #   --server-args: explicit screen geometry; Xvfb's 640x480x8 default
+          #     trips some Chromium color-depth assertions
+          xvfb-run \
+            --auto-servernum \
+            --server-args="-screen 0 1280x720x24" \
+            "$BIN" \
+              --no-sandbox \
+              --disable-gpu \
+              --disable-dev-shm-usage \
+            > "$LOG" 2>&1 &
+          WRAPPER_PID=$!
+
+          # Wait up to 30s for the app to crash. The #7320 crash surfaces
+          # within ~100ms — 30s is generous headroom for Angular bootstrap
+          # in CI. xvfb-run exits when its child exits, so the wrapper PID
+          # going away is a reliable crash signal. We also scan stderr for
+          # known failure markers as a belt-and-suspenders backstop: some
+          # main-process exceptions log without killing the process.
+          CRASH_RE='(Uncaught Exception|Cannot find module|A JavaScript error occurred in the main process|Segmentation fault|SIGSEGV|SIGABRT|TypeError:|ReferenceError:|FATAL ERROR|Check failed)'
+          for i in $(seq 1 30); do
+            if ! kill -0 $WRAPPER_PID 2>/dev/null; then
+              echo "::error::xvfb-run/Electron exited after ${i}s — likely crash."
+              echo "----8<---- launch log"
+              cat "$LOG" || true
+              echo "---->8----"
+              exit 1
+            fi
+            if grep -E -q "$CRASH_RE" "$LOG" 2>/dev/null; then
+              echo "::error::Crash marker detected in log after ${i}s:"
+              grep -E "$CRASH_RE" "$LOG" || true
+              echo "----8<---- launch log"
+              cat "$LOG" || true
+              echo "---->8----"
+              kill -9 $WRAPPER_PID 2>/dev/null || true
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "App still alive after 30s — startup OK. Terminating."
+          kill $WRAPPER_PID 2>/dev/null || true
+          # xvfb-run forwards SIGTERM to its child; give them 5s to exit
+          # cleanly before SIGKILL. Also sweep any stray electron workers.
+          for i in 1 2 3 4 5; do
+            if ! kill -0 $WRAPPER_PID 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -9 $WRAPPER_PID 2>/dev/null || true
+          pkill -9 -f "$UNPACKED/superproductivity" 2>/dev/null || true
+          wait $WRAPPER_PID 2>/dev/null || true
+
+          # Final scan for errors that didn't crash the main process but
+          # would still indicate a broken build.
+          if grep -E -q "$CRASH_RE" "$LOG" 2>/dev/null; then
+            echo "::error::Crash marker detected in final log scan:"
+            grep -E "$CRASH_RE" "$LOG" || true
+            exit 1
+          fi
+
+          echo "Smoke test passed."
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: electron-smoke-logs
+          path: |
+            .tmp/smoke/
+            .tmp/app-builds/builder-debug.yml
+            .tmp/app-builds/builder-effective-config.yaml
+          retention-days: 7
+          if-no-files-found: ignore

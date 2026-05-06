@@ -40,6 +40,10 @@ import {
   simpleCounterReducer,
 } from '../features/simple-counter/store/simple-counter.reducer';
 import { SimpleCounterEffects } from '../features/simple-counter/store/simple-counter.effects';
+import {
+  SECTION_FEATURE_NAME,
+  sectionReducer,
+} from '../features/section/store/section.reducer';
 import { TAG_FEATURE_NAME, tagReducer } from '../features/tag/store/tag.reducer';
 import { TagEffects } from '../features/tag/store/tag.effects';
 import {
@@ -136,6 +140,8 @@ import {
 
     StoreModule.forFeature(SIMPLE_COUNTER_FEATURE_NAME, simpleCounterReducer),
     EffectsModule.forFeature([SimpleCounterEffects]),
+
+    StoreModule.forFeature(SECTION_FEATURE_NAME, sectionReducer),
 
     StoreModule.forFeature(TAG_FEATURE_NAME, tagReducer),
     EffectsModule.forFeature([TagEffects]),

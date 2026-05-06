@@ -34,7 +34,7 @@ export class NextcloudProvider extends WebdavBaseProvider<SyncProviderId.WebDAV>
    * Builds the full WebDAV base URL from serverUrl + userName.
    * e.g., https://cloud.example.com -> https://cloud.example.com/remote.php/dav/files/john/
    */
-  private _buildNextcloudBaseUrl(cfg: NextcloudPrivateCfg): string {
+  static buildBaseUrl(cfg: Pick<NextcloudPrivateCfg, 'serverUrl' | 'userName'>): string {
     let serverUrl = cfg.serverUrl.trim();
     if (serverUrl.endsWith('/')) {
       serverUrl = serverUrl.slice(0, -1);
@@ -69,7 +69,7 @@ export class NextcloudProvider extends WebdavBaseProvider<SyncProviderId.WebDAV>
     }
     return {
       ...cfg,
-      baseUrl: this._buildNextcloudBaseUrl(cfg),
+      baseUrl: NextcloudProvider.buildBaseUrl(cfg),
     };
   }
 

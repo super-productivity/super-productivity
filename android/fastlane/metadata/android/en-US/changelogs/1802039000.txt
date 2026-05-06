@@ -1,0 +1,3 @@
+- pin app-builder-lib minimatch back to 10.1.1
+- restore title tolerance in LWW archive resurrection assertion
+- reset sort/group/filter on work context change (#7263)

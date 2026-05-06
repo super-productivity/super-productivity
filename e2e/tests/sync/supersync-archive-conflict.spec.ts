@@ -250,21 +250,30 @@ test.describe('@supersync Archive Conflict Resolution', () => {
       await clientB.sync.syncAndWait();
       console.log('[BugB] Client B synced (downloaded archive + conflict resolution)');
 
-      // Extra sync rounds for convergence
+      // Extra sync rounds for convergence.
+      // Pattern A→B→A→B: conflict-resolution on either client may re-upload ops,
+      // and an uneven final round (e.g. A→B→A) can leave B one op behind A's
+      // final state. The closing B sync guarantees both clients are equal.
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
       console.log('[BugB] Extra sync rounds for convergence');
 
       // ============ PHASE 6: Verify task NOT in active task list ============
       await navigateToWorkView(clientA);
       await navigateToWorkView(clientB);
 
-      await expectTaskNotVisible(clientA, taskName);
+      // Use an extended timeout: archive op application goes through an async
+      // reducer pipeline plus an event-loop yield during sync replay (see
+      // CLAUDE.md #11). Give the UI enough time to reflect the archived state
+      // before asserting — this is real settle time, not masking.
+      const archivedAssertionTimeout = 15000;
+      await expectTaskNotVisible(clientA, taskName, archivedAssertionTimeout);
       console.log('[BugB] Client A: task not visible in active list');
 
-      await expectTaskNotVisible(clientB, taskRenamed);
-      await expectTaskNotVisible(clientB, taskName);
+      await expectTaskNotVisible(clientB, taskRenamed, archivedAssertionTimeout);
+      await expectTaskNotVisible(clientB, taskName, archivedAssertionTimeout);
       console.log('[BugB] Client B: task not visible in active list');
 
       // ============ PHASE 7: Verify task IN worklog ============

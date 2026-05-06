@@ -466,6 +466,7 @@ describe('ValidationService', () => {
         'MENU_TREE',
         'METRIC',
         'BOARD',
+        'SECTION',
         'REMINDER',
         'MIGRATION',
         'RECOVERY',
@@ -480,7 +481,7 @@ describe('ValidationService', () => {
     });
 
     it('should have exactly the expected number of entity types', () => {
-      expect(ALLOWED_ENTITY_TYPES.size).toBe(20);
+      expect(ALLOWED_ENTITY_TYPES.size).toBe(21);
     });
   });
 });

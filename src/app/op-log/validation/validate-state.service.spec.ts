@@ -31,6 +31,7 @@ describe('ValidateStateService', () => {
     project: { ids: [], entities: {} },
     tag: { ids: [], entities: {} },
     note: { ids: [], entities: {}, todayOrder: [] },
+    section: { ids: [], entities: {} },
     simpleCounter: { ids: [], entities: {} },
     issueProvider: { ids: [], entities: {} },
     taskRepeatCfg: { ids: [], entities: {} },

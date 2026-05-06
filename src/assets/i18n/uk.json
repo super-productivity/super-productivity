@@ -194,10 +194,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Як і де оцінювати",
-      "BTN_DONT_BOTHER": "Не турбувати більше",
-      "TITLE": "🙈 Пробачте, будь ласка, але...",
-      "TXT": "Ви б дуже допомогли проекту, <strong>поставивши йому хорошу оцінку, якщо вам це подобається!</strong>"
+      "A_HOW": "Як оцінити",
+      "BTN_DONT_BOTHER": "Більше не запитувати",
+      "BTN_FEEDBACK": "Надіслати відгук",
+      "BTN_LATER": "Можливо, пізніше",
+      "BTN_RATE_APP_STORE": "Оцінити в App Store",
+      "BTN_RATE_PLAY_STORE": "Оцінити в Play Store",
+      "FEEDBACK_BACK": "Назад",
+      "FEEDBACK_CONTRIBUTE": "Зробити внесок у проєкт",
+      "FEEDBACK_CONTRIBUTE_DESC": "Код, дизайн, переклади тощо",
+      "FEEDBACK_PRIVATE": "Написати супровіднику",
+      "FEEDBACK_PRIVATE_DESC": "Надіслати приватне повідомлення",
+      "FEEDBACK_PUBLIC": "Написати в GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Інші можуть побачити та відповісти",
+      "FEEDBACK_TITLE": "Як ви хочете допомогти?",
+      "TITLE": "Подобається Super Productivity?",
+      "TXT": "Це <strong>безкоштовний проєкт з відкритим кодом</strong>, створений ентузіастами — без відстеження й реклами. Оцінка або коротке повідомлення допомагає більшій кількості людей знайти його."
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
@@ -1878,7 +1890,8 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Будь ласка, введіть повний URL резервної JSON-файлу Super Productivity, який ви хочете імпортувати.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Імпортувати з URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Імпортувати з URL",
-    "PRIVACY_EXPORT": "Експорт анонімізованих даних (для надсилання на contact@super-productivity.com для налагодження)",
+    "PRIVACY_EXPORT": "Експортувати дані (анонімізовані)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Експорт анонімізованих даних (для надсилання на contact@super-productivity.com для налагодження)",
     "S_BACKUP_DOWNLOADED": "Резервна копія завантажена в папку з документами Android",
     "S_ERR_IMPORT_FAILED": "Не вдалося імпортувати дані",
     "S_ERR_INVALID_DATA": "Імпорт не вдався: Недійсний JSON",

@@ -53,7 +53,21 @@ export class TaskShortcutService {
     if (!cfg) return false;
 
     const keys = cfg.keyboard;
-    const focusedTaskId: TaskId | null = this._taskFocusService.focusedTaskId();
+    let focusedTaskId: TaskId | null = this._taskFocusService.focusedTaskId();
+
+    // Focus-tracking recovery: a `focusout` can clear focusedTaskId without a
+    // following `focusin` rebinding it (e.g. when focus stays on the task host
+    // after an inline-edit blur, the host's `.focus()` becomes a no-op and no
+    // new focusin fires). If the active element is still inside a <task>,
+    // derive the id from its data-task-id so shortcuts don't silently drop.
+    if (!focusedTaskId) {
+      const active = document.activeElement as HTMLElement | null;
+      const taskEl = active?.closest('task') as HTMLElement | null;
+      const recoveredId = taskEl?.getAttribute('data-task-id');
+      if (recoveredId) {
+        focusedTaskId = recoveredId;
+      }
+    }
 
     // Handle togglePlay specially - it works with focusedTaskId OR selectedTaskId
     // This allows starting time tracking from Schedule view where tasks are selected but not focused
@@ -108,6 +122,17 @@ export class TaskShortcutService {
 
     // Check if the focused task's context menu is open - if so, skip arrow navigation shortcuts
     const isContextMenuOpen = this._isTaskContextMenuOpen(focusedTaskId);
+
+    // Ctrl/Cmd+Enter on a focused (but not editing) task: same as the `a`
+    // shortcut — create a new subtask. Must run before the plain-Enter
+    // "edit title" handler below. A user-bound `togglePlay` is checked
+    // earlier (line ~74), so remapping `togglePlay` to Mod+Enter takes
+    // precedence over this hardcoded combo.
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+      this._handleTaskShortcut(focusedTaskId, 'addSubTask');
+      ev.preventDefault();
+      return true;
+    }
 
     // Basic task actions that work through component delegation
     if (
@@ -207,7 +232,7 @@ export class TaskShortcutService {
         checkKeyCombo(ev, keys.selectPreviousTask))
     ) {
       ev.preventDefault();
-      this._handleTaskShortcut(focusedTaskId, 'focusPrevious');
+      this._handleTaskShortcut(focusedTaskId, 'handleArrowUp');
       return true;
     }
 
@@ -217,7 +242,7 @@ export class TaskShortcutService {
         checkKeyCombo(ev, keys.selectNextTask))
     ) {
       ev.preventDefault();
-      this._handleTaskShortcut(focusedTaskId, 'focusNext');
+      this._handleTaskShortcut(focusedTaskId, 'handleArrowDown');
       return true;
     }
 
@@ -275,7 +300,9 @@ export class TaskShortcutService {
   /**
    * Calls a method on the currently focused task component.
    *
-   * @param taskId - The ID of the task (for validation)
+   * @param taskId - The ID of the task (must match lastFocusedTaskComponent;
+   *   guards against the recovery path delegating to a stale component when
+   *   the active element belongs to a different task than the one tracked).
    * @param method - The method name to call on the task component
    * @param args - Arguments to pass to the method
    */
@@ -287,6 +314,12 @@ export class TaskShortcutService {
     const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
     if (!taskComponent) {
       Log.warn(`No focused task component available for ID: ${taskId}`);
+      return;
+    }
+    if (taskComponent.task().id !== taskId) {
+      Log.warn(
+        `Focused task component (${taskComponent.task().id}) does not match shortcut target (${taskId})`,
+      );
       return;
     }
 

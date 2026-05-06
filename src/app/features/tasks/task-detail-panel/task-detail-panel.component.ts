@@ -53,8 +53,12 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
+import { MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Store } from '@ngrx/store';
 import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
+import { IssueLog } from '../../../core/log';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
 import { TaskListComponent } from '../task-list/task-list.component';
@@ -89,6 +93,8 @@ import { checkKeyCombo } from '../../../util/check-key-combo';
     TaskTitleComponent,
     TaskDetailItemComponent,
     MatIcon,
+    MatIconButton,
+    MatTooltip,
     TaskListComponent,
     MatButton,
     ProgressBarComponent,
@@ -365,9 +371,17 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
           distinctUntilChanged(),
           switchMap((issueProviderId) =>
             issueProviderId
-              ? this._store.select(
-                  selectIssueProviderById<IssueProviderJira>(issueProviderId, 'JIRA'),
-                )
+              ? this._store
+                  .select(
+                    selectIssueProviderById<IssueProviderJira>(issueProviderId, 'JIRA'),
+                  )
+                  .pipe(
+                    // Orphan issueProviderId — see #7135.
+                    catchError((err: unknown) => {
+                      IssueLog.warn('Jira header setup skipped', err);
+                      return of(null);
+                    }),
+                  )
               : of(null),
           ),
           takeUntilDestroyed(this._destroyRef),
@@ -482,6 +496,16 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       restoreFocus: true,
       data: { task: this.task() },
     });
+  }
+
+  unscheduleTask(ev: Event): void {
+    ev.stopPropagation();
+    this._store.dispatch(TaskSharedActions.unscheduleTask({ id: this.task().id }));
+  }
+
+  removeDeadline(ev: Event): void {
+    ev.stopPropagation();
+    this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: this.task().id }));
   }
 
   editTaskRepeatCfg(): void {

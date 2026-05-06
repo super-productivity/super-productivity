@@ -66,8 +66,8 @@ mat-dialog-content {
   left: 50%;
   z-index: 11;
   box-shadow: var(--whiteframe-shadow-1dp);
-  border-radius: 8px;
-  margin-top: -12px;
+  border-radius: var(--radius-md);
+  margin-top: calc(var(--s) * -1.5);
   white-space: nowrap;
   transform: translateX(-50%);
 
@@ -115,7 +115,7 @@ mat-dialog-content {
   height: auto;
   min-height: 38px;
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 
@@ -131,7 +131,7 @@ mat-dialog-content {
 .deadline-actions button,
 .dialog-cancel-btn {
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 

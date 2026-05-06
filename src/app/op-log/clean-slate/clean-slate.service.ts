@@ -82,7 +82,28 @@ export class CleanSlateService {
     reason: PreMigrationReason,
     syncImportReason: SyncImportReason,
   ): Promise<void> {
-    OpLog.normal('[CleanSlate] Starting clean slate process', { reason });
+    // Diagnostic snapshot of state about to be wiped. Captured before any
+    // mutation. Lets a future sync-stuck incident be correlated to the local
+    // op-log shape that preceded the destructive recovery (count of unsynced
+    // user work, prior vector-clock entries) without forensic recovery.
+    const priorClock = await this.opLogStore.getVectorClock();
+    const priorUnsynced = await this.opLogStore.getUnsynced();
+    const priorOpTypeBreakdown = priorUnsynced.reduce<Record<string, number>>(
+      (acc, entry) => {
+        const key = entry.op.opType;
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
+    OpLog.normal('[CleanSlate] Starting clean slate process', {
+      reason,
+      syncImportReason,
+      priorUnsyncedCount: priorUnsynced.length,
+      priorUnsyncedByOpType: priorOpTypeBreakdown,
+      priorClockSize: priorClock ? Object.keys(priorClock).length : 0,
+      priorClock: priorClock ?? null,
+    });
 
     // 1. Create pre-migration backup (placeholder for now)
     try {

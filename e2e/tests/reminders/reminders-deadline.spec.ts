@@ -94,6 +94,67 @@ test.describe('Deadline Reminders', () => {
     await expect(page.locator(REMINDER_DIALOG)).not.toBeVisible();
   });
 
+  test('should not reappear after ESC/backdrop dismissal of the deadline reminder dialog', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    test.setTimeout(SCHEDULE_MAX_WAIT_TIME + 60000);
+
+    await workViewPage.waitForTaskList();
+
+    const taskTitle = `${testPrefix}-deadline-esc`;
+    await workViewPage.addTask(taskTitle);
+
+    const escapedTitle = taskTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const task = page.locator(`task:has-text("${escapedTitle}")`).first();
+    await task.waitFor({ state: 'visible', timeout: 10000 });
+
+    await openTaskDetailPanel(page, task);
+    const deadlineItem = page.locator(DETAIL_PANEL_DEADLINE_ITEM).first();
+    await deadlineItem.waitFor({ state: 'visible', timeout: 5000 });
+    await deadlineItem.click();
+
+    const deadlineDialog = page.locator(DEADLINE_DIALOG);
+    await deadlineDialog.waitFor({ state: 'visible', timeout: 10000 });
+    await deadlineDialog.locator('.mat-calendar-body-today').click();
+
+    const deadlineTime = Date.now() + 10000;
+    await fillTimeInput(page, deadlineTime);
+
+    const remindSelect = deadlineDialog.locator('mat-select[name="type"]').last();
+    await remindSelect.waitFor({ state: 'visible', timeout: 5000 });
+    await remindSelect.click();
+
+    const atDeadlineOption = page
+      .locator('mat-option')
+      .filter({ hasText: 'At deadline' })
+      .first();
+    await atDeadlineOption.waitFor({ state: 'visible', timeout: 5000 });
+    await atDeadlineOption.click();
+
+    const submitBtn = deadlineDialog.locator('button:has-text("Set deadline")');
+    await submitBtn.click();
+    await deadlineDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await closeDetailPanelIfOpen(page);
+
+    // Wait for the reminder dialog to fire
+    await page.waitForSelector(REMINDER_DIALOG, {
+      state: 'visible',
+      timeout: SCHEDULE_MAX_WAIT_TIME,
+    });
+    await expect(page.locator(REMINDER_DIALOG)).toBeVisible();
+
+    // Dismiss via ESC (simulates user closing the dialog without a dedicated action)
+    await page.keyboard.press('Escape');
+    await page.locator(REMINDER_DIALOG).waitFor({ state: 'hidden', timeout: 10000 });
+
+    // Poll over a window longer than the 10s reminder worker tick. If the
+    // worker re-fires the past-due deadline, the dialog becomes visible and
+    // this assertion fails immediately.
+    await expect(page.locator(REMINDER_DIALOG)).not.toBeVisible({ timeout: 15000 });
+  });
+
   test('should not re-trigger after reschedule until tomorrow', async ({
     page,
     workViewPage,

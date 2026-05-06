@@ -81,6 +81,32 @@ const wouldCreateCircularReference = (
   return false;
 };
 
+// Normalize timeSpentOnDay at the data boundary so all consumers can trust the
+// invariant: timeSpentOnDay is always a valid object, never undefined. This mirrors
+// normalizeCountOnDay in simple-counter.reducer.ts. Fixing it here (rather than
+// adding optional-chaining guards at every access site) is correct because:
+//   1. The TypeScript type says timeSpentOnDay is required — the compiler won't catch
+//      unguarded accesses, so individual guards are invisible and get reverted.
+//   2. The undefined comes from legacy persisted data written before the field existed.
+//      It is a data-integrity issue, not a valid domain state; the type is correct.
+//   3. Normalizing once at load time is cheaper and more reliable than N guards.
+const normalizeTimeSpentOnDay = (state: TaskState): TaskState => {
+  let hasUndefined = false;
+  for (const id of state.ids as string[]) {
+    if (state.entities[id] && !state.entities[id]!.timeSpentOnDay) {
+      hasUndefined = true;
+      break;
+    }
+  }
+  if (!hasUndefined) return state;
+  const entities: TaskState['entities'] = {};
+  for (const id of state.ids as string[]) {
+    const task = state.entities[id];
+    entities[id] = task && !task.timeSpentOnDay ? { ...task, timeSpentOnDay: {} } : task;
+  }
+  return { ...state, entities };
+};
+
 // REDUCER
 // -------
 export const initialTaskState: TaskState = taskAdapter.getInitialState({
@@ -106,13 +132,16 @@ export const taskReducer = createReducer<TaskState>(
     if (hasOrphans) {
       devError('loadAllData: Found orphaned task IDs in loaded state — sanitizing');
     }
-    return {
-      ...(hasOrphans ? { ...task, ids: ids.filter((id) => !!task.entities[id]) } : task),
+    const sanitized = hasOrphans
+      ? { ...task, ids: ids.filter((id) => !!task.entities[id]) }
+      : task;
+    return normalizeTimeSpentOnDay({
+      ...sanitized,
       currentTaskId: null,
       selectedTaskId: null,
       lastCurrentTaskId: task.currentTaskId,
       isDataLoaded: true,
-    };
+    } as TaskState);
   }),
 
   on(TaskSharedActions.deleteProject, (state, { allTaskIds }) => {
@@ -200,7 +229,12 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(unsetCurrentTask, (state) => {
-    return { ...state, currentTaskId: null, lastCurrentTaskId: state.currentTaskId };
+    // Preserve lastCurrentTaskId when currentTaskId is already null (no-op unset).
+    return {
+      ...state,
+      currentTaskId: null,
+      lastCurrentTaskId: state.currentTaskId ?? state.lastCurrentTaskId,
+    };
   }),
 
   on(setSelectedTask, (state, { id, taskDetailTargetPanel, isSkipToggle }) => {
@@ -290,6 +324,24 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {
+    // Guard against invalid moves (e.g. 'UNDONE' passed as ID) that may
+    // appear in older op-log entries. Also reject self-moves where the
+    // task being moved is its own src/target — that would put a task into
+    // its own subTaskIds.
+    if (
+      !state.entities[srcTaskId] ||
+      !state.entities[targetTaskId] ||
+      taskId === srcTaskId ||
+      taskId === targetTaskId
+    ) {
+      TaskLog.warn('Ignoring invalid moveSubTask action', {
+        taskId,
+        srcTaskId,
+        targetTaskId,
+      });
+      return state;
+    }
+
     // Prevent circular references (task becoming subtask of its own descendant)
     if (wouldCreateCircularReference(state, taskId, targetTaskId)) {
       TaskLog.err(
@@ -469,8 +521,9 @@ export const taskReducer = createReducer<TaskState>(
       {
         ...task,
         // update timeSpent if first sub task and non present
+        // Guard timeSpentOnDay: legacy/imported tasks may have undefined here
         ...(parentTask.subTaskIds.length === 0 &&
-        Object.keys(task.timeSpentOnDay).length === 0
+        Object.keys(task.timeSpentOnDay || {}).length === 0
           ? {
               timeSpentOnDay: parentTask.timeSpentOnDay,
               timeSpent: calcTotalTimeSpent(parentTask.timeSpentOnDay),
@@ -534,7 +587,8 @@ export const taskReducer = createReducer<TaskState>(
     );
 
     const updateSubsAndMainWithoutSubs: Update<Task>[] = idsToUpdateDirectly.map((id) => {
-      const spentOnDayBefore = getTaskById(id, state).timeSpentOnDay;
+      // Guard timeSpentOnDay: legacy/imported tasks may have undefined here
+      const spentOnDayBefore = getTaskById(id, state).timeSpentOnDay || {};
       const timeSpentOnDayUpdated = {
         ...spentOnDayBefore,
         [day]: roundDurationVanilla(spentOnDayBefore[day], roundTo, isRoundUp),

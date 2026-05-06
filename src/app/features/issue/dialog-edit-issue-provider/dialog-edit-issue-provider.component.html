@@ -87,6 +87,9 @@
       <!-- -->
       @if (issueProviderKey === 'JIRA' && IS_WEB_EXTENSION_REQUIRED_FOR_JIRA) {
         <div [ngClass]="HelperClasses.isHideForAdvancedFeatures">
+          <p [innerHTML]="T.F.ISSUE.CROSS_ORIGIN_BROWSER_WARNING | translate"></p>
+        </div>
+        <div [ngClass]="HelperClasses.isHideForAdvancedFeatures">
           <p [innerHTML]="T.G.EXTENSION_INFO | translate"></p>
         </div>
       }

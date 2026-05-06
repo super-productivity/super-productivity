@@ -473,6 +473,78 @@ describe('getNewestPossibleDueDate()', () => {
     );
   });
 
+  describe('MONTHLY Nth weekday (issue #6040)', () => {
+    it('returns the Nth weekday of this month when today equals it', () => {
+      // 1st Thursday of Jan 2026 = Jan 1 (Thu). today = Jan 1.
+      const today = new Date(2026, 0, 1);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4,
+        lastTaskCreationDay: '2025-12-04', // 1st Thu of Dec 2025
+      });
+      testCase(cfg, today, new Date(2025, 11, 4), new Date(2026, 0, 1));
+    });
+
+    it('returns null when the candidate equals lastTaskCreation (uses > not >=)', () => {
+      // 1st Thursday of Jan 2026 = Jan 1. lastTaskCreation = Jan 1.
+      // today = Jan 1 → no newer occurrence to surface.
+      const today = new Date(2026, 0, 1);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-2', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4,
+        lastTaskCreationDay: getDbDateStr(new Date(2026, 0, 1)),
+      });
+      testCase(cfg, today, new Date(2025, 11, 4), null);
+    });
+
+    it('skips off-cycle months when repeatEvery=2', () => {
+      // startDate = Jan 1 2026 (1st Thu). repeatEvery=2 → expect Jan, Mar, May…
+      // today = Feb 28 2026; Feb is off-cycle, so newest valid is Jan's 1st Thu.
+      const today = new Date(2026, 1, 28);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-3', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 2,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4,
+        lastTaskCreationDay: '1970-01-01',
+      });
+      testCase(cfg, today, new Date(2026, 0, 1), new Date(2026, 0, 1));
+    });
+
+    it('falls back to legacy behavior when anchors are out of range', () => {
+      // monthlyWeekOfMonth=99 should not engage the NTH branch — the cfg
+      // behaves like a plain day-of-month MONTHLY anchored to startDate.
+      const today = new Date(2022, 1, 15);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-4', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 99 as never,
+        monthlyWeekday: 1,
+        lastTaskCreationDay: '1970-01-01',
+      });
+      testCase(cfg, today, new Date(2022, 0, 15), new Date(2022, 1, 15));
+    });
+
+    it('falls back to legacy behavior when monthlyWeekOfMonth is null (form sentinel)', () => {
+      // The form's "(Day of month)" option stores null transiently. Even if
+      // a stray null reaches the calc layer (e.g. a pre-normalization save
+      // path), the gatekeeper rejects it and behavior is day-of-month.
+      const today = new Date(2022, 1, 15);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-5', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: null as never,
+        monthlyWeekday: 1,
+        lastTaskCreationDay: '1970-01-01',
+      });
+      testCase(cfg, today, new Date(2022, 0, 15), new Date(2022, 1, 15));
+    });
+  });
+
   describe('Timezone Edge Cases', () => {
     describe('DST transitions', () => {
       it('should handle spring DST transition (clocks forward)', () => {

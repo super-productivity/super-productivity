@@ -24,6 +24,7 @@ export enum ActionType {
   BOARDS_UPDATE = '[Boards] Update Board',
   BOARDS_UPDATE_PANEL_CFG = '[Boards] Update Panel Cfg',
   BOARDS_UPDATE_PANEL_TASK_IDS = '[Boards] Update Panel Cfg TaskIds',
+  BOARDS_SORT = '[Boards] Sort Boards',
 
   // GlobalConfig actions (C)
   GLOBAL_CONFIG_UPDATE_SECTION = '[Global Config] Update Global Config Section',
@@ -130,6 +131,14 @@ export enum ActionType {
   REPEAT_CFG_DELETE_MULTIPLE = '[TaskRepeatCfg] Delete multiple TaskRepeatCfgs',
   REPEAT_CFG_DELETE_INSTANCE = '[TaskRepeatCfg] Delete Single Instance',
   REPEAT_CFG_UPSERT = '[TaskRepeatCfg] Upsert TaskRepeatCfg',
+
+  // Section actions (S)
+  SECTION_ADD = '[Section] Add Section',
+  SECTION_DELETE = '[Section] Delete Section',
+  SECTION_UPDATE = '[Section] Update Section',
+  SECTION_UPDATE_ORDER = '[Section] Update Section Order',
+  SECTION_ADD_TASK = '[Section] Add Task to Section',
+  SECTION_REMOVE_TASK = '[Section] Remove Task from Section',
 
   // SimpleCounter actions (S)
   COUNTER_ADD = '[SimpleCounter] Add SimpleCounter',

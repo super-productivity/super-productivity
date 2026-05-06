@@ -98,6 +98,7 @@ export class PluginHooksEffects {
           TaskSharedActions.scheduleTaskWithTime,
           TaskSharedActions.reScheduleTaskWithTime,
           TaskSharedActions.unscheduleTask,
+          TaskSharedActions.moveToOtherProject,
           PlannerActions.planTaskForDay,
           PlannerActions.transferTask,
         ),
@@ -118,6 +119,9 @@ export class PluginHooksEffects {
           } else if (action.type === TaskSharedActions.unscheduleTask.type) {
             taskId = action.id;
             changes = { dueWithTime: undefined, reminderId: undefined };
+          } else if (action.type === TaskSharedActions.moveToOtherProject.type) {
+            taskId = action.task.id;
+            changes = { projectId: action.targetProjectId };
           } else if (action.type === PlannerActions.planTaskForDay.type) {
             taskId = action.task.id;
             changes = { dueDay: action.day, dueWithTime: undefined };

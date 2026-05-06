@@ -357,20 +357,28 @@ export class DialogEditIssueProviderComponent {
     this.isOAuthConnecting.set(true);
     try {
       await this._pluginBridge.startOAuthFlow(pluginId, oauthConfig);
-      this.isOAuthConnected.set(true);
-      this._snackService.open({
-        type: 'SUCCESS',
-        msg: T.F.ISSUE.S.OAUTH_CONNECTED,
-      });
-      await this._loadDynamicOptions();
     } catch (e) {
+      const detail = (e instanceof Error ? e.message : String(e))
+        .replace(/\s+/g, ' ')
+        .slice(0, 200);
+      IssueLog.err('OAuth connect failed', { message: detail });
       this._snackService.open({
         type: 'ERROR',
-        msg: T.F.ISSUE.S.OAUTH_FAILED,
+        msg: detail ? T.F.ISSUE.S.OAUTH_FAILED_WITH_DETAIL : T.F.ISSUE.S.OAUTH_FAILED,
+        translateParams: { detail },
       });
+      return;
     } finally {
       this.isOAuthConnecting.set(false);
     }
+    this.isOAuthConnected.set(true);
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg: T.F.ISSUE.S.OAUTH_CONNECTED,
+    });
+    // _loadDynamicOptions surfaces its own per-field error snacks; failures
+    // here must not be reported as OAuth failures (the connection succeeded).
+    await this._loadDynamicOptions();
   }
 
   async disconnectOAuth(): Promise<void> {

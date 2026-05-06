@@ -51,7 +51,7 @@ describe('DateService timezone test', () => {
       const result = service.todayStr(now);
 
       console.log('DateService with startOfNextDayDiff:', {
-        startOfNextDayDiff: service.startOfNextDayDiff,
+        startOfNextDayDiffMs: service.getStartOfNextDayDiffMs(),
         localTime: now.toString(),
         result: result,
         expectedBehavior: 'Should treat 1 AM as previous day due to 2-hour offset',
@@ -60,5 +60,62 @@ describe('DateService timezone test', () => {
       // This is working as intended - adjusting the date based on work day settings
       expect(result).toBeDefined();
     });
+  });
+});
+
+describe('DateService — logical clock helpers', () => {
+  let service: DateService;
+
+  beforeEach(() => {
+    service = new DateService();
+    jasmine.clock().install();
+  });
+
+  afterEach(() => {
+    jasmine.clock().uninstall();
+  });
+
+  it('getLogicalTodayDate() equals Date.now() when offset is 0', () => {
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date('2026-04-17T10:00:00Z'));
+    expect(service.getLogicalTodayDate().getTime()).toBe(
+      new Date('2026-04-17T10:00:00Z').getTime(),
+    );
+  });
+
+  it('getLogicalTodayDate() subtracts offset hours from real now', () => {
+    service.setStartOfNextDayDiff(3);
+    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
+    const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+    const expected = new Date('2026-04-17T02:00:00Z').getTime() - THREE_HOURS_MS;
+    expect(service.getLogicalTodayDate().getTime()).toBe(expected);
+  });
+
+  it('getLogicalTomorrowMs() advances the local calendar day by one', () => {
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date(2026, 5, 15, 12, 0));
+    const tomorrow = new Date(service.getLogicalTomorrowMs());
+    expect(tomorrow.getFullYear()).toBe(2026);
+    expect(tomorrow.getMonth()).toBe(5); // June
+    expect(tomorrow.getDate()).toBe(16);
+  });
+
+  it('getLogicalTomorrowMs() advances the local date across a DST fall-back', () => {
+    // 2026-11-01 00:30 is the DST fall-back boundary in US/Pacific.
+    // A naive +24h stays on 2026-11-01 local (wrong); setDate-based advance yields 2026-11-02.
+    // Berlin has no DST transition on this date, so the test passes trivially there.
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date(2026, 10, 1, 0, 30));
+    const tomorrow = new Date(service.getLogicalTomorrowMs());
+    expect(tomorrow.getFullYear()).toBe(2026);
+    expect(tomorrow.getMonth()).toBe(10); // November
+    expect(tomorrow.getDate()).toBe(2);
+  });
+
+  it('getStartOfNextDayDiffMs() returns the current offset in ms', () => {
+    service.setStartOfNextDayDiff(3);
+    expect(service.getStartOfNextDayDiffMs()).toBe(3 * 60 * 60 * 1000);
+    service.setStartOfNextDayDiff(0);
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
   });
 });

@@ -37,6 +37,7 @@
 </p>
 
 ## :computer: Downloads & Install
+
 <p align="center">
   <a href='https://flathub.org/apps/com.super_productivity.SuperProductivity' target="_blank"> <img alt='Get it on Flathub'src='https://flathub.org/api/badge?locale=en' height="30"/></a>
   <a href="https://snapcraft.io/superproductivity" target="_blank"><img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" height="30"/></a>
@@ -96,31 +97,64 @@ And much more!
 
 <a href="https://youtu.be/_mvMXWLsL-8"><img alt="Work View with global links" src="docs/screens/screen_standard.png" width="100%"></a>
 
-## :book: Documentation
+> [!NOTE]
+> The web version has some limitations: See the **[Web App vs Desktop comparison](https://github.com/super-productivity/super-productivity/wiki/3.05-Web-App-vs-Desktop)** for more details.
 
-Full guides and reference material live in the **[wiki](https://github.com/super-productivity/super-productivity/wiki)**. Quick links: [First steps](https://github.com/super-productivity/super-productivity/wiki/1.01-First-Steps), [Reference index](https://github.com/super-productivity/super-productivity/wiki/3.00-Reference), [How-To index](https://github.com/super-productivity/super-productivity/wiki/2.00-How_To).
+## :book: Documentation and Guides
 
-## :question: How to use it
+<div style="display: flex; gap: 30px; align-items: flex-start;">
 
-If you need some help, [this article on dev.to is the best place to start](https://dev.to/johannesjo/getting-started-with-super-productivity-2791).
+  <!-- Getting Started -->
+  <div style="flex: 1;">
+    <h3>Getting Started</h3>
+    <ul>
+      <li><a href="https://dev.to/johannesjo/getting-started-with-super-productivity-2791">Getting started guide</a> (article)</li>
+      <li><a href="https://www.youtube.com/watch?v=VoF2_RSdNXA">Video walkthrough</a> (YouTube)</li>
+      <li><a href="https://dev.to/johannesjo/the-prioritising-scheme-how-to-eat-the-frog-with-super-productivity-mlk">Eat the frog prioritizing scheme</a></li>
+    </ul>
+    <p><strong>Starting Point in Wiki:</strong><br>
+      <a href="https://github.com/super-productivity/super-productivity/wiki/1.01-First-Steps">First steps</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.00-Reference">Reference</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/2.00-How_To">How-To</a>
+    </p>
+    <p><strong>Productivity Tips:</strong><br>
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.03-Keyboard-Shortcuts">Keyboard Shortcuts</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.04-Short-Syntax">Short Syntax</a>
+    </p>
+    <p><strong>Need Help?</strong><br>
+      <a href="https://github.com/super-productivity/super-productivity/discussions">Visit the discussions page</a>
+    </p>
+    <p>See the bottom of the README for more information on the documentation.</p>
+  </div>
 
-If you prefer, there is also a (long) [YouTube video available](https://www.youtube.com/watch?v=VoF2_RSdNXA).
-
-There is another [article](https://dev.to/johannesjo/the-prioritising-scheme-how-to-eat-the-frog-with-super-productivity-mlk) on how I implement the 'eat the frog' prioritizing scheme in the app.
-
-[If you have further questions, please refer to the discussions page](https://github.com/super-productivity/super-productivity/discussions).
-
-For a structured walkthrough (web app, install, next steps), see **[First steps (wiki)](https://github.com/super-productivity/super-productivity/wiki/1.01-First-Steps)**.
-
-**Keyboard shortcuts** and **short-syntax** for new tasks are maintained in the wiki: **[Keyboard shortcuts](https://github.com/super-productivity/super-productivity/wiki/3.03-Keyboard-Shortcuts)**, **[Short syntax](https://github.com/super-productivity/super-productivity/wiki/3.04-Short-Syntax)**.
-
-## :globe_with_meridians: Web Version
-
-Check out the web version even though it is a bit limited: Time tracking only works if the app is open and for idle time tracking to work, the chrome extension must be installed.
-
-If you want the Jira integration and idle time tracking to work, you also have to download and install the [Super Productivity Chrome Extension](https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb).
-
-More detail: **[Web app vs desktop (wiki)](https://github.com/super-productivity/super-productivity/wiki/3.05-Web-App-vs-Desktop)**.
+  <!-- Advanced Topics -->
+  <div style="flex: 1;">
+    <h3>Advanced Topics</h3>
+    <p>Here are some other topics covered in the
+      <a href="https://github.com/super-productivity/super-productivity/wiki">official wiki</a>:
+    </p>
+    <p><strong>Development:</strong><br>
+      <a href="https://github.com/super-productivity/super-productivity/wiki/2.11-Run-the-Development-Server">Run dev server</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/2.12-Package-the-App">Package the app</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/2.14-Build-for-Android">Build for Android</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/2.13-Run-with-Docker">Run with Docker</a>
+    </p>
+    <p><strong>Data Management:</strong><br>
+      <a href="https://github.com/super-productivity/super-productivity/wiki/4.23-Managing-Your-Data">User Data</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.07-Issue-Integration-Comparison">Issue Providers</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.08-Sync-Integration-Comparison">Sync Providers</a>
+    </p>
+    <p><strong>Customization:</strong><br>
+      <a href="https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin">Plugins</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.09-Theming">Themes</a>
+    </p>
+    <p><strong>APIs:</strong><br>
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.01-API#1-sync-server-rest-api">Sync Server</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.01-API#2-plugin-api">Plugins</a> •
+      <a href="https://github.com/super-productivity/super-productivity/wiki/3.01-API#3-local-rest-api">REST</a>
+    </p>
+  </div>
+</div>
 
 ## Community
 
@@ -154,7 +188,7 @@ There are several ways to help.
 
 7. **[Make a feature or improvement request](https://github.com/super-productivity/super-productivity/issues/new)**: Something can be done better? Something essential missing? Let us know!
 
-8. **[Translations](https://github.com/super-productivity/super-productivity/tree/master/src/assets/i18n), Icons, etc.**: You don't have to be a programmer to help. Many of the translations could use some love. Guide: **[Contribute translations (wiki)](https://github.com/super-productivity/super-productivity/wiki/2.18-Contribute-Translations)**.
+8. **[Translations](https://github.com/super-productivity/super-productivity/tree/master/src/assets/i18n), Icons, etc.**: You don't have to be a programmer to help; **[learn how to contribute translations](https://github.com/super-productivity/super-productivity/wiki/2.18-Contribute-Translations)**!
 
 [//]: # '[![inlang status badge](https://badge.inlang.com/?url=github.com/super-productivity/super-productivity)](https://fink.inlang.com/github.com/super-productivity/super-productivity?ref=badge)'
 [//]: #
@@ -162,7 +196,7 @@ There are several ways to help.
 
 9. **[Sponsor the project](https://github.com/sponsors/johannesjo)**
 
-10. **[Create custom plugins](docs/plugin-development.md)**: Extend Super Productivity with your own features and integrations by developing custom plugins. Overview: **[Develop a plugin (wiki)](https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin)**.
+10. **Create [custom plugins](https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin)** or **[custom themes](https://github.com/super-productivity/super-productivity/wiki/3.09-Theming)**
 
 ### Special Thanks to our Sponsors!!!
 
@@ -184,26 +218,53 @@ _(If you are, intend to or have been a sponsor and want to be shown here, [pleas
 
 Windows binaries are signed. Free code signing is provided by [SignPath.io](https://signpath.io?utm_source=foundation&utm_medium=github&utm_campaign=super-productivity), certificate by [SignPath Foundation](https://signpath.org?utm_source=foundation&utm_medium=github&utm_campaign=super-productivity).
 
-## Running the development server
+## Documentation: Manual versus Automated
 
-See the wiki: **[Run the development server](https://github.com/super-productivity/super-productivity/wiki/2.11-Run-the-Development-Server)**, **[Package the app](https://github.com/super-productivity/super-productivity/wiki/2.12-Package-the-App)**, **[Build for Android](https://github.com/super-productivity/super-productivity/wiki/2.14-Build-for-Android)**.
+There are two wikis: the official one hosted in by GitHub autonomously generated variant using [DeepWiki.com](https://deepwiki.com/super-productivity/super-productivity). The manually curated version is a more stable and approachable resource designed to help you understand the app from a more human-focused perspective whereas DeepWiki is optimized for explaining the code itself with little regard for context beyond that.
 
-## Run as Docker Container
 
-See the wiki: **[Run with Docker (wiki)](https://github.com/super-productivity/super-productivity/wiki/2.13-Run-with-Docker)**.
+<div style="display: flex; gap: 10px; align-items: flex-start;">
 
-## Custom themes (desktop only)
+  <!-- Official Wiki -->
+  <div style="flex: 1;">
+    <h3>Official Wiki</h3>
+    <p>
+      It is preferable to maintain local documentation rather than rely on an external service.
+      It also preferable that the documentation is updated in tandem with the code changes as
+      demonstrated in
+      <a href="https://github.com/super-productivity/super-productivity/commit/7a51d4b06e414fdcc48e4999197a93eee9cd09da">this commit</a>.
+    </p>
+    <p>
+      Changes to files within <code>./docs/wiki</code> are linted in CI before being automatically
+      sync'd to the repository's official Wiki hosted by GitHub.
+    </p>
+    <p>
+      Migrating to Docusaurus is a long-term goal once the content and structure of the wiki has matured
+      and the remaining "legacy docs" have either been reworked or removed. There are some automations in development to help reduce the difference between the published docs and the state of the code while retaining a human-in-the-loop.
+    </p>
+  </div>
 
-See the wiki: **[Theming (wiki)](https://github.com/super-productivity/super-productivity/wiki/3.09-Theming)**, **[User data (wiki)](https://github.com/super-productivity/super-productivity/wiki/3.06-User-Data)**.
-
-## Custom WebDAV Syncing
-
-See the wiki: **[User data (wiki)](https://github.com/super-productivity/super-productivity/wiki/3.06-User-Data)**, **[Managing your data (wiki)](https://github.com/super-productivity/super-productivity/wiki/4.23-Managing-Your-Data)**.
-
-## Automatic Backups
-
-See the wiki: **[User data (wiki)](https://github.com/super-productivity/super-productivity/wiki/3.06-User-Data)**, **[Restore data from backup (wiki)](https://github.com/super-productivity/super-productivity/wiki/2.02-Restore-Data-From-Backup)**.
-
-## User Data Folder
-
-See the wiki: **[User data (wiki)](https://github.com/super-productivity/super-productivity/wiki/3.06-User-Data)**, **[Other (wiki)](https://github.com/super-productivity/super-productivity/wiki/3.99-Other)**.
+  <!-- DeepWiki -->
+  <div style="flex: 1;">
+    <h3>DeepWiki.com</h3>
+    <p>
+      If you have very specific questions about how the code works or why a bug might be producing
+      a particular message it might be useful to
+      <a href="https://deepwiki.com/super-productivity/super-productivity">
+        <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+      </a>. It can help "cite your sources" when discussing functionality and code that you don't fully
+      understand as part of feature requests or bug reports.
+    </p>
+    <p>
+      This automated
+      <a href="https://diataxis.fr/reference/#reference">reference</a>
+      does come with some significant drawbacks:
+    </p>
+    <ol>
+      <li><strong>Intent:</strong> Describes what code does, not why decisions or tradeoffs were made.</li>
+      <li><strong>Staleness:</strong> Will *always* lag behind the code.</li>
+      <li><strong>Code-Focused:</strong> Does not provide guides or conceptual explanations.</li>
+      <li><strong>Cost:</strong> Potential future cost and higher resource usage than static docs.</li>
+    </ol>
+  </div>
+</div>

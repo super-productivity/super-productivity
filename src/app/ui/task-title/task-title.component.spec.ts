@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TaskTitleComponent } from './task-title.component';
 import { TranslateModule } from '@ngx-translate/core';
+import { EMPTY } from 'rxjs';
+import { MentionConfigService } from '../../features/tasks/mention-config.service';
 
 describe('TaskTitleComponent', () => {
   let component: TaskTitleComponent;
@@ -9,6 +11,7 @@ describe('TaskTitleComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [TaskTitleComponent, TranslateModule.forRoot()],
+      providers: [{ provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TaskTitleComponent);
@@ -189,6 +192,44 @@ describe('TaskTitleComponent', () => {
 
       expect(stopPropagationSpy).toHaveBeenCalled();
       expect(component.isEditing()).toBe(true);
+    });
+  });
+
+  describe('handleKeyDown trigger routing', () => {
+    const buildKey = (key: string, opts: KeyboardEventInit = {}): KeyboardEvent =>
+      new KeyboardEvent('keydown', { key, ...opts });
+
+    it('routes Escape to a blur with submitTrigger=escape', () => {
+      const blurSpy = spyOn<any>(component, '_forceBlur');
+      component.handleKeyDown(buildKey('Escape'));
+      expect(blurSpy).toHaveBeenCalledTimes(1);
+      expect((component as any)._submitTrigger).toBe('escape');
+    });
+
+    it('routes plain Enter to a blur with submitTrigger=enter', () => {
+      const blurSpy = spyOn<any>(component, '_forceBlur');
+      component.handleKeyDown(buildKey('Enter'));
+      expect(blurSpy).toHaveBeenCalledTimes(1);
+      expect((component as any)._submitTrigger).toBe('enter');
+    });
+
+    it('routes Ctrl+Enter to a blur with submitTrigger=modEnter', () => {
+      const blurSpy = spyOn<any>(component, '_forceBlur');
+      component.handleKeyDown(buildKey('Enter', { ctrlKey: true }));
+      expect(blurSpy).toHaveBeenCalledTimes(1);
+      expect((component as any)._submitTrigger).toBe('modEnter');
+    });
+
+    it('swallows Enter/Escape (no blur) while the mention list is shown', () => {
+      const blurSpy = spyOn<any>(component, '_forceBlur');
+      // Set the gating signal directly to bypass the setTimeout in updateMentionListShown.
+      (component as any)._isMentionListShown.set(true);
+
+      component.handleKeyDown(buildKey('Enter'));
+      component.handleKeyDown(buildKey('Escape'));
+      component.handleKeyDown(buildKey('Enter', { metaKey: true }));
+
+      expect(blurSpy).not.toHaveBeenCalled();
     });
   });
 });

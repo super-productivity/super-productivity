@@ -21,13 +21,18 @@ import { isOnline$ } from '../../util/is-online';
 import { LS } from '../persistence/storage-keys.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DialogPleaseRateComponent } from '../../features/dialog-please-rate/dialog-please-rate.component';
-import { map, take } from 'rxjs/operators';
+import {
+  applyRateDialogResult,
+  loadRateDialogState,
+  saveRateDialogState,
+  shouldShowRateDialog,
+} from '../../features/dialog-please-rate/rate-dialog-state';
+import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
 import { selectEnabledIssueProviders } from '../../features/issue/store/issue-provider.selectors';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { GlobalConfigState } from '../../features/config/global-config.model';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { IpcRendererEvent } from 'electron';
 import { environment } from '../../../environments/environment';
@@ -133,14 +138,14 @@ export class StartupService {
 
     if (IS_ELECTRON) {
       this._injector.get(LocalRestApiHandlerService).init();
+
+      window.ea.on(IPC.TRANSFER_SETTINGS_REQUESTED, () =>
+        this._sendCurrentSettingsToElectronAfterDataLoad(),
+      );
+      this._sendCurrentSettingsToElectronAfterDataLoad();
+
       window.ea.informAboutAppReady();
       this._uiHelperService.initElectron();
-
-      window.ea.on(IPC.TRANSFER_SETTINGS_REQUESTED, () => {
-        window.ea.sendAppSettingsToElectron(
-          this._globalConfigService.cfg() as GlobalConfigState,
-        );
-      });
     } else {
       // WEB VERSION
       window.addEventListener('beforeunload', (e) => {
@@ -162,6 +167,15 @@ export class StartupService {
         this._chromeExtensionInterfaceService.init();
       }
     }
+  }
+
+  private _sendCurrentSettingsToElectronAfterDataLoad(): void {
+    this._dataInitStateService.isAllDataLoadedInitially$
+      .pipe(
+        take(1),
+        switchMap(() => this._globalConfigService.cfg$.pipe(take(1))),
+      )
+      .subscribe((cfg) => window.ea.sendAppSettingsToElectron(cfg));
   }
 
   private async _initBackups(): Promise<void> {
@@ -365,17 +379,30 @@ export class StartupService {
   }
 
   private _handleAppStartRating(): void {
-    const appStarts = +(localStorage.getItem(LS.APP_START_COUNT) || 0);
     const lastStartDay = localStorage.getItem(LS.APP_START_COUNT_LAST_START_DAY);
     const todayStr = getDbDateStr();
-    if (appStarts === 32 || appStarts === 96) {
-      this._matDialog.open(DialogPleaseRateComponent);
-      localStorage.setItem(LS.APP_START_COUNT, (appStarts + 1).toString());
-    }
+    let appStarts = +(localStorage.getItem(LS.APP_START_COUNT) || 0);
     if (lastStartDay !== todayStr) {
-      localStorage.setItem(LS.APP_START_COUNT, (appStarts + 1).toString());
+      appStarts += 1;
+      localStorage.setItem(LS.APP_START_COUNT, appStarts.toString());
       localStorage.setItem(LS.APP_START_COUNT_LAST_START_DAY, todayStr);
     }
+
+    const state = loadRateDialogState();
+    if (!shouldShowRateDialog(state, appStarts)) {
+      return;
+    }
+    this._matDialog
+      .open(DialogPleaseRateComponent)
+      .afterClosed()
+      .subscribe((result) => {
+        const next = applyRateDialogResult(
+          loadRateDialogState(),
+          result ?? null,
+          appStarts,
+        );
+        saveRateDialogState(next);
+      });
   }
 
   private async _initPlugins(): Promise<void> {

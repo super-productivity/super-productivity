@@ -19,12 +19,34 @@
 // Mode selector at the top (Preparation state)
 .focus-mode-select-mode {
   position: absolute;
-  top: calc(var(--s2) + var(--safe-area-top));
+  top: var(--s2);
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-focus-mode-main-selector);
   padding: 0 var(--s2);
   max-width: 600px;
+}
+
+// Pomodoro settings cog — lives inside the clock face during prep (Pomodoro
+// mode only), centered at the bottom. Fades in on hover like the other
+// in-circle controls.
+.pomodoro-settings-btn {
+  position: absolute;
+  bottom: calc(var(--clock-face-size) * 0.05);
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: var(--muted-opacity);
+  transition: var(--transition-standard);
+  pointer-events: auto;
+
+  &:hover,
+  .clock-face:hover & {
+    opacity: 1;
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    opacity: 1;
+  }
 }
 
 // ========== CENTER BLOCK (Preparation & In Progress) ==========
@@ -136,6 +158,20 @@
   align-items: center;
   margin-bottom: var(--s2);
 
+  // Sizing tokens — scoped here so both .clock-face and the overlayed
+  // duration slider can share the same diameter. --control-offset is the
+  // distance the in-circle controls (pause/done/+/-) sit from the rim;
+  // larger circles allow tucking them slightly further inward.
+  --clock-face-size: 175px;
+  --clock-time-size: 34px;
+  --control-offset: 10px;
+
+  @media (min-height: 600px) and (min-width: 600px) {
+    --clock-face-size: 282px;
+    --clock-time-size: 68px;
+    --control-offset: 20px;
+  }
+
   &__content {
     position: relative;
     display: flex;
@@ -151,21 +187,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  --clock-face-size: 150px;
   width: var(--clock-face-size);
   height: var(--clock-face-size);
-
-  @media (min-height: 800px) and (min-width: 500px) {
-    --clock-face-size: 180px;
-  }
-
-  @media (min-height: 900px) and (min-width: 600px) {
-    --clock-face-size: 220px;
-  }
-
-  @media (max-height: 500px) {
-    --clock-face-size: 90px;
-  }
 
   &__layer {
     position: absolute;
@@ -183,6 +206,12 @@
       pointer-events: none;
     }
   }
+}
+
+// Breathing dot (flow mode) — sized just under the clock face so the task
+// title / "Select task to focus" placeholder above it stays easy to spot.
+breathing-dot {
+  --breathing-dot-size: calc(var(--clock-face-size) * 0.8);
 }
 
 .focus-progress-circle {
@@ -205,9 +234,20 @@
 }
 
 .clock-time {
-  font-size: 24px;
+  font-size: var(--clock-time-size, 52px);
   font-weight: bold;
-  @include center;
+  // Locked line-height + tabular digits so the ticking countdown doesn't
+  // shift width or vertical metrics mid-session.
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  // Optical centering: Roboto Bold digits sit slightly below the line-box
+  // center, so a plain 50/50 translate looks bottom-heavy. Nudging up by
+  // ~4% of the font-size brings the digits to the visual middle of the
+  // clock face (~3px at 72px, scales with breakpoint).
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% - 0.05em));
 }
 
 .overtime-msg {
@@ -217,20 +257,31 @@
   margin-top: 8px;
 }
 
+// Duration slider overlays the clock face so the selector fills the full
+// circle during countdown preparation.
 .duration-slider-overlay-wrapper {
-  @include center;
-  width: 200px;
+  position: absolute;
+  top: calc(var(--clock-face-size) * 0.5);
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-focus-mode-duration-slider);
+  pointer-events: auto;
 }
 
 .duration-slider-overlay {
+  --input-duration-slider-size: var(--clock-face-size);
+  // Scale the editable duration text with the circle so it's readable on
+  // large screens; ~16% of diameter keeps proportions close to the clock-time.
+  --input-duration-slider-value-size: calc(var(--clock-face-size) * 0.16);
   display: flex;
   justify-content: center;
-  z-index: var(--z-focus-mode-duration-slider);
+}
 
-  @include mq(xs, max) {
-    width: 160px;
-    bottom: -50px;
-  }
+// When the duration slider is showing (countdown prep), hide the clock
+// digits — the slider's own value display takes over. Toggled by a class
+// bound to isShowDurationSlider() in the template.
+.clock-display__content.is-duration-slider-active .clock-time {
+  visibility: hidden;
 }
 
 // ========== CLOCK WRAPPER (In Progress state) ==========
@@ -241,7 +292,9 @@
   display: grid;
   place-items: center;
   text-align: center;
-  --control-offset: var(--s2);
+  // --control-offset declared on .clock-display so it can be tuned per
+  // breakpoint. The earlier formula derived it from font-size and ended up
+  // pushing controls over the digits at larger sizes. See #7403.
 
   &:hover button {
     opacity: 1;
@@ -333,7 +386,7 @@
   justify-content: center;
   align-items: center;
   position: fixed;
-  bottom: var(--s2);
+  bottom: calc(var(--s2) + var(--safe-area-bottom));
   left: 50%;
   transform: translateX(-50%);
 
@@ -428,7 +481,7 @@
       color: inherit;
       border: none;
       box-sizing: border-box;
-      word-wrap: break-word;
+      overflow-wrap: break-word;
       display: block;
       resize: none;
       min-height: 60px;

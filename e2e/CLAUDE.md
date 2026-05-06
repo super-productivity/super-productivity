@@ -3,8 +3,32 @@
 ## Run Tests
 
 ```bash
-npm run e2e:file tests/path/to/test.spec.ts   # Single test
+npm run e2e:file tests/path/to/test.spec.ts   # Single test (~20s/test)
 npm run e2e                                    # All tests
+npm run e2e:supersync:file <path>              # SuperSync E2E (auto-starts server)
+```
+
+When iterating, prefer single-file runs with `--retries=0` to avoid long waits, and `--grep "test name"` for one test:
+
+```bash
+npm run e2e:file <path> -- --retries=0 --grep "should X"
+```
+
+## SuperSync full suite
+
+The `npm run e2e:supersync` script buffers output, which is unhelpful for live debugging. Run Playwright directly with a line reporter instead:
+
+```bash
+# Start the server
+docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d supersync && \
+  until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done && \
+  echo 'Server ready!'
+
+# Run with line reporter for real-time output
+npx playwright test --config e2e/playwright.config.ts --grep @supersync --reporter=line
+
+# Stop the server when done
+docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync
 ```
 
 ## Test Template

@@ -36,6 +36,7 @@ import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
+import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 
 @Component({
   selector: 'note',
@@ -55,6 +56,7 @@ import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-i
     MatMenuItem,
     AsyncPipe,
     TranslatePipe,
+    RenderLinksPipe,
   ],
 })
 export class NoteComponent implements OnChanges {

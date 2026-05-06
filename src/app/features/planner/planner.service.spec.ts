@@ -81,10 +81,7 @@ describe('PlannerService', () => {
             const tomorrowObservable = mockDaysSubject.pipe(
               map((days) => {
                 const ds = TestBed.inject(DateService);
-                const todayMs = Date.now() - ds.startOfNextDayDiff;
-                // eslint-disable-next-line no-mixed-operators
-                const tomorrowMs = todayMs + 24 * 60 * 60 * 1000;
-                const tomorrowStr = getDbDateStr(tomorrowMs);
+                const tomorrowStr = getDbDateStr(ds.getLogicalTomorrowMs());
                 return days.find((d) => d.dayDate === tomorrowStr) ?? null;
               }),
               shareReplay(1),

@@ -111,7 +111,8 @@ export class ReminderCountdownEffects {
     if (
       this._currentBannerTask &&
       this._currentBannerTask.id === firstDue.id &&
-      this._currentBannerTask.remindAt === firstDue.remindAt
+      this._currentBannerTask.remindAt === firstDue.remindAt &&
+      this._currentBannerTask.dueWithTime === firstDue.dueWithTime
     ) {
       // just leave banner as is
       return;
@@ -126,7 +127,12 @@ export class ReminderCountdownEffects {
     const showBannerStart = Date.now();
     const remainingAtBannerStart = firstDue.remindAt - showBannerStart;
 
-    const startsAt = this._datePipe.transform(firstDue.remindAt, 'shortTime') as string;
+    // dueWithTime is the task's scheduled start; remindAt is when the reminder fires.
+    // Fallback covers reminder-only tasks where dueWithTime is unset.
+    const startsAt = this._datePipe.transform(
+      firstDue.dueWithTime ?? firstDue.remindAt,
+      'shortTime',
+    ) as string;
 
     const nrOfAllBanners = dueTasks.length;
     Log.log({

@@ -204,9 +204,13 @@ describe('Task Selectors', () => {
     fromSelectors.selectAllTasksWithSubTasks.clearResult();
     fromSelectors.selectAllRepeatableTaskWithSubTasks.clearResult();
     fromSelectors.selectTaskByIdWithSubTaskData.clearResult();
+    fromSelectors.selectOverdueTasksWithSubTasks.clearResult();
+    fromSelectors.selectLaterTodayTasksWithSubTasks.clearResult();
     fromSelectors.selectAllTasksWithSubTasks.release();
     fromSelectors.selectAllRepeatableTaskWithSubTasks.release();
     fromSelectors.selectTaskByIdWithSubTaskData.release();
+    fromSelectors.selectOverdueTasksWithSubTasks.release();
+    fromSelectors.selectLaterTodayTasksWithSubTasks.release();
   });
 
   // Basic selectors

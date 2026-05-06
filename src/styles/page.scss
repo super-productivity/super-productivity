@@ -14,6 +14,68 @@ app-root,
   box-sizing: border-box;
   font-optical-sizing: auto;
   font-family: var(--font-primary-stack);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+  letter-spacing: var(--letter-spacing-normal);
+}
+
+// Tabular figures — opt-in only (avoid applying to non-numeric <time> content)
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+// Wrapped in :where() so the global rules specificity is (0,0,0) — any
+// component or Material typography override wins trivially.
+// Excludes Material dialog/card titles explicitly.
+:where(h1, h2, h3, h4, h5, h6):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(
+    .mat-mdc-card-title
+  ) {
+  font-family: inherit;
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-tight);
+  color: var(--text-color-most-intense);
+}
+
+:where(h1):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-3xl);
+  letter-spacing: var(--letter-spacing-tighter);
+  line-height: var(--line-height-tight);
+}
+
+:where(h2):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-2xl);
+  letter-spacing: var(--letter-spacing-tighter);
+}
+
+:where(h3):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-xl);
+}
+
+:where(h4):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-lg);
+}
+
+:where(h5):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-md);
+}
+
+:where(h6):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--text-color-muted);
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono-stack);
+  font-feature-settings: 'liga' 0;
 }
 
 html {

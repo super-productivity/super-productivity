@@ -45,6 +45,7 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.BOARDS_UPDATE]: 'BU',
   [ActionType.BOARDS_UPDATE_PANEL_CFG]: 'BP',
   [ActionType.BOARDS_UPDATE_PANEL_TASK_IDS]: 'BT',
+  [ActionType.BOARDS_SORT]: 'BS',
 
   // GlobalConfig actions (C)
   [ActionType.GLOBAL_CONFIG_UPDATE_SECTION]: 'CU',
@@ -151,6 +152,14 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.REPEAT_CFG_DELETE_MULTIPLE]: 'RDM',
   [ActionType.REPEAT_CFG_DELETE_INSTANCE]: 'RDI',
   [ActionType.REPEAT_CFG_UPSERT]: 'RX',
+
+  // Section
+  [ActionType.SECTION_ADD]: 'S1',
+  [ActionType.SECTION_DELETE]: 'S2',
+  [ActionType.SECTION_UPDATE]: 'S3',
+  [ActionType.SECTION_UPDATE_ORDER]: 'S4',
+  [ActionType.SECTION_ADD_TASK]: 'S5',
+  [ActionType.SECTION_REMOVE_TASK]: 'S6',
 
   // SimpleCounter actions (S)
   [ActionType.COUNTER_ADD]: 'SA',

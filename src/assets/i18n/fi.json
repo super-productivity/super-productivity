@@ -176,10 +176,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Miten ja missä arvostella",
-      "BTN_DONT_BOTHER": "Älä häiritse minua uudelleen",
-      "TITLE": "🙈 Pyydämme anteeksi, mutta...",
-      "TXT": "Auttaisit projektia valtavasti <strong>antamalla sille hyvän arvion, jos pidät siitä!</strong>"
+      "A_HOW": "Miten arvostella",
+      "BTN_DONT_BOTHER": "Älä kysy uudelleen",
+      "BTN_FEEDBACK": "Anna palautetta",
+      "BTN_LATER": "Ehkä myöhemmin",
+      "BTN_RATE_APP_STORE": "Arvostele App Storessa",
+      "BTN_RATE_PLAY_STORE": "Arvostele Play Storessa",
+      "FEEDBACK_BACK": "Takaisin",
+      "FEEDBACK_CONTRIBUTE": "Osallistu projektiin",
+      "FEEDBACK_CONTRIBUTE_DESC": "Koodi, suunnittelu, käännökset ja muuta",
+      "FEEDBACK_PRIVATE": "Lähetä sähköpostia ylläpitäjälle",
+      "FEEDBACK_PRIVATE_DESC": "Lähetä yksityinen viesti",
+      "FEEDBACK_PUBLIC": "Kirjoita GitHub Discussionsiin",
+      "FEEDBACK_PUBLIC_DESC": "Muut näkevät ja voivat vastata",
+      "FEEDBACK_TITLE": "Miten haluaisit auttaa?",
+      "TITLE": "Pidätkö Super Productivitysta?",
+      "TXT": "Se on <strong>ilmainen avoimen lähdekoodin projekti</strong>, jonka tekevät innokkaat harrastajat – ei seurantaa eikä mainoksia. Arvostelu tai lyhyt viesti auttaa useampia löytämään sen."
     },
     "DROPBOX": {
       "S": {
@@ -1878,7 +1890,8 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Anna koko URL-osoite Super Productivityn varmuuskopio JSON-tiedostolle, jonka haluat tuoda.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Tuo URL-osoitteesta",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Tuo URL-osoitteesta",
-    "PRIVACY_EXPORT": "Vie anonyymit tiedot (lähetettäväksi osoitteeseen contact@super-productivity.com vianetsintää varten)",
+    "PRIVACY_EXPORT": "Vie tiedot (anonyymit)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Vie anonyymit tiedot (lähetettäväksi osoitteeseen contact@super-productivity.com vianetsintää varten)",
     "S_BACKUP_DOWNLOADED": "Varmuuskopio ladattu android-asiakirjakansioon",
     "S_ERR_IMPORT_FAILED": "Tietojen tuonti epäonnistui",
     "S_ERR_INVALID_DATA": "Tuonti epäonnistui: Virheellinen JSON",

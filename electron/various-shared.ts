@@ -26,8 +26,12 @@ export function showOrFocus(passedWin: BrowserWindow): void {
   if (win.isVisible()) {
     win.focus();
   } else {
-    // restore explicitly
-    if (win.isMinimized()) win.restore();
+    // restore explicitly - always call restore() before show()
+    // On Linux, event.preventDefault() on the minimize event has no effect, so the
+    // window may be minimized. On some desktop environments (e.g. GNOME/Wayland),
+    // isMinimized() returns false for a hidden+minimized window, so calling restore()
+    // only when isMinimized() is true would skip it and leave show() to fail alone.
+    win.restore();
     win.show();
     if (getWasMaximizedBeforeHide()) win.maximize();
   }

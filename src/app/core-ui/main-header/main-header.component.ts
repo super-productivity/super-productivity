@@ -126,13 +126,6 @@ export class MainHeaderComponent implements OnDestroy {
   );
   isRouteWithSidePanel = toSignal(this._isRouteWithSidePanel$, { initialValue: true });
 
-  private _isScheduleSection$ = this._router.events.pipe(
-    filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-    map((event) => !!event.urlAfterRedirects.match(/(schedule)$/)),
-    startWith(!!this._router.url.match(/(schedule)$/)),
-  );
-  isScheduleSection = toSignal(this._isScheduleSection$, { initialValue: false });
-
   // Convert more observables to signals
 
   currentTask = toSignal(this.taskService.currentTask$);
@@ -186,12 +179,6 @@ export class MainHeaderComponent implements OnDestroy {
 
   private _subs: Subscription = new Subscription();
 
-  selectedTimeView = computed(() => this.layoutService.selectedTimeView());
-
-  selectTimeView(view: 'week' | 'month'): void {
-    this.layoutService.selectedTimeView.set(view);
-  }
-
   ngOnDestroy(): void {
     this._subs.unsubscribe();
   }
@@ -224,9 +211,9 @@ export class MainHeaderComponent implements OnDestroy {
     if (this.dialogSyncCfgRef) {
       return;
     }
-    const { DialogSyncInitialCfgComponent } =
-      await import('../../imex/sync/dialog-sync-initial-cfg/dialog-sync-initial-cfg.component');
-    this.dialogSyncCfgRef = this.matDialog.open(DialogSyncInitialCfgComponent);
+    const { DialogSyncCfgComponent } =
+      await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component');
+    this.dialogSyncCfgRef = this.matDialog.open(DialogSyncCfgComponent);
     this._subs.add(
       this.dialogSyncCfgRef.afterClosed().subscribe(() => {
         this.dialogSyncCfgRef = null;

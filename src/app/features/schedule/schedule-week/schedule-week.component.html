@@ -93,7 +93,7 @@
   }
 
   <!-- Events -->
-  @for (ev of safeEvents(); track ev.id) {
+  @for (ev of safeEvents(); track trackEventKey(ev)) {
     @if (isDraggableSE(ev)) {
       <schedule-event
         class="draggable"
@@ -127,7 +127,7 @@
           <mat-icon>hourglass_disabled</mat-icon>
           {{ beyondBudgetDay.length }}
         </div>
-        @for (ev of beyondBudgetDay; track ev.id) {
+        @for (ev of beyondBudgetDay; track trackEventKey(ev)) {
           @if (isDraggableSE(ev)) {
             <schedule-event
               [event]="ev"

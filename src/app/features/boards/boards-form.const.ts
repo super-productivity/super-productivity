@@ -9,7 +9,6 @@ import {
 import { nanoid } from 'nanoid';
 import { T } from '../../t.const';
 import { DEFAULT_PANEL_CFG } from './boards.const';
-import { FormlyFieldConfig } from '@ngx-formly/core';
 
 const getNewPanel = (): BoardPanelCfg => ({
   ...DEFAULT_PANEL_CFG,
@@ -67,6 +66,30 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           },
         },
         {
+          key: 'includedTagsMatch',
+          type: 'radio',
+          // Only meaningful with >=2 required tags.
+          expressions: {
+            hide: 'model.includedTagIds?.length < 2',
+          },
+          // `defaultValue` lives at the field level — Formly's core extension
+          // reads `field.defaultValue`, not `field.props.defaultValue`, when
+          // populating the model. `resetOnHide` makes the default flow into
+          // the model when the field transitions hidden→visible. Without
+          // these, the field is shown with `undefined` and the `required`
+          // validator locks the Save button (#7380).
+          defaultValue: 'all',
+          resetOnHide: true,
+          props: {
+            label: T.F.BOARDS.FORM.TAGS_MATCH_MODE,
+            required: true,
+            options: [
+              { value: 'all', label: T.F.BOARDS.FORM.TAGS_MATCH_ALL },
+              { value: 'any', label: T.F.BOARDS.FORM.TAGS_MATCH_ANY },
+            ],
+          },
+        },
+        {
           type: 'tag-select',
           key: 'excludedTagIds',
           expressions: {
@@ -75,6 +98,23 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           },
           templateOptions: {
             label: T.F.BOARDS.FORM.TAGS_EXCLUDED,
+          },
+        },
+        {
+          key: 'excludedTagsMatch',
+          type: 'radio',
+          expressions: {
+            hide: 'model.excludedTagIds?.length < 2',
+          },
+          defaultValue: 'any',
+          resetOnHide: true,
+          props: {
+            label: T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_MODE,
+            required: true,
+            options: [
+              { value: 'any', label: T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ANY },
+              { value: 'all', label: T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ALL },
+            ],
           },
         },
         {
@@ -128,20 +168,34 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           },
         },
         {
-          key: 'sortByDue',
+          key: 'sortBy',
+          type: 'select',
+          props: {
+            label: T.F.BOARDS.FORM.SORT_BY,
+            defaultValue: null,
+            options: [
+              { value: null, label: T.F.BOARDS.FORM.SORT_BY_MANUAL },
+              { value: 'dueDate', label: T.F.BOARDS.FORM.SORT_BY_DUE },
+              { value: 'created', label: T.F.BOARDS.FORM.SORT_BY_CREATED },
+              { value: 'title', label: T.F.BOARDS.FORM.SORT_BY_TITLE },
+              { value: 'timeEstimate', label: T.F.BOARDS.FORM.SORT_BY_TIME_ESTIMATE },
+            ],
+          },
+        },
+        {
+          key: 'sortDir',
           type: 'radio',
           expressions: {
-            hide: (fCfg: FormlyFieldConfig) =>
-              fCfg.model.scheduledState !== BoardPanelCfgScheduledState.Scheduled,
+            hide: '!model.sortBy',
           },
+          defaultValue: 'asc',
+          resetOnHide: true,
           props: {
-            label: 'Sort by due date',
+            label: T.F.BOARDS.FORM.SORT_DIR,
             required: true,
-            defaultValue: 'off',
             options: [
-              { value: 'off', label: 'Off' },
-              { value: 'asc', label: 'Ascending (soonest first)' },
-              { value: 'desc', label: 'Descending (furthest first)' },
+              { value: 'asc', label: T.F.BOARDS.FORM.SORT_DIR_ASC },
+              { value: 'desc', label: T.F.BOARDS.FORM.SORT_DIR_DESC },
             ],
           },
         },

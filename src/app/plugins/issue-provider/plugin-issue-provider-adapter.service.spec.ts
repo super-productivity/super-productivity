@@ -733,6 +733,56 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
       });
 
+      it('should pass issueNumber from the fresh issue into ctx for toTaskValue', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Updated',
+          lastUpdated: 2000,
+          // GitHub-style extended field surfaced via ctx.issueNumber
+          ...({ number: 42 } as Record<string, unknown>),
+        } as PluginIssue;
+        const syncValues = { summary: 'Updated' };
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [
+            {
+              taskField: 'title',
+              issueField: 'summary',
+              defaultDirection: 'pullOnly',
+              toIssueValue: (v: unknown) => v,
+              toTaskValue: (v: unknown, ctx: { issueId: string; issueNumber?: number }) =>
+                `#${ctx.issueNumber} ${v}`,
+            },
+          ],
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue(syncValues),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { title: 'pullOnly' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          issueLastSyncedValues: { summary: 'Original' },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['title' as keyof Task]).toBe('#42 Updated');
+      });
+
       it('should clear mutually exclusive fields when pulling dueWithTime', async () => {
         const freshIssue: PluginIssue = {
           id: 'ISS-1',

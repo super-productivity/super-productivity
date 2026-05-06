@@ -10,6 +10,7 @@ import {
 } from '../../time-tracking/store/time-tracking.actions';
 import { _resetDevErrorState } from '../../../util/dev-error';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 
 describe('Task Reducer', () => {
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
@@ -529,6 +530,18 @@ describe('Task Reducer', () => {
       expect(state.currentTaskId).toBeNull();
       expect(state.lastCurrentTaskId).toBe('task1');
     });
+
+    it('should preserve lastCurrentTaskId on a no-op unsetCurrentTask', () => {
+      const pausedState: TaskState = {
+        ...stateWithTasks,
+        currentTaskId: null,
+        lastCurrentTaskId: 'task1',
+      };
+      const state = taskReducer(pausedState, fromActions.unsetCurrentTask());
+
+      expect(state.currentTaskId).toBeNull();
+      expect(state.lastCurrentTaskId).toBe('task1');
+    });
   });
 
   describe('removeTasksFromTodayTag action', () => {
@@ -926,6 +939,101 @@ describe('Task Reducer', () => {
       expect(result.entities['task-remind']!.remindAt).toBeUndefined();
       expect(result.entities['task-remind']!.dueDay).toBe('2024-01-02');
       expect(result.entities['task-remind']!.dueWithTime).toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // timeSpentOnDay normalization (issue #7104)
+  //
+  // Legacy archive/persisted tasks can have timeSpentOnDay: undefined when
+  // they were created before the field was introduced. Rather than adding
+  // optional-chaining guards at every individual access site (which TypeScript
+  // won't enforce since the type declares the field as required), we normalize
+  // to {} at the data boundary so the rest of the codebase can trust the
+  // invariant: timeSpentOnDay is always a valid object, never undefined.
+  // -----------------------------------------------------------------------
+
+  describe('loadAllData - timeSpentOnDay normalization', () => {
+    it('should normalize tasks with undefined timeSpentOnDay to {} on load', () => {
+      const taskWithUndefined = createTask('t1', { timeSpentOnDay: undefined as any });
+      const appDataComplete = {
+        task: {
+          ids: ['t1'],
+          entities: { t1: taskWithUndefined },
+          currentTaskId: null,
+          selectedTaskId: null,
+          lastCurrentTaskId: null,
+          isDataLoaded: false,
+        },
+      } as any;
+
+      const result = taskReducer(initialTaskState, loadAllData({ appDataComplete }));
+
+      expect(result.entities['t1']!.timeSpentOnDay).toEqual({});
+    });
+
+    it('should leave tasks with valid timeSpentOnDay untouched', () => {
+      const taskWithTime = createTask('t1', {
+        timeSpentOnDay: { '2026-04-01': 3600000 },
+      });
+      const appDataComplete = {
+        task: {
+          ids: ['t1'],
+          entities: { t1: taskWithTime },
+          currentTaskId: null,
+          selectedTaskId: null,
+          lastCurrentTaskId: null,
+          isDataLoaded: false,
+        },
+      } as any;
+
+      const result = taskReducer(initialTaskState, loadAllData({ appDataComplete }));
+
+      expect(result.entities['t1']!.timeSpentOnDay).toEqual({ '2026-04-01': 3600000 });
+    });
+  });
+
+  describe('addSubTask - undefined timeSpentOnDay guard', () => {
+    it('should not crash when the first subtask of a parent has undefined timeSpentOnDay', () => {
+      // The crash at task.reducer.ts:473 only fires on the FIRST subtask of a parent
+      // (subTaskIds.length === 0), where it tries to inherit the parent's timeSpentOnDay.
+      // If the new subtask has timeSpentOnDay: undefined, Object.keys(undefined) throws.
+      const parentWithNoSubs = createTask('parentNoSubs', { subTaskIds: [] });
+      const state: TaskState = {
+        ...initialTaskState,
+        ids: ['parentNoSubs'],
+        entities: { parentNoSubs: parentWithNoSubs },
+      };
+      const newSubTask = createTask('sub99', { timeSpentOnDay: undefined as any });
+      const action = fromActions.addSubTask({
+        task: newSubTask,
+        parentId: 'parentNoSubs',
+      });
+
+      expect(() => taskReducer(state, action)).not.toThrow();
+      const result = taskReducer(state, action);
+      expect(result.entities['parentNoSubs']!.subTaskIds).toContain('sub99');
+    });
+  });
+
+  describe('roundTimeSpentForDay - undefined timeSpentOnDay guard', () => {
+    it('should not crash when the task has undefined timeSpentOnDay', () => {
+      const stateWithUndefined: TaskState = {
+        ...initialTaskState,
+        ids: ['t1'],
+        entities: {
+          t1: createTask('t1', { subTaskIds: [], timeSpentOnDay: undefined as any }),
+        },
+      };
+      const action = fromActions.roundTimeSpentForDay({
+        day: '2026-04-02',
+        taskIds: ['t1'],
+        isRoundUp: false,
+        roundTo: 'QUARTER' as any,
+        projectId: undefined,
+      });
+
+      expect(() => taskReducer(stateWithUndefined, action)).not.toThrow();
     });
   });
 });

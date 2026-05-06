@@ -17,6 +17,12 @@ files:
 directories:
   output: './.tmp/app-builds'
 
+# Post-pack hook that installs a shell wrapper for Linux builds to force
+# --ozone-platform=x11 in Snap+Wayland sessions.
+# See tools/afterPack.js + build/linux/snap-wrapper.sh and
+# docs/research/snap-wayland-gpu-fix-research.md §18.
+afterPack: ./tools/afterPack.js
+
 win:
   target:
     - target: nsis
@@ -75,6 +81,16 @@ rpm:
 #    GenericName: ToDo List and Time Tracker
 
 snap:
+  # We upload the .snap to the Snap Store ourselves via Canonical's snapcraft
+  # container in CI (build.yml). electron-builder's snap target has a
+  # hard-coded fallback to `snapStore` in `findSnapPublishConfig` (snap.js):
+  # if `snap.publish` is unset, it falls through `linux.publish`/`config.publish`
+  # to `{ provider: "snapStore" }`, then invokes `snapcraft` on the runner
+  # during upload — and we no longer install snapcraft there (it was an
+  # unreliable `sudo snap install`). Setting `snap.publish: github` overrides
+  # that fallback. The .snap also lands on the GitHub release as a side effect,
+  # which is harmless (and a useful manual-download fallback).
+  publish: github
   grade: stable
   allowNativeWayland: true
   autoStart: true
@@ -84,6 +100,19 @@ snap:
     # Fix for issue #4920: Isolate fontconfig cache to prevent GTK dialog rendering issues
     # https://github.com/super-productivity/super-productivity/issues/4920
     FC_CACHEDIR: $SNAP_USER_DATA/.cache/fontconfig
+    # Fix for issue #7298: tray icon renders as three dots on Ubuntu 24.04+ snap.
+    # Chromium's StatusIconLinuxDbus writes the tray PNG to TMPDIR and sends
+    # its path to gnome-shell via the SNI IconThemePath property. The default
+    # /tmp inside a strict snap is bind-mounted to
+    # /tmp/snap-private-tmp/snap.<name>/tmp with mode 0700 on the parent, so
+    # gnome-shell (outside the mount namespace) cannot stat the file and
+    # falls back to 'image-loading-symbolic' (three dots). $XDG_RUNTIME_DIR
+    # (= /run/user/$UID) is visible to both sides, so redirecting Chromium's
+    # temp writes there restores icon rendering. Matches Signal Desktop's
+    # snap and the official Electron snapcraft guide. electron-builder's
+    # SnapOptions docstring claims this as a default but snap.js no longer
+    # injects it (see node_modules/app-builder-lib/out/targets/snap.js).
+    TMPDIR: $XDG_RUNTIME_DIR
   plugs:
     - default # Includes: home, desktop, desktop-legacy, x11, wayland, etc.
     - password-manager-service
@@ -92,9 +121,21 @@ snap:
     # Fix for issue #6031: Add filesystem access for local file sync
     # https://github.com/super-productivity/super-productivity/issues/6031
     - removable-media # Allows sync to external drives/USB storage
+    # Override electron-builder's hardcoded gnome-3-28-1804 content snap (core20 era)
+    # with gnome-42-2204 (core22 era) for up-to-date Mesa drivers and GSettings schemas.
+    # The plug name must match the template key to replace it rather than duplicate it.
+    # The explicit `content` attribute tells snapd to match the gnome-42-2204 slot.
+    # Pattern from Tidal HiFi: https://github.com/Mastermindzh/tidal-hifi
+    # gnome-42-2204 has global auto-connect (granted June 2022).
+    # Ref: electron-builder#9452, electron-builder#8548 (closed, not planned)
+    - gnome-3-28-1804:
+        interface: content
+        content: gnome-42-2204
+        target: $SNAP/gnome-platform
+        default-provider: gnome-42-2204
 
 flatpak:
-  runtimeVersion: '23.08'
+  runtimeVersion: '25.08'
   finishArgs:
     - --share=network
     - --share=ipc
@@ -104,8 +145,13 @@ flatpak:
     - --socket=pulseaudio
     - --device=dri
     - --filesystem=home
+    - --talk-name=org.freedesktop.Notifications
+    - --talk-name=org.kde.StatusNotifierWatcher
     - --talk-name=org.gnome.Mutter.IdleMonitor
+    - --talk-name=org.freedesktop.secrets
     - --system-talk-name=org.freedesktop.login1
+    - --env=XCURSOR_PATH=/run/host/user-share/icons:/run/host/share/icons
+    - --env=ELECTRON_TRASH=gio
 
 mac:
   appId: com.super-productivity.app

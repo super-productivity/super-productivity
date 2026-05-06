@@ -458,7 +458,9 @@ vi.mock('../src/db', async () => {
 
 // Mock auth module
 vi.mock('../src/auth', () => ({
-  verifyToken: vi.fn().mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
+  verifyToken: vi
+    .fn()
+    .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
 }));
 
 // Import AFTER mocking
@@ -767,18 +769,24 @@ describe('SyncService', () => {
         schemaVersion: 1,
       };
 
-      const results = await service.uploadOps(userId, clientId, [op]);
+      // Freeze the clock so the service samples the same `now` as the test.
+      // Otherwise a 1ms advance between the two Date.now() calls prevents
+      // clamping (the op is then within maxClockDriftMs of the service's now).
+      vi.useFakeTimers();
+      vi.setSystemTime(now);
+      try {
+        const results = await service.uploadOps(userId, clientId, [op]);
 
-      expect(results[0].accepted).toBe(true);
+        expect(results[0].accepted).toBe(true);
 
-      // Timestamp just over the boundary should be clamped
-      const storedOp = testState.operations.get(op.id);
-      const storedTimestamp = Number(storedOp.clientTimestamp);
-      expect(storedTimestamp).toBeLessThan(justOverLimit);
-      // Should be clamped to maxClockDriftMs (within small tolerance for test execution time)
-      expect(storedTimestamp).toBeLessThanOrEqual(
-        now + DEFAULT_SYNC_CONFIG.maxClockDriftMs + 50,
-      );
+        // Timestamp just over the boundary should be clamped to the exact
+        // boundary value (time is frozen, so no tolerance needed).
+        const storedOp = testState.operations.get(op.id);
+        const storedTimestamp = Number(storedOp.clientTimestamp);
+        expect(storedTimestamp).toBe(now + DEFAULT_SYNC_CONFIG.maxClockDriftMs);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should reject operations that are too old', async () => {

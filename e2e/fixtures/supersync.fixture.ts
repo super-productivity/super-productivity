@@ -47,9 +47,18 @@ export const test = base.extend<SuperSyncFixtures>({
    * Also checks server health and skips test if server unavailable.
    */
   testRunId: async ({}, use, testInfo) => {
-    // Check server health once per worker
+    // Check server health once per worker.
+    // Prefer the result pre-computed in globalSetup (stored as an env var before workers
+    // were forked) to avoid a stampede of concurrent HTTP requests from all workers
+    // simultaneously — which can overload the server and produce false negatives.
     if (serverHealthyCache === null) {
-      serverHealthyCache = await isServerHealthy();
+      if (process.env.SUPERSYNC_SERVER_HEALTHY !== undefined) {
+        serverHealthyCache = process.env.SUPERSYNC_SERVER_HEALTHY === 'true';
+      } else {
+        // Fallback for when tests are run directly without going through globalSetup
+        // (e.g., `npx playwright test --config ... e2e/tests/sync/foo.spec.ts`)
+        serverHealthyCache = await isServerHealthy();
+      }
       if (!serverHealthyCache) {
         console.warn(
           'SuperSync server not healthy at http://localhost:1901 - skipping tests',
@@ -69,9 +78,13 @@ export const test = base.extend<SuperSyncFixtures>({
    * Tests are automatically skipped if the server is not healthy.
    */
   serverHealthy: async ({}, use, testInfo) => {
-    // Only check once per worker
+    // Only check once per worker — use globalSetup env var if available (see testRunId above)
     if (serverHealthyCache === null) {
-      serverHealthyCache = await isServerHealthy();
+      if (process.env.SUPERSYNC_SERVER_HEALTHY !== undefined) {
+        serverHealthyCache = process.env.SUPERSYNC_SERVER_HEALTHY === 'true';
+      } else {
+        serverHealthyCache = await isServerHealthy();
+      }
       if (!serverHealthyCache) {
         console.warn(
           'SuperSync server not healthy at http://localhost:1901 - skipping tests',

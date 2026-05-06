@@ -5,7 +5,6 @@ import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
-import { TaskAttachmentService } from '../../task-attachment/task-attachment.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { ProjectService } from '../../../project/project.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
@@ -52,7 +51,6 @@ describe('TaskContextMenuInnerComponent', () => {
           provide: IssueService,
           useValue: { issueLink: () => Promise.resolve('') },
         },
-        { provide: TaskAttachmentService, useValue: {} },
         { provide: SnackService, useValue: {} },
         {
           provide: ProjectService,
@@ -194,6 +192,25 @@ describe('TaskContextMenuInnerComponent', () => {
 
       const callArgs = taskService.add.calls.mostRecent().args[2] as any;
       expect(callArgs.notes).toBeUndefined();
+    }));
+  });
+
+  describe('getElementById for task ID lookup', () => {
+    it('should use getElementById for task ID in focusRelatedTaskOrNext', fakeAsync(() => {
+      component.task = {
+        id: 'task-with-{special}-chars',
+        title: 'Test',
+        projectId: 'P1',
+        tagIds: [],
+        subTaskIds: [],
+      } as any;
+
+      const getByIdSpy = spyOn(document, 'getElementById').and.returnValue(null);
+
+      component.focusRelatedTaskOrNext();
+      tick(100);
+
+      expect(getByIdSpy).toHaveBeenCalledWith('t-task-with-{special}-chars');
     }));
   });
 });

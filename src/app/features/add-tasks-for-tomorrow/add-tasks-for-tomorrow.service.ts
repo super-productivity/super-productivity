@@ -71,8 +71,7 @@ export class AddTasksForTomorrowService {
   async addAllDueTomorrow(): Promise<'ADDED' | void> {
     const dueRepeatCfgs = await this._repeatableForTomorrow$.pipe(first()).toPromise();
 
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-    const tomorrow = Date.now() - this._dateService.startOfNextDayDiff + ONE_DAY_MS;
+    const tomorrow = this._dateService.getLogicalTomorrowMs();
 
     const promises = dueRepeatCfgs.sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
       return this._taskRepeatCfgService.createRepeatableTask(repeatCfg, tomorrow);
@@ -136,7 +135,7 @@ export class AddTasksForTomorrowService {
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   async addAllDueToday(): Promise<'ADDED' | void> {
-    const todayDate = new Date(Date.now() - this._dateService.startOfNextDayDiff);
+    const todayDate = this._dateService.getLogicalTodayDate();
     const todayTS = todayDate.getTime();
     const todayStr = this._dateService.todayStr();
 

@@ -45,6 +45,8 @@ export class GiteaCommonInterfacesService extends BaseIssueProviderService<Gitea
   getAddTaskData(issue: GiteaIssue): Partial<Readonly<TaskCopy>> & { title: string } {
     return {
       title: formatGiteaIssueTitle(issue),
+      issueId: String(issue.number),
+      isDone: issue.state === 'closed',
       issueWasUpdated: false,
       issueLastUpdated: new Date(issue.updated_at).getTime(),
     };

@@ -16,7 +16,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { MentionConfig, MentionItem, MentionModule } from '../../../ui/mentions';
+import { MentionModule } from '../../../ui/mentions';
 import { MatInput } from '@angular/material/input';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -63,11 +63,10 @@ import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
-import { Mentions } from '../../../ui/mentions/mention-config';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { unique } from '../../../util/unique';
-import { CHRONO_SUGGESTIONS } from './add-task-bar.const';
+import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
@@ -250,41 +249,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     startWith([]),
   );
 
-  mentionCfg$ = combineLatest([
-    this._globalConfigService.shortSyntax$,
-    this._tagService.tagsNoMyDayAndNoListSorted$,
-    this._projectService.listSortedForUI$,
-  ]).pipe(
-    map(([cfg, tagSuggestions, projectSuggestions]) => {
-      const mentions: Mentions[] = [];
-      if (cfg.isEnableTag) {
-        mentions.push({
-          items: (tagSuggestions as unknown as MentionItem[]) || [],
-          labelKey: 'title',
-          triggerChar: '#',
-        });
-      }
-      if (cfg.isEnableDue) {
-        mentions.push({
-          items: CHRONO_SUGGESTIONS,
-          labelKey: 'title',
-          triggerChar: '@',
-        });
-      }
-      if (cfg.isEnableProject) {
-        mentions.push({
-          items: (projectSuggestions as unknown as MentionItem[]) || [],
-          labelKey: 'title',
-          triggerChar: '+',
-        });
-      }
-      const mentionCfg: MentionConfig = {
-        mentions,
-        triggerChar: undefined,
-      };
-      return mentionCfg;
-    }),
-  );
+  mentionCfg$ = inject(MentionConfigService).mentionConfig$;
 
   // View children
   inputEl = viewChild<ElementRef>('inputEl');

@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, OnDestroy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  OnDestroy,
+  signal,
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -58,6 +64,10 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
   // redirect URI to be registered in the Dropbox developer console, and
   // Android may kill the app during auth, losing the in-memory code verifier.
   readonly isNativePlatform = false;
+  // Flips to true once the user clicks "Get Auth Code". When true, the paste
+  // field is rendered at the top of the dialog — keeps the field above the
+  // iOS on-screen keyboard (discussion #7340).
+  readonly codeRequested = signal(false);
   private _authCodeSub?: Subscription;
 
   constructor() {
@@ -99,5 +109,13 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
 
   close(token?: string): void {
     this._matDialogRef.close(token?.trim());
+  }
+
+  // iOS Safari only opens the keyboard when .focus() runs synchronously in the
+  // same task as the user gesture — must stay in this click handler, not an
+  // effect.
+  onGetAuthCode(input: HTMLInputElement): void {
+    this.codeRequested.set(true);
+    input.focus();
   }
 }

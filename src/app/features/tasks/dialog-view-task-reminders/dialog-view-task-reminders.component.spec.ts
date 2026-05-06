@@ -1,7 +1,17 @@
 import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { first, map, switchMap } from 'rxjs/operators';
+import { TestBed } from '@angular/core/testing';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { provideMockStore, MockStore } from '@ngrx/store/testing';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { Reminder } from '../../reminder/reminder.model';
 import { DEFAULT_TASK, Task, TaskWithReminderData } from '../task.model';
+import { DialogViewTaskRemindersComponent } from './dialog-view-task-reminders.component';
+import { TaskService } from '../task.service';
+import { ProjectService } from '../../project/project.service';
+import { ReminderService } from '../../reminder/reminder.service';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 /**
  * Tests for the tasks$ filter logic in DialogViewTaskRemindersComponent.
@@ -309,5 +319,408 @@ describe('DialogViewTaskRemindersComponent dismissed reminder tracking', () => {
     expect(currentReminders.length).toBe(2);
     expect(currentReminders.find((r) => r.id === 'reminder-5')).toBeDefined();
     expect(currentReminders.find((r) => r.id === 'reminder-6')).toBeDefined();
+  });
+});
+
+/**
+ * Tests for the close-animation race condition (issue #7189).
+ *
+ * The fix: _close() cancels the onRemindersActive$ subscription immediately
+ * and guards against re-entry via MatDialogState. Without this, a worker tick
+ * arriving during the 300ms close animation updates a mid-teardown component,
+ * which can corrupt Angular change detection in Electron/Linux environments.
+ */
+describe('DialogViewTaskRemindersComponent close-animation race condition', () => {
+  // Simulate the dialog state machine
+  type MockDialogState = 'OPEN' | 'CLOSING' | 'CLOSED';
+
+  // Simulate the component's subscription management as implemented after the fix.
+  // _close() must:
+  //   1. Guard against double-calls (CLOSING/CLOSED state)
+  //   2. Unsubscribe _onRemindersActiveSub immediately
+  //   3. Transition state to CLOSING
+  const buildComponent = (
+    onRemindersActive$: Subject<TaskWithReminderData[]>,
+  ): {
+    taskIds$: BehaviorSubject<string[]>;
+    dialogState: () => MockDialogState;
+    close: () => void;
+    removeFromList: (taskId: string) => void;
+    simulateAnimationEnd: () => void;
+  } => {
+    let state: MockDialogState = 'OPEN';
+    const dismissedIds = new Set<string>();
+    const taskIds$ = new BehaviorSubject<string[]>([]);
+
+    const close = (): void => {
+      if (state !== 'OPEN') return; // guard (mirrors MatDialogState check)
+      sub.unsubscribe(); // eager cancel
+      state = 'CLOSING';
+      // angular material close animation would run here (~300ms)
+    };
+
+    const simulateAnimationEnd = (): void => {
+      state = 'CLOSED';
+      // ngOnDestroy would be called here — subscription already cancelled
+    };
+
+    const removeFromList = (taskId: string): void => {
+      dismissedIds.add(taskId);
+      const next = taskIds$.getValue().filter((id) => id !== taskId);
+      if (next.length === 0) {
+        close();
+      } else {
+        taskIds$.next(next);
+      }
+    };
+
+    const sub = onRemindersActive$.subscribe((reminders) => {
+      const filtered = reminders.filter((r) => !dismissedIds.has(r.id));
+      if (filtered.length > 0) {
+        taskIds$.next(filtered.map((r) => r.id));
+      } else {
+        close();
+      }
+    });
+
+    return {
+      taskIds$,
+      dialogState: () => state,
+      close,
+      removeFromList,
+      simulateAnimationEnd,
+    };
+  };
+
+  const makeReminder = (taskId: string): TaskWithReminderData =>
+    ({
+      ...DEFAULT_TASK,
+      id: taskId,
+      title: `Task ${taskId}`,
+      remindAt: Date.now() - 1000,
+      isDeadlineReminder: false,
+      reminderData: { remindAt: Date.now() - 1000 },
+    }) as TaskWithReminderData;
+
+  it('should not update taskIds$ after _close() is called (race condition prevention)', () => {
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { taskIds$, dialogState, close } = buildComponent(onRemindersActive$);
+
+    // Dialog open showing task-a
+    taskIds$.next(['task-a']);
+    expect(taskIds$.getValue()).toEqual(['task-a']);
+
+    // User dismisses task-a, dialog begins closing
+    close();
+    expect(dialogState()).toBe('CLOSING');
+
+    // Worker tick fires during close animation with task-b
+    const taskBReminder = makeReminder('task-b');
+    onRemindersActive$.next([taskBReminder]);
+
+    // task-b must NOT have been applied to the closing dialog
+    expect(taskIds$.getValue()).toEqual(['task-a']);
+  });
+
+  it('should guard against double-close (no-op on CLOSING state)', () => {
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { dialogState, close } = buildComponent(onRemindersActive$);
+
+    close();
+    expect(dialogState()).toBe('CLOSING');
+
+    // Second close must be a no-op
+    close();
+    expect(dialogState()).toBe('CLOSING');
+  });
+
+  it('should guard against double-close (no-op on CLOSED state)', () => {
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { dialogState, close, simulateAnimationEnd } =
+      buildComponent(onRemindersActive$);
+
+    close();
+    simulateAnimationEnd();
+    expect(dialogState()).toBe('CLOSED');
+
+    // Third close after animation must be a no-op
+    close();
+    expect(dialogState()).toBe('CLOSED');
+  });
+
+  it('should close when all reminders are filtered out (empty-list path)', () => {
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { taskIds$, dialogState } = buildComponent(onRemindersActive$);
+
+    taskIds$.next(['task-a']);
+
+    // Worker sends stale data that is entirely filtered — simulates #5826 path
+    onRemindersActive$.next([]); // empty after filtering dismissed ids
+    expect(dialogState()).toBe('CLOSING');
+  });
+
+  it('scenario: Task A play then Task B reminder during animation — B must not corrupt closing dialog', () => {
+    // Exactly the sequence from issue #7189:
+    //   1. Dialog opens for task-a
+    //   2. User clicks play → dismissReminderOnly → _removeTaskFromList('task-a') → _close()
+    //   3. Worker tick during close animation sends [task-b]
+    //   4. Dialog must ignore task-b and remain in CLOSING state
+
+    const onRemindersActive$ = new Subject<TaskWithReminderData[]>();
+    const { taskIds$, dialogState, removeFromList, simulateAnimationEnd } =
+      buildComponent(onRemindersActive$);
+
+    // Step 1: dialog shows task-a
+    taskIds$.next(['task-a']);
+
+    // Step 2: play() path — _removeTaskFromList empties the list and calls _close()
+    removeFromList('task-a');
+    expect(dialogState()).toBe('CLOSING');
+
+    // Step 3: worker tick arrives during the ~300ms close animation with task-b
+    const taskB = makeReminder('task-b');
+    onRemindersActive$.next([taskB]);
+
+    // Step 4: dialog is CLOSING; the subscription was already cancelled, so
+    // taskIds$ must not have been mutated to show task-b (still has old value)
+    expect(dialogState()).toBe('CLOSING');
+    expect(taskIds$.getValue()).not.toContain('task-b');
+
+    // Animation ends — dialog fully closed
+    simulateAnimationEnd();
+    expect(dialogState()).toBe('CLOSED');
+  });
+});
+
+/**
+ * Tests for the deadline reminder cleanup on dialog destroy.
+ *
+ * Bug: when the user closes the dialog via any non-action path (ESC, backdrop
+ * click), deadlineRemindAt was never cleared. The reminder stays armed in
+ * state and will re-fire on the next worker tick.
+ *
+ * Fix: on ngOnDestroy, dispatch clearDeadlineReminder for every deadline
+ * reminder that was shown in this session and was NOT explicitly handled by
+ * the user. Explicit handlers (snooze/dismiss/done/add-to-today/plan) add the
+ * task to _dismissedReminderIds so we don't double-dispatch.
+ */
+describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline reminders', () => {
+  let store: MockStore;
+  let dispatchSpy: jasmine.Spy;
+  let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let projectServiceSpy: jasmine.SpyObj<ProjectService>;
+  let matDialogSpy: jasmine.SpyObj<MatDialog>;
+  let matDialogRefSpy: jasmine.SpyObj<MatDialogRef<DialogViewTaskRemindersComponent>>;
+  let reminderServiceStub: { onRemindersActive$: Subject<TaskWithReminderData[]> };
+
+  const buildTask = (id: string, overrides: Partial<Task> = {}): Task =>
+    ({
+      ...DEFAULT_TASK,
+      id,
+      title: `Task ${id}`,
+      ...overrides,
+    }) as Task;
+
+  const buildReminder = (
+    id: string,
+    opts: { isDeadline: boolean; deadlineDay?: string; deadlineWithTime?: number } = {
+      isDeadline: false,
+    },
+  ): TaskWithReminderData =>
+    ({
+      ...DEFAULT_TASK,
+      id,
+      title: `Task ${id}`,
+      deadlineDay: opts.deadlineDay,
+      deadlineWithTime: opts.deadlineWithTime,
+      deadlineRemindAt: opts.isDeadline ? Date.now() - 1000 : undefined,
+      remindAt: opts.isDeadline ? undefined : Date.now() - 1000,
+      isDeadlineReminder: opts.isDeadline,
+      reminderData: { remindAt: Date.now() - 1000 },
+    }) as TaskWithReminderData;
+
+  const createComponent = (
+    reminders: TaskWithReminderData[],
+    storeTasks: Task[] = [],
+  ): DialogViewTaskRemindersComponent => {
+    TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { reminders } });
+    taskServiceSpy.getByIdsLive$.and.returnValue(of(storeTasks));
+    // TestBed becomes instantiated on the first inject/createComponent call,
+    // after which overrideProvider throws. Resolve the store here — after the
+    // override — rather than in beforeEach so the override still applies.
+    store = TestBed.inject(MockStore);
+    dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+    const fixture = TestBed.createComponent(DialogViewTaskRemindersComponent);
+    return fixture.componentInstance;
+  };
+
+  const dispatchedClearIds = (): string[] =>
+    dispatchSpy.calls
+      .allArgs()
+      .map(([action]) => action)
+      .filter((a) => a.type === TaskSharedActions.clearDeadlineReminder.type)
+      .map((a) => a.taskId);
+
+  beforeEach(async () => {
+    matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['close', 'getState']);
+    taskServiceSpy = jasmine.createSpyObj('TaskService', [
+      'getByIdsLive$',
+      'setDone',
+      'setCurrentId',
+    ]);
+    projectServiceSpy = jasmine.createSpyObj('ProjectService', ['moveTaskToTodayList']);
+    matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
+    reminderServiceStub = {
+      onRemindersActive$: new Subject<TaskWithReminderData[]>(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [
+        DialogViewTaskRemindersComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
+      providers: [
+        provideMockStore({ initialState: {} }),
+        { provide: MatDialogRef, useValue: matDialogRefSpy },
+        { provide: MAT_DIALOG_DATA, useValue: { reminders: [] } },
+        { provide: TaskService, useValue: taskServiceSpy },
+        { provide: ProjectService, useValue: projectServiceSpy },
+        { provide: MatDialog, useValue: matDialogSpy },
+        { provide: ReminderService, useValue: reminderServiceStub },
+        TranslateService,
+        TranslateStore,
+      ],
+    })
+      // Stub the template so child components (tag-list → WorkContextService →
+      // LOCAL_ACTIONS → Actions) and template pipes (DateTimeFormatService →
+      // DateAdapter) aren't instantiated. These tests only exercise ngOnDestroy
+      // logic, not rendering.
+      .overrideComponent(DialogViewTaskRemindersComponent, {
+        set: { template: '' },
+      })
+      .compileComponents();
+  });
+
+  it('dispatches clearDeadlineReminder on ngOnDestroy for an unhandled deadline reminder', () => {
+    const reminder = buildReminder('task-1', {
+      isDeadline: true,
+      deadlineDay: '2026-04-25',
+    });
+    const component = createComponent(
+      [reminder],
+      [buildTask('task-1', { deadlineDay: '2026-04-25', deadlineRemindAt: Date.now() })],
+    );
+
+    component.ngOnDestroy();
+
+    expect(dispatchedClearIds()).toEqual(['task-1']);
+  });
+
+  it('does NOT re-dispatch clearDeadlineReminder on destroy when snooze() already handled the task', () => {
+    const reminder = buildReminder('task-1', {
+      isDeadline: true,
+      deadlineDay: '2026-04-25',
+    });
+    const component = createComponent(
+      [reminder],
+      [buildTask('task-1', { deadlineDay: '2026-04-25', deadlineRemindAt: Date.now() })],
+    );
+
+    // snooze dispatches setDeadline and adds the id to _dismissedReminderIds
+    component.snooze(reminder, 10);
+    dispatchSpy.calls.reset();
+
+    component.ngOnDestroy();
+
+    expect(dispatchedClearIds()).toEqual([]);
+  });
+
+  it('does NOT dispatch clearDeadlineReminder for schedule-only reminders on destroy', () => {
+    const reminder = buildReminder('task-1', { isDeadline: false });
+    const component = createComponent([reminder], [buildTask('task-1')]);
+
+    component.ngOnDestroy();
+
+    expect(dispatchedClearIds()).toEqual([]);
+  });
+
+  it('clears every unhandled deadline reminder on destroy, skipping dismissed ones', () => {
+    const r1 = buildReminder('task-1', { isDeadline: true, deadlineDay: '2026-04-25' });
+    const r2 = buildReminder('task-2', { isDeadline: true, deadlineDay: '2026-04-26' });
+    const r3 = buildReminder('task-3', { isDeadline: true, deadlineDay: '2026-04-27' });
+    const component = createComponent(
+      [r1, r2, r3],
+      [
+        buildTask('task-1', { deadlineDay: '2026-04-25', deadlineRemindAt: Date.now() }),
+        buildTask('task-2', { deadlineDay: '2026-04-26', deadlineRemindAt: Date.now() }),
+        buildTask('task-3', { deadlineDay: '2026-04-27', deadlineRemindAt: Date.now() }),
+      ],
+    );
+
+    // User handled task-2 via the deadline-specific clear path
+    component.dismissReminderOnly(r2);
+    dispatchSpy.calls.reset();
+
+    component.ngOnDestroy();
+
+    expect(dispatchedClearIds().sort()).toEqual(['task-1', 'task-3']);
+  });
+
+  it('markSingleAsDone adds the task to the dismissed set so destroy is a no-op', () => {
+    const reminder = buildReminder('task-1', {
+      isDeadline: true,
+      deadlineDay: '2026-04-25',
+    });
+    const task = buildTask('task-1', {
+      deadlineDay: '2026-04-25',
+      deadlineRemindAt: Date.now(),
+    });
+    const component = createComponent([reminder], [task]);
+
+    component.markSingleAsDone();
+    dispatchSpy.calls.reset();
+
+    component.ngOnDestroy();
+
+    expect(dispatchedClearIds()).toEqual([]);
+  });
+
+  it('markAllTasksAsDone adds every task to the dismissed set so destroy is a no-op', async () => {
+    const r1 = buildReminder('task-1', { isDeadline: true, deadlineDay: '2026-04-25' });
+    const r2 = buildReminder('task-2', { isDeadline: true, deadlineDay: '2026-04-26' });
+    const component = createComponent(
+      [r1, r2],
+      [
+        buildTask('task-1', { deadlineDay: '2026-04-25', deadlineRemindAt: Date.now() }),
+        buildTask('task-2', { deadlineDay: '2026-04-26', deadlineRemindAt: Date.now() }),
+      ],
+    );
+
+    await component.markAllTasksAsDone();
+    dispatchSpy.calls.reset();
+
+    component.ngOnDestroy();
+
+    expect(dispatchedClearIds()).toEqual([]);
+  });
+
+  it('addAllToToday adds every task to the dismissed set so destroy is a no-op', async () => {
+    const r1 = buildReminder('task-1', { isDeadline: true, deadlineDay: '2026-04-25' });
+    const r2 = buildReminder('task-2', { isDeadline: true, deadlineDay: '2026-04-26' });
+    const component = createComponent(
+      [r1, r2],
+      [
+        buildTask('task-1', { deadlineDay: '2026-04-25', deadlineRemindAt: Date.now() }),
+        buildTask('task-2', { deadlineDay: '2026-04-26', deadlineRemindAt: Date.now() }),
+      ],
+    );
+
+    await component.addAllToToday();
+    dispatchSpy.calls.reset();
+
+    component.ngOnDestroy();
+
+    expect(dispatchedClearIds()).toEqual([]);
   });
 });

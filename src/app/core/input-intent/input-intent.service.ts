@@ -31,12 +31,14 @@ export class InputIntentService {
       return;
     }
 
-    // Use detect-it's primaryInput to set the initial intent. Many phones are classified
-    // as 'hybrid' by detect-it (they expose both touch and pointer APIs), yet their
-    // primaryInput is still 'touch'. Defaulting to 'mouse' would mean the very first
-    // drag on such a phone starts without the touch delay, because CDK reads
-    // cdkDragStartDelay before the pointerdown handler can update the signal.
-    this._setIntent(IS_TOUCH_PRIMARY ? 'touch' : 'mouse');
+    // Write initial body classes directly: _setIntent's equality guard would
+    // skip the mouse->mouse case, leaving hybrid devices with neither class set
+    // until the first pointer event (issue #7132).
+    const initialIntent: InputIntent = IS_TOUCH_PRIMARY ? 'touch' : 'mouse';
+    _inputIntentSignal.set(initialIntent);
+    const initialBody = this._document.body.classList;
+    initialBody.toggle(BodyClass.isTouchPrimary, initialIntent === 'touch');
+    initialBody.toggle(BodyClass.isMousePrimary, initialIntent === 'mouse');
 
     this._zone.runOutsideAngular(() => {
       window.addEventListener(

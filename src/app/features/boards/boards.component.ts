@@ -14,7 +14,13 @@ import { MatMenuModule } from '@angular/material/menu';
 import { nanoid } from 'nanoid';
 import { BoardComponent } from './board/board.component';
 import { CdkScrollable } from '@angular/cdk/overlay';
-import { CdkDropListGroup } from '@angular/cdk/drag-drop';
+import {
+  CdkDrag,
+  CdkDragDrop,
+  CdkDropList,
+  CdkDropListGroup,
+} from '@angular/cdk/drag-drop';
+import { moveItemInArray } from '../../util/move-item-in-array';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { selectAllBoards } from './store/boards.selectors';
 import { LS } from '../../core/persistence/storage-keys.const';
@@ -42,6 +48,8 @@ import { Log } from 'src/app/core/log';
     BoardComponent,
     CdkScrollable,
     CdkDropListGroup,
+    CdkDropList,
+    CdkDrag,
     TranslatePipe,
     BoardEditComponent,
   ],
@@ -54,6 +62,7 @@ export class BoardsComponent {
   store = inject(Store);
   elementRef = inject(ElementRef);
   selectedTabIndex = signal(localStorage.getItem(LS.SELECTED_BOARD) || 0);
+  readonly dragStartDelay = { touch: 300, mouse: 0 };
 
   boards = toSignal(this.store.select(selectAllBoards));
   protected readonly T = T;
@@ -83,6 +92,17 @@ export class BoardsComponent {
   onTabChange(index: number): void {
     setTimeout(() => this.selectedTabIndex.set(index));
     this.store.dispatch(setSelectedTask({ id: null }));
+  }
+
+  drop(ev: CdkDragDrop<string[]>): void {
+    const boards = this.boards();
+    if (!boards || ev.previousIndex === ev.currentIndex) {
+      return;
+    }
+    const ids = moveItemInArray(boards, ev.previousIndex, ev.currentIndex).map(
+      (b) => b.id,
+    );
+    this.store.dispatch(BoardsActions.sortBoards({ ids }));
   }
 
   get componentElement(): HTMLElement {

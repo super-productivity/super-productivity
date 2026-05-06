@@ -140,6 +140,30 @@ describe('validateOperationPayload', () => {
       expect(result.success).toBe(true);
     });
 
+    it('should reject UPDATE batch shape when a task is missing a valid id', () => {
+      const op = createTestOperation({
+        opType: OpType.Update,
+        entityType: 'TASK' as EntityType,
+        payload: { tasks: [{ id: 'task1' }, { title: 'Missing id' }] },
+      });
+      const result = validateOperationPayload(op);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('missing valid');
+    });
+
+    it('should reject UPDATE batch shape when a subtask is missing a valid id', () => {
+      const op = createTestOperation({
+        opType: OpType.Update,
+        entityType: 'TASK' as EntityType,
+        payload: {
+          tasks: [{ id: 'task1', subTasks: [{ title: 'Broken subtask' }] }],
+        },
+      });
+      const result = validateOperationPayload(op);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('subTasks[0]');
+    });
+
     it('should validate UPDATE with full entity in nested key', () => {
       const op = createTestOperation({
         opType: OpType.Update,

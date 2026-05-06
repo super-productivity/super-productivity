@@ -2,6 +2,10 @@
   mat-stretch-tabs="false"
   dynamicHeight="true"
   cdkScrollable
+  cdkDropList
+  cdkDropListOrientation="horizontal"
+  cdkDropListElementContainer=".mat-mdc-tab-labels"
+  (cdkDropListDropped)="drop($event)"
   (selectedIndexChange)="onTabChange($event)"
   [selectedIndex]="selectedTabIndex()"
 >
@@ -9,6 +13,11 @@
     <mat-tab>
       <ng-template mat-tab-label>
         <div
+          cdkDrag
+          cdkDragLockAxis="x"
+          cdkDragRootElement=".mat-mdc-tab"
+          cdkDragPreviewClass="boards-drag-preview"
+          [cdkDragStartDelay]="dragStartDelay"
           [matContextMenuTriggerFor]="boardContextMenu"
           [matContextMenuTriggerData]="{ boardCfg: board }"
         >

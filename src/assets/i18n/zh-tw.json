@@ -181,10 +181,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "如何和在哪裡評分",
-      "BTN_DONT_BOTHER": "不要再打擾我",
-      "TITLE": "🙈 請原諒我們，但是...",
-      "TXT": "如果您喜歡它，<strong>給予好評</strong>將對專案有極大幫助！"
+      "A_HOW": "如何評分",
+      "BTN_DONT_BOTHER": "不要再詢問",
+      "BTN_FEEDBACK": "提供意見",
+      "BTN_LATER": "稍後再說",
+      "BTN_RATE_APP_STORE": "在 App Store 評分",
+      "BTN_RATE_PLAY_STORE": "在 Play Store 評分",
+      "FEEDBACK_BACK": "返回",
+      "FEEDBACK_CONTRIBUTE": "為此專案貢獻",
+      "FEEDBACK_CONTRIBUTE_DESC": "程式碼、設計、翻譯等",
+      "FEEDBACK_PRIVATE": "寄信給維護者",
+      "FEEDBACK_PRIVATE_DESC": "寄送私人訊息",
+      "FEEDBACK_PUBLIC": "在 GitHub Discussions 發文",
+      "FEEDBACK_PUBLIC_DESC": "他人可看到並回覆",
+      "FEEDBACK_TITLE": "您想如何協助？",
+      "TITLE": "喜歡 Super Productivity 嗎？",
+      "TXT": "這是一個由愛好者打造的<strong>免費開源專案</strong>——沒有追蹤、沒有廣告。一個評分或簡短訊息能幫助更多人發現它。"
     },
     "DROPBOX": {
       "S": {
@@ -1879,7 +1891,8 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "請輸入要匯入的 Super Productivity 備份 JSON 檔案的完整網址。",
     "IMPORT_FROM_URL_DIALOG_TITLE": "從網址匯入",
     "OPEN_IMPORT_FROM_URL_DIALOG": "從網址匯入",
-    "PRIVACY_EXPORT": "匯出匿名資料（傳送至 contact@super-productivity.com 以進行除錯）",
+    "PRIVACY_EXPORT": "匯出資料（匿名）",
+    "PRIVACY_EXPORT_DESCRIPTION": "匯出匿名資料（傳送至 contact@super-productivity.com 以進行除錯）",
     "S_BACKUP_DOWNLOADED": "備份已下載至 Android 文件資料夾",
     "S_ERR_IMPORT_FAILED": "匯入資料失敗",
     "S_ERR_INVALID_DATA": "匯入失敗：無效的 JSON",

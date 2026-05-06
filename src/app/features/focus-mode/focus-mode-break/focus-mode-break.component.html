@@ -59,6 +59,7 @@
         <button
           mat-stroked-button
           (click)="resetCycles()"
+          class="reset-cycles-btn"
         >
           <mat-icon>restart_alt</mat-icon>
           {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
@@ -76,16 +77,17 @@
     <div class="button-row">
       <button
         mat-stroked-button
-        (click)="completeBreak()"
+        (click)="exitToPlanning()"
       >
         <mat-icon>done_all</mat-icon>
-        {{ T.G.COMPLETE | translate }}
+        {{ T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate }}
       </button>
 
       @if (isPomodoro()) {
         <button
           mat-stroked-button
           (click)="resetCycles()"
+          class="reset-cycles-btn"
         >
           <mat-icon>restart_alt</mat-icon>
           {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}

@@ -192,10 +192,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Jak i gdzie oceniać",
-      "BTN_DONT_BOTHER": "Nie zawracaj mi więcej głowy",
-      "TITLE": "🙈 Proszę nam wybaczyć, ale...",
-      "TXT": "Bardzo pomógłbyś projektowi, <strong>wystawiając mu dobrą ocenę, jeśli Ci się spodoba!</strong>"
+      "A_HOW": "Jak oceniać",
+      "BTN_DONT_BOTHER": "Nie pytaj ponownie",
+      "BTN_FEEDBACK": "Wyślij opinię",
+      "BTN_LATER": "Może później",
+      "BTN_RATE_APP_STORE": "Oceń w App Store",
+      "BTN_RATE_PLAY_STORE": "Oceń w Play Store",
+      "FEEDBACK_BACK": "Wstecz",
+      "FEEDBACK_CONTRIBUTE": "Przyczynij się do projektu",
+      "FEEDBACK_CONTRIBUTE_DESC": "Kod, design, tłumaczenia i więcej",
+      "FEEDBACK_PRIVATE": "Napisz do opiekuna",
+      "FEEDBACK_PRIVATE_DESC": "Wyślij prywatną wiadomość",
+      "FEEDBACK_PUBLIC": "Opublikuj w GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Inni mogą zobaczyć i odpowiedzieć",
+      "FEEDBACK_TITLE": "Jak chcesz pomóc?",
+      "TITLE": "Podoba Ci się Super Productivity?",
+      "TXT": "To <strong>darmowy projekt open source</strong> tworzony przez pasjonatów — bez śledzenia, bez reklam. Ocena lub krótka wiadomość pomaga większej liczbie osób go znaleźć."
     },
     "DROPBOX": {
       "S": {
@@ -1922,7 +1934,8 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Wprowadź pełny URL pliku kopii zapasowej JSON Super Productivity, który chcesz zaimportować.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Importuj z URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Importuj z URL",
-    "PRIVACY_EXPORT": "Eksport anonimowych danych (do wysłania na adres contact@super-productivity.com w celu debugowania)",
+    "PRIVACY_EXPORT": "Eksportuj dane (anonimowe)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Eksport anonimowych danych (do wysłania na adres contact@super-productivity.com w celu debugowania)",
     "S_BACKUP_DOWNLOADED": "Kopia zapasowa pobrana do folderu dokumentów Androida",
     "S_ERR_IMPORT_FAILED": "Importowanie danych nie powiodło się",
     "S_ERR_INVALID_DATA": "Nieprawidłowe dane w pliku",

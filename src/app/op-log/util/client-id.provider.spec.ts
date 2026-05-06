@@ -7,7 +7,13 @@ describe('CLIENT_ID_PROVIDER', () => {
   let mockClientIdService: jasmine.SpyObj<ClientIdService>;
 
   beforeEach(() => {
-    mockClientIdService = jasmine.createSpyObj('ClientIdService', ['loadClientId']);
+    mockClientIdService = jasmine.createSpyObj('ClientIdService', [
+      'loadClientId',
+      'generateNewClientId',
+      'getOrGenerateClientId',
+    ]);
+    mockClientIdService.generateNewClientId.and.resolveTo('B_new1');
+    mockClientIdService.getOrGenerateClientId.and.resolveTo('test-client-id-123');
 
     TestBed.configureTestingModule({
       providers: [{ provide: ClientIdService, useValue: mockClientIdService }],
@@ -43,5 +49,14 @@ describe('CLIENT_ID_PROVIDER', () => {
     mockClientIdService.loadClientId.and.rejectWith(error);
 
     await expectAsync(provider.loadClientId()).toBeRejectedWith(error);
+  });
+
+  it('should delegate getOrGenerateClientId to ClientIdService', async () => {
+    mockClientIdService.getOrGenerateClientId.and.resolveTo('B_a7Kx');
+
+    const result = await provider.getOrGenerateClientId();
+
+    expect(result).toBe('B_a7Kx');
+    expect(mockClientIdService.getOrGenerateClientId).toHaveBeenCalledTimes(1);
   });
 });

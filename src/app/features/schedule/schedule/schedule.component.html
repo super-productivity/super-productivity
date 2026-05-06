@@ -1,33 +1,60 @@
-<!--  <div class="title">February 2019 Week 6</div>-->
-
 <div class="schedule-nav-controls">
-  <button
-    mat-icon-button
-    (click)="goToPreviousPeriod()"
-    [disabled]="isViewingToday()"
-    [attr.aria-label]="isMonthView() ? 'Go to previous month' : 'Go to previous week'"
-    [matTooltip]="isMonthView() ? 'Previous Month' : 'Previous Week'"
-  >
-    <mat-icon>chevron_left</mat-icon>
-  </button>
+  <div class="week-month-selector">
+    <button
+      mat-icon-button
+      class="week-month-btn"
+      [class.active]="!isMonthView()"
+      (click)="selectTimeView('week')"
+      matTooltip="View Week"
+      aria-label="View Week"
+    >
+      <mat-icon>view_week</mat-icon>
+    </button>
+    <button
+      mat-icon-button
+      class="week-month-btn"
+      [class.active]="isMonthView()"
+      (click)="selectTimeView('month')"
+      matTooltip="View Month"
+      aria-label="View Month"
+    >
+      <mat-icon>calendar_month</mat-icon>
+    </button>
+  </div>
 
-  <button
-    mat-button
-    (click)="goToToday()"
-    [disabled]="isViewingToday()"
-    aria-label="Go to today"
-  >
-    {{ T.F.SCHEDULE.NOW | translate }}
-  </button>
+  <div class="date-nav-group">
+    <button
+      mat-icon-button
+      (click)="goToPreviousPeriod()"
+      [disabled]="isViewingToday()"
+      [attr.aria-label]="isMonthView() ? 'Go to previous month' : 'Go to previous week'"
+      [matTooltip]="isMonthView() ? 'Previous Month' : 'Previous Week'"
+    >
+      <mat-icon>chevron_left</mat-icon>
+    </button>
 
-  <button
-    mat-icon-button
-    (click)="goToNextPeriod()"
-    [attr.aria-label]="isMonthView() ? 'Go to next month' : 'Go to next week'"
-    [matTooltip]="isMonthView() ? 'Next Month' : 'Next Week'"
-  >
-    <mat-icon>chevron_right</mat-icon>
-  </button>
+    <button
+      mat-icon-button
+      class="today-btn"
+      (click)="goToToday()"
+      [disabled]="isViewingToday()"
+      [attr.aria-label]="T.G.TODAY_TAG_TITLE | translate"
+      [matTooltip]="T.G.TODAY_TAG_TITLE | translate"
+    >
+      <mat-icon>radio_button_unchecked</mat-icon>
+    </button>
+
+    <button
+      mat-icon-button
+      (click)="goToNextPeriod()"
+      [attr.aria-label]="isMonthView() ? 'Go to next month' : 'Go to next week'"
+      [matTooltip]="isMonthView() ? 'Next Month' : 'Next Week'"
+    >
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+
+  <div class="title">{{ headerTitle() }}</div>
 </div>
 
 <div

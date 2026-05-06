@@ -20,6 +20,10 @@ import { SnackService } from '../../core/snack/snack.service';
 import { take } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { PluginHttpService } from '../../plugins/issue-provider/plugin-http.service';
+import { IssueProviderPluginType } from '../issue/issue.model';
+import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 
 describe('CalendarIntegrationService', () => {
   let service: CalendarIntegrationService;
@@ -658,6 +662,64 @@ END:VCALENDAR`;
 
       tick(0);
       // Should not throw, might return empty array or parsed result
+    }));
+
+    it('should surface a dedicated snack message when the URL returns HTML instead of iCal', fakeAsync(() => {
+      const mockProvider = createMockProvider();
+      mockSnackService.open.calls.reset();
+
+      let result: unknown;
+      const sub = service.requestEvents$(mockProvider).subscribe((val) => {
+        result = val;
+      });
+      subscriptions.push(sub);
+
+      const req = httpMock.expectOne(mockProvider.icalUrl);
+      // Simulate Office365 returning an HTML redirect page when the share link is revoked
+      req.flush(
+        '<html><head><title>Object moved</title></head><body>' +
+          '<h2>Object moved to <a href="https://outlook.office365.com/mail/">here</a>.</h2>' +
+          '</body></html>',
+      );
+
+      tick(0);
+      expect(result).toEqual([]);
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: 'F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL',
+        }),
+      );
+    }));
+
+    it('should propagate the typed error and still show the snack when isForwardError=true', fakeAsync(() => {
+      const mockProvider = createMockProvider();
+      mockSnackService.open.calls.reset();
+
+      let caughtError: unknown;
+      const sub = service
+        .requestEvents$(mockProvider, Date.now(), Date.now() + 86_400_000, true)
+        .subscribe({
+          next: () => {},
+          error: (err) => {
+            caughtError = err;
+          },
+        });
+      subscriptions.push(sub);
+
+      const req = httpMock.expectOne(mockProvider.icalUrl);
+      req.flush('<html>not ical</html>');
+
+      tick(0);
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: 'F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL',
+        }),
+      );
+      // The NotIcalResponseError must propagate unwrapped so upstream consumers
+      // can branch on its identity via `instanceof`. A plain-Error wrapper (the
+      // prior behaviour via `throw new Error(err)`) would fail this check.
+      expect(caughtError).toBeInstanceOf(NotIcalResponseError);
     }));
   });
 
@@ -1503,5 +1565,86 @@ END:VCALENDAR`;
 
       discardPeriodicTasks();
     }));
+  });
+
+  // Regression guard for #7238: dueWithTime was dropped during the PluginSearchResult →
+  // CalendarIntegrationEvent conversion, causing tasks created from plugin calendar events
+  // with a precise start time to fall back to dueDay instead of addAndSchedule().
+  describe('_fetchPluginCalendarEvents (plugin → event mapping)', () => {
+    it('should propagate dueWithTime from PluginSearchResult to CalendarIntegrationEvent', async () => {
+      const mockPluginProvider = {
+        id: 'plugin-provider-id',
+        issueProviderKey: 'plugin:my-calendar',
+        pluginConfig: { apiKey: 'x' },
+      } as unknown as IssueProviderPluginType;
+
+      const pluginResults = [
+        {
+          id: 'evt-with-time',
+          title: 'Timed event',
+          start: 1701700000000,
+          dueWithTime: 1701700000000,
+          duration: 3600000,
+        },
+        {
+          id: 'evt-without-time',
+          title: 'All-day event',
+          start: 1701700000000,
+          duration: 0,
+          isAllDay: true,
+        },
+        {
+          // Must be filtered out (no start)
+          id: 'evt-no-start',
+          title: 'No start',
+        },
+      ];
+
+      const mockRegistry = {
+        getProvider: jasmine.createSpy('getProvider').and.returnValue({
+          definition: {
+            getNewIssuesForBacklog: jasmine
+              .createSpy('getNewIssuesForBacklog')
+              .and.returnValue(Promise.resolve(pluginResults)),
+            getHeaders: jasmine.createSpy('getHeaders').and.returnValue({}),
+          },
+          allowPrivateNetwork: false,
+        }),
+      };
+      const mockPluginHttp = {
+        createHttpHelper: jasmine.createSpy('createHttpHelper').and.returnValue({}),
+      };
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [HttpClientTestingModule],
+        providers: [
+          CalendarIntegrationService,
+          provideMockStore({
+            selectors: [
+              { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
+              { selector: selectAllCalendarTaskEventIds, value: [] },
+            ],
+          }),
+          { provide: SnackService, useValue: mockSnackService },
+          { provide: PluginIssueProviderRegistryService, useValue: mockRegistry },
+          { provide: PluginHttpService, useValue: mockPluginHttp },
+        ],
+      });
+
+      const freshService = TestBed.inject(CalendarIntegrationService);
+      const events = await (freshService as any)._fetchPluginCalendarEvents(
+        mockPluginProvider,
+      );
+
+      expect(events.length).toBe(2);
+      const timed = events.find((e: any) => e.id === 'evt-with-time');
+      const allDay = events.find((e: any) => e.id === 'evt-without-time');
+      expect(timed).toBeDefined();
+      expect(timed.dueWithTime).toBe(1701700000000);
+      expect(allDay).toBeDefined();
+      expect(allDay.dueWithTime).toBeUndefined();
+    });
   });
 });

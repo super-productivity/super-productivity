@@ -94,14 +94,9 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isSkipPreparation: false,
     isPlayTick: false,
     focusModeSound: 'off',
-    isPauseTrackingDuringBreak: false,
+    isPauseTrackingDuringBreak: true,
     isSyncSessionWithTracking: false,
     isStartInBackground: false,
-  },
-  taskWidget: {
-    isEnabled: false,
-    isAlwaysShow: false,
-    opacity: 95,
   },
   clipboardImages: {
     imagePath: null,
