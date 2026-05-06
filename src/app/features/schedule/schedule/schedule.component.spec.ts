@@ -12,6 +12,7 @@ import { provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { PastWorkScheduleEntriesService } from '../past-work-schedule-entries.service';
 
 describe('ScheduleComponent', () => {
   let component: ScheduleComponent;
@@ -22,6 +23,7 @@ describe('ScheduleComponent', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockGlobalTrackingIntervalService: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
+  let mockPastWorkScheduleEntriesService: jasmine.SpyObj<PastWorkScheduleEntriesService>;
 
   beforeEach(async () => {
     // Create mock services
@@ -79,10 +81,16 @@ describe('ScheduleComponent', () => {
       cfg: signal(undefined),
     });
 
+    mockPastWorkScheduleEntriesService = jasmine.createSpyObj(
+      'PastWorkScheduleEntriesService',
+      ['buildEntriesForDays$', 'clearCache'],
+    );
+    mockPastWorkScheduleEntriesService.buildEntriesForDays$.and.returnValue(of([]));
+
     await TestBed.configureTestingModule({
       imports: [ScheduleComponent, TranslateModule.forRoot()],
       providers: [
-        provideMockStore({ initialState: {} }),
+        provideMockStore({ initialState: { issueProvider: { ids: [], entities: {} } } }),
         { provide: TaskService, useValue: mockTaskService },
         { provide: LayoutService, useValue: mockLayoutService },
         { provide: ScheduleService, useValue: mockScheduleService },
@@ -93,6 +101,10 @@ describe('ScheduleComponent', () => {
         },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 1 } },
+        {
+          provide: PastWorkScheduleEntriesService,
+          useValue: mockPastWorkScheduleEntriesService,
+        },
       ],
     }).compileComponents();
 

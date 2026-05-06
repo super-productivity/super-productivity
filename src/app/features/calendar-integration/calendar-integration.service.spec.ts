@@ -177,24 +177,33 @@ END:VCALENDAR`;
         discardPeriodicTasks();
       }));
 
-      it('should filter out past events from cache', fakeAsync(() => {
+      it('should filter out events older than one week from cache', fakeAsync(() => {
+        const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
         const cachedData = [
           {
             items: [
               {
-                id: 'past-event',
+                id: 'old-event',
                 calProviderId: 'provider-1',
                 issueProviderKey: 'ICAL',
-                title: 'Past Event',
+                title: 'Old Event',
+                start: Date.now() - ONE_WEEK - 7200000, // more than 1 week ago
+                duration: 3600000,
+              },
+              {
+                id: 'recent-past-event',
+                calProviderId: 'provider-1',
+                issueProviderKey: 'ICAL',
+                title: 'Recent Past Event',
                 start: Date.now() - 7200000, // 2 hours ago
-                duration: 3600000, // 1 hour - so end is 1 hour ago
+                duration: 3600000,
               },
               {
                 id: 'future-event',
                 calProviderId: 'provider-1',
                 issueProviderKey: 'ICAL',
                 title: 'Future Event',
-                start: Date.now() + 60000, // Future event
+                start: Date.now() + 60000,
                 duration: 3600000,
               },
             ],
@@ -211,9 +220,10 @@ END:VCALENDAR`;
         subscriptions.push(sub);
 
         tick(0);
-        // Should only have the future event
-        expect((emittedValue as any[])[0].items.length).toBe(1);
-        expect((emittedValue as any[])[0].items[0].id).toBe('future-event');
+        // Old event (> 1 week) is filtered; recent past and future events are kept
+        expect((emittedValue as any[])[0].items.length).toBe(2);
+        expect((emittedValue as any[])[0].items[0].id).toBe('recent-past-event');
+        expect((emittedValue as any[])[0].items[1].id).toBe('future-event');
         discardPeriodicTasks();
       }));
     });
