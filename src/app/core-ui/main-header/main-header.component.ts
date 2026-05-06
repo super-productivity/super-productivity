@@ -45,6 +45,7 @@ import { DateService } from '../../core/date/date.service';
 import { UserProfileButtonComponent } from '../../features/user-profile/user-profile-button/user-profile-button.component';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
+import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
 
 @Component({
   selector: 'main-header',
@@ -84,6 +85,7 @@ export class MainHeaderComponent implements OnDestroy {
   private readonly _metricService = inject(MetricService);
   private readonly _dateService = inject(DateService);
   private readonly _dataInitStateService = inject(DataInitStateService);
+  private readonly _focusModeService = inject(FocusModeService);
 
   readonly isDataLoaded = toSignal(this._dataInitStateService.isAllDataLoadedInitially$, {
     initialValue: false,
