@@ -182,27 +182,7 @@ test.describe('Bug #5974: Pomodoro timer break sync issues', () => {
     });
   });
 
-  test.describe('Typo fix verification', () => {
-    test('should show "Sync focus sessions with time tracking" (plural)', async ({
-      page,
-    }) => {
-      // Navigate to settings
-      await page.goto('/#/config');
-      await page.waitForLoadState('networkidle');
-
-      // Expand Focus Mode section by clicking on it
-      const focusModeHeader = page.locator('text=Focus Mode').first();
-      if (await focusModeHeader.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await focusModeHeader.click();
-        await page.waitForTimeout(500);
-      }
-
-      // Look for the setting label - should have "sessions" (plural) not "session"
-      const settingLabel = page.getByText('Sync focus sessions with time tracking');
-      const count = await settingLabel.count();
-      if (count > 0) {
-        await expect(settingLabel.first()).toBeVisible({ timeout: 5000 });
-      }
-    });
-  });
+  // Note: a previous "Typo fix verification" test for the
+  // "Sync focus sessions with time tracking" label was removed along with the
+  // setting itself in the focus-mode rework — sync is now always on.
 });

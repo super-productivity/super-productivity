@@ -71,5 +71,11 @@ test.describe('Issue #6731: Pause in focus mode stops task time tracking', () =>
     // Expected: task is paused — no task carries the isCurrent class.
     await expect(firstTask).not.toHaveClass(/isCurrent/, { timeout: 5000 });
     await expect(page.locator('task.isCurrent')).toHaveCount(0);
+
+    // The header focus-button must remain the visible indicator while the
+    // session is paused — otherwise the user has no way back to it without
+    // hitting the keyboard shortcut. Banner removal would have hidden this.
+    const focusRunningLabel = page.locator('focus-button .focus-running-label');
+    await expect(focusRunningLabel).toBeVisible({ timeout: 5000 });
   });
 });
