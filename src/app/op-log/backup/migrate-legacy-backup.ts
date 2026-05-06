@@ -346,6 +346,30 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
   }
 }
 
+function getStartOfNextDayDiffMs(
+  startOfNextDayTime: string | undefined,
+  startOfNextDay: number | undefined,
+): number {
+  if (typeof startOfNextDayTime === 'string') {
+    const [hourStr, minuteStr] = startOfNextDayTime.split(':');
+    const hour = Number(hourStr);
+    const minute = Number(minuteStr);
+    const clampedHour = Number.isFinite(hour) ? Math.max(0, Math.min(23, hour)) : 0;
+    const clampedMinute = Number.isFinite(minute) ? Math.max(0, Math.min(59, minute)) : 0;
+    const minutesFromHours = clampedHour * 60;
+    const totalMinutes = minutesFromHours + clampedMinute;
+
+    return totalMinutes * 60 * 1000;
+  }
+
+  if (typeof startOfNextDay === 'number') {
+    const clampedHour = Math.max(0, Math.min(23, startOfNextDay));
+    return clampedHour * 60 * 60 * 1000;
+  }
+
+  return 0;
+}
+
 // ---------------------------------------------------------------------------
 // Migration 3 — planner, INBOX project, legacy tag cleanup
 // ---------------------------------------------------------------------------
@@ -371,8 +395,10 @@ function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, a
   }
 
   // Fix TODAY_TAG tasks
-  const startOfNextDayDiffMs =
-    (data.globalConfig?.misc?.startOfNextDay || 0) * 60 * 60 * 1000;
+  const startOfNextDayDiffMs = getStartOfNextDayDiffMs(
+    data.globalConfig?.misc?.startOfNextDayTime,
+    data.globalConfig?.misc?.startOfNextDay,
+  );
   const todayStr = getDbDateStr(new Date(Date.now() - startOfNextDayDiffMs));
   const todayTag = data.tag?.entities?.[TODAY_TAG.id];
   if (todayTag?.taskIds) {

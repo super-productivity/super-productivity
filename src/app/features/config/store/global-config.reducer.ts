@@ -105,6 +105,34 @@ export const initialGlobalConfigState: GlobalConfigState = {
   ...DEFAULT_GLOBAL_CONFIG,
 };
 
+const normalizeStartOfNextDayConfig = (
+  misc: Partial<MiscConfig>,
+): Partial<MiscConfig> => {
+  type NormalizedMiscConfig = Omit<
+    Partial<MiscConfig>,
+    'startOfNextDay' | 'startOfNextDayTime'
+  > & {
+    startOfNextDay?: number;
+    startOfNextDayTime?: string;
+  };
+  const normalized: NormalizedMiscConfig = { ...misc };
+
+  if (typeof misc.startOfNextDayTime === 'string') {
+    const [hourStr] = misc.startOfNextDayTime.split(':');
+    const hour = Number(hourStr);
+    if (!Number.isNaN(hour)) {
+      normalized.startOfNextDay = Math.max(0, Math.min(23, hour));
+    }
+  }
+
+  if (typeof misc.startOfNextDay === 'number' && normalized.startOfNextDayTime == null) {
+    const hour = Math.max(0, Math.min(23, misc.startOfNextDay));
+    normalized.startOfNextDayTime = `${String(hour).padStart(2, '0')}:00`;
+  }
+
+  return normalized;
+};
+
 export const globalConfigReducer = createReducer<GlobalConfigState>(
   initialGlobalConfigState,
 
@@ -137,8 +165,18 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       ? oldState.sync.isEncryptionEnabled
       : incomingSyncConfig.isEncryptionEnabled;
 
-    return {
+    const incomingGlobalConfig = {
+      ...DEFAULT_GLOBAL_CONFIG,
       ...appDataComplete.globalConfig,
+      misc: {
+        ...DEFAULT_GLOBAL_CONFIG.misc,
+        ...appDataComplete.globalConfig.misc,
+        ...normalizeStartOfNextDayConfig(appDataComplete.globalConfig.misc ?? {}),
+      },
+    };
+
+    return {
+      ...incomingGlobalConfig,
       // Merge defaults for tasks config to fill missing fields.
       // This handles data from older app versions or synced snapshots that
       // predate newly added fields (e.g., isAutoMarkParentAsDone, notesTemplate).
@@ -167,13 +205,20 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     };
   }),
 
-  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => ({
-    ...state,
-    [sectionKey]: {
-      ...state[sectionKey],
-      ...sectionCfg,
-    },
-  })),
+  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => {
+    const normalizedSectionCfg =
+      sectionKey === 'misc'
+        ? normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>)
+        : sectionCfg;
+
+    return {
+      ...state,
+      [sectionKey]: {
+        ...state[sectionKey],
+        ...normalizedSectionCfg,
+      },
+    };
+  }),
 );
 
 export const selectTimelineWorkStartEndHours = createSelector(

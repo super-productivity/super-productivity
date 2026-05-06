@@ -213,7 +213,7 @@ describe('GlobalConfigEffects', () => {
           appDataComplete: {
             globalConfig: {
               ...DEFAULT_GLOBAL_CONFIG,
-              misc: { ...DEFAULT_GLOBAL_CONFIG.misc, startOfNextDay: 4 },
+              misc: { startOfNextDay: 4 } as any,
             },
           } as any,
         }),
@@ -234,7 +234,7 @@ describe('GlobalConfigEffects', () => {
           appDataComplete: {
             globalConfig: {
               ...DEFAULT_GLOBAL_CONFIG,
-              misc: { ...DEFAULT_GLOBAL_CONFIG.misc, startOfNextDay: 4 },
+              misc: { startOfNextDay: 4 } as any,
             },
           } as any,
         }),

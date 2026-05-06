@@ -28,7 +28,8 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
   isLocalRestApiEnabled?: boolean;
-  startOfNextDay: string | number;
+  startOfNextDay: number;
+  startOfNextDayTime?: string;
   isDisableAnimations: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;

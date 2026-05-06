@@ -50,7 +50,7 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         ]
       : []) as LimitedFormlyFieldConfig<MiscConfig>[]),
     {
-      key: 'startOfNextDay',
+      key: 'startOfNextDayTime',
       type: 'input',
       defaultValue: '00:00',
       templateOptions: {
@@ -60,7 +60,7 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         type: 'text',
         pattern: '^([01]\\d|2[0-3]):([0-5]\\d)$',
         maxLength: 5,
-        minLength: 4,
+        minLength: 5,
       },
     },
     {

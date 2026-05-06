@@ -166,6 +166,43 @@ export class GlobalConfigService {
     initialValue: DEFAULT_GLOBAL_CONFIG.appFeatures,
   });
 
+  private normalizeSectionCfg(
+    sectionKey: GlobalConfigSectionKey,
+    sectionCfg: Partial<GlobalSectionConfig>,
+  ): Partial<GlobalSectionConfig> {
+    if (sectionKey !== 'misc') {
+      return sectionCfg;
+    }
+
+    const misc = sectionCfg as Partial<MiscConfig>;
+    type NormalizedMiscConfig = Omit<
+      Partial<MiscConfig>,
+      'startOfNextDay' | 'startOfNextDayTime'
+    > & {
+      startOfNextDay?: number;
+      startOfNextDayTime?: string;
+    };
+    const normalized: NormalizedMiscConfig = { ...misc };
+
+    if (typeof misc.startOfNextDayTime === 'string') {
+      const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(misc.startOfNextDayTime);
+      if (match) {
+        const hour = Number(match[1]);
+        normalized.startOfNextDay = hour;
+      }
+    }
+
+    if (
+      typeof misc.startOfNextDay === 'number' &&
+      normalized.startOfNextDayTime == null
+    ) {
+      const hour = Math.max(0, Math.min(23, misc.startOfNextDay));
+      normalized.startOfNextDayTime = `${String(hour).padStart(2, '0')}:00`;
+    }
+
+    return normalized;
+  }
+
   updateSection(
     sectionKey: GlobalConfigSectionKey,
     sectionCfg: Partial<GlobalSectionConfig>,
@@ -174,7 +211,7 @@ export class GlobalConfigService {
     this._store.dispatch(
       updateGlobalConfigSection({
         sectionKey,
-        sectionCfg,
+        sectionCfg: this.normalizeSectionCfg(sectionKey, sectionCfg),
         isSkipSnack,
       }),
     );
