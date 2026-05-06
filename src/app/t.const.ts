@@ -1510,6 +1510,7 @@ const T = {
         LABEL: 'F.TAG.D_EDIT.LABEL',
       },
       FORM_BASIC: {
+        D_COLOR: 'F.TAG.FORM_BASIC.D_COLOR',
         L_COLOR: 'F.TAG.FORM_BASIC.L_COLOR',
         L_ICON: 'F.TAG.FORM_BASIC.L_ICON',
         L_TITLE: 'F.TAG.FORM_BASIC.L_TITLE',

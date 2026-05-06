@@ -757,14 +757,19 @@ export class TaskService {
       }),
     );
 
-    this._focusNewlyCreatedTask(task.id, !task.title?.trim().length);
+    this.focusTaskById(task.id, !task.title?.trim().length);
 
     return task.id;
   }
 
-  private _focusNewlyCreatedTask(taskId: string, shouldStartEditing: boolean): void {
-    // Use double-RAF to ensure Angular has completed rendering after change detection.
-    // First RAF queues after the current frame, second RAF runs after the render.
+  /**
+   * Focus a task element by id, deferred via double-RAF so it runs after
+   * Angular renders the next frame. When `shouldStartEditing` is true and
+   * the task's title is empty at the time of focus, also enter title edit
+   * mode. Used both by newly-created tasks and by callers that want to
+   * focus an existing task (e.g. an empty sibling on Mod+Enter).
+   */
+  focusTaskById(taskId: string, shouldStartEditing: boolean): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const taskElement = document.getElementById(`t-${taskId}`);

@@ -3,3 +3,6 @@
   [value]="formControl.value"
   (valueChange)="onColorChange($event)"
 />
+@if (to.description) {
+  <div class="description">{{ to.description }}</div>
+}

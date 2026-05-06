@@ -123,6 +123,17 @@ export class TaskShortcutService {
     // Check if the focused task's context menu is open - if so, skip arrow navigation shortcuts
     const isContextMenuOpen = this._isTaskContextMenuOpen(focusedTaskId);
 
+    // Ctrl/Cmd+Enter on a focused (but not editing) task: same as the `a`
+    // shortcut — create a new subtask. Must run before the plain-Enter
+    // "edit title" handler below. A user-bound `togglePlay` is checked
+    // earlier (line ~74), so remapping `togglePlay` to Mod+Enter takes
+    // precedence over this hardcoded combo.
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+      this._handleTaskShortcut(focusedTaskId, 'addSubTask');
+      ev.preventDefault();
+      return true;
+    }
+
     // Basic task actions that work through component delegation
     if (
       !isContextMenuOpen &&

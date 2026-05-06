@@ -228,3 +228,5 @@ export interface TaskState extends EntityState<Task> {
 export interface WorklogTask extends Task {
   dateStr: string;
 }
+
+export type SubmitTrigger = 'blur' | 'escape' | 'enter' | 'modEnter';

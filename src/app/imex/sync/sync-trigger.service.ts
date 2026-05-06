@@ -71,6 +71,11 @@ export class SyncTriggerService {
     if (IS_ELECTRON) {
       ipcResume$.subscribe(() => this._hydrationState.openSyncWindow());
     }
+    // Open synchronously on visibilitychange — bridged onResume$ on Android
+    // arrives ~100ms later, after the DAY_CHANGE → TODAY_TAG repair cascade.
+    fromEvent(document, 'visibilitychange')
+      .pipe(filter(() => document.visibilityState === 'visible'))
+      .subscribe(() => this._hydrationState.openSyncWindow());
   }
 
   // Note: This was previously connected to PFAPI's onLocalMetaUpdate$, which was a no-op.

@@ -18,6 +18,7 @@ import { TaskService } from '../task.service';
 import { EMPTY, forkJoin, Subscription } from 'rxjs';
 import {
   HideSubTasksMode,
+  SubmitTrigger,
   TaskCopy,
   TaskDetailTargetPanel,
   TaskWithSubTasks,
@@ -688,13 +689,33 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     newVal,
     wasChanged,
     blurEvent,
+    submitTrigger,
   }: {
     newVal: string;
     wasChanged: boolean;
     blurEvent?: FocusEvent;
+    submitTrigger: SubmitTrigger;
   }): void {
     if (wasChanged) {
       this._taskService.update(this.task().id, { title: newVal });
+    }
+
+    if (submitTrigger === 'modEnter') {
+      this._addSubTaskOrFocusEmpty(newVal);
+      return;
+    }
+
+    // Escape in subtask editor should return focus to previous sibling;
+    // for empty titles we remove the subtask entirely.
+    if (submitTrigger === 'escape' && this.task().parentId) {
+      const previousTaskEl = this._getPreviousTaskEl();
+      // Only auto-delete for freshly spawned empty subtasks.
+      // If user cleared an existing title, Escape should save and keep the task.
+      if (!wasChanged && !newVal) {
+        this._taskService.remove(this.task());
+      }
+      this._focusTaskHost(previousTaskEl);
+      return;
     }
 
     // Only focus self if no input/textarea is receiving focus next
@@ -763,6 +784,37 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   addSubTask(): void {
     this._taskService.addSubTaskTo(this.task().parentId || this.task().id);
+  }
+
+  /**
+   * Mod+Enter (in title editor): focus an existing empty sibling subtask if
+   * one exists, otherwise create a new one. For top-level tasks, "siblings"
+   * means children. `effectiveSelfTitle` is the just-submitted title — use it
+   * instead of `task().title`, which still reflects the pre-update value
+   * within this turn.
+   */
+  private _addSubTaskOrFocusEmpty(effectiveSelfTitle: string): void {
+    const t = this.task();
+    const targetParentId = t.parentId || t.id;
+    const isOnParent = !t.parentId;
+    const isEmpty = (title?: string): boolean => !title?.trim();
+
+    if (isOnParent && t._hideSubTasksMode === HideSubTasksMode.HideAll) {
+      this._taskService.showSubTasks(t.id);
+    }
+
+    this._taskService.getByIdWithSubTaskData$(targetParentId).subscribe((parent) => {
+      const emptyChild = parent.subTasks.find((s) => s.id !== t.id && isEmpty(s.title));
+      if (emptyChild) {
+        this._taskService.focusTaskById(emptyChild.id, true);
+        return;
+      }
+      // Already on the only empty subtask — leave focus where it is.
+      if (!isOnParent && isEmpty(effectiveSelfTitle)) {
+        return;
+      }
+      this._taskService.addSubTaskTo(targetParentId);
+    });
   }
 
   @throttle(200, { leading: true, trailing: false })
@@ -1163,6 +1215,26 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
         })()
       : (taskEls[currentIndex + 1] as HTMLElement);
     return nextEl;
+  }
+
+  private _getPreviousTaskEl(): HTMLElement | undefined {
+    const currentTaskEl = this._elementRef.nativeElement as HTMLElement;
+    const enclosingListEl = currentTaskEl.closest('task-list');
+    const taskEls = Array.from(
+      (enclosingListEl ?? document).querySelectorAll('task'),
+    ) as HTMLElement[];
+    const currentIndex = taskEls.findIndex((el) => el === currentTaskEl);
+    return currentIndex > 0 ? taskEls[currentIndex - 1] : undefined;
+  }
+
+  private _focusTaskHost(taskEl?: HTMLElement): void {
+    if (!taskEl || isTouchActive()) {
+      return;
+    }
+    // Defer to next tick so focus survives blur/delete related DOM updates.
+    window.setTimeout(() => {
+      taskEl.focus();
+    });
   }
 
   get kb(): KeyboardConfig {
