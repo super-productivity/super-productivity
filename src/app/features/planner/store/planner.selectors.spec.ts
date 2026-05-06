@@ -367,7 +367,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
     dayDates: string[] = [today],
     todayStr: string = today,
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-  ) => fromSelectors.selectPlannerDays(dayDates, [], false, [], [], todayStr);
+  ) => fromSelectors.selectPlannerDays(dayDates, [], [], [], [], todayStr);
 
   it('should return a PlannerDay for each day date', () => {
     const selector = createPlannerDaysSelector([today]);
@@ -396,14 +396,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
       days: { [tomorrow]: ['t1'] },
     };
 
-    const selector = fromSelectors.selectPlannerDays(
-      [tomorrow],
-      [],
-      false,
-      [],
-      [],
-      today,
-    );
+    const selector = fromSelectors.selectPlannerDays([tomorrow], [], [], [], [], today);
     const result = selector.projector(taskState, plannerState, defaultScheduleConfig, 0);
 
     expect(result[0].tasks.length).toBe(1);
@@ -535,7 +528,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
     const selector = fromSelectors.selectPlannerDays(
       [today],
       [],
-      false,
+      [],
       calendarEvents,
       [],
       today,
@@ -585,7 +578,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
     const selector = fromSelectors.selectPlannerDays(
       [today],
       [],
-      false,
+      [],
       calendarEvents,
       [],
       today,
@@ -646,7 +639,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
     const selector = fromSelectors.selectPlannerDays(
       [today],
       [],
-      false,
+      ['t1'],
       calendarEvents,
       [],
       today,
