@@ -170,6 +170,20 @@ export class MainHeaderComponent implements OnDestroy {
   readonly isFocusModeEnabled = computed(() => {
     return this.globalConfigService.appFeatures().isFocusModeEnabled;
   });
+  // On mobile the focus-button is normally hidden to save space. When a focus
+  // session/break is in flight the running countdown lives on this button, so
+  // surface it on mobile too — otherwise the user has no way to see or open
+  // the session after the overlay is closed.
+  readonly isFocusSessionActive = computed(
+    () =>
+      this._focusModeService.isSessionRunning() || this._focusModeService.isBreakActive(),
+  );
+  readonly isFocusButtonVisible = computed(
+    () =>
+      this.isFocusModeEnabled() &&
+      !this.isXxxs() &&
+      (this.showDesktopButtons() || this.isFocusSessionActive()),
+  );
   readonly isSyncIconEnabled = computed(() => {
     return this.globalConfigService.appFeatures().isSyncIconEnabled;
   });
