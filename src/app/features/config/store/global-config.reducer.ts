@@ -23,6 +23,23 @@ import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
 
+/**
+ * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
+ * rework) to the new `autoStartFocusOnPlay` opt-in. Users who had sync enabled
+ * relied on play→spawn behavior; without this, the upgrade would silently turn
+ * auto-spawn off for them. The deprecated key is dropped from the resulting state.
+ */
+const migrateFocusModeConfig = (cfg: FocusModeConfig): FocusModeConfig => {
+  const legacy = cfg as FocusModeConfig & { isSyncSessionWithTracking?: boolean };
+  if (!('isSyncSessionWithTracking' in legacy)) {
+    return cfg;
+  }
+  const { isSyncSessionWithTracking, ...rest } = legacy;
+  // Only backfill when the user has not explicitly set the new key.
+  const autoStartFocusOnPlay = rest.autoStartFocusOnPlay ?? !!isSyncSessionWithTracking;
+  return { ...rest, autoStartFocusOnPlay };
+};
+
 export const CONFIG_FEATURE_NAME = 'globalConfig';
 export const selectConfigFeatureState =
   createFeatureSelector<GlobalConfigState>(CONFIG_FEATURE_NAME);
@@ -154,10 +171,10 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
       },
-      focusMode: {
+      focusMode: migrateFocusModeConfig({
         ...DEFAULT_GLOBAL_CONFIG.focusMode,
         ...appDataComplete.globalConfig.focusMode,
-      },
+      }),
       sync: {
         ...incomingSyncConfig,
         syncProvider,

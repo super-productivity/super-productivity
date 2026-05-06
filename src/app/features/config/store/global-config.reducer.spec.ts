@@ -323,6 +323,88 @@ describe('GlobalConfigReducer', () => {
         expect(result.sync.isEnabled).toBe(true);
       });
     });
+
+    describe('focusMode migration: isSyncSessionWithTracking → autoStartFocusOnPlay', () => {
+      it('should backfill autoStartFocusOnPlay=true from legacy isSyncSessionWithTracking=true', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          focusMode: {
+            ...initialGlobalConfigState.focusMode,
+            isSyncSessionWithTracking: true,
+            autoStartFocusOnPlay: undefined,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(true);
+        expect('isSyncSessionWithTracking' in (result.focusMode as object)).toBe(false);
+      });
+
+      it('should leave autoStartFocusOnPlay=false when legacy isSyncSessionWithTracking=false', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          focusMode: {
+            ...initialGlobalConfigState.focusMode,
+            isSyncSessionWithTracking: false,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
+        expect('isSyncSessionWithTracking' in (result.focusMode as object)).toBe(false);
+      });
+
+      it('should not overwrite an explicit autoStartFocusOnPlay value', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          focusMode: {
+            ...initialGlobalConfigState.focusMode,
+            isSyncSessionWithTracking: true,
+            autoStartFocusOnPlay: false,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
+      });
+
+      it('should leave fresh configs (no legacy key) untouched', () => {
+        const freshConfig = {
+          ...initialGlobalConfigState,
+          focusMode: {
+            ...initialGlobalConfigState.focusMode,
+            autoStartFocusOnPlay: true,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: freshConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(true);
+      });
+    });
   });
 
   describe('Selectors', () => {

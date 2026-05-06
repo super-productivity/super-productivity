@@ -2,14 +2,17 @@
  * Tests for GitHub issue #6575
  * https://github.com/super-productivity/super-productivity/issues/6575
  *
- * Bug: Finishing a task in focus mode with isSyncSessionWithTracking causes
- * the session UI to revert to the preparation state (showing play button
- * instead of pause/end buttons).
+ * Bug: Finishing a task in focus mode causes the session UI to revert to the
+ * preparation state (showing play button instead of pause/end buttons).
  *
- * Root cause: When a task is completed with isSyncSessionWithTracking enabled,
+ * Root cause: When a task is completed while focus-tracking sync is active,
  * the chain task done → unsetCurrentTask → pauseFocusSession → (new task selected)
  * → unPauseFocusSession fires. The unPauseFocusSession reducer resumes the timer
  * but does NOT restore mainState to InProgress, leaving the UI in Preparation.
+ *
+ * Note: sync between focus session and time tracking is now always on; the
+ * `isSyncSessionWithTracking` toggle that originally gated this chain has been
+ * removed in the focus-mode rework.
  */
 
 import { focusModeReducer, initialState } from './focus-mode.reducer';
