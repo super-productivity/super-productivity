@@ -171,10 +171,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Hur och var man ska betygsätta",
-      "BTN_DONT_BOTHER": "Stör mig inte igen.",
-      "TITLE": "🙈 Förlåt oss, men...",
-      "TXT": "Du skulle hjälpa projektet enormt genom att <strong>ge det ett bra betyg, om du gillar det!</strong>"
+      "A_HOW": "Så betygsätter du",
+      "BTN_DONT_BOTHER": "Fråga inte igen",
+      "BTN_FEEDBACK": "Lämna feedback",
+      "BTN_LATER": "Kanske senare",
+      "BTN_RATE_APP_STORE": "Betygsätt i App Store",
+      "BTN_RATE_PLAY_STORE": "Betygsätt i Play Store",
+      "FEEDBACK_BACK": "Tillbaka",
+      "FEEDBACK_CONTRIBUTE": "Bidra till projektet",
+      "FEEDBACK_CONTRIBUTE_DESC": "Kod, design, översättningar och mer",
+      "FEEDBACK_PRIVATE": "Mejla underhållaren",
+      "FEEDBACK_PRIVATE_DESC": "Skicka ett privat meddelande",
+      "FEEDBACK_PUBLIC": "Skriv på GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Andra kan se och svara",
+      "FEEDBACK_TITLE": "Hur vill du hjälpa till?",
+      "TITLE": "Gillar du Super Productivity?",
+      "TXT": "Det är ett <strong>gratis projekt med öppen källkod</strong> byggt av entusiaster – ingen spårning, inga annonser. Ett betyg eller ett kort meddelande hjälper fler att upptäcka det."
     },
     "VOICE_REMINDER": {
       "FORM": {

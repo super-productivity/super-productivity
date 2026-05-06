@@ -345,7 +345,13 @@ describe('sectionReducer', () => {
       ]);
       const next = sectionReducer(
         start,
-        removeTaskFromSection({ sectionId: 's1', taskId: 't1' }),
+        removeTaskFromSection({
+          sectionId: 's1',
+          taskId: 't1',
+          workContextId: 'project1',
+          workContextType: WorkContextType.PROJECT,
+          workContextAfterTaskId: null,
+        }),
       );
       expect(next.entities['s1']?.taskIds).toEqual(['t2']);
       // Other sections untouched — caller is responsible for the right source.
@@ -356,7 +362,13 @@ describe('sectionReducer', () => {
       const start = stateWithSections([makeSection({ id: 's1', taskIds: ['t1'] })]);
       const next = sectionReducer(
         start,
-        removeTaskFromSection({ sectionId: 's1', taskId: 'absent' }),
+        removeTaskFromSection({
+          sectionId: 's1',
+          taskId: 'absent',
+          workContextId: 'project1',
+          workContextType: WorkContextType.PROJECT,
+          workContextAfterTaskId: null,
+        }),
       );
       expect(next).toBe(start);
     });
@@ -365,7 +377,13 @@ describe('sectionReducer', () => {
       const start = stateWithSections([makeSection({ id: 's1', taskIds: ['t1'] })]);
       const next = sectionReducer(
         start,
-        removeTaskFromSection({ sectionId: 'missing', taskId: 't1' }),
+        removeTaskFromSection({
+          sectionId: 'missing',
+          taskId: 't1',
+          workContextId: 'project1',
+          workContextType: WorkContextType.PROJECT,
+          workContextAfterTaskId: null,
+        }),
       );
       expect(next).toBe(start);
     });

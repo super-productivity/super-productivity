@@ -4,6 +4,7 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { IdleService } from '../../features/idle/idle.service';
 import { SyncWrapperService } from './sync-wrapper.service';
+import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 import { Store } from '@ngrx/store';
 import { BehaviorSubject, Observable, of, ReplaySubject } from 'rxjs';
 
@@ -330,5 +331,63 @@ describe('SyncTriggerService', () => {
 
       sub.unsubscribe();
     }));
+  });
+
+  // Regression for the wake-up race: the visibilitychange listener must open
+  // the sync window synchronously. Any debounce/throttle in front would let
+  // the DAY_CHANGE → TODAY_TAG-repair cascade fire on stale state first.
+  it('opens sync window synchronously on visibilitychange to visible', () => {
+    const isAllDataLoaded$ = new ReplaySubject<boolean>(1);
+    isAllDataLoaded$.next(true);
+    const hydrationSpy = jasmine.createSpyObj<HydrationStateService>(
+      'HydrationStateService',
+      ['openSyncWindow', 'isInSyncWindow', 'isApplyingRemoteOps'],
+    );
+    // spyOnProperty is auto-restored per spec — no Document.prototype mutation.
+    spyOnProperty(document, 'visibilityState', 'get').and.returnValue('visible');
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        SyncTriggerService,
+        {
+          provide: GlobalConfigService,
+          useValue: jasmine.createSpyObj('GlobalConfigService', [], {
+            cfg$: of({ sync: { isEnabled: true } }),
+            idle$: of({ isEnableIdleTimeTracking: false }),
+          }),
+        },
+        {
+          provide: DataInitStateService,
+          useValue: jasmine.createSpyObj('DataInitStateService', [], {
+            isAllDataLoadedInitially$: isAllDataLoaded$.asObservable(),
+          }),
+        },
+        {
+          provide: IdleService,
+          useValue: jasmine.createSpyObj('IdleService', [], {
+            isIdle$: of(false),
+          }),
+        },
+        {
+          provide: SyncWrapperService,
+          useValue: jasmine.createSpyObj('SyncWrapperService', [], {
+            syncProviderId$: of(null),
+            isWaitingForUserInput$: of(false),
+          }),
+        },
+        { provide: HydrationStateService, useValue: hydrationSpy },
+        { provide: Store, useValue: jasmine.createSpyObj('Store', ['select']) },
+      ],
+    });
+    TestBed.inject(SyncTriggerService);
+    hydrationSpy.openSyncWindow.calls.reset();
+
+    const before = hydrationSpy.openSyncWindow.calls.count();
+    document.dispatchEvent(new Event('visibilitychange'));
+    const after = hydrationSpy.openSyncWindow.calls.count();
+
+    // Synchronous: a debounceTime/throttleTime regression would yield 0 here.
+    expect(after - before).toBe(1);
   });
 });

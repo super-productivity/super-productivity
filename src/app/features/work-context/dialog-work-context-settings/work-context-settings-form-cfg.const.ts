@@ -30,6 +30,7 @@ export const buildWorkContextSettingsFormCfg = (
       type: 'color',
       templateOptions: {
         label: T.F.TAG.FORM_BASIC.L_COLOR,
+        description: T.F.TAG.FORM_BASIC.D_COLOR,
       },
     });
   }

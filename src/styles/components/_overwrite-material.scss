@@ -70,6 +70,12 @@ body.isNativeMobile .cdk-global-overlay-wrapper {
     var(--safe-area-left);
 }
 
+body.isIOS.isKeyboardVisible .cdk-global-overlay-wrapper {
+  // Dialogs render outside the app shell; when iOS does not shrink the WebView,
+  // reserve keyboard space in the overlay layer itself.
+  padding-bottom: calc(var(--safe-area-bottom) + var(--keyboard-overlay-offset));
+}
+
 // Constrain menu panels to safe area so content scrolls instead of
 // extending behind the status bar when CDK pushes the overlay up.
 body.isNativeMobile .mat-mdc-menu-panel {
@@ -95,6 +101,12 @@ body.isNativeMobile .mat-mdc-menu-panel {
       100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
     ) !important;
   }
+}
+
+body.isIOS.isKeyboardVisible .cdk-overlay-pane.mat-mdc-dialog-panel {
+  max-height: calc(
+    var(--visual-viewport-height) - var(--safe-area-top) - var(--safe-area-bottom)
+  ) !important;
 }
 
 body .mat-mdc-dialog-content {
@@ -384,4 +396,8 @@ mat-tooltip-component {
     ) !important;
     pointer-events: auto;
   }
+}
+
+.mat-expansion-panel-header {
+  --mat-expansion-header-expanded-state-height: 48px;
 }

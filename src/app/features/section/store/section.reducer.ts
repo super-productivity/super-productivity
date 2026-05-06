@@ -148,4 +148,5 @@ export const sectionReducer = createReducer(
   ),
 );
 
-export const { selectAll } = adapter.getSelectors();
+export const { selectIds, selectEntities, selectAll, selectTotal } =
+  adapter.getSelectors();

@@ -160,20 +160,16 @@
                   class="section-container"
                   cdkDrag
                   [cdkDragData]="section"
+                  [cdkDragStartDelay]="dragDelayForTouch()"
                   [cdkDragLockAxis]="'y'"
                 >
                   <collapsible
                     [title]="section.title"
                     [isIconBefore]="true"
                     [isExpanded]="true"
+                    [isTitleDragHandle]="true"
                   >
                     <ng-container actions>
-                      <div
-                        class="drag-handle"
-                        cdkDragHandle
-                      >
-                        <mat-icon>drag_indicator</mat-icon>
-                      </div>
                       <button
                         mat-icon-button
                         [matMenuTriggerFor]="sectionMenu"

@@ -29,6 +29,7 @@ describe('entity-registry', () => {
     'MENU_TREE',
     'METRIC',
     'BOARD',
+    'SECTION',
     'REMINDER',
     'PLUGIN_USER_DATA',
     'PLUGIN_METADATA',
@@ -47,6 +48,7 @@ describe('entity-registry', () => {
     'TASK_REPEAT_CFG',
     'METRIC',
     'ISSUE_PROVIDER',
+    'SECTION',
   ];
 
   const SINGLETON_ENTITIES: EntityType[] = [
@@ -427,8 +429,8 @@ describe('entity-registry', () => {
       ];
 
       // Update this count when adding new entity types to EntityType union
-      // Current: 17 regular + 3 special = 20 total
-      expect(ALL_TESTED.length).toBe(20);
+      // Current: 18 regular + 3 special = 21 total
+      expect(ALL_TESTED.length).toBe(21);
 
       // Verify no duplicates
       const uniqueTypes = new Set(ALL_TESTED);

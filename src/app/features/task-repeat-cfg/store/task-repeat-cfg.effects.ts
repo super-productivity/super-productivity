@@ -267,10 +267,24 @@ export class TaskRepeatCfgEffects {
                   a.created > b.created ? a : b,
                 );
 
-                // Editing an existing recurring cfg: compute the next occurrence
-                // from today, not from startDate. Using getFirstRepeatOccurrence
-                // here would retro-anchor on the original startDate.
-                const firstOccurrence = getNextRepeatOccurrence(fullCfg, new Date());
+                // If the user moved startDate earlier than the existing
+                // lastTaskCreationDay, the anchor is stale — re-anchor on
+                // the new startDate (#7423). Skip for repeatFromCompletionDate
+                // configs: there startDate is decoupled from scheduling
+                // (getEffectiveRepeatStartDate uses lastTaskCreationDay), so
+                // editing startDate must not clear completion history.
+                const changes = taskRepeatCfg.changes as Partial<TaskRepeatCfgCopy>;
+                const lastCreationDay = getEffectiveLastTaskCreationDay(fullCfg);
+                const isStartDateMovedEarlier =
+                  'startDate' in changes &&
+                  !fullCfg.repeatFromCompletionDate &&
+                  !!fullCfg.startDate &&
+                  !!lastCreationDay &&
+                  fullCfg.startDate < lastCreationDay;
+
+                const firstOccurrence = isStartDateMovedEarlier
+                  ? getFirstRepeatOccurrence(fullCfg)
+                  : getNextRepeatOccurrence(fullCfg, new Date());
                 const firstOccurrenceStr = firstOccurrence
                   ? this._dateService.todayStr(firstOccurrence)
                   : this._dateService.todayStr();

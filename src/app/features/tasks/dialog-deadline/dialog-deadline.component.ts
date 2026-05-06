@@ -27,6 +27,7 @@ import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { getClockStringFromHours } from '../../../util/get-clock-string-from-hours';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateService } from '../../../core/date/date.service';
@@ -224,7 +225,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
       return;
     }
 
-    if (this.selectedTime) {
+    if (this.selectedTime && isValidSplitTime(this.selectedTime)) {
       const deadlineTimestamp = getDateTimeFromClockString(
         this.selectedTime,
         this.selectedDate!,
@@ -242,6 +243,8 @@ export class DialogDeadlineComponent implements AfterViewInit {
         }),
       );
     } else {
+      // Falls through for both "no time entered" and "malformed time" — the
+      // latter would otherwise crash getDateTimeFromClockString (issue #7490).
       const newDay = getDbDateStr(this.selectedDate!);
       this._store.dispatch(
         TaskSharedActions.setDeadline({

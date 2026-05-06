@@ -1,6 +1,8 @@
 import { AppDataComplete } from '../model/model-config';
 import { IValidation } from 'typia';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
+import { INBOX_PROJECT } from '../../features/project/project.const';
+import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { OpLog } from '../../core/log';
 
 export const autoFixTypiaErrors = (
@@ -57,6 +59,38 @@ export const autoFixTypiaErrors = (
         } else {
           setValueByPath(data, keys, 0);
           OpLog.err(`Fixed: ${path} to 0 (was ${value})`);
+        }
+      } else if (
+        // Issue #7330: a TASK entity recreated from a partial LWW Update can
+        // be missing required scalar fields. Primary fix is in the
+        // meta-reducer; this branch is defense-in-depth for state already
+        // corrupted on disk. Field list and default values both come from
+        // RECREATE_FALLBACK so the two layers cannot drift.
+        keys[0] === 'task' &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        value === undefined &&
+        RECREATE_FALLBACK.TASK?.requiredKeys.includes(keys[3] as string)
+      ) {
+        const field = keys[3] as string;
+        if (field === 'projectId') {
+          // INBOX_PROJECT may be absent (corrupted import); mirror
+          // normalizeRestoredTask at task-shared-lifecycle.reducer.ts:110.
+          const projectEntities = ((
+            data as { project?: { entities?: Record<string, unknown> } }
+          ).project?.entities ?? {}) as Record<string, unknown>;
+          const fallback = projectEntities[INBOX_PROJECT.id]
+            ? INBOX_PROJECT.id
+            : (Object.keys(projectEntities)[0] ?? INBOX_PROJECT.id);
+          setValueByPath(data, keys, fallback);
+          OpLog.err(`Fixed: ${path} from undefined to "${fallback}" for task.projectId`);
+        } else {
+          const defaultValue = RECREATE_FALLBACK.TASK.defaults[field];
+          setValueByPath(data, keys, defaultValue);
+          OpLog.err(
+            `Fixed: ${path} from undefined to ${JSON.stringify(defaultValue)} ` +
+              `for task.${field}`,
+          );
         }
       } else if (
         keys[0] === 'simpleCounter' &&

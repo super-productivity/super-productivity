@@ -166,9 +166,10 @@ export class CapacitorReminderService {
               // The string 'default' triggers iOS's file-not-found fallback to the system sound.
               sound: 'default',
               // Include action type for iOS notification actions (Done/Snooze buttons)
-              actionTypeId: this._platformService.isIOS()
-                ? REMINDER_ACTION_TYPE_ID
-                : undefined,
+              actionTypeId:
+                this._platformService.isIOS() && options.reminderType !== 'DUE_DATE'
+                  ? REMINDER_ACTION_TYPE_ID
+                  : undefined,
               // Group notifications on iOS via thread identifier
               threadIdentifier: this._platformService.isIOS()
                 ? 'sp_reminders'

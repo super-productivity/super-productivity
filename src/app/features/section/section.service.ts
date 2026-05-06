@@ -92,11 +92,26 @@ export class SectionService {
   }
 
   /**
-   * Removes `taskId` from `sourceSectionId`. Persisted as a single
-   * Update keyed on the source — concurrent ungroups from different
-   * sections do NOT collide.
+   * Atomic: strips `taskId` from `sourceSectionId` AND repositions it in
+   * the work-context's `taskIds` so the task lands at the dropped slot
+   * in the no-section bucket. Single op, both stores updated by the
+   * section-shared meta-reducer.
    */
-  removeTaskFromSection(sourceSectionId: string, taskId: string): void {
-    this._store.dispatch(removeTaskFromSection({ sectionId: sourceSectionId, taskId }));
+  removeTaskFromSection(
+    sourceSectionId: string,
+    taskId: string,
+    workContextId: string,
+    workContextType: WorkContextType,
+    workContextAfterTaskId: string | null,
+  ): void {
+    this._store.dispatch(
+      removeTaskFromSection({
+        sectionId: sourceSectionId,
+        taskId,
+        workContextId,
+        workContextType,
+        workContextAfterTaskId,
+      }),
+    );
   }
 }

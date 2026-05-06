@@ -71,6 +71,7 @@
   },
   "F": {
     "ATTACHMENT": {
+      "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Add Attachment",
         "EDIT_ATTACHMENT": "Edit Attachment",
@@ -218,10 +219,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "How and where to rate",
-      "BTN_DONT_BOTHER": "Don't bother me again",
-      "TITLE": "🙈 Please forgive us, but...",
-      "TXT": "You will help the project immensely by <strong>giving it a good rating, if you like it!</strong>"
+      "A_HOW": "How to rate",
+      "BTN_DONT_BOTHER": "Don't ask again",
+      "BTN_FEEDBACK": "Give feedback",
+      "BTN_LATER": "Maybe later",
+      "BTN_RATE_APP_STORE": "Rate on App Store",
+      "BTN_RATE_PLAY_STORE": "Rate on Play Store",
+      "FEEDBACK_BACK": "Back",
+      "FEEDBACK_CONTRIBUTE": "Contribute to the project",
+      "FEEDBACK_CONTRIBUTE_DESC": "Code, design, translations, and more",
+      "FEEDBACK_PRIVATE": "Email maintainer",
+      "FEEDBACK_PRIVATE_DESC": "Send a private message",
+      "FEEDBACK_PUBLIC": "Post on GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Others can see and respond",
+      "FEEDBACK_TITLE": "How would you like to help?",
+      "TITLE": "Enjoying Super Productivity?",
+      "TXT": "It's a free, open-source project built by enthusiasts – no tracking, no ads. A rating or short message helps more people find it."
     },
     "DROPBOX": {
       "S": {
@@ -439,6 +452,7 @@
         "OAUTH_CONNECTED": "OAuth account connected successfully.",
         "OAUTH_DISCONNECTED": "OAuth account disconnected.",
         "OAUTH_FAILED": "Authentication failed.",
+        "OAUTH_FAILED_WITH_DETAIL": "Authentication failed: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}"
@@ -1458,7 +1472,8 @@
         "LABEL": "Tags"
       },
       "FORM_BASIC": {
-        "L_COLOR": "Color (if undefined primary theme color is used)",
+        "D_COLOR": "If not set, defaults to the theme's Primary color.",
+        "L_COLOR": "Tag Color",
         "L_ICON": "Icon",
         "L_TITLE": "Tag Name",
         "TITLE": "Basic Settings"
@@ -1495,7 +1510,7 @@
         "CREATE_NEW_TAGS": "Create new tags",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
-        "PLACEHOLDER_CREATE": "A task title #tag @16:00",
+        "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m ",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
         "REPEAT_BUTTON": "Repeat",
         "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",

@@ -14,6 +14,7 @@ import {
 import { expandAnimation } from '../animations/expand.ani';
 import { MatIcon } from '@angular/material/icon';
 import { findAdjacentFocusable } from '../../util/find-adjacent-focusable';
+import { CdkDragHandle } from '@angular/cdk/drag-drop';
 
 /**
  * CSS selector matching every element that participates in keyboard
@@ -27,7 +28,7 @@ export const GROUP_NAV_SELECTOR = 'task, collapsible.is-group > .collapsible-hea
   styleUrls: ['./collapsible.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [expandAnimation],
-  imports: [MatIcon],
+  imports: [MatIcon, CdkDragHandle],
 })
 export class CollapsibleComponent implements OnInit, OnDestroy {
   // TODO: _groupCollapsibles is a global registry. If a second consumer uses [isGroup]="true",
@@ -43,6 +44,7 @@ export class CollapsibleComponent implements OnInit, OnDestroy {
   @Input() icon?: string;
 
   readonly isIconBefore = input<boolean>(false);
+  readonly isTitleDragHandle = input<boolean>(false);
   @HostBinding('class.is-group') @Input() isGroup = false;
 
   // TODO: Skipped for migration because:

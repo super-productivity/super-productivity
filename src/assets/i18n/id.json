@@ -176,10 +176,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Bagaimana dan di mana menilai",
-      "BTN_DONT_BOTHER": "Jangan ganggu aku lagi",
-      "TITLE": "🙈 Maafkan kami, tapi...",
-      "TXT": "Anda akan sangat membantu proyek dengan <strong>memberikannya peringkat yang bagus, jika Anda menyukainya!</strong>"
+      "A_HOW": "Cara menilai",
+      "BTN_DONT_BOTHER": "Jangan tanya lagi",
+      "BTN_FEEDBACK": "Beri masukan",
+      "BTN_LATER": "Mungkin nanti",
+      "BTN_RATE_APP_STORE": "Nilai di App Store",
+      "BTN_RATE_PLAY_STORE": "Nilai di Play Store",
+      "FEEDBACK_BACK": "Kembali",
+      "FEEDBACK_CONTRIBUTE": "Berkontribusi ke proyek",
+      "FEEDBACK_CONTRIBUTE_DESC": "Kode, desain, terjemahan, dan lainnya",
+      "FEEDBACK_PRIVATE": "Email ke pengelola",
+      "FEEDBACK_PRIVATE_DESC": "Kirim pesan pribadi",
+      "FEEDBACK_PUBLIC": "Posting di GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Orang lain bisa melihat dan menanggapi",
+      "FEEDBACK_TITLE": "Bagaimana Anda ingin membantu?",
+      "TITLE": "Suka Super Productivity?",
+      "TXT": "Ini adalah proyek <strong>gratis dan sumber terbuka</strong> yang dibuat oleh para penggemar — tanpa pelacakan, tanpa iklan. Penilaian atau pesan singkat membantu lebih banyak orang menemukannya."
     },
     "DROPBOX": {
       "S": {

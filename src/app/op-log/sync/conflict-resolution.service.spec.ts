@@ -2938,7 +2938,11 @@ describe('ConflictResolutionService', () => {
       expect(result[0].actionType).toBe('test');
     });
 
-    it('should fall back to changing only actionType when base entity cannot be extracted', () => {
+    it('should return remote op unchanged when base entity cannot be extracted', () => {
+      // Rewriting actionType to LWW Update with an unmerged NgRx UPDATE payload
+      // would no-op at the consumer (lwwUpdateMetaReducer bails when entityData
+      // has no top-level id). The fallback now leaves the op alone instead of
+      // pretending to convert it.
       const conflict = createConflict(
         'task-1',
         [
@@ -2959,7 +2963,7 @@ describe('ConflictResolutionService', () => {
 
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
-      expect(result[0].actionType).toBe('[TASK] LWW Update');
+      expect(result[0].actionType).toBe('test');
       expect(result[0].payload).toEqual({
         task: { id: 'task-1', changes: { title: 'Updated' } },
       });
@@ -3022,8 +3026,8 @@ describe('ConflictResolutionService', () => {
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result.length).toBe(1);
-      expect(result[0].actionType).toBe('[TASK] LWW Update');
-      // Fallback: original payload preserved (no merged entity)
+      // Fallback returns the remote op unchanged — original actionType + payload preserved.
+      expect(result[0].actionType).toBe('test');
       expect(result[0].payload).toEqual({
         task: { id: 'task-1', changes: { title: 'Updated' } },
       });
@@ -3050,8 +3054,8 @@ describe('ConflictResolutionService', () => {
 
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
-      expect(result[0].actionType).toBe('[TASK] LWW Update');
-      // Original remote payload kept as-is when fallback triggers
+      // Fallback returns the remote op unchanged — original actionType + payload preserved.
+      expect(result[0].actionType).toBe('test');
       expect(result[0].payload).toEqual({
         task: { id: 'task-1', changes: { notes: 'New notes' } },
       });

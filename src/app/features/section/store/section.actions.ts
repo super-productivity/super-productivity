@@ -3,6 +3,7 @@ import { Update } from '@ngrx/entity';
 import { Section } from '../section.model';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { OpType } from '../../../op-log/core/operation.types';
+import { WorkContextType } from '../../work-context/work-context.model';
 
 export const addSection = createAction(
   '[Section] Add Section',
@@ -88,21 +89,35 @@ export const addTaskToSection = createAction(
 );
 
 /**
- * Remove `taskId` from `sectionId`. Used when a task is dragged out of a
- * section into the "no section" area. Persisted as an Update on the
- * source section so concurrent ungroups from different sections never
- * collide on a sentinel id (the prior 'NONE' approach).
+ * Remove `taskId` from `sectionId` and atomically reposition it in the
+ * work-context's `taskIds` so it lands at the dropped slot in the
+ * no-section bucket. The work-context reorder happens in
+ * `sectionSharedMetaReducer` so a single op covers both state mutations
+ * — partial replay can't leave the task half-moved.
  *
- * FOLLOW-UP (simplicity): this action duplicates a lot of
- * `addTaskToSection`. Folding it into `addTaskToSection` with a nullable
- * `sectionId` would drop one action, one op-log code (S6), and one
- * reducer branch. Held back because the two actions use different
- * opTypes (Move vs Update) and the meta-builder asymmetry would need
- * sync-replay validation. Out of scope for this PR.
+ * `workContextAfterTaskId` is the anchor in the WORK-CONTEXT taskIds
+ * (project.taskIds or tag.taskIds), not the section's. `null` means
+ * "place at the start of the no-section bucket". The op stays typed as
+ * a SECTION update; the cross-feature mutation rides along the same
+ * pattern as `TaskSharedActions.deleteTask` etc. in
+ * section-shared.reducer.ts.
+ *
+ * FOLLOW-UP (simplicity): `removeTaskFromSection` and `addTaskToSection`
+ * now carry near-identical anchor-style payloads. Folding them into one
+ * action with a nullable `sectionId` would drop one action, one op-log
+ * code (S6), one reducer branch, and one ACTION_HANDLERS entry. The
+ * obstacles are an opType change (Move vs Update) and an op-log meta
+ * migration — out of scope for this bug fix.
  */
 export const removeTaskFromSection = createAction(
   '[Section] Remove Task from Section',
-  (payload: { sectionId: string; taskId: string }) => ({
+  (payload: {
+    sectionId: string;
+    taskId: string;
+    workContextId: string;
+    workContextType: WorkContextType;
+    workContextAfterTaskId: string | null;
+  }) => ({
     ...payload,
     meta: {
       isPersistent: true,

@@ -1,14 +1,21 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import {
   MatDialogActions,
-  MatDialogClose,
   MatDialogContent,
+  MatDialogRef,
   MatDialogTitle,
 } from '@angular/material/dialog';
 import { T } from '../../t.const';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
+import {
+  CONTRIBUTING_URL,
+  DISCUSSIONS_URL,
+  RateDialogResult,
+  buildFeedbackMailto,
+  getPrimaryCta,
+} from './rate-dialog-state';
 
 @Component({
   selector: 'dialog-please-rate',
@@ -19,24 +26,32 @@ import { MatIcon } from '@angular/material/icon';
     MatDialogActions,
     MatButton,
     MatIcon,
-    MatDialogClose,
-    MatAnchor,
     TranslatePipe,
   ],
   templateUrl: './dialog-please-rate.component.html',
+  styleUrl: './dialog-please-rate.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DialogPleaseRateComponent {
-  protected readonly T = T;
+  private readonly _dialogRef =
+    inject<MatDialogRef<DialogPleaseRateComponent, RateDialogResult>>(MatDialogRef);
 
-  // IS_ELECTRON = IS_ELECTRON;
-  // IS_MAC = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
-  // IS_WINDOWS = /Win32|Win64|Windows/.test(navigator.platform);
-  // IS_LINUX = /Linux/.test(navigator.platform);
-  //
-  // // For Ubuntu or GNOME:
-  // IS_UBUNTU = this.IS_LINUX && /Ubuntu/i.test(navigator.userAgent);
-  // IS_GNOME = this.IS_LINUX && /gnome/i.test(navigator.userAgent);
-  // IS_SNAP = IS_ELECTRON && window.ea.isSnap();
-  // IS_ANDROID_WEBVIEW = IS_ANDROID_WEB_VIEW;
+  protected readonly T = T;
+  protected readonly view = signal<'main' | 'feedback'>('main');
+  protected readonly cta = getPrimaryCta();
+  protected readonly mailtoUrl = buildFeedbackMailto();
+  protected readonly discussionsUrl = DISCUSSIONS_URL;
+  protected readonly contributingUrl = CONTRIBUTING_URL;
+
+  protected showFeedback(): void {
+    this.view.set('feedback');
+  }
+
+  protected showMain(): void {
+    this.view.set('main');
+  }
+
+  protected close(result: RateDialogResult): void {
+    this._dialogRef.close(result);
+  }
 }

@@ -1,9 +1,11 @@
 import { Action, ActionReducer } from '@ngrx/store';
 import { sectionSharedMetaReducer } from './section-shared.reducer';
 import { TaskSharedActions } from '../task-shared.actions';
+import { removeTaskFromSection } from '../../../features/section/store/section.actions';
 import { RootState } from '../../root-state';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
+import { PROJECT_FEATURE_NAME } from '../../../features/project/store/project.reducer';
 import { SECTION_FEATURE_NAME } from '../../../features/section/store/section.reducer';
 import { Section, SectionState } from '../../../features/section/section.model';
 import { createBaseState, createMockTask } from './test-utils';
@@ -469,6 +471,123 @@ describe('sectionSharedMetaReducer', () => {
 
       const updated = (result as any)[SECTION_FEATURE_NAME] as SectionState;
       expect(updated.entities['today-sec']?.taskIds).toEqual(['other']);
+    });
+  });
+
+  describe('removeTaskFromSection (atomic workContext reorder)', () => {
+    it('repositions the task in the project taskIds at the given anchor', () => {
+      const state = stateWith({ a: {}, b: {}, c: {} }, [
+        {
+          id: 's1',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'A',
+          taskIds: ['c'],
+        },
+      ]);
+      // project1 starts with [a, b, c] in workContext order
+      (state as any)[PROJECT_FEATURE_NAME].entities.project1.taskIds = ['a', 'b', 'c'];
+
+      metaReducer(
+        state,
+        removeTaskFromSection({
+          sectionId: 's1',
+          taskId: 'c',
+          workContextId: 'project1',
+          workContextType: WorkContextType.PROJECT,
+          // anchor 'a' → c lands right after a
+          workContextAfterTaskId: 'a',
+        }),
+      );
+
+      const projectState = (mockReducer.calls.mostRecent().args[0] as any)[
+        PROJECT_FEATURE_NAME
+      ];
+      expect(projectState.entities.project1.taskIds).toEqual(['a', 'c', 'b']);
+    });
+
+    it('places at the start of the project taskIds when anchor is null', () => {
+      const state = stateWith({ a: {}, b: {}, c: {} }, [
+        {
+          id: 's1',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'A',
+          taskIds: ['c'],
+        },
+      ]);
+      (state as any)[PROJECT_FEATURE_NAME].entities.project1.taskIds = ['a', 'b', 'c'];
+
+      metaReducer(
+        state,
+        removeTaskFromSection({
+          sectionId: 's1',
+          taskId: 'c',
+          workContextId: 'project1',
+          workContextType: WorkContextType.PROJECT,
+          workContextAfterTaskId: null,
+        }),
+      );
+
+      const projectState = (mockReducer.calls.mostRecent().args[0] as any)[
+        PROJECT_FEATURE_NAME
+      ];
+      expect(projectState.entities.project1.taskIds).toEqual(['c', 'a', 'b']);
+    });
+
+    it('repositions in the TAG taskIds when workContextType is TAG', () => {
+      const state = stateWith({ a: {}, b: {}, c: {} }, [
+        {
+          id: 's1',
+          contextId: 'tag1',
+          contextType: WorkContextType.TAG,
+          title: 'A',
+          taskIds: ['c'],
+        },
+      ]);
+      (state as any)[TAG_FEATURE_NAME].entities.tag1.taskIds = ['a', 'b', 'c'];
+
+      metaReducer(
+        state,
+        removeTaskFromSection({
+          sectionId: 's1',
+          taskId: 'c',
+          workContextId: 'tag1',
+          workContextType: WorkContextType.TAG,
+          workContextAfterTaskId: 'a',
+        }),
+      );
+
+      const tagState = (mockReducer.calls.mostRecent().args[0] as any)[TAG_FEATURE_NAME];
+      expect(tagState.entities.tag1.taskIds).toEqual(['a', 'c', 'b']);
+    });
+
+    it('is a no-op when the work-context entity is missing', () => {
+      const state = stateWith({ a: {} }, [
+        {
+          id: 's1',
+          contextId: 'ghost',
+          contextType: WorkContextType.PROJECT,
+          title: 'A',
+          taskIds: ['a'],
+        },
+      ]);
+
+      const result = metaReducer(
+        state,
+        removeTaskFromSection({
+          sectionId: 's1',
+          taskId: 'a',
+          workContextId: 'ghost',
+          workContextType: WorkContextType.PROJECT,
+          workContextAfterTaskId: null,
+        }),
+      );
+
+      // Pre-state passed straight through — no project entity to mutate.
+      expect((result as any)[PROJECT_FEATURE_NAME]).toBe(
+        (state as any)[PROJECT_FEATURE_NAME],
+      );
     });
   });
 });

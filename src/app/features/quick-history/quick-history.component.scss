@@ -141,7 +141,7 @@ $this-border-radius: 8px;
       padding-right: 0;
       width: 100%;
       // prevent overflow for looooong words
-      word-break: break-word;
+      overflow-wrap: anywhere;
     }
 
     &.worked {

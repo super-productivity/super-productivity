@@ -176,10 +176,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Как и где выставлять оценки",
-      "BTN_DONT_BOTHER": "Больше не беспокойте меня",
-      "TITLE": "🙈 Пожалуйста, простите нас, но...",
-      "TXT": "Вы бы очень помогли проекту, если бы <strong>дали ему хорошую оценку, если он вам нравится!</strong>"
+      "A_HOW": "Как оценить",
+      "BTN_DONT_BOTHER": "Больше не спрашивать",
+      "BTN_FEEDBACK": "Отправить отзыв",
+      "BTN_LATER": "Может, позже",
+      "BTN_RATE_APP_STORE": "Оценить в App Store",
+      "BTN_RATE_PLAY_STORE": "Оценить в Play Store",
+      "FEEDBACK_BACK": "Назад",
+      "FEEDBACK_CONTRIBUTE": "Внести вклад в проект",
+      "FEEDBACK_CONTRIBUTE_DESC": "Код, дизайн, переводы и другое",
+      "FEEDBACK_PRIVATE": "Написать сопровождающему",
+      "FEEDBACK_PRIVATE_DESC": "Отправить личное сообщение",
+      "FEEDBACK_PUBLIC": "Написать в GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Другие увидят и смогут ответить",
+      "FEEDBACK_TITLE": "Как вы хотели бы помочь?",
+      "TITLE": "Нравится ли вам Super Productivity?",
+      "TXT": "Это <strong>бесплатный проект с открытым исходным кодом</strong>, созданный энтузиастами — без отслеживания и рекламы. Оценка или короткое сообщение помогает большему числу людей найти приложение."
     },
     "DROPBOX": {
       "S": {

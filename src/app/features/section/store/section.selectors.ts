@@ -7,6 +7,12 @@ export const selectSectionFeatureState =
 
 export const selectAllSections = createSelector(selectSectionFeatureState, selectAll);
 
+export const selectSectionById = createSelector(
+  selectSectionFeatureState,
+  (state: SectionState, props: { id: string }): Section | undefined =>
+    state.entities[props.id],
+);
+
 /**
  * Memoized selector grouping sections by contextId. A Map (not a plain
  * object) is used so that a malicious sync peer cannot poison
