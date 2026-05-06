@@ -69,6 +69,19 @@
     }
   }
 
+  &.is-done {
+    opacity: 0.5;
+    cursor: default;
+
+    .title {
+      text-decoration: line-through;
+    }
+
+    &::before {
+      cursor: default;
+    }
+  }
+
   &.LunchBreak {
     display: flex;
     justify-content: center;

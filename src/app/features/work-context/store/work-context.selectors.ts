@@ -369,10 +369,41 @@ export const selectTimelineTasks = createSelector(
       .map((id) => s.entities[id])
       .filter((t): t is Task => !!t)
       .forEach((t) => {
-        if (!t.isDone) {
-          if (t.dueWithTime) {
-            allPlannedTasks.push(t as TaskWithDueTime);
-          }
+        if (!t.isDone && t.dueWithTime) {
+          allPlannedTasks.push(t as TaskWithDueTime);
+        }
+      });
+    // Use Set for O(1) lookup instead of O(n) .includes() in filter
+    const allPlannedIdSet = new Set(allPlannedTasks.map((t) => t.id));
+
+    return {
+      planned: allPlannedTasks,
+      unPlanned: todayIds
+        .map((id) => s.entities[id])
+        .filter((t): t is Task => !!t)
+        .map((t) => mapSubTasksToTask(t, s) as TaskWithSubTasks)
+        .filter((t) => !t.isDone && !allPlannedIdSet.has(t.id)),
+    };
+  },
+);
+
+export const selectTimelineTasksIncludeDone = createSelector(
+  selectTodayTaskIds,
+  selectTaskFeatureState,
+  (
+    todayIds,
+    s,
+  ): {
+    planned: TaskWithDueTime[];
+    unPlanned: TaskWithSubTasks[];
+  } => {
+    const allPlannedTasks: TaskWithDueTime[] = [];
+    s.ids
+      .map((id) => s.entities[id])
+      .filter((t): t is Task => !!t)
+      .forEach((t) => {
+        if (t.dueWithTime) {
+          allPlannedTasks.push(t as TaskWithDueTime);
         }
       });
     // Use Set for O(1) lookup instead of O(n) .includes() in filter

@@ -57,6 +57,34 @@
   @include extraBorder('-top');
   @include extraBorder('-bottom');
 
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to left, var(--bg), transparent);
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.3s;
+  }
+
+  &.scrolled-to-end::after {
+    opacity: 0;
+  }
+
   .title {
     margin-left: auto;
     padding-right: var(--s);
@@ -66,6 +94,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex-shrink: 0;
 
     @include mq(xs, max) {
       font-size: 14px;
@@ -89,7 +118,6 @@
     display: flex;
     margin-left: var(--s);
     border-radius: var(--card-border-radius);
-    overflow: hidden;
     box-shadow: var(--whiteframe-shadow-2dp);
   }
 
@@ -97,6 +125,23 @@
     border: none;
     border-radius: 0;
     transition: var(--transition-standard);
+
+    &:first-child {
+      border-radius: var(--card-border-radius) 0 0 var(--card-border-radius);
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+
+      @include darkTheme() {
+        border-right-color: var(--c-light-10);
+      }
+    }
+
+    &:last-child {
+      border-radius: 0 var(--card-border-radius) var(--card-border-radius) 0;
+    }
+
+    &:only-child {
+      border-radius: var(--card-border-radius);
+    }
 
     @include lightTheme() {
       &.active {
@@ -116,14 +161,6 @@
       &.active {
         background: var(--c-primary);
         color: white;
-      }
-    }
-
-    &:first-child {
-      border-right: 1px solid rgba(255, 255, 255, 0.2);
-
-      @include darkTheme() {
-        border-right-color: var(--c-light-10);
       }
     }
   }

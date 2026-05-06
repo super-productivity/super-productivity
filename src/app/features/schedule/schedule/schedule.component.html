@@ -1,4 +1,8 @@
-<div class="schedule-nav-controls">
+<div
+  class="schedule-nav-controls"
+  (scroll)="onNavScroll($event)"
+  [class.scrolled-to-end]="isScrolledToEnd()"
+>
   <div class="week-month-selector">
     <button
       mat-icon-button
@@ -20,13 +24,22 @@
     >
       <mat-icon>calendar_month</mat-icon>
     </button>
+    <button
+      mat-icon-button
+      class="week-month-btn"
+      [class.active]="showDoneTasks()"
+      (click)="toggleShowDoneTasks()"
+      matTooltip="Show Done Tasks"
+      aria-label="Toggle done tasks visibility"
+    >
+      <mat-icon>check_box</mat-icon>
+    </button>
   </div>
 
   <div class="date-nav-group">
     <button
       mat-icon-button
       (click)="goToPreviousPeriod()"
-      [disabled]="isViewingToday()"
       [attr.aria-label]="isMonthView() ? 'Go to previous month' : 'Go to previous week'"
       [matTooltip]="isMonthView() ? 'Previous Month' : 'Previous Week'"
     >

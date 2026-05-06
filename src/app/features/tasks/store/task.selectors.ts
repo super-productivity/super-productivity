@@ -604,7 +604,8 @@ export const selectAllTasksWithDueTime = createSelector(
   selectAllTasks,
   (tasks: Task[]): TaskWithDueTime[] => {
     return tasks.filter(
-      (task): task is TaskWithDueTime => !!task && typeof task.dueWithTime === 'number',
+      (task): task is TaskWithDueTime =>
+        !!task && !task.isDone && typeof task.dueWithTime === 'number',
     );
   },
 );
@@ -614,7 +615,8 @@ export const selectAllTasksWithDueTimeSorted = createSelector(
   (tasks: Task[]): TaskWithDueTime[] => {
     return tasks
       .filter(
-        (task): task is TaskWithDueTime => !!task && typeof task.dueWithTime === 'number',
+        (task): task is TaskWithDueTime =>
+          !!task && !task.isDone && typeof task.dueWithTime === 'number',
       )
       .sort((a, b) => a.dueWithTime - b.dueWithTime);
   },

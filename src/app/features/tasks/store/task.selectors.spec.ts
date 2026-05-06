@@ -130,6 +130,20 @@ describe('Task Selectors', () => {
       timeSpent: 0,
       attachments: [],
     },
+    task9: {
+      id: 'task9',
+      title: 'Done Task With Time',
+      created: Date.now(),
+      isDone: true,
+      subTaskIds: [],
+      tagIds: [],
+      projectId: 'project1',
+      timeSpentOnDay: {},
+      dueWithTime: Date.now() + 10800000, // 3 hours - outside the 2-hour range used in tests
+      timeEstimate: 0,
+      timeSpent: 0,
+      attachments: [],
+    },
     subtask1: {
       id: 'subtask1',
       title: 'Subtask 1',
@@ -247,7 +261,8 @@ describe('Task Selectors', () => {
 
     it('should select all tasks', () => {
       const result = fromSelectors.selectAllTasks(mockState);
-      expect(result.length).toBe(10);
+      // 9 main tasks + 2 subtasks = 11
+      expect(result.length).toBe(11);
     });
   });
 
@@ -269,7 +284,8 @@ describe('Task Selectors', () => {
     it('should flatten tasks', () => {
       const tasksWithSubTasks = fromSelectors.selectAllTasksWithSubTasks(mockState);
       const result = fromSelectors.flattenTasks(tasksWithSubTasks);
-      expect(result.length).toBe(10);
+      // 9 main tasks + 2 subtasks = 11
+      expect(result.length).toBe(11);
     });
 
     it('should select task by ID with subtask data', () => {
@@ -600,6 +616,23 @@ describe('Task Selectors', () => {
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('task5');
     });
+
+    it('should select all tasks with due time excluding done tasks', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksWithDueTime.projector(allTasks);
+      expect(result.some((t) => t.id === 'task9')).toBeFalse();
+      expect(result.some((t) => t.id === 'task5')).toBeTrue();
+    });
+
+    it('should select all tasks with due time sorted excluding done tasks', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksWithDueTimeSorted.projector(allTasks);
+      expect(result.some((t) => t.id === 'task9')).toBeFalse();
+      expect(result.some((t) => t.id === 'task5')).toBeTrue();
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i].dueWithTime).toBeGreaterThanOrEqual(result[i - 1].dueWithTime);
+      }
+    });
   });
 
   // Selected task selectors
@@ -655,8 +688,8 @@ describe('Task Selectors', () => {
       const result = fromSelectors.selectMainTasksWithoutTag(mockState, {
         tagId: TODAY_TAG.id,
       });
-      // Virtual tag pattern: TODAY_TAG not in task.tagIds, so all 8 main tasks are returned
-      expect(result.length).toBe(8);
+      // Virtual tag pattern: TODAY_TAG not in task.tagIds, so all 9 main tasks are returned
+      expect(result.length).toBe(9);
     });
 
     it('should select all calendar task event IDs', () => {
@@ -751,7 +784,8 @@ describe('Task Selectors', () => {
       const result = fromSelectors.selectTasksWorkedOnOrDoneFlat(mockState, {
         day: today,
       });
-      expect(result?.length).toBe(2); // task2 (done and worked on) and subtask2 (done)
+      // task2 (done and worked on), task9 (done), subtask2 (done)
+      expect(result?.length).toBe(3);
     });
   });
 
@@ -777,7 +811,8 @@ describe('Task Selectors', () => {
     it('should select all tasks without hidden projects', () => {
       const result = fromSelectors.selectAllTasksWithoutHiddenProjects(mockState);
       // All tasks should still be returned since none belong to hidden project3
-      expect(result.length).toBe(10);
+      // 9 main tasks + 2 subtasks = 11
+      expect(result.length).toBe(11);
     });
   });
 

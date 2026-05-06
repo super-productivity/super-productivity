@@ -68,6 +68,12 @@ export class ScheduleComponent {
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
 
+  // Toggle for showing done tasks in schedule view
+  showDoneTasks = signal<boolean>(false);
+
+  // Track if nav is scrolled to end for gradient fade effect
+  isScrolledToEnd = signal<boolean>(false);
+
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);
 
@@ -191,6 +197,7 @@ export class ScheduleComponent {
       contextNow: this._contextNow(),
       realNow: Date.now(), // Always use actual current time for "current week" calculation
       currentTaskId: this.taskService.currentTaskId() ?? null,
+      showDoneTasks: this.showDoneTasks(),
     });
   });
 
@@ -234,9 +241,6 @@ export class ScheduleComponent {
   });
 
   goToPreviousPeriod(): void {
-    // Never navigate into the past — the displayed range must include today or later
-    if (this.isViewingToday()) return;
-
     const currentDate = this._selectedDate() || new Date();
     const selectedView = this._currentTimeViewMode();
 
@@ -252,15 +256,7 @@ export class ScheduleComponent {
       const previousPeriod = new Date(currentDate);
       previousPeriod.setDate(currentDate.getDate() - daysToSkip);
       previousPeriod.setHours(0, 0, 0, 0);
-
-      // If going back would land on or before today, snap to "today view" (null)
-      const todayMidnight = new Date();
-      todayMidnight.setHours(0, 0, 0, 0);
-      if (previousPeriod.getTime() <= todayMidnight.getTime()) {
-        this._selectedDate.set(null);
-      } else {
-        this._selectedDate.set(previousPeriod);
-      }
+      this._selectedDate.set(previousPeriod);
     }
   }
 
@@ -294,6 +290,16 @@ export class ScheduleComponent {
   selectTimeView(view: 'week' | 'month'): void {
     this.layoutService.selectedTimeView.set(view);
     localStorage.setItem(LS.SELECTED_TIME_VIEW, view);
+  }
+
+  toggleShowDoneTasks(): void {
+    this.showDoneTasks.update((v) => !v);
+  }
+
+  onNavScroll(event: Event): void {
+    const element = event.target as HTMLElement;
+    const isAtEnd = element.scrollWidth - element.scrollLeft <= element.clientWidth + 10;
+    this.isScrolledToEnd.set(isAtEnd);
   }
 
   private getTimeView(): 'week' | 'month' {

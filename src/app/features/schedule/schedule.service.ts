@@ -15,7 +15,10 @@ import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { ScheduleConfig } from '../config/global-config.model';
 import { mapToScheduleDays } from './map-schedule-data/map-to-schedule-days';
 import { Store } from '@ngrx/store';
-import { selectTimelineTasks } from '../work-context/store/work-context.selectors';
+import {
+  selectTimelineTasks,
+  selectTimelineTasksIncludeDone,
+} from '../work-context/store/work-context.selectors';
 import { selectPlannerDayMap } from '../planner/store/planner.selectors';
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTimelineConfig } from '../config/store/global-config.reducer';
@@ -35,6 +38,9 @@ export class ScheduleService {
   private _taskService = inject(TaskService);
 
   private _timelineTasks = toSignal(this._store.select(selectTimelineTasks));
+  private _timelineTasksIncludeDone = toSignal(
+    this._store.select(selectTimelineTasksIncludeDone),
+  );
   private _taskRepeatCfgs = toSignal(
     this._store.select(selectTaskRepeatCfgsWithAndWithoutStartTime),
   );
@@ -119,9 +125,12 @@ export class ScheduleService {
     contextNow: number;
     realNow: number;
     currentTaskId: string | null;
+    showDoneTasks?: boolean;
   }): ScheduleDay[] {
     this.scheduleRefreshTick();
-    const timelineTasks = this._timelineTasks();
+    const timelineTasks = params.showDoneTasks
+      ? this._timelineTasksIncludeDone()
+      : this._timelineTasks();
     const taskRepeatCfgs = this._taskRepeatCfgs();
     const timelineCfg = this._timelineConfig();
     const plannerDayMap = this._plannerDayMap();

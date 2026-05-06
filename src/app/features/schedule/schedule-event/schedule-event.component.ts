@@ -3,6 +3,7 @@ import {
   Component,
   AfterViewInit,
   computed,
+  effect,
   ElementRef,
   inject,
   input,
@@ -66,6 +67,7 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[style.--title-line-clamp]': '_titleLineClamp()',
     '[style.--project-color]': 'projectColor()',
     '[style.height]': '_resizeHeight()',
+    '[class.draggable]': 'isDraggable()',
     '(click)': 'clickHandler($event)',
     '(contextmenu)': 'onContextMenu($event)',
   },
@@ -86,6 +88,13 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   private _taskService = inject(TaskService);
   private _calEventActions = inject(CalendarEventActionsService);
   private _ngZone = inject(NgZone);
+  private _cdkDrag = inject(CdkDrag, { self: true });
+
+  constructor() {
+    effect(() => {
+      this._cdkDrag.disabled = !this.isDraggable();
+    });
+  }
   readonly titleHasLinks = computed(() => {
     const t = this.title();
     return !!t && hasLinkHints(t);
@@ -199,6 +208,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
 
   readonly cssClass = computed(() => {
     const evt = this.se();
+    const t = this.task();
     let addClass = '';
     if (this.isSplitContinued()) {
       addClass = 'split-continued';
@@ -214,6 +224,10 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
 
     if (this._isResizing()) {
       addClass += ' is-resizing';
+    }
+
+    if (t?.isDone) {
+      addClass += ' is-done';
     }
 
     return evt.type + '  ' + addClass;
@@ -493,6 +507,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     // Allow resizing for all task types with a time estimate
     return (
       !!t &&
+      !t.isDone &&
       (evt.type === SVEType.ScheduledTask ||
         evt.type === SVEType.Task ||
         evt.type === SVEType.SplitTaskContinuedLast ||
@@ -500,6 +515,11 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
         evt.type === SVEType.SplitTaskPlannedForDay) &&
       t.timeEstimate > 0
     );
+  }
+
+  isDraggable(): boolean {
+    const t = this.task();
+    return !!t && !t.isDone;
   }
 
   onResizeStart(event: MouseEvent | TouchEvent): void {

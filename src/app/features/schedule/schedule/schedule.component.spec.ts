@@ -279,15 +279,22 @@ describe('ScheduleComponent', () => {
       expect(newDate?.getHours()).toBe(0); // Normalized to midnight
     });
 
-    it('should not navigate backward when already viewing today', () => {
+    it('should navigate backward from today by the number of days shown', () => {
       // Arrange - viewing today (null selected date)
       component['_selectedDate'].set(null);
+      const daysShown = component.daysToShow().length;
 
       // Act
       component.goToPreviousPeriod();
 
-      // Assert - prev nav is disabled when today is in view
-      expect(component['_selectedDate']()).toBeNull();
+      // Assert - should allow navigating to past to view done tasks
+      const newDate = component['_selectedDate']();
+      expect(newDate).not.toBeNull();
+      const today = new Date();
+      const expectedDate = new Date(today);
+      expectedDate.setDate(today.getDate() - daysShown);
+      expect(newDate?.getDate()).toBe(expectedDate.getDate());
+      expect(newDate?.getHours()).toBe(0); // Normalized to midnight
     });
 
     it('should go to previous month in month view', () => {
@@ -743,6 +750,67 @@ describe('ScheduleComponent', () => {
 
       // Assert - 10 days should round up to 2 weeks
       expect(weeks).toBe(2);
+    });
+  });
+
+  describe('Navigation scroll behavior', () => {
+    it('should initialize isScrolledToEnd as false', () => {
+      expect(component.isScrolledToEnd()).toBe(false);
+    });
+
+    it('should set isScrolledToEnd to true when scrolled to end', () => {
+      const navElement = fixture.nativeElement.querySelector('.schedule-nav-controls');
+
+      Object.defineProperty(navElement, 'scrollWidth', {
+        value: 1000,
+        configurable: true,
+      });
+      Object.defineProperty(navElement, 'clientWidth', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(navElement, 'scrollLeft', {
+        value: 495,
+        writable: true,
+        configurable: true,
+      });
+
+      navElement.dispatchEvent(new Event('scroll'));
+      fixture.detectChanges();
+
+      expect(component.isScrolledToEnd()).toBe(true);
+    });
+
+    it('should set isScrolledToEnd to false when not scrolled to end', () => {
+      const navElement = fixture.nativeElement.querySelector('.schedule-nav-controls');
+
+      Object.defineProperty(navElement, 'scrollWidth', {
+        value: 1000,
+        configurable: true,
+      });
+      Object.defineProperty(navElement, 'clientWidth', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(navElement, 'scrollLeft', {
+        value: 100,
+        writable: true,
+        configurable: true,
+      });
+
+      navElement.dispatchEvent(new Event('scroll'));
+      fixture.detectChanges();
+
+      expect(component.isScrolledToEnd()).toBe(false);
+    });
+
+    it('should apply scrolled-to-end class when scrolled to end', () => {
+      const navElement = fixture.nativeElement.querySelector('.schedule-nav-controls');
+
+      component.isScrolledToEnd.set(true);
+      fixture.detectChanges();
+
+      expect(navElement.classList.contains('scrolled-to-end')).toBe(true);
     });
   });
 });
