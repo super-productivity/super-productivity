@@ -26,7 +26,7 @@
     <button
       mat-icon-button
       (click)="goToPreviousPeriod()"
-      [disabled]="isViewingToday()"
+      [disabled]="isViewingToday() && !showWorkLog()"
       [attr.aria-label]="isMonthView() ? 'Go to previous month' : 'Go to previous week'"
       [matTooltip]="isMonthView() ? 'Previous Month' : 'Previous Week'"
     >
@@ -51,6 +51,17 @@
       [matTooltip]="isMonthView() ? 'Next Month' : 'Next Week'"
     >
       <mat-icon>chevron_right</mat-icon>
+    </button>
+
+    <button
+      mat-icon-button
+      class="show-past-toggle-btn"
+      [class.active]="showWorkLog()"
+      (click)="toggleShowWorkLog()"
+      [matTooltip]="showWorkLog() ? 'Hide work log' : 'Show work log'"
+      [attr.aria-label]="showWorkLog() ? 'Hide work log' : 'Show work log'"
+    >
+      <mat-icon>history</mat-icon>
     </button>
   </div>
 

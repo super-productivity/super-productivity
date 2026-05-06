@@ -121,6 +121,7 @@ export class ScheduleService {
     contextNow: number;
     realNow: number;
     currentTaskId: string | null;
+    additionalCalendarEntries?: ScheduleCalendarMapEntry[];
   }): ScheduleDay[] {
     this.scheduleRefreshTick();
     const timelineTasks = this._timelineTasks();
@@ -128,11 +129,14 @@ export class ScheduleService {
     const timelineCfg = this._timelineConfig();
     const plannerDayMap = this._plannerDayMap();
     const hiddenProviderIds = this._hiddenCalendarProviders.hiddenProviderIds();
-    const calendarEvents = this._calendarEvents().filter(
-      (entry) =>
-        !entry.items[0]?.calProviderId ||
-        !hiddenProviderIds.includes(entry.items[0].calProviderId),
-    );
+    const calendarEvents = [
+      ...this._calendarEvents().filter(
+        (entry) =>
+          !entry.items[0]?.calProviderId ||
+          !hiddenProviderIds.includes(entry.items[0].calProviderId),
+      ),
+      ...(params.additionalCalendarEntries ?? []),
+    ];
 
     return this.buildScheduleDays({
       now: params.contextNow,
