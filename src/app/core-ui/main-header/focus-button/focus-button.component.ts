@@ -46,6 +46,7 @@ export class FocusButtonComponent {
   });
 
   readonly isSessionRunning = this.focusModeService.isSessionRunning;
+  readonly isSessionPaused = this.focusModeService.isSessionPaused;
   readonly isBreakActive = this.focusModeService.isBreakActive;
   readonly progress = this.focusModeService.progress;
   readonly mode = this.focusModeService.mode;
@@ -61,8 +62,10 @@ export class FocusButtonComponent {
     return shortcut ? ` [${shortcut}]` : '';
   });
 
+  // Indicator stays visible while a session is paused too — otherwise the
+  // user loses sight of the session until they manually reopen the overlay.
   readonly circleVisible = computed(
-    () => this.isSessionRunning() || this.isBreakActive(),
+    () => this.isSessionRunning() || this.isSessionPaused() || this.isBreakActive(),
   );
 
   readonly isCountdownMode = computed(() => {

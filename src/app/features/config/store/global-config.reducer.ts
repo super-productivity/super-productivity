@@ -27,16 +27,33 @@ import { getHoursFromClockString } from '../../../util/get-hours-from-clock-stri
  * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
  * rework) to the new `autoStartFocusOnPlay` opt-in. Users who had sync enabled
  * relied on play→spawn behavior; without this, the upgrade would silently turn
- * auto-spawn off for them. The deprecated key is dropped from the resulting state.
+ * auto-spawn off for them.
+ *
+ * Important: this runs on the RAW incoming config (before defaults are merged)
+ * so `autoStartFocusOnPlay` is genuinely absent on pre-rework data — otherwise
+ * the default `false` would short-circuit the `??` backfill below.
  */
-const migrateFocusModeConfig = (cfg: FocusModeConfig): FocusModeConfig => {
-  const legacy = cfg as FocusModeConfig & { isSyncSessionWithTracking?: boolean };
-  if (!('isSyncSessionWithTracking' in legacy)) {
+const migrateFocusModeConfig = (
+  cfg: Partial<FocusModeConfig> | undefined,
+): Partial<FocusModeConfig> => {
+  if (!cfg) {
+    return {};
+  }
+  const legacy = cfg as Partial<FocusModeConfig> & {
+    isSyncSessionWithTracking?: boolean;
+  };
+  // `hasOwnProperty.call` rather than `in` to avoid prototype-chain false positives.
+  const hasLegacyKey = Object.prototype.hasOwnProperty.call(
+    legacy,
+    'isSyncSessionWithTracking',
+  );
+  if (!hasLegacyKey) {
     return cfg;
   }
   const { isSyncSessionWithTracking, ...rest } = legacy;
   // Only backfill when the user has not explicitly set the new key.
-  const autoStartFocusOnPlay = rest.autoStartFocusOnPlay ?? !!isSyncSessionWithTracking;
+  const autoStartFocusOnPlay =
+    rest.autoStartFocusOnPlay ?? isSyncSessionWithTracking === true;
   return { ...rest, autoStartFocusOnPlay };
 };
 
@@ -171,10 +188,10 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
       },
-      focusMode: migrateFocusModeConfig({
+      focusMode: {
         ...DEFAULT_GLOBAL_CONFIG.focusMode,
-        ...appDataComplete.globalConfig.focusMode,
-      }),
+        ...migrateFocusModeConfig(appDataComplete.globalConfig.focusMode),
+      },
       sync: {
         ...incomingSyncConfig,
         syncProvider,

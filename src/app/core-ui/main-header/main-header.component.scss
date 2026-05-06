@@ -320,28 +320,3 @@ page-title {
     outline-offset: -2px;
   }
 }
-
-.focus-btn-wrapper {
-  position: relative;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-
-  button {
-    margin: 0;
-  }
-
-  .focus-label {
-    position: absolute;
-    line-height: 1;
-    padding: var(--s-quarter) var(--s-half) 1px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-weight: bold;
-    border-radius: 8px;
-    pointer-events: none;
-    bottom: calc(var(--s) * -0.25);
-    background: var(--bg-lighter);
-    color: var(--text-color-most-intense);
-  }
-}
