@@ -10,26 +10,21 @@ import { TASK_FEATURE_NAME } from '../../tasks/store/task.reducer';
 import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 
+// Helper to create a timestamp for a specific day at noon local time
+const getLocalNoon = (year: number, month: number, day: number): number => {
+  return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
+};
+
+// Helper to create a timestamp for a specific day at a given hour local time
+const getLocalTime = (year: number, month: number, day: number, hour: number): number => {
+  return new Date(year, month - 1, day, hour, 0, 0, 0).getTime();
+};
+
 // Helper to test getIcalEventsForDay logic
 // Since it's a private function, we test it through selectPlannerDays behavior
 // For now, we test the separation logic directly
 
 describe('Planner Selectors - All Day Events', () => {
-  // Helper to create a timestamp for a specific day at noon local time
-  const getLocalNoon = (year: number, month: number, day: number): number => {
-    return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
-  };
-
-  // Helper to create a timestamp for a specific day at a given hour local time
-  const getLocalTime = (
-    year: number,
-    month: number,
-    day: number,
-    hour: number,
-  ): number => {
-    return new Date(year, month - 1, day, hour, 0, 0, 0).getTime();
-  };
-
   // Replicate the getIcalEventsForDay logic for testing
   const getIcalEventsForDay = (
     calendarEvents: ScheduleCalendarMapEntry[],
@@ -319,6 +314,12 @@ describe('Planner Selectors - All Day Events', () => {
 describe('Planner Selectors - selectPlannerDays', () => {
   const today = getDbDateStr();
 
+  // Helper to create a local timestamp for today at a specific hour
+  const todayAtHour = (hour: number): number => {
+    const [y, m, d] = today.split('-').map(Number);
+    return new Date(y, m - 1, d, hour, 0, 0, 0).getTime();
+  };
+
   const createMockTask = (overrides: Partial<Task> & { id: string }): Task => {
     const { id, ...rest } = overrides;
     return {
@@ -517,7 +518,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
             calProviderId: 'provider-1',
             issueProviderKey: 'ICAL',
             title: 'Timed Meeting',
-            start: getLocalTime(2025, 1, 15, 10),
+            start: todayAtHour(10),
             duration: 7200000, // 2 hours
           },
         ],
@@ -566,7 +567,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
             calProviderId: 'provider-1',
             issueProviderKey: 'ICAL',
             title: 'All Day Conference',
-            start: getLocalNoon(2025, 1, 15),
+            start: todayAtHour(12),
             duration: 86400000, // 24 hours
             isAllDay: true,
           },
@@ -628,7 +629,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
             calProviderId: 'provider-1',
             issueProviderKey: 'ICAL',
             title: 'Timed Meeting',
-            start: getLocalTime(2025, 1, 15, 10),
+            start: todayAtHour(10),
             duration: 7200000, // 2 hours
           },
         ],
