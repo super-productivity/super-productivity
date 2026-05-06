@@ -102,7 +102,7 @@ export const selectTasksForPlannerDay = (day: string) => {
 export const selectPlannerDays = (
   dayDates: string[],
   taskRepeatCfgs: TaskRepeatCfg[],
-  todayListTaskIds: string[],
+  todayListTaskIds: string[] | false,
   calendarEvents: ScheduleCalendarMapEntry[],
   allPlannedTasks: TaskWithDueTime[],
   todayStr: string,
@@ -110,7 +110,10 @@ export const selectPlannerDays = (
 ) => {
   // Use Set for O(1) lookup instead of O(n) .includes() in filter
   const allPlannedIdSet = new Set(allPlannedTasks.map((t) => t.id));
-  const unplannedTaskIdsToday = todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
+  const unplannedTaskIdsToday =
+    todayListTaskIds === false
+      ? false
+      : todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
 
   return createSelector(
     selectTaskFeatureState,
