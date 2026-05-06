@@ -2109,7 +2109,6 @@
       "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
       "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",
-      "L_START_IN_BACKGROUND": "Start focus sessions in the background (no overlay)",
       "TITLE": "Focus Mode"
     },
     "TASK_WIDGET": {

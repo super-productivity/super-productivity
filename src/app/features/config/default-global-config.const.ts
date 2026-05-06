@@ -96,7 +96,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     focusModeSound: 'off',
     isPauseTrackingDuringBreak: true,
     autoStartFocusOnPlay: false,
-    isStartInBackground: false,
     isManualBreakStart: false,
   },
   clipboardImages: {

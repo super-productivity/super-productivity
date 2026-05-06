@@ -37,13 +37,6 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
           },
         },
         {
-          key: 'isStartInBackground',
-          type: 'checkbox',
-          templateOptions: {
-            label: T.GCF.FOCUS_MODE.L_START_IN_BACKGROUND,
-          },
-        },
-        {
           key: 'isSkipPreparation',
           type: 'checkbox',
           templateOptions: {
