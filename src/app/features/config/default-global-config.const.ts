@@ -245,7 +245,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
       useCustomApp: !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
       clientId: OFFICIAL_ONEDRIVE_CLIENT_ID,
       tenantId: 'common',
-      syncFolderPath: 'super-productivity',
+      syncFolderPath: 'Super Productivity',
     },
   },
 } as const;

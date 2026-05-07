@@ -120,6 +120,17 @@ const createWebdavFormFields = (options: {
   ];
 };
 
+const isOneDriveClientIdRequired = (field: FormlyFieldConfig): boolean => {
+  if (field?.parent?.parent?.model?.syncProvider !== SyncProviderId.OneDrive) {
+    return false;
+  }
+
+  // If no official app client ID is available, users must provide their own.
+  // If an official app client ID is available, clientId is only required when
+  // users explicitly switch to custom app mode.
+  return !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID || !!field?.parent?.model?.useCustomApp;
+};
+
 export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
   title: T.F.SYNC.FORM.TITLE,
   key: 'sync',
@@ -370,8 +381,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           },
           expressions: {
             'props.required': (field: FormlyFieldConfig) =>
-              field?.parent?.parent?.model?.syncProvider === SyncProviderId.OneDrive &&
-              (!HAS_OFFICIAL_ONEDRIVE_CLIENT_ID || !!field?.parent?.model?.useCustomApp),
+              isOneDriveClientIdRequired(field),
           },
         },
         {
@@ -439,7 +449,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
     {
       key: 'isManualSyncOnly',
       type: 'checkbox',
-      // Only show for file-based providers (Dropbox, WebDAV, LocalFile)
+      // Show for all non-SuperSync providers when one is selected.
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider === SyncProviderId.SuperSync ||
         field?.parent?.model.syncProvider === null,

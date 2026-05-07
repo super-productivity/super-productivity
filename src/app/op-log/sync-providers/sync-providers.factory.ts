@@ -51,7 +51,9 @@ const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> =
       appKey: DROPBOX_APP_KEY,
       basePath: environment.production ? `/` : `/DEV/`,
     }) as SyncProviderBase<SyncProviderId>,
-    new OneDrive() as SyncProviderBase<SyncProviderId>,
+    new OneDrive(
+      environment.production ? undefined : `/DEV`,
+    ) as SyncProviderBase<SyncProviderId>,
     new Webdav(
       environment.production ? undefined : `/DEV`,
     ) as SyncProviderBase<SyncProviderId>,

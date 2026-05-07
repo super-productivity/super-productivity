@@ -96,7 +96,7 @@ const PROVIDER_FIELD_DEFAULTS: Record<
     useCustomApp: !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
     clientId: '',
     tenantId: 'common',
-    syncFolderPath: 'super-productivity',
+    syncFolderPath: 'Super Productivity',
     accessToken: '',
     refreshToken: '',
     tokenExpiresAt: 0,

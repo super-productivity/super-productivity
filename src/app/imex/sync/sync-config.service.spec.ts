@@ -100,9 +100,11 @@ describe('SyncConfigService', () => {
       // Should only pass non-private data to global config
       expect(globalConfigService.updateSection).toHaveBeenCalledWith('sync', {
         isEnabled: true,
+        isEncryptionEnabled: true,
+        isCompressionEnabled: undefined,
         syncProvider: SyncProviderId.WebDAV,
         syncInterval: 300000,
-        isEncryptionEnabled: true,
+        isManualSyncOnly: undefined,
       });
     });
 

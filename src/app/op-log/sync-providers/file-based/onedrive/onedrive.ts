@@ -1,7 +1,4 @@
-import {
-  SyncProviderAuthHelper,
-  SyncProviderServiceInterface,
-} from '../../provider.interface';
+import { FileSyncProvider, SyncProviderAuthHelper } from '../../provider.interface';
 import { SyncProviderId } from '../../provider.const';
 import {
   AuthFailSPError,
@@ -24,6 +21,7 @@ import {
   HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
   OFFICIAL_ONEDRIVE_CLIENT_ID,
 } from '../../../../imex/sync/onedrive-auth-mode.const';
+import { IS_ELECTRON } from '../../../../app.constants';
 
 const ONEDRIVE_PROTOCOL = {
   graphApiBaseUrl: 'https://graph.microsoft.com/v1.0',
@@ -36,7 +34,7 @@ const ONEDRIVE_PROTOCOL = {
 
 const ONEDRIVE_DEFAULTS = {
   tenantId: 'common',
-  syncFolderPath: 'super-productivity',
+  syncFolderPath: 'Super Productivity',
 } as const;
 
 interface ApiRequestOptions {
@@ -62,37 +60,31 @@ interface OAuthTokenRequest {
 // OAuth state storage for CSRF protection: state -> { provider, expiresAt }
 const OAUTH_STATES_MAP = new Map<string, { provider: 'onedrive'; expiresAt: number }>();
 
-// Clean up expired states periodically
 const TOKEN_STATE_VALIDITY_MS = 10 * 60 * 1000; // 10 minutes
-setInterval(
-  () => {
-    const now = Date.now();
-    for (const [state, data] of OAUTH_STATES_MAP.entries()) {
-      if (now > data.expiresAt) {
-        OAUTH_STATES_MAP.delete(state);
-      }
+
+const _pruneExpiredOAuthStates = (): void => {
+  const now = Date.now();
+  for (const [state, data] of OAUTH_STATES_MAP.entries()) {
+    if (now > data.expiresAt) {
+      OAUTH_STATES_MAP.delete(state);
     }
-  },
-  5 * 60 * 1000,
-); // Every 5 minutes
+  }
+};
 
 /**
  * Validate OneDrive OAuth state parameter against stored states.
  * Returns true if state is valid and belongs to OneDrive, false otherwise.
  */
 export const validateOneDriveOAuthState = (state: string | null): boolean => {
+  _pruneExpiredOAuthStates();
   if (!state) return false;
   const stored = OAUTH_STATES_MAP.get(state);
   if (!stored) return false;
-  if (Date.now() > stored.expiresAt) {
-    OAUTH_STATES_MAP.delete(state);
-    return false;
-  }
   OAUTH_STATES_MAP.delete(state);
   return true;
 };
 
-export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.OneDrive> {
+export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
   readonly id = SyncProviderId.OneDrive;
   readonly isUploadForcePossible = true;
   readonly maxConcurrentRequests = 4;
@@ -102,6 +94,8 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
   private _folderEnsureInFlightPath: string | null = null;
   private _folderEnsureInFlightPromise: Promise<void> | null = null;
   private _tokenRefreshInFlightPromise: Promise<string> | null = null;
+
+  constructor(private readonly _devPath?: string) {}
 
   async isReady(): Promise<boolean> {
     const cfg = await this.privateCfg.load();
@@ -128,6 +122,7 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
 
   async getAuthHelper(): Promise<SyncProviderAuthHelper> {
     const cfg = await this._cfgOrError();
+    _pruneExpiredOAuthStates();
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const tenant = cfg.tenantId || ONEDRIVE_DEFAULTS.tenantId;
@@ -181,14 +176,23 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
   async downloadFile(targetPath: string): Promise<{ rev: string; dataStr: string }> {
     const cfg = await this._cfgOrError();
     try {
-      const metadata = await this._requestJson<{ eTag?: string }>(
-        this._getDriveItemPath(targetPath, cfg),
-      );
+      const driveItemPath = this._getDriveItemPath(targetPath, cfg);
       const response = await this._request({
         method: 'GET',
-        path: `${this._getDriveItemPath(targetPath, cfg)}/content`,
+        path: `${driveItemPath}/content`,
       });
       const dataStr = await response.text();
+      const revFromContentHeaders = this._getResponseETag(response);
+      if (revFromContentHeaders) {
+        return {
+          rev: revFromContentHeaders,
+          dataStr,
+        };
+      }
+
+      // Fallback: if Graph does not expose ETag in content response headers,
+      // fetch metadata once to keep revision semantics unchanged.
+      const metadata = await this._requestJson<{ eTag?: string }>(driveItemPath);
       return {
         rev: metadata.eTag || '',
         dataStr,
@@ -264,7 +268,7 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
   }
 
   private _getSyncFolderPath(cfg: OneDrivePrivateCfg): string {
-    return this._normalizeRelativePath(cfg?.syncFolderPath || '');
+    return this._joinPathSegments(this._devPath || '', cfg?.syncFolderPath || '');
   }
 
   private _normalizeRelativePath(path: string): string {
@@ -288,6 +292,10 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
       .filter(Boolean)
       .map((segment) => encodeURIComponent(segment))
       .join('/');
+  }
+
+  private _getResponseETag(response: Response): string {
+    return response.headers.get('etag') || response.headers.get('ETag') || '';
   }
 
   // Cache successful folder checks to avoid repeated path probes on every upload.
@@ -335,21 +343,11 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
       const parentPath = currentPath;
       currentPath = parentPath ? `${parentPath}/${segment}` : segment;
 
+      const createPath = parentPath
+        ? `/me/drive/special/approot:/${this._encodePath(parentPath)}:/children`
+        : '/me/drive/special/approot/children';
+
       try {
-        await this._request({
-          method: 'GET',
-          path: `/me/drive/special/approot:/${this._encodePath(currentPath)}:`,
-        });
-      } catch (e) {
-        const err = e as HttpNotOkAPIError;
-        if (err?.response?.status !== 404) {
-          throw e;
-        }
-
-        const createPath = parentPath
-          ? `/me/drive/special/approot:/${this._encodePath(parentPath)}:/children`
-          : '/me/drive/special/approot/children';
-
         await this._request({
           method: 'POST',
           path: createPath,
@@ -364,6 +362,15 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
             ...{ ['@microsoft.graph.conflictBehavior']: 'replace' },
           }),
         });
+      } catch (e) {
+        const err = e as HttpNotOkAPIError;
+        if (err?.response?.status === 409) {
+          const parsed = this._parseGraphError(err.body);
+          if (parsed.code === 'nameAlreadyExists') {
+            continue;
+          }
+        }
+        throw e;
       }
     }
   }
@@ -520,9 +527,10 @@ export class OneDrive implements SyncProviderServiceInterface<SyncProviderId.One
   }
 
   private _getRedirectUri(): string {
-    return IS_ELECTRON
-      ? ONEDRIVE_PROTOCOL.electronRedirectUri
-      : ONEDRIVE_PROTOCOL.redirectUri;
+    if (!IS_ELECTRON) {
+      return ONEDRIVE_PROTOCOL.redirectUri;
+    }
+    return ONEDRIVE_PROTOCOL.electronRedirectUri;
   }
 
   private async _request(options: ApiRequestOptions): Promise<Response> {
