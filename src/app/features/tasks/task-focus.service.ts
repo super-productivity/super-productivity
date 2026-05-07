@@ -1,6 +1,5 @@
 import { Injectable, signal } from '@angular/core';
 import { TaskComponent } from './task/task.component';
-import { TaskDetailPanelComponent } from './task-detail-panel/task-detail-panel.component';
 
 @Injectable({
   providedIn: 'root',
@@ -9,7 +8,6 @@ export class TaskFocusService {
   readonly focusedTaskId = signal<string | null>(null);
   readonly lastFocusedTaskComponent = signal<TaskComponent | null>(null);
   readonly isTaskContextMenuOpen = signal(false);
-  readonly taskDetailPanel = signal<TaskDetailPanelComponent | null>(null);
 
   // Registry of all task components for efficient focus navigation
   private _taskComponentsRegistry = new Map<string, TaskComponent>();

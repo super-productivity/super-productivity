@@ -82,7 +82,6 @@ import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checkl
 import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
 import { checkKeyCombo } from '../../../util/check-key-combo';
-import { TaskFocusService } from '../task-focus.service';
 
 @Component({
   selector: 'task-detail-panel',
@@ -126,7 +125,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
-  private _taskFocusService = inject(TaskFocusService);
 
   // Inputs
   task = input.required<TaskWithSubTasks>();
@@ -136,7 +134,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   // View children
   itemEls = viewChildren(TaskDetailItemComponent);
   attachmentPanelElRef = viewChild<TaskDetailItemComponent>('attachmentPanelElRef');
-  taskTitleField = viewChild<TaskTitleComponent>('taskTitleField');
 
   // Constants
   IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
@@ -151,8 +148,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     isDragOver: signal(false),
     isExpandedAttachmentPanel: signal(!IS_MOBILE),
   };
-
-  setTaskDetailPanel = this._taskFocusService.taskDetailPanel.set(this);
 
   // Observable conversions
   private _task$ = toObservable(this.task);
@@ -613,14 +608,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         cmpInstance.elementRef.nativeElement.focus();
       }
     }, timeoutDuration);
-  }
-
-  focusTitleField(): void {
-    const taskTitleField = this.taskTitleField();
-    if (!taskTitleField) {
-      throw new Error('TaskDetailPanel: title field missing');
-    }
-    taskTitleField.focusInput();
   }
 
   updateTaskTitleIfChanged(isChanged: boolean, newTitle: string): void {
