@@ -10,6 +10,12 @@ export class TaskFocusService {
   readonly lastFocusedTaskComponent = signal<TaskComponent | null>(null);
   readonly isTaskContextMenuOpen = signal(false);
   readonly taskDetailPanel = signal<TaskDetailPanelComponent | null>(null);
+  /**
+   * Set to a task id to request that the side-panel title field for that task
+   * receive focus. The panel reacts via an effect once its `task` input has
+   * caught up, then clears the request. Race-free without imperative timing.
+   */
+  readonly focusTitleRequest = signal<string | null>(null);
 
   // Registry of all task components for efficient focus navigation
   private _taskComponentsRegistry = new Map<string, TaskComponent>();

@@ -428,9 +428,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
           ) ===
             otherTaskEl.length - 1
         ) {
-          const taskDetailPanel = this._taskFocusService.taskDetailPanel();
-          if (taskDetailPanel) {
-            taskDetailPanel.focusTitleField();
+          if (this._taskFocusService.taskDetailPanel()) {
+            this._taskFocusService.focusTitleRequest.set(t.id);
           } else {
             // No detail panel mounted — fall back to inline-list edit.
             this.focusTitleForEdit();

@@ -779,9 +779,8 @@ export class TaskService {
             taskComponent.task().id === taskId &&
             !taskComponent.task().title?.trim().length
           ) {
-            const taskDetailPanel = this._taskFocusService.taskDetailPanel();
-            if (taskDetailPanel) {
-              taskDetailPanel.focusTitleField();
+            if (this._taskFocusService.taskDetailPanel()) {
+              this._taskFocusService.focusTitleRequest.set(taskId);
             } else {
               taskComponent.focusTitleForEdit();
             }

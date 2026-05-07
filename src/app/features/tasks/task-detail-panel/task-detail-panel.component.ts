@@ -4,8 +4,10 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   HostListener,
   inject,
+  Injector,
   input,
   OnDestroy,
   OnInit,
@@ -127,6 +129,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _taskFocusService = inject(TaskFocusService);
+  private _injector = inject(Injector);
 
   // Inputs
   task = input.required<TaskWithSubTasks>();
@@ -443,6 +446,21 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   ngOnInit(): void {
     window.history.pushState({ [HISTORY_STATE.TASK_DETAIL_PANEL]: true }, '');
     this._taskFocusService.taskDetailPanel.set(this);
+
+    // Reactive title-focus: consume focusTitleRequest only once `task` input
+    // has caught up to the requested id. This avoids the synchronous race
+    // where a caller fires focus before NgRx CD propagates the new selection.
+    effect(
+      () => {
+        const reqId = this._taskFocusService.focusTitleRequest();
+        if (reqId === null || this.task().id !== reqId) return;
+        const field = this.taskTitleField();
+        if (!field) return;
+        this._taskFocusService.focusTitleRequest.set(null);
+        field.focusInput();
+      },
+      { injector: this._injector },
+    );
   }
 
   ngAfterViewInit(): void {
@@ -617,14 +635,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         cmpInstance.elementRef.nativeElement.focus();
       }
     }, timeoutDuration);
-  }
-
-  focusTitleField(): void {
-    const taskTitleField = this.taskTitleField();
-    if (!taskTitleField) {
-      throw new Error('TaskDetailPanel: title field missing');
-    }
-    taskTitleField.focusInput();
   }
 
   updateTaskTitleIfChanged(isChanged: boolean, newTitle: string): void {
