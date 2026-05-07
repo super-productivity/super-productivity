@@ -16,7 +16,11 @@ import {
   getIssueProviderTooltip,
 } from '../../issue/mapping-helper/get-issue-provider-tooltip';
 import { IssueProvider } from '../../issue/issue.model';
-import { MatChipListbox, MatChipOption } from '@angular/material/chips';
+import {
+  MatChipListbox,
+  MatChipOption,
+  MatChipSelectionChange,
+} from '@angular/material/chips';
 import { debounceTime, map, startWith } from 'rxjs/operators';
 import { safeFormatDate } from '../../../util/safe-format-date';
 import { TaskService } from '../../tasks/task.service';
@@ -87,7 +91,11 @@ export class ScheduleComponent {
     getIssueProviderInitials(p) ??
     getIssueProviderTooltip(p).substring(0, 2).toUpperCase();
 
-  toggleCalendarProvider(providerId: string): void {
+  // Triggered by user interaction with the mat-chip-option. The isUserInput
+  // guard prevents the loop where setting [selected] programmatically
+  // (after the toggle updates hiddenProviderIds) re-fires the handler.
+  onCalProviderSelectionChange(ev: MatChipSelectionChange, providerId: string): void {
+    if (!ev.isUserInput) return;
     this._hiddenCalendarProviders.toggle(providerId);
   }
 

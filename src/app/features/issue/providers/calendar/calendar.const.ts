@@ -24,7 +24,6 @@ export const DEFAULT_CALENDAR_CFG: CalendarProviderCfg = {
   icalUrl: '',
   isAutoImportForCurrentDay: false,
   isReferenceCalendar: false,
-  color: undefined,
   checkUpdatesEvery: 2 * 60 * 60000,
   showBannerBeforeThreshold: 2 * 60 * 60000,
   isDisabledForWebApp: false,

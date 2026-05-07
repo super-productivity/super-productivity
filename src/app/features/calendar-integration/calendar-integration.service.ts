@@ -338,7 +338,7 @@ export class CalendarIntegrationService {
           events.map((ev) => ({
             ...ev,
             isReferenceCalendar: !!calProvider.isReferenceCalendar,
-            ...(calProvider.color && { color: calProvider.color }),
+            color: calProvider.color,
           })),
         ),
         catchError((err) => {

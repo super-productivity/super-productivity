@@ -9,12 +9,12 @@ export class HiddenCalendarProvidersService {
   readonly hiddenProviderIds = signal<string[]>(this._loadFromStorage());
 
   toggle(providerId: string): void {
-    const current = this.hiddenProviderIds();
-    const next = current.includes(providerId)
-      ? current.filter((id) => id !== providerId)
-      : [...current, providerId];
-    this.hiddenProviderIds.set(next);
-    saveToRealLs(LS.HIDDEN_CALENDAR_PROVIDER_IDS, next);
+    this.hiddenProviderIds.update((current) =>
+      current.includes(providerId)
+        ? current.filter((id) => id !== providerId)
+        : [...current, providerId],
+    );
+    saveToRealLs(LS.HIDDEN_CALENDAR_PROVIDER_IDS, this.hiddenProviderIds());
   }
 
   private _loadFromStorage(): string[] {

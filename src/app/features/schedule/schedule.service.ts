@@ -128,11 +128,16 @@ export class ScheduleService {
     const timelineCfg = this._timelineConfig();
     const plannerDayMap = this._plannerDayMap();
     const hiddenProviderIds = this._hiddenCalendarProviders.hiddenProviderIds();
-    const calendarEvents = this._calendarEvents().filter(
-      (entry) =>
-        !entry.items[0]?.calProviderId ||
-        !hiddenProviderIds.includes(entry.items[0].calProviderId),
-    );
+    const calendarEvents = hiddenProviderIds.length
+      ? this._calendarEvents()
+          .map((entry) => ({
+            ...entry,
+            items: entry.items.filter(
+              (item) => !hiddenProviderIds.includes(item.calProviderId),
+            ),
+          }))
+          .filter((entry) => entry.items.length > 0)
+      : this._calendarEvents();
 
     return this.buildScheduleDays({
       now: params.contextNow,

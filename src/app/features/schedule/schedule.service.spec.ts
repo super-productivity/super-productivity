@@ -685,12 +685,40 @@ describe('ScheduleService – calendar visibility filter', () => {
     expect(callCreate().length).toBe(0);
   });
 
-  it('should keep entries whose items array is empty (no calProviderId to match)', () => {
+  it('should drop entries whose items array becomes empty after filtering', () => {
     calendarEvents$.next([{ items: [] }, makeEntry('provider-A')]);
+    hiddenProviderIds.set(['provider-A']);
+
+    expect(callCreate().length).toBe(0);
+  });
+
+  it('should filter hidden items inside a mixed-provider entry', () => {
+    const mixedEntry: ScheduleCalendarMapEntry = {
+      items: [
+        {
+          id: 'ev-A',
+          calProviderId: 'provider-A',
+          issueProviderKey: 'ICAL',
+          title: 'A',
+          start: Date.now() + 60_000,
+          duration: 3_600_000,
+        },
+        {
+          id: 'ev-B',
+          calProviderId: 'provider-B',
+          issueProviderKey: 'ICAL',
+          title: 'B',
+          start: Date.now() + 60_000,
+          duration: 3_600_000,
+        },
+      ],
+    };
+    calendarEvents$.next([mixedEntry]);
     hiddenProviderIds.set(['provider-A']);
 
     const passed = callCreate();
     expect(passed.length).toBe(1);
-    expect(passed[0].items.length).toBe(0);
+    expect(passed[0].items.length).toBe(1);
+    expect(passed[0].items[0].calProviderId).toBe('provider-B');
   });
 });

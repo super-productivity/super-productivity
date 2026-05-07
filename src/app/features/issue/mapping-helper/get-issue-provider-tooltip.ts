@@ -2,6 +2,22 @@ import { IssueProvider } from '../issue.model';
 
 const SECRET_KEY_PATTERNS = /token|secret|key|password|apikey|api_key/i;
 
+// iCal feed URLs frequently embed credentials in the path (e.g. Google
+// private feeds) or query string. Show only the host so tokens never end up
+// in tooltips, screenshots, or screenshares.
+const sanitizeIcalUrlForDisplay = (url: string | undefined): string => {
+  if (!url) return 'iCal';
+  try {
+    const u = new URL(url);
+    if (u.host) return u.host;
+    // file:// — show basename only
+    const basename = u.pathname.split('/').filter(Boolean).pop();
+    return basename ? `file: ${basename}` : 'iCal';
+  } catch {
+    return 'iCal';
+  }
+};
+
 const _hasPluginConfig = (
   issueProvider: IssueProvider,
 ): issueProvider is IssueProvider & { pluginConfig: Record<string, unknown> } => {
@@ -35,7 +51,7 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
       case 'CALDAV':
         return issueProvider.caldavUrl;
       case 'ICAL':
-        return issueProvider.icalUrl;
+        return sanitizeIcalUrlForDisplay(issueProvider.icalUrl);
       case 'REDMINE':
         return issueProvider.projectId;
       case 'OPEN_PROJECT':
