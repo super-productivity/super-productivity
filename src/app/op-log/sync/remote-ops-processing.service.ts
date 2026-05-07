@@ -85,6 +85,14 @@ export class RemoteOpsProcessingService {
     filteredOpCount: number;
     filteringImport?: Operation;
     isLocalUnsyncedImport: boolean;
+    /**
+     * Issue #7330: surfaces a `false` from `validateAfterSync` (or the
+     * conflict-resolution variant) so the sync wrapper can refuse to claim
+     * IN_SYNC when post-apply state validation fails. Absent on early-exit
+     * paths that never reach validation (e.g. version-mismatch, all ops
+     * filtered by SYNC_IMPORT) — those are not validation failures.
+     */
+    validationFailed?: boolean;
   }> {
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Schema Migration (Receiver-Side)
@@ -259,12 +267,13 @@ export class RemoteOpsProcessingService {
       // Local synced ops are NOT replayed - the import is an explicit user action
       // to restore all clients to a specific point in time.
 
-      await this.validateAfterSync();
+      const isValid = await this.validateAfterSync();
       return {
         localWinOpsCreated: 0,
         allOpsFilteredBySyncImport: false,
         filteredOpCount: 0,
         isLocalUnsyncedImport: false,
+        validationFailed: !isValid,
       };
     }
 
@@ -290,12 +299,13 @@ export class RemoteOpsProcessingService {
           `Applying ${validOps.length} ops directly.`,
       );
       await this.applyNonConflictingOps(validOps);
-      await this.validateAfterSync();
+      const isValid = await this.validateAfterSync();
       return {
         localWinOpsCreated: 0,
         allOpsFilteredBySyncImport: false,
         filteredOpCount: 0,
         isLocalUnsyncedImport: false,
+        validationFailed: !isValid,
       };
     }
 
@@ -312,6 +322,7 @@ export class RemoteOpsProcessingService {
     // This ensures no NEW writes can start while we read the frontier,
     // detect conflicts, AND apply resolutions.
     let localWinOpsCreated = 0;
+    let validationFailed = false;
     await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
       const appliedFrontierByEntity = await this.vectorClockService.getEntityFrontier();
       const conflictResult = await this.detectConflicts(
@@ -338,6 +349,7 @@ export class RemoteOpsProcessingService {
           nonConflicting,
         );
         localWinOpsCreated = lwwResult.localWinOpsCreated;
+        if (lwwResult.validationFailed) validationFailed = true;
         return;
       }
 
@@ -346,7 +358,8 @@ export class RemoteOpsProcessingService {
       // ─────────────────────────────────────────────────────────────────────────
       if (nonConflicting.length > 0) {
         await this.applyNonConflictingOps(nonConflicting, true);
-        await this.validateAfterSync(true); // Inside sp_op_log lock
+        const isValid = await this.validateAfterSync(true); // Inside sp_op_log lock
+        if (!isValid) validationFailed = true;
       }
     });
     return {
@@ -354,6 +367,7 @@ export class RemoteOpsProcessingService {
       allOpsFilteredBySyncImport: false,
       filteredOpCount: 0,
       isLocalUnsyncedImport: false,
+      validationFailed,
     };
   }
 
@@ -637,8 +651,11 @@ export class RemoteOpsProcessingService {
    *
    * @param callerHoldsLock - If true, skip lock acquisition in repair operation.
    *        Pass true when calling from within the sp_op_log lock.
+   * @returns `true` if state is valid (or was successfully repaired), `false`
+   *          otherwise. Issue #7330: callers must surface a `false` up to the
+   *          sync wrapper so it can avoid claiming IN_SYNC.
    */
-  async validateAfterSync(callerHoldsLock: boolean = false): Promise<void> {
+  async validateAfterSync(callerHoldsLock: boolean = false): Promise<boolean> {
     // FIX #6571: Check and surface validation result.
     // Previously, the boolean return was discarded — validation failures
     // were invisible and sync reported IN_SYNC despite invalid state.
@@ -653,5 +670,6 @@ export class RemoteOpsProcessingService {
         msg: T.F.SYNC.S.SYNC_VALIDATION_FAILED,
       });
     }
+    return isValid;
   }
 }

@@ -282,6 +282,7 @@ export class OperationLogSyncService {
     // even if processing throws. Otherwise rejected ops remain in pending
     // state and get re-uploaded infinitely.
     let localWinOpsCreated = 0;
+    let piggybackValidationFailed = false;
     let rejectionResult: RejectionHandlingResult = {
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
@@ -346,6 +347,7 @@ export class OperationLogSyncService {
         result.piggybackedOps,
       );
       localWinOpsCreated = processResult.localWinOpsCreated;
+      if (processResult.validationFailed) piggybackValidationFailed = true;
     }
 
     // STEP 2: Handle server-rejected operations
@@ -410,6 +412,7 @@ export class OperationLogSyncService {
       permanentRejectionCount: rejectionResult.permanentRejectionCount,
       hasMorePiggyback: result.hasMorePiggyback ?? false,
       rejectedOps: result.rejectedOps,
+      validationFailed: piggybackValidationFailed,
     };
   }
 
@@ -837,6 +840,7 @@ export class OperationLogSyncService {
       localWinOpsCreated: processResult.localWinOpsCreated,
       allOpClocks: result.allOpClocks,
       snapshotVectorClock: result.snapshotVectorClock,
+      validationFailed: processResult.validationFailed,
     };
   }
 

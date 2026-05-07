@@ -189,6 +189,12 @@ export type DownloadOutcome =
       localWinOpsCreated: number;
       allOpClocks?: VectorClock[];
       snapshotVectorClock?: VectorClock;
+      /**
+       * `validateAfterSync` returned `false` while applying these ops — state
+       * may be inconsistent. Issue #7330: previously discarded; now surfaced
+       * so the sync wrapper can refuse to claim IN_SYNC.
+       */
+      validationFailed?: boolean;
     }
   | {
       /** File-based snapshot was hydrated (fresh download from file provider). */
@@ -220,6 +226,11 @@ export type UploadOutcome =
       permanentRejectionCount: number;
       hasMorePiggyback: boolean;
       rejectedOps: RejectedOpInfo[];
+      /**
+       * `validateAfterSync` returned `false` while processing piggybacked ops
+       * — state may be inconsistent. See `DownloadOutcome.validationFailed`.
+       */
+      validationFailed?: boolean;
     }
   | {
       /** User cancelled a piggybacked SYNC_IMPORT conflict dialog. */

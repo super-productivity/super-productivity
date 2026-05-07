@@ -1274,5 +1274,81 @@ describe('RemoteOpsProcessingService', () => {
         jasmine.objectContaining({ type: 'ERROR' }),
       );
     });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Issue #7330: validation failure must propagate up to sync status so
+    // the sync wrapper can refuse to claim IN_SYNC. Previously the boolean
+    // result was only used to drive a snackbar — sync still reported IN_SYNC.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    it('returns true when validation passes', async () => {
+      validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(true);
+
+      const result = await service.validateAfterSync();
+
+      expect(result).toBe(true);
+    });
+
+    it('returns false when validation fails', async () => {
+      validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(false);
+
+      const result = await service.validateAfterSync();
+
+      expect(result).toBe(false);
+    });
+
+    it('processRemoteOps surfaces validationFailed=true when validation fails on the no-conflict path', async () => {
+      const remoteOps: Operation[] = [{ id: 'op1', schemaVersion: 1 } as Operation];
+
+      opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+      opLogStoreSpy.getUnsyncedByEntity.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getEntityFrontier.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getSnapshotVectorClock.and.returnValue(Promise.resolve({}));
+      vectorClockServiceSpy.getSnapshotEntityKeys.and.returnValue(
+        Promise.resolve(new Set()),
+      );
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      opLogStoreSpy.markApplied.and.returnValue(Promise.resolve());
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [remoteOps[0]] }),
+      );
+      spyOn(service, 'detectConflicts').and.resolveTo({
+        nonConflicting: remoteOps,
+        conflicts: [],
+      });
+      validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(false);
+
+      const result = await service.processRemoteOps(remoteOps);
+
+      expect(result.validationFailed).toBe(true);
+    });
+
+    it('processRemoteOps surfaces validationFailed=false when validation succeeds', async () => {
+      const remoteOps: Operation[] = [{ id: 'op1', schemaVersion: 1 } as Operation];
+
+      opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+      opLogStoreSpy.getUnsyncedByEntity.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getEntityFrontier.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getSnapshotVectorClock.and.returnValue(Promise.resolve({}));
+      vectorClockServiceSpy.getSnapshotEntityKeys.and.returnValue(
+        Promise.resolve(new Set()),
+      );
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      opLogStoreSpy.markApplied.and.returnValue(Promise.resolve());
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [remoteOps[0]] }),
+      );
+      spyOn(service, 'detectConflicts').and.resolveTo({
+        nonConflicting: remoteOps,
+        conflicts: [],
+      });
+      validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(true);
+
+      const result = await service.processRemoteOps(remoteOps);
+
+      expect(result.validationFailed).toBeFalsy();
+    });
   });
 });

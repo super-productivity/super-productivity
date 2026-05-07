@@ -165,10 +165,13 @@ export class ConflictResolutionService {
    *
    * @see ValidateStateService for the full validation and repair logic
    */
-  private async _validateAndRepairAfterResolution(): Promise<void> {
-    await this.validateStateService.validateAndRepairCurrentState('conflict-resolution', {
-      callerHoldsLock: true,
-    });
+  private async _validateAndRepairAfterResolution(): Promise<boolean> {
+    return this.validateStateService.validateAndRepairCurrentState(
+      'conflict-resolution',
+      {
+        callerHoldsLock: true,
+      },
+    );
   }
 
   /**
@@ -325,7 +328,7 @@ export class ConflictResolutionService {
   async autoResolveConflictsLWW(
     conflicts: EntityConflict[],
     nonConflictingOps: Operation[] = [],
-  ): Promise<{ localWinOpsCreated: number }> {
+  ): Promise<{ localWinOpsCreated: number; validationFailed?: boolean }> {
     if (conflicts.length === 0 && nonConflictingOps.length === 0) {
       return { localWinOpsCreated: 0 };
     }
@@ -569,9 +572,12 @@ export class ConflictResolutionService {
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 8: Validate and repair state after resolution
     // ─────────────────────────────────────────────────────────────────────────
-    await this._validateAndRepairAfterResolution();
+    const isValid = await this._validateAndRepairAfterResolution();
 
-    return { localWinOpsCreated: newLocalWinOps.length };
+    return {
+      localWinOpsCreated: newLocalWinOps.length,
+      validationFailed: !isValid,
+    };
   }
 
   /**

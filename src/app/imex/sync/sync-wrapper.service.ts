@@ -492,6 +492,26 @@ export class SyncWrapperService {
         return SyncStatus.UpdateRemote;
       }
 
+      // Issue #7330: post-sync state validation failure must not be reported
+      // as IN_SYNC. Previously the validation result was discarded; the user
+      // saw a "State validation failed" snackbar yet the indicator still said
+      // IN_SYNC, masking real corruption.
+      const downloadValidationFailed =
+        downloadResult.kind === 'ops_processed' && downloadResult.validationFailed;
+      const uploadValidationFailed =
+        uploadResult.kind === 'completed' && uploadResult.validationFailed;
+      if (downloadValidationFailed || uploadValidationFailed) {
+        SyncLog.err(
+          'SyncWrapperService: Post-sync state validation failed, not marking as IN_SYNC',
+          {
+            downloadValidationFailed,
+            uploadValidationFailed,
+          },
+        );
+        this._providerManager.setSyncStatus('ERROR');
+        return 'HANDLED_ERROR';
+      }
+
       // 4. Check for permanent rejection failures
       if (uploadResult.kind === 'completed' && uploadResult.permanentRejectionCount > 0) {
         const hasPayloadError = uploadResult.rejectedOps.some(
