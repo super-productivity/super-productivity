@@ -56,8 +56,4 @@ export class TaskFocusService {
     const currentIndex = taskEls.findIndex((el) => el === currentEl);
     return taskEls[currentIndex - 1] as HTMLElement;
   }
-
-  setTaskDetailPanel(panel: TaskDetailPanelComponent): void {
-    this.taskDetailPanel.set(panel);
-  }
 }
