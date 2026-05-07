@@ -17,7 +17,7 @@ describe('OneDrive', () => {
   const baseCfg: OneDrivePrivateCfg = {
     clientId: 'client-id',
     tenantId: 'common',
-    syncFolderPath: 'super-productivity',
+    syncFolderPath: 'Super Productivity',
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     tokenExpiresAt: Date.now() + tokenExpiryMs,
@@ -247,14 +247,14 @@ describe('OneDrive', () => {
       provider.uploadFile('file-2.json', '{"a":2}', null, true),
     ).toBeResolved();
 
-    const folderCheckCalls = fetchSpy.calls
+    const folderCreateCalls = fetchSpy.calls
       .all()
       .filter(
         (call) =>
-          (call.args[1] as RequestInit | undefined)?.method === 'GET' &&
-          String(call.args[0]).includes('/me/drive/special/approot:/super-productivity'),
+          (call.args[1] as RequestInit | undefined)?.method === 'POST' &&
+          String(call.args[0]).includes('/me/drive/special/approot/children'),
       );
 
-    expect(folderCheckCalls.length).toBe(1);
+    expect(folderCreateCalls.length).toBe(1);
   });
 });
