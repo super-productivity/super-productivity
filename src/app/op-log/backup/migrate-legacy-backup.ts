@@ -36,6 +36,8 @@ import {
 } from '../../features/project/project.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../util/is-today.util';
+// Matches DateService.setStartOfNextDayDiff semantics for legacy backup normalization.
+import { getStartOfNextDayDiffMs } from '../../util/start-of-next-day.util';
 import { LanguageCode } from '../../core/locale.constants';
 import {
   initialPluginUserDataState,
@@ -344,30 +346,6 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
       }
     }
   }
-}
-
-function getStartOfNextDayDiffMs(
-  startOfNextDayTime: string | undefined,
-  startOfNextDay: number | undefined,
-): number {
-  if (typeof startOfNextDayTime === 'string') {
-    const [hourStr, minuteStr] = startOfNextDayTime.split(':');
-    const hour = Number(hourStr);
-    const minute = Number(minuteStr);
-    const clampedHour = Number.isFinite(hour) ? Math.max(0, Math.min(23, hour)) : 0;
-    const clampedMinute = Number.isFinite(minute) ? Math.max(0, Math.min(59, minute)) : 0;
-    const minutesFromHours = clampedHour * 60;
-    const totalMinutes = minutesFromHours + clampedMinute;
-
-    return totalMinutes * 60 * 1000;
-  }
-
-  if (typeof startOfNextDay === 'number') {
-    const clampedHour = Math.max(0, Math.min(23, startOfNextDay));
-    return clampedHour * 60 * 60 * 1000;
-  }
-
-  return 0;
 }
 
 // ---------------------------------------------------------------------------

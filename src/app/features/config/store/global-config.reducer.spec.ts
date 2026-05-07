@@ -175,6 +175,45 @@ describe('GlobalConfigReducer', () => {
       expect(result.sync.syncProvider).toBe(SyncProviderId.WebDAV);
     });
 
+    it('should normalize startOfNextDayTime with minutes into startOfNextDay hour', () => {
+      const snapshotConfig: GlobalConfigState = {
+        ...initialGlobalConfigState,
+        misc: {
+          ...initialGlobalConfigState.misc,
+          startOfNextDayTime: '02:30',
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.misc.startOfNextDay).toBe(2);
+    });
+
+    it('should synthesize startOfNextDayTime for legacy numeric hour values', () => {
+      const snapshotConfig: any = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          startOfNextDay: 4,
+          startOfNextDayTime: undefined,
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.misc.startOfNextDayTime).toBe('04:00');
+    });
+
     it('should update other sync config properties while preserving syncProvider', () => {
       const oldState: GlobalConfigState = {
         ...initialGlobalConfigState,

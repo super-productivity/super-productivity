@@ -22,6 +22,7 @@ import {
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
+import { getStartOfNextDayHourFromTimeString } from '../../../util/start-of-next-day.util';
 
 export const CONFIG_FEATURE_NAME = 'globalConfig';
 export const selectConfigFeatureState =
@@ -108,6 +109,10 @@ export const initialGlobalConfigState: GlobalConfigState = {
 const normalizeStartOfNextDayConfig = (
   misc: Partial<MiscConfig>,
 ): Partial<MiscConfig> => {
+  // `startOfNextDayTime` wins when present. When both fields arrive together
+  // from sync/REST/plugin payloads we keep minute precision from
+  // `startOfNextDayTime` and derive a legacy hour-only `startOfNextDay`.
+  // If only the legacy `startOfNextDay` arrives, minutes are unavoidably lost.
   type NormalizedMiscConfig = Omit<
     Partial<MiscConfig>,
     'startOfNextDay' | 'startOfNextDayTime'
@@ -118,10 +123,9 @@ const normalizeStartOfNextDayConfig = (
   const normalized: NormalizedMiscConfig = { ...misc };
 
   if (typeof misc.startOfNextDayTime === 'string') {
-    const [hourStr] = misc.startOfNextDayTime.split(':');
-    const hour = Number(hourStr);
-    if (!Number.isNaN(hour)) {
-      normalized.startOfNextDay = Math.max(0, Math.min(23, hour));
+    const hour = getStartOfNextDayHourFromTimeString(misc.startOfNextDayTime);
+    if (hour != null) {
+      normalized.startOfNextDay = hour;
     }
   }
 

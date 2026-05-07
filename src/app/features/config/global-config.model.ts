@@ -28,7 +28,9 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
   isLocalRestApiEnabled?: boolean;
+  /** @deprecated Legacy hour-only representation. Use `startOfNextDayTime` as canonical source of truth. */
   startOfNextDay: number;
+  /** Canonical start-of-next-day value, including minute precision. */
   startOfNextDayTime?: string;
   isDisableAnimations: boolean;
   // optional because it was added later
