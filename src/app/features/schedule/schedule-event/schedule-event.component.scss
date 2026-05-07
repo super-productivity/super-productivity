@@ -134,12 +134,6 @@
     );
   }
 
-  &.CalendarEvent.is-reference-calendar.is-past-work {
-    --project-color: var(--c-primary);
-    opacity: 0.7;
-    background-image: none;
-  }
-
   &.ScheduledRepeatProjection .ico {
     color: var(--c-primary);
   }

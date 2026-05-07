@@ -15,7 +15,6 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateTimeLocales } from '../../../core/locale.constants';
 import { safeFormatDate } from '../../../util/safe-format-date';
-import { PastWorkScheduleEntriesService } from '../past-work-schedule-entries.service';
 
 /**
  * Regression guard for issue #7383 (NG0701 on /schedule).
@@ -100,19 +99,12 @@ describe('issue #7383 — NG0701 race on /schedule', () => {
         cfg: signal(undefined),
       });
 
-      const mockPastWorkService = jasmine.createSpyObj('PastWorkScheduleEntriesService', [
-        'buildEntriesForDays$',
-        'clearCache',
-      ]);
-      mockPastWorkService.buildEntriesForDays$.and.returnValue(of([]));
-
       await TestBed.configureTestingModule({
         imports: [ScheduleComponent, TranslateModule.forRoot()],
         providers: [
           provideMockStore({
             initialState: { issueProvider: { ids: [], entities: {} } },
           }),
-          { provide: PastWorkScheduleEntriesService, useValue: mockPastWorkService },
           { provide: TaskService, useValue: mockTaskService },
           { provide: LayoutService, useValue: mockLayoutService },
           { provide: ScheduleService, useValue: mockScheduleService },

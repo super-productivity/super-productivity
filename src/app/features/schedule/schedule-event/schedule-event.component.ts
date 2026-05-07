@@ -41,7 +41,6 @@ import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-con
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { FH } from '../schedule.const';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
-import { PAST_WORK_CAL_PROVIDER_ID } from '../map-schedule-data/build-past-work-calendar-entries';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
@@ -223,10 +222,6 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
       addClass += ' is-reference-calendar';
     }
 
-    if (this.isPastWork()) {
-      addClass += ' is-past-work';
-    }
-
     return evt.type + '  ' + addClass;
   });
 
@@ -402,14 +397,6 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     const evt = this.se();
     if (evt.type !== SVEType.CalendarEvent) return false;
     return !!(evt.data as ScheduleFromCalendarEvent).isReferenceCalendar;
-  });
-
-  readonly isPastWork = computed(() => {
-    const evt = this.se();
-    if (evt.type !== SVEType.CalendarEvent) return false;
-    return (
-      (evt.data as ScheduleFromCalendarEvent).calProviderId === PAST_WORK_CAL_PROVIDER_ID
-    );
   });
 
   async openCalendarEventLink(): Promise<void> {

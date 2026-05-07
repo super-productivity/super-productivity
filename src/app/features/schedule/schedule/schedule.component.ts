@@ -11,10 +11,13 @@ import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
 import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
-import { getIssueProviderTooltip } from '../../issue/mapping-helper/get-issue-provider-tooltip';
+import {
+  getIssueProviderInitials,
+  getIssueProviderTooltip,
+} from '../../issue/mapping-helper/get-issue-provider-tooltip';
 import { IssueProvider } from '../../issue/issue.model';
 import { MatChipListbox, MatChipOption } from '@angular/material/chips';
-import { debounceTime, map, startWith, switchMap } from 'rxjs/operators';
+import { debounceTime, map, startWith } from 'rxjs/operators';
 import { safeFormatDate } from '../../../util/safe-format-date';
 import { TaskService } from '../../tasks/task.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
@@ -26,7 +29,7 @@ import { LS } from 'src/app/core/persistence/storage-keys.const';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { FH } from '../schedule.const';
 import { mapScheduleDaysToScheduleEvents } from '../map-schedule-data/map-schedule-days-to-schedule-events';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
 import { ScheduleMonthComponent } from '../schedule-month/schedule-month.component';
 import { ScheduleService } from '../schedule.service';
@@ -38,8 +41,6 @@ import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getWeekNumber } from '../../../util/get-week-number';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
-import { PastWorkScheduleEntriesService } from '../past-work-schedule-entries.service';
-import { ScheduleCalendarMapEntry } from '../schedule.model';
 
 @Component({
   selector: 'schedule',
@@ -73,31 +74,6 @@ export class ScheduleComponent {
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translate = inject(TranslateService);
   private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
-  private _pastWorkScheduleEntriesService = inject(PastWorkScheduleEntriesService);
-
-  readonly showWorkLog = signal(
-    localStorage.getItem(LS.SCHEDULE_SHOW_WORK_LOG) === 'true',
-  );
-
-  toggleShowWorkLog(): void {
-    const next = !this.showWorkLog();
-    this.showWorkLog.set(next);
-    localStorage.setItem(LS.SCHEDULE_SHOW_WORK_LOG, String(next));
-    if (!next) {
-      this._pastWorkScheduleEntriesService.clearCache();
-    }
-  }
-
-  private _workLogDays = computed(() => (this.showWorkLog() ? this.daysToShow() : []));
-
-  readonly _pastWorkEntries = toSignal(
-    toObservable(this._workLogDays).pipe(
-      switchMap((days) =>
-        this._pastWorkScheduleEntriesService.buildEntriesForDays$(days),
-      ),
-    ),
-    { initialValue: [] as ScheduleCalendarMapEntry[] },
-  );
 
   readonly hiddenCalendarProviderIds = this._hiddenCalendarProviders.hiddenProviderIds;
   readonly enabledCalendarProviders = toSignal(
@@ -107,6 +83,9 @@ export class ScheduleComponent {
     { initialValue: [] },
   );
   readonly calProviderLabel = (p: IssueProvider): string => getIssueProviderTooltip(p);
+  readonly calProviderInitials = (p: IssueProvider): string =>
+    getIssueProviderInitials(p) ??
+    getIssueProviderTooltip(p).substring(0, 2).toUpperCase();
 
   toggleCalendarProvider(providerId: string): void {
     this._hiddenCalendarProviders.toggle(providerId);
@@ -217,7 +196,7 @@ export class ScheduleComponent {
   });
 
   // Calculate context-aware "now" based on selected date
-  // When viewing a future/past week, use the start of that period as reference time
+  // When viewing a future week, use the start of that week as reference time
   private _contextNow = computed(() => {
     const selectedDate = this._selectedDate();
     if (selectedDate === null) {
@@ -236,7 +215,6 @@ export class ScheduleComponent {
       contextNow: this._contextNow(),
       realNow: Date.now(),
       currentTaskId: this.taskService.currentTaskId() ?? null,
-      additionalCalendarEntries: this._pastWorkEntries(),
     });
   });
 
@@ -280,7 +258,8 @@ export class ScheduleComponent {
   });
 
   goToPreviousPeriod(): void {
-    if (this.isViewingToday() && !this.showWorkLog()) return;
+    // Never navigate into the past — the displayed range must include today or later
+    if (this.isViewingToday()) return;
 
     const currentDate = this._selectedDate() || new Date();
     const selectedView = this._currentTimeViewMode();
@@ -298,17 +277,13 @@ export class ScheduleComponent {
       previousPeriod.setDate(currentDate.getDate() - daysToSkip);
       previousPeriod.setHours(0, 0, 0, 0);
 
-      if (this.showWorkLog()) {
-        this._selectedDate.set(previousPeriod);
+      // If going back would land on or before today, snap to "today view" (null)
+      const todayMidnight = new Date();
+      todayMidnight.setHours(0, 0, 0, 0);
+      if (previousPeriod.getTime() <= todayMidnight.getTime()) {
+        this._selectedDate.set(null);
       } else {
-        // Snap to today if going back would land on or before today
-        const todayMidnight = new Date();
-        todayMidnight.setHours(0, 0, 0, 0);
-        if (previousPeriod.getTime() <= todayMidnight.getTime()) {
-          this._selectedDate.set(null);
-        } else {
-          this._selectedDate.set(previousPeriod);
-        }
+        this._selectedDate.set(previousPeriod);
       }
     }
   }

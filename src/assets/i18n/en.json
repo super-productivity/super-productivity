@@ -987,6 +987,7 @@
       "S_REMINDER_ERR": "Error for reminder interface"
     },
     "SCHEDULE": {
+      "CALENDAR_VISIBILITY": "Calendar visibility",
       "D_INITIAL": {
         "TEXT": "<p>The Schedule will provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended), regular tasks will never be placed outside of these boundaries.</p>",
         "TITLE": "Schedule"
@@ -995,6 +996,12 @@
       "INSERT_BEFORE": "Before",
       "LUNCH_BREAK": "Lunch Break",
       "MONTH": "Month",
+      "NEXT_MONTH": "Next Month",
+      "NEXT_WEEK": "Next Week",
+      "PREVIOUS_MONTH": "Previous Month",
+      "PREVIOUS_WEEK": "Previous Week",
+      "VIEW_MONTH": "View Month",
+      "VIEW_WEEK": "View Week",
       "NO_TASKS": "Currently there are no tasks. Please add some tasks via the plus (+) button in the top bar.",
       "NOW": "Now",
       "PLAN_END_DAY": "End of {{date}}",
@@ -2074,10 +2081,14 @@
       "TITLE": "Automatic Backups"
     },
     "CALENDARS": {
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "Auto import events as tasks for current day",
       "BROWSER_WARNING": "Due to cross-origin restrictions <b>this will likely NOT work with the web browser version of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
+      "CAL_COLOR": "Calendar color",
       "CAL_PATH": "URL of the iCal source",
       "CHECK_UPDATES": "Check for remote updates every X",
+      "DISABLE_FOR_WEB_APP": "Disable when using web application",
       "HELP": "You can integrate calendars to be reminded and add them as tasks within Super Productivity. The integration works by using the iCal format. For this to work your calendars need to be accessible either over the internet or via file system.",
+      "REFERENCE_CALENDAR": "Reference calendar (display only, no task creation)",
       "SHOW_BANNER_THRESHOLD": "Show a notification X before the event (blank for disabled)"
     },
     "CLIPBOARD_IMAGES": {

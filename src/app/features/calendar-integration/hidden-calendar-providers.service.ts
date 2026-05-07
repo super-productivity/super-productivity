@@ -1,4 +1,5 @@
 import { Injectable, signal } from '@angular/core';
+import { loadFromRealLs, saveToRealLs } from '../../core/persistence/local-storage';
 import { LS } from '../../core/persistence/storage-keys.const';
 
 @Injectable({
@@ -13,19 +14,15 @@ export class HiddenCalendarProvidersService {
       ? current.filter((id) => id !== providerId)
       : [...current, providerId];
     this.hiddenProviderIds.set(next);
-    localStorage.setItem(LS.HIDDEN_CALENDAR_PROVIDER_IDS, JSON.stringify(next));
+    saveToRealLs(LS.HIDDEN_CALENDAR_PROVIDER_IDS, next);
   }
 
   private _loadFromStorage(): string[] {
     try {
-      const stored = localStorage.getItem(LS.HIDDEN_CALENDAR_PROVIDER_IDS);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return Array.isArray(parsed) ? parsed : [];
-      }
+      const stored = loadFromRealLs(LS.HIDDEN_CALENDAR_PROVIDER_IDS);
+      return Array.isArray(stored) ? (stored as string[]) : [];
     } catch {
-      // ignore parse errors
+      return [];
     }
-    return [];
   }
 }

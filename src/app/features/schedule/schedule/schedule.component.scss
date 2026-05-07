@@ -85,14 +85,6 @@
     align-items: center;
   }
 
-  .show-past-toggle-btn {
-    transition: var(--transition-standard);
-
-    &.active {
-      color: var(--c-primary);
-    }
-  }
-
   .week-month-selector {
     display: flex;
     margin-left: var(--s);

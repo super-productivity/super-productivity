@@ -86,37 +86,29 @@ export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
       type: 'checkbox',
       key: 'isAutoImportForCurrentDay',
       templateOptions: {
-        type: 'url',
-        // TODO translation
-        // label: T.GCF.CALENDARS.CAL_PATH,
-        label: 'Auto import events as tasks for current day',
+        label: T.GCF.CALENDARS.AUTO_IMPORT_FOR_CURRENT_DAY,
       },
     },
     {
       type: 'checkbox',
       key: 'isReferenceCalendar',
       templateOptions: {
-        // TODO translation
-        label: 'Reference calendar (display only, no task creation)',
+        label: T.GCF.CALENDARS.REFERENCE_CALENDAR,
       },
     },
     {
       type: 'input',
       key: 'color',
       templateOptions: {
-        // TODO translation
         type: 'color',
-        label: 'Calendar color',
+        label: T.GCF.CALENDARS.CAL_COLOR,
       },
     },
     {
       type: 'checkbox',
       key: 'isDisabledForWebApp',
       templateOptions: {
-        type: 'url',
-        // TODO translation
-        // label: T.GCF.CALENDARS.CAL_PATH,
-        label: 'Disable when using web application',
+        label: T.GCF.CALENDARS.DISABLE_FOR_WEB_APP,
       },
     },
     ...ISSUE_PROVIDER_COMMON_FORM_FIELDS,
