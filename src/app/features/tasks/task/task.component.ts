@@ -427,7 +427,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
         ) {
           const taskDetailPanel = this._taskFocusService.taskDetailPanel();
           if (taskDetailPanel) {
-            taskDetailPanel?.focusTitleField();
+            taskDetailPanel.focusTitleField();
           }
         }
       });

@@ -152,7 +152,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     isExpandedAttachmentPanel: signal(!IS_MOBILE),
   };
 
-  //Set panel as last focused panel
   setTaskDetailPanel = this._taskFocusService.setTaskDetailPanel(this);
 
   // Observable conversions
@@ -619,8 +618,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   focusTitleField(): void {
     const taskTitleField = this.taskTitleField();
     if (!taskTitleField) {
-      Log.log(taskTitleField);
-      throw new Error('No el');
+      throw new Error('TaskDetailPanel: title field missing');
     }
     taskTitleField.focusInput();
   }
