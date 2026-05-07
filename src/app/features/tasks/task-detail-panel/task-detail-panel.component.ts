@@ -152,7 +152,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     isExpandedAttachmentPanel: signal(!IS_MOBILE),
   };
 
-  setTaskDetailPanel = this._taskFocusService.setTaskDetailPanel(this);
+  setTaskDetailPanel = this._taskFocusService.taskDetailPanel.set(this);
 
   // Observable conversions
   private _task$ = toObservable(this.task);
