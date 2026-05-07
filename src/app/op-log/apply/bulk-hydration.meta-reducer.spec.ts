@@ -777,4 +777,138 @@ describe('bulkHydrationMetaReducer', () => {
       expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
     });
   });
+
+  // =========================================================================
+  // Issue #7330: TAG/PROJECT LWW Updates whose taskIds payload references
+  // entities being archived/deleted in the SAME batch must have those task
+  // IDs stripped before the action reaches lwwUpdateMetaReducer. The orphan
+  // filter inside lwwUpdateMetaReducer only checks current taskState.ids, so
+  // when a TAG LWW Update is processed before the TASK archive in the same
+  // batch, the task is still present and not filtered — leaving TODAY_TAG
+  // (or any tag) referencing a now-archived task.
+  //
+  // Reporter symptom: "archived/completed tasks reappear in today's view"
+  // after wake from hibernate.
+  // =========================================================================
+  describe('TAG/PROJECT LWW Updates referencing same-batch archives (#7330)', () => {
+    const TAG_LWW_TYPE = '[TAG] LWW Update';
+    const PROJECT_LWW_TYPE = '[PROJECT] LWW Update';
+
+    const createMoveToArchiveOp = (entityIds: string[]): Operation =>
+      createMockOperation({
+        id: `archive-op-${entityIds.join('-')}`,
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: entityIds[0],
+        entityIds,
+        payload: {
+          actionPayload: {
+            tasks: entityIds.map((id) => ({ id, title: `Task ${id}` })),
+          },
+          entityChanges: [],
+        },
+      });
+
+    it('strips archiving task IDs from a TAG LWW Update taskIds payload', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww',
+        actionType: TAG_LWW_TYPE as ActionType,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      const archiveOp = createMoveToArchiveOp([TASK_ID]);
+
+      const operations = [tagLwwOp, archiveOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // Both ops should reach the inner reducer (TAG LWW Update is not
+      // skipped — only TASK LWW Updates are skipped wholesale).
+      expect(mockReducer).toHaveBeenCalledTimes(2);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      expect(tagAction).toBeDefined();
+      // The archiving TASK_ID must be stripped; TASK_ID_2 stays.
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+
+    it('strips archiving task IDs from a PROJECT LWW Update taskIds + backlogTaskIds', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const projectLwwOp = createMockOperation({
+        id: 'project-lww',
+        actionType: PROJECT_LWW_TYPE as ActionType,
+        opType: OpType.Update,
+        entityType: 'PROJECT',
+        entityId: PROJECT_ID,
+        payload: {
+          id: PROJECT_ID,
+          title: 'Inbox',
+          taskIds: [TASK_ID, TASK_ID_2],
+          backlogTaskIds: [TASK_ID, 'task3'],
+        },
+      });
+      const archiveOp = createMoveToArchiveOp([TASK_ID]);
+
+      const operations = [projectLwwOp, archiveOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const projectAction = reducerCalls.find((c) => c.action.type === PROJECT_LWW_TYPE)
+        ?.action as { taskIds?: string[]; backlogTaskIds?: string[] } | undefined;
+      expect(projectAction).toBeDefined();
+      expect(projectAction!.taskIds).toEqual([TASK_ID_2]);
+      expect(projectAction!.backlogTaskIds).toEqual(['task3']);
+    });
+
+    // Order independence is structural — the pre-scan loop builds the archive
+    // Set before the apply loop runs. This test guards that invariant
+    // explicitly: if a future refactor moved Set-collection into the apply
+    // loop, this case would regress.
+    it('also strips when the archive op precedes the TAG LWW Update in the batch', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-after-archive',
+        actionType: TAG_LWW_TYPE as ActionType,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      const archiveOp = createMoveToArchiveOp([TASK_ID]);
+
+      const operations = [archiveOp, tagLwwOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+  });
 });

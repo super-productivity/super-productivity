@@ -1,9 +1,64 @@
 import { Action, ActionReducer } from '@ngrx/store';
 import { bulkApplyOperations } from './bulk-hydration.action';
 import { convertOpToAction } from './operation-converter.util';
-import { ActionType } from '../core/operation.types';
+import { ActionType, Operation } from '../core/operation.types';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { OpLog } from '../../core/log';
+
+/**
+ * Issue #7330: `lwwUpdateMetaReducer`'s orphan filter only sees taskState as
+ * it is when each op runs. A TAG LWW Update applied before its sibling
+ * archive op in the same batch escapes the filter, leaving TODAY_TAG (or any
+ * tag/project) referencing a task the very next op removes — user-visible as
+ * "archived tasks reappear in today's view" on hibernate-wake.
+ */
+const stripBatchArchivedTaskIdsFromLwwPayload = (
+  op: Operation,
+  isLww: boolean,
+  archivingOrDeletingEntityIds: Set<string>,
+): Operation => {
+  if (!isLww) return op;
+  if (op.entityType !== 'TAG' && op.entityType !== 'PROJECT') return op;
+  const payload = op.payload;
+  if (!payload || typeof payload !== 'object') return op;
+  const p = payload as Record<string, unknown>;
+
+  const stripIds = (
+    key: string,
+  ): { cleaned: string[]; removed: string[] } | undefined => {
+    const value = p[key];
+    if (!Array.isArray(value)) return undefined;
+    const cleaned: string[] = [];
+    const removed: string[] = [];
+    for (const id of value) {
+      if (typeof id !== 'string') {
+        cleaned.push(id);
+        continue;
+      }
+      if (archivingOrDeletingEntityIds.has(id)) removed.push(id);
+      else cleaned.push(id);
+    }
+    return removed.length === 0 ? undefined : { cleaned, removed };
+  };
+
+  const taskIdsResult = stripIds('taskIds');
+  const backlogResult =
+    op.entityType === 'PROJECT' ? stripIds('backlogTaskIds') : undefined;
+  if (!taskIdsResult && !backlogResult) return op;
+
+  const newPayload: Record<string, unknown> = { ...p };
+  if (taskIdsResult) newPayload.taskIds = taskIdsResult.cleaned;
+  if (backlogResult) newPayload.backlogTaskIds = backlogResult.cleaned;
+  OpLog.warn(
+    `bulkOperationsMetaReducer: Stripped same-batch-archived task IDs from ` +
+      `${op.entityType}:${op.entityId} LWW Update payload`,
+    {
+      taskIdsRemoved: taskIdsResult?.removed,
+      backlogTaskIdsRemoved: backlogResult?.removed,
+    },
+  );
+  return { ...op, payload: newPayload };
+};
 
 /**
  * Meta-reducer that applies multiple operations in a single reducer pass.
@@ -61,21 +116,26 @@ export const bulkOperationsMetaReducer = <T>(
       }
 
       let currentState = state;
+      const hasArchives = archivingOrDeletingEntityIds.size > 0;
       for (const op of operations) {
-        // Skip LWW Updates for entities archived/deleted in this same batch
-        if (
-          archivingOrDeletingEntityIds.size > 0 &&
-          isLwwUpdateActionType(op.actionType) &&
-          op.entityId &&
-          archivingOrDeletingEntityIds.has(op.entityId)
-        ) {
+        const isLww = hasArchives && isLwwUpdateActionType(op.actionType);
+        // Skip LWW Updates whose entityId itself is archived/deleted in this batch
+        // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task).
+        if (isLww && op.entityId && archivingOrDeletingEntityIds.has(op.entityId)) {
           OpLog.normal(
             `bulkOperationsMetaReducer: Skipping LWW Update for ` +
               `${op.entityType}:${op.entityId} — entity archived/deleted in same batch`,
           );
           continue;
         }
-        const opAction = convertOpToAction(op);
+        const opForApply = hasArchives
+          ? stripBatchArchivedTaskIdsFromLwwPayload(
+              op,
+              isLww,
+              archivingOrDeletingEntityIds,
+            )
+          : op;
+        const opAction = convertOpToAction(opForApply);
         currentState = reducer(currentState, opAction);
       }
       return currentState as T;
