@@ -63,8 +63,13 @@ export class WorkViewPage extends BasePage {
 
     await task.press('a');
 
-    // Wait for textarea to appear
-    const textarea = this.page.locator('textarea:focus, input[type="text"]:focus');
+    // Sub-task creation focuses the side-panel title field (mobile fix #7120);
+    // when no panel is mounted we fall back to whatever input has focus.
+    const textarea = this.page
+      .locator(
+        'task-detail-panel task-title textarea, textarea:focus, input[type="text"]:focus',
+      )
+      .first();
     await textarea.waitFor({ state: 'visible', timeout: 3000 });
 
     // Ensure the field is properly focused and cleared before filling

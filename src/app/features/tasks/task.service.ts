@@ -774,14 +774,17 @@ export class TaskService {
 
         if (shouldStartEditing) {
           const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
-          const taskDetailPanel = this._taskFocusService.taskDetailPanel();
           if (
             taskComponent &&
             taskComponent.task().id === taskId &&
-            !taskComponent.task().title?.trim().length &&
-            taskDetailPanel
+            !taskComponent.task().title?.trim().length
           ) {
-            taskDetailPanel.focusTitleField();
+            const taskDetailPanel = this._taskFocusService.taskDetailPanel();
+            if (taskDetailPanel) {
+              taskDetailPanel.focusTitleField();
+            } else {
+              taskComponent.focusTitleForEdit();
+            }
           }
         }
       });

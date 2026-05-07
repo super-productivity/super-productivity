@@ -152,8 +152,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     isExpandedAttachmentPanel: signal(!IS_MOBILE),
   };
 
-  setTaskDetailPanel = this._taskFocusService.taskDetailPanel.set(this);
-
   // Observable conversions
   private _task$ = toObservable(this.task);
 
@@ -444,6 +442,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   ngOnInit(): void {
     window.history.pushState({ [HISTORY_STATE.TASK_DETAIL_PANEL]: true }, '');
+    this._taskFocusService.taskDetailPanel.set(this);
   }
 
   ngAfterViewInit(): void {
@@ -472,6 +471,11 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       window.history.back();
     }
     window.clearTimeout(this._focusTimeout);
+    // Only clear the singleton if we still own it — another panel may have
+    // taken over (right-panel ↔ dialog ↔ bottom-panel can overlap briefly).
+    if (this._taskFocusService.taskDetailPanel() === this) {
+      this._taskFocusService.taskDetailPanel.set(null);
+    }
   }
 
   changeTaskNotes($event: string): void {

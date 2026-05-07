@@ -431,6 +431,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
           const taskDetailPanel = this._taskFocusService.taskDetailPanel();
           if (taskDetailPanel) {
             taskDetailPanel.focusTitleField();
+          } else {
+            // No detail panel mounted — fall back to inline-list edit.
+            this.focusTitleForEdit();
           }
         }
       });
