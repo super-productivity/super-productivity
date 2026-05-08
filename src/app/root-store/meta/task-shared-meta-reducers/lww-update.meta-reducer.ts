@@ -475,17 +475,6 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       }
     }
 
-    // Defense in depth (#7330): if a producer slipped through without
-    // backfilling payload.id, recover from meta.entityId — convertOpToAction
-    // always populates it from op.entityId, which is the canonical id.
-    if (!entityData['id']) {
-      const metaEntityId = (actionAny['meta'] as { entityId?: unknown } | undefined)
-        ?.entityId;
-      if (typeof metaEntityId === 'string' && metaEntityId.length > 0) {
-        entityData = { ...entityData, id: metaEntityId };
-      }
-    }
-
     // Filter orphaned taskIds/backlogTaskIds for TAG and PROJECT entities
     entityData = filterOrphanedTaskIdsFromEntityData(entityData, entityType, rootState);
 
@@ -514,6 +503,26 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       OpLog.warn(`lwwUpdateMetaReducer: Missing adapter for: ${entityType}`);
       devError(`lwwUpdateMetaReducer: Missing adapter for: ${entityType}`);
       return reducer(state, action);
+    }
+
+    // Defense in depth (#7330): if a producer slipped through without
+    // backfilling payload.id, recover from meta.entityId — convertOpToAction
+    // always populates it from op.entityId, the canonical id. Adapter-only:
+    // singletons use '*' as entityId and have no `id` field. Loud devError
+    // so a producer regression doesn't slip through silently.
+    if (!entityData['id']) {
+      const metaEntityId = (actionAny['meta'] as { entityId?: unknown } | undefined)
+        ?.entityId;
+      if (
+        typeof metaEntityId === 'string' &&
+        metaEntityId.length > 0 &&
+        metaEntityId !== '*'
+      ) {
+        devError(
+          `lwwUpdateMetaReducer: payload missing id, recovered from meta.entityId for ${entityType}`,
+        );
+        entityData = { ...entityData, id: metaEntityId };
+      }
     }
 
     if (!entityData['id']) {

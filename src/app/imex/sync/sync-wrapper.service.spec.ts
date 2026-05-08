@@ -692,6 +692,44 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
+    // #7521 follow-up: when re-upload retries exhaust AND validation failed
+    // during one of the retry passes, prefer ERROR over UNKNOWN_OR_CHANGED.
+    // Validation failure is a more serious signal than unuploaded ops.
+    it('should set ERROR (not UNKNOWN_OR_CHANGED) when retries exhaust AND validation failed during a retry', async () => {
+      // Initial upload returns 1 LWW op to enter the retry loop.
+      // Every retry returns localWinOpsCreated: 1 (so loop hits MAX retries),
+      // and one retry reports validationFailed: true.
+      const completed = (
+        validationFailed = false,
+      ): Awaited<ReturnType<typeof mockSyncService.uploadPendingOps>> => ({
+        kind: 'completed' as const,
+        uploadedCount: 1,
+        piggybackedOpsCount: 0,
+        localWinOpsCreated: 1,
+        permanentRejectionCount: 0,
+        hasMorePiggyback: false,
+        rejectedOps: [],
+        validationFailed,
+      });
+      // 1 initial + MAX_LWW_REUPLOAD_RETRIES retries; one of the retries flags validation.
+      mockSyncService.uploadPendingOps.and.returnValues(
+        Promise.resolve(completed()),
+        Promise.resolve(completed(true)),
+        ...Array.from({ length: MAX_LWW_REUPLOAD_RETRIES }, () =>
+          Promise.resolve(completed()),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
     it('should set ERROR and return HANDLED_ERROR when upload has rejected ops with "Payload too complex"', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({

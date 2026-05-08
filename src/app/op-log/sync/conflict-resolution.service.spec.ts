@@ -3621,5 +3621,25 @@ describe('ConflictResolutionService', () => {
       expect(result[0].payload.title).toBe('New title');
       expect(result[0].payload.projectId).toBe('proj-1');
     });
+
+    // Singletons (GLOBAL_CONFIG, app-state, time-tracking) use entityId='*'
+    // as a sentinel. Injecting `id: '*'` into the payload would pollute the
+    // singleton feature state — which has no `id` field — when the consumer
+    // reducer spreads entityData into the feature state.
+    it('should NOT inject id when entityId is the singleton sentinel "*"', () => {
+      const singletonState = { sync: { syncProvider: null }, misc: { foo: 'bar' } };
+      const op = service.createLWWUpdateOp(
+        'GLOBAL_CONFIG',
+        '*',
+        singletonState,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBeUndefined();
+      // Original payload shape preserved (no synthetic field injected).
+      expect(op.payload).toEqual(singletonState);
+    });
   });
 });

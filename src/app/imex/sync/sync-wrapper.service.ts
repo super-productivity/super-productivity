@@ -494,6 +494,17 @@ export class SyncWrapperService {
           `SyncWrapperService: LWW re-upload still has ${pendingLwwOps} pending ops after ` +
             `${MAX_LWW_REUPLOAD_RETRIES} retries. Will retry on next sync.`,
         );
+        // If validation also failed during a retry, prefer ERROR over the
+        // softer UNKNOWN_OR_CHANGED — validation failure is more serious
+        // than unuploaded ops, and the user already saw a "State validation
+        // failed" snackbar. (#7521)
+        if (reuploadValidationFailed) {
+          SyncLog.err(
+            'SyncWrapperService: Validation failed during LWW re-upload retries; reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+          return 'HANDLED_ERROR';
+        }
         // Don't claim IN_SYNC — there are known unuploaded ops.
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return SyncStatus.UpdateRemote;

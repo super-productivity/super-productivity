@@ -1124,6 +1124,34 @@ describe('lwwUpdateMetaReducer', () => {
       expect(globalConfig['misc']).toBeDefined();
     });
 
+    // Singletons use entityId='*' as a sentinel; the meta.entityId fallback
+    // (#7330) must NOT inject `id: '*'` into singleton state — singletons
+    // have no `id` field. (#7521 follow-up: caught by post-merge review.)
+    it('should NOT inject id from meta.entityId="*" into singleton state', () => {
+      const state = createMockStateWithSingletons();
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          entityId: '*',
+          isRemote: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as Record<string, unknown>;
+      // Singleton state should not have a synthetic `id` field.
+      expect(globalConfig['id']).toBeUndefined();
+      expect(globalConfig['misc']).toBeDefined();
+    });
+
     it('should strip type and meta from applied singleton state', () => {
       const state = createMockStateWithSingletons();
       const action = {

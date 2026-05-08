@@ -122,15 +122,18 @@ export class ConflictResolutionService {
     // by regex in lwwUpdateMetaReducer. This is by design - LWW ops are synthetic,
     // created during conflict resolution to carry the winning local state to remote clients.
 
-    // Always force payload.id to the canonical entityId. lwwUpdateMetaReducer
-    // bails with "Entity data has no id" when the payload lacks a top-level id;
-    // a malformed/partial entityState (e.g. NgRx selector returning a stripped
-    // shape) would silently lose the LWW write on remote clients. (#7330)
+    // Force payload.id to the canonical entityId for adapter entities.
+    // lwwUpdateMetaReducer bails with "Entity data has no id" when an adapter
+    // payload lacks a top-level id; a malformed/partial entityState (e.g. an
+    // NgRx selector returning a stripped shape) would silently lose the LWW
+    // write on remote clients. Singletons use the '*' sentinel for entityId
+    // and have no `id` field — injecting `id: '*'` would pollute the singleton
+    // feature state when the consumer reducer spreads entityData. (#7330)
     const basePayload =
       entityState && typeof entityState === 'object'
         ? (entityState as Record<string, unknown>)
         : {};
-    const payload = { ...basePayload, id: entityId };
+    const payload = entityId === '*' ? basePayload : { ...basePayload, id: entityId };
     return {
       id: uuidv7(),
       actionType: toLwwUpdateActionType(entityType),
@@ -893,14 +896,14 @@ export class ConflictResolutionService {
             remoteOp.payload,
             conflict.entityType,
           );
-          // Force top-level id from the canonical conflict.entityId — defensive
-          // against malformed DELETE payloads whose embedded entity lacks one.
-          // lwwUpdateMetaReducer bails on missing id. (#7330)
-          const mergedEntity = {
-            ...baseEntity,
-            ...updateChanges,
-            id: conflict.entityId,
-          };
+          // Force top-level id from the canonical conflict.entityId for
+          // adapter entities — defensive against malformed DELETE payloads
+          // whose embedded entity lacks one. Singletons use '*' as entityId
+          // and have no `id` field; don't inject one. (#7330)
+          const mergedEntity =
+            conflict.entityId === '*'
+              ? { ...baseEntity, ...updateChanges }
+              : { ...baseEntity, ...updateChanges, id: conflict.entityId };
           return {
             ...remoteOp,
             actionType: toLwwUpdateActionType(remoteOp.entityType),

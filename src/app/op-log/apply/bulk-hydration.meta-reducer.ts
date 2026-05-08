@@ -23,11 +23,14 @@ const collectCascadedSubTaskIds = (op: Operation, sink: Set<string>): void => {
   const payload = op.payload;
   if (!payload || typeof payload !== 'object') return;
   // op payloads use MultiEntityPayload format ({ actionPayload, entityChanges })
-  // for these action types; unwrap to the action body.
-  const inner =
-    'actionPayload' in (payload as Record<string, unknown>)
-      ? ((payload as Record<string, unknown>).actionPayload as Record<string, unknown>)
-      : (payload as Record<string, unknown>);
+  // for these action types; unwrap to the action body. Guard against a
+  // malformed `actionPayload: null` which would otherwise throw on the next
+  // property access. (#7521)
+  const p = payload as Record<string, unknown>;
+  const candidateInner =
+    'actionPayload' in p ? (p.actionPayload as unknown) : (p as unknown);
+  if (!candidateInner || typeof candidateInner !== 'object') return;
+  const inner = candidateInner as Record<string, unknown>;
 
   const harvestSubTasks = (taskLike: unknown): void => {
     if (!taskLike || typeof taskLike !== 'object') return;
