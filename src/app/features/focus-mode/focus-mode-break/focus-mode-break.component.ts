@@ -22,6 +22,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TaskTrackingInfoComponent } from '../task-tracking-info/task-tracking-info.component';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
+import { unsetCurrentTask } from '../../tasks/store/task.actions';
 
 @Component({
   selector: 'focus-mode-break',
@@ -95,11 +96,21 @@ export class FocusModeBreakComponent {
 
   resumeBreak(): void {
     if (this.isBreakOffer()) {
+      // Prefer the stored pausedTaskId for Flowtime break offers;
+      // fallback to the active current task only when no pausedTaskId exists.
+      const currentTaskId = this._taskService.currentTaskId();
+      const storePausedTaskId = this._pausedTaskId();
+      const pausedTaskId = storePausedTaskId || currentTaskId;
+      const config = this.focusModeService.focusModeConfig();
+      if (config?.isSyncSessionWithTracking && config?.isPauseTrackingDuringBreak) {
+        this._store.dispatch(unsetCurrentTask());
+      }
+
       this._store.dispatch(
         startBreak({
           duration: this.focusModeService.sessionDuration(),
           isLongBreak: this.focusModeService.isBreakLong(),
-          pausedTaskId: this._pausedTaskId(),
+          pausedTaskId,
         }),
       );
     } else {

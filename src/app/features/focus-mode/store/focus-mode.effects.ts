@@ -455,19 +455,21 @@ export class FocusModeEffects {
         if (timer.purpose !== 'work') return false;
         return true;
       }),
-      map(([action, mode, timer]) => {
+      switchMap(([action, mode, timer]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
         const breakInfo = strategy.getBreakDuration(timer.elapsed);
 
         if (!strategy.shouldStartBreakAfterSession || !breakInfo) {
-          return actions.completeFocusSession({ isManual: true });
+          return [actions.completeFocusSession({ isManual: true })];
         }
 
-        return actions.offerFlowtimeBreak({
-          duration: breakInfo.duration,
-          isLongBreak: breakInfo.isLong,
-          pausedTaskId: action.pausedTaskId,
-        });
+        return [
+          actions.offerFlowtimeBreak({
+            duration: breakInfo.duration,
+            isLongBreak: breakInfo.isLong,
+            pausedTaskId: action.pausedTaskId,
+          }),
+        ];
       }),
     ),
   );
@@ -688,7 +690,7 @@ export class FocusModeEffects {
   logFocusSession$ = createEffect(
     () =>
       this.actions$.pipe(
-        ofType(actions.completeFocusSession),
+        ofType(actions.completeFocusSession, actions.offerFlowtimeBreak),
         withLatestFrom(this.store.select(selectors.selectLastSessionDuration)),
         tap(([, duration]) => {
           if (duration > 0) {
@@ -1125,10 +1127,25 @@ export class FocusModeEffects {
   }
 
   /**
-   * Handles ending the current session manually
+   * Handles ending the current session manually.
+   * For Flowtime mode, dispatches endFlowtimeSession so that the break-offer
+   * effect can calculate and present a break — the same path as the main component.
+   * For all other modes, dispatches completeFocusSession as before.
    */
   private _handleEndSession(): void {
-    this.store.dispatch(actions.completeFocusSession({ isManual: true }));
+    this.store
+      .select(selectors.selectMode)
+      .pipe(take(1))
+      .subscribe((mode) => {
+        if (mode === FocusModeMode.Flowtime) {
+          const currentTaskId = this.taskService.currentTaskId();
+          this.store.dispatch(
+            actions.endFlowtimeSession({ pausedTaskId: currentTaskId }),
+          );
+        } else {
+          this.store.dispatch(actions.completeFocusSession({ isManual: true }));
+        }
+      });
   }
 
   /**

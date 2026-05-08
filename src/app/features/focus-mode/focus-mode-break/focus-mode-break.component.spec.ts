@@ -20,6 +20,8 @@ import { T } from '../../../t.const';
 import { of } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { FocusMainUIState, FocusModeMode } from '../focus-mode.model';
+import { FocusModeConfig } from '../../config/global-config.model';
+import { unsetCurrentTask } from '../../tasks/store/task.actions';
 
 describe('FocusModeBreakComponent', () => {
   let component: FocusModeBreakComponent;
@@ -34,6 +36,7 @@ describe('FocusModeBreakComponent', () => {
     mainState: Signal<FocusMainUIState>;
     mode: Signal<FocusModeMode>;
     sessionDuration: Signal<number>;
+    focusModeConfig: Signal<FocusModeConfig | undefined>;
   };
   let environmentInjector: EnvironmentInjector;
   const mockPausedTaskId = 'test-task-id';
@@ -55,6 +58,7 @@ describe('FocusModeBreakComponent', () => {
       mainState: signal(FocusMainUIState.InProgress),
       mode: signal(FocusModeMode.Pomodoro),
       sessionDuration: signal(300000),
+      focusModeConfig: signal(undefined),
     };
 
     TestBed.configureTestingModule({
@@ -157,6 +161,26 @@ describe('FocusModeBreakComponent', () => {
 
       component.resumeBreak();
 
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        startBreak({
+          duration: 300000,
+          isLongBreak: false,
+          pausedTaskId: mockPausedTaskId,
+        }),
+      );
+    });
+
+    it('should unset current task before starting break offer when pause-during-break is enabled', () => {
+      (mockFocusModeService.mainState as any).set(FocusMainUIState.BreakOffer);
+      (mockFocusModeService.isSessionRunning as any).set(false);
+      (mockFocusModeService.focusModeConfig as any).set({
+        isSyncSessionWithTracking: true,
+        isPauseTrackingDuringBreak: true,
+      });
+
+      component.resumeBreak();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(unsetCurrentTask());
       expect(mockStore.dispatch).toHaveBeenCalledWith(
         startBreak({
           duration: 300000,

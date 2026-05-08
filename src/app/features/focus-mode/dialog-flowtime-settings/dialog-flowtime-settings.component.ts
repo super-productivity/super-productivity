@@ -74,6 +74,10 @@ export class DialogFlowtimeSettingsComponent {
   form = new FormGroup({});
   model = signal<FlowtimeFormModel>({});
 
+  private readonly _minMaxDurationValidatorMessage = this._translateService.instant(
+    T.F.FOCUS_MODE.FLOWTIME_VALIDATION_MIN_MAX,
+  );
+
   readonly fields = computed(() => [
     {
       key: 'isBreakEnabled',
@@ -136,6 +140,16 @@ export class DialogFlowtimeSettingsComponent {
         },
       },
       fieldArray: {
+        validators: {
+          minMaxDuration: {
+            expression: (control: AbstractControl) => {
+              const min = control.get('minDuration')?.value;
+              const max = control.get('maxDuration')?.value;
+              return max === null || max === undefined || max === '' || max >= min;
+            },
+            message: this._minMaxDurationValidatorMessage,
+          },
+        },
         fieldGroup: [
           {
             key: 'minDuration',
@@ -154,19 +168,6 @@ export class DialogFlowtimeSettingsComponent {
               label: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULE_MAX,
               type: 'number',
               min: 1,
-              required: true,
-            },
-            validators: {
-              minMaxDuration: {
-                expression: (control: AbstractControl) => {
-                  const min = control.parent?.get('minDuration')?.value;
-                  const max = control.value;
-                  return max === null || max === undefined || max >= min;
-                },
-                message: this._translateService.instant(
-                  T.F.FOCUS_MODE.FLOWTIME_VALIDATION_MIN_MAX,
-                ),
-              },
             },
           },
           {
@@ -221,18 +222,20 @@ export class DialogFlowtimeSettingsComponent {
       isBreakEnabled: currentModel.isBreakEnabled,
       breakMode: currentModel.breakMode,
       breakPercentage: currentModel.breakPercentage,
-      breakRules: [...(currentModel.breakRules ?? [])]
+      breakRules: (currentModel.breakRules ?? [])
         .sort((a, b) => (a.minDuration ?? 0) - (b.minDuration ?? 0))
         .map((rule: FlowtimeBreakRuleInMinutes) => {
           const min = rule.minDuration ?? 0;
-          let max = rule.maxDuration;
-          if (max !== null && max !== undefined && max < min) {
+
+          let max = rule.maxDuration == null ? null : rule.maxDuration;
+
+          if (max !== null && max < min) {
             max = min;
           }
+
           return {
             minDuration: Math.round(min * 60000),
-            maxDuration:
-              max === null || max === undefined ? null : Math.round(max * 60000),
+            maxDuration: max === null ? null : Math.round(max * 60000),
             breakDuration: Math.round((rule.breakDuration ?? 0) * 60000),
           };
         }),

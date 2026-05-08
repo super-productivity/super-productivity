@@ -105,21 +105,65 @@ describe('DialogFlowtimeSettingsComponent', () => {
         globalConfigServiceMock.updateSection.calls.mostRecent().args[1];
       expect(savedConfig.breakRules[0].maxDuration).toBe(30 * 60000);
     });
+
+    it('should save empty maxDuration as null for open-ended rules', () => {
+      component.model.set({
+        ...component.model(),
+        breakRules: [{ minDuration: 90, maxDuration: null, breakDuration: 15 }],
+      });
+
+      component.save();
+      const savedConfig =
+        globalConfigServiceMock.updateSection.calls.mostRecent().args[1];
+      expect(savedConfig.breakRules[0]).toEqual({
+        minDuration: 90 * 60000,
+        maxDuration: null,
+        breakDuration: 15 * 60000,
+      });
+    });
   });
 
   describe('validator', () => {
-    it('should mark maxDuration invalid if maxDuration < minDuration', () => {
+    it('should mark rule row invalid if maxDuration < minDuration', () => {
       const breakRules = component.form.get('breakRules') as any;
       const firstRow = breakRules.at(0);
-      const maxDurationControl = firstRow.get('maxDuration');
 
       firstRow.get('minDuration').setValue(20);
-      maxDurationControl.setValue(10);
-      maxDurationControl.updateValueAndValidity();
+      firstRow.get('maxDuration').setValue(10);
+      firstRow.updateValueAndValidity();
       fixture.detectChanges();
 
-      expect(maxDurationControl.valid).toBe(false);
-      expect(maxDurationControl.hasError('minMaxDuration')).toBe(true);
+      expect(firstRow.valid).toBe(false);
+      expect(firstRow.hasError('minMaxDuration')).toBe(true);
+    });
+
+    it('should revalidate when only minDuration changes', () => {
+      const breakRules = component.form.get('breakRules') as any;
+      const firstRow = breakRules.at(0);
+
+      firstRow.get('minDuration').setValue(0);
+      firstRow.get('maxDuration').setValue(25);
+      firstRow.updateValueAndValidity();
+      expect(firstRow.valid).toBe(true);
+
+      firstRow.get('minDuration').setValue(30);
+      firstRow.updateValueAndValidity();
+      fixture.detectChanges();
+
+      expect(firstRow.valid).toBe(false);
+      expect(firstRow.hasError('minMaxDuration')).toBe(true);
+    });
+
+    it('should allow null maxDuration for open-ended rules', () => {
+      const breakRules = component.form.get('breakRules') as any;
+      const firstRow = breakRules.at(0);
+
+      firstRow.get('minDuration').setValue(90);
+      firstRow.get('maxDuration').setValue(null);
+      firstRow.updateValueAndValidity();
+      fixture.detectChanges();
+
+      expect(firstRow.valid).toBe(true);
     });
   });
 });

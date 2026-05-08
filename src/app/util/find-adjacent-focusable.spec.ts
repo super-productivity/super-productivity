@@ -5,6 +5,7 @@ describe('findAdjacentFocusable', () => {
 
   beforeEach(() => {
     root = document.createElement('div');
+    root.id = 'find-adjacent-focusable-root';
     document.body.appendChild(root);
   });
 
@@ -43,7 +44,8 @@ describe('findAdjacentFocusable', () => {
     };
   };
 
-  const SELECTOR = 'task, collapsible.is-group > .collapsible-header';
+  const SELECTOR =
+    '#find-adjacent-focusable-root task, #find-adjacent-focusable-root collapsible.is-group > .collapsible-header';
 
   it('returns next match when from is in the list', () => {
     const { taskA1, taskA2 } = setupTree();

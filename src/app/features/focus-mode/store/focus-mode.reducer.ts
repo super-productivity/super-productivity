@@ -192,6 +192,7 @@ export const focusModeReducer = createReducer(
       ...state,
       timer: { ...state.timer, isRunning: false },
       pausedTaskId: pausedTaskId ?? state.pausedTaskId,
+      lastCompletedDuration: state.timer.elapsed,
     };
   }),
 
