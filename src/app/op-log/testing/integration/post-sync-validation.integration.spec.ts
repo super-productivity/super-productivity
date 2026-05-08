@@ -81,76 +81,90 @@ describe('Post-sync validation latch (#7330) — integration', () => {
     remoteOps = TestBed.inject(RemoteOpsProcessingService);
     conflictResolution = TestBed.inject(ConflictResolutionService);
 
-    latch.reset();
+    latch._resetForTest();
   });
 
+  // Validation flows always run inside a session opened by SyncWrapperService /
+  // WsTriggeredDownloadService in production. Wrap each test body in
+  // withSession() so setFailed() doesn't trip the "outside an active session"
+  // guard and pollute output.
   describe('RemoteOpsProcessingService.validateAfterSync', () => {
     it('flips the latch when ValidateStateService reports failure', async () => {
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
-      expect(latch.hasFailed()).toBe(false);
+      await latch.withSession(async () => {
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
+        expect(latch.hasFailed()).toBe(false);
 
-      await remoteOps.validateAfterSync();
+        await remoteOps.validateAfterSync();
 
-      expect(latch.hasFailed()).toBe(true);
+        expect(latch.hasFailed()).toBe(true);
+      });
     });
 
     it('leaves the latch reset when validation succeeds', async () => {
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(true);
+      await latch.withSession(async () => {
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(true);
 
-      await remoteOps.validateAfterSync();
+        await remoteOps.validateAfterSync();
 
-      expect(latch.hasFailed()).toBe(false);
+        expect(latch.hasFailed()).toBe(false);
+      });
     });
 
     it('still flips the latch when callerHoldsLock is true (inside sp_op_log lock)', async () => {
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
+      await latch.withSession(async () => {
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
 
-      await remoteOps.validateAfterSync(true);
+        await remoteOps.validateAfterSync(true);
 
-      expect(latch.hasFailed()).toBe(true);
-      expect(validateStateSpy.validateAndRepairCurrentState).toHaveBeenCalledWith(
-        'sync',
-        { callerHoldsLock: true },
-      );
+        expect(latch.hasFailed()).toBe(true);
+        expect(validateStateSpy.validateAndRepairCurrentState).toHaveBeenCalledWith(
+          'sync',
+          { callerHoldsLock: true },
+        );
+      });
     });
 
     // Regression net for the sync wrapper's contract: if a future code path
     // calls validateAfterSync and discards the boolean, the latch is still
     // set — the wrapper will see it and refuse IN_SYNC.
     it('flips the latch even when the caller discards the boolean return', async () => {
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
+      await latch.withSession(async () => {
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
 
-      // Discard the return value (mirrors the post-#7330 callers).
-      void remoteOps.validateAfterSync();
-      await Promise.resolve();
+        // Discard the return value (mirrors the post-#7330 callers).
+        void remoteOps.validateAfterSync();
+        await Promise.resolve();
 
-      expect(latch.hasFailed()).toBe(true);
+        expect(latch.hasFailed()).toBe(true);
+      });
     });
   });
 
   describe('ConflictResolutionService validation path', () => {
     it('flips the latch when post-LWW validation fails', async () => {
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
-      expect(latch.hasFailed()).toBe(false);
+      await latch.withSession(async () => {
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
+        expect(latch.hasFailed()).toBe(false);
 
-      // autoResolveConflictsLWW with empty conflicts and ops short-circuits
-      // before validation. To exercise the validation path we call the
-      // private validation method via type-cast — no other public surface
-      // runs the conflict-resolution validation in isolation.
-      await (
-        conflictResolution as unknown as {
-          _validateAndRepairAfterResolution(): Promise<boolean>;
-        }
-      )._validateAndRepairAfterResolution();
+        // autoResolveConflictsLWW with empty conflicts and ops short-circuits
+        // before validation. To exercise the validation path we call the
+        // private validation method via type-cast — no other public surface
+        // runs the conflict-resolution validation in isolation.
+        await (
+          conflictResolution as unknown as {
+            _validateAndRepairAfterResolution(): Promise<boolean>;
+          }
+        )._validateAndRepairAfterResolution();
 
-      // Note: the private method itself doesn't flip the latch — that's
-      // done in autoResolveConflictsLWW after the call. Direct invocation
-      // here verifies the validator returned false; the latch flip is
-      // observed end-to-end via autoResolveConflictsLWW callers.
-      expect(validateStateSpy.validateAndRepairCurrentState).toHaveBeenCalledWith(
-        'conflict-resolution',
-        { callerHoldsLock: true },
-      );
+        // Note: the private method itself doesn't flip the latch — that's
+        // done in autoResolveConflictsLWW after the call. Direct invocation
+        // here verifies the validator returned false; the latch flip is
+        // observed end-to-end via autoResolveConflictsLWW callers.
+        expect(validateStateSpy.validateAndRepairCurrentState).toHaveBeenCalledWith(
+          'conflict-resolution',
+          { callerHoldsLock: true },
+        );
+      });
     });
   });
 
@@ -222,7 +236,7 @@ describe('Post-sync validation latch (#7330) — integration', () => {
 
       hydrationService = TestBed.inject(SyncHydrationService);
       hydrationLatch = TestBed.inject(SyncSessionValidationService);
-      hydrationLatch.reset();
+      hydrationLatch._resetForTest();
     });
 
     // Codex review found: hydrateFromRemoteSync runs validateAndRepair
@@ -230,62 +244,75 @@ describe('Post-sync validation latch (#7330) — integration', () => {
     // hydration (file-based providers, USE_REMOTE force-download) would
     // therefore silently accept corrupt remote state.
     it('flips the latch when validateAndRepair reports an unrepairable remote snapshot', async () => {
-      validateStateForHydrationSpy.validateAndRepair.and.resolveTo({
-        isValid: false,
-        wasRepaired: false,
-        error: 'simulated corruption',
-      } as never);
+      await hydrationLatch.withSession(async () => {
+        validateStateForHydrationSpy.validateAndRepair.and.resolveTo({
+          isValid: false,
+          wasRepaired: false,
+          error: 'simulated corruption',
+        } as never);
 
-      await hydrationService.hydrateFromRemoteSync(
-        { task: { ids: [], entities: {} } as never },
-        { clientRemote: 1 },
-        false,
-      );
+        await hydrationService.hydrateFromRemoteSync(
+          { task: { ids: [], entities: {} } as never },
+          { clientRemote: 1 },
+          false,
+        );
 
-      expect(hydrationLatch.hasFailed()).toBe(true);
+        expect(hydrationLatch.hasFailed()).toBe(true);
+      });
     });
 
     it('leaves the latch reset when validateAndRepair reports a clean snapshot', async () => {
-      validateStateForHydrationSpy.validateAndRepair.and.resolveTo({
-        isValid: true,
-        wasRepaired: false,
-      } as never);
+      await hydrationLatch.withSession(async () => {
+        validateStateForHydrationSpy.validateAndRepair.and.resolveTo({
+          isValid: true,
+          wasRepaired: false,
+        } as never);
 
-      await hydrationService.hydrateFromRemoteSync(
-        { task: { ids: [], entities: {} } as never },
-        { clientRemote: 1 },
-        false,
-      );
+        await hydrationService.hydrateFromRemoteSync(
+          { task: { ids: [], entities: {} } as never },
+          { clientRemote: 1 },
+          false,
+        );
 
-      expect(hydrationLatch.hasFailed()).toBe(false);
+        expect(hydrationLatch.hasFailed()).toBe(false);
+      });
     });
   });
 
   describe('latch session semantics', () => {
     it('multiple validateAfterSync calls within one session keep the latch flipped', async () => {
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
+      await latch.withSession(async () => {
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
 
-      await remoteOps.validateAfterSync();
-      expect(latch.hasFailed()).toBe(true);
+        await remoteOps.validateAfterSync();
+        expect(latch.hasFailed()).toBe(true);
 
-      // A subsequent successful validation in the same session does NOT
-      // un-flip the latch — once corruption is observed, the session is
-      // tainted until the wrapper resets at the next entry point.
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(true);
-      await remoteOps.validateAfterSync();
-      expect(latch.hasFailed()).toBe(true);
+        // A subsequent successful validation in the same session does NOT
+        // un-flip the latch — once corruption is observed, the session is
+        // tainted until the wrapper resets at the next entry point.
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(true);
+        await remoteOps.validateAfterSync();
+        expect(latch.hasFailed()).toBe(true);
+      });
     });
 
-    it('reset() between sessions clears the latch', async () => {
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
-      await remoteOps.validateAfterSync();
+    it('a fresh withSession() clears state from a prior session', async () => {
+      await latch.withSession(async () => {
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(false);
+        await remoteOps.validateAfterSync();
+        expect(latch.hasFailed()).toBe(true);
+      });
+      // Latch state persists between sessions until the next withSession() entry.
       expect(latch.hasFailed()).toBe(true);
 
-      latch.reset(); // wrapper would call this at the start of the next sync()
+      await latch.withSession(async () => {
+        // Session entry resets — validation site sees a clean latch.
+        expect(latch.hasFailed()).toBe(false);
 
-      validateStateSpy.validateAndRepairCurrentState.and.resolveTo(true);
-      await remoteOps.validateAfterSync();
-      expect(latch.hasFailed()).toBe(false);
+        validateStateSpy.validateAndRepairCurrentState.and.resolveTo(true);
+        await remoteOps.validateAfterSync();
+        expect(latch.hasFailed()).toBe(false);
+      });
     });
   });
 });

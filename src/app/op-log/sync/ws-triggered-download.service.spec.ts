@@ -207,7 +207,7 @@ describe('WsTriggeredDownloadService', () => {
       mockProviderManager.setSyncStatus = jasmine.createSpy('setSyncStatus');
     }
     const latch = TestBed.inject(SyncSessionValidationService);
-    latch.reset();
+    latch._resetForTest();
 
     service.start();
     notification$.next({ latestSeq: 1 });
@@ -217,19 +217,24 @@ describe('WsTriggeredDownloadService', () => {
     expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
   }));
 
-  // Defense against stale latch from a prior path: the WS service resets
-  // before its download runs, so the read at the end reflects only this
-  // session's outcome.
+  // Defense against stale latch from a prior path: the WS service opens its
+  // own session, which resets the latch up front so the read at the end
+  // reflects only this session's outcome.
   it('resets the latch before each WS download', fakeAsync(() => {
     const latch = TestBed.inject(SyncSessionValidationService);
-    latch.setFailed(); // simulate stale failure from a prior path
+    // Directly seed stale state via the test-only helper, mirroring "a
+    // prior session left the latch flipped." setFailed() outside a session
+    // would log a warning, which we don't want in test output.
+    latch._resetForTest();
+    (latch as unknown as { _failed: boolean })._failed = true;
 
     service.start();
     notification$.next({ latestSeq: 1 });
     tick(500);
     flushMicrotasks();
 
-    // After the reset and a clean download, the latch should be back to false.
+    // After withSession's entry-reset and a clean download, the latch
+    // should be back to false.
     expect(latch.hasFailed()).toBe(false);
   }));
 });

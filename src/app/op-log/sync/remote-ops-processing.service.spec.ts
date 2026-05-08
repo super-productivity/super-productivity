@@ -1321,8 +1321,10 @@ describe('RemoteOpsProcessingService', () => {
       validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(false);
 
       const latch = TestBed.inject(SyncSessionValidationService);
-      latch.reset();
-      await service.processRemoteOps(remoteOps);
+      latch._resetForTest();
+      await latch.withSession(async () => {
+        await service.processRemoteOps(remoteOps);
+      });
 
       expect(latch.hasFailed()).toBe(true);
     });
@@ -1350,8 +1352,10 @@ describe('RemoteOpsProcessingService', () => {
       validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(true);
 
       const latch = TestBed.inject(SyncSessionValidationService);
-      latch.reset();
-      await service.processRemoteOps(remoteOps);
+      latch._resetForTest();
+      await latch.withSession(async () => {
+        await service.processRemoteOps(remoteOps);
+      });
 
       expect(latch.hasFailed()).toBe(false);
     });

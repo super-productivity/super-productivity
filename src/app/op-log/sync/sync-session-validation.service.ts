@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { SyncLog } from '../../core/log';
 
 /**
  * Session-scoped latch that records whether post-sync state validation
@@ -8,6 +9,7 @@ import { Injectable } from '@angular/core';
  * - `SyncWrapperService.sync()`
  * - `SyncWrapperService._forceDownload()`
  * - `SyncWrapperService.resolveSyncConflict()` (USE_REMOTE branch)
+ * - `WsTriggeredDownloadService._downloadOps()`
  *
  * These entry points are serialised by the wrapper's global lock, so a
  * single mutable boolean is safe — there is never more than one session
@@ -28,24 +30,100 @@ import { Injectable } from '@angular/core';
  *
  * ## Contract
  *
- * - `reset()` must be called by every wrapper entry point before doing work.
- * - `setFailed()` is called by validation sites whenever
- *   `validateAndRepairCurrentState` returns `false`.
+ * - Every sync entry point wraps its work in `withSession()`. The wrapper
+ *   resets the latch up-front and clears the session marker on completion.
+ * - `setFailed()` is called by validation sites when state is corrupt.
+ *   Outside an active session it logs an error (programming-error guard) but
+ *   still flips the flag so we err on the side of surfacing the failure.
  * - `hasFailed()` is read by the wrapper before claiming IN_SYNC.
+ *
+ * ## Why `withSession` instead of `reset()` + `try/finally`?
+ *
+ * The previous API had a "remember to call reset() before doing work"
+ * contract enforced only by code review. A new entry point that forgot the
+ * reset would inherit a leaked-failed latch from a prior session. The
+ * callback form makes the session boundary unambiguous and self-clearing,
+ * and lets us assert "no nested sessions" — a re-entry that would silently
+ * clobber the outer session's state.
  */
 @Injectable({ providedIn: 'root' })
 export class SyncSessionValidationService {
   private _failed = false;
+  private _sessionActive = false;
 
-  reset(): void {
+  /**
+   * Run `work` inside a fresh validation session.
+   *
+   * Resets the latch at entry, marks a session as active for the duration,
+   * and clears the marker on completion (success or error). If a session is
+   * already active when called, logs an error and runs `work` in the outer
+   * session's context without resetting (treats the inner call as a no-op
+   * boundary so the outer's state isn't clobbered).
+   */
+  async withSession<T>(work: () => Promise<T>): Promise<T> {
+    if (this._sessionActive) {
+      SyncLog.err(
+        'SyncSessionValidationService: nested withSession() detected — this is a ' +
+          'programming error. Inner call will run in the outer session context.',
+      );
+      return await work();
+    }
+    this._sessionActive = true;
     this._failed = false;
+    try {
+      return await work();
+    } finally {
+      this._sessionActive = false;
+    }
   }
 
   setFailed(): void {
+    if (!this._sessionActive) {
+      // Programming error: validation fired without a sync entry point
+      // having opened a session. Still flip the flag so the failure isn't
+      // silently lost — the next session's reset will clear it cleanly.
+      SyncLog.err(
+        'SyncSessionValidationService: setFailed() called outside an active ' +
+          'session. A sync code path is calling validation without going through ' +
+          'a known entry point.',
+      );
+    }
     this._failed = true;
   }
 
   hasFailed(): boolean {
     return this._failed;
+  }
+
+  /**
+   * Clear the failed flag within an already-open session.
+   *
+   * The intended use is sub-scope re-scoping: a recovery branch within a
+   * sync session wants to ignore failures recorded earlier in the same
+   * session and start a fresh validation scope (e.g., USE_REMOTE conflict
+   * recovery in `SyncWrapperService._handleLocalDataConflict`).
+   *
+   * This is NOT a substitute for `withSession()` — top-level entry points
+   * MUST use `withSession()`. Calling `reset()` outside an active session
+   * still works but logs a warning, since that pattern shouldn't appear
+   * outside test setup.
+   */
+  reset(): void {
+    if (!this._sessionActive) {
+      SyncLog.err(
+        'SyncSessionValidationService: reset() called outside an active ' +
+          'session. Top-level sync entry points must use withSession() instead.',
+      );
+    }
+    this._failed = false;
+  }
+
+  /**
+   * @internal Test-only helper to clear state between unit tests that
+   * inject the singleton directly. Production code MUST use `withSession()`.
+   */
+  _resetForTest(): void {
+    this._failed = false;
+    this._sessionActive = false;
   }
 }

@@ -545,9 +545,11 @@ describe('OperationLogSyncService', () => {
 
           // Simulate the nested download triggering validation failure by
           // flipping the latch directly, which the real
-          // RemoteOpsProcessingService.validateAfterSync would do.
+          // RemoteOpsProcessingService.validateAfterSync would do. The flow
+          // runs inside a withSession() in production (opened by the wrapper);
+          // mirror that here so setFailed() doesn't trip the no-session guard.
           const latch = TestBed.inject(SyncSessionValidationService);
-          latch.reset();
+          latch._resetForTest();
           spyOn(service, 'downloadRemoteOps').and.callFake(async () => {
             latch.setFailed();
             return {
@@ -557,7 +559,9 @@ describe('OperationLogSyncService', () => {
             };
           });
 
-          await service.uploadPendingOps(mockProvider);
+          await latch.withSession(async () => {
+            await service.uploadPendingOps(mockProvider);
+          });
 
           // The latch is the canonical signal that reaches the wrapper. The
           // upload result no longer carries validationFailed — that field is

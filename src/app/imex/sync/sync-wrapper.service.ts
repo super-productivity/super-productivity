@@ -390,12 +390,16 @@ export class SyncWrapperService {
       throw new Error('No Sync Provider for sync()');
     }
 
-    // Reset the session-validation latch at the start of every sync. Any
-    // post-sync validation failure during this session (download, upload,
-    // piggyback, retry, USE_REMOTE force-download) flips the latch; the
-    // wrapper reads it once before claiming IN_SYNC. (#7330)
-    this._sessionValidation.reset();
+    // Open a session-validation scope for this sync. Any post-sync
+    // validation failure during the session (download, upload, piggyback,
+    // retry, USE_REMOTE force-download) flips the latch; the wrapper reads
+    // it once before claiming IN_SYNC. (#7330)
+    return this._sessionValidation.withSession(() => this._syncBody(providerId));
+  }
 
+  private async _syncBody(
+    providerId: SyncProviderId,
+  ): Promise<SyncStatus | 'HANDLED_ERROR'> {
     try {
       // PERF: For legacy sync providers (WebDAV, Dropbox, LocalFile), sync the vector clock
       // from SUP_OPS to pf.META_MODEL before sync. This bridges the gap between the new
@@ -844,41 +848,42 @@ export class SyncWrapperService {
   private async _forceDownload(): Promise<void> {
     SyncLog.log('SyncWrapperService: forceDownload called - downloading remote state');
 
-    await this.runWithSyncBlocked(async () => {
-      // Reset session-validation latch — read after forceDownloadRemoteState
-      // returns so a corrupt downloaded state is reported as ERROR. (#7330)
-      this._sessionValidation.reset();
-      try {
-        const rawProvider = this._providerManager.getActiveProvider();
-        const syncCapableProvider =
-          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
+    // Open a session-validation scope — read after forceDownloadRemoteState
+    // returns so a corrupt downloaded state is reported as ERROR. (#7330)
+    await this.runWithSyncBlocked(() =>
+      this._sessionValidation.withSession(async () => {
+        try {
+          const rawProvider = this._providerManager.getActiveProvider();
+          const syncCapableProvider =
+            await this._wrappedProvider.getOperationSyncCapable(rawProvider);
 
-        if (!syncCapableProvider) {
-          SyncLog.warn(
-            'SyncWrapperService: Cannot force download - provider not available',
-          );
-          return;
-        }
+          if (!syncCapableProvider) {
+            SyncLog.warn(
+              'SyncWrapperService: Cannot force download - provider not available',
+            );
+            return;
+          }
 
-        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-        if (this._sessionValidation.hasFailed()) {
-          SyncLog.err(
-            'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
-          );
-          this._providerManager.setSyncStatus('ERROR');
-        } else {
-          this._providerManager.setSyncStatus('IN_SYNC');
+          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+          if (this._sessionValidation.hasFailed()) {
+            SyncLog.err(
+              'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
+            );
+            this._providerManager.setSyncStatus('ERROR');
+          } else {
+            this._providerManager.setSyncStatus('IN_SYNC');
+          }
+          SyncLog.log('SyncWrapperService: Force download complete');
+        } catch (error) {
+          SyncLog.err('SyncWrapperService: Force download failed:', error);
+          const errStr = getSyncErrorStr(error);
+          this._snackService.open({
+            msg: errStr,
+            type: 'ERROR',
+          });
         }
-        SyncLog.log('SyncWrapperService: Force download complete');
-      } catch (error) {
-        SyncLog.err('SyncWrapperService: Force download failed:', error);
-        const errStr = getSyncErrorStr(error);
-        this._snackService.open({
-          msg: errStr,
-          type: 'ERROR',
-        });
-      }
-    });
+      }),
+    );
   }
 
   async configuredAuthForSyncProviderIfNecessary(
