@@ -17,6 +17,7 @@ import { download } from '../../util/download';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
 import { uuidv7 } from '../../util/uuid-v7';
 import { ActionType, Operation, OpType } from '../core/operation.types';
+import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { AppDataComplete } from '../model/model-config';
 import {
@@ -253,7 +254,7 @@ export class OperationLogMigrationService {
       actionType: ActionType.MIGRATION_GENESIS_IMPORT,
       opType: OpType.Batch,
       entityType: 'MIGRATION',
-      entityId: '*',
+      entityId: SINGLETON_ENTITY_ID,
       payload: dataToMigrate,
       clientId,
       vectorClock: meta.vectorClock || { [clientId]: 1 },

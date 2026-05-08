@@ -505,26 +505,11 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       return reducer(state, action);
     }
 
-    // Defense in depth (#7330): if a producer slipped through without
-    // backfilling payload.id, recover from meta.entityId — convertOpToAction
-    // always populates it from op.entityId, the canonical id. Adapter-only:
-    // singletons use '*' as entityId and have no `id` field. Loud devError
-    // so a producer regression doesn't slip through silently.
-    if (!entityData['id']) {
-      const metaEntityId = (actionAny['meta'] as { entityId?: unknown } | undefined)
-        ?.entityId;
-      if (
-        typeof metaEntityId === 'string' &&
-        metaEntityId.length > 0 &&
-        metaEntityId !== '*'
-      ) {
-        devError(
-          `lwwUpdateMetaReducer: payload missing id, recovered from meta.entityId for ${entityType}`,
-        );
-        entityData = { ...entityData, id: metaEntityId };
-      }
-    }
-
+    // Note (#7330): backfill of payload.id for adapter LWW Updates lives in
+    // convertOpToAction at the apply boundary — every applied op has its id
+    // set from op.entityId before reaching this reducer. Producers also
+    // force the canonical id on-disk. The check below remains as a hard
+    // guard for actions arriving with no usable id at all.
     if (!entityData['id']) {
       OpLog.warn('lwwUpdateMetaReducer: Entity data has no id');
       return reducer(state, action);

@@ -107,20 +107,34 @@ const stripBatchArchivedTaskIdsFromLwwPayload = (
 
   const stripIds = (
     key: string,
-  ): { cleaned: string[]; removed: string[] } | undefined => {
+  ): { cleaned: string[]; removed: unknown[] } | undefined => {
     const value = p[key];
     if (!Array.isArray(value)) return undefined;
+    // First pass: detect whether anything would change (archived ID or a
+    // non-string entry). Skips the cleaned[] allocation in the common case
+    // (TAG/PROJECT with thousands of taskIds, zero co-batched archives).
+    let needsRewrite = false;
+    for (const id of value) {
+      if (typeof id !== 'string' || archivingOrDeletingEntityIds.has(id)) {
+        needsRewrite = true;
+        break;
+      }
+    }
+    if (!needsRewrite) return undefined;
+    // Second pass: build the cleaned[] and removed[] arrays. Non-string
+    // entries are dropped (this helper is the canonical cleanup point;
+    // preserving type-violations would just push the problem downstream).
     const cleaned: string[] = [];
-    const removed: string[] = [];
+    const removed: unknown[] = [];
     for (const id of value) {
       if (typeof id !== 'string') {
-        cleaned.push(id);
+        removed.push(id);
         continue;
       }
       if (archivingOrDeletingEntityIds.has(id)) removed.push(id);
       else cleaned.push(id);
     }
-    return removed.length === 0 ? undefined : { cleaned, removed };
+    return { cleaned, removed };
   };
 
   const taskIdsResult = stripIds('taskIds');

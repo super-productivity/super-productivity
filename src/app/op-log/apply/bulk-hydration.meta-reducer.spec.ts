@@ -1037,6 +1037,41 @@ describe('bulkHydrationMetaReducer', () => {
       expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
     });
 
+    // The strip helper is the canonical cleanup point for taskIds — non-string
+    // entries (type violations from a malformed remote payload) must not be
+    // preserved verbatim into the consumer reducer.
+    it('drops non-string ids from a TAG LWW Update taskIds payload', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-malformed',
+        actionType: TAG_LWW_TYPE as ActionType,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, 123, null, TASK_ID_2, undefined],
+          color: '#000',
+          icon: null,
+        },
+      });
+      const archiveOp = createMoveToArchiveOp([TASK_ID]);
+
+      const operations = [tagLwwOp, archiveOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      // Only the live TASK_ID_2 string remains; archived TASK_ID stripped,
+      // non-string entries (123, null, undefined) dropped.
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+
     // deleteTask carries a single task with subTasks/subTaskIds. The reducer
     // cascades to subtasks, so subtask IDs must be stripped from co-batched
     // TAG/PROJECT LWW Update payloads.

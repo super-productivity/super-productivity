@@ -32,6 +32,7 @@ import {
   getPayloadKey,
   isAdapterEntity,
   isSingletonEntity,
+  isSingletonEntityId,
   isMapEntity,
   isArrayEntity,
 } from '../core/entity-registry';
@@ -133,7 +134,9 @@ export class ConflictResolutionService {
       entityState && typeof entityState === 'object'
         ? (entityState as Record<string, unknown>)
         : {};
-    const payload = entityId === '*' ? basePayload : { ...basePayload, id: entityId };
+    const payload = isSingletonEntityId(entityId)
+      ? basePayload
+      : { ...basePayload, id: entityId };
     return {
       id: uuidv7(),
       actionType: toLwwUpdateActionType(entityType),
@@ -900,10 +903,9 @@ export class ConflictResolutionService {
           // adapter entities — defensive against malformed DELETE payloads
           // whose embedded entity lacks one. Singletons use '*' as entityId
           // and have no `id` field; don't inject one. (#7330)
-          const mergedEntity =
-            conflict.entityId === '*'
-              ? { ...baseEntity, ...updateChanges }
-              : { ...baseEntity, ...updateChanges, id: conflict.entityId };
+          const mergedEntity = isSingletonEntityId(conflict.entityId)
+            ? { ...baseEntity, ...updateChanges }
+            : { ...baseEntity, ...updateChanges, id: conflict.entityId };
           return {
             ...remoteOp,
             actionType: toLwwUpdateActionType(remoteOp.entityType),

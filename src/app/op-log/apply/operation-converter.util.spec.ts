@@ -446,5 +446,60 @@ describe('operation-converter utility', () => {
         expect((action as any).subTasks[0].id).toBe('st1');
       });
     });
+
+    // Issue #7330: LWW Update apply path requires payload.id to be set so
+    // lwwUpdateMetaReducer can write the entity. Producers force this on the
+    // on-disk shape, but as a universal safety net the converter backfills
+    // payload.id from op.entityId for any LWW Update op missing it.
+    describe('LWW Update id backfill (#7330)', () => {
+      it('injects id from op.entityId into adapter LWW Update payloads when missing', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-789',
+          // payload lacks `id` (e.g. an op produced before the producer fixes,
+          // or via a path that didn't backfill).
+          payload: { title: 'Recovered' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).id).toBe('task-789');
+        expect((action as any).title).toBe('Recovered');
+      });
+
+      it('preserves an explicitly-set payload id', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-canonical',
+          payload: { id: 'task-explicit', title: 'Explicit' },
+        });
+        const action = convertOpToAction(op);
+
+        // Explicit id wins; converter only fills when missing.
+        expect((action as any).id).toBe('task-explicit');
+      });
+
+      it('does NOT inject id for singleton LWW Update (entityId === "*")', () => {
+        const op = createMockOperation({
+          actionType: '[GLOBAL_CONFIG] LWW Update' as ActionType,
+          entityId: '*',
+          payload: { theme: 'dark' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).id).toBeUndefined();
+        expect((action as any).theme).toBe('dark');
+      });
+
+      it('does NOT inject id for non-LWW action types', () => {
+        const op = createMockOperation({
+          actionType: '[Task] Update Task' as ActionType,
+          entityId: 'task-789',
+          payload: { title: 'No id here' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).id).toBeUndefined();
+      });
+    });
   });
 });

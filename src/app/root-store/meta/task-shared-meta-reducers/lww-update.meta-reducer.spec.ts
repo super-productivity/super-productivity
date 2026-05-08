@@ -497,39 +497,6 @@ describe('lwwUpdateMetaReducer', () => {
       expect(mockReducer).toHaveBeenCalledWith(state, action);
     });
 
-    // Defense in depth (#7330): convertOpToAction always populates
-    // action.meta.entityId from op.entityId. If a producer slips through
-    // without backfilling payload.id (regression), the reducer should still
-    // recover from meta.entityId rather than silently dropping the LWW Update.
-    it('should derive id from meta.entityId when payload lacks id (#7330)', () => {
-      const state = createMockState();
-      const action = {
-        type: '[TASK] LWW Update',
-        title: 'Recovered Title',
-        meta: {
-          isPersistent: true,
-          entityType: 'TASK',
-          entityId: TASK_ID,
-        },
-      };
-
-      spyOn(OpLog, 'warn');
-      reducer(state, action);
-
-      // Should NOT have bailed
-      expect(OpLog.warn).not.toHaveBeenCalledWith(
-        jasmine.stringMatching(/Entity data has no id/),
-      );
-      // Inner reducer should be called with the existing TASK_ID's entity
-      // updated to title "Recovered Title".
-      expect(mockReducer).toHaveBeenCalled();
-      const finalCall = mockReducer.calls.mostRecent();
-      const finalState = finalCall.args[0] as RootState;
-      expect(finalState[TASK_FEATURE_NAME].entities[TASK_ID]?.title).toBe(
-        'Recovered Title',
-      );
-    });
-
     // #7330 integration: drive the recreate path with the worst-case partial
     // payload shape that _convertToLWWUpdatesIfNeeded emits (just `{id}` plus
     // remote-changed fields), then run the resulting TaskState through the
@@ -1121,34 +1088,6 @@ describe('lwwUpdateMetaReducer', () => {
         unknown
       >;
       const globalConfig = updatedState[CONFIG_FEATURE_NAME] as Record<string, unknown>;
-      expect(globalConfig['misc']).toBeDefined();
-    });
-
-    // Singletons use entityId='*' as a sentinel; the meta.entityId fallback
-    // (#7330) must NOT inject `id: '*'` into singleton state — singletons
-    // have no `id` field. (#7521 follow-up: caught by post-merge review.)
-    it('should NOT inject id from meta.entityId="*" into singleton state', () => {
-      const state = createMockStateWithSingletons();
-      const action = {
-        type: '[GLOBAL_CONFIG] LWW Update',
-        misc: { isDisableAnimations: true },
-        meta: {
-          isPersistent: true,
-          entityType: 'GLOBAL_CONFIG',
-          entityId: '*',
-          isRemote: true,
-        },
-      };
-
-      reducer(state, action);
-
-      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
-        string,
-        unknown
-      >;
-      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as Record<string, unknown>;
-      // Singleton state should not have a synthetic `id` field.
-      expect(globalConfig['id']).toBeUndefined();
       expect(globalConfig['misc']).toBeDefined();
     });
 

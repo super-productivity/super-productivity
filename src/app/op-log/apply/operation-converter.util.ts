@@ -4,6 +4,8 @@ import {
   Operation,
   OpType,
 } from '../core/operation.types';
+import { isLwwUpdateActionType } from '../core/lww-update-action-types';
+import { isSingletonEntityId } from '../core/entity-registry';
 import { PersistentAction } from '../core/persistent-action.interface';
 
 /**
@@ -57,9 +59,27 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
   // Handle full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair) specially
   // These need their payload wrapped in appDataComplete for the loadAllData action
   const isFullStateOp = FULL_STATE_OP_TYPES.has(op.opType as OpType);
-  const actionPayload = isFullStateOp
+  let actionPayload: Record<string, unknown> = isFullStateOp
     ? extractFullStatePayload(op.payload)
-    : extractActionPayload(op.payload);
+    : (extractActionPayload(op.payload) as Record<string, unknown>);
+
+  // Backfill `payload.id` for LWW Update ops at the apply boundary. Producers
+  // also force this in their own creation paths (so the on-disk op shape is
+  // explicit), but doing it here means every applied LWW op has the id set —
+  // removing the need for downstream defense-in-depth and covering ops that
+  // pre-date the producer fixes. Singletons use `SINGLETON_ENTITY_ID` and
+  // have no `id` field. Issue #7330.
+  if (
+    !isFullStateOp &&
+    isLwwUpdateActionType(actionType) &&
+    op.entityId &&
+    !isSingletonEntityId(op.entityId) &&
+    actionPayload &&
+    typeof actionPayload === 'object' &&
+    !actionPayload['id']
+  ) {
+    actionPayload = { ...actionPayload, id: op.entityId };
+  }
 
   // IMPORTANT: Spread actionPayload FIRST, then set type, to prevent entity properties
   // named 'type' (like SimpleCounter.type = 'ClickCounter') from overwriting the action type.
