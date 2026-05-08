@@ -942,6 +942,7 @@
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the menu on the top left.",
         "DELETED": "Deleted Project",
         "UNARCHIVED": "Unarchived project",
+        "UNARCHIVED_BUT_HIDDEN": "Project unarchived, but still hidden from menu",
         "UPDATED": "Updated project settings"
       },
       "ARCHIVED_PROJECTS": {

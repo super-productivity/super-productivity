@@ -18,6 +18,7 @@ import { selectArchivedProjects } from '../../features/project/store/project.sel
 import { ProjectService } from '../../features/project/project.service';
 import { DEFAULT_PROJECT_ICON } from '../../features/project/project.const';
 import { T } from '../../t.const';
+import { SnackService } from '../../core/snack/snack.service';
 
 @Component({
   selector: 'archived-projects-page',
@@ -40,6 +41,7 @@ import { T } from '../../t.const';
 export class ArchivedProjectsPageComponent {
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
+  private readonly _snackService = inject(SnackService);
 
   readonly T = T;
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
@@ -61,6 +63,13 @@ export class ArchivedProjectsPageComponent {
   });
 
   unarchive(projectId: string): void {
+    const project = this.filteredProjects().find((p) => p.id === projectId);
     this._projectService.unarchive(projectId);
+    this._snackService.open({
+      ico: 'unarchive',
+      msg: project?.isHiddenFromMenu
+        ? T.F.PROJECT.S.UNARCHIVED_BUT_HIDDEN
+        : T.F.PROJECT.S.UNARCHIVED,
+    });
   }
 }
