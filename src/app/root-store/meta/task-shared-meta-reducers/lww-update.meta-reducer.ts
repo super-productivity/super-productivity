@@ -475,6 +475,17 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       }
     }
 
+    // Defense in depth (#7330): if a producer slipped through without
+    // backfilling payload.id, recover from meta.entityId — convertOpToAction
+    // always populates it from op.entityId, which is the canonical id.
+    if (!entityData['id']) {
+      const metaEntityId = (actionAny['meta'] as { entityId?: unknown } | undefined)
+        ?.entityId;
+      if (typeof metaEntityId === 'string' && metaEntityId.length > 0) {
+        entityData = { ...entityData, id: metaEntityId };
+      }
+    }
+
     // Filter orphaned taskIds/backlogTaskIds for TAG and PROJECT entities
     entityData = filterOrphanedTaskIdsFromEntityData(entityData, entityType, rootState);
 

@@ -1209,7 +1209,8 @@ describe('ConflictResolutionService', () => {
       it('should return { localWinOpsCreated: 0 } when no conflicts', async () => {
         const result = await service.autoResolveConflictsLWW([]);
 
-        expect(result).toEqual(jasmine.objectContaining({ localWinOpsCreated: 0 }));
+        // Early-exit path: no validation runs, validationFailed is absent.
+        expect(result).toEqual({ localWinOpsCreated: 0 });
       });
 
       it('should return { localWinOpsCreated: 0 } when only non-conflicting ops', async () => {
@@ -1224,7 +1225,7 @@ describe('ConflictResolutionService', () => {
 
         const result = await service.autoResolveConflictsLWW([], nonConflicting);
 
-        expect(result).toEqual(jasmine.objectContaining({ localWinOpsCreated: 0 }));
+        expect(result).toEqual({ localWinOpsCreated: 0, validationFailed: false });
       });
 
       it('should return { localWinOpsCreated: 0 } when remote wins all conflicts', async () => {
@@ -1243,7 +1244,7 @@ describe('ConflictResolutionService', () => {
 
         const result = await service.autoResolveConflictsLWW(conflicts);
 
-        expect(result).toEqual(jasmine.objectContaining({ localWinOpsCreated: 0 }));
+        expect(result).toEqual({ localWinOpsCreated: 0, validationFailed: false });
       });
 
       it('should return { localWinOpsCreated: 1 } when local wins one conflict', async () => {
@@ -1263,7 +1264,7 @@ describe('ConflictResolutionService', () => {
 
         const result = await service.autoResolveConflictsLWW(conflicts);
 
-        expect(result).toEqual(jasmine.objectContaining({ localWinOpsCreated: 1 }));
+        expect(result).toEqual({ localWinOpsCreated: 1, validationFailed: false });
       });
 
       it('should return correct count when multiple local wins', async () => {
@@ -1297,7 +1298,7 @@ describe('ConflictResolutionService', () => {
 
         const result = await service.autoResolveConflictsLWW(conflicts);
 
-        expect(result).toEqual(jasmine.objectContaining({ localWinOpsCreated: 2 }));
+        expect(result).toEqual({ localWinOpsCreated: 2, validationFailed: false });
       });
 
       it('should return correct count for mixed local/remote wins', async () => {
@@ -1352,7 +1353,7 @@ describe('ConflictResolutionService', () => {
         const result = await service.autoResolveConflictsLWW(conflicts);
 
         // Only 1 local win out of 3 conflicts
-        expect(result).toEqual(jasmine.objectContaining({ localWinOpsCreated: 1 }));
+        expect(result).toEqual({ localWinOpsCreated: 1, validationFailed: false });
       });
 
       it('should return 0 when local wins but entity not found', async () => {
@@ -1373,7 +1374,7 @@ describe('ConflictResolutionService', () => {
         const result = await service.autoResolveConflictsLWW(conflicts);
 
         // No op created because entity not found
-        expect(result).toEqual(jasmine.objectContaining({ localWinOpsCreated: 0 }));
+        expect(result).toEqual({ localWinOpsCreated: 0, validationFailed: false });
       });
     });
 

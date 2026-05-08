@@ -497,6 +497,39 @@ describe('lwwUpdateMetaReducer', () => {
       expect(mockReducer).toHaveBeenCalledWith(state, action);
     });
 
+    // Defense in depth (#7330): convertOpToAction always populates
+    // action.meta.entityId from op.entityId. If a producer slips through
+    // without backfilling payload.id (regression), the reducer should still
+    // recover from meta.entityId rather than silently dropping the LWW Update.
+    it('should derive id from meta.entityId when payload lacks id (#7330)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        title: 'Recovered Title',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+        },
+      };
+
+      spyOn(OpLog, 'warn');
+      reducer(state, action);
+
+      // Should NOT have bailed
+      expect(OpLog.warn).not.toHaveBeenCalledWith(
+        jasmine.stringMatching(/Entity data has no id/),
+      );
+      // Inner reducer should be called with the existing TASK_ID's entity
+      // updated to title "Recovered Title".
+      expect(mockReducer).toHaveBeenCalled();
+      const finalCall = mockReducer.calls.mostRecent();
+      const finalState = finalCall.args[0] as RootState;
+      expect(finalState[TASK_FEATURE_NAME].entities[TASK_ID]?.title).toBe(
+        'Recovered Title',
+      );
+    });
+
     // #7330 integration: drive the recreate path with the worst-case partial
     // payload shape that _convertToLWWUpdatesIfNeeded emits (just `{id}` plus
     // remote-changed fields), then run the resulting TaskState through the
