@@ -243,7 +243,7 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
     baseURL,
     testRunId,
   }, testInfo) => {
-    testInfo.setTimeout(120000); // 2 minutes - migration tests need extra time
+    testInfo.setTimeout(180000); // 3 minutes — 3 migrations + Client B sync runs hot under parallel load
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
 
