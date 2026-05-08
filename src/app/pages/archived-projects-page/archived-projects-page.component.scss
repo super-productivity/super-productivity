@@ -1,0 +1,43 @@
+.search-header {
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+
+  .search-field {
+    width: 100%;
+    max-width: 600px;
+  }
+}
+
+.empty-state {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider-color);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.project-icon {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.project-title {
+  flex: 1;
+  font-size: 16px;
+}

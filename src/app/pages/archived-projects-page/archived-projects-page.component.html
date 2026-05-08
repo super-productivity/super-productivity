@@ -1,0 +1,50 @@
+<div class="page-wrapper">
+  <div class="search-header">
+    <mat-form-field
+      appearance="outline"
+      class="search-field"
+    >
+      <mat-label>{{ T.F.PROJECT.ARCHIVED_PROJECTS.SEARCH | translate }}</mat-label>
+      <input
+        matInput
+        [(ngModel)]="searchTerm"
+        [placeholder]="T.F.PROJECT.ARCHIVED_PROJECTS.SEARCH | translate"
+      />
+      @if (searchTerm()) {
+        <button
+          mat-icon-button
+          matSuffix
+          (click)="searchTerm.set('')"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      }
+    </mat-form-field>
+  </div>
+
+  <section class="component-wrapper">
+    @if (filteredProjects().length === 0) {
+      <p class="empty-state">{{ T.F.PROJECT.ARCHIVED_PROJECTS.EMPTY | translate }}</p>
+    } @else {
+      <ul class="project-list">
+        @for (project of filteredProjects(); track project.id) {
+          <li class="project-row">
+            <mat-icon
+              class="project-icon"
+              [style.color]="project.theme?.primary || null"
+              >{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon
+            >
+            <span class="project-title">{{ project.title }}</span>
+            <button
+              mat-icon-button
+              [matTooltip]="T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE | translate"
+              (click)="unarchive(project.id)"
+            >
+              <mat-icon>unarchive</mat-icon>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>
