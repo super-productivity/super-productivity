@@ -36,6 +36,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { TagComponent } from '../../tag/tag/tag.component';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { parseProjectChanges } from '../short-syntax';
+import { MatTooltip } from '@angular/material/tooltip';
 
 @Component({
   selector: 'select-task',
@@ -56,6 +58,7 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
     TranslatePipe,
     IssueIconPipe,
     TagComponent,
+    MatTooltip,
   ],
 })
 export class SelectTaskComponent {
@@ -112,18 +115,25 @@ export class SelectTaskComponent {
   readonly filteredTasks = computed(() => {
     const taskOrTitle = this._taskOrTitle();
     if (typeof taskOrTitle === 'string') {
-      const searchTerm = taskOrTitle.trim().toLowerCase();
-      if (!searchTerm && !this.isShowSuggestionsWithoutSearch()) {
+      const projectParseResult = parseProjectChanges(
+        { title: taskOrTitle },
+        this._projects().filter(
+          (project) => !project.isArchived && !project.isHiddenFromMenu,
+        ),
+      );
+      const searchTerm = (projectParseResult.title ?? taskOrTitle).trim().toLowerCase();
+      const projectId = projectParseResult.projectId;
+
+      if (!searchTerm && !projectId && !this.isShowSuggestionsWithoutSearch()) {
         return [];
       }
 
-      if (!searchTerm) {
-        return this._tasks();
-      }
-
-      return this._tasks().filter((task) =>
-        task.title?.toLowerCase().includes(searchTerm),
-      );
+      return this._tasks().filter((task) => {
+        if (projectId && task.projectId !== projectId) {
+          return false;
+        }
+        return !searchTerm || task.title?.toLowerCase().includes(searchTerm);
+      });
     }
     return [];
   });

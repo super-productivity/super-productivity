@@ -6,12 +6,15 @@ import { TranslateModule } from '@ngx-translate/core';
 import { SelectTaskComponent } from './select-task.component';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { Task } from '../task.model';
+import { Project } from '../../project/project.model';
+import { selectAllProjects } from '../../project/store/project.selectors';
 
 describe('SelectTaskComponent', () => {
   let component: SelectTaskComponent;
   let fixture: ComponentFixture<SelectTaskComponent>;
   let mockStore: jasmine.SpyObj<Store>;
   let tasksSubject: BehaviorSubject<Task[]>;
+  let projectsSubject: BehaviorSubject<Project[]>;
 
   const validTask: Task = {
     id: 'task-1',
@@ -42,9 +45,12 @@ describe('SelectTaskComponent', () => {
 
   beforeEach(async () => {
     tasksSubject = new BehaviorSubject<Task[]>([validTask]);
+    projectsSubject = new BehaviorSubject<Project[]>([]);
 
     mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch']);
-    mockStore.select.and.returnValue(tasksSubject);
+    mockStore.select.and.callFake((selector) =>
+      selector === selectAllProjects ? projectsSubject : tasksSubject,
+    );
 
     const mockWorkContextService = jasmine.createSpyObj('WorkContextService', [], {
       startableTasksForActiveContext$: tasksSubject,
@@ -89,6 +95,42 @@ describe('SelectTaskComponent', () => {
       const result = component.filteredTasks();
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('task-1');
+    });
+
+    it('should filter tasks by project short syntax', () => {
+      projectsSubject.next([
+        { id: 'project-1', title: 'Work' } as Project,
+        { id: 'project-2', title: 'Home' } as Project,
+      ]);
+      tasksSubject.next([
+        { ...validTask, id: 'task-1', title: 'Write report', projectId: 'project-1' },
+        { ...validTask, id: 'task-2', title: 'Write report', projectId: 'project-2' },
+        { ...validTask, id: 'task-3', title: 'Call client', projectId: 'project-1' },
+      ]);
+
+      component.taskSelectCtrl.setValue('write +wor');
+      fixture.detectChanges();
+
+      const result = component.filteredTasks();
+      expect(result.map((task) => task.id)).toEqual(['task-1']);
+    });
+
+    it('should show all tasks for a project when only project short syntax is entered', () => {
+      projectsSubject.next([
+        { id: 'project-1', title: 'Work' } as Project,
+        { id: 'project-2', title: 'Home' } as Project,
+      ]);
+      tasksSubject.next([
+        { ...validTask, id: 'task-1', title: 'Write report', projectId: 'project-1' },
+        { ...validTask, id: 'task-2', title: 'Do laundry', projectId: 'project-2' },
+        { ...validTask, id: 'task-3', title: 'Call client', projectId: 'project-1' },
+      ]);
+
+      component.taskSelectCtrl.setValue('+work');
+      fixture.detectChanges();
+
+      const result = component.filteredTasks();
+      expect(result.map((task) => task.id)).toEqual(['task-1', 'task-3']);
     });
   });
 });
