@@ -78,6 +78,8 @@ export interface TaskRepeatCfgCopy {
   shouldInheritSubtasks?: boolean;
   // Base new start date on completion date
   repeatFromCompletionDate?: boolean;
+  // Only create next task after current one is completed (prevents pile-up of uncompleted recurring tasks)
+  waitForCompletion?: boolean;
   // new UX: disable auto update checkbox (auto-update is default)
   disableAutoUpdateSubtasks?: boolean;
   subTaskTemplates?: {
@@ -112,6 +114,7 @@ export const DEFAULT_TASK_REPEAT_CFG: Omit<TaskRepeatCfgCopy, 'id'> = {
   quickSetting: 'DAILY',
   repeatCycle: 'WEEKLY',
   repeatFromCompletionDate: false,
+  waitForCompletion: false,
   monday: true,
   tuesday: true,
   wednesday: true,
