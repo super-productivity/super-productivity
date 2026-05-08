@@ -57,6 +57,7 @@ import { PluginHttpService } from '../../plugins/issue-provider/plugin-http.serv
 import { selectEnabledIssueProviders } from '../issue/store/issue-provider.selectors';
 import { PluginSearchResult } from '../../plugins/issue-provider/plugin-issue-provider.model';
 import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
+import { passesCalendarEventRegexFilter } from './calendar-event-regex-filter';
 import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
@@ -179,14 +180,21 @@ export class CalendarIntegrationService {
             const cachedByProviderId = this._groupCachedEventsByProvider(
               this._getCalProviderFromCache(),
             );
+            const icalProviderMap = new Map(icalProviders.map((p) => [p.id, p]));
             return resultForProviders.map(
               ({ itemsForProvider, providerId, didError }) => {
                 const sourceItems: ScheduleFromCalendarEvent[] = didError
                   ? (cachedByProviderId.get(providerId) ?? [])
                   : (itemsForProvider as ScheduleFromCalendarEvent[]);
+                const providerCfg = icalProviderMap.get(providerId);
                 return {
                   items: sourceItems.filter(
                     (calEv) =>
+                      passesCalendarEventRegexFilter(
+                        calEv,
+                        providerCfg?.filterIncludeRegex,
+                        providerCfg?.filterExcludeRegex,
+                      ) &&
                       !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
                       !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
                       !matchesAnyCalendarEventId(calEv, hiddenEventIds),

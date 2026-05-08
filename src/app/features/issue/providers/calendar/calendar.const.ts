@@ -27,6 +27,8 @@ export const DEFAULT_CALENDAR_CFG: CalendarProviderCfg = {
   checkUpdatesEvery: 2 * 60 * 60000,
   showBannerBeforeThreshold: 2 * 60 * 60000,
   isDisabledForWebApp: false,
+  filterIncludeRegex: null,
+  filterExcludeRegex: null,
 };
 
 export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
@@ -108,6 +110,50 @@ export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
       key: 'isDisabledForWebApp',
       templateOptions: {
         label: T.GCF.CALENDARS.DISABLE_FOR_WEB_APP,
+      },
+    },
+    {
+      type: 'input',
+      key: 'filterIncludeRegex',
+      templateOptions: {
+        label: T.GCF.CALENDARS.FILTER_INCLUDE_REGEX,
+        description: T.GCF.CALENDARS.FILTER_INCLUDE_REGEX_DESCRIPTION,
+      },
+      validators: {
+        validRegex: {
+          expression: (c: { value: string | undefined | null }) => {
+            if (!c.value) return true;
+            try {
+              new RegExp(c.value);
+              return true;
+            } catch {
+              return false;
+            }
+          },
+          message: T.GCF.CALENDARS.INVALID_REGEX,
+        },
+      },
+    },
+    {
+      type: 'input',
+      key: 'filterExcludeRegex',
+      templateOptions: {
+        label: T.GCF.CALENDARS.FILTER_EXCLUDE_REGEX,
+        description: T.GCF.CALENDARS.FILTER_EXCLUDE_REGEX_DESCRIPTION,
+      },
+      validators: {
+        validRegex: {
+          expression: (c: { value: string | undefined | null }) => {
+            if (!c.value) return true;
+            try {
+              new RegExp(c.value);
+              return true;
+            } catch {
+              return false;
+            }
+          },
+          message: T.GCF.CALENDARS.INVALID_REGEX,
+        },
       },
     },
     ...ISSUE_PROVIDER_COMMON_FORM_FIELDS,

@@ -11,6 +11,8 @@ export interface CalendarProviderCfg extends BaseIssueProviderCfg {
   checkUpdatesEvery: number;
   showBannerBeforeThreshold: number | null | undefined;
   isDisabledForWebApp?: boolean;
+  filterIncludeRegex?: string | null;
+  filterExcludeRegex?: string | null;
 }
 
 export type LegacyCalendarProvider = Readonly<{

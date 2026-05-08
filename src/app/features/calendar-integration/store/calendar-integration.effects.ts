@@ -29,6 +29,7 @@ import {
   shareCalendarEventId,
 } from '../get-calendar-event-id-candidates';
 import { getEffectiveCheckInterval } from '../../issue/providers/calendar/calendar.const';
+import { passesCalendarEventRegexFilter } from '../calendar-event-regex-filter';
 
 const CHECK_TO_SHOW_INTERVAL = 60 * 1000;
 
@@ -93,6 +94,11 @@ export class CalendarIntegrationEffects {
                           );
                         allEventsToday.forEach((calEv) => {
                           if (
+                            passesCalendarEventRegexFilter(
+                              calEv,
+                              calProvider.filterIncludeRegex,
+                              calProvider.filterExcludeRegex,
+                            ) &&
                             this._dateService.isToday(calEv.start) &&
                             !matchesAnyCalendarEventId(calEv, allIssueIds)
                           ) {
@@ -111,12 +117,18 @@ export class CalendarIntegrationEffects {
 
                       const eventsToShowBannerFor = allEventsToday.filter(
                         (calEv) =>
+                          passesCalendarEventRegexFilter(
+                            calEv,
+                            calProvider.filterIncludeRegex,
+                            calProvider.filterExcludeRegex,
+                          ) &&
                           isCalenderEventDue(
                             calEv,
                             calProvider,
                             this._calendarIntegrationService.skippedEventIds$.getValue(),
                             now,
-                          ) && !calEv.isReferenceCalendar,
+                          ) &&
+                          !calEv.isReferenceCalendar,
                       );
                       eventsToShowBannerFor.forEach((calEv) => {
                         this._addEvToShow(calEv, calProvider);

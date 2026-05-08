@@ -2097,6 +2097,11 @@
       "CAL_PATH": "URL of the iCal source",
       "CHECK_UPDATES": "Check for remote updates every X",
       "DISABLE_FOR_WEB_APP": "Disable when using web application",
+      "FILTER_EXCLUDE_REGEX": "Exclude events matching regex (optional)",
+      "FILTER_EXCLUDE_REGEX_DESCRIPTION": "Events whose title matches this regular expression will be hidden. Applied after the include filter. Example: Lunch|Daily|Blocker",
+      "FILTER_INCLUDE_REGEX": "Include events matching regex (optional)",
+      "FILTER_INCLUDE_REGEX_DESCRIPTION": "Only events whose title matches this regular expression will be shown. Leave empty to include all events. Example: meeting|standup",
+      "INVALID_REGEX": "Invalid regular expression",
       "HELP": "You can integrate calendars to be reminded and add them as tasks within Super Productivity. The integration works by using the iCal format. For this to work your calendars need to be accessible either over the internet or via file system.",
       "REFERENCE_CALENDAR": "Reference calendar (display only, no task creation)",
       "SHOW_BANNER_THRESHOLD": "Show a notification X before the event (blank for disabled)"
