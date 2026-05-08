@@ -102,7 +102,7 @@ export class FocusModeBreakComponent {
       const storePausedTaskId = this._pausedTaskId();
       const pausedTaskId = storePausedTaskId || currentTaskId;
       const config = this.focusModeService.focusModeConfig();
-      if (config?.isSyncSessionWithTracking && config?.isPauseTrackingDuringBreak) {
+      if (config?.isPauseTrackingDuringBreak) {
         this._store.dispatch(unsetCurrentTask());
       }
 

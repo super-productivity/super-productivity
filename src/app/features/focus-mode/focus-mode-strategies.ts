@@ -84,11 +84,11 @@ export class FlowtimeStrategy implements FocusModeStrategy {
         return null;
       }
       // Rule-based: find matching rule
-      // Note: ranges are inclusive on both ends; first match wins, sorted by minDuration.
+      // Use half-open ranges for adjacent rules to avoid boundary overlap.
       const matchingRule = config.breakRules.find(
         (rule) =>
           elapsedMs >= rule.minDuration &&
-          (rule.maxDuration === null || elapsedMs <= rule.maxDuration),
+          (rule.maxDuration === null || elapsedMs < rule.maxDuration),
       );
       if (!matchingRule) {
         return null;

@@ -252,6 +252,26 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(true);
     });
 
+    it('should not unpause a BreakOffer state', () => {
+      const pausedBreakOfferState = {
+        ...initialState,
+        timer: {
+          isRunning: false,
+          startedAt: null,
+          elapsed: 0,
+          duration: 300000,
+          purpose: 'break' as const,
+        },
+        mainState: FocusMainUIState.BreakOffer,
+        currentScreen: FocusScreen.Break,
+      };
+
+      const action = a.unPauseFocusSession();
+      const result = focusModeReducer(pausedBreakOfferState, action);
+
+      expect(result).toBe(pausedBreakOfferState);
+    });
+
     it('should not unpause sessions with no purpose (idle)', () => {
       const idleState = {
         ...initialState,

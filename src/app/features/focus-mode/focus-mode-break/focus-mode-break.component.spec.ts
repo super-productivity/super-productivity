@@ -174,7 +174,6 @@ describe('FocusModeBreakComponent', () => {
       (mockFocusModeService.mainState as any).set(FocusMainUIState.BreakOffer);
       (mockFocusModeService.isSessionRunning as any).set(false);
       (mockFocusModeService.focusModeConfig as any).set({
-        isSyncSessionWithTracking: true,
         isPauseTrackingDuringBreak: true,
       });
 

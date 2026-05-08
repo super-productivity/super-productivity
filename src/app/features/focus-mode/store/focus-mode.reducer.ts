@@ -138,6 +138,7 @@ export const focusModeReducer = createReducer(
   on(a.unPauseFocusSession, (state) => {
     // Allow resuming both work sessions and breaks
     if (state.timer.purpose === null) return state;
+    if (state.mainState === FocusMainUIState.BreakOffer) return state;
 
     return {
       ...state,
