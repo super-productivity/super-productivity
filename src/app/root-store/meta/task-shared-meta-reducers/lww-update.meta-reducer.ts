@@ -24,6 +24,7 @@ import { Task } from '../../../features/tasks/task.model';
 import { INBOX_PROJECT } from '../../../features/project/project.const';
 import { RECREATE_FALLBACK } from '../../../op-log/core/recreate-fallback.const';
 import { OpLog } from '../../../core/log';
+import { filterTaskIdArraysFromTagOrProjectPayload } from '../../../op-log/apply/bulk-archive-filter.util';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
@@ -361,51 +362,31 @@ const syncParentSubTaskIds = (
  *
  * This is necessary because LWW conflict resolution replaces entire entities
  * without checking whether referenced tasks still exist locally.
+ *
+ * Wraps the shared `filterTaskIdArraysFromTagOrProjectPayload` helper. The
+ * sibling filter for in-batch archives is `stripBatchArchivedTaskIdsFromLwwPayload`
+ * in op-log/apply/bulk-archive-filter.util.ts — the two run at different
+ * layers because their predicates resolve at different times.
  */
 const filterOrphanedTaskIdsFromEntityData = (
   entityData: Record<string, unknown>,
   entityType: string,
   rootState: RootState,
 ): Record<string, unknown> => {
-  if (entityType !== 'TAG' && entityType !== 'PROJECT') {
-    return entityData;
-  }
-
   const taskState = rootState[TASK_FEATURE_NAME];
-  if (!taskState) {
-    return entityData;
-  }
+  if (!taskState) return entityData;
   const existingTaskIds = new Set(taskState.ids as string[]);
-
-  let filtered = entityData;
-
-  if (Array.isArray(entityData['taskIds'])) {
-    const original = entityData['taskIds'] as string[];
-    const cleaned = original.filter((id) => existingTaskIds.has(id));
-    if (cleaned.length !== original.length) {
-      const removed = original.filter((id) => !existingTaskIds.has(id));
-      OpLog.warn(
-        `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
-        { entityId: entityData['id'], removed },
-      );
-      filtered = { ...filtered, taskIds: cleaned };
-    }
-  }
-
-  if (entityType === 'PROJECT' && Array.isArray(entityData['backlogTaskIds'])) {
-    const original = entityData['backlogTaskIds'] as string[];
-    const cleaned = original.filter((id) => existingTaskIds.has(id));
-    if (cleaned.length !== original.length) {
-      const removed = original.filter((id) => !existingTaskIds.has(id));
-      OpLog.warn(
-        `lwwUpdateMetaReducer: Filtered orphaned backlogTaskIds from PROJECT LWW Update`,
-        { entityId: entityData['id'], removed },
-      );
-      filtered = { ...filtered, backlogTaskIds: cleaned };
-    }
-  }
-
-  return filtered;
+  const cleaned = filterTaskIdArraysFromTagOrProjectPayload(
+    entityData,
+    entityType,
+    (id) => !existingTaskIds.has(id),
+    {
+      warnMessage: `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
+      entityId:
+        typeof entityData['id'] === 'string' ? (entityData['id'] as string) : undefined,
+    },
+  );
+  return cleaned ?? entityData;
 };
 
 /**

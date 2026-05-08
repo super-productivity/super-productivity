@@ -149,6 +149,13 @@ export interface DownloadResultForRejection {
   newOpsCount: number;
   allOpClocks?: VectorClock[];
   snapshotVectorClock?: VectorClock;
+  /**
+   * True when the underlying download ran post-sync validation and the
+   * validation failed. Propagated through `RejectionHandlingResult` to
+   * `OperationLogSyncService.uploadPendingOps` so the wrapper can refuse
+   * IN_SYNC. Replaces a closure-smuggled boolean. Issue #7330.
+   */
+  validationFailed?: boolean;
 }
 
 /**

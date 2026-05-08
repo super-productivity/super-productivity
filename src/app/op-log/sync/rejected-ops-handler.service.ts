@@ -25,6 +25,11 @@ export interface RejectionHandlingResult {
   mergedOpsCreated: number;
   /** Number of operations that were permanently rejected (validation errors, etc.) */
   permanentRejectionCount: number;
+  /**
+   * True when a nested download triggered by concurrent-modification resolution
+   * ran post-sync validation and the validation failed. Issue #7330.
+   */
+  validationFailed?: boolean;
 }
 
 /**
@@ -187,6 +192,7 @@ export class RejectedOpsHandlerService {
 
     // For concurrent modifications: try download first, then resolve locally if needed
     let retryExceededCount = 0;
+    let validationFailed = false;
     if (concurrentModificationOps.length > 0 && downloadCallback) {
       const result = await this._resolveConcurrentModifications(
         concurrentModificationOps,
@@ -194,11 +200,13 @@ export class RejectedOpsHandlerService {
       );
       mergedOpsCreated = result.mergedOpsCreated;
       retryExceededCount = result.retryExceededCount;
+      validationFailed = result.validationFailed;
     }
 
     return {
       mergedOpsCreated,
       permanentRejectionCount: permanentlyRejectedOps.length + retryExceededCount,
+      validationFailed,
     };
   }
 
@@ -212,8 +220,13 @@ export class RejectedOpsHandlerService {
       existingClock?: VectorClock;
     }>,
     downloadCallback: DownloadCallback,
-  ): Promise<{ mergedOpsCreated: number; retryExceededCount: number }> {
+  ): Promise<{
+    mergedOpsCreated: number;
+    retryExceededCount: number;
+    validationFailed: boolean;
+  }> {
     let mergedOpsCreated = 0;
+    let validationFailed = false;
 
     // Check resolution attempt counts per entity to prevent infinite loops.
     // When vector clock pruning makes it impossible to create a dominating clock,
@@ -272,7 +285,11 @@ export class RejectedOpsHandlerService {
     }
 
     if (opsToResolve.length === 0) {
-      return { mergedOpsCreated: 0, retryExceededCount: opsExceededRetries.length };
+      return {
+        mergedOpsCreated: 0,
+        retryExceededCount: opsExceededRetries.length,
+        validationFailed: false,
+      };
     }
 
     OpLog.normal(
@@ -283,6 +300,7 @@ export class RejectedOpsHandlerService {
     try {
       // Try to download new remote ops - if there are any, conflict detection will handle them
       const downloadResult = await downloadCallback();
+      if (downloadResult.validationFailed) validationFailed = true;
 
       // Helper to check which ops are still pending, preserving existingClock from rejection
       const getStillPendingOps = async (): Promise<
@@ -326,6 +344,7 @@ export class RejectedOpsHandlerService {
           );
 
           const forceDownloadResult = await downloadCallback({ forceFromSeq0: true });
+          if (forceDownloadResult.validationFailed) validationFailed = true;
 
           // Use the clocks from force download to resolve superseded ops
           // Also merge in entity clocks from server rejection responses
@@ -418,7 +437,11 @@ export class RejectedOpsHandlerService {
       throw e;
     }
 
-    return { mergedOpsCreated, retryExceededCount: opsExceededRetries.length };
+    return {
+      mergedOpsCreated,
+      retryExceededCount: opsExceededRetries.length,
+      validationFailed,
+    };
   }
 
   private _getEntityKey(op: Operation): string {

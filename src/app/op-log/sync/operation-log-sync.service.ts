@@ -286,6 +286,7 @@ export class OperationLogSyncService {
     let rejectionResult: RejectionHandlingResult = {
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
+      validationFailed: false,
     };
 
     if (result.piggybackedOps.length > 0) {
@@ -365,22 +366,21 @@ export class OperationLogSyncService {
       forceFromSeq0?: boolean;
     }): Promise<DownloadResultForRejection> => {
       const outcome = await this.downloadRemoteOps(syncProvider, downloadOptions);
-      // A nested download here can itself run post-sync validation via
-      // processRemoteOps → validateAfterSync. The DownloadResultForRejection
-      // shape doesn't carry the boolean back to the rejected-op handler, so
-      // route it via the outer `piggybackValidationFailed` flag — that is
-      // what eventually surfaces in our return below. (#7330)
-      if (outcome.kind === 'ops_processed' && outcome.validationFailed) {
-        piggybackValidationFailed = true;
-      }
       switch (outcome.kind) {
         case 'ops_processed':
           return {
             newOpsCount: outcome.newOpsCount,
             allOpClocks: outcome.allOpClocks,
             snapshotVectorClock: outcome.snapshotVectorClock,
+            validationFailed: outcome.validationFailed,
           };
         case 'no_new_ops':
+          return {
+            newOpsCount: 0,
+            allOpClocks: outcome.allOpClocks,
+            snapshotVectorClock: outcome.snapshotVectorClock,
+            validationFailed: outcome.validationFailed,
+          };
         case 'snapshot_hydrated':
           return {
             newOpsCount: 0,
@@ -424,7 +424,8 @@ export class OperationLogSyncService {
       permanentRejectionCount: rejectionResult.permanentRejectionCount,
       hasMorePiggyback: result.hasMorePiggyback ?? false,
       rejectedOps: result.rejectedOps,
-      validationFailed: piggybackValidationFailed,
+      validationFailed:
+        piggybackValidationFailed || rejectionResult.validationFailed === true,
     };
   }
 

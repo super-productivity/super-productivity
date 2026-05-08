@@ -446,7 +446,11 @@ describe('RejectedOpsHandlerService', () => {
           [remoteClock],
           { snapshot: 1 },
         );
-        expect(result).toEqual({ mergedOpsCreated: 1, permanentRejectionCount: 0 });
+        expect(result).toEqual({
+          mergedOpsCreated: 1,
+          permanentRejectionCount: 0,
+          validationFailed: false,
+        });
       });
 
       it('should pass existingClock from rejection to superseded resolver (FIX: encryption conflict loop)', async () => {

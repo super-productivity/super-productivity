@@ -534,8 +534,14 @@ describe('OperationLogSyncService', () => {
 
           rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
             async (_ops, callback) => {
-              await callback?.();
-              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+              // Mirror what the real handler does: invoke the callback,
+              // observe its validationFailed, propagate to result.
+              const downloadResult = await callback?.();
+              return {
+                mergedOpsCreated: 0,
+                permanentRejectionCount: 0,
+                validationFailed: downloadResult?.validationFailed === true,
+              };
             },
           );
 
