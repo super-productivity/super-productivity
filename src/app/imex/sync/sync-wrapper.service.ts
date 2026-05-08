@@ -73,6 +73,7 @@ import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-downl
 import { IS_ELECTRON } from '../../app.constants';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
+import { SyncSessionValidationService } from '../../op-log/sync/sync-session-validation.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
@@ -109,6 +110,7 @@ export class SyncWrapperService {
   private _wsDownloadService = inject(WsTriggeredDownloadService);
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
+  private _sessionValidation = inject(SyncSessionValidationService);
   private _wrappedProvider = inject(WrappedProviderService);
   private _hydrationState = inject(HydrationStateService);
 
@@ -388,6 +390,12 @@ export class SyncWrapperService {
       throw new Error('No Sync Provider for sync()');
     }
 
+    // Reset the session-validation latch at the start of every sync. Any
+    // post-sync validation failure during this session (download, upload,
+    // piggyback, retry, USE_REMOTE force-download) flips the latch; the
+    // wrapper reads it once before claiming IN_SYNC. (#7330)
+    this._sessionValidation.reset();
+
     try {
       // PERF: For legacy sync providers (WebDAV, Dropbox, LocalFile), sync the vector clock
       // from SUP_OPS to pf.META_MODEL before sync. This bridges the gap between the new
@@ -464,23 +472,6 @@ export class SyncWrapperService {
         return 'HANDLED_ERROR';
       }
 
-      // Issue #7330: post-sync state validation failure must not be reported
-      // as IN_SYNC. Previously the validation result was discarded; the user
-      // saw a "State validation failed" snackbar yet the indicator still said
-      // IN_SYNC, masking real corruption.
-      //
-      // Hoisted above the LWW retry loop so the failure is recognised even
-      // when retries also exhaust (otherwise the retry-exhaustion branch
-      // below would return UNKNOWN_OR_CHANGED, masking validation failure).
-      // `no_new_ops` carries `validationFailed` in the USE_REMOTE conflict
-      // path (forceDownloadRemoteState).
-      const downloadValidationFailed =
-        (downloadResult.kind === 'ops_processed' ||
-          downloadResult.kind === 'no_new_ops') &&
-        downloadResult.validationFailed === true;
-      const uploadValidationFailed =
-        uploadResult.kind === 'completed' && uploadResult.validationFailed === true;
-
       // 3. If LWW created local-win ops, upload them (with retry limit to prevent infinite loops)
       const downloadLwwOps =
         downloadResult.kind === 'ops_processed' ? downloadResult.localWinOpsCreated : 0;
@@ -488,10 +479,6 @@ export class SyncWrapperService {
         uploadResult.kind === 'completed' ? uploadResult.localWinOpsCreated : 0;
       let lwwRetries = 0;
       let pendingLwwOps = downloadLwwOps + uploadLwwOps;
-      // Retry-pass piggybacked downloads can themselves trigger validation;
-      // discarding the boolean would re-introduce the original IN_SYNC bug
-      // for the retry path. (#7330)
-      let reuploadValidationFailed = false;
       while (pendingLwwOps > 0 && lwwRetries < MAX_LWW_REUPLOAD_RETRIES) {
         lwwRetries++;
         SyncLog.log(
@@ -502,31 +489,18 @@ export class SyncWrapperService {
           await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
         pendingLwwOps =
           reuploadResult.kind === 'completed' ? reuploadResult.localWinOpsCreated : 0;
-        if (reuploadResult.kind === 'completed' && reuploadResult.validationFailed) {
-          reuploadValidationFailed = true;
-        }
       }
       if (pendingLwwOps > 0) {
         SyncLog.warn(
           `SyncWrapperService: LWW re-upload still has ${pendingLwwOps} pending ops after ` +
             `${MAX_LWW_REUPLOAD_RETRIES} retries. Will retry on next sync.`,
         );
-        // If validation failed at any point (initial download, initial upload,
-        // or retry), prefer ERROR over the softer UNKNOWN_OR_CHANGED —
-        // validation failure is more serious than unuploaded ops, and the
-        // user already saw a "State validation failed" snackbar. (#7521)
-        if (
-          downloadValidationFailed ||
-          uploadValidationFailed ||
-          reuploadValidationFailed
-        ) {
+        // Issue #7521: validation failure is more serious than unuploaded
+        // ops — prefer ERROR over UNKNOWN_OR_CHANGED if the latch was
+        // flipped at any point during the session.
+        if (this._sessionValidation.hasFailed()) {
           SyncLog.err(
             'SyncWrapperService: Validation failed during sync (retry exhaustion path); reporting ERROR',
-            {
-              downloadValidationFailed,
-              uploadValidationFailed,
-              reuploadValidationFailed,
-            },
           );
           this._providerManager.setSyncStatus('ERROR');
           return 'HANDLED_ERROR';
@@ -536,18 +510,12 @@ export class SyncWrapperService {
         return SyncStatus.UpdateRemote;
       }
 
-      if (
-        downloadValidationFailed ||
-        uploadValidationFailed ||
-        reuploadValidationFailed
-      ) {
+      // Issue #7330: post-sync state validation failure must not be reported
+      // as IN_SYNC. The latch is flipped by every validation site; we read it
+      // once here before claiming IN_SYNC.
+      if (this._sessionValidation.hasFailed()) {
         SyncLog.err(
           'SyncWrapperService: Post-sync state validation failed, not marking as IN_SYNC',
-          {
-            downloadValidationFailed,
-            uploadValidationFailed,
-            reuploadValidationFailed,
-          },
         );
         this._providerManager.setSyncStatus('ERROR');
         return 'HANDLED_ERROR';
@@ -877,6 +845,9 @@ export class SyncWrapperService {
     SyncLog.log('SyncWrapperService: forceDownload called - downloading remote state');
 
     await this.runWithSyncBlocked(async () => {
+      // Reset session-validation latch — read after forceDownloadRemoteState
+      // returns so a corrupt downloaded state is reported as ERROR. (#7330)
+      this._sessionValidation.reset();
       try {
         const rawProvider = this._providerManager.getActiveProvider();
         const syncCapableProvider =
@@ -889,9 +860,8 @@ export class SyncWrapperService {
           return;
         }
 
-        const downloadResult =
-          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-        if (downloadResult.validationFailed) {
+        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        if (this._sessionValidation.hasFailed()) {
           SyncLog.err(
             'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
           );
@@ -1209,13 +1179,14 @@ export class SyncWrapperService {
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else if (resolution === 'USE_REMOTE') {
-        // User chose to discard local data and download remote
+        // User chose to discard local data and download remote.
+        // Reset latch — read after forceDownloadRemoteState returns. (#7330)
         SyncLog.log(
           'SyncWrapperService: User chose USE_REMOTE - downloading remote state, discarding local',
         );
-        const downloadResult =
-          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-        if (downloadResult.validationFailed) {
+        this._sessionValidation.reset();
+        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        if (this._sessionValidation.hasFailed()) {
           SyncLog.err(
             'SyncWrapperService: USE_REMOTE applied but post-sync validation failed; reporting ERROR',
           );

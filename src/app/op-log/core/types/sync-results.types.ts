@@ -144,18 +144,15 @@ export interface UploadOptions {
 
 /**
  * Result from a download operation, used for concurrent modification resolution.
+ *
+ * Validation failure (if any during a nested download) is surfaced via the
+ * SyncSessionValidationService latch — the wrapper reads it once before
+ * deciding IN_SYNC vs ERROR. (#7330)
  */
 export interface DownloadResultForRejection {
   newOpsCount: number;
   allOpClocks?: VectorClock[];
   snapshotVectorClock?: VectorClock;
-  /**
-   * True when the underlying download ran post-sync validation and the
-   * validation failed. Propagated through `RejectionHandlingResult` to
-   * `OperationLogSyncService.uploadPendingOps` so the wrapper can refuse
-   * IN_SYNC. Replaces a closure-smuggled boolean. Issue #7330.
-   */
-  validationFailed?: boolean;
 }
 
 /**
@@ -188,13 +185,6 @@ export type DownloadOutcome =
       kind: 'no_new_ops';
       allOpClocks?: VectorClock[];
       snapshotVectorClock?: VectorClock;
-      /**
-       * Set when this terminal state was reached after a USE_REMOTE
-       * conflict-resolution that ran `validateAfterSync` against the
-       * downloaded state and the validation reported corruption. The
-       * wrapper must not claim IN_SYNC. Issue #7330.
-       */
-      validationFailed?: boolean;
     }
   | {
       /** Incremental ops were downloaded and processed. */
@@ -203,12 +193,6 @@ export type DownloadOutcome =
       localWinOpsCreated: number;
       allOpClocks?: VectorClock[];
       snapshotVectorClock?: VectorClock;
-      /**
-       * `validateAfterSync` returned `false` while applying these ops — state
-       * may be inconsistent. Issue #7330: previously discarded; now surfaced
-       * so the sync wrapper can refuse to claim IN_SYNC.
-       */
-      validationFailed?: boolean;
     }
   | {
       /** File-based snapshot was hydrated (fresh download from file provider). */
@@ -240,11 +224,6 @@ export type UploadOutcome =
       permanentRejectionCount: number;
       hasMorePiggyback: boolean;
       rejectedOps: RejectedOpInfo[];
-      /**
-       * `validateAfterSync` returned `false` while processing piggybacked ops
-       * — state may be inconsistent. See `DownloadOutcome.validationFailed`.
-       */
-      validationFailed?: boolean;
     }
   | {
       /** User cancelled a piggybacked SYNC_IMPORT conflict dialog. */

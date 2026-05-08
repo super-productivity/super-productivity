@@ -18,18 +18,15 @@ export type {
 } from '../core/types/sync-results.types';
 
 /**
- * Result of handling rejected operations.
+ * Result of handling rejected operations. Validation failure (if any during
+ * a nested download) is surfaced via the SyncSessionValidationService latch
+ * — the wrapper reads it once before deciding IN_SYNC vs ERROR. (#7330)
  */
 export interface RejectionHandlingResult {
   /** Number of merged ops created from conflict resolution (these need to be uploaded) */
   mergedOpsCreated: number;
   /** Number of operations that were permanently rejected (validation errors, etc.) */
   permanentRejectionCount: number;
-  /**
-   * True when a nested download triggered by concurrent-modification resolution
-   * ran post-sync validation and the validation failed. Issue #7330.
-   */
-  validationFailed?: boolean;
 }
 
 /**
@@ -192,7 +189,6 @@ export class RejectedOpsHandlerService {
 
     // For concurrent modifications: try download first, then resolve locally if needed
     let retryExceededCount = 0;
-    let validationFailed = false;
     if (concurrentModificationOps.length > 0 && downloadCallback) {
       const result = await this._resolveConcurrentModifications(
         concurrentModificationOps,
@@ -200,13 +196,11 @@ export class RejectedOpsHandlerService {
       );
       mergedOpsCreated = result.mergedOpsCreated;
       retryExceededCount = result.retryExceededCount;
-      validationFailed = result.validationFailed;
     }
 
     return {
       mergedOpsCreated,
       permanentRejectionCount: permanentlyRejectedOps.length + retryExceededCount,
-      validationFailed,
     };
   }
 
@@ -223,10 +217,8 @@ export class RejectedOpsHandlerService {
   ): Promise<{
     mergedOpsCreated: number;
     retryExceededCount: number;
-    validationFailed: boolean;
   }> {
     let mergedOpsCreated = 0;
-    let validationFailed = false;
 
     // Check resolution attempt counts per entity to prevent infinite loops.
     // When vector clock pruning makes it impossible to create a dominating clock,
@@ -288,7 +280,6 @@ export class RejectedOpsHandlerService {
       return {
         mergedOpsCreated: 0,
         retryExceededCount: opsExceededRetries.length,
-        validationFailed: false,
       };
     }
 
@@ -298,9 +289,10 @@ export class RejectedOpsHandlerService {
     );
 
     try {
-      // Try to download new remote ops - if there are any, conflict detection will handle them
+      // Try to download new remote ops - if there are any, conflict detection will handle them.
+      // Validation failure (if any during the nested download) is on the
+      // session-validation latch — wrapper reads it. (#7330)
       const downloadResult = await downloadCallback();
-      if (downloadResult.validationFailed) validationFailed = true;
 
       // Helper to check which ops are still pending, preserving existingClock from rejection
       const getStillPendingOps = async (): Promise<
@@ -344,7 +336,6 @@ export class RejectedOpsHandlerService {
           );
 
           const forceDownloadResult = await downloadCallback({ forceFromSeq0: true });
-          if (forceDownloadResult.validationFailed) validationFailed = true;
 
           // Use the clocks from force download to resolve superseded ops
           // Also merge in entity clocks from server rejection responses
@@ -440,7 +431,6 @@ export class RejectedOpsHandlerService {
     return {
       mergedOpsCreated,
       retryExceededCount: opsExceededRetries.length,
-      validationFailed,
     };
   }
 

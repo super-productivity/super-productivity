@@ -5,6 +5,7 @@ import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
+import { SyncSessionValidationService } from '../../op-log/sync/sync-session-validation.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
@@ -613,19 +614,22 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
-    // Issue #7330: previously, post-sync state validation failure was surfaced
-    // only via a snackbar; sync still reported IN_SYNC, contradicting the
-    // "State validation failed" message the user just saw. Sync status must
-    // reflect the validation result.
-    it('should set ERROR (not IN_SYNC) when downloadRemoteOps reports validationFailed', async () => {
-      mockSyncService.downloadRemoteOps.and.returnValue(
-        Promise.resolve({
+    // Issue #7330: post-sync state validation failure must not be reported
+    // as IN_SYNC. After the latch refactor, validation failure is signalled
+    // via SyncSessionValidationService — the wrapper reads it once before
+    // claiming IN_SYNC. Tests below simulate validation failure by flipping
+    // the latch from inside a mocked sync call (mirroring what
+    // RemoteOpsProcessingService.validateAfterSync does in production).
+    it('should set ERROR (not IN_SYNC) when validation latch is flipped during download', async () => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      mockSyncService.downloadRemoteOps.and.callFake(async () => {
+        latch.setFailed();
+        return {
           kind: 'ops_processed' as const,
           newOpsCount: 3,
           localWinOpsCreated: 0,
-          validationFailed: true,
-        }),
-      );
+        };
+      });
 
       const result = await service.sync();
 
@@ -634,9 +638,11 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
-    it('should set ERROR (not IN_SYNC) when uploadPendingOps reports validationFailed', async () => {
-      mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
+    it('should set ERROR (not IN_SYNC) when validation latch is flipped during upload', async () => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        latch.setFailed();
+        return {
           kind: 'completed' as const,
           uploadedCount: 0,
           piggybackedOpsCount: 2,
@@ -644,9 +650,8 @@ describe('SyncWrapperService', () => {
           permanentRejectionCount: 0,
           hasMorePiggyback: false,
           rejectedOps: [],
-          validationFailed: true,
-        }),
-      );
+        };
+      });
 
       const result = await service.sync();
 
@@ -655,25 +660,29 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
-    // Issue #7330 follow-up: the LWW re-upload retry loop initially discarded
-    // reuploadResult.validationFailed. If a re-upload pass triggered a
-    // piggybacked download with failing post-sync validation, sync would
-    // still report IN_SYNC.
-    it('should set ERROR (not IN_SYNC) when LWW re-upload reports validationFailed', async () => {
-      // First upload returns localWinOpsCreated to enter the retry loop.
-      // Re-upload returns validationFailed=true with no remaining LWW ops
-      // (loop terminates after detecting the failure).
-      mockSyncService.uploadPendingOps.and.returnValues(
-        Promise.resolve({
-          kind: 'completed' as const,
-          uploadedCount: 1,
-          piggybackedOpsCount: 0,
-          localWinOpsCreated: 2,
-          permanentRejectionCount: 0,
-          hasMorePiggyback: false,
-          rejectedOps: [],
-        }),
-        Promise.resolve({
+    // Issue #7330 follow-up: a retry-pass piggybacked download can flip the
+    // latch — the wrapper must still report ERROR.
+    it('should set ERROR (not IN_SYNC) when validation latch is flipped during LWW re-upload', async () => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          // Initial upload returns localWinOpsCreated to enter the retry loop.
+          return {
+            kind: 'completed' as const,
+            uploadedCount: 1,
+            piggybackedOpsCount: 0,
+            localWinOpsCreated: 2,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
+          };
+        }
+        // Retry pass flips the latch (simulating validation failure during
+        // a piggybacked download triggered by uploadPendingOps).
+        latch.setFailed();
+        return {
           kind: 'completed' as const,
           uploadedCount: 0,
           piggybackedOpsCount: 1,
@@ -681,9 +690,8 @@ describe('SyncWrapperService', () => {
           permanentRejectionCount: 0,
           hasMorePiggyback: false,
           rejectedOps: [],
-          validationFailed: true,
-        }),
-      );
+        };
+      });
 
       const result = await service.sync();
 
@@ -692,33 +700,29 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
-    // #7521 follow-up: when re-upload retries exhaust AND validation failed
-    // during one of the retry passes, prefer ERROR over UNKNOWN_OR_CHANGED.
-    // Validation failure is a more serious signal than unuploaded ops.
-    it('should set ERROR (not UNKNOWN_OR_CHANGED) when retries exhaust AND validation failed during a retry', async () => {
-      // Initial upload returns 1 LWW op to enter the retry loop.
-      // Every retry returns localWinOpsCreated: 1 (so loop hits MAX retries),
-      // and one retry reports validationFailed: true.
-      const completed = (
-        validationFailed = false,
-      ): Awaited<ReturnType<typeof mockSyncService.uploadPendingOps>> => ({
-        kind: 'completed' as const,
-        uploadedCount: 1,
-        piggybackedOpsCount: 0,
-        localWinOpsCreated: 1,
-        permanentRejectionCount: 0,
-        hasMorePiggyback: false,
-        rejectedOps: [],
-        validationFailed,
+    // #7521 follow-up: when re-upload retries exhaust AND the latch is
+    // flipped, prefer ERROR over UNKNOWN_OR_CHANGED — validation failure is
+    // a more serious signal than unuploaded ops.
+    it('should set ERROR (not UNKNOWN_OR_CHANGED) when retries exhaust AND latch is flipped', async () => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 2) {
+          // One retry flips the latch; subsequent retries don't, but the
+          // latch persists for the rest of the session.
+          latch.setFailed();
+        }
+        return {
+          kind: 'completed' as const,
+          uploadedCount: 1,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 1,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        };
       });
-      // 1 initial + MAX_LWW_REUPLOAD_RETRIES retries; one of the retries flags validation.
-      mockSyncService.uploadPendingOps.and.returnValues(
-        Promise.resolve(completed()),
-        Promise.resolve(completed(true)),
-        ...Array.from({ length: MAX_LWW_REUPLOAD_RETRIES }, () =>
-          Promise.resolve(completed()),
-        ),
-      );
 
       const result = await service.sync();
 
@@ -730,24 +734,19 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
-    // #7330 follow-up: when retries exhaust AND the *initial* download already
-    // reported validationFailed (separate from the retry pass), the wrapper
-    // must still report ERROR. Previously the retry-exhaustion branch only
-    // checked reuploadValidationFailed, so an initial downloadValidationFailed
-    // combined with retry exhaustion fell through to UNKNOWN_OR_CHANGED.
-    it('should set ERROR (not UNKNOWN_OR_CHANGED) when retries exhaust AND initial download reported validationFailed', async () => {
-      mockSyncService.downloadRemoteOps.and.returnValue(
-        Promise.resolve({
+    // #7330 follow-up: when retries exhaust AND the initial download flipped
+    // the latch (before the retry loop), the wrapper must still report ERROR.
+    it('should set ERROR (not UNKNOWN_OR_CHANGED) when retries exhaust AND initial download flipped the latch', async () => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      mockSyncService.downloadRemoteOps.and.callFake(async () => {
+        latch.setFailed();
+        return {
           kind: 'ops_processed' as const,
           newOpsCount: 3,
           localWinOpsCreated: 0,
-          validationFailed: true,
-        }),
-      );
-      // Every upload reports localWinOpsCreated: 1 so retries always exhaust.
-      const completed = (): Awaited<
-        ReturnType<typeof mockSyncService.uploadPendingOps>
-      > => ({
+        };
+      });
+      mockSyncService.uploadPendingOps.and.callFake(async () => ({
         kind: 'completed' as const,
         uploadedCount: 1,
         piggybackedOpsCount: 0,
@@ -755,12 +754,7 @@ describe('SyncWrapperService', () => {
         permanentRejectionCount: 0,
         hasMorePiggyback: false,
         rejectedOps: [],
-      });
-      mockSyncService.uploadPendingOps.and.returnValues(
-        ...Array.from({ length: 1 + MAX_LWW_REUPLOAD_RETRIES }, () =>
-          Promise.resolve(completed()),
-        ),
-      );
+      }));
 
       const result = await service.sync();
 
@@ -771,17 +765,16 @@ describe('SyncWrapperService', () => {
       );
     });
 
-    // #7330: the USE_REMOTE conflict-resolution path returns DownloadOutcome
-    // with kind 'no_new_ops' and validationFailed: true when the
-    // forceDownloadRemoteState validator rejected the applied state. The
-    // wrapper must surface this as ERROR rather than IN_SYNC.
-    it('should set ERROR when downloadRemoteOps returns no_new_ops with validationFailed', async () => {
-      mockSyncService.downloadRemoteOps.and.returnValue(
-        Promise.resolve({
-          kind: 'no_new_ops' as const,
-          validationFailed: true,
-        }),
-      );
+    // #7330: the USE_REMOTE conflict-resolution path returns
+    // `kind: 'no_new_ops'` after applying remote state. If validation
+    // failed during that apply, the latch is flipped — the wrapper must
+    // surface this as ERROR rather than IN_SYNC.
+    it('should set ERROR when downloadRemoteOps returns no_new_ops AND latch is flipped', async () => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      mockSyncService.downloadRemoteOps.and.callFake(async () => {
+        latch.setFailed();
+        return { kind: 'no_new_ops' as const };
+      });
 
       const result = await service.sync();
 
@@ -1267,7 +1260,7 @@ describe('SyncWrapperService', () => {
 
         mockSyncService.forceDownloadRemoteState = jasmine
           .createSpy('forceDownloadRemoteState')
-          .and.resolveTo({ validationFailed: false });
+          .and.resolveTo();
 
         const result = await service.sync();
 
@@ -1330,8 +1323,8 @@ describe('SyncWrapperService', () => {
       });
 
       // Issue #7330: even when forceDownloadRemoteState succeeds, if it
-      // reports validationFailed: true, the wrapper must not claim IN_SYNC.
-      it('should return HANDLED_ERROR with ERROR status when forceDownloadRemoteState reports validationFailed', async () => {
+      // flips the session-validation latch, the wrapper must not claim IN_SYNC.
+      it('should return HANDLED_ERROR with ERROR status when forceDownloadRemoteState flips the latch', async () => {
         const conflictError = new LocalDataConflictError(
           2,
           { tasks: [] },
@@ -1343,9 +1336,12 @@ describe('SyncWrapperService', () => {
           afterClosed: () => of('USE_REMOTE'),
         } as any);
 
+        const latch = TestBed.inject(SyncSessionValidationService);
         mockSyncService.forceDownloadRemoteState = jasmine
           .createSpy('forceDownloadRemoteState')
-          .and.resolveTo({ validationFailed: true });
+          .and.callFake(async () => {
+            latch.setFailed();
+          });
 
         const result = await service.sync();
 

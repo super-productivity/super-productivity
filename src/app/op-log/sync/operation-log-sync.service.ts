@@ -282,11 +282,9 @@ export class OperationLogSyncService {
     // even if processing throws. Otherwise rejected ops remain in pending
     // state and get re-uploaded infinitely.
     let localWinOpsCreated = 0;
-    let piggybackValidationFailed = false;
     let rejectionResult: RejectionHandlingResult = {
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
-      validationFailed: false,
     };
 
     if (result.piggybackedOps.length > 0) {
@@ -322,12 +320,12 @@ export class OperationLogSyncService {
             },
             'OperationLogSyncService (piggybacked full-state op)',
           );
-          if (conflictResult.resolution === 'CANCEL') {
+          if (conflictResult === 'CANCEL') {
             return { kind: 'cancelled' };
           }
           // USE_LOCAL or USE_REMOTE was handled — report as completed with no further work.
-          // Surface USE_REMOTE post-sync validation failure so SyncWrapperService can
-          // refuse IN_SYNC. Issue #7330.
+          // Validation failure (if any during USE_REMOTE force-download) is on the
+          // session-validation latch already; the wrapper reads it. (#7330)
           return {
             kind: 'completed',
             uploadedCount: result.uploadedCount,
@@ -336,8 +334,6 @@ export class OperationLogSyncService {
             permanentRejectionCount: 0,
             hasMorePiggyback: false,
             rejectedOps: [],
-            validationFailed:
-              piggybackValidationFailed || conflictResult.validationFailed,
           };
         } else {
           OpLog.normal(
@@ -352,7 +348,7 @@ export class OperationLogSyncService {
         result.piggybackedOps,
       );
       localWinOpsCreated = processResult.localWinOpsCreated;
-      if (processResult.validationFailed) piggybackValidationFailed = true;
+      // Validation failure (if any) is on the session-validation latch.
     }
 
     // STEP 2: Handle server-rejected operations
@@ -366,21 +362,16 @@ export class OperationLogSyncService {
       forceFromSeq0?: boolean;
     }): Promise<DownloadResultForRejection> => {
       const outcome = await this.downloadRemoteOps(syncProvider, downloadOptions);
+      // Validation failure (if any during the nested download) is on the
+      // session-validation latch — no need to thread the boolean back. (#7330)
       switch (outcome.kind) {
         case 'ops_processed':
           return {
             newOpsCount: outcome.newOpsCount,
             allOpClocks: outcome.allOpClocks,
             snapshotVectorClock: outcome.snapshotVectorClock,
-            validationFailed: outcome.validationFailed,
           };
         case 'no_new_ops':
-          return {
-            newOpsCount: 0,
-            allOpClocks: outcome.allOpClocks,
-            snapshotVectorClock: outcome.snapshotVectorClock,
-            validationFailed: outcome.validationFailed,
-          };
         case 'snapshot_hydrated':
           return {
             newOpsCount: 0,
@@ -424,8 +415,6 @@ export class OperationLogSyncService {
       permanentRejectionCount: rejectionResult.permanentRejectionCount,
       hasMorePiggyback: result.hasMorePiggyback ?? false,
       rejectedOps: result.rejectedOps,
-      validationFailed:
-        piggybackValidationFailed || rejectionResult.validationFailed === true,
     };
   }
 
@@ -765,14 +754,12 @@ export class OperationLogSyncService {
           },
           'OperationLogSyncService (incoming full-state op)',
         );
-        if (conflictResult.resolution === 'CANCEL') {
+        if (conflictResult === 'CANCEL') {
           return { kind: 'cancelled' };
         }
-        // Surface USE_REMOTE post-sync validation failure. Issue #7330.
-        return {
-          kind: 'no_new_ops',
-          validationFailed: conflictResult.validationFailed,
-        };
+        // Validation failure (if any during USE_REMOTE force-download) is on
+        // the session-validation latch — wrapper reads it. (#7330)
+        return { kind: 'no_new_ops' };
       } else {
         OpLog.normal(
           `OperationLogSyncService: Accepting incoming ${incomingFullStateOp.opType} from client ` +
@@ -815,14 +802,12 @@ export class OperationLogSyncService {
         },
         'OperationLogSyncService (local SYNC_IMPORT filters remote)',
       );
-      if (conflictResult.resolution === 'CANCEL') {
+      if (conflictResult === 'CANCEL') {
         return { kind: 'cancelled' };
       }
-      // Surface USE_REMOTE post-sync validation failure. Issue #7330.
-      return {
-        kind: 'no_new_ops',
-        validationFailed: conflictResult.validationFailed,
-      };
+      // Validation failure (if any during USE_REMOTE force-download) is on
+      // the session-validation latch — wrapper reads it. (#7330)
+      return { kind: 'no_new_ops' };
     } else if (
       processResult.allOpsFilteredBySyncImport &&
       processResult.filteredOpCount > 0
@@ -861,7 +846,6 @@ export class OperationLogSyncService {
       localWinOpsCreated: processResult.localWinOpsCreated,
       allOpClocks: result.allOpClocks,
       snapshotVectorClock: result.snapshotVectorClock,
-      validationFailed: processResult.validationFailed,
     };
   }
 
@@ -881,10 +865,7 @@ export class OperationLogSyncService {
     syncProvider: OperationSyncCapable,
     dialogData: SyncImportConflictData,
     logPrefix: string,
-  ): Promise<{
-    resolution: SyncImportConflictResolution;
-    validationFailed: boolean;
-  }> {
+  ): Promise<SyncImportConflictResolution> {
     const resolution =
       await this.syncImportConflictDialogService.showConflictDialog(dialogData);
 
@@ -892,21 +873,18 @@ export class OperationLogSyncService {
       case 'USE_LOCAL':
         OpLog.normal(`${logPrefix}: User chose USE_LOCAL. Force uploading local state.`);
         await this.forceUploadLocalState(syncProvider);
-        return { resolution: 'USE_LOCAL', validationFailed: false };
-      case 'USE_REMOTE': {
+        return 'USE_LOCAL';
+      case 'USE_REMOTE':
         OpLog.normal(
           `${logPrefix}: User chose USE_REMOTE. Force downloading remote state.`,
         );
-        const downloadResult = await this.forceDownloadRemoteState(syncProvider);
-        return {
-          resolution: 'USE_REMOTE',
-          validationFailed: downloadResult.validationFailed,
-        };
-      }
+        // Validation failure (if any) is on the session-validation latch.
+        await this.forceDownloadRemoteState(syncProvider);
+        return 'USE_REMOTE';
       case 'CANCEL':
       default:
         OpLog.normal(`${logPrefix}: User cancelled SYNC_IMPORT conflict resolution.`);
-        return { resolution: 'CANCEL', validationFailed: false };
+        return 'CANCEL';
     }
   }
 
@@ -977,13 +955,10 @@ export class OperationLogSyncService {
    *
    * @param syncProvider - The sync provider to download from
    */
-  async forceDownloadRemoteState(
-    syncProvider: OperationSyncCapable,
-  ): Promise<{ validationFailed: boolean }> {
+  async forceDownloadRemoteState(syncProvider: OperationSyncCapable): Promise<void> {
     OpLog.warn(
       'OperationLogSyncService: Force downloading remote state - clearing local import and unsynced ops.',
     );
-    let validationFailed = false;
 
     // IMPORTANT: Clear local full-state ops (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)
     // This is critical - if the user chose USE_REMOTE, we must not filter incoming
@@ -1058,7 +1033,7 @@ export class OperationLogSyncService {
       OpLog.normal(
         'OperationLogSyncService: Force download snapshot hydration complete.',
       );
-      return { validationFailed };
+      return;
     }
 
     if (result.newOps.length > 0) {
@@ -1087,18 +1062,13 @@ export class OperationLogSyncService {
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
-      // Process all remote ops (no confirmation needed - user already chose USE_REMOTE)
+      // Process all remote ops (no confirmation needed - user already chose USE_REMOTE).
       // Skip conflict detection because the NgRx store was just reset to empty state,
       // which causes all entities to appear missing and CONCURRENT ops to be discarded.
-      // Capture validationFailed so callers (and ultimately SyncWrapperService) can
-      // refuse IN_SYNC when the downloaded state is corrupt. Issue #7330.
-      const processResult = await this.remoteOpsProcessingService.processRemoteOps(
-        result.newOps,
-        { skipConflictDetection: true },
-      );
-      if (processResult.validationFailed) {
-        validationFailed = true;
-      }
+      // Validation failure is surfaced via the session-validation latch. (#7330)
+      await this.remoteOpsProcessingService.processRemoteOps(result.newOps, {
+        skipConflictDetection: true,
+      });
 
       // Update lastServerSeq
       if (result.latestServerSeq !== undefined) {
@@ -1109,7 +1079,6 @@ export class OperationLogSyncService {
     OpLog.normal(
       `OperationLogSyncService: Force download complete. Processed ${result.newOps.length} ops.`,
     );
-    return { validationFailed };
   }
 
   /**

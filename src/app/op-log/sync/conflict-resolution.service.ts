@@ -18,6 +18,7 @@ import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import {
   compareVectorClocks,
@@ -85,6 +86,7 @@ export class ConflictResolutionService {
   private opLogStore = inject(OperationLogStoreService);
   private snackService = inject(SnackService);
   private validateStateService = inject(ValidateStateService);
+  private sessionValidation = inject(SyncSessionValidationService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -344,7 +346,7 @@ export class ConflictResolutionService {
   async autoResolveConflictsLWW(
     conflicts: EntityConflict[],
     nonConflictingOps: Operation[] = [],
-  ): Promise<{ localWinOpsCreated: number; validationFailed?: boolean }> {
+  ): Promise<{ localWinOpsCreated: number }> {
     if (conflicts.length === 0 && nonConflictingOps.length === 0) {
       return { localWinOpsCreated: 0 };
     }
@@ -587,13 +589,13 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 8: Validate and repair state after resolution
+    // Validation failure flips the SyncSessionValidationService latch — the
+    // wrapper reads it before deciding IN_SYNC vs ERROR. (#7330)
     // ─────────────────────────────────────────────────────────────────────────
     const isValid = await this._validateAndRepairAfterResolution();
+    if (!isValid) this.sessionValidation.setFailed();
 
-    return {
-      localWinOpsCreated: newLocalWinOps.length,
-      validationFailed: !isValid,
-    };
+    return { localWinOpsCreated: newLocalWinOps.length };
   }
 
   /**

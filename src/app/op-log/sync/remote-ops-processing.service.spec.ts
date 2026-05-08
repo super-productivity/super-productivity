@@ -11,6 +11,7 @@ import { VectorClockService } from './vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { LockService } from './lock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from './sync-import-filter.service';
@@ -1297,7 +1298,7 @@ describe('RemoteOpsProcessingService', () => {
       expect(result).toBe(false);
     });
 
-    it('processRemoteOps surfaces validationFailed=true when validation fails on the no-conflict path', async () => {
+    it('processRemoteOps flips the session-validation latch when validation fails on the no-conflict path', async () => {
       const remoteOps: Operation[] = [{ id: 'op1', schemaVersion: 1 } as Operation];
 
       opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
@@ -1319,12 +1320,14 @@ describe('RemoteOpsProcessingService', () => {
       });
       validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(false);
 
-      const result = await service.processRemoteOps(remoteOps);
+      const latch = TestBed.inject(SyncSessionValidationService);
+      latch.reset();
+      await service.processRemoteOps(remoteOps);
 
-      expect(result.validationFailed).toBe(true);
+      expect(latch.hasFailed()).toBe(true);
     });
 
-    it('processRemoteOps surfaces validationFailed=false when validation succeeds', async () => {
+    it('processRemoteOps leaves the latch reset when validation succeeds', async () => {
       const remoteOps: Operation[] = [{ id: 'op1', schemaVersion: 1 } as Operation];
 
       opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
@@ -1346,9 +1349,11 @@ describe('RemoteOpsProcessingService', () => {
       });
       validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(true);
 
-      const result = await service.processRemoteOps(remoteOps);
+      const latch = TestBed.inject(SyncSessionValidationService);
+      latch.reset();
+      await service.processRemoteOps(remoteOps);
 
-      expect(result.validationFailed).toBeFalsy();
+      expect(latch.hasFailed()).toBe(false);
     });
   });
 });

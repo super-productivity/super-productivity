@@ -11,6 +11,7 @@ import { OpLog } from '../../core/log';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { VectorClockService } from './vector-clock.service';
 import {
   MAX_VERSION_SKIP,
@@ -46,6 +47,7 @@ export class RemoteOpsProcessingService {
   private operationApplier = inject(OperationApplierService);
   private conflictResolutionService = inject(ConflictResolutionService);
   private validateStateService = inject(ValidateStateService);
+  private sessionValidation = inject(SyncSessionValidationService);
   private vectorClockService = inject(VectorClockService);
   private schemaMigrationService = inject(SchemaMigrationService);
   private snackService = inject(SnackService);
@@ -85,15 +87,12 @@ export class RemoteOpsProcessingService {
     filteredOpCount: number;
     filteringImport?: Operation;
     isLocalUnsyncedImport: boolean;
-    /**
-     * Issue #7330: surfaces a `false` from `validateAfterSync` (or the
-     * conflict-resolution variant) so the sync wrapper can refuse to claim
-     * IN_SYNC when post-apply state validation fails. Absent on early-exit
-     * paths that never reach validation (e.g. version-mismatch, all ops
-     * filtered by SYNC_IMPORT) — those are not validation failures.
-     */
-    validationFailed?: boolean;
   }> {
+    // Validation failure surfaces via the SyncSessionValidationService latch
+    // (#7330). `validateAfterSync` and the conflict-resolution validation path
+    // both flip the latch on failure; the sync wrapper reads it once before
+    // deciding IN_SYNC vs ERROR. No need to thread the boolean through this
+    // return shape.
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Schema Migration (Receiver-Side)
     // Migrate ops from older schema versions to current version.
@@ -267,13 +266,12 @@ export class RemoteOpsProcessingService {
       // Local synced ops are NOT replayed - the import is an explicit user action
       // to restore all clients to a specific point in time.
 
-      const isValid = await this.validateAfterSync();
+      await this.validateAfterSync();
       return {
         localWinOpsCreated: 0,
         allOpsFilteredBySyncImport: false,
         filteredOpCount: 0,
         isLocalUnsyncedImport: false,
-        validationFailed: !isValid,
       };
     }
 
@@ -299,13 +297,12 @@ export class RemoteOpsProcessingService {
           `Applying ${validOps.length} ops directly.`,
       );
       await this.applyNonConflictingOps(validOps);
-      const isValid = await this.validateAfterSync();
+      await this.validateAfterSync();
       return {
         localWinOpsCreated: 0,
         allOpsFilteredBySyncImport: false,
         filteredOpCount: 0,
         isLocalUnsyncedImport: false,
-        validationFailed: !isValid,
       };
     }
 
@@ -322,7 +319,6 @@ export class RemoteOpsProcessingService {
     // This ensures no NEW writes can start while we read the frontier,
     // detect conflicts, AND apply resolutions.
     let localWinOpsCreated = 0;
-    let validationFailed = false;
     await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
       const appliedFrontierByEntity = await this.vectorClockService.getEntityFrontier();
       const conflictResult = await this.detectConflicts(
@@ -342,14 +338,14 @@ export class RemoteOpsProcessingService {
           `RemoteOpsProcessingService: Detected ${conflicts.length} conflicts. Auto-resolving with LWW.`,
           conflicts,
         );
-        // Auto-resolve conflicts using Last-Write-Wins strategy
-        // Piggyback non-conflicting ops so they're applied with resolved conflicts
+        // Auto-resolve conflicts using Last-Write-Wins strategy.
+        // Piggyback non-conflicting ops so they're applied with resolved conflicts.
+        // Validation failure is surfaced via the session-validation latch.
         const lwwResult = await this.conflictResolutionService.autoResolveConflictsLWW(
           conflicts,
           nonConflicting,
         );
         localWinOpsCreated = lwwResult.localWinOpsCreated;
-        if (lwwResult.validationFailed) validationFailed = true;
         return;
       }
 
@@ -358,8 +354,7 @@ export class RemoteOpsProcessingService {
       // ─────────────────────────────────────────────────────────────────────────
       if (nonConflicting.length > 0) {
         await this.applyNonConflictingOps(nonConflicting, true);
-        const isValid = await this.validateAfterSync(true); // Inside sp_op_log lock
-        if (!isValid) validationFailed = true;
+        await this.validateAfterSync(true); // Inside sp_op_log lock
       }
     });
     return {
@@ -367,7 +362,6 @@ export class RemoteOpsProcessingService {
       allOpsFilteredBySyncImport: false,
       filteredOpCount: 0,
       isLocalUnsyncedImport: false,
-      validationFailed,
     };
   }
 
@@ -652,19 +646,17 @@ export class RemoteOpsProcessingService {
    * @param callerHoldsLock - If true, skip lock acquisition in repair operation.
    *        Pass true when calling from within the sp_op_log lock.
    * @returns `true` if state is valid (or was successfully repaired), `false`
-   *          otherwise. Issue #7330: callers must surface a `false` up to the
-   *          sync wrapper so it can avoid claiming IN_SYNC.
+   *          otherwise. On failure the SyncSessionValidationService latch is
+   *          flipped so the wrapper can refuse to claim IN_SYNC (#7330).
    */
   async validateAfterSync(callerHoldsLock: boolean = false): Promise<boolean> {
-    // FIX #6571: Check and surface validation result.
-    // Previously, the boolean return was discarded — validation failures
-    // were invisible and sync reported IN_SYNC despite invalid state.
     const isValid = await this.validateStateService.validateAndRepairCurrentState(
       'sync',
       { callerHoldsLock },
     );
     if (!isValid) {
       OpLog.err('RemoteOpsProcessingService: State validation failed after sync');
+      this.sessionValidation.setFailed();
       this.snackService.open({
         type: 'ERROR',
         msg: T.F.SYNC.S.SYNC_VALIDATION_FAILED,
