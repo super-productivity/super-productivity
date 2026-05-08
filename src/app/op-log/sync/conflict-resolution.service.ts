@@ -121,13 +121,23 @@ export class ConflictResolutionService {
     // NOT in the ActionType enum. They are dynamically constructed here and matched
     // by regex in lwwUpdateMetaReducer. This is by design - LWW ops are synthetic,
     // created during conflict resolution to carry the winning local state to remote clients.
+
+    // Always force payload.id to the canonical entityId. lwwUpdateMetaReducer
+    // bails with "Entity data has no id" when the payload lacks a top-level id;
+    // a malformed/partial entityState (e.g. NgRx selector returning a stripped
+    // shape) would silently lose the LWW write on remote clients. (#7330)
+    const basePayload =
+      entityState && typeof entityState === 'object'
+        ? (entityState as Record<string, unknown>)
+        : {};
+    const payload = { ...basePayload, id: entityId };
     return {
       id: uuidv7(),
       actionType: toLwwUpdateActionType(entityType),
       opType: OpType.Update,
       entityType,
       entityId,
-      payload: entityState,
+      payload,
       clientId,
       vectorClock,
       timestamp,
@@ -883,7 +893,14 @@ export class ConflictResolutionService {
             remoteOp.payload,
             conflict.entityType,
           );
-          const mergedEntity = { ...baseEntity, ...updateChanges };
+          // Force top-level id from the canonical conflict.entityId — defensive
+          // against malformed DELETE payloads whose embedded entity lacks one.
+          // lwwUpdateMetaReducer bails on missing id. (#7330)
+          const mergedEntity = {
+            ...baseEntity,
+            ...updateChanges,
+            id: conflict.entityId,
+          };
           return {
             ...remoteOp,
             actionType: toLwwUpdateActionType(remoteOp.entityType),
