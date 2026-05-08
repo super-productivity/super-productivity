@@ -2,14 +2,21 @@
 /**
  * Static check: enumerates all production callers of
  * `SyncSessionValidationService.withSession()` and asserts the set is
- * exactly the four known sync entry points.
+ * exactly the known sync entry points.
  *
  * Why brittle on purpose: the latch contract requires every top-level sync
- * entry point to wrap its work in `withSession()`. Adding a 5th entry point
+ * entry point to wrap its work in `withSession()`. Adding a new entry point
  * (e.g., a new background download path) without doing so is the
  * maintenance hazard #7330 is most exposed to. This script fails if a new
  * `withSession()` caller appears, forcing the contributor to read the
  * service-level contract before adding to the allow-list here.
+ *
+ * Known gap (see docs/plans/2026-05-08-sync-run-service-refactor.md):
+ * this check enumerates `withSession()` callers — it catches "added a
+ * withSession call without updating the list" but not the inverse, "added
+ * a sync entry point that *should* call withSession() but doesn't." The
+ * runner refactor proposed in that plan would replace this lint with a
+ * type-enforced contract.
  *
  * Usage: `node tools/check-sync-session-entry-points.js`
  * Wired into `npm run lint` so CI catches drift without extra steps.
@@ -30,6 +37,7 @@ const ALLOWED_ENTRY_POINTS = [
   'SyncWrapperService._sync() — top-level user-initiated sync',
   'SyncWrapperService._forceDownload() — user-initiated force download',
   'WsTriggeredDownloadService._downloadOps() — realtime WS-triggered download',
+  'ImmediateUploadService._performUpload() — debounced post-edit upload (SuperSync)',
 ];
 
 // Files that may legitimately contain `withSession(` references in production
@@ -38,6 +46,7 @@ const ALLOWED_ENTRY_POINTS = [
 const SCANNED_FILES = [
   'src/app/imex/sync/sync-wrapper.service.ts',
   'src/app/op-log/sync/ws-triggered-download.service.ts',
+  'src/app/op-log/sync/immediate-upload.service.ts',
   'src/app/op-log/sync/operation-log-sync.service.ts',
   'src/app/op-log/sync/conflict-resolution.service.ts',
   'src/app/op-log/sync/remote-ops-processing.service.ts',
