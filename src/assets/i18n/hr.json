@@ -22,7 +22,7 @@
   },
   "CONFIRM": {
     "AUTO_FIX": "Izgleda da su podaci oštećeni (\"{{validityError}}\"). Želiš li pokušati automatski popraviti? Može doći do djelomičnog gubitka podataka.",
-    "DELETE_SECTION": "Are you sure you want to delete this section? Tasks in it will be moved to the task list.",
+    "DELETE_SECTION": "Stvarno želiš izbrisati ovaj odjeljak? Zadaci u njemu će se premjestiti u popis zadataka.",
     "RELOAD_AFTER_IDB_ERROR": "Greška baze podataka – aplikacija će se ponovo pokrenuti\n\nSuper Productivity ne može spremiti podatke! Uobičajeni razlozi su:\n• Nedovoljno memorije na disku (najčešće)\n• Aplikacija se aktualizira u pozadini\n• Linux Snap korisnici: pokreni 'snap set core experimental.refresh-app-awareness=true'\n\nNedavne promjene možda nisu spremljene. Oslobodi memoriju ako je nema dovoljno. Aplikacija će se ponovo pokrenuti nakon što zatvoriš ovaj prozor.",
     "RESTORE_FILE_BACKUP": "Izgleda da NEMA PODATAKA, ali postoji sigurnosna kopija na \"{{dir}}\". Želiš li obnoviti sa zadnjom sigurnosnom kopijom od {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "Izgleda da NEMA PODATAKA, ali postoji sigurnosna kopija. Želiš li je učitati?",
@@ -71,7 +71,7 @@
   },
   "F": {
     "ATTACHMENT": {
-      "LOCAL_FILE_UNAVAILABLE": "Ovaj privitak je dostupan samo na uređaju na kojem je dodan."
+      "LOCAL_FILE_UNAVAILABLE": "Ovaj privitak je dostupan samo na uređaju na kojem je dodan.",
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Dodaj privitak",
         "EDIT_ATTACHMENT": "Uredi privitak",
@@ -148,7 +148,7 @@
         "CALDAV_RESOURCE": "Ime CalDAV resursa (kalendar)",
         "CALDAV_URL": "CalDAV URL (osnovni URL)",
         "CALDAV_USER": "Tvoje CalDAV korisničko ime",
-        "IS_ADD_SUB_TASKS": "Kada se zadatak doda također uvezi i podzadatke"
+        "IS_ADD_SUB_TASKS": "Kada se zadatak doda također uvezi i podzadatke",
         "TWO_WAY_SYNC_BOTH": "Oba (dvosmjerno)",
         "TWO_WAY_SYNC_NOTES": "Smjer sinkronizacije bilješki / opisa",
         "TWO_WAY_SYNC_OFF": "Isključeno",
@@ -201,7 +201,7 @@
       },
       "S": {
         "CAL_PROVIDER_ERROR": "Greška usluge kalendara: {{errTxt}}",
-        "CAL_PROVIDER_NOT_ICAL": "URL kalendara nije vratio iCal podatke. Poveznica za dijeljenje je možda istekla, opozvana ili zahtijeva prijavu – pokušaj generirati novu poveznicu za dijeljenje."
+        "CAL_PROVIDER_NOT_ICAL": "URL kalendara nije vratio iCal podatke. Poveznica za dijeljenje je možda istekla, opozvana ili zahtijeva prijavu – pokušaj generirati novu poveznicu za dijeljenje.",
         "EVENT_HIDDEN": "Događaj u kalendaru skriven",
         "EVENT_RESCHEDULED": "Događaj je premješten",
         "EVENT_DELETED": "Događaj je izbrisan",
@@ -251,7 +251,7 @@
         "TITLE": "Završiti tvoj dan prije prekida?",
         "UNARCHIVED_TASKS": {
           "ONE": "1 završeni zadatak na tvom popisu Danas još nije premješten u arhivu.",
-          "OTHER": "{{nr}} završena zadatka na tvom popisu Danas još nisu premješteni u arhivu.",
+          "OTHER": "{{nr}} završena zadatka na tvom popisu Danas još nisu premješteni u arhivu."
         }
       }
     },
@@ -324,7 +324,7 @@
         "EXCLUDE_LABELS": "Isključi oznake (opcionalno)",
         "EXCLUDE_LABELS_DESCRIPTION": "Popis imena oznaka odvojena zarezima. Zadaci koji imaju bilo koju od ovih oznaka će se isključiti.",
         "FILTER_LABELS": "Filtriraj prema oznakama (opcionalno)",
-        "FILTER_LABELS_DESCRIPTION": "Popis imena oznaka odvojena zarezima. Sinkronizirat će se samo zadaci koji imaju sve ove oznake. Ostavi prazno za sinkronizaciju svih zadataka koji odgovaraju opsegu."
+        "FILTER_LABELS_DESCRIPTION": "Popis imena oznaka odvojena zarezima. Sinkronizirat će se samo zadaci koji imaju sve ove oznake. Ostavi prazno za sinkronizaciju svih zadataka koji odgovaraju opsegu.",
         "HOST": "Host (npr. https://try.gitea.io)",
         "REPO_FULL_NAME": "Korisničko ime ili ime organizacije/repozitorija",
         "REPO_FULL_NAME_DESCRIPTION": "Možeš ga vidjeti u URL-u kad otvoriš repozitorij u pregledniku.",
@@ -1073,7 +1073,7 @@
       "BTN_RESTORE_FROM_HISTORY": "Obnovi iz povijesti",
       "BTN_SYNC_NOW": "Sinkroniziraj sada",
       "C": {
-        "FORCE_UPLOAD": "Forsirani prijenos može prouzročiti gubitak podataka. Stvarno želiš nastaviti?"
+        "FORCE_UPLOAD": "Forsirani prijenos može prouzročiti gubitak podataka. Stvarno želiš nastaviti?",
         "DECRYPT_OVERWRITE": "Ovo će ZAMIJENITI šifrirane podatke na serveru s lokalnom kopijom s ovog uređaja i ponovo ih šifrirati novom lozinkom. Svi ostali uređaji morat će ponovo unijeti lozinku i preuzeti zamijenjene podatke. Sve nesinkronizirane promjene na tim uređajima će se zauvijek izgubiti. Nastaviti?"
       },
       "D_AUTH_CODE": {
@@ -1400,7 +1400,7 @@
         "ERROR_REMOTE_FILE_EMPTY": "Udaljena datoteka sinkronizacije je prazna. To se može dogoditi nakon prekinute sinkronizacije. Želiš li prepisati udaljene podatke s lokalnim podacima?",
         "ERROR_REMOTE_FILE_LOCKED": "Udaljena datoteka sinkronizacije je zaključana od strane servera. To se može riješiti pri sljedećem pokušaju sinkronizacije.",
         "ERROR_SYNC_VERSION_MISMATCH": "Udaljeni podaci sinkronizacije koriste nekompatibilnu verziju formata. Provjeri da svi uređaji koriste istu Super Productivity verziju.",
-        "WARN_CLIENT_ID_REGENERATED": "ID uređaja za sinkronizaciju nije bio valjan i ponovo je generiran. Pri sljedećoj sinkronizaciji može doći do konflikta."
+        "WARN_CLIENT_ID_REGENERATED": "ID uređaja za sinkronizaciju nije bio valjan i ponovo je generiran. Pri sljedećoj sinkronizaciji može doći do konflikta.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Greška tijekom sinkronizacije. Nije moguće pročitati udaljene podatke. Možda si uključio/la šifriranje, a lokalna lozinka se ne podudara?",
         "FINISH_DAY_SYNC_ERROR": "Greška sinkronizacije pri završetku dana. Pokušaj ponovo.",
         "FRESH_CLIENT_SYNC_CANCELLED": "Početna sinkronizacija je prekinuta. Udaljeni podaci nisu primijenjeni.",
@@ -1412,7 +1412,7 @@
         "INTEGRITY_CHECK_FAILED": "Otkriven je problem s integritetom podataka. Pokušan je automatski popravak. Ako se problemi nastave, ponovo učitaj aplikaciju.",
         "INVALID_AUTH_CODE": "Autorizacijski kod je odbijen. Pokušaj ponovo i provjeri jesi li ga točno kopiralo/la.",
         "INVALID_OPERATION_PAYLOAD": "Otkrivena je nevažeća operacija. Promjene možda nisu spremljene – ponovno učitajte aplikaciju.",
-        "LEGACY_FORMAT_DETECTED": "Nesklad u formatu sinkronizacije: udaljeno spremište je zadnji put zapisano starijom verzijom aplikacije (v16.x ili ranija) koja koristi drugačiji format sinkronizacije. Aktualiziraj sve uređaje na istu verziju aplikacije. \"Prisilno prepisivanje\" deblokira ovaj uređaj zapisivanjem novog formata uz postojeće stare datoteke; koristi samo ako se nijedan stariji uređaj više ne da sinkronizirati s ovom udaljenim spremištem, inače će se ti uređaji odstupati u odnosu na ovaj uređaj."
+        "LEGACY_FORMAT_DETECTED": "Nesklad u formatu sinkronizacije: udaljeno spremište je zadnji put zapisano starijom verzijom aplikacije (v16.x ili ranija) koja koristi drugačiji format sinkronizacije. Aktualiziraj sve uređaje na istu verziju aplikacije. \"Prisilno prepisivanje\" deblokira ovaj uređaj zapisivanjem novog formata uz postojeće stare datoteke; koristi samo ako se nijedan stariji uređaj više ne da sinkronizirati s ovom udaljenim spremištem, inače će se ti uređaji odstupati u odnosu na ovaj uređaj.",
         "LOCAL_CHANGES_DISCARDED": "{{count}} lokalnih promjena odbačeno – stavke su izbrisane na jednom drugom uređaju",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} nespremljenih lokalnih promjena odbačeno – sinkronizacija je preuzela novije podatke",
         "LOCAL_DATA_REPLACE_CANCELLED": "Sinkronizacija prekinuta. Lokalni podaci su zadržani.",
@@ -1442,7 +1442,7 @@
         "VECTOR_CLOCK_LIMIT_REACHED": "Sinkronizacija je pratila {{originalSize}} uređaja/preglednika, što premašuje ograničenje od {{maxSize}}. Neaktivni zapisi su uklonjeni. Razmisli o resetiranju sinkronizacije ako imaš problema.",
         "VERSION_TOO_OLD": "Tvoja verzija aplikacije je prestara za ove podatke. Aktualiziraj aplikaciju!",
         "VERSION_UNSUPPORTED": "Sinkronizacija nije moguća: podaci zahtijevaju noviju verziju aplikacije. Aktualiziraj.",
-        "WEB_CRYPTO_NOT_AVAILABLE": "Šifriranje nije dostupno na ovom uređaju. Na Androidu je potreban siguran kontekst (HTTPS). Isključi šifriranje ili koristi desktop preglednik.",
+        "WEB_CRYPTO_NOT_AVAILABLE": "Šifriranje nije dostupno na ovom uređaju. Na Androidu je potreban siguran kontekst (HTTPS). Isključi šifriranje ili koristi desktop preglednik."
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Izbriši sve",
@@ -1577,7 +1577,7 @@
         "ADD_SUB_TASK": "Dodaj podzadatak",
         "ADD_TO_MY_DAY": "Dodaj u danas",
         "ADD_TO_PROJECT": "Dodaj u projekt",
-        "CLEAR_ESTIMATE": "Ukloni procjenu"
+        "CLEAR_ESTIMATE": "Ukloni procjenu",
         "CONVERT_TO_PARENT_TASK": "Pretvori u nadređeni zadatak",
         "CUSTOM_ESTIMATE": "Prilagođeno …",
         "DELETE": "Izbriši zadatak",
@@ -1826,7 +1826,7 @@
         "THURSDAY": "Četvrtak",
         "TITLE": "Ime zadatka",
         "TUESDAY": "Utorak",
-        "WEDNESDAY": "Srijeda"
+        "WEDNESDAY": "Srijeda",
         "WEEK_OF_MONTH": "Tjedan u mjesecu",
         "WEEKDAY": "Dan u tjednu"
       },
@@ -2091,14 +2091,14 @@
       "TITLE": "Automatske sigurnosne kopije"
     },
     "CALENDARS": {
-      "AUTO_IMPORT_FOR_CURRENT_DAY": "Automatski uvezi događaje kao zadatke za tekući dan"
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "Automatski uvezi događaje kao zadatke za tekući dan",
       "BROWSER_WARNING": "Zbog cross-origin ograničenja <b>ovo vjerojatno NEĆE raditi u Super Productivity web pregledniku.<br /> Preuzmi <a href=\"https://super-productivity.com/download/\">desktop verziju</a> za korištenje ove funkcije!</b>",
       "CAL_COLOR": "Boja kalendara",
       "CAL_PATH": "URL iCal izvora",
       "CHECK_UPDATES": "Provjeri udaljena aktualiziranja svakih X",
-      "DISABLE_FOR_WEB_APP": "Isključi kada se koristi web aplikacija"
+      "DISABLE_FOR_WEB_APP": "Isključi kada se koristi web aplikacija",
       "HELP": "Možeš integrirati kalendare kako bi bio podsjećen i dodao ih kao zadatke u Super Productivity. Integracija koristi iCal format. Za rad, tvoji kalendari moraju biti dostupni putem interneta ili datotečnog sustava.",
-      "REFERENCE_CALENDAR": "Referentni kalendar (samo prikaz, bez stvaranja zadataka)"
+      "REFERENCE_CALENDAR": "Referentni kalendar (samo prikaz, bez stvaranja zadataka)",
       "SHOW_BANNER_THRESHOLD": "Prikaži obavijest X prije događaja (ostavi prazno za deaktivirano)"
     },
     "CLIPBOARD_IMAGES": {
@@ -2140,12 +2140,12 @@
       "FOCUS_MODE_SOUND_TICK": "Otkucaji",
       "FOCUS_MODE_SOUND_WHITE_NOISE": "Bijeli šum",
       "HELP": "Modus fokusa otvara ekran bez smetajućih elemenata za bolje fokusiranje na trenutačni zadatak.",
-      "L_AUTO_START_FOCUS_ON_PLAY": "Pokreni fokus sesiju kada započnem pratiti zadatak"
-      "L_FOCUS_MODE_SOUND": "Pozadinski zvuk tijekom fokus sesija"
+      "L_AUTO_START_FOCUS_ON_PLAY": "Pokreni fokus sesiju kada započnem pratiti zadatak",
+      "L_FOCUS_MODE_SOUND": "Pozadinski zvuk tijekom fokus sesija",
       "L_MANUAL_BREAK_START": "Ručno pokreni pauze (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pauziraj praćenje zadatka tijekom pauza",
       "L_SKIP_PREPARATION_SCREEN": "Preskoči ekran pripreme (raketna animacija)",
-      "TITLE": "Modus fokusa",
+      "TITLE": "Modus fokusa"
     },
     "TASK_WIDGET": {
       "TITLE": "Widget zadataka",
@@ -2685,7 +2685,7 @@
     "UNABLE_TO_PERSIST_DATA": "Nije moguće spremiti podatke u spremište dodataka",
     "UNKNOWN_ERROR": "Došlo je do nepoznate greške",
     "UPLOAD_PLUGIN_INSTRUCTION": "Prenesi ZIP datoteku dodatka za instalaciju:",
-    "VALIDATION_FAILED": "Validacija nije uspjela",
+    "VALIDATION_FAILED": "Validacija nije uspjela"
   },
   "PM": {
     "ALL_TASKS_TITLE": "Sve metrike (svi zadaci)",
