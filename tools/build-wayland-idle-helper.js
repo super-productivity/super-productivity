@@ -25,12 +25,24 @@ const hasCargo = () => {
   return result.status === 0;
 };
 
+const isExplicitlySkipped = () => {
+  const value = process.env.SP_SKIP_WAYLAND_IDLE_HELPER_BUILD;
+  return value === '1' || value === 'true';
+};
+
 const buildHelper = () => {
-  if (!hasCargo()) {
+  if (isExplicitlySkipped()) {
     console.warn(
-      '[build-wayland-idle-helper] Rust toolchain not found -- skipping Wayland idle helper. Install via https://rustup.rs if you need it.',
+      '[build-wayland-idle-helper] Skipping Wayland idle helper because SP_SKIP_WAYLAND_IDLE_HELPER_BUILD is set.',
     );
     return;
+  }
+
+  if (!hasCargo()) {
+    console.error(
+      '[build-wayland-idle-helper] Rust/Cargo is required to build the Wayland idle helper. Install rustup/cargo, or set SP_SKIP_WAYLAND_IDLE_HELPER_BUILD=1 for local builds that intentionally omit ext-idle-notify support.',
+    );
+    process.exit(1);
   }
 
   run('cargo', [

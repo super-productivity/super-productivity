@@ -12,6 +12,7 @@ const log = electronLog.scope('IdleTimeHandler');
 const WAYLAND_IDLE_HELPER_READY_TIMEOUT_MS = 3000;
 const WAYLAND_IDLE_HELPER_KILL_TIMEOUT_MS = 500;
 const WAYLAND_IDLE_HELPER_FAILURE_THRESHOLD = 3;
+const WAYLAND_IDLE_NOTIFY_RETRY_INTERVAL_MS = 60_000;
 
 type IdleDetectionMethod =
   | 'powerMonitor'
@@ -45,6 +46,8 @@ export class IdleTimeHandler {
   private _waylandIdleHelperReadyPromise: Promise<boolean> | null = null;
   private _waylandIdleSinceMs: number | null = null;
   private _waylandIdleHelperFailureCount: number = 0;
+  private _waylandIdleNotifyPromotionPromise: Promise<IdleDetectionMethod> | null = null;
+  private _lastWaylandIdleNotifyRetryMs: number = 0;
   private readonly _waylandHelperTimeoutMs = CONFIG.MIN_IDLE_TIME;
   private readonly _resetWaylandIdleAfterResume = (): void => {
     this._waylandIdleSinceMs = null;
@@ -100,7 +103,9 @@ export class IdleTimeHandler {
   }
 
   async getIdleTime(): Promise<number> {
-    const methodUsed = await this._ensureWorkingMethod();
+    const methodUsed = await this._maybePromoteToWaylandIdleNotify(
+      await this._ensureWorkingMethod(),
+    );
 
     switch (methodUsed) {
       case 'powerMonitor':
@@ -180,6 +185,52 @@ export class IdleTimeHandler {
       this._methodDetectionPromise = this._initializeWorkingMethod();
     }
     return this._methodDetectionPromise;
+  }
+
+  private async _maybePromoteToWaylandIdleNotify(
+    currentMethod: IdleDetectionMethod,
+  ): Promise<IdleDetectionMethod> {
+    if (
+      !this._environment.isWayland ||
+      currentMethod === 'gnomeDBus' ||
+      currentMethod === 'waylandIdleNotify'
+    ) {
+      return currentMethod;
+    }
+
+    if (this._waylandIdleNotifyPromotionPromise) {
+      return this._waylandIdleNotifyPromotionPromise;
+    }
+
+    const now = Date.now();
+    if (
+      this._lastWaylandIdleNotifyRetryMs &&
+      now - this._lastWaylandIdleNotifyRetryMs < WAYLAND_IDLE_NOTIFY_RETRY_INTERVAL_MS
+    ) {
+      return currentMethod;
+    }
+    this._lastWaylandIdleNotifyRetryMs = now;
+
+    this._waylandIdleNotifyPromotionPromise = this._ensureWaylandIdleHelperStarted()
+      .then((works) => {
+        if (!works) {
+          return this._workingMethod;
+        }
+
+        log.info('Promoted idle detection method to waylandIdleNotify');
+        this._workingMethod = 'waylandIdleNotify';
+        this._methodDetectionPromise = Promise.resolve('waylandIdleNotify');
+        return 'waylandIdleNotify' as const;
+      })
+      .catch((error: unknown) => {
+        log.debug('Wayland idle-notify promotion failed', error);
+        return this._workingMethod;
+      })
+      .finally(() => {
+        this._waylandIdleNotifyPromotionPromise = null;
+      });
+
+    return this._waylandIdleNotifyPromotionPromise;
   }
 
   private async _determineWorkingMethod(): Promise<IdleDetectionMethod> {
