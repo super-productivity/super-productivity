@@ -14,7 +14,10 @@ import { isDBDateStr } from '../../../util/get-db-date-str';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { IssueProvider, isPluginIssueProvider } from '../../issue/issue.model';
 import { Project } from '../../project/project.model';
-import { selectAllProjects } from '../../project/store/project.selectors';
+import {
+  selectAllProjects,
+  selectArchivedProjects,
+} from '../../project/store/project.selectors';
 import {
   selectTagFeatureState,
   selectTodayTagTaskIds,
@@ -628,18 +631,30 @@ export const selectTimeConflictTaskIds = createSelector(
 
 export const selectAllTasksWithReminder = createSelector(
   selectAllTasks,
-  (tasks: Task[]): TaskWithReminder[] => {
+  selectArchivedProjects,
+  (tasks: Task[], archivedProjects: Project[]): TaskWithReminder[] => {
+    const archivedProjectIds = new Set(archivedProjects.map((p) => p.id));
     return tasks.filter(
-      (task) => task && typeof task.remindAt === 'number' && !task.isDone,
+      (task) =>
+        task &&
+        typeof task.remindAt === 'number' &&
+        !task.isDone &&
+        !archivedProjectIds.has(task.projectId),
     ) as TaskWithReminder[];
   },
 );
 
 export const selectAllTasksWithDeadlineReminder = createSelector(
   selectAllTasks,
-  (tasks: Task[]): Task[] => {
+  selectArchivedProjects,
+  (tasks: Task[], archivedProjects: Project[]): Task[] => {
+    const archivedProjectIds = new Set(archivedProjects.map((p) => p.id));
     return tasks.filter(
-      (task) => task && typeof task.deadlineRemindAt === 'number' && !task.isDone,
+      (task) =>
+        task &&
+        typeof task.deadlineRemindAt === 'number' &&
+        !task.isDone &&
+        !archivedProjectIds.has(task.projectId),
     );
   },
 );
