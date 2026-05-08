@@ -7,6 +7,7 @@ import {
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { isSingletonEntityId } from '../core/entity-registry';
 import { PersistentAction } from '../core/persistent-action.interface';
+import { SyncLog } from '../../core/log';
 
 /**
  * Maps old/renamed action types to their current names.
@@ -82,6 +83,16 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
     typeof actionPayload === 'object' &&
     actionPayload['id'] !== op.entityId
   ) {
+    // The hard rewrite is correct in direction (canonical entityId wins),
+    // but it silently fixes a producer/wire bug. Surface it so we can
+    // detect if the assumption ever breaks in production. Log only the
+    // ids — never the payload content (op log is exportable). #7330.
+    SyncLog.warn(`[convertOpToAction] payload.id mismatch — forcing to op.entityId`, {
+      actionType,
+      entityType: op.entityType,
+      entityId: op.entityId,
+      payloadId: actionPayload['id'],
+    });
     actionPayload = { ...actionPayload, id: op.entityId };
   }
 

@@ -1,5 +1,6 @@
 import { convertOpToAction, ACTION_TYPE_ALIASES } from './operation-converter.util';
 import { ActionType, Operation, OpType } from '../core/operation.types';
+import { SyncLog } from '../../core/log';
 
 describe('operation-converter utility', () => {
   const createMockOperation = (overrides: Partial<Operation> = {}): Operation => ({
@@ -491,6 +492,45 @@ describe('operation-converter utility', () => {
 
         // op.entityId is the canonical identifier — payload.id is overridden.
         expect((action as any).id).toBe('task-canonical');
+      });
+
+      // The override is correct in direction but silently fixes a wire/producer
+      // bug. The converter logs a warning so that if the assumption ever breaks
+      // in production we have a head start before users report a corrupt entity.
+      // Telemetry-by-log: never log payload content, only ids.
+      it('warns when overriding a mismatched payload.id (visibility for stale producer)', () => {
+        const warnSpy = spyOn(SyncLog, 'warn');
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-canonical',
+          payload: { id: 'task-stale', title: 'should not leak to log' },
+        });
+
+        convertOpToAction(op);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          jasmine.stringMatching(/payload\.id mismatch/),
+          jasmine.objectContaining({
+            entityId: 'task-canonical',
+            payloadId: 'task-stale',
+          }),
+        );
+        // Sanity: payload content (title) must NOT appear in the log args.
+        const logCall = warnSpy.calls.mostRecent();
+        expect(JSON.stringify(logCall.args)).not.toContain('should not leak');
+      });
+
+      it('does not warn when payload.id already matches op.entityId', () => {
+        const warnSpy = spyOn(SyncLog, 'warn');
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-canonical',
+          payload: { id: 'task-canonical', title: 'fine' },
+        });
+
+        convertOpToAction(op);
+
+        expect(warnSpy).not.toHaveBeenCalled();
       });
 
       it('does NOT inject id for singleton LWW Update (entityId === "*")', () => {
