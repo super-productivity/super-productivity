@@ -23,6 +23,7 @@ describe('WorkContextMenuComponent', () => {
   beforeEach(() => {
     mockProjectService = jasmine.createSpyObj('ProjectService', [
       'archive',
+      'unarchive',
       'getByIdOnce$',
     ]);
     mockWorkContextService = { activeWorkContextId: undefined };
@@ -65,7 +66,20 @@ describe('WorkContextMenuComponent', () => {
 
     it('should show a snack notification after archiving', async () => {
       await component.archiveProject();
-      expect(mockSnackService.open).toHaveBeenCalledWith(T.F.PROJECT.S.ARCHIVED);
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          ico: 'archive',
+          msg: T.F.PROJECT.S.ARCHIVED,
+          actionStr: T.G.UNDO,
+        }),
+      );
+    });
+
+    it('should call projectService.unarchive when undo action is triggered', async () => {
+      await component.archiveProject();
+      const callArgs = mockSnackService.open.calls.mostRecent().args[0];
+      callArgs['actionFn']();
+      expect(mockProjectService.unarchive).toHaveBeenCalledWith('project-123');
     });
 
     it('should navigate away when archiving the currently active project', async () => {

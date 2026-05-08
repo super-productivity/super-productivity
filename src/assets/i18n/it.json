@@ -900,7 +900,8 @@
         "ARCHIVED": "Progetto archiviato",
         "CREATED": "Creato progetto <strong>{{title}}</strong>. Puoi selezionarlo dal menu in alto a sinistra.",
         "DELETED": "Progetto eliminato",
-        "UNARCHIVED": "Progetto non archiviato",
+        "UNARCHIVED": "Progetto ripristinato",
+        "UNARCHIVED_BUT_HIDDEN": "Progetto ripristinato, ma ancora nascosto dal menu",
         "UPDATED": "Aggiornate impostazioni di progetto"
       },
       "ARCHIVED_PROJECTS": {
