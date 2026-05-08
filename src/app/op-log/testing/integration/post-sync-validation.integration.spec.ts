@@ -5,8 +5,13 @@ import { of, BehaviorSubject } from 'rxjs';
 import { RemoteOpsProcessingService } from '../../sync/remote-ops-processing.service';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
 import { SyncSessionValidationService } from '../../sync/sync-session-validation.service';
+import { SyncHydrationService } from '../../persistence/sync-hydration.service';
 import { ValidateStateService } from '../../validation/validate-state.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
+import { StateSnapshotService } from '../../backup/state-snapshot.service';
+import { ClientIdService } from '../../../core/util/client-id.service';
+import { VectorClockService } from '../../sync/vector-clock.service';
+import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
 
@@ -146,6 +151,113 @@ describe('Post-sync validation latch (#7330) — integration', () => {
         'conflict-resolution',
         { callerHoldsLock: true },
       );
+    });
+  });
+
+  describe('SyncHydrationService snapshot path', () => {
+    let hydrationService: SyncHydrationService;
+    let validateStateForHydrationSpy: jasmine.SpyObj<ValidateStateService>;
+    let hydrationLatch: SyncSessionValidationService;
+
+    beforeEach(() => {
+      // Separate TestBed for the hydration test — wider dependency surface.
+      TestBed.resetTestingModule();
+      validateStateForHydrationSpy = jasmine.createSpyObj('ValidateStateService', [
+        'validateAndRepair',
+        'validateAndRepairCurrentState',
+      ]);
+      const opLogStoreHydrationSpy = jasmine.createSpyObj('OperationLogStoreService', [
+        'getLastSeq',
+        'getUnsynced',
+        'markRejected',
+        'saveStateCache',
+        'setVectorClock',
+        'append',
+        'loadStateCache',
+      ]);
+      opLogStoreHydrationSpy.getLastSeq.and.resolveTo(0);
+      opLogStoreHydrationSpy.getUnsynced.and.resolveTo([]);
+      opLogStoreHydrationSpy.loadStateCache.and.resolveTo(null);
+      const stateSnapshotSpy = jasmine.createSpyObj('StateSnapshotService', [
+        'getStateSnapshot',
+        'getAllSyncModelDataFromStoreAsync',
+      ]);
+      stateSnapshotSpy.getStateSnapshot.and.returnValue({});
+      stateSnapshotSpy.getAllSyncModelDataFromStoreAsync.and.resolveTo({});
+      const clientIdSpy = jasmine.createSpyObj('ClientIdService', [
+        'getClientId',
+        'getOrGenerateClientId',
+      ]);
+      clientIdSpy.getClientId.and.resolveTo('clientTest');
+      clientIdSpy.getOrGenerateClientId.and.resolveTo('clientTest');
+      const vectorClockSpy = jasmine.createSpyObj('VectorClockService', [
+        'getCurrentVectorClock',
+      ]);
+      vectorClockSpy.getCurrentVectorClock.and.resolveTo({});
+      const archiveDbSpy = jasmine.createSpyObj('ArchiveDbAdapter', ['load']);
+      archiveDbSpy.load.and.resolveTo(undefined);
+      const storeForHydrationSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+      storeForHydrationSpy.select.and.returnValue(
+        of({ syncProvider: null, isEnabled: false }),
+      );
+
+      TestBed.configureTestingModule({
+        providers: [
+          SyncSessionValidationService,
+          SyncHydrationService,
+          { provide: ValidateStateService, useValue: validateStateForHydrationSpy },
+          { provide: OperationLogStoreService, useValue: opLogStoreHydrationSpy },
+          { provide: StateSnapshotService, useValue: stateSnapshotSpy },
+          { provide: ClientIdService, useValue: clientIdSpy },
+          { provide: VectorClockService, useValue: vectorClockSpy },
+          { provide: ArchiveDbAdapter, useValue: archiveDbSpy },
+          { provide: SnackService, useValue: jasmine.createSpyObj('S', ['open']) },
+          { provide: Store, useValue: storeForHydrationSpy },
+          {
+            provide: TranslateService,
+            useValue: { instant: (k: string): string => k },
+          },
+        ],
+      });
+
+      hydrationService = TestBed.inject(SyncHydrationService);
+      hydrationLatch = TestBed.inject(SyncSessionValidationService);
+      hydrationLatch.reset();
+    });
+
+    // Codex review found: hydrateFromRemoteSync runs validateAndRepair
+    // directly and was not flipping the latch on failure. Snapshot
+    // hydration (file-based providers, USE_REMOTE force-download) would
+    // therefore silently accept corrupt remote state.
+    it('flips the latch when validateAndRepair reports an unrepairable remote snapshot', async () => {
+      validateStateForHydrationSpy.validateAndRepair.and.resolveTo({
+        isValid: false,
+        wasRepaired: false,
+        error: 'simulated corruption',
+      } as never);
+
+      await hydrationService.hydrateFromRemoteSync(
+        { task: { ids: [], entities: {} } as never },
+        { clientRemote: 1 },
+        false,
+      );
+
+      expect(hydrationLatch.hasFailed()).toBe(true);
+    });
+
+    it('leaves the latch reset when validateAndRepair reports a clean snapshot', async () => {
+      validateStateForHydrationSpy.validateAndRepair.and.resolveTo({
+        isValid: true,
+        wasRepaired: false,
+      } as never);
+
+      await hydrationService.hydrateFromRemoteSync(
+        { task: { ids: [], entities: {} } as never },
+        { clientRemote: 1 },
+        false,
+      );
+
+      expect(hydrationLatch.hasFailed()).toBe(false);
     });
   });
 

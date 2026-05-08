@@ -63,12 +63,16 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
     ? extractFullStatePayload(op.payload)
     : (extractActionPayload(op.payload) as Record<string, unknown>);
 
-  // Backfill `payload.id` for LWW Update ops at the apply boundary. Producers
-  // also force this in their own creation paths (so the on-disk op shape is
-  // explicit), but doing it here means every applied LWW op has the id set —
-  // removing the need for downstream defense-in-depth and covering ops that
-  // pre-date the producer fixes. Singletons use `SINGLETON_ENTITY_ID` and
-  // have no `id` field. Issue #7330.
+  // Force `payload.id = op.entityId` for non-singleton LWW Update ops. The
+  // op's `entityId` is the canonical identifier — producers also enforce
+  // this when creating ops, but a malformed/older remote op (or any path
+  // that ever drifts) could carry a payload.id that disagrees with
+  // op.entityId, in which case the consumer reducer at
+  // task-shared-meta-reducers/lww-update.meta-reducer.ts trusts payload.id
+  // and would update the WRONG entity. Forcing here makes "entityId is
+  // canonical" a hard invariant at the apply boundary regardless of
+  // producer or wire shape. Singletons use `SINGLETON_ENTITY_ID` and have
+  // no `id` field. Issue #7330.
   if (
     !isFullStateOp &&
     isLwwUpdateActionType(actionType) &&
@@ -76,7 +80,7 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
     !isSingletonEntityId(op.entityId) &&
     actionPayload &&
     typeof actionPayload === 'object' &&
-    !actionPayload['id']
+    actionPayload['id'] !== op.entityId
   ) {
     actionPayload = { ...actionPayload, id: op.entityId };
   }

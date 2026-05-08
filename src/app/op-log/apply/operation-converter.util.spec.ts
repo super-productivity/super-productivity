@@ -466,16 +466,31 @@ describe('operation-converter utility', () => {
         expect((action as any).title).toBe('Recovered');
       });
 
-      it('preserves an explicitly-set payload id', () => {
+      it('preserves payload id when it already matches op.entityId', () => {
         const op = createMockOperation({
           actionType: '[TASK] LWW Update' as ActionType,
           entityId: 'task-canonical',
-          payload: { id: 'task-explicit', title: 'Explicit' },
+          payload: { id: 'task-canonical', title: 'Match' },
         });
         const action = convertOpToAction(op);
 
-        // Explicit id wins; converter only fills when missing.
-        expect((action as any).id).toBe('task-explicit');
+        expect((action as any).id).toBe('task-canonical');
+      });
+
+      // Regression net (#7330 / codex review): a malformed or older remote
+      // LWW op whose payload.id disagrees with op.entityId would otherwise
+      // update the WRONG entity in lwwUpdateMetaReducer (which trusts
+      // entityData.id). The converter must enforce op.entityId as canonical.
+      it('overrides a payload id that disagrees with op.entityId', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-canonical',
+          payload: { id: 'task-malicious-or-stale', title: 'Drift' },
+        });
+        const action = convertOpToAction(op);
+
+        // op.entityId is the canonical identifier — payload.id is overridden.
+        expect((action as any).id).toBe('task-canonical');
       });
 
       it('does NOT inject id for singleton LWW Update (entityId === "*")', () => {

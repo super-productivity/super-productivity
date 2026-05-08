@@ -5,6 +5,7 @@ import { SuperSyncWebSocketService } from './super-sync-websocket.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { WrappedProviderService } from '../sync-providers/wrapped-provider.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { SyncLog } from '../../core/log';
 import { AuthFailSPError, MissingCredentialsSPError } from '../sync-exports';
 
@@ -26,6 +27,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
   private _syncService = inject(OperationLogSyncService);
   private _providerManager = inject(SyncProviderManager);
   private _wrappedProvider = inject(WrappedProviderService);
+  private _sessionValidation = inject(SyncSessionValidationService);
 
   private _subscription: Subscription | null = null;
 
@@ -62,6 +64,14 @@ export class WsTriggeredDownloadService implements OnDestroy {
       return;
     }
 
+    // WS-triggered downloads are their own session boundary. Reset the
+    // latch up-front so the read at the end reflects only this session,
+    // and a leaked-failed latch from a prior path can't masquerade as a
+    // failure here. (#7330 — codex review found that without this the
+    // validation result of a realtime apply was silently dropped before
+    // the next user-initiated sync() reset the latch.)
+    this._sessionValidation.reset();
+
     try {
       const rawProvider = this._providerManager.getActiveProvider();
       if (!rawProvider) {
@@ -87,6 +97,13 @@ export class WsTriggeredDownloadService implements OnDestroy {
       const result = await this._syncService.downloadRemoteOps(syncCapableProvider);
 
       SyncLog.log(`WsTriggeredDownloadService: Download complete. kind=${result.kind}`);
+
+      if (this._sessionValidation.hasFailed()) {
+        SyncLog.err(
+          'WsTriggeredDownloadService: Post-sync validation failed during WS download — reporting ERROR',
+        );
+        this._providerManager.setSyncStatus('ERROR');
+      }
     } catch (err) {
       if (err instanceof AuthFailSPError || err instanceof MissingCredentialsSPError) {
         SyncLog.warn('WsTriggeredDownloadService: Auth failure during download', err);
