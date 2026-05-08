@@ -361,6 +361,14 @@ export class OperationLogSyncService {
       forceFromSeq0?: boolean;
     }): Promise<DownloadResultForRejection> => {
       const outcome = await this.downloadRemoteOps(syncProvider, downloadOptions);
+      // A nested download here can itself run post-sync validation via
+      // processRemoteOps → validateAfterSync. The DownloadResultForRejection
+      // shape doesn't carry the boolean back to the rejected-op handler, so
+      // route it via the outer `piggybackValidationFailed` flag — that is
+      // what eventually surfaces in our return below. (#7330)
+      if (outcome.kind === 'ops_processed' && outcome.validationFailed) {
+        piggybackValidationFailed = true;
+      }
       switch (outcome.kind) {
         case 'ops_processed':
           return {

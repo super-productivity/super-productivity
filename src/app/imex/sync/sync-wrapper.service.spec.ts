@@ -655,6 +655,43 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
+    // Issue #7330 follow-up: the LWW re-upload retry loop initially discarded
+    // reuploadResult.validationFailed. If a re-upload pass triggered a
+    // piggybacked download with failing post-sync validation, sync would
+    // still report IN_SYNC.
+    it('should set ERROR (not IN_SYNC) when LWW re-upload reports validationFailed', async () => {
+      // First upload returns localWinOpsCreated to enter the retry loop.
+      // Re-upload returns validationFailed=true with no remaining LWW ops
+      // (loop terminates after detecting the failure).
+      mockSyncService.uploadPendingOps.and.returnValues(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 1,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 2,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 1,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+          validationFailed: true,
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
     it('should set ERROR and return HANDLED_ERROR when upload has rejected ops with "Payload too complex"', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({

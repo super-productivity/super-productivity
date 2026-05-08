@@ -471,6 +471,10 @@ export class SyncWrapperService {
         uploadResult.kind === 'completed' ? uploadResult.localWinOpsCreated : 0;
       let lwwRetries = 0;
       let pendingLwwOps = downloadLwwOps + uploadLwwOps;
+      // Retry-pass piggybacked downloads can themselves trigger validation;
+      // discarding the boolean would re-introduce the original IN_SYNC bug
+      // for the retry path. (#7330)
+      let reuploadValidationFailed = false;
       while (pendingLwwOps > 0 && lwwRetries < MAX_LWW_REUPLOAD_RETRIES) {
         lwwRetries++;
         SyncLog.log(
@@ -481,6 +485,9 @@ export class SyncWrapperService {
           await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
         pendingLwwOps =
           reuploadResult.kind === 'completed' ? reuploadResult.localWinOpsCreated : 0;
+        if (reuploadResult.kind === 'completed' && reuploadResult.validationFailed) {
+          reuploadValidationFailed = true;
+        }
       }
       if (pendingLwwOps > 0) {
         SyncLog.warn(
@@ -500,12 +507,17 @@ export class SyncWrapperService {
         downloadResult.kind === 'ops_processed' && downloadResult.validationFailed;
       const uploadValidationFailed =
         uploadResult.kind === 'completed' && uploadResult.validationFailed;
-      if (downloadValidationFailed || uploadValidationFailed) {
+      if (
+        downloadValidationFailed ||
+        uploadValidationFailed ||
+        reuploadValidationFailed
+      ) {
         SyncLog.err(
           'SyncWrapperService: Post-sync state validation failed, not marking as IN_SYNC',
           {
             downloadValidationFailed,
             uploadValidationFailed,
+            reuploadValidationFailed,
           },
         );
         this._providerManager.setSyncStatus('ERROR');

@@ -910,5 +910,113 @@ describe('bulkHydrationMetaReducer', () => {
         ?.action as { taskIds?: string[] } | undefined;
       expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
     });
+
+    // moveToArchive only declares top-level task IDs in op.entityIds, but the
+    // reducer cascades to subtasks via taskIdsToArchive = [t.id, ...t.subTasks.map(st => st.id)].
+    // The pre-scan must harvest subtask IDs from the archive payload too.
+    it('strips subtask IDs (cascade) referenced by a TAG LWW Update', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const SUB_TASK_ID = 'sub-task-1';
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-with-subtask',
+        actionType: TAG_LWW_TYPE as ActionType,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      // Archive op carries the parent + its subTasks. entityIds is [parent]
+      // only, but the reducer also archives the subTasks, so any LWW payload
+      // referencing those subtasks must be cleaned.
+      const archiveOpWithSubtasks: Operation = createMockOperation({
+        id: 'archive-op-with-subs',
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        entityIds: [TASK_ID],
+        payload: {
+          actionPayload: {
+            tasks: [
+              {
+                id: TASK_ID,
+                title: 'Parent',
+                subTasks: [{ id: SUB_TASK_ID, title: 'Sub' }],
+              },
+            ],
+          },
+          entityChanges: [],
+        },
+      });
+
+      const operations = [tagLwwOp, archiveOpWithSubtasks];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      // Both parent (TASK_ID) and subtask (SUB_TASK_ID) should be stripped.
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+
+    // deleteTask carries a single task with subTasks/subTaskIds. The reducer
+    // cascades to subtasks, so subtask IDs must be stripped from co-batched
+    // TAG/PROJECT LWW Update payloads.
+    it('strips subtask IDs (cascade) when a deleteTask op carries subtasks', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const SUB_TASK_ID = 'sub-of-deleted';
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-delete-subtask',
+        actionType: TAG_LWW_TYPE as ActionType,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      const deleteOp: Operation = createMockOperation({
+        id: 'delete-op-with-subs',
+        actionType: ActionType.TASK_SHARED_DELETE,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        payload: {
+          actionPayload: {
+            task: {
+              id: TASK_ID,
+              title: 'Parent',
+              subTasks: [{ id: SUB_TASK_ID, title: 'Sub' }],
+              subTaskIds: [SUB_TASK_ID],
+            },
+          },
+          entityChanges: [],
+        },
+      });
+
+      const operations = [tagLwwOp, deleteOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
   });
 });

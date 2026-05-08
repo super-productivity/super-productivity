@@ -511,6 +511,50 @@ describe('OperationLogSyncService', () => {
             jasmine.any(Function),
           );
         });
+
+        // Issue #7330 follow-up: a download triggered from inside the
+        // rejected-op handler can run post-sync validation. If validation
+        // fails on that path, the boolean must surface through the eventual
+        // uploadPendingOps return — otherwise sync-wrapper reports IN_SYNC.
+        it('should surface validationFailed from a download triggered by handleRejectedOps callback', async () => {
+          uploadServiceSpy.uploadPendingOps.and.returnValue(
+            Promise.resolve({
+              uploadedCount: 0,
+              piggybackedOps: [],
+              rejectedCount: 1,
+              rejectedOps: [
+                {
+                  opId: 'local-op-1',
+                  error: 'Concurrent',
+                  errorCode: 'CONFLICT_CONCURRENT',
+                },
+              ],
+            }),
+          );
+
+          rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
+            async (_ops, callback) => {
+              await callback?.();
+              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+            },
+          );
+
+          spyOn(service, 'downloadRemoteOps').and.returnValue(
+            Promise.resolve({
+              kind: 'ops_processed' as const,
+              newOpsCount: 1,
+              localWinOpsCreated: 0,
+              validationFailed: true,
+            }),
+          );
+
+          const result = await service.uploadPendingOps(mockProvider);
+
+          expect(result.kind).toBe('completed');
+          if (result.kind === 'completed') {
+            expect(result.validationFailed).toBe(true);
+          }
+        });
       });
     });
 

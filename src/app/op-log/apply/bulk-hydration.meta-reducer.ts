@@ -6,6 +6,54 @@ import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { OpLog } from '../../core/log';
 
 /**
+ * Issue #7330: `moveToArchive` declares only top-level task IDs in
+ * `op.entityIds`, but the reducer cascades to subtasks via
+ * `[t.id, ...t.subTasks.map(st => st.id)]`. `deleteTask` carries a single
+ * `TaskWithSubTasks` and its reducer cascades the same way. Without this
+ * helper, a co-batched TAG/PROJECT LWW Update referencing an archived
+ * subtask would still leak through the strip below.
+ */
+const collectCascadedSubTaskIds = (op: Operation, sink: Set<string>): void => {
+  if (
+    op.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE &&
+    op.actionType !== ActionType.TASK_SHARED_DELETE
+  ) {
+    return;
+  }
+  const payload = op.payload;
+  if (!payload || typeof payload !== 'object') return;
+  // op payloads use MultiEntityPayload format ({ actionPayload, entityChanges })
+  // for these action types; unwrap to the action body.
+  const inner =
+    'actionPayload' in (payload as Record<string, unknown>)
+      ? ((payload as Record<string, unknown>).actionPayload as Record<string, unknown>)
+      : (payload as Record<string, unknown>);
+
+  const harvestSubTasks = (taskLike: unknown): void => {
+    if (!taskLike || typeof taskLike !== 'object') return;
+    const subTasks = (taskLike as { subTasks?: unknown }).subTasks;
+    if (Array.isArray(subTasks)) {
+      for (const st of subTasks) {
+        const id = (st as { id?: unknown } | null)?.id;
+        if (typeof id === 'string') sink.add(id);
+      }
+    }
+    const subTaskIds = (taskLike as { subTaskIds?: unknown }).subTaskIds;
+    if (Array.isArray(subTaskIds)) {
+      for (const id of subTaskIds) {
+        if (typeof id === 'string') sink.add(id);
+      }
+    }
+  };
+
+  // moveToArchive: { tasks: TaskWithSubTasks[] }
+  const tasks = (inner as { tasks?: unknown }).tasks;
+  if (Array.isArray(tasks)) tasks.forEach(harvestSubTasks);
+  // deleteTask: { task: TaskWithSubTasks }
+  harvestSubTasks((inner as { task?: unknown }).task);
+};
+
+/**
  * Issue #7330: `lwwUpdateMetaReducer`'s orphan filter only sees taskState as
  * it is when each op runs. A TAG LWW Update applied before its sibling
  * archive op in the same batch escapes the filter, leaving TODAY_TAG (or any
@@ -112,6 +160,7 @@ export const bulkOperationsMetaReducer = <T>(
           } else if (op.entityId) {
             archivingOrDeletingEntityIds.add(op.entityId);
           }
+          collectCascadedSubTaskIds(op, archivingOrDeletingEntityIds);
         }
       }
 
