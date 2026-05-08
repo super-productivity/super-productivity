@@ -6,10 +6,14 @@ import { SyncLog } from '../../core/log';
  * failed at any point during the current sync session.
  *
  * A "sync session" is a single top-level sync operation:
- * - `SyncWrapperService.sync()`
+ * - `SyncWrapperService._sync()`
  * - `SyncWrapperService._forceDownload()`
- * - `SyncWrapperService.resolveSyncConflict()` (USE_REMOTE branch)
  * - `WsTriggeredDownloadService._downloadOps()`
+ * - `ImmediateUploadService._performUpload()`
+ *
+ * The USE_REMOTE branch in `SyncWrapperService._handleLocalDataConflict`
+ * is *not* an entry point — it runs inside `_sync()`'s session and uses
+ * `reset()` for sub-scope re-scoping (see the `reset()` docs below).
  *
  * These entry points are serialised by the wrapper's global lock, so a
  * single mutable boolean is safe — there is never more than one session
