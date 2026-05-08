@@ -5,15 +5,61 @@ import { ActionType, Operation } from '../core/operation.types';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { OpLog } from '../../core/log';
 
+// Task NgRx feature key. Hardcoded here (rather than imported from
+// features/tasks) to keep this op-log infrastructure file free of feature
+// imports. Kept in sync with `TASK_FEATURE_NAME` in
+// features/tasks/store/task.reducer.ts.
+const TASK_FEATURE_KEY = 'tasks';
+
+const harvestSubTaskIdsFromTaskLike = (taskLike: unknown, sink: Set<string>): void => {
+  if (!taskLike || typeof taskLike !== 'object') return;
+  const subTasks = (taskLike as { subTasks?: unknown }).subTasks;
+  if (Array.isArray(subTasks)) {
+    for (const st of subTasks) {
+      const id = (st as { id?: unknown } | null)?.id;
+      if (typeof id === 'string') sink.add(id);
+    }
+  }
+  const subTaskIds = (taskLike as { subTaskIds?: unknown }).subTaskIds;
+  if (Array.isArray(subTaskIds)) {
+    for (const id of subTaskIds) {
+      if (typeof id === 'string') sink.add(id);
+    }
+  }
+};
+
 /**
  * Issue #7330: `moveToArchive` declares only top-level task IDs in
  * `op.entityIds`, but the reducer cascades to subtasks via
  * `[t.id, ...t.subTasks.map(st => st.id)]`. `deleteTask` carries a single
- * `TaskWithSubTasks` and its reducer cascades the same way. Without this
- * helper, a co-batched TAG/PROJECT LWW Update referencing an archived
+ * `TaskWithSubTasks` and its reducer cascades the same way. `deleteTasks`
+ * (DELETE_MULTIPLE) only carries flat `taskIds` in its payload, so subtask
+ * cascade must be derived from `state` at pre-scan time — mirroring what
+ * `handleDeleteTasks` does at apply time. Without this helper, a
+ * co-batched TAG/PROJECT LWW Update referencing an archived/deleted
  * subtask would still leak through the strip below.
  */
-const collectCascadedSubTaskIds = (op: Operation, sink: Set<string>): void => {
+const collectCascadedSubTaskIds = (
+  op: Operation,
+  sink: Set<string>,
+  state: unknown,
+): void => {
+  if (op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE) {
+    // Bulk delete payload has no embedded subtask info; look them up from
+    // the initial batch state by parent entityId.
+    if (!op.entityIds || op.entityIds.length === 0) return;
+    if (!state || typeof state !== 'object') return;
+    const taskFeature = (state as Record<string, unknown>)[TASK_FEATURE_KEY];
+    if (!taskFeature || typeof taskFeature !== 'object') return;
+    const entities = (taskFeature as { entities?: unknown }).entities;
+    if (!entities || typeof entities !== 'object') return;
+    const entityMap = entities as Record<string, unknown>;
+    for (const parentId of op.entityIds) {
+      harvestSubTaskIdsFromTaskLike(entityMap[parentId], sink);
+    }
+    return;
+  }
+
   if (
     op.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE &&
     op.actionType !== ActionType.TASK_SHARED_DELETE
@@ -32,28 +78,13 @@ const collectCascadedSubTaskIds = (op: Operation, sink: Set<string>): void => {
   if (!candidateInner || typeof candidateInner !== 'object') return;
   const inner = candidateInner as Record<string, unknown>;
 
-  const harvestSubTasks = (taskLike: unknown): void => {
-    if (!taskLike || typeof taskLike !== 'object') return;
-    const subTasks = (taskLike as { subTasks?: unknown }).subTasks;
-    if (Array.isArray(subTasks)) {
-      for (const st of subTasks) {
-        const id = (st as { id?: unknown } | null)?.id;
-        if (typeof id === 'string') sink.add(id);
-      }
-    }
-    const subTaskIds = (taskLike as { subTaskIds?: unknown }).subTaskIds;
-    if (Array.isArray(subTaskIds)) {
-      for (const id of subTaskIds) {
-        if (typeof id === 'string') sink.add(id);
-      }
-    }
-  };
-
   // moveToArchive: { tasks: TaskWithSubTasks[] }
   const tasks = (inner as { tasks?: unknown }).tasks;
-  if (Array.isArray(tasks)) tasks.forEach(harvestSubTasks);
+  if (Array.isArray(tasks)) {
+    for (const t of tasks) harvestSubTaskIdsFromTaskLike(t, sink);
+  }
   // deleteTask: { task: TaskWithSubTasks }
-  harvestSubTasks((inner as { task?: unknown }).task);
+  harvestSubTaskIdsFromTaskLike((inner as { task?: unknown }).task, sink);
 };
 
 /**
@@ -163,7 +194,7 @@ export const bulkOperationsMetaReducer = <T>(
           } else if (op.entityId) {
             archivingOrDeletingEntityIds.add(op.entityId);
           }
-          collectCascadedSubTaskIds(op, archivingOrDeletingEntityIds);
+          collectCascadedSubTaskIds(op, archivingOrDeletingEntityIds, state);
         }
       }
 

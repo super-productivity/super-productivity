@@ -181,6 +181,13 @@ export type DownloadOutcome =
       kind: 'no_new_ops';
       allOpClocks?: VectorClock[];
       snapshotVectorClock?: VectorClock;
+      /**
+       * Set when this terminal state was reached after a USE_REMOTE
+       * conflict-resolution that ran `validateAfterSync` against the
+       * downloaded state and the validation reported corruption. The
+       * wrapper must not claim IN_SYNC. Issue #7330.
+       */
+      validationFailed?: boolean;
     }
   | {
       /** Incremental ops were downloaded and processed. */

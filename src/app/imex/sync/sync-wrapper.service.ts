@@ -464,6 +464,23 @@ export class SyncWrapperService {
         return 'HANDLED_ERROR';
       }
 
+      // Issue #7330: post-sync state validation failure must not be reported
+      // as IN_SYNC. Previously the validation result was discarded; the user
+      // saw a "State validation failed" snackbar yet the indicator still said
+      // IN_SYNC, masking real corruption.
+      //
+      // Hoisted above the LWW retry loop so the failure is recognised even
+      // when retries also exhaust (otherwise the retry-exhaustion branch
+      // below would return UNKNOWN_OR_CHANGED, masking validation failure).
+      // `no_new_ops` carries `validationFailed` in the USE_REMOTE conflict
+      // path (forceDownloadRemoteState).
+      const downloadValidationFailed =
+        (downloadResult.kind === 'ops_processed' ||
+          downloadResult.kind === 'no_new_ops') &&
+        downloadResult.validationFailed === true;
+      const uploadValidationFailed =
+        uploadResult.kind === 'completed' && uploadResult.validationFailed === true;
+
       // 3. If LWW created local-win ops, upload them (with retry limit to prevent infinite loops)
       const downloadLwwOps =
         downloadResult.kind === 'ops_processed' ? downloadResult.localWinOpsCreated : 0;
@@ -494,13 +511,22 @@ export class SyncWrapperService {
           `SyncWrapperService: LWW re-upload still has ${pendingLwwOps} pending ops after ` +
             `${MAX_LWW_REUPLOAD_RETRIES} retries. Will retry on next sync.`,
         );
-        // If validation also failed during a retry, prefer ERROR over the
-        // softer UNKNOWN_OR_CHANGED — validation failure is more serious
-        // than unuploaded ops, and the user already saw a "State validation
-        // failed" snackbar. (#7521)
-        if (reuploadValidationFailed) {
+        // If validation failed at any point (initial download, initial upload,
+        // or retry), prefer ERROR over the softer UNKNOWN_OR_CHANGED —
+        // validation failure is more serious than unuploaded ops, and the
+        // user already saw a "State validation failed" snackbar. (#7521)
+        if (
+          downloadValidationFailed ||
+          uploadValidationFailed ||
+          reuploadValidationFailed
+        ) {
           SyncLog.err(
-            'SyncWrapperService: Validation failed during LWW re-upload retries; reporting ERROR',
+            'SyncWrapperService: Validation failed during sync (retry exhaustion path); reporting ERROR',
+            {
+              downloadValidationFailed,
+              uploadValidationFailed,
+              reuploadValidationFailed,
+            },
           );
           this._providerManager.setSyncStatus('ERROR');
           return 'HANDLED_ERROR';
@@ -510,14 +536,6 @@ export class SyncWrapperService {
         return SyncStatus.UpdateRemote;
       }
 
-      // Issue #7330: post-sync state validation failure must not be reported
-      // as IN_SYNC. Previously the validation result was discarded; the user
-      // saw a "State validation failed" snackbar yet the indicator still said
-      // IN_SYNC, masking real corruption.
-      const downloadValidationFailed =
-        downloadResult.kind === 'ops_processed' && downloadResult.validationFailed;
-      const uploadValidationFailed =
-        uploadResult.kind === 'completed' && uploadResult.validationFailed;
       if (
         downloadValidationFailed ||
         uploadValidationFailed ||
@@ -871,8 +889,16 @@ export class SyncWrapperService {
           return;
         }
 
-        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-        this._providerManager.setSyncStatus('IN_SYNC');
+        const downloadResult =
+          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        if (downloadResult.validationFailed) {
+          SyncLog.err(
+            'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+        } else {
+          this._providerManager.setSyncStatus('IN_SYNC');
+        }
         SyncLog.log('SyncWrapperService: Force download complete');
       } catch (error) {
         SyncLog.err('SyncWrapperService: Force download failed:', error);
@@ -1187,7 +1213,15 @@ export class SyncWrapperService {
         SyncLog.log(
           'SyncWrapperService: User chose USE_REMOTE - downloading remote state, discarding local',
         );
-        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        const downloadResult =
+          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        if (downloadResult.validationFailed) {
+          SyncLog.err(
+            'SyncWrapperService: USE_REMOTE applied but post-sync validation failed; reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+          return 'HANDLED_ERROR';
+        }
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else {

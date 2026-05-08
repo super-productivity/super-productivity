@@ -311,7 +311,7 @@ export class OperationLogSyncService {
               `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
           );
 
-          const resolution = await this._handleSyncImportConflict(
+          const conflictResult = await this._handleSyncImportConflict(
             syncProvider,
             {
               filteredOpCount: pendingOps.length,
@@ -321,10 +321,12 @@ export class OperationLogSyncService {
             },
             'OperationLogSyncService (piggybacked full-state op)',
           );
-          if (resolution === 'CANCEL') {
+          if (conflictResult.resolution === 'CANCEL') {
             return { kind: 'cancelled' };
           }
-          // USE_LOCAL or USE_REMOTE was handled — report as completed with no further work
+          // USE_LOCAL or USE_REMOTE was handled — report as completed with no further work.
+          // Surface USE_REMOTE post-sync validation failure so SyncWrapperService can
+          // refuse IN_SYNC. Issue #7330.
           return {
             kind: 'completed',
             uploadedCount: result.uploadedCount,
@@ -333,6 +335,8 @@ export class OperationLogSyncService {
             permanentRejectionCount: 0,
             hasMorePiggyback: false,
             rejectedOps: [],
+            validationFailed:
+              piggybackValidationFailed || conflictResult.validationFailed,
           };
         } else {
           OpLog.normal(
@@ -750,7 +754,7 @@ export class OperationLogSyncService {
             `with ${pendingLocalOps.length} pending local ops. Showing conflict dialog.`,
         );
 
-        const resolution = await this._handleSyncImportConflict(
+        const conflictResult = await this._handleSyncImportConflict(
           syncProvider,
           {
             filteredOpCount: pendingLocalOps.length,
@@ -760,10 +764,14 @@ export class OperationLogSyncService {
           },
           'OperationLogSyncService (incoming full-state op)',
         );
-        if (resolution === 'CANCEL') {
+        if (conflictResult.resolution === 'CANCEL') {
           return { kind: 'cancelled' };
         }
-        return { kind: 'no_new_ops' };
+        // Surface USE_REMOTE post-sync validation failure. Issue #7330.
+        return {
+          kind: 'no_new_ops',
+          validationFailed: conflictResult.validationFailed,
+        };
       } else {
         OpLog.normal(
           `OperationLogSyncService: Accepting incoming ${incomingFullStateOp.opType} from client ` +
@@ -796,7 +804,7 @@ export class OperationLogSyncService {
           `Showing conflict resolution dialog (local import detected).`,
       );
 
-      const resolution = await this._handleSyncImportConflict(
+      const conflictResult = await this._handleSyncImportConflict(
         syncProvider,
         {
           filteredOpCount: processResult.filteredOpCount,
@@ -806,10 +814,14 @@ export class OperationLogSyncService {
         },
         'OperationLogSyncService (local SYNC_IMPORT filters remote)',
       );
-      if (resolution === 'CANCEL') {
+      if (conflictResult.resolution === 'CANCEL') {
         return { kind: 'cancelled' };
       }
-      return { kind: 'no_new_ops' };
+      // Surface USE_REMOTE post-sync validation failure. Issue #7330.
+      return {
+        kind: 'no_new_ops',
+        validationFailed: conflictResult.validationFailed,
+      };
     } else if (
       processResult.allOpsFilteredBySyncImport &&
       processResult.filteredOpCount > 0
@@ -868,7 +880,10 @@ export class OperationLogSyncService {
     syncProvider: OperationSyncCapable,
     dialogData: SyncImportConflictData,
     logPrefix: string,
-  ): Promise<SyncImportConflictResolution> {
+  ): Promise<{
+    resolution: SyncImportConflictResolution;
+    validationFailed: boolean;
+  }> {
     const resolution =
       await this.syncImportConflictDialogService.showConflictDialog(dialogData);
 
@@ -876,17 +891,21 @@ export class OperationLogSyncService {
       case 'USE_LOCAL':
         OpLog.normal(`${logPrefix}: User chose USE_LOCAL. Force uploading local state.`);
         await this.forceUploadLocalState(syncProvider);
-        return 'USE_LOCAL';
-      case 'USE_REMOTE':
+        return { resolution: 'USE_LOCAL', validationFailed: false };
+      case 'USE_REMOTE': {
         OpLog.normal(
           `${logPrefix}: User chose USE_REMOTE. Force downloading remote state.`,
         );
-        await this.forceDownloadRemoteState(syncProvider);
-        return 'USE_REMOTE';
+        const downloadResult = await this.forceDownloadRemoteState(syncProvider);
+        return {
+          resolution: 'USE_REMOTE',
+          validationFailed: downloadResult.validationFailed,
+        };
+      }
       case 'CANCEL':
       default:
         OpLog.normal(`${logPrefix}: User cancelled SYNC_IMPORT conflict resolution.`);
-        return 'CANCEL';
+        return { resolution: 'CANCEL', validationFailed: false };
     }
   }
 
@@ -957,10 +976,13 @@ export class OperationLogSyncService {
    *
    * @param syncProvider - The sync provider to download from
    */
-  async forceDownloadRemoteState(syncProvider: OperationSyncCapable): Promise<void> {
+  async forceDownloadRemoteState(
+    syncProvider: OperationSyncCapable,
+  ): Promise<{ validationFailed: boolean }> {
     OpLog.warn(
       'OperationLogSyncService: Force downloading remote state - clearing local import and unsynced ops.',
     );
+    let validationFailed = false;
 
     // IMPORTANT: Clear local full-state ops (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)
     // This is critical - if the user chose USE_REMOTE, we must not filter incoming
@@ -1035,7 +1057,7 @@ export class OperationLogSyncService {
       OpLog.normal(
         'OperationLogSyncService: Force download snapshot hydration complete.',
       );
-      return;
+      return { validationFailed };
     }
 
     if (result.newOps.length > 0) {
@@ -1067,9 +1089,15 @@ export class OperationLogSyncService {
       // Process all remote ops (no confirmation needed - user already chose USE_REMOTE)
       // Skip conflict detection because the NgRx store was just reset to empty state,
       // which causes all entities to appear missing and CONCURRENT ops to be discarded.
-      await this.remoteOpsProcessingService.processRemoteOps(result.newOps, {
-        skipConflictDetection: true,
-      });
+      // Capture validationFailed so callers (and ultimately SyncWrapperService) can
+      // refuse IN_SYNC when the downloaded state is corrupt. Issue #7330.
+      const processResult = await this.remoteOpsProcessingService.processRemoteOps(
+        result.newOps,
+        { skipConflictDetection: true },
+      );
+      if (processResult.validationFailed) {
+        validationFailed = true;
+      }
 
       // Update lastServerSeq
       if (result.latestServerSeq !== undefined) {
@@ -1080,6 +1108,7 @@ export class OperationLogSyncService {
     OpLog.normal(
       `OperationLogSyncService: Force download complete. Processed ${result.newOps.length} ops.`,
     );
+    return { validationFailed };
   }
 
   /**

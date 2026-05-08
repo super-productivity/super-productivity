@@ -968,6 +968,75 @@ describe('bulkHydrationMetaReducer', () => {
       expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
     });
 
+    // deleteTasks (DELETE_MULTIPLE) only carries flat taskIds in its payload.
+    // The reducer cascades to subtasks via state lookup at apply time, so the
+    // pre-scan must do the same — otherwise a co-batched TAG/PROJECT LWW
+    // Update can retain subtask IDs deleted by the bulk delete.
+    it('strips subtask IDs (cascade) when a deleteTasks op references parents with subtasks via state lookup', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const SUB_TASK_ID = 'sub-of-bulk-deleted';
+      const state = {
+        ...createMockState(),
+        [TASK_FEATURE_NAME]: {
+          ids: [TASK_ID, SUB_TASK_ID],
+          entities: {
+            [TASK_ID]: createMockTask({
+              id: TASK_ID,
+              subTaskIds: [SUB_TASK_ID],
+            }),
+            [SUB_TASK_ID]: createMockTask({
+              id: SUB_TASK_ID,
+              parentId: TASK_ID,
+            }),
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+          lastCurrentTaskId: null,
+        },
+      } as Partial<RootState>;
+
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-bulk-delete',
+        actionType: TAG_LWW_TYPE as ActionType,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      // deleteTasks payload only carries flat taskIds — no embedded subtask
+      // info. The cascade must be derived from state.
+      const deleteMultipleOp = createMockOperation({
+        id: 'delete-multiple-bulk',
+        actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        entityIds: [TASK_ID],
+        payload: {
+          actionPayload: { taskIds: [TASK_ID] },
+          entityChanges: [],
+        },
+      });
+
+      const operations = [tagLwwOp, deleteMultipleOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      // Both parent (TASK_ID) and subtask (SUB_TASK_ID) must be stripped.
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+
     // deleteTask carries a single task with subTasks/subTaskIds. The reducer
     // cascades to subtasks, so subtask IDs must be stripped from co-batched
     // TAG/PROJECT LWW Update payloads.

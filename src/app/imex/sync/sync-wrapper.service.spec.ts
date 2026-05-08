@@ -730,6 +730,66 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
+    // #7330 follow-up: when retries exhaust AND the *initial* download already
+    // reported validationFailed (separate from the retry pass), the wrapper
+    // must still report ERROR. Previously the retry-exhaustion branch only
+    // checked reuploadValidationFailed, so an initial downloadValidationFailed
+    // combined with retry exhaustion fell through to UNKNOWN_OR_CHANGED.
+    it('should set ERROR (not UNKNOWN_OR_CHANGED) when retries exhaust AND initial download reported validationFailed', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'ops_processed' as const,
+          newOpsCount: 3,
+          localWinOpsCreated: 0,
+          validationFailed: true,
+        }),
+      );
+      // Every upload reports localWinOpsCreated: 1 so retries always exhaust.
+      const completed = (): Awaited<
+        ReturnType<typeof mockSyncService.uploadPendingOps>
+      > => ({
+        kind: 'completed' as const,
+        uploadedCount: 1,
+        piggybackedOpsCount: 0,
+        localWinOpsCreated: 1,
+        permanentRejectionCount: 0,
+        hasMorePiggyback: false,
+        rejectedOps: [],
+      });
+      mockSyncService.uploadPendingOps.and.returnValues(
+        ...Array.from({ length: 1 + MAX_LWW_REUPLOAD_RETRIES }, () =>
+          Promise.resolve(completed()),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+    });
+
+    // #7330: the USE_REMOTE conflict-resolution path returns DownloadOutcome
+    // with kind 'no_new_ops' and validationFailed: true when the
+    // forceDownloadRemoteState validator rejected the applied state. The
+    // wrapper must surface this as ERROR rather than IN_SYNC.
+    it('should set ERROR when downloadRemoteOps returns no_new_ops with validationFailed', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'no_new_ops' as const,
+          validationFailed: true,
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
     it('should set ERROR and return HANDLED_ERROR when upload has rejected ops with "Payload too complex"', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
@@ -1207,7 +1267,7 @@ describe('SyncWrapperService', () => {
 
         mockSyncService.forceDownloadRemoteState = jasmine
           .createSpy('forceDownloadRemoteState')
-          .and.resolveTo();
+          .and.resolveTo({ validationFailed: false });
 
         const result = await service.sync();
 
@@ -1267,6 +1327,30 @@ describe('SyncWrapperService', () => {
             type: 'ERROR',
           }),
         );
+      });
+
+      // Issue #7330: even when forceDownloadRemoteState succeeds, if it
+      // reports validationFailed: true, the wrapper must not claim IN_SYNC.
+      it('should return HANDLED_ERROR with ERROR status when forceDownloadRemoteState reports validationFailed', async () => {
+        const conflictError = new LocalDataConflictError(
+          2,
+          { tasks: [] },
+          { clientB: 3 },
+        );
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(conflictError));
+
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of('USE_REMOTE'),
+        } as any);
+
+        mockSyncService.forceDownloadRemoteState = jasmine
+          .createSpy('forceDownloadRemoteState')
+          .and.resolveTo({ validationFailed: true });
+
+        const result = await service.sync();
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
       });
 
       it('should return HANDLED_ERROR when forceDownloadRemoteState fails', async () => {

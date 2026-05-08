@@ -1799,6 +1799,67 @@ describe('OperationLogSyncService', () => {
         error,
       );
     });
+
+    // Issue #7330: post-sync validation failure must be surfaced so
+    // SyncWrapperService can refuse IN_SYNC. Previously the result was
+    // discarded and a corrupt USE_REMOTE state silently looked clean.
+    it('returns validationFailed: true when processRemoteOps signals validation failure', async () => {
+      const mockOps: Operation[] = [
+        {
+          id: 'op1',
+          actionType: 'ACTION' as ActionType,
+          opType: 'UPDATE' as OpType,
+          entityType: 'TASK',
+          entityId: 'task1',
+          payload: {},
+          clientId: 'remote',
+          vectorClock: {},
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ];
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: mockOps,
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        latestServerSeq: 1,
+      });
+
+      remoteOpsProcessingServiceSpy.processRemoteOps.and.resolveTo({
+        localWinOpsCreated: 0,
+        allOpsFilteredBySyncImport: false,
+        filteredOpCount: 0,
+        isLocalUnsyncedImport: false,
+        validationFailed: true,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      const result = await service.forceDownloadRemoteState(mockProvider);
+      expect(result).toEqual({ validationFailed: true });
+    });
+
+    it('returns validationFailed: false when no ops are downloaded', async () => {
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      const result = await service.forceDownloadRemoteState(mockProvider);
+      expect(result).toEqual({ validationFailed: false });
+    });
   });
 
   describe('_hasMeaningfulStoreData detection for first-time sync', () => {
@@ -2694,7 +2755,9 @@ describe('OperationLogSyncService', () => {
 
       syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('USE_REMOTE');
 
-      const forceDownloadSpy = spyOn(service, 'forceDownloadRemoteState').and.resolveTo();
+      const forceDownloadSpy = spyOn(service, 'forceDownloadRemoteState').and.resolveTo({
+        validationFailed: false,
+      });
 
       const mockProvider = {
         isReady: () => Promise.resolve(true),
