@@ -943,6 +943,12 @@
         "DELETED": "Deleted Project",
         "UNARCHIVED": "Unarchived project",
         "UPDATED": "Updated project settings"
+      },
+      "ARCHIVED_PROJECTS": {
+        "EMPTY": "No archived projects.",
+        "LINK_LABEL": "Archived projects",
+        "SEARCH": "Search archived projects",
+        "UNARCHIVE": "Restore project"
       }
     },
     "PROJECT_FOLDER": {
@@ -2566,7 +2572,8 @@
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
-    "WORKLOG": "Worklog"
+    "WORKLOG": "Worklog",
+    "ARCHIVED_PROJECTS": "Archived Projects"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Do you want to download a backup of your legacy data (can be used with older versions of Super Productivity)?",

@@ -18,14 +18,10 @@ import {
 } from '../../ui/dialog-create-tag/dialog-create-tag.component';
 import {
   selectAllProjectsExceptInbox,
-  selectArchivedProjects,
   selectUnarchivedProjects,
   selectUnarchivedVisibleProjects,
 } from '../../features/project/store/project.selectors';
-import {
-  toggleHideFromMenu,
-  unarchiveProject,
-} from '../../features/project/store/project.actions';
+import { toggleHideFromMenu } from '../../features/project/store/project.actions';
 import { NavConfig, NavItem } from './magic-side-nav.model';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PluginService } from '../../plugins/plugin.service';
@@ -82,10 +78,6 @@ export class MagicNavConfigService {
   );
   private readonly _allUnarchivedProjects = toSignal(
     this._store.select(selectUnarchivedProjects),
-    { initialValue: [] },
-  );
-  private readonly _archivedProjects = toSignal(
-    this._store.select(selectArchivedProjects),
     { initialValue: [] },
   );
   private readonly _tags = toSignal(this._tagService.tagsNoMyDayAndNoList$, {
@@ -474,11 +466,6 @@ export class MagicNavConfigService {
   // Public access to projects for visibility menu
   readonly allProjectsExceptInbox = computed(() => this._allProjectsExceptInbox());
   readonly allUnarchivedProjects = computed(() => this._allUnarchivedProjects());
-  readonly archivedProjects = computed(() => this._archivedProjects());
-
-  unarchiveProjectById(projectId: string): void {
-    this._store.dispatch(unarchiveProject({ id: projectId }));
-  }
 
   // Check if there are any projects or tags (for empty state)
   readonly hasAnyProjects = computed(() => this._visibleProjects().length > 0);

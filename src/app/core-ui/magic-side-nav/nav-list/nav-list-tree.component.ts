@@ -34,6 +34,7 @@ import { MenuTreeService } from '../../../features/menu-tree/menu-tree.service';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { DEFAULT_PROJECT_ICON } from '../../../features/project/project.const';
 import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
+import { Router } from '@angular/router';
 
 const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
 
@@ -60,6 +61,7 @@ const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
 export class NavListTreeComponent implements OnDestroy {
   private readonly _navConfigService = inject(MagicNavConfigService);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private readonly _router = inject(Router);
   private _expandAnimationTimeoutId: number | null = null;
 
   item = input.required<NavTreeItem>();
@@ -76,7 +78,6 @@ export class NavListTreeComponent implements OnDestroy {
 
   // Access to service methods and data for visibility menu (includes Inbox for unhiding)
   readonly allUnarchivedProjects = this._navConfigService.allUnarchivedProjects;
-  readonly archivedProjects = this._navConfigService.archivedProjects;
 
   // ViewChild for visibility menu trigger to close menu after toggling
   visibilityMenuTrigger = viewChild('visibilityBtn', { read: MatMenuTrigger });
@@ -134,9 +135,9 @@ export class NavListTreeComponent implements OnDestroy {
     this.visibilityMenuTrigger()?.closeMenu();
   }
 
-  unarchiveProject(projectId: string): void {
-    this._navConfigService.unarchiveProjectById(projectId);
+  goToArchivedProjects(): void {
     this.visibilityMenuTrigger()?.closeMenu();
+    this._router.navigateByUrl('/archived-projects');
   }
 
   onFolderMoreButton(event: MouseEvent, node: TreeNode<MenuTreeViewNode>): void {

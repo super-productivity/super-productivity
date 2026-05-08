@@ -902,6 +902,12 @@
         "DELETED": "Progetto eliminato",
         "UNARCHIVED": "Progetto non archiviato",
         "UPDATED": "Aggiornate impostazioni di progetto"
+      },
+      "ARCHIVED_PROJECTS": {
+        "EMPTY": "Nessun progetto archiviato.",
+        "UNARCHIVE": "Ripristina progetto",
+        "LINK_LABEL": "Progetti archiviati",
+        "SEARCH": "Cerca progetti archiviati"
       }
     },
     "PROJECT_FOLDER": {
@@ -2534,7 +2540,10 @@
     "PROJECT_SETTINGS": "Impostazioni progetto",
     "SHOW_TRACKED_TASK": "Mostra attività tracciata",
     "TOGGLE_SHOW_BOOKMARKS": "Mostra/nascondi segnalibri",
-    "ADD_SECTION": "Aggiungi sezione"
+    "ADD_SECTION": "Aggiungi sezione",
+    "TOGGLE_SHOW_BOOKMARKS": "Mostra/nascondi segnalibri",
+    "ARCHIVED_PROJECTS": "Progetti archiviati",
+    "ARCHIVE_PROJECT": "Archivia progetto"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Vuoi scaricare un backup dei tuoi dati legacy (possono essere usati con versioni più vecchie di Super Productivity)?",
