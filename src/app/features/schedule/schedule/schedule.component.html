@@ -80,14 +80,13 @@
     </button>
 
     <button
-      mat-icon-button
       class="today-btn"
       (click)="goToToday()"
       [disabled]="isViewingToday()"
       [attr.aria-label]="T.G.TODAY_TAG_TITLE | translate"
-      [matTooltip]="T.G.TODAY_TAG_TITLE | translate"
     >
-      <mat-icon>radio_button_unchecked</mat-icon>
+      <mat-icon>wb_sunny</mat-icon>
+      {{ 'Today' | translate }}
     </button>
 
     <button
