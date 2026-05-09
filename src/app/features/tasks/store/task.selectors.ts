@@ -151,7 +151,8 @@ export const selectOverdueTasks = createSelector(
   selectTaskFeatureState,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (s, todayStr, startOfNextDayDiffMs): Task[] => {
+  selectArchivedProjectIds,
+  (s, todayStr, startOfNextDayDiffMs, archivedProjectsIds): Task[] => {
     const today = dateStrToUtcDate(todayStr);
     today.setHours(0, 0, 0, 0);
     // The logical start of "today" is shifted by the offset
@@ -161,6 +162,7 @@ export const selectOverdueTasks = createSelector(
       .filter(
         (task): task is Task =>
           !!task &&
+          !archivedProjectsIds.has(task.projectId) &&
           // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
           // which is lexicographically sortable. This avoids timezone conversion issues.
           !!(
