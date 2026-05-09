@@ -12,7 +12,9 @@ export const sanitizeIcalUrlForDisplay = (url: string | undefined): string => {
   try {
     // webcal:// is the canonical iCal subscription scheme but is non-special
     // in URL Standard terms; normalize so URL parsing extracts the hostname.
-    const normalized = url.replace(/^webcals?:/i, 'https:');
+    // Anchor the trailing `//` so a malformed `webcal:javascript:...` doesn't
+    // get rewritten into the parser's special-scheme path.
+    const normalized = url.replace(/^webcals?:\/\//i, 'https://');
     const u = new URL(normalized);
     if (u.hostname) return u.hostname;
     if (u.protocol === 'file:') {

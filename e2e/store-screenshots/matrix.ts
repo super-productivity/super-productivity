@@ -12,7 +12,8 @@
 export type Theme = 'light' | 'dark';
 export type Locale = 'en' | 'de';
 
-export const LOCALES: readonly Locale[] = ['en', 'de'] as const;
+// 'de' temporarily disabled — re-add once translations are caught up.
+export const LOCALES: readonly Locale[] = ['en'] as const;
 export const THEMES: readonly Theme[] = ['light', 'dark'] as const;
 
 /**
@@ -32,20 +33,27 @@ export type ViewportSpec = {
  * The key is also the on-disk directory name under `_master/<viewport>/`.
  */
 export const VIEWPORTS = {
-  /** Shared desktop master (16:10). 1440×900 CSS @2x → 2880×1800. Source for
-   *  Mac App Store, MS Store, Snap, and the marketing site — MS Store accepts
-   *  ≥1366×768 so this exceeds spec. */
-  desktopMaster: { width: 2880, height: 1800, deviceScaleFactor: 2 },
+  /** Shared desktop master (16:10). 1280×800 CSS @2x → 2560×1600. The smaller
+   *  of MAS's two listed Retina sizes — gives more apparent UI zoom than the
+   *  1440×900 baseline while still being a native MAS submission size. MS
+   *  Store min is 1366×768 so this still exceeds spec. */
+  desktopMaster: { width: 2560, height: 1600, deviceScaleFactor: 2 },
   /** Apple App Store iPhone 6.9" portrait. CSS 430×932 @3x → 1290×2796. */
   iphone69: { width: 1290, height: 2796, deviceScaleFactor: 3, isMobile: true },
   /** Apple App Store iPad 13" portrait. CSS 1032×1376 @2x → 2064×2752. */
   ipad13: { width: 2064, height: 2752, deviceScaleFactor: 2, isMobile: true },
-  /** Google Play phone portrait. CSS 360×640 @3x → 1080×1920. */
-  androidPhone: { width: 1080, height: 1920, deviceScaleFactor: 3, isMobile: true },
-  /** Google Play 7" tablet portrait. CSS 600×960 @2x → 1200×1920. */
-  android7Tablet: { width: 1200, height: 1920, deviceScaleFactor: 2, isMobile: true },
-  /** Google Play 10" tablet landscape. CSS 960×600 @2x → 1920×1200. */
-  android10Tablet: { width: 1920, height: 1200, deviceScaleFactor: 2, isMobile: true },
+  /** Google Play phone portrait. CSS 412×915 @3x → 1236×2745.
+   *  Matches modern flagships (Pixel 7/8, Galaxy S22+, OnePlus 11). 412 CSS
+   *  stays below the 768px breakpoint so SP still renders its phone layout. */
+  androidPhone: { width: 1236, height: 2745, deviceScaleFactor: 3, isMobile: true },
+  /** Google Play 7" tablet landscape. CSS 960×600 @2x → 1920×1200.
+   *  Portrait (600 CSS) was below the 768 desktop breakpoint and rendered
+   *  the phone layout, which felt cramped — landscape stays in tablet
+   *  layout and reads cleanly. */
+  android7Tablet: { width: 1920, height: 1200, deviceScaleFactor: 2, isMobile: true },
+  /** Google Play 10" tablet portrait. CSS 800×1280 @2x → 1600×2560.
+   *  Standard 10" tablet portrait dimensions. */
+  android10Tablet: { width: 1600, height: 2560, deviceScaleFactor: 2, isMobile: true },
 } as const satisfies Record<string, ViewportSpec>;
 
 export type ViewportName = keyof typeof VIEWPORTS;
@@ -69,38 +77,31 @@ export const MOBILE_VIEWPORTS = [
 /**
  * "Phone-class": viewports < 768 CSS px wide where SP renders its mobile
  * layout (bottom-nav, no side panels). These run `scenarios/mobile/`.
- *
- * Note that `android7Tablet` is 600 CSS wide in portrait — below the 768
- * mobile-breakpoint — so it really is phone-class for layout purposes.
  */
 export const PHONE_VIEWPORTS = [
   'iphone69',
   'androidPhone',
-  'android7Tablet',
 ] as const satisfies readonly ViewportName[];
 
 /**
  * "Tablet-class": viewports ≥ 768 CSS px wide where SP renders the desktop
- * layout (sidenav, panels) but the canvas is taller-than-wide (iPad portrait)
- * or narrower than the desktopMaster (Android 10" landscape). Routing these
+ * layout (sidenav, panels) but the canvas is taller-than-wide (iPad / 10"
+ * portrait) or narrower than the desktopMaster (7" landscape). Routing these
  * to the desktop spec would push side panels off-screen; routing them to the
  * mobile spec wastes the canvas. They run `scenarios/tablet/` instead.
  */
 export const TABLET_VIEWPORTS = [
   'ipad13',
+  'android7Tablet',
   'android10Tablet',
 ] as const satisfies readonly ViewportName[];
 
 import * as path from 'path';
 const repoRoot = path.resolve(__dirname, '..', '..');
+export const SCREENSHOTS_OUT_DIR = path.join(repoRoot, 'dist', 'screenshots');
 /** Roots that hold raw scenario captures, separated by capture pipeline. */
-export const MASTER_DIR_WEB = path.join(repoRoot, '.tmp', 'screenshots', '_master');
-export const MASTER_DIR_ELECTRON = path.join(
-  repoRoot,
-  '.tmp',
-  'screenshots',
-  '_master_electron',
-);
+export const MASTER_DIR_WEB = path.join(SCREENSHOTS_OUT_DIR, '_master');
+export const MASTER_DIR_ELECTRON = path.join(SCREENSHOTS_OUT_DIR, '_master_electron');
 
 /**
  * Per-store derivation rules used by `build-store-assets.ts`. Each rule maps

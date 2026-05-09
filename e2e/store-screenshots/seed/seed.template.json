@@ -46,7 +46,7 @@
           "id": "personal",
           "title": "Personal",
           "isHiddenFromMenu": false,
-          "taskIds": ["t-yoga", "t-call-mom"],
+          "taskIds": ["t-call-mom"],
           "backlogTaskIds": ["t-book-flight", "t-renew-passport"],
           "noteIds": ["n-ideas", "n-week-goals"],
           "theme": {
@@ -269,7 +269,6 @@
         "t-quarterly-plan",
         "t-quarterly-plan-sub-1",
         "t-quarterly-plan-sub-2",
-        "t-yoga",
         "t-call-mom",
         "t-book-flight",
         "t-renew-passport",
@@ -304,7 +303,7 @@
           "timeEstimate": 2700000,
           "isDone": false,
           "notes": "",
-          "tagIds": ["tag-deep-work", "EM_URGENT", "EM_IMPORTANT"],
+          "tagIds": ["EM_URGENT", "EM_IMPORTANT"],
           "created": 0,
           "attachments": [],
           "dueDayOffset": 0,
@@ -332,7 +331,7 @@
           "timeSpentOnDay": {},
           "timeSpent": 0,
           "timeEstimate": 1800000,
-          "isDone": true,
+          "isDone": false,
           "notes": "",
           "tagIds": [],
           "parentId": "t-quarterly-plan",
@@ -354,22 +353,6 @@
           "created": 0,
           "attachments": [],
           "projectId": "work"
-        },
-        "t-yoga": {
-          "id": "t-yoga",
-          "title": "Morning yoga",
-          "subTaskIds": [],
-          "timeSpentOnDayKeysAreOffsets": true,
-          "timeSpentOnDayOffsets": { "0": 1500000 },
-          "timeSpent": 1500000,
-          "timeEstimate": 1800000,
-          "isDone": true,
-          "notes": "",
-          "tagIds": ["tag-home"],
-          "created": 0,
-          "attachments": [],
-          "dueDayOffset": 0,
-          "projectId": "personal"
         },
         "t-call-mom": {
           "id": "t-call-mom",
@@ -507,13 +490,7 @@
         "TODAY": {
           "id": "TODAY",
           "title": "Today",
-          "taskIds": [
-            "t-yoga",
-            "t-pr-review",
-            "t-call-mom",
-            "t-design-review",
-            "t-issue-triage"
-          ],
+          "taskIds": ["t-pr-review", "t-call-mom", "t-design-review", "t-issue-triage"],
           "icon": "wb_sunny",
           "color": null,
           "created": 0,
@@ -608,7 +585,7 @@
         "tag-home": {
           "id": "tag-home",
           "title": "home",
-          "taskIds": ["t-yoga"],
+          "taskIds": [],
           "icon": "home",
           "created": 0,
           "theme": {

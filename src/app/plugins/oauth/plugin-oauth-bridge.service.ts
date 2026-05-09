@@ -44,16 +44,33 @@ export class PluginOAuthBridgeService {
     // getRedirectUri() starts a server — avoid leaking it if config is invalid.
     this._pluginOAuthService.validateOAuthConfig(config);
 
-    // On native mobile, use the platform-specific client ID (which authenticates
-    // via app signing, not a client secret) and drop the secret.
-    const nativeClientId = IS_ANDROID_NATIVE
-      ? config.mobileClientId
-      : IS_IOS_NATIVE
-        ? config.iosClientId
-        : undefined;
-    const effectiveConfig: OAuthFlowConfig = nativeClientId
-      ? { ...config, clientId: nativeClientId, clientSecret: undefined }
-      : config;
+    // Pick the platform-specific client. The default `clientId` is the desktop
+    // client (loopback redirect, used by Electron); other platforms override it.
+    // - Android/iOS authenticate via app signing → no client secret
+    // - Web uses an IdP-specific "Web application" client → may ship a secret
+    // Order matters: Android-WebView sets both IS_ANDROID_NATIVE and IS_NATIVE_PLATFORM,
+    // so it lands in the Android branch (correct) and never reaches the web branch.
+    const effectiveConfig = ((): OAuthFlowConfig => {
+      if (IS_ANDROID_NATIVE && config.mobileClientId) {
+        return { ...config, clientId: config.mobileClientId, clientSecret: undefined };
+      }
+      if (IS_IOS_NATIVE && config.iosClientId) {
+        return { ...config, clientId: config.iosClientId, clientSecret: undefined };
+      }
+      if (!IS_ELECTRON && !IS_NATIVE_PLATFORM) {
+        if (!config.webClientId) {
+          throw new Error(
+            'OAuth: this plugin does not support the web build (no webClientId configured). Connect from the desktop or mobile app instead.',
+          );
+        }
+        return {
+          ...config,
+          clientId: config.webClientId,
+          clientSecret: config.webClientSecret,
+        };
+      }
+      return config;
+    })();
 
     const redirectUri = await this._pluginOAuthService.getRedirectUri();
     const { url, codeVerifier, state } = await this._pluginOAuthService.buildAuthUrl(

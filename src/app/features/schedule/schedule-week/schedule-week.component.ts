@@ -33,8 +33,15 @@ import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { calculatePlaceholderForGridMove } from './schedule-week-placeholder.util';
 import { formatScheduleDragPreviewLabel } from './format-schedule-drag-preview-label.util';
 import { truncate } from '../../../util/truncate';
+import { LS } from '../../../core/persistence/storage-keys.const';
 
 const D_HOURS = 24;
+const DEFAULT_ROW_HEIGHT_PX = 9;
+const DEFAULT_MOBILE_ROW_HEIGHT_PX = 7;
+const MIN_ROW_HEIGHT_PX = 5;
+const MAX_ROW_HEIGHT_PX = 24;
+const ROW_HEIGHT_STEP_PX = 1;
+const MOBILE_ROW_HEIGHT_FACTOR = DEFAULT_MOBILE_ROW_HEIGHT_PX / DEFAULT_ROW_HEIGHT_PX;
 
 @Component({
   selector: 'schedule-week',
@@ -78,6 +85,12 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   todayDateStr = input<string | undefined>(undefined);
   isCtrlPressed = signal<boolean>(false);
   isTaskDragActive = input<boolean>(false);
+  scheduleRowHeightPx = signal<number>(readStoredScheduleRowHeight());
+  scheduleRowHeightCss = computed(() => `${this.scheduleRowHeightPx()}px`);
+  scheduleRowHeightMobileCss = computed(
+    () =>
+      `${Math.max(4, Math.round(this.scheduleRowHeightPx() * MOBILE_ROW_HEIGHT_FACTOR))}px`,
+  );
 
   // Shift mode changes drag behavior: instead of scheduling at a time,
   // tasks are planned for the day or reordered relative to other tasks.
@@ -238,6 +251,27 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     this._service.destroy();
   }
 
+  @HostListener('wheel', ['$event'])
+  onWheel(ev: WheelEvent): void {
+    if (!ev.ctrlKey || ev.deltaY === 0) {
+      return;
+    }
+
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const direction = ev.deltaY < 0 ? 1 : -1;
+    const rowHeightDelta = direction * ROW_HEIGHT_STEP_PX;
+    const nextValue = clampScheduleRowHeight(this.scheduleRowHeightPx() + rowHeightDelta);
+
+    if (nextValue === this.scheduleRowHeightPx()) {
+      return;
+    }
+
+    this.scheduleRowHeightPx.set(nextValue);
+    localStorage.setItem(LS.SCHEDULE_WEEK_ROW_HEIGHT, String(nextValue));
+  }
+
   onGridClick(ev: MouseEvent): void {
     if (this.isAnyEventResizing()) {
       return;
@@ -370,3 +404,15 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     this._service.hideExternalPreview();
   }
 }
+
+const clampScheduleRowHeight = (value: number): number =>
+  Math.min(MAX_ROW_HEIGHT_PX, Math.max(MIN_ROW_HEIGHT_PX, value));
+
+const readStoredScheduleRowHeight = (): number => {
+  const rawValue = localStorage.getItem(LS.SCHEDULE_WEEK_ROW_HEIGHT);
+  const parsedValue = rawValue === null ? DEFAULT_ROW_HEIGHT_PX : Number(rawValue);
+
+  return Number.isFinite(parsedValue)
+    ? clampScheduleRowHeight(parsedValue)
+    : DEFAULT_ROW_HEIGHT_PX;
+};

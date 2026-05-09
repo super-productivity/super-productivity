@@ -141,13 +141,16 @@ export class ImportPage extends BasePage {
     // Handle encryption warning dialog if it appears.
     // The dialog may appear several seconds after setInputFiles because FileReader is async.
     // Race: either the dialog appears (handle it) or the import completes without it.
+    // Catch the dialog timeout so a slow import (cold dev server, large seed) doesn't
+    // reject the race before importCompletePromise has a chance to resolve.
     const encryptionWarning = this.page
       .locator('dialog-import-encryption-warning')
       .first();
     const dialogOrImport = await Promise.race([
       encryptionWarning
         .waitFor({ state: 'visible', timeout: 15000 })
-        .then(() => 'dialog' as const),
+        .then(() => 'dialog' as const)
+        .catch(() => 'no_dialog' as const),
       importCompletePromise.then(() => 'import_complete' as const),
     ]);
 
@@ -157,6 +160,10 @@ export class ImportPage extends BasePage {
       await confirmBtn.click();
       await encryptionWarning.waitFor({ state: 'hidden', timeout: 10000 });
       // Now wait for the import to actually complete
+      await importCompletePromise;
+    } else if (dialogOrImport === 'no_dialog') {
+      // Dialog didn't appear within 15s — import is slow but may still complete.
+      // Wait for the import-complete signal (its own 60s timeout will catch a true hang).
       await importCompletePromise;
     }
     // If 'import_complete', the import finished without showing the dialog

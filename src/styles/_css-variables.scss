@@ -1,5 +1,40 @@
 // CSS Custom Properties (CSS Variables)
-// This file defines all CSS variables used throughout the application
+// This file defines all CSS variables used throughout the application.
+//
+// -----------------------------------------------------------------------------
+// Naming taxonomy (when adding a new token, pick the family it belongs to):
+//   --surface-{0..4}       → background ramp (deepest → highest layer)
+//   --ink, --ink-strong,   → text colors
+//   --ink-muted
+//   --ink-on-channel       → RGB triplet (e.g. "0,0,0") for `rgba()` overlays
+//   --separator, --divider → border / hairline tones
+//   --scrim, --bg-overlay  → modal / wallpaper overlay tones
+//   --brand, --focus-ring  → accent / focus surfaces (alias to Material palette)
+//   --state-{hover,focus,
+//   pressed,selected}-alpha,
+//   --state-disabled-alpha → interaction-state opacity scalars
+//   --c-* / --palette-*    → legacy + Material palette ladders (don't introduce
+//                             new --c-* names; prefer the families above)
+//
+// Selector contract for theme authors:
+//   Primitives MUST be overridden under `body` (light) or `body.isDarkTheme`
+//   (dark). Declaring a primitive at `:root` only is mode-inconsistent —
+//   `:root` (specificity 0,1,0) beats base `body` (0,0,1) but loses to
+//   `body.isDarkTheme` (0,1,1), so the override silently fails in dark mode.
+//   Semantic aliases live at `:where(body, body.isDarkTheme)` (specificity 0)
+//   so any selector with non-zero specificity wins.
+//
+// File layout:
+//   1. `:root` — primitive scales (palette stops, dark/light elevation,
+//      shadows, motion, breakpoints, z-index, layout). Mode-independent.
+//   2. `body` / `body.isDarkTheme` — Layer-1 PRIMITIVES (surface ramp, ink,
+//      brand, separators, scrim, focus-ring). Values differ per mode.
+//   3. `:where(body, body.isDarkTheme)` — Layer-2 SEMANTIC ALIASES + state
+//      tokens. Declared once, reference primitives. Zero specificity so theme
+//      overrides win.
+//   4. `body` / `body.isDarkTheme` — Layer-3 CATEGORY-B tokens whose values
+//      genuinely differ per mode and cannot be expressed via primitive aliasing.
+// -----------------------------------------------------------------------------
 
 @use 'fonts';
 
@@ -276,275 +311,366 @@
 // ===============================
 // THEME-SPECIFIC OVERRIDES
 // ===============================
+//
+// Three layers (see `docs/theming-contract.md` for the full contract):
+//
+//   1. PRIMITIVES — declared on `body` (light) and `body.isDarkTheme` (dark).
+//      Surfaces, ink, separators, scrim, brand. ~15 tokens. Themes overriding
+//      these MUST use `body` / `body.isDarkTheme` selectors (specificity beats
+//      the base; see plan §4 selector contract).
+//
+//   2. SEMANTIC ALIASES — declared once at `:where(body, body.isDarkTheme)`
+//      (specificity 0,0,0). Category-A semantic tokens whose value is the
+//      same across modes when expressed via primitives. Themes win regardless
+//      of selector choice (`:root`, `body`, `body.isDarkTheme`).
+//
+//   3. CATEGORY B — true per-mode tokens whose relationship genuinely differs
+//      between modes (see migration table for rationale). Stay split.
+//
+// State tokens (`--state-hover`, `--state-focus`, `--state-pressed`,
+// `--state-selected`, `--state-disabled-alpha`) live in Layer 2. The velvet
+// legacy bridge (`--hover-bg-opacity` / `--focus-bg-opacity` /
+// `--pressed-bg-opacity` / `--disabled-opacity`) is implemented via `var()`
+// fallback — no theme files are touched.
 
 // -----------------------------
-// Light Theme (Default)
+// Layer 1: PRIMITIVES (per-mode)
 // -----------------------------
 body {
-  // Background colors
-  --bg: #f8f8f7;
-  --bg-darker: rgb(235, 235, 235);
-  --bg-drag-col: rgb(242, 242, 242);
-  --bg-slightly-lighter: var(--bg);
-  --bg-lighter: #fff;
-  --bg-lightest: #fff;
-  --bg-super-light: #fff;
-  --card-bg: #ffffff;
-  --card-shadow: var(--whiteframe-shadow-2dp);
+  // Surfaces (background ladder, low → high)
+  --surface-0: rgb(235, 235, 235);
+  --surface-1: #f8f8f7;
+  --surface-2: #fff;
+  --surface-3: #fff;
+  --surface-4: #fff;
 
-  // Navigation & Panel backgrounds
+  // Ink (foreground)
+  --ink-strong: rgb(0, 0, 0);
+  --ink: rgb(44, 44, 44);
+  --ink-muted: rgba(44, 44, 44, 0.6);
+  // RGB triplet (no `rgb()` wrapper) — keystone for `rgba(var(--ink-on-channel), α)` overlays.
+  --ink-on-channel: 0, 0, 0;
+
+  // Separators / scrim / overlays
+  --separator: #d0d0d0;
+  --divider: rgba(0, 0, 0, 0.12);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --bg-overlay: rgba(255, 255, 255, 0.8);
+
+  // Brand & focus ring
+  // light uses primary-600 for stronger contrast on light backgrounds (see
+  // `--sidenav-active-text` historical comment); fixes a pre-existing
+  // light-mode contrast issue.
+  --brand: var(--palette-primary-600);
+  --focus-ring: var(--brand);
+}
+
+body.isDarkTheme {
+  --surface-0: var(--dark0);
+  --surface-1: #131314;
+  --surface-2: var(--dark3);
+  --surface-3: var(--dark12);
+  --surface-4: var(--dark24);
+
+  --ink-strong: rgb(255, 255, 255);
+  --ink: rgb(230, 230, 230);
+  --ink-muted: rgba(235, 235, 235, 0.65);
+  --ink-on-channel: 255, 255, 255;
+
+  --separator: rgba(255, 255, 255, 0.1);
+  --divider: rgba(255, 255, 255, 0.12);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --bg-overlay: rgba(0, 0, 0, 0.8);
+
+  --brand: var(--palette-primary-400);
+  --focus-ring: var(--brand);
+}
+
+// -----------------------------
+// Layer 2: SEMANTIC ALIASES (zero specificity — themes always win)
+// -----------------------------
+//
+// `:where()` makes the selector contribute zero specificity (CSS Selectors L4).
+// Any theme override at `body`, `body.isDarkTheme`, or `:root` wins by spec.
+:where(body, body.isDarkTheme) {
+  // Backgrounds (Cat A)
+  --bg: var(--surface-1);
+  --bg-darker: var(--surface-0);
+  --bg-lighter: var(--surface-3);
+  --bg-lightest: var(--surface-4);
+  --card-bg: var(--surface-2);
+
+  // Navigation & panel (Cat A)
   --sidenav-bg: transparent;
   --sidenav-bg-mobile: var(--bg);
-  --sidenav-item-active-bg: rgba(255, 255, 255, 1.25);
-  --sidenav-hover-bg: rgba(205, 205, 205, 0.35);
-  --sidenav-active-text: var(
-    --palette-primary-600
-  ); // Darker for better contrast on light bg
+  // 10% ink overlay; replaces the `rgba(255,255,255,1.25)` typo that previously
+  // clamped to opaque white in light mode.
+  --sidenav-item-active-bg: rgba(var(--ink-on-channel), 0.1);
+  --sidenav-active-text: var(--brand);
   --sidenav-text: var(--text-color-less-intense);
   --sidenav-text-hover: var(--text-color-most-intense);
-  // task numbers and projects/tags expand and hover buttons on right
   --sidenav-text-secondary: var(--text-color-muted);
 
-  --overlay-bg: var(--c-backdrop, rgba(0, 0, 0, 0.6));
   --right-panel-bg: transparent;
-  --right-panel-bg-mobile: #fff;
   --bottom-nav-height: 44px;
   --bottom-nav-bg: var(--sidenav-bg-mobile);
+  --bottom-panel-handle: rgba(var(--ink-on-channel), 0.4);
+  --bottom-panel-handle-active: rgba(var(--ink-on-channel), 0.6);
+
+  // Text (Cat A)
+  --text-color: var(--ink);
+  --text-color-muted: var(--ink-muted);
+  --text-color-most-intense: var(--ink-strong);
+
+  // Borders / separators / scrim (Cat A)
+  --separator-color: var(--separator);
+  --divider-color: var(--divider);
+  --c-backdrop: var(--scrim);
+
+  --notes-container-bg: inherit;
+
+  // Task surfaces (Cat A)
+  --task-c-bg: var(--surface-2);
+  --task-c-current-bg: var(--surface-3);
+  --task-c-drag-drop-bg: var(--surface-3);
+
+  // Task shadows (Cat A — same in both modes)
+  --task-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
+  --task-current-shadow: var(--whiteframe-shadow-4dp);
+
+  // Chips / progress (Cat A)
+  --chip-outline-color: rgba(125, 125, 125, 0.4);
+  --progress-bg: rgba(127, 127, 127, 0.2);
+
+  // Banner (Cat A — surface-4 maps both modes)
+  --banner-bg: var(--surface-4);
+  --banner-shadow: var(--whiteframe-shadow-2dp);
+
+  // Improvement banner shared bits (Cat A)
+  --improvement-border: var(--c-light-33);
+
+  // Select/Options — both modes use 10% ink overlay
+  --select-hover-bg: rgba(var(--ink-on-channel), 0.1);
+  --options-border-color: rgba(var(--ink-on-channel), 0.1);
+
+  // Schedule events (Cat A)
+  --schedule-event-bg: var(--card-bg);
+
+  // Task-detail card shadow (Cat A)
+  --task-detail-shadow: var(--card-shadow);
+
+  // Backdrop overlay (Cat A)
+  --c-bg-overlay: var(--bg-overlay);
+
+  // -------------------------------------------------------------------------
+  // Interaction-state tokens
+  //
+  // LEGACY BRIDGE — each alpha falls back to velvet's pre-token name if
+  // present (`--hover-bg-opacity` etc., `velvet.css:158–160`, declared under
+  // `body.isDarkTheme`). CSS variable inheritance carries them down to every
+  // consumer of the state tokens. ONE declaration per token.
+  //
+  // The bridge can be deleted in a future release once velvet (the only theme
+  // using these legacy names) is migrated to declare `--state-*-alpha`
+  // directly. Until then, the base layer references theme-private names —
+  // accept the inverted coupling as the cost of keeping `--state-*` tunable
+  // without editing any theme file.
+  // -------------------------------------------------------------------------
+  --state-hover-alpha: var(--hover-bg-opacity, 0.06);
+  --state-focus-alpha: var(--focus-bg-opacity, 0.1);
+  --state-pressed-alpha: var(--pressed-bg-opacity, 0.14);
+  --state-selected-alpha: var(--selected-bg-opacity, 0.1);
+  --state-disabled-alpha: var(--disabled-opacity, 0.4);
+
+  // Pre-composed overlay colors — what components consume.
+  --state-hover: rgba(var(--ink-on-channel), var(--state-hover-alpha));
+  --state-focus: rgba(var(--ink-on-channel), var(--state-focus-alpha));
+  --state-pressed: rgba(var(--ink-on-channel), var(--state-pressed-alpha));
+  --state-selected: rgba(var(--ink-on-channel), var(--state-selected-alpha));
+}
+
+// -----------------------------
+// Layer 3: CATEGORY B (true light/dark splits)
+// -----------------------------
+// These tokens stay split because either the relationship genuinely differs
+// per mode (inverted, mode-only) or collapsing to a primitive would drift
+// values past the screenshot-acceptance bar. See migration table for each.
+
+/* stylelint-disable-next-line no-duplicate-selectors -- layered token file: Cat B follows Layer 1 primitives on the same selector */
+body {
+  // Background colors (Cat B)
+  --bg-drag-col: rgb(242, 242, 242);
+  --bg-slightly-lighter: var(--bg);
+  --bg-super-light: #fff;
+  --card-shadow: var(--whiteframe-shadow-2dp);
+
+  // Navigation & panel (Cat B)
+  --sidenav-hover-bg: rgba(205, 205, 205, 0.35);
+  --overlay-bg: var(--c-backdrop, rgba(0, 0, 0, 0.6));
+  --right-panel-bg-mobile: #fff;
   --bottom-panel-bg: #fff;
-  --bottom-panel-handle: rgba(0, 0, 0, 0.4);
-  --bottom-panel-handle-active: rgba(0, 0, 0, 0.6);
 
-  // Text colors
-  --text-color: rgb(44, 44, 44);
+  // Text colors (Cat B)
   --text-color-less-intense: rgba(44, 44, 44, 0.9);
-  --text-color-muted: rgba(44, 44, 44, 0.6);
   --text-color-more-intense: var(--text-color);
-  --text-color-most-intense: rgb(0, 0, 0);
 
-  // Selected task
+  // Selected task (Cat B)
   --selected-task-bg-color: #fff;
 
-  // Borders and separators
+  // Borders (Cat B)
   --extra-border-color: #eee;
-  --separator-color: #d0d0d0;
-  --divider-color: rgba(0, 0, 0, 0.12);
 
-  // Backdrop
-  --c-backdrop: var(--c-dark-60);
-
-  // Note colors
+  // Note colors (Cat B)
   --standard-note-bg: #ffffff;
   --standard-note-fg: var(--text-color);
   --standard-note-bg-hovered: var(--standard-note-bg);
-  --notes-container-bg: inherit;
 
-  // Task colors
-  --task-c-bg: #fff;
+  // Task colors (Cat B)
   --task-c-selected-bg: var(--selected-task-bg-color);
   --sub-task-c-bg: var(--task-c-bg);
   --sub-task-c-bg-done: var(--task-c-bg);
   --task-c-bg-done: var(--task-c-bg);
-  --task-c-current-bg: var(--task-c-bg);
-  --task-c-drag-drop-bg: var(--task-c-bg);
   --sub-task-c-bg-in-selected: var(--task-c-bg);
 
-  // Task shadows
-  --task-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
-  //--task-shadow: rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.06) 0px 1px 2px 0px;
-
+  // Task shadows (Cat B)
   --task-shadow-sub-task: none;
-  //--task-shadow-sub-task: rgba(0, 0, 0, 0.16) 0px 1px 4px;
-  --task-current-shadow: var(--whiteframe-shadow-4dp);
   --task-selected-shadow: var(--whiteframe-shadow-3dp);
 
-  // Task Border
-  //--task-border: 1px solid var(--extra-border-color);
-
-  // Scrollbar colors
+  // Scrollbar colors (Cat B)
   --scrollbar-thumb: rgba(136, 136, 136, 0.4);
   --scrollbar-thumb-hover: rgba(85, 85, 85, 0.7);
   --scrollbar-track: rgba(241, 241, 241, 0);
 
-  // Chip colors
-  --chip-outline-color: rgba(125, 125, 125, 0.4);
-
-  // Progress circle
-  --progress-bg: rgba(127, 127, 127, 0.2);
-
-  // Close button
+  // Close button (Cat B — inverted relationship)
   --close-btn-bg: var(--bg-darker);
   --close-btn-border: var(--divider-color);
 
-  // Banner
-  --banner-bg: var(--card-bg);
-  --banner-shadow: var(--whiteframe-shadow-2dp);
-
-  // Improvement banner
+  // Improvement banner (Cat B)
   --improvement-text: rgba(44, 44, 44, 1);
-  --improvement-border: var(--c-light-33);
   --improvement-button-text: rgba(44, 44, 44, 1);
 
-  // Select/Options
-  --select-hover-bg: var(--c-dark-10);
-  --options-border-color: var(--c-dark-10);
-
-  // Attachments
+  // Attachments (Cat B — inverted same-as-surface lift)
   --attachment-bg: var(--card-bg);
   --attachment-border: var(--extra-border-color);
   --attachment-control-bg: var(--c-light-40);
   --attachment-control-border: var(--c-light-50);
   --attachment-control-hover-bg: var(--c-light-90);
 
-  // Schedule Events
-  --schedule-event-bg: var(--card-bg);
+  // Schedule events (Cat B)
   --schedule-event-bg-in-side-panel: var(--schedule-event-bg);
 
-  // Hover controls
+  // Hover controls (Cat B — visible vs invisible per mode)
   --hover-controls-border: 1px solid;
   --hover-controls-border-opacity: 0.5;
 
-  // Task detail item
+  // Task detail item (Cat B; `--task-detail-value-color` is broken — out of scope)
   --task-detail-value-color: rgba(
     var(--palette-foreground-secondary-text),
     var(--palette-foreground-secondary-text-alpha, 1)
   );
   --task-detail-bg: var(--card-bg);
   --task-detail-bg-hover: #eeeeee;
-  --task-detail-shadow: var(--card-shadow);
 
-  // Grid colors
+  // Grid colors (Cat B)
   --grid-color: #dadce0;
 
   // Special colors overrides for light theme
   --sun-yellow: #ffc107;
-
-  // Background overlay
-  --c-bg-overlay: var(--c-light-80);
 }
 
-// -----------------------------
-// Dark Theme
-// -----------------------------
+/* stylelint-disable-next-line no-duplicate-selectors -- layered token file: Cat B follows Layer 1 primitives on the same selector */
 body.isDarkTheme {
-  // Background colors
-  //--bg: var(--dark0);
-  --bg: #131314;
-  --bg-darker: var(--dark0);
+  // Background colors (Cat B)
   --bg-slightly-lighter: var(--dark4);
-  --bg-lighter: var(--dark12);
-  --bg-lightest: var(--dark24);
   --bg-super-light: #616161;
-  --card-bg: var(--dark3);
 
-  // Navigation & Panel backgrounds
-  --sidenav-bg: transparent;
-  --sidenav-bg-mobile: var(--bg);
-  --sidenav-item-active-bg: rgba(255, 255, 255, 0.075);
+  // Navigation & panel (Cat B)
   --sidenav-hover-bg: rgba(255, 255, 255, 0.05);
-  --sidenav-active-text: var(--palette-primary-400);
-
   --overlay-bg: var(--c-backdrop, rgba(0, 0, 0, 0.8));
-  --right-panel-bg: transparent;
   --right-panel-bg-mobile: var(--bg);
-  --bottom-nav-bg: var(--sidenav-bg-mobile);
   --bottom-panel-bg: var(--dark1);
-  --bottom-panel-handle: rgba(255, 255, 255, 0.4);
-  --bottom-panel-handle-active: rgba(255, 255, 255, 0.6);
 
-  // Text colors
-  --text-color: rgb(230, 230, 230);
+  // Text colors (Cat B)
   --text-color-less-intense: rgba(235, 235, 235, 0.8);
-  --text-color-muted: rgba(235, 235, 235, 0.65);
   --text-color-more-intense: rgb(245, 245, 245);
-  --text-color-most-intense: rgb(255, 255, 255);
 
-  // Selected task
+  // Selected task (Cat B)
   --selected-task-bg-color: var(--dark6);
 
-  // Borders and separators
+  // Borders (Cat B)
   --extra-border-color: rgba(255, 255, 255, 0.12);
-  --separator-color: rgba(255, 255, 255, 0.1);
-  --divider-color: rgba(255, 255, 255, 0.12);
 
-  // Backdrop
-  --c-backdrop: var(--c-dark-60);
-
-  // Note colors
+  // Note colors (Cat B)
   --standard-note-bg: var(--dark10);
   --standard-note-fg: #eeeeee;
   --standard-note-bg-hovered: var(--dark24);
-  --notes-container-bg: inherit;
 
-  // Task colors
-  //--task-c-bg: #212123ff;
-  --task-c-bg: var(--dark3);
+  // Task colors (Cat B)
+  --task-c-selected-bg: var(--dark6);
   --sub-task-c-bg: var(--dark4-5);
   --sub-task-c-bg-done: var(--dark2);
   --task-c-bg-done: var(--dark1);
-
-  --task-c-selected-bg: var(--dark6);
-  --task-c-current-bg: var(--dark12);
-  --task-c-drag-drop-bg: var(--dark12);
   --sub-task-c-bg-in-selected: var(--dark10);
 
-  // Task shadows
-  --task-current-shadow: var(--whiteframe-shadow-4dp);
-  --task-selected-shadow: var(--whiteframe-shadow-4dp);
+  // Task shadows (Cat B)
   --task-shadow-sub-task: var(--task-shadow);
+  --task-selected-shadow: var(--whiteframe-shadow-4dp);
 
-  // Scrollbar colors
+  // Scrollbar colors (Cat B)
   --scrollbar-thumb: rgba(150, 150, 150, 0.3);
   --scrollbar-thumb-hover: rgba(150, 150, 150, 0.7);
   --scrollbar-track: rgba(34, 34, 34, 0);
 
-  // Grid colors
-  --grid-color: var(--c-light-10);
-
-  // Chip colors
-  --chip-outline-color: rgba(125, 125, 125, 0.4);
-
-  // Close button
+  // Close button (Cat B — inverted relationship)
   --close-btn-bg: var(--bg-lightest);
   --close-btn-border: var(--extra-border-color);
 
-  // Banner
-  --banner-bg: var(--bg-lightest);
-
-  // Improvement banner
+  // Improvement banner (Cat B)
   --improvement-text: var(--text-color-most-intense);
-  --improvement-border: var(--c-light-33);
   --improvement-button-text: white;
 
-  // Select/Options
-  --select-hover-bg: var(--c-light-10);
-  --options-border-color: var(--c-light-10);
-
-  // Attachments
+  // Attachments (Cat B — inverted same-as-surface lift)
   --attachment-bg: var(--bg-lighter);
   --attachment-border: transparent;
   --attachment-control-bg: var(--c-dark-40);
   --attachment-control-border: var(--c-dark-50);
   --attachment-control-hover-bg: var(--c-dark-90);
 
-  // Schedule Events
-  --schedule-event-bg: var(--card-bg);
+  // Schedule events (Cat B)
   --schedule-event-bg-in-side-panel: var(--dark12);
 
-  // Hover controls
+  // Hover controls (Cat B)
   --hover-controls-border: none;
   --hover-controls-border-opacity: 0;
 
-  // Task detail item
+  // Task detail item (Cat B; broken token kept as-is per scope)
   --task-detail-value-color: rgba(255, 255, 255, 0.7);
   --task-detail-bg: var(--dark8);
   --task-detail-bg-hover: var(--dark12);
 
-  // Material Design sidenav backdrop override
+  // Material Design sidenav backdrop override (dark-only — preserves
+  // light-mode MD default fallback).
   --mat-sidenav-scrim-color: var(--c-dark-80);
 
-  // Background overlay
-  --c-bg-overlay: var(--c-dark-80);
+  // Grid colors (Cat B — light gray hex would be opaque on dark surfaces;
+  // dark uses low-opacity white instead).
+  --grid-color: var(--c-light-10);
+
+  // Sidenav active item (Cat B — dark intentionally softer than the
+  // 0.10 alias resolves to; preserved at 0.075 to match pre-refactor visuals).
+  --sidenav-item-active-bg: rgba(255, 255, 255, 0.075);
 }
+
+// -----------------------------
+// State-token demo migrations (this PR — scope per plan §3):
+//   * src/app/features/user-profile/dialog-user-profile-management — `:hover`
+//     overlay + `.active-profile` selected lift now consume `--state-hover` /
+//     `--state-selected`.
+//   * src/app/imex/sync/dialog-restore-point — `:hover` overlay + `.selected`
+//     lift now consume `--state-hover` / `--state-selected`.
+// Bulk migration of remaining ~34 ad-hoc rgba state-overlay callsites is a
+// follow-up PR (see plan §3 bulk-sweep regex).
+// -----------------------------
 
 /* stylelint-disable */
 :root {

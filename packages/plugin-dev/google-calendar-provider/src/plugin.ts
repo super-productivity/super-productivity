@@ -37,6 +37,20 @@ const MOBILE_CLIENT_ID =
 // Requires "Custom URI scheme" to be enabled in Google Cloud Console.
 const IOS_CLIENT_ID =
   '637968426975-ka1muro7mee1go0m7hhog49fm7svr4os.apps.googleusercontent.com';
+// Web OAuth client — used by the browser build (app.super-productivity.com).
+// Google classifies "Web application" clients as confidential, so the token
+// endpoint rejects PKCE-only exchanges and we must ship the client_secret
+// alongside the auth code. Unlike CLIENT_SECRET above (which is RFC 8252-style
+// public for desktop apps), Google's policy formally requires this secret to
+// be kept confidential — embedding it in client-side JS deviates from policy
+// and the credential MAY be revoked by Google if abused.
+// In practice the actual security boundary is PKCE + the registered redirect
+// URI: a stolen secret cannot be used to redeem codes for a different origin.
+// The deployed origin's /assets/oauth-callback.html must be registered as an
+// Authorized redirect URI, and the origin itself in Authorized JavaScript origins.
+const WEB_CLIENT_ID =
+  '637968426975-6t6q988dk0417re8pcl06vq75obqq944.apps.googleusercontent.com';
+const WEB_CLIENT_SECRET = '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';
 
 // --- Config ---
 
@@ -272,6 +286,8 @@ PluginAPI.registerIssueProvider({
         clientSecret: CLIENT_SECRET,
         mobileClientId: MOBILE_CLIENT_ID,
         iosClientId: IOS_CLIENT_ID,
+        webClientId: WEB_CLIENT_ID,
+        webClientSecret: WEB_CLIENT_SECRET,
         scopes: [CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE],
         extraAuthParams: { access_type: 'offline', prompt: 'consent' },
       },

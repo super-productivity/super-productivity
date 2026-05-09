@@ -11,16 +11,14 @@ import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
 import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
-import {
-  getIssueProviderInitials,
-  getIssueProviderTooltip,
-} from '../../issue/mapping-helper/get-issue-provider-tooltip';
+import { getIssueProviderTooltip } from '../../issue/mapping-helper/get-issue-provider-tooltip';
 import { IssueProvider } from '../../issue/issue.model';
 import {
-  MatChipListbox,
-  MatChipListboxChange,
-  MatChipOption,
-} from '@angular/material/chips';
+  MatMenu,
+  MatMenuContent,
+  MatMenuItem,
+  MatMenuTrigger,
+} from '@angular/material/menu';
 import { debounceTime, map, startWith } from 'rxjs/operators';
 import { safeFormatDate } from '../../../util/safe-format-date';
 import { TaskService } from '../../tasks/task.service';
@@ -55,8 +53,10 @@ import { parseDbDateStr } from '../../../util/parse-db-date-str';
     MatIcon,
     MatTooltip,
     TranslatePipe,
-    MatChipListbox,
-    MatChipOption,
+    MatMenu,
+    MatMenuContent,
+    MatMenuItem,
+    MatMenuTrigger,
   ],
   templateUrl: './schedule.component.html',
   styleUrls: ['./schedule.component.scss'],
@@ -86,26 +86,19 @@ export class ScheduleComponent {
       .pipe(map((ps) => ps.filter((p) => p.isEnabled))),
     { initialValue: [] },
   );
-  // Show the bar with multiple providers, OR with a single provider that is
-  // currently hidden — otherwise the user has no UI to re-enable the only
+  // Show the button with multiple providers, OR with a single provider that
+  // is currently hidden — otherwise the user has no UI to re-enable the only
   // calendar after, e.g., deleting all but one provider in settings.
-  readonly showCalFilterBar = computed(() => {
+  readonly showCalFilterBtn = computed(() => {
     const providers = this.enabledCalendarProviders();
     if (providers.length > 1) return true;
     const hidden = this.hiddenCalendarProviderIds();
     return providers.some((p) => hidden.includes(p.id));
   });
   readonly calProviderLabel = (p: IssueProvider): string => getIssueProviderTooltip(p);
-  readonly calProviderInitials = (p: IssueProvider): string =>
-    getIssueProviderInitials(p) ??
-    getIssueProviderTooltip(p).substring(0, 2).toUpperCase();
 
-  onCalProvidersChange(ev: MatChipListboxChange): void {
-    const visible = new Set<string>((ev.value as string[]) ?? []);
-    const hidden = this.enabledCalendarProviders()
-      .map((p) => p.id)
-      .filter((id) => !visible.has(id));
-    this._hiddenCalendarProviders.setHidden(hidden);
+  toggleCalProvider(providerId: string): void {
+    this._hiddenCalendarProviders.toggle(providerId);
   }
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
@@ -188,6 +181,15 @@ export class ScheduleComponent {
 
   weeksToShow = computed(() => Math.ceil(this.daysToShow().length / 7));
 
+  // Memoized so headerTitle only re-runs at the breakpoint boundary,
+  // not on every debounced resize tick.
+  private _isCompact = computed(
+    () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.XS,
+  );
+  private _isVeryCompact = computed(
+    () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.XXS,
+  );
+
   headerTitle = computed(() => {
     const days = this.daysToShow();
     if (!days.length) return '';
@@ -201,9 +203,17 @@ export class ScheduleComponent {
     const start = parseDbDateStr(days[0]);
     const end = parseDbDateStr(days[days.length - 1]);
     const weekNr = getWeekNumber(start); // ISO — default firstDayOfWeek=1
+    const sameMonth =
+      start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
     const startStr = safeFormatDate(start, 'MMM d', locale);
-    const endStr = safeFormatDate(end, 'MMM d', locale);
-    const label = this._translate.instant(T.F.WORKLOG.CMP.WEEK_NR, { nr: weekNr });
+    const endStr = sameMonth
+      ? safeFormatDate(end, 'd', locale)
+      : safeFormatDate(end, 'MMM d', locale);
+    const labelKey = this._isCompact()
+      ? T.F.WORKLOG.CMP.WEEK_NR_SHORT
+      : T.F.WORKLOG.CMP.WEEK_NR;
+    const label = this._translate.instant(labelKey, { nr: weekNr });
+    if (this._isVeryCompact()) return label;
     return `${label} · ${startStr} – ${endStr}`;
   });
 
@@ -353,7 +363,9 @@ export class ScheduleComponent {
     const timeCol = scrollContainer.querySelector(
       'schedule-week .time-column-bg, schedule-week .filler',
     );
-    const timeColWidth = timeCol?.getBoundingClientRect().width ?? 48;
+    // `.filler` is `display:none` in side-panel mode, so a 0-width hit
+    // here means we matched the hidden one — fall back to the default.
+    const timeColWidth = timeCol?.getBoundingClientRect().width || 48;
     const EXTRA_PX = 12;
 
     const elRect = element.getBoundingClientRect();

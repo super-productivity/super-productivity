@@ -6,6 +6,7 @@ import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { Operation, OpType, ActionType } from '../core/operation.types';
+import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
 import { uuidv7 } from '../../util/uuid-v7';
 import { PENDING_OPERATION_EXPIRY_MS } from '../core/operation-log.const';
 import { OpLog } from '../../core/log';
@@ -84,7 +85,7 @@ export class OperationLogRecoveryService {
       actionType: ActionType.RECOVERY_DATA_IMPORT,
       opType: OpType.Batch,
       entityType: 'RECOVERY',
-      entityId: '*',
+      entityId: SINGLETON_ENTITY_ID,
       payload: legacyData,
       clientId: clientId,
       vectorClock: { [clientId]: 1 },

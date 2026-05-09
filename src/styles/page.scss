@@ -1,4 +1,3 @@
-@use 'angular-material-css-vars' as mat-css-vars;
 @use '../_common';
 @use './mixins/media-queries';
 
@@ -139,16 +138,17 @@ body {
     opacity: 0;
   }
 
-  &.isLightTheme {
+  // Soft primary-tinted gradient backdrop. Light and dark want different
+  // recipes — the same single corner-glow that reads as warm on dark looks
+  // smudgy on white, so light gets two larger diffuse glows (primary +
+  // accent) for subtle depth without flat-tint feel.
+  // Themes that want a different/no backdrop hide body:before (dark-base,
+  // arc, nord-snow-storm, dracula, velvet do this).
+  &.isLightTheme,
+  &.isDarkTheme {
     color: var(--text-color);
     background: var(--bg);
 
-    &:before {
-      display: block;
-      opacity: 1;
-      filter: saturate(0.8);
-      background: mat-css-vars.mat-css-color(50, 1);
-    }
     &.isDisableBackgroundTint {
       background: var(--bg);
       &:before {
@@ -158,23 +158,39 @@ body {
     }
   }
 
-  &.isDarkTheme {
-    color: var(--text-color);
-    background: var(--bg);
+  &.isLightTheme:before {
+    display: block;
+    opacity: 1;
+    // Two glows in different primary shades — primary-200 (soft pastel)
+    // for the top-left highlight, primary-400 (deeper) for bottom-right
+    // depth. Single-hue keeps the light-mode wash calm.
+    background:
+      radial-gradient(
+        ellipse 120% 80% at 0% -10%,
+        color-mix(in srgb, var(--palette-primary-200) 40%, transparent) 0%,
+        transparent 65%
+      ),
+      radial-gradient(
+        ellipse 80% 60% at 100% 100%,
+        color-mix(in srgb, var(--palette-primary-400) 15%, transparent) 0%,
+        transparent 60%
+      );
+  }
 
-    &:before {
-      display: block;
-      opacity: 1;
-      filter: brightness(0.1);
-      background: mat-css-vars.mat-css-color(900, 1);
-    }
-    &.isDisableBackgroundTint {
-      background: var(--bg);
-      &:before {
-        display: none;
-        opacity: 0;
-      }
-    }
+  &.isDarkTheme:before {
+    display: block;
+    opacity: 1;
+    background:
+      radial-gradient(
+        ellipse 80% 60% at 10% -10%,
+        color-mix(in srgb, var(--c-primary) 10%, transparent) 0%,
+        transparent 55%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--c-primary) 4%, transparent) 0%,
+        transparent 100%
+      );
   }
 
   // also hide material dialogs while import is in progress

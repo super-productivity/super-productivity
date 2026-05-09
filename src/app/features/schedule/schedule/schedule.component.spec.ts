@@ -700,7 +700,7 @@ describe('ScheduleComponent', () => {
     });
   });
 
-  describe('showCalFilterBar computed', () => {
+  describe('showCalFilterBtn computed', () => {
     const makeProvider = (id: string): any => ({
       id,
       isEnabled: true,
@@ -725,7 +725,7 @@ describe('ScheduleComponent', () => {
       store.overrideSelector(selectCalendarProviders, []);
       store.refreshState();
       fixture.detectChanges();
-      expect(component.showCalFilterBar()).toBe(false);
+      expect(component.showCalFilterBtn()).toBe(false);
     });
 
     it('should be false with a single visible provider', () => {
@@ -733,7 +733,7 @@ describe('ScheduleComponent', () => {
       store.overrideSelector(selectCalendarProviders, [makeProvider('only')]);
       store.refreshState();
       fixture.detectChanges();
-      expect(component.showCalFilterBar()).toBe(false);
+      expect(component.showCalFilterBtn()).toBe(false);
     });
 
     it('should be true when the only enabled provider is hidden (C2 regression)', () => {
@@ -743,7 +743,7 @@ describe('ScheduleComponent', () => {
       const hidden = TestBed.inject(HiddenCalendarProvidersService);
       hidden.setHidden(['only']);
       fixture.detectChanges();
-      expect(component.showCalFilterBar()).toBe(true);
+      expect(component.showCalFilterBtn()).toBe(true);
     });
 
     it('should be true with multiple enabled providers', () => {
@@ -754,7 +754,7 @@ describe('ScheduleComponent', () => {
       ]);
       store.refreshState();
       fixture.detectChanges();
-      expect(component.showCalFilterBar()).toBe(true);
+      expect(component.showCalFilterBtn()).toBe(true);
     });
   });
 

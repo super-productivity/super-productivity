@@ -207,6 +207,15 @@
   //}
 }
 
+// Hide the time-wrapper while hover-controls are mounted: they're absolutely
+// positioned over .time-wrapper and would let its digits ghost through on
+// translucent themes (velvet, glass) and paint redundantly on solid ones.
+// Angular only renders task-hover-controls on hover (non-touch), so :has()
+// exactly matches the visibility intent without needing :hover guards.
+.first-line:has(task-hover-controls) .time-wrapper {
+  visibility: hidden;
+}
+
 .additional-info {
   display: block;
   // required as sort of a clearfix (fixes padding issue)

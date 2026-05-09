@@ -6,7 +6,11 @@ import {
   EntityChange,
 } from '../core/operation.types';
 import { OpLog } from '../../core/log';
-import { getPayloadKey, getAllPayloadKeys } from '../core/entity-registry';
+import {
+  getPayloadKey,
+  getAllPayloadKeys,
+  isSingletonEntityId,
+} from '../core/entity-registry';
 import { isValidEntityId } from './is-valid-entity-id';
 
 /**
@@ -385,7 +389,7 @@ const validateEntityChanges = (
       }
       // Create should have an id in changes
       const changesObj = change.changes as Record<string, unknown>;
-      if (!changesObj.id && change.entityId !== '*') {
+      if (!changesObj.id && !isSingletonEntityId(change.entityId)) {
         warnings.push(`EntityChange[${i}] CREATE changes missing 'id' field`);
       }
     } else if (change.opType === OpType.Delete) {

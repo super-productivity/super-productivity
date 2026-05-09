@@ -89,6 +89,7 @@ const ea: ElectronAPI = {
   isLinux: () => process.platform === 'linux',
   isGnomeDesktop,
   isMacOS: () => process.platform === 'darwin',
+  isAppleSilicon: () => process.platform === 'darwin' && process.arch === 'arm64',
   isSnap: () => process && process.env && !!process.env.SNAP,
   isFlatpak: () => process && process.env && !!process.env.FLATPAK_ID,
 

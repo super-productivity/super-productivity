@@ -9,65 +9,70 @@ Reproducible app-store screenshots driven by Playwright + a single seed dataset.
 npm run screenshots
 
 # Or split:
-npm run screenshots:capture          # full web matrix → .tmp/screenshots/_master/
+npm run screenshots:capture          # full web matrix → dist/screenshots/_master/
 npm run screenshots:capture:desktop  # desktopMaster only
 npm run screenshots:capture:mobile   # iPhone/iPad/Android viewports only
-npm run screenshots:capture:electron # Electron build → .tmp/screenshots/_master_electron/
+npm run screenshots:capture:electron # Electron build → dist/screenshots/_master_electron/
 npm run screenshots:electron         # capture:electron + build (lands in dist/)
 npm run screenshots:build            # rebuild dist/ layout from existing masters
 
-# One group while iterating (pattern matches `desktop dark|light|catppuccin` etc.)
+# One group while iterating
 npx playwright test --config e2e/playwright.store-screenshots.config.ts \
-  --project=desktopMaster --grep "desktop dark \(en\)"
+  --project=desktopMaster --grep "desktop all"
 ```
 
 ## Environment overrides
 
-| Var | Effect |
-| --- | --- |
-| `SCREENSHOT_MODE=electron` | Switches the fixture to the Electron pipeline (set by `screenshots:capture:electron`). |
-| `SCREENSHOT_BASE_DATE=2026-05-06T09:30:00` | Pin the "today" anchor used by the seed builder. Default is a Wednesday well clear of midnight in CI timezones. |
-| `SP_SCREENSHOT_BG_DARK_URL` / `SP_SCREENSHOT_BG_LIGHT_URL` | Override the default Unsplash backgrounds (e.g. point to a vendored asset for offline / privacy-sensitive runs). |
-| `SP_SCREENSHOT_BG_DISABLE=1` | Drop background images entirely. |
-| `SP_SCREENSHOT_BG_OVERLAY_OPACITY=80` | Drives the per-context "Darken/lighten background image for better contrast" slider (0–99). Default 80 for screenshots vs. 20 in the app. |
+| Var                                                        | Effect                                                                                                                                    |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCREENSHOT_MODE=electron`                                 | Switches the fixture to the Electron pipeline (set by `screenshots:capture:electron`).                                                    |
+| `SCREENSHOT_BASE_DATE=2026-05-06T09:30:00`                 | Pin the "today" anchor used by the seed builder. Default is a Wednesday well clear of midnight in CI timezones.                           |
+| `SP_SCREENSHOT_BG_DARK_URL` / `SP_SCREENSHOT_BG_LIGHT_URL` | Override the default Unsplash backgrounds (e.g. point to a vendored asset for offline / privacy-sensitive runs).                          |
+| `SP_SCREENSHOT_BG_DISABLE=1`                               | Drop background images entirely.                                                                                                          |
+| `SP_SCREENSHOT_BG_OVERLAY_OPACITY=80`                      | Drives the per-context "Darken/lighten background image for better contrast" slider (0–99). Default 80 for screenshots vs. 20 in the app. |
 
-Master captures land in `.tmp/screenshots/_master/<viewport>/<locale>/<theme>/<scenario>/<name>.png`.
+Master captures land in `dist/screenshots/_master/<viewport>/<locale>/<theme>/<scenario>/<name>.png`.
 Per-store assets land in `dist/screenshots/<store>/<locale>/NN-name.png` (and the F-Droid `fastlane/...` layout).
 
 ## Scenario lineup
 
-| Slot | Platform | Theme | What it shows |
-| ---- | -------- | ----- | ------------- |
-| mobile-01 | mobile | dark | Planner |
-| mobile-02 | mobile | dark | Planner with calendar nav expanded |
-| mobile-03 | mobile | dark | Eisenhower matrix board |
-| mobile-04 | mobile | light | Planner expanded (light variant) |
-| mobile-05 | mobile | dark | Schedule view |
-| mobile-06 | mobile | dark | Today task list |
-| desktop-01 | desktop | dark | Today + schedule day-panel open |
-| desktop-02 | desktop | dark | Eisenhower matrix board |
-| desktop-03 | desktop | dark | Schedule view |
-| desktop-04 | desktop | light | Project (Work) + notes panel populated |
-| desktop-05 | desktop | dark | Focus mode |
-| desktop-06 | desktop | light | Schedule (light variant) |
-| desktop-07 | desktop | catppuccin-mocha | Today list with custom theme |
+| Slot       | Platform | Theme | What it shows                                                     |
+| ---------- | -------- | ----- | ----------------------------------------------------------------- |
+| mobile-00  | mobile   | dark  | Cover/hero — Today list with marketing caption overlay            |
+| desktop-00 | desktop  | dark  | Cover/hero — Today list with marketing caption overlay            |
+| tablet-00  | tablet   | dark  | Cover/hero — Today list with marketing caption overlay            |
+| mobile-01  | mobile   | dark  | Planner                                                           |
+| mobile-02  | mobile   | dark  | Planner with calendar nav expanded                                |
+| mobile-03  | mobile   | dark  | Eisenhower matrix board                                           |
+| mobile-04  | mobile   | light | Planner expanded (light variant)                                  |
+| mobile-05  | mobile   | dark  | Schedule view                                                     |
+| mobile-06  | mobile   | dark  | Today task list                                                   |
+| desktop-01 | desktop  | dark  | Today + schedule day-panel open                                   |
+| desktop-02 | desktop  | dark  | Eisenhower matrix board                                           |
+| desktop-03 | desktop  | dark  | Schedule view                                                     |
+| desktop-04 | desktop  | light | Project (Work) + notes panel populated                            |
+| desktop-05 | desktop  | dark  | Focus mode                                                        |
+| desktop-06 | desktop  | light | Schedule (light variant)                                          |
+| desktop-07 | desktop  | dark  | Project (Work) view, no wallpaper — regular palette reads cleanly |
+| desktop-08 | desktop  | dark  | Planner                                                           |
 
-Specs are platform-grouped: `scenarios/desktop/all.spec.ts` and `scenarios/mobile/all.spec.ts` each capture every dark+light slot in a single session, flipping `DARK_MODE` between groups via `applyTheme()` (Playwright `addInitScript` is append-only, so a later script wins on each reload). The catppuccin slot stays in its own spec because changing `customTheme` requires a different seed file. Each spec runs once per locale (en + de).
+Specs are platform-grouped: `scenarios/desktop/all.spec.ts` and `scenarios/mobile/all.spec.ts` each capture every slot in a single session, flipping `DARK_MODE` between groups via `applyTheme()` (Playwright `addInitScript` is append-only, so a later script wins on each reload). Each spec runs once per locale (en + de).
 
 ## Files
 
-| Path | Purpose |
-| ---- | ------- |
-| `matrix.ts` | Locales, themes, viewports, mobile/desktop classification, store rules |
-| `seed/seed.template.json` | Curated dataset with date offsets and `@@PLANNER_OFFSET_+N` placeholders |
-| `seed/build-seed.ts` | Materializes offsets to absolute dates, injects `locale` + `customTheme` |
-| `fixture.ts` | Pins clock, applies dark-mode, imports seed via UI flow, exposes `screenshotMaster` (which reads live `DARK_MODE` so light/dark scenes land in the right directory) |
-| `helpers.ts` | `gotoAndSettle`, `openNotesPanel`, `openSchedulePanel`, `resetView`, `applyTheme` |
-| `scenarios/desktop/all.spec.ts` | 6 desktop slots (dark + light, single session) |
-| `scenarios/desktop/catppuccin.spec.ts` | desktop-07 (different seed → standalone) |
-| `scenarios/mobile/all.spec.ts` | 6 mobile slots (dark + light, single session) |
-| `build-store-assets.ts` | Renames + copies masters into per-store directory layouts; JPEG re-encode for `maxBytes`-capped stores (Snap) |
-| `../playwright.store-screenshots.config.ts` | Separate Playwright config; one project per viewport |
+| Path                                        | Purpose                                                                                                                                                                                                     |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `matrix.ts`                                 | Locales, themes, viewports, mobile/desktop classification, store rules                                                                                                                                      |
+| `seed/seed.template.json`                   | Curated dataset with date offsets and `@@PLANNER_OFFSET_+N` placeholders                                                                                                                                    |
+| `seed/build-seed.ts`                        | Materializes offsets to absolute dates, injects `locale` + `customTheme`                                                                                                                                    |
+| `fixture.ts`                                | Pins clock, applies dark-mode, imports seed via UI flow, exposes `screenshotMaster` (which reads live `DARK_MODE` so light/dark scenes land in the right directory)                                         |
+| `helpers.ts`                                | `gotoAndSettle`, `openNotesPanel`, `openSchedulePanel`, `resetView`, `applyTheme`, `applyLocale`, `applyTimeTrackingEnabled`, `applySideNavCollapsed`, `setPlannerCalendarExpanded`, `showMarketingOverlay` |
+| `marketing-copy.ts`                         | Headline + subline shown on the slot-00 hero overlay                                                                                                                                                        |
+| `scenarios/desktop/all.spec.ts`             | 9 desktop slots: hero + 8 scenes                                                                                                                                                                            |
+| `scenarios/mobile/all.spec.ts`              | 7 mobile slots: hero + 6 scenes                                                                                                                                                                             |
+| `scenarios/tablet/all.spec.ts`              | 6 tablet slots: hero + 5 scenes                                                                                                                                                                             |
+| `build-store-assets.ts`                     | Renames + copies masters into per-store layouts; JPEG re-encode for `maxBytes`-capped stores (Snap); emits `_preview.html` contact sheet                                                                    |
+| `../playwright.store-screenshots.config.ts` | Separate Playwright config; one project per viewport                                                                                                                                                        |
 
 ## How it works
 
@@ -109,23 +114,26 @@ for (const locale of LOCALES) {
 
 ## Electron pipeline (Mac App Store, Flathub)
 
-Web Chromium captures don't look "native" on macOS — wrong fonts, wrong scrollbars, no traffic-lights. Flathub explicitly *requires* native window chrome. So there's a parallel pipeline that runs the actual SP Electron build via Playwright's `_electron` API and captures via OS-level region tools (`screencapture` on macOS, `grim`/`import` on Linux).
+Web Chromium captures don't look "native" on macOS — wrong fonts, wrong scrollbars, no traffic-lights. Flathub explicitly _requires_ native window chrome. So there's a parallel pipeline that runs the actual SP Electron build via Playwright's `_electron` API. macOS captures use Electron renderer screenshots plus a deterministic hiddenInset traffic-light overlay; Linux captures use OS-level region tools (`grim`/`import`) so Flathub gets real GTK chrome.
 
 ```bash
-# Capture only — masters land in .tmp/screenshots/_master_electron/.
+# Capture only — masters land in dist/screenshots/_master_electron/.
 npm run screenshots:capture:electron
 
-# Capture + build — masters under .tmp/, deliverables under dist/screenshots/
+# Capture + build — masters and deliverables under dist/screenshots/
 # (macappstore/, flathub/). Mirrors `npm run screenshots` for the web pipeline.
 npm run screenshots:electron
 ```
 
 Same scenarios, same fixture file — `store-screenshots/fixture.ts` branches on the `SCREENSHOT_MODE` env var (the npm script sets it). Each desktop spec runs unchanged in either mode.
 
-The OS-level capture grabs the full window rect including titlebar, shadow, and traffic-lights / GTK decoration. Bounds come from `BrowserWindow.getBounds()`; on macOS Retina, 1440×900 points capture as 2880×1800 px. On Linux X11/Wayland bounds == pixels.
+On macOS, Playwright-launched Electron is not always treated like a LaunchServices-started `.app`, and OS capture can miss AppKit's hiddenInset traffic lights even when the window content is correct. The fixture avoids that fragile path: it captures the renderer at the target 2560×1600 Retina size and composites the three traffic lights at AppKit's hiddenInset coordinates.
+
+On Linux, the OS-level capture grabs the full window rect including titlebar, shadow, and GTK decoration. Bounds come from `BrowserWindow.getBounds()`; on X11/Wayland bounds == pixels.
 
 Per-OS tooling (must be on PATH):
-- **macOS** — `screencapture` (built-in)
+
+- **macOS** — no external capture tool; the fixture forces Retina-scale capture so the renderer screenshot lands at 2560×1600.
 - **Linux X11** — ImageMagick (`apt install imagemagick`, ships `import`)
 - **Linux Wayland** — `grim` (`apt install grim`, wlroots-based compositors only)
 
@@ -134,8 +142,9 @@ The Mac App Store store rule has `masterDir: 'electron'` in `STORE_RULES`, so th
 ## Status
 
 - ✅ Foundation: matrix, seed builder, fixture (web + electron modes), helpers, post-processor
-- ✅ 13 scenarios (6 mobile + 7 desktop) covering planner, boards, schedule, focus, notes, custom theme
-- ✅ Electron-mode pipeline with OS-level chrome capture (`screencapture` / `grim` / `import`)
+- ✅ 22 scenarios (3 hero + 6 mobile + 8 desktop + 5 tablet) covering planner, boards, schedule, focus, notes, project view
+- ✅ Per-build `_preview.html` contact sheet under `dist/screenshots/` for one-click QA
+- ✅ Electron-mode pipeline with macOS traffic-light compositing and Linux OS chrome capture (`grim` / `import`)
 - ✅ Mac App Store wired to source from `_master_electron/`
 - ✅ Flathub STORE_RULE (single-gallery, sourced from `_master_electron/`)
 - ✅ Snap JPEG re-encode under 2 MB cap (mozjpeg, automatic per-file)
