@@ -8,6 +8,8 @@ import {
 import { GlobalConfigService } from '../config/global-config.service';
 import { FocusModeStorageService } from './focus-mode-storage.service';
 
+const MIN_BREAK_MS = 60 * 1000;
+
 @Injectable({ providedIn: 'root' })
 export class PomodoroStrategy implements FocusModeStrategy {
   private globalConfigService = inject(GlobalConfigService);
@@ -78,7 +80,10 @@ export class FlowtimeStrategy implements FocusModeStrategy {
         return null;
       }
       // Ratio-based: breakDuration = elapsedTime * (percentage / 100)
-      breakDuration = Math.round(elapsedMs * (config.breakPercentage / 100));
+      breakDuration = Math.max(
+        MIN_BREAK_MS,
+        Math.round(elapsedMs * (config.breakPercentage / 100)),
+      );
     } else if (config.breakMode === 'rule') {
       if (!config.breakRules?.length) {
         return null;

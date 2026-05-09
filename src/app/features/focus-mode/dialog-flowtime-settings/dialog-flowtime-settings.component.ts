@@ -117,7 +117,7 @@ export class DialogFlowtimeSettingsComponent {
       props: {
         label: T.F.FOCUS_MODE.FLOWTIME_BREAK_PERCENTAGE,
         type: 'number',
-        min: 0,
+        min: 1,
         max: 100,
         required: true,
         description: T.F.FOCUS_MODE.FLOWTIME_BREAK_PERCENTAGE_DESC,
@@ -125,6 +125,7 @@ export class DialogFlowtimeSettingsComponent {
     },
     {
       key: 'breakRules',
+      description: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULES_DESC,
       type: 'repeat',
       expressions: {
         hide: (field: FormlyFieldConfig) =>
@@ -145,7 +146,11 @@ export class DialogFlowtimeSettingsComponent {
             expression: (control: AbstractControl) => {
               const min = control.get('minDuration')?.value;
               const max = control.get('maxDuration')?.value;
-              return max === null || max === undefined || max === '' || max >= min;
+              if (min == null || min === '') {
+                return true;
+              }
+
+              return max == null || max === '' || Number(max) >= Number(min);
             },
             message: this._minMaxDurationValidatorMessage,
           },
@@ -158,6 +163,7 @@ export class DialogFlowtimeSettingsComponent {
               label: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULE_MIN,
               type: 'number',
               min: 0,
+              max: 480,
               required: true,
             },
           },
@@ -168,6 +174,7 @@ export class DialogFlowtimeSettingsComponent {
               label: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULE_MAX,
               type: 'number',
               min: 1,
+              max: 480,
             },
           },
           {
@@ -222,7 +229,7 @@ export class DialogFlowtimeSettingsComponent {
       isBreakEnabled: currentModel.isBreakEnabled,
       breakMode: currentModel.breakMode,
       breakPercentage: currentModel.breakPercentage,
-      breakRules: (currentModel.breakRules ?? [])
+      breakRules: [...(currentModel.breakRules ?? [])]
         .sort((a, b) => (a.minDuration ?? 0) - (b.minDuration ?? 0))
         .map((rule: FlowtimeBreakRuleInMinutes) => {
           const min = rule.minDuration ?? 0;

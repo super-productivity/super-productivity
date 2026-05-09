@@ -185,8 +185,12 @@ export const focusModeReducer = createReducer(
   })),
 
   // Flowtime end-of-session: store elapsed duration, pause the timer, but DON'T
-  // reset the screen — the offerFlowtimeBreak effect reads timer.elapsed and
-  // dispatches offerFlowtimeBreak which transitions to the Break screen.
+  // reset the screen — offerFlowtimeBreak reads the current timer state and
+  // transitions to the Break screen.
+  //
+  // IMPORTANT:
+  // lastCompletedDuration must remain populated across the offerFlowtimeBreak
+  // transition because logFocusSession$ relies on it for session logging.
   on(a.endFlowtimeSession, (state, { pausedTaskId }) => {
     if (state.timer.purpose !== 'work') return state;
     return {

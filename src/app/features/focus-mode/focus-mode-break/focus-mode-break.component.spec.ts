@@ -90,15 +90,6 @@ describe('FocusModeBreakComponent', () => {
     it('should compute progressPercentage from focusModeService', () => {
       expect(component.progressPercentage()).toBe(0.5);
     });
-
-    it('should compute breakTypeLabel for short break', () => {
-      expect(component.breakTypeLabel()).toBe(T.F.FOCUS_MODE.SHORT_BREAK);
-    });
-
-    it('should compute breakTypeLabel for long break', () => {
-      (mockFocusModeService.isBreakLong as any).set(true);
-      expect(component.breakTypeLabel()).toBe(T.F.FOCUS_MODE.LONG_BREAK);
-    });
   });
 
   describe('skipBreak', () => {

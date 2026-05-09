@@ -197,8 +197,8 @@ describe('FocusModeStrategies', () => {
           breakMode: 'ratio',
           breakPercentage: 20,
         });
-        expect(strategy.getBreakDuration(100000)).toEqual({
-          duration: 20000,
+        expect(strategy.getBreakDuration(1000000)).toEqual({
+          duration: 200000,
           isLong: false,
         });
       });

@@ -284,6 +284,8 @@
       "FLOWTIME_BREAK_MODE_RULE": "Rule-based",
       "FLOWTIME_BREAK_PERCENTAGE": "Break percentage",
       "FLOWTIME_BREAK_PERCENTAGE_DESC": "Take a break for this percentage of the work session length.",
+      "FLOWTIME_BREAK_RULES_DESC": "Rules are evaluated in ascending order. If ranges overlap, the first matching rule is used.",
+      "FLOWTIME_BREAK_TITLE": "Take a break",
       "FLOWTIME_ADD_BREAK_RULE": "Add break rule",
       "FLOWTIME_VALIDATION_MIN_MAX": "Max duration must be greater than or equal to Min duration",
       "FLOWTIME_BREAK_RULE_MIN": "Min work duration (minutes)",

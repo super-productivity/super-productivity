@@ -1,12 +1,7 @@
 <div class="focus-mode-break">
   <h1>
     @if (isBreakOffer()) {
-      {{
-        (focusModeService.isBreakLong()
-          ? T.F.FOCUS_MODE.LONG_BREAK_TITLE
-          : T.F.FOCUS_MODE.SHORT_BREAK_TITLE
-        ) | translate
-      }}
+      {{ T.F.FOCUS_MODE.FLOWTIME_BREAK_TITLE | translate }}
     } @else {
       {{
         (focusModeService.isBreakLong()

@@ -58,12 +58,6 @@ export class FocusModeBreakComponent {
     return this.focusModeService.progress() || 0;
   });
 
-  readonly breakTypeLabel = computed(() =>
-    this.focusModeService.isBreakLong()
-      ? T.F.FOCUS_MODE.LONG_BREAK
-      : T.F.FOCUS_MODE.SHORT_BREAK,
-  );
-
   readonly isBreakPaused = computed(() => this.focusModeService.isSessionPaused());
   readonly isBreakOffer = computed(
     () =>
@@ -100,7 +94,7 @@ export class FocusModeBreakComponent {
       // fallback to the active current task only when no pausedTaskId exists.
       const currentTaskId = this._taskService.currentTaskId();
       const storePausedTaskId = this._pausedTaskId();
-      const pausedTaskId = storePausedTaskId || currentTaskId;
+      const pausedTaskId = storePausedTaskId ?? currentTaskId;
       const config = this.focusModeService.focusModeConfig();
       if (config?.isPauseTrackingDuringBreak) {
         this._store.dispatch(unsetCurrentTask());

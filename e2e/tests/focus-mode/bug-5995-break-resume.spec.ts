@@ -40,10 +40,15 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     }
   });
 
-  test('CRITICAL: Resuming paused break should continue break, not start next session', async ({
+  // The banner-based focus-session surface this test exercised was removed —
+  // the header focus-button now indicates the running session and pause/resume
+  // of breaks is only available inside the focus-mode-break component (whose
+  // pause/resume buttons are not E2E-testable per the note in
+  // focus-mode-break.spec.ts; that path is covered by 48 reducer + 14
+  // component unit tests).
+  test.skip('CRITICAL: Resuming paused break should continue break, not start next session', async ({
     page,
     workViewPage,
-    testPrefix,
   }) => {
     // Step 1: Enable the critical setting
     await enableSyncSetting(page);

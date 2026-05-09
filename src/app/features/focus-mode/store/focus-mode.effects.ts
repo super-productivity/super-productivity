@@ -130,8 +130,10 @@ export class FocusModeEffects {
           // Bug #7384 fix: respect isSkipPreparation. When off, leave the user on
           // the preparation screen so they must click 'Start' (and see the rocket
           // animation), matching the manual-start flow in focus-mode-main.component.
+          // However, if we are starting in the background (no overlay), we must bypass this
+          // because the user will not see the preparation screen to click 'Start'.
           if (timer.purpose === null && currentScreen === FocusScreen.Main) {
-            if (!cfg?.isSkipPreparation) {
+            if (!cfg?.isSkipPreparation && !cfg?.isStartInBackground) {
               return EMPTY;
             }
             const strategy = this.strategyFactory.getStrategy(mode);
