@@ -24,11 +24,13 @@ const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
     await productivityTab.click();
   }
 
-  const focusModeHeader = page.locator('text=Focus Mode').first();
-  if (await focusModeHeader.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await focusModeHeader.click();
-    await page.waitForTimeout(300);
-  }
+  const focusModeHeader = page
+    .locator('collapsible')
+    .filter({ hasText: 'Focus Mode' })
+    .first()
+    .locator('.collapsible-header');
+  await expect(focusModeHeader).toBeVisible({ timeout: 5000 });
+  await focusModeHeader.click();
 
   const toggle = page
     .locator('mat-slide-toggle')
@@ -36,8 +38,8 @@ const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
     .first();
 
   await expect(toggle).toBeVisible({ timeout: 5000 });
-  const cls = (await toggle.getAttribute('class')) ?? '';
-  if (!cls.includes('mat-checked')) {
+  const isChecked = (await toggle.getAttribute('class'))?.includes('checked') ?? false;
+  if (!isChecked) {
     await toggle.click();
     await page.waitForTimeout(300);
   }
