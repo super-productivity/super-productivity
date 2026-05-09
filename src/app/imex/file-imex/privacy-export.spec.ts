@@ -267,6 +267,35 @@ describe('privacyExport', () => {
     });
   });
 
+  describe('calendar regex filter fields', () => {
+    it('should mask filterIncludeRegex field', () => {
+      const input = { filterIncludeRegex: 'Meeting|Standup' };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.filterIncludeRegex).toMatch(/^filterIncludeRegex__\d+$/);
+      expect(result.filterIncludeRegex).not.toBe('Meeting|Standup');
+    });
+
+    it('should mask filterExcludeRegex field', () => {
+      const input = { filterExcludeRegex: 'Lunch|ClientName|Blocker' };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.filterExcludeRegex).toMatch(/^filterExcludeRegex__\d+$/);
+      expect(result.filterExcludeRegex).not.toBe('Lunch|ClientName|Blocker');
+    });
+
+    it('should mask both regex fields in a calendar provider config', () => {
+      const input = {
+        id: 'provider-123',
+        icalUrl: 'https://example.com/calendar.ics',
+        filterIncludeRegex: 'Team|Project Alpha',
+        filterExcludeRegex: 'Lunch|john.doe@company.com',
+      };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.filterIncludeRegex).toMatch(/^filterIncludeRegex__\d+$/);
+      expect(result.filterExcludeRegex).toMatch(/^filterExcludeRegex__\d+$/);
+      expect(result.id).toBe('provider-123');
+    });
+  });
+
   describe('realistic CalDAV data structure', () => {
     it('should properly anonymize a realistic CalDAV calendar configuration', () => {
       const input = {
