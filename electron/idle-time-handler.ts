@@ -199,11 +199,7 @@ export class IdleTimeHandler {
     }
 
     const now = Date.now();
-    if (
-      this._lastWaylandIdleNotifyDemotionMs &&
-      now - this._lastWaylandIdleNotifyDemotionMs <
-        WAYLAND_IDLE_NOTIFY_DEMOTION_COOLDOWN_MS
-    ) {
+    if (this._isWaylandIdleNotifyDemotionCoolingDown(now)) {
       return;
     }
 
@@ -218,6 +214,14 @@ export class IdleTimeHandler {
     // start duplicate helper processes while the up-to-3s readiness check runs.
     this._lastWaylandIdleNotifyRetryMs = now;
     void this._tryPromoteToWaylandIdleNotify();
+  }
+
+  private _isWaylandIdleNotifyDemotionCoolingDown(now = Date.now()): boolean {
+    return (
+      !!this._lastWaylandIdleNotifyDemotionMs &&
+      now - this._lastWaylandIdleNotifyDemotionMs <
+        WAYLAND_IDLE_NOTIFY_DEMOTION_COOLDOWN_MS
+    );
   }
 
   private async _tryPromoteToWaylandIdleNotify(): Promise<void> {
@@ -290,10 +294,14 @@ export class IdleTimeHandler {
       });
     }
 
-    candidates.push({
-      name: 'waylandIdleNotify',
-      test: async () => this._ensureWaylandIdleHelperStarted(),
-    });
+    if (this._isWaylandIdleNotifyDemotionCoolingDown()) {
+      log.debug('Skipping waylandIdleNotify during demotion cooldown');
+    } else {
+      candidates.push({
+        name: 'waylandIdleNotify',
+        test: async () => this._ensureWaylandIdleHelperStarted(),
+      });
+    }
 
     candidates.push({
       name: 'xprintidle',

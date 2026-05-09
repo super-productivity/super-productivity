@@ -30,6 +30,8 @@ const WAYLAND_IDLE_HELPER_SRC = join(
 );
 const WAYLAND_IDLE_HELPER_DEST = 'wayland-idle-helper';
 
+const isTruthyEnv = (value) => value === '1' || value?.toLowerCase() === 'true';
+
 async function afterPack(context) {
   if (context.electronPlatformName !== 'linux') return;
 
@@ -41,10 +43,16 @@ async function afterPack(context) {
   const installWaylandIdleHelper = async () => {
     const helperStat = await fs.stat(WAYLAND_IDLE_HELPER_SRC).catch(() => null);
     if (!helperStat) {
-      console.warn(
-        `[afterPack] ${WAYLAND_IDLE_HELPER_SRC} not found; skipping Wayland idle helper copy`,
+      if (isTruthyEnv(process.env.SP_SKIP_WAYLAND_IDLE_HELPER_BUILD)) {
+        console.warn(
+          `[afterPack] ${WAYLAND_IDLE_HELPER_SRC} not found; skipping Wayland idle helper copy because SP_SKIP_WAYLAND_IDLE_HELPER_BUILD is set`,
+        );
+        return;
+      }
+
+      throw new Error(
+        `[afterPack] ${WAYLAND_IDLE_HELPER_SRC} not found. Linux packages must include the Wayland idle helper; install Rust/Cargo before packaging or set SP_SKIP_WAYLAND_IDLE_HELPER_BUILD=1 to intentionally omit ext-idle-notify support.`,
       );
-      return;
     }
 
     await fs.copyFile(WAYLAND_IDLE_HELPER_SRC, helperDestPath);
