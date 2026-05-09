@@ -235,7 +235,18 @@ export class TaskRepeatCfgService {
       const hasUncompletedInstances = existingTaskInstances.some((task) => !task.isDone);
       if (hasUncompletedInstances) {
         // Don't create the next task yet; wait for completion of the current instance
-        return [];
+        // But advance lastTaskCreationDay to avoid re-evaluating the same date on every app open
+        return [
+          updateTaskRepeatCfg({
+            taskRepeatCfg: {
+              id: taskRepeatCfg.id,
+              changes: {
+                lastTaskCreation: targetCreated.getTime(),
+                lastTaskCreationDay: targetDateStr,
+              },
+            },
+          }),
+        ];
       }
     }
     // If skipOverdue is enabled, silently skip instances that are in the past (before today).

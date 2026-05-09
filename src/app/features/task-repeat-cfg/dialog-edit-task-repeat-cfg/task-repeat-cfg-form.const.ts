@@ -259,6 +259,13 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
     type: 'select',
     defaultValue: false,
     resetOnHide: false,
+    hideExpression: (model: any) => {
+      // Only show for custom settings with intervals > 1
+      if (model.quickSetting !== 'CUSTOM') {
+        return true;
+      }
+      return false;
+    },
     templateOptions: {
       label: T.F.TASK_REPEAT.F.SCHEDULE_TYPE_LABEL,
       options: [],
@@ -288,15 +295,6 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
     },
   },
   {
-    key: 'waitForCompletion',
-    type: 'checkbox',
-    defaultValue: false,
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION,
-      description: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION_DESCRIPTION,
-    },
-  },
-  {
     key: 'shouldInheritSubtasks',
     type: 'checkbox',
     defaultValue: false,
@@ -316,6 +314,15 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       description: T.F.TASK_REPEAT.F.DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION,
     },
     className: 'sp-formly-child-option',
+  },
+  {
+    key: 'waitForCompletion',
+    type: 'checkbox',
+    defaultValue: false,
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION,
+      description: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION_DESCRIPTION,
+    },
   },
   {
     key: 'skipOverdue',

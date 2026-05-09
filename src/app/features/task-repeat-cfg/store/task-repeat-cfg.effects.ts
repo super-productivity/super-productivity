@@ -530,7 +530,7 @@ export class TaskRepeatCfgEffects {
     ),
   );
 
-  // Update startDate when a task with repeatOnComplete is marked as done
+  // Update repeat cfg state when the latest recurring task is completed
   updateStartDateOnComplete$ = createEffect(() =>
     this._localActions$.pipe(
       ofType(TaskSharedActions.updateTask),
@@ -547,15 +547,24 @@ export class TaskRepeatCfgEffects {
           map((cfg) => ({ task, cfg })),
         ),
       ),
-      filter(({ cfg }) => !!cfg && cfg.repeatFromCompletionDate === true),
+      filter(
+        ({ cfg }) =>
+          !!cfg &&
+          (cfg.repeatFromCompletionDate === true || cfg.waitForCompletion === true),
+      ),
       filter(({ task, cfg }) => this._isLatestInstance(task, cfg)),
       map(({ cfg }) => {
         const today = this._dateService.todayStr();
+
         return updateTaskRepeatCfg({
           taskRepeatCfg: {
             id: cfg.id as string,
             changes: {
-              startDate: today,
+              ...(cfg.repeatFromCompletionDate
+                ? {
+                    startDate: today,
+                  }
+                : {}),
               lastTaskCreationDay: today,
             },
           },

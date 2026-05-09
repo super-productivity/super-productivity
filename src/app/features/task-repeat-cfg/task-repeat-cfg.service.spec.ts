@@ -1505,6 +1505,284 @@ describe('TaskRepeatCfgService', () => {
     });
   });
 
+  describe('waitForCompletion', () => {
+    it('should block task creation when prior instance is uncompleted', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+      const todayStr = formatIsoDate(today);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const cfgWithWaitForCompletion: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: yesterdayStr,
+        lastTaskCreationDay: yesterdayStr,
+        waitForCompletion: true,
+      };
+
+      // Yesterday's task exists and is NOT completed
+      const uncompletedTask: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithWaitForCompletion.id, yesterdayStr),
+        created: yesterday.getTime(),
+        isDone: false,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([uncompletedTask]),
+      );
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithWaitForCompletion,
+        targetDayDate,
+      );
+
+      // Should return only updateTaskRepeatCfg to advance lastTaskCreationDay
+      expect(actions.length).toBe(1);
+      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+      const updateAction = actions[0] as ReturnType<typeof updateTaskRepeatCfg>;
+      expect(updateAction.taskRepeatCfg.changes.lastTaskCreationDay).toBe(todayStr);
+      expect(updateAction.taskRepeatCfg.changes.lastTaskCreation).toBeDefined();
+    });
+
+    it('should create task when prior instance is completed', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const cfgWithWaitForCompletion: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: yesterdayStr,
+        lastTaskCreationDay: yesterdayStr,
+        waitForCompletion: true,
+      };
+
+      // Yesterday's task exists and IS completed
+      const completedTask: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithWaitForCompletion.id, yesterdayStr),
+        created: yesterday.getTime(),
+        isDone: true,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithWaitForCompletion,
+        targetDayDate,
+      );
+
+      // Should create new task (addTask + updateTaskRepeatCfg)
+      expect(actions.length).toBe(2);
+      expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
+      expect(actions[1].type).toBe(updateTaskRepeatCfg.type);
+    });
+
+    it('should create task when there are no prior instances', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = formatIsoDate(weekAgo);
+
+      const cfgWithWaitForCompletion: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: weekAgoStr,
+        lastTaskCreationDay: weekAgoStr,
+        waitForCompletion: true,
+      };
+
+      // No prior instances exist
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithWaitForCompletion,
+        targetDayDate,
+      );
+
+      // Should create new task (addTask + updateTaskRepeatCfg)
+      expect(actions.length).toBe(2);
+      expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
+      expect(actions[1].type).toBe(updateTaskRepeatCfg.type);
+    });
+
+    it('should work with repeatFromCompletionDate when both flags are enabled', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+      const todayStr = formatIsoDate(today);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const cfgWithBothFlags: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: yesterdayStr,
+        lastTaskCreationDay: yesterdayStr,
+        waitForCompletion: true,
+        repeatFromCompletionDate: true,
+      };
+
+      // Yesterday's task exists and is NOT completed
+      const uncompletedTask: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithBothFlags.id, yesterdayStr),
+        created: yesterday.getTime(),
+        isDone: false,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([uncompletedTask]),
+      );
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithBothFlags,
+        targetDayDate,
+      );
+
+      // Should block creation and advance lastTaskCreationDay
+      expect(actions.length).toBe(1);
+      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+      const updateAction = actions[0] as ReturnType<typeof updateTaskRepeatCfg>;
+      expect(updateAction.taskRepeatCfg.changes.lastTaskCreationDay).toBe(todayStr);
+    });
+
+    it('should create task when both flags enabled and prior is completed', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const cfgWithBothFlags: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: yesterdayStr,
+        lastTaskCreationDay: yesterdayStr,
+        waitForCompletion: true,
+        repeatFromCompletionDate: true,
+      };
+
+      // Yesterday's task exists and IS completed
+      const completedTask: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithBothFlags.id, yesterdayStr),
+        created: yesterday.getTime(),
+        isDone: true,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithBothFlags,
+        targetDayDate,
+      );
+
+      // Should create new task
+      expect(actions.length).toBe(2);
+      expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
+      expect(actions[1].type).toBe(updateTaskRepeatCfg.type);
+    });
+
+    it('should handle multiple uncompleted instances (only first matters)', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const twoDaysAgo = new Date(today);
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      const twoDaysAgoStr = formatIsoDate(twoDaysAgo);
+
+      const cfgWithWaitForCompletion: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: twoDaysAgoStr,
+        lastTaskCreationDay: yesterdayStr,
+        waitForCompletion: true,
+      };
+
+      // Multiple uncompleted tasks exist
+      const uncompletedTask1: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithWaitForCompletion.id, twoDaysAgoStr),
+        created: twoDaysAgo.getTime(),
+        isDone: false,
+      };
+      const uncompletedTask2: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithWaitForCompletion.id, yesterdayStr),
+        created: yesterday.getTime(),
+        isDone: false,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([uncompletedTask1, uncompletedTask2]),
+      );
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithWaitForCompletion,
+        targetDayDate,
+      );
+
+      // Should block creation because at least one uncompleted instance exists
+      expect(actions.length).toBe(1);
+      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+    });
+
+    it('should advance lastTaskCreationDay even when blocked to prevent re-evaluation', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+      const todayStr = formatIsoDate(today);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const cfgWithWaitForCompletion: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: yesterdayStr,
+        lastTaskCreationDay: yesterdayStr,
+        waitForCompletion: true,
+        repeatEvery: 1,
+        repeatCycle: 'DAILY',
+      };
+
+      // Uncompleted task exists
+      const uncompletedTask: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithWaitForCompletion.id, yesterdayStr),
+        created: yesterday.getTime(),
+        isDone: false,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([uncompletedTask]),
+      );
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithWaitForCompletion,
+        targetDayDate,
+      );
+
+      // Verify lastTaskCreationDay is advanced
+      expect(actions.length).toBe(1);
+      const updateAction = actions[0] as ReturnType<typeof updateTaskRepeatCfg>;
+      expect(updateAction.taskRepeatCfg.changes.lastTaskCreationDay).toBe(todayStr);
+      expect(updateAction.taskRepeatCfg.changes.lastTaskCreation).toBeDefined();
+
+      // Verify the timestamp represents today
+      const updatedTimestamp = updateAction.taskRepeatCfg.changes
+        .lastTaskCreation as number;
+      const updatedDate = new Date(updatedTimestamp);
+      expect(formatIsoDate(updatedDate)).toBe(todayStr);
+    });
+  });
+
   describe('addTaskRepeatCfgToTask dispatch (#5594)', () => {
     // Note: First occurrence calculation and lastTaskCreationDay updates
     // are handled by the updateTaskAfterMakingItRepeatable$ effect.
