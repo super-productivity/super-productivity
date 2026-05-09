@@ -16,7 +16,7 @@ import { IssueProvider, isPluginIssueProvider } from '../../issue/issue.model';
 import { Project } from '../../project/project.model';
 import {
   selectAllProjects,
-  selectArchivedProjects,
+  selectArchivedProjectIds,
 } from '../../project/store/project.selectors';
 import {
   selectTagFeatureState,
@@ -631,9 +631,8 @@ export const selectTimeConflictTaskIds = createSelector(
 
 export const selectAllTasksWithReminder = createSelector(
   selectAllTasks,
-  selectArchivedProjects,
-  (tasks: Task[], archivedProjects: Project[]): TaskWithReminder[] => {
-    const archivedProjectIds = new Set(archivedProjects.map((p) => p.id));
+  selectArchivedProjectIds,
+  (tasks: Task[], archivedProjectIds: Set<string>): TaskWithReminder[] => {
     return tasks.filter(
       (task) =>
         task &&
@@ -646,9 +645,8 @@ export const selectAllTasksWithReminder = createSelector(
 
 export const selectAllTasksWithDeadlineReminder = createSelector(
   selectAllTasks,
-  selectArchivedProjects,
-  (tasks: Task[], archivedProjects: Project[]): Task[] => {
-    const archivedProjectIds = new Set(archivedProjects.map((p) => p.id));
+  selectArchivedProjectIds,
+  (tasks: Task[], archivedProjectIds: Set<string>): Task[] => {
     return tasks.filter(
       (task) =>
         task &&
@@ -766,7 +764,7 @@ export const selectAllTasksWithoutHiddenProjects = createSelector(
       const project = projectMap[projectId];
       if (!project) return true;
 
-      if (project.isHiddenFromMenu) return false;
+      if (project.isHiddenFromMenu || project.isArchived) return false;
 
       // if (project.backlogTaskIds && project.backlogTaskIds.includes(task.id)) {
       //   return false;
