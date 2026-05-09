@@ -815,12 +815,11 @@ export class TaskRepeatCfgEffects {
     if (!lastCreationDay) {
       return true;
     }
-    // Only allow repeat-from-completion to advance configs when the finished task
-    // represents the most recently generated instance. Completing an archived/old
-    // copy previously skipped ahead incorrectly.
-    const taskDay =
-      task.dueDay ||
-      (task.dueWithTime ? getDbDateStr(task.dueWithTime) : getDbDateStr(task.created));
+    // Use the stable task.created date (set to noon on the repeat occurrence day)
+    // instead of the mutable task.dueDay. dueDay changes when tasks are rescheduled
+    // (e.g., "Add to Today"), which would cause waitForCompletion to miss the
+    // completion event after the task is moved.
+    const taskDay = getDbDateStr(task.created);
     return taskDay === lastCreationDay;
   }
 }
