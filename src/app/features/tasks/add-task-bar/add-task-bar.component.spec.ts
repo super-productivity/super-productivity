@@ -186,6 +186,11 @@ describe('AddTaskBarComponent', () => {
       tasks$: new BehaviorSubject({ defaultProjectId: null }),
       shortSyntax$: of({}),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
+      cfg: signal({
+        tasks: { defaultProjectId: null, isSetDefaultDayForTodayTasks: true },
+        reminder: { defaultTaskRemindOption: 'AT_START' },
+        appFeatures: { isTimeTrackingEnabled: true },
+      }),
     });
     mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
     mockStore.pipe.and.returnValue(of([]));
