@@ -866,7 +866,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
   });
 
   describe('updateStartDateOnComplete$', () => {
-    it('should update startDate when completing a repeat-on-complete task', () => {
+    it('should update startDate and lastTaskCreationDay when completing a repeat-on-complete task', () => {
       testScheduler.run(({ hot, expectObservable }) => {
         const action = TaskSharedActions.updateTask({
           task: { id: 'parent-task-id', changes: { isDone: true } },
@@ -886,7 +886,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         const expectedAction = updateTaskRepeatCfg({
           taskRepeatCfg: {
             id: 'repeat-cfg-id',
-            changes: { startDate: today },
+            changes: { startDate: today, lastTaskCreationDay: today },
           },
         });
 

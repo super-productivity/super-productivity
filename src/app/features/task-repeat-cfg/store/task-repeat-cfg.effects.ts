@@ -556,7 +556,9 @@ export class TaskRepeatCfgEffects {
       concatMap(({ task, cfg }) => {
         const today = this._dateService.todayStr();
 
-        // For repeatFromCompletionDate, update startDate to anchor future occurrences on today
+        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay
+        // because getEffectiveRepeatStartDate() prioritizes lastTaskCreationDay when set.
+        // Without updating lastTaskCreationDay, the recurrence stays anchored to the old date.
         if (cfg.repeatFromCompletionDate) {
           return rxOf([
             updateTaskRepeatCfg({
@@ -564,6 +566,7 @@ export class TaskRepeatCfgEffects {
                 id: cfg.id as string,
                 changes: {
                   startDate: today,
+                  lastTaskCreationDay: today,
                 },
               },
             }),
