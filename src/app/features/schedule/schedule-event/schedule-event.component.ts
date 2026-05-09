@@ -10,6 +10,7 @@ import {
   OnDestroy,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { CdkDrag } from '@angular/cdk/drag-drop';
@@ -64,7 +65,7 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[class]': 'cssClass()',
     '[style]': 'style()',
     '[style.--title-line-clamp]': '_titleLineClamp()',
-    '[style.--project-color]': 'projectColor()',
+    '[style.--project-color]': 'calEventColor() || projectColor()',
     '[style.height]': '_resizeHeight()',
     '(click)': 'clickHandler($event)',
     '(contextmenu)': 'onContextMenu($event)',
@@ -107,6 +108,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   });
 
   readonly calMenuTrigger = viewChild('calMenuTrigger', { read: MatMenuTrigger });
+  private readonly _calMenuItems = viewChildren(MatMenuItem);
   private readonly _titleEl = viewChild<ElementRef<HTMLElement>>('titleEl');
 
   protected readonly SVEType = SVEType;
@@ -216,6 +218,10 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
       addClass += ' is-resizing';
     }
 
+    if (this.isReferenceCalendar()) {
+      addClass += ' is-reference-calendar';
+    }
+
     return evt.type + '  ' + addClass;
   });
 
@@ -292,16 +298,22 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
 
   readonly projectColor = computed(() => {
     const projectId = this._projectId();
-    if (!projectId) return '';
+    if (!projectId) return null;
     // Use store.select and convert to immediate value
-    let color = '';
+    let color: string | null = null;
     this._store
       .select(selectProjectById, { id: projectId })
       .pipe(first())
       .subscribe((project) => {
-        color = project?.theme?.primary || '';
+        color = project?.theme?.primary || null;
       });
     return color;
+  });
+
+  readonly calEventColor = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return null;
+    return (evt.data as ScheduleFromCalendarEvent).color || null;
   });
 
   readonly elementId = computed(() => {
@@ -369,7 +381,9 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
         },
       });
     } else if (evt.type === SVEType.CalendarEvent) {
-      this.calMenuTrigger()?.openMenu();
+      if (this._calMenuItems().length) {
+        this.calMenuTrigger()?.openMenu();
+      }
     }
   }
 
@@ -377,6 +391,12 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     const evt = this.se();
     if (evt.type !== SVEType.CalendarEvent) return false;
     return this._calEventActions.isPluginEvent(evt.data as ScheduleFromCalendarEvent);
+  });
+
+  readonly isReferenceCalendar = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return !!(evt.data as ScheduleFromCalendarEvent).isReferenceCalendar;
   });
 
   async openCalendarEventLink(): Promise<void> {

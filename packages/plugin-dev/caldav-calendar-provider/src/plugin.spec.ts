@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { IssueProviderPluginDefinition } from '@super-productivity/plugin-api';
 
 let definition: IssueProviderPluginDefinition;
@@ -478,32 +478,337 @@ END:VCALENDAR</cal:calendar-data>
 </d:multistatus>`;
 
     it('should parse Nextcloud REPORT response into events', async () => {
-      const mockHttp = {
-        get: vi.fn(),
-        post: vi.fn(),
-        put: vi.fn(),
-        patch: vi.fn(),
-        delete: vi.fn(),
-        request: vi.fn().mockResolvedValue(NEXTCLOUD_REPORT_RESPONSE),
+      // Pin "now" so the canned DTSTART:20260320T100000Z falls inside the sync window.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-15T00:00:00Z'));
+      try {
+        const mockHttp = {
+          get: vi.fn(),
+          post: vi.fn(),
+          put: vi.fn(),
+          patch: vi.fn(),
+          delete: vi.fn(),
+          request: vi.fn().mockResolvedValue(NEXTCLOUD_REPORT_RESPONSE),
+        };
+
+        const events = await definition.getNewIssuesForBacklog!(
+          {
+            serverUrl: 'https://example.com/dav',
+            username: 'admin',
+            password: 'pass',
+            readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
+          } as any,
+          mockHttp as any,
+        );
+
+        expect(events.length).toBe(1);
+        expect(events[0].title).toBe('Test Meeting');
+        expect(events[0].description).toBe('A test event');
+        expect(events[0].isAllDay).toBe(false);
+        expect(events[0].start).toBeDefined();
+        // Compound ID should contain the event href from REPORT, not the UID
+        expect(events[0].id).toContain('event1.ics');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // Regression coverage for issue #7492 — recurring CalDAV events parsed as one event.
+    describe('RRULE expansion (issue #7492)', () => {
+      const wrapMultistatus = (icsBody: string, eventPath = 'weekly.ics'): string =>
+        `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/${eventPath}</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"rec123"</d:getetag>
+        <cal:calendar-data>${icsBody}</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+      const cfg = {
+        serverUrl: 'https://example.com/dav',
+        username: 'admin',
+        password: 'pass',
+        readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
+        syncRangeWeeks: '8',
       };
 
-      const events = await definition.getNewIssuesForBacklog!(
-        {
-          serverUrl: 'https://example.com/dav',
-          username: 'admin',
-          password: 'pass',
-          readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
-        } as any,
-        mockHttp as any,
-      );
+      const callBacklog = async (icsBody: string, eventPath?: string) => {
+        const mockHttp = {
+          get: vi.fn(),
+          post: vi.fn(),
+          put: vi.fn(),
+          patch: vi.fn(),
+          delete: vi.fn(),
+          request: vi.fn().mockResolvedValue(wrapMultistatus(icsBody, eventPath)),
+        };
+        return definition.getNewIssuesForBacklog!(cfg as any, mockHttp as any);
+      };
 
-      expect(events.length).toBe(1);
-      expect(events[0].title).toBe('Test Meeting');
-      expect(events[0].description).toBe('A test event');
-      expect(events[0].isAllDay).toBe(false);
-      expect(events[0].start).toBeDefined();
-      // Compound ID should contain the event href from REPORT, not the UID
-      expect(events[0].id).toContain('event1.ics');
+      beforeEach(() => {
+        // Pin "now" so DTSTART:20260105T100000Z falls inside the 8-week sync window.
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('expands FREQ=WEEKLY;COUNT=4 into four occurrences', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+SUMMARY:Weekly Standup
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        expect(events.length).toBe(4);
+        expect(new Set(events.map((e) => e.title))).toEqual(new Set(['Weekly Standup']));
+        // Compound IDs must be unique per occurrence so the UI can deduplicate.
+        expect(new Set(events.map((e) => e.id)).size).toBe(4);
+        const expectedStarts = [
+          Date.parse('2026-01-05T10:00:00Z'),
+          Date.parse('2026-01-12T10:00:00Z'),
+          Date.parse('2026-01-19T10:00:00Z'),
+          Date.parse('2026-01-26T10:00:00Z'),
+        ];
+        expect(events.map((e) => e.start).sort()).toEqual(expectedStarts);
+        expect(events.every((e) => e.duration === 60 * 60 * 1000)).toBe(true);
+      });
+
+      it('honors EXDATE to skip cancelled occurrences', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+EXDATE:20260112T100000Z
+SUMMARY:Weekly Standup
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        expect(events.length).toBe(3);
+        expect(events.map((e) => e.start)).not.toContain(
+          Date.parse('2026-01-12T10:00:00Z'),
+        );
+      });
+
+      it('applies a RECURRENCE-ID override to a single occurrence', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+SUMMARY:Weekly Standup
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly-uid
+RECURRENCE-ID:20260112T100000Z
+DTSTART:20260112T140000Z
+DTEND:20260112T150000Z
+SUMMARY:Rescheduled Standup
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        expect(events.length).toBe(4);
+        const overridden = events.find(
+          (e) => e.start === Date.parse('2026-01-12T14:00:00Z'),
+        );
+        expect(overridden?.title).toBe('Rescheduled Standup');
+        // The original 10:00 slot for Jan 12 must be gone.
+        expect(events.map((e) => e.start)).not.toContain(
+          Date.parse('2026-01-12T10:00:00Z'),
+        );
+      });
+
+      it('skips a cancelled RECURRENCE-ID instance', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+SUMMARY:Weekly Standup
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly-uid
+RECURRENCE-ID:20260119T100000Z
+DTSTART:20260119T100000Z
+STATUS:CANCELLED
+SUMMARY:Weekly Standup
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        expect(events.length).toBe(3);
+        expect(events.map((e) => e.start)).not.toContain(
+          Date.parse('2026-01-19T10:00:00Z'),
+        );
+      });
+
+      it('still emits a single result for non-recurring events', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:single-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+SUMMARY:One-Off Meeting
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics, 'single.ics');
+
+        expect(events.length).toBe(1);
+        expect(events[0].title).toBe('One-Off Meeting');
+      });
+
+      it('limits an unbounded RRULE to occurrences inside the sync window', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:daily-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=DAILY
+SUMMARY:Daily Forever
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        // 8-week window from 2026-01-01T00:00 ends 2026-02-26T00:00 (exclusive).
+        // Recurrence DTSTART is 2026-01-05T10:00; daily occurrences fall on
+        // Jan 5..31 (27 days) + Feb 1..25 (25 days) = 52 occurrences.
+        expect(events.length).toBe(52);
+      });
+
+      it('keeps an in-progress event visible (rangeStart anchored to UTC midnight)', async () => {
+        // Pin "now" to mid-morning so a 09:00 → 10:00 meeting is in progress.
+        vi.setSystemTime(new Date('2026-01-15T09:30:00Z'));
+
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:in-progress-uid
+DTSTART:20260115T090000Z
+DTEND:20260115T100000Z
+SUMMARY:Standup In Progress
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics, 'in-progress.ics');
+
+        expect(events.length).toBe(1);
+        expect(events[0].title).toBe('Standup In Progress');
+      });
+
+      it('expands a master with DTSTART years in the past without hitting the safety cap', async () => {
+        // The master event began two years before the sync window; only the
+        // occurrences inside the window should be emitted, not the years of
+        // skipped iterations counted toward MAX_OCCURRENCES_PER_EVENT.
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:long-running-uid
+DTSTART:20240105T100000Z
+DTEND:20240105T110000Z
+RRULE:FREQ=WEEKLY
+SUMMARY:Long-Running Weekly
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics, 'long-running.ics');
+
+        // 8-week window from 2026-01-01 with weekly recurrence anchored to a
+        // 2024 Monday: occurrences fall on Jan 5, 12, 19, 26, Feb 2, 9, 16, 23
+        // (8 in window). Pre-fix, ~104 past iterations from 2024 would be
+        // counted toward the 1000 cap — fine here, but the regression risk is
+        // a higher-frequency rule. We assert the simple weekly case still
+        // resolves correctly.
+        expect(events.length).toBe(8);
+      });
+    });
+
+    describe('parseCompoundId / toCompoundId (W2 — server-controlled href safety)', () => {
+      // A hostile or quirky CalDAV server returns an href containing what
+      // looks like the old occurrence suffix (`::<digits>`). After fix, the
+      // occurrence delimiter is `#occ=<digits>` so the server-controlled path
+      // segment is never silently stripped.
+      it('does not strip a "::<digits>" tail from a server-supplied href', async () => {
+        vi.setSystemTime(new Date('2026-01-15T09:30:00Z'));
+
+        const HOSTILE_RESPONSE = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/event::1234567890123</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"abc"</d:getetag>
+        <cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:hostile-uid
+DTSTART:20260115T090000Z
+DTEND:20260115T100000Z
+SUMMARY:Quirky Path
+END:VEVENT
+END:VCALENDAR</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+        const mockHttp = {
+          get: vi.fn(),
+          post: vi.fn(),
+          put: vi.fn(),
+          patch: vi.fn(),
+          delete: vi.fn(),
+          request: vi.fn().mockResolvedValue(HOSTILE_RESPONSE),
+        };
+
+        const events = await definition.getNewIssuesForBacklog!(
+          {
+            serverUrl: 'https://example.com/dav',
+            username: 'admin',
+            password: 'pass',
+            readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
+          } as any,
+          mockHttp as any,
+        );
+
+        expect(events.length).toBe(1);
+        // The full server-supplied path must round-trip through getIssueLink.
+        expect(events[0].id).toContain('event::1234567890123');
+        const link = definition.getIssueLink!(events[0].id, {
+          serverUrl: 'https://example.com/dav',
+        } as any);
+        expect(link).toContain('event::1234567890123');
+      });
     });
   });
 });

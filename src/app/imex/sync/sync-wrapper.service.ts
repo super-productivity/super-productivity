@@ -73,6 +73,7 @@ import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-downl
 import { IS_ELECTRON } from '../../app.constants';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
+import { SyncSessionValidationService } from '../../op-log/sync/sync-session-validation.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
@@ -109,6 +110,7 @@ export class SyncWrapperService {
   private _wsDownloadService = inject(WsTriggeredDownloadService);
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
+  private _sessionValidation = inject(SyncSessionValidationService);
   private _wrappedProvider = inject(WrappedProviderService);
   private _hydrationState = inject(HydrationStateService);
 
@@ -388,6 +390,16 @@ export class SyncWrapperService {
       throw new Error('No Sync Provider for sync()');
     }
 
+    // Open a session-validation scope for this sync. Any post-sync
+    // validation failure during the session (download, upload, piggyback,
+    // retry, USE_REMOTE force-download) flips the latch; the wrapper reads
+    // it once before claiming IN_SYNC. (#7330)
+    return this._sessionValidation.withSession(() => this._syncBody(providerId));
+  }
+
+  private async _syncBody(
+    providerId: SyncProviderId,
+  ): Promise<SyncStatus | 'HANDLED_ERROR'> {
     try {
       // PERF: For legacy sync providers (WebDAV, Dropbox, LocalFile), sync the vector clock
       // from SUP_OPS to pf.META_MODEL before sync. This bridges the gap between the new
@@ -487,9 +499,30 @@ export class SyncWrapperService {
           `SyncWrapperService: LWW re-upload still has ${pendingLwwOps} pending ops after ` +
             `${MAX_LWW_REUPLOAD_RETRIES} retries. Will retry on next sync.`,
         );
+        // Issue #7521: validation failure is more serious than unuploaded
+        // ops — prefer ERROR over UNKNOWN_OR_CHANGED if the latch was
+        // flipped at any point during the session.
+        if (this._sessionValidation.hasFailed()) {
+          SyncLog.err(
+            'SyncWrapperService: Validation failed during sync (retry exhaustion path); reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+          return 'HANDLED_ERROR';
+        }
         // Don't claim IN_SYNC — there are known unuploaded ops.
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return SyncStatus.UpdateRemote;
+      }
+
+      // Issue #7330: post-sync state validation failure must not be reported
+      // as IN_SYNC. The latch is flipped by every validation site; we read it
+      // once here before claiming IN_SYNC.
+      if (this._sessionValidation.hasFailed()) {
+        SyncLog.err(
+          'SyncWrapperService: Post-sync state validation failed, not marking as IN_SYNC',
+        );
+        this._providerManager.setSyncStatus('ERROR');
+        return 'HANDLED_ERROR';
       }
 
       // 4. Check for permanent rejection failures
@@ -815,31 +848,42 @@ export class SyncWrapperService {
   private async _forceDownload(): Promise<void> {
     SyncLog.log('SyncWrapperService: forceDownload called - downloading remote state');
 
-    await this.runWithSyncBlocked(async () => {
-      try {
-        const rawProvider = this._providerManager.getActiveProvider();
-        const syncCapableProvider =
-          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
+    // Open a session-validation scope — read after forceDownloadRemoteState
+    // returns so a corrupt downloaded state is reported as ERROR. (#7330)
+    await this.runWithSyncBlocked(() =>
+      this._sessionValidation.withSession(async () => {
+        try {
+          const rawProvider = this._providerManager.getActiveProvider();
+          const syncCapableProvider =
+            await this._wrappedProvider.getOperationSyncCapable(rawProvider);
 
-        if (!syncCapableProvider) {
-          SyncLog.warn(
-            'SyncWrapperService: Cannot force download - provider not available',
-          );
-          return;
+          if (!syncCapableProvider) {
+            SyncLog.warn(
+              'SyncWrapperService: Cannot force download - provider not available',
+            );
+            return;
+          }
+
+          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+          if (this._sessionValidation.hasFailed()) {
+            SyncLog.err(
+              'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
+            );
+            this._providerManager.setSyncStatus('ERROR');
+          } else {
+            this._providerManager.setSyncStatus('IN_SYNC');
+          }
+          SyncLog.log('SyncWrapperService: Force download complete');
+        } catch (error) {
+          SyncLog.err('SyncWrapperService: Force download failed:', error);
+          const errStr = getSyncErrorStr(error);
+          this._snackService.open({
+            msg: errStr,
+            type: 'ERROR',
+          });
         }
-
-        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-        this._providerManager.setSyncStatus('IN_SYNC');
-        SyncLog.log('SyncWrapperService: Force download complete');
-      } catch (error) {
-        SyncLog.err('SyncWrapperService: Force download failed:', error);
-        const errStr = getSyncErrorStr(error);
-        this._snackService.open({
-          msg: errStr,
-          type: 'ERROR',
-        });
-      }
-    });
+      }),
+    );
   }
 
   async configuredAuthForSyncProviderIfNecessary(
@@ -1140,11 +1184,20 @@ export class SyncWrapperService {
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else if (resolution === 'USE_REMOTE') {
-        // User chose to discard local data and download remote
+        // User chose to discard local data and download remote.
+        // Reset latch — read after forceDownloadRemoteState returns. (#7330)
         SyncLog.log(
           'SyncWrapperService: User chose USE_REMOTE - downloading remote state, discarding local',
         );
+        this._sessionValidation.reset();
         await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        if (this._sessionValidation.hasFailed()) {
+          SyncLog.err(
+            'SyncWrapperService: USE_REMOTE applied but post-sync validation failed; reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+          return 'HANDLED_ERROR';
+        }
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else {

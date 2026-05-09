@@ -757,17 +757,29 @@ export class TaskService {
       }),
     );
 
-    this._focusNewlyCreatedTask(task.id, !task.title?.trim().length);
+    this.focusTaskById(task.id, !task.title?.trim().length);
 
     return task.id;
   }
 
-  private _focusNewlyCreatedTask(taskId: string, shouldStartEditing: boolean): void {
-    // Use double-RAF to ensure Angular has completed rendering after change detection.
-    // First RAF queues after the current frame, second RAF runs after the render.
+  /**
+   * Focus a task element by id, deferred via double-RAF so it runs after
+   * Angular renders the next frame. When `shouldStartEditing` is true and
+   * the task's title is empty at the time of focus, also enter title edit
+   * mode. Used both by newly-created tasks and by callers that want to
+   * focus an existing task (e.g. an empty sibling on Mod+Enter).
+   */
+  focusTaskById(taskId: string, shouldStartEditing: boolean): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const taskElement = document.getElementById(`t-${taskId}`);
+        // Prefer the in-panel instance when both the main list and the side
+        // detail panel render the same task (e.g. a just-created sub-task in
+        // the parent's sub-task list). Focusing the panel copy preserves the
+        // user's current context (parent stays selected) and on mobile lands
+        // on a visible input rather than the main-list copy that the panel
+        // overlays (#7120).
+        const allEls = document.querySelectorAll<HTMLElement>(`#t-${CSS.escape(taskId)}`);
+        const taskElement = allEls[allEls.length - 1];
         if (!taskElement) return;
 
         taskElement.focus();

@@ -23,6 +23,41 @@ import {
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
+import { getStartOfNextDayHourFromTimeString } from '../../../util/start-of-next-day.util';
+
+/**
+ * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
+ * rework) to the new `autoStartFocusOnPlay` opt-in. Users who had sync enabled
+ * relied on play→spawn behavior; without this, the upgrade would silently turn
+ * auto-spawn off for them.
+ *
+ * Important: this runs on the RAW incoming config (before defaults are merged)
+ * so `autoStartFocusOnPlay` is genuinely absent on pre-rework data — otherwise
+ * the default `false` would short-circuit the `??` backfill below.
+ */
+const migrateFocusModeConfig = (
+  cfg: Partial<FocusModeConfig> | undefined,
+): Partial<FocusModeConfig> => {
+  if (!cfg) {
+    return {};
+  }
+  const legacy = cfg as Partial<FocusModeConfig> & {
+    isSyncSessionWithTracking?: boolean;
+  };
+  // `hasOwnProperty.call` rather than `in` to avoid prototype-chain false positives.
+  const hasLegacyKey = Object.prototype.hasOwnProperty.call(
+    legacy,
+    'isSyncSessionWithTracking',
+  );
+  if (!hasLegacyKey) {
+    return cfg;
+  }
+  const { isSyncSessionWithTracking, ...rest } = legacy;
+  // Only backfill when the user has not explicitly set the new key.
+  const autoStartFocusOnPlay =
+    rest.autoStartFocusOnPlay ?? isSyncSessionWithTracking === true;
+  return { ...rest, autoStartFocusOnPlay };
+};
 
 export const CONFIG_FEATURE_NAME = 'globalConfig';
 export const selectConfigFeatureState =
@@ -110,6 +145,37 @@ export const initialGlobalConfigState: GlobalConfigState = {
   ...DEFAULT_GLOBAL_CONFIG,
 };
 
+const normalizeStartOfNextDayConfig = (
+  misc: Partial<MiscConfig>,
+): Partial<MiscConfig> => {
+  // `startOfNextDayTime` wins when present. When both fields arrive together
+  // from sync/REST/plugin payloads we keep minute precision from
+  // `startOfNextDayTime` and derive a legacy hour-only `startOfNextDay`.
+  // If only the legacy `startOfNextDay` arrives, minutes are unavoidably lost.
+  type NormalizedMiscConfig = Omit<
+    Partial<MiscConfig>,
+    'startOfNextDay' | 'startOfNextDayTime'
+  > & {
+    startOfNextDay?: number;
+    startOfNextDayTime?: string;
+  };
+  const normalized: NormalizedMiscConfig = { ...misc };
+
+  if (typeof misc.startOfNextDayTime === 'string') {
+    const hour = getStartOfNextDayHourFromTimeString(misc.startOfNextDayTime);
+    if (hour != null) {
+      normalized.startOfNextDay = hour;
+    }
+  }
+
+  if (typeof misc.startOfNextDay === 'number' && normalized.startOfNextDayTime == null) {
+    const hour = Math.max(0, Math.min(23, misc.startOfNextDay));
+    normalized.startOfNextDayTime = `${String(hour).padStart(2, '0')}:00`;
+  }
+
+  return normalized;
+};
+
 export const globalConfigReducer = createReducer<GlobalConfigState>(
   initialGlobalConfigState,
 
@@ -142,8 +208,18 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       ? oldState.sync.isEncryptionEnabled
       : incomingSyncConfig.isEncryptionEnabled;
 
-    return {
+    const incomingGlobalConfig = {
+      ...DEFAULT_GLOBAL_CONFIG,
       ...appDataComplete.globalConfig,
+      misc: {
+        ...DEFAULT_GLOBAL_CONFIG.misc,
+        ...appDataComplete.globalConfig.misc,
+        ...normalizeStartOfNextDayConfig(appDataComplete.globalConfig.misc ?? {}),
+      },
+    };
+
+    return {
+      ...incomingGlobalConfig,
       // Merge defaults for tasks config to fill missing fields.
       // This handles data from older app versions or synced snapshots that
       // predate newly added fields (e.g., isAutoMarkParentAsDone, notesTemplate).
@@ -161,7 +237,7 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       },
       focusMode: {
         ...DEFAULT_GLOBAL_CONFIG.focusMode,
-        ...appDataComplete.globalConfig.focusMode,
+        ...migrateFocusModeConfig(appDataComplete.globalConfig.focusMode),
       },
       sync: {
         ...incomingSyncConfig,
@@ -172,13 +248,20 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     };
   }),
 
-  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => ({
-    ...state,
-    [sectionKey]: {
-      ...state[sectionKey],
-      ...sectionCfg,
-    },
-  })),
+  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => {
+    const normalizedSectionCfg =
+      sectionKey === 'misc'
+        ? normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>)
+        : sectionCfg;
+
+    return {
+      ...state,
+      [sectionKey]: {
+        ...state[sectionKey],
+        ...normalizedSectionCfg,
+      },
+    };
+  }),
 );
 
 export const selectTimelineWorkStartEndHours = createSelector(

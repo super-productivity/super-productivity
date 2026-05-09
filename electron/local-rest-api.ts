@@ -135,6 +135,23 @@ const handleHttpRequest = async (
     return;
   }
 
+  // Block browser-CSRF: reject any request that arrives with a web Origin.
+  // The intended consumers are CLI tools and scripts (no Origin header).
+  // Browsers always set Origin on cross-origin POSTs (and on simple POSTs
+  // with text/plain bodies, which CORS does not preflight); rejecting here
+  // closes that gap on top of the Host-header check above.
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null') {
+    writeJson(res, 403, {
+      ok: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Requests from web origins are not allowed',
+      },
+    });
+    return;
+  }
+
   if (pendingRequests.size >= LOCAL_REST_API_MAX_CONCURRENT_REQUESTS) {
     writeJson(res, 429, {
       ok: false,

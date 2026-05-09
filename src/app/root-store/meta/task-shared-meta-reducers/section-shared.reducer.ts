@@ -6,12 +6,18 @@ import {
   SECTION_FEATURE_NAME,
 } from '../../../features/section/store/section.reducer';
 import { Section, SectionState } from '../../../features/section/section.model';
+import * as SectionActions from '../../../features/section/store/section.actions';
 import { TaskSharedActions } from '../task-shared.actions';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
-import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
+import { TAG_FEATURE_NAME, tagAdapter } from '../../../features/tag/store/tag.reducer';
+import {
+  PROJECT_FEATURE_NAME,
+  projectAdapter,
+} from '../../../features/project/store/project.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
 
 // Must run before taskSharedCrudMetaReducer — handlers read pre-update
 // task state to compute cleanups. Position pinned by
@@ -246,6 +252,42 @@ const applyTodayTagSectionCleanup = (
 };
 
 /**
+ * Atomic side-effect of `removeTaskFromSection`: reposition the task in
+ * the work-context's `taskIds` so it lands at the dropped slot in the
+ * no-section bucket. Same reducer pass as the section.taskIds removal —
+ * one op, one replay, both stores updated together.
+ *
+ * `afterTaskId === null` places the task at the start of the bucket.
+ * If the work-context entity is missing (concurrently deleted) the
+ * mutation is a no-op rather than an error.
+ */
+const handleRemoveTaskFromSection = (
+  state: ExtendedState,
+  workContextType: WorkContextType,
+  workContextId: string,
+  taskId: string,
+  afterTaskId: string | null,
+): ExtendedState => {
+  // TAG and PROJECT slices share the same `taskIds: string[]` shape, so
+  // pick the slice / adapter once and run the single mutation path.
+  const isTag = workContextType === WorkContextType.TAG;
+  const featureName = isTag ? TAG_FEATURE_NAME : PROJECT_FEATURE_NAME;
+  const adapter = isTag ? tagAdapter : projectAdapter;
+  const slice = state[featureName];
+  const entity = slice.entities[workContextId];
+  if (!entity) return state;
+  const next = moveItemAfterAnchor(taskId, afterTaskId, entity.taskIds);
+  if (next === entity.taskIds) return state;
+  return {
+    ...state,
+    [featureName]: (adapter as typeof projectAdapter).updateOne(
+      { id: workContextId, changes: { taskIds: next } },
+      slice as never,
+    ),
+  };
+};
+
+/**
  * Action-specific handlers.
  *
  * KNOWN FOLLOW-UPs:
@@ -319,6 +361,17 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     >;
     return handleMoveToOtherProject(state, task.id, targetProjectId);
   },
+  [SectionActions.removeTaskFromSection.type]: (state, action) => {
+    const { workContextType, workContextId, taskId, workContextAfterTaskId } =
+      action as ReturnType<typeof SectionActions.removeTaskFromSection>;
+    return handleRemoveTaskFromSection(
+      state,
+      workContextType,
+      workContextId,
+      taskId,
+      workContextAfterTaskId,
+    );
+  },
 };
 
 export const sectionSharedMetaReducer: MetaReducer<RootState> = (
@@ -329,7 +382,12 @@ export const sectionSharedMetaReducer: MetaReducer<RootState> = (
     // Boot/hydration guard: skip section-side cleanup until every slice
     // it touches is hydrated.
     const ext = state as ExtendedState;
-    if (!ext[TASK_FEATURE_NAME] || !ext[TAG_FEATURE_NAME] || !ext[SECTION_FEATURE_NAME]) {
+    if (
+      !ext[TASK_FEATURE_NAME] ||
+      !ext[TAG_FEATURE_NAME] ||
+      !ext[PROJECT_FEATURE_NAME] ||
+      !ext[SECTION_FEATURE_NAME]
+    ) {
       return reducer(state, action);
     }
     const handler = ACTION_HANDLERS[action.type];

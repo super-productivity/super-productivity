@@ -8,7 +8,9 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { DateAdapter } from '@angular/material/core';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
+import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -22,7 +24,6 @@ describe('ScheduleComponent', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockGlobalTrackingIntervalService: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
-
   beforeEach(async () => {
     // Create mock services
     mockTaskService = jasmine.createSpyObj('TaskService', ['currentTaskId']);
@@ -82,7 +83,7 @@ describe('ScheduleComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ScheduleComponent, TranslateModule.forRoot()],
       providers: [
-        provideMockStore({ initialState: {} }),
+        provideMockStore({ initialState: { issueProvider: { ids: [], entities: {} } } }),
         { provide: TaskService, useValue: mockTaskService },
         { provide: LayoutService, useValue: mockLayoutService },
         { provide: ScheduleService, useValue: mockScheduleService },
@@ -696,6 +697,64 @@ describe('ScheduleComponent', () => {
       expect(SCHEDULE_CONSTANTS.HORIZONTAL_SCROLL_THRESHOLD).toBe(1900);
       // The result depends on actual window width vs threshold
       expect(typeof shouldScroll).toBe('boolean');
+    });
+  });
+
+  describe('showCalFilterBtn computed', () => {
+    const makeProvider = (id: string): any => ({
+      id,
+      isEnabled: true,
+      issueProviderKey: 'ICAL',
+      icalUrl: `https://example.com/${id}.ics`,
+    });
+
+    beforeEach(() => {
+      localStorage.removeItem('SUP_HIDDEN_CALENDAR_PROVIDER_IDS');
+      const hidden = TestBed.inject(HiddenCalendarProvidersService);
+      hidden.setHidden([]);
+    });
+
+    // overrideSelector mutates the selector itself, so always reset to avoid
+    // leaking provider lists into unrelated tests later in the file.
+    afterEach(() => {
+      TestBed.inject(MockStore).resetSelectors();
+    });
+
+    it('should be false when no providers are enabled', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(false);
+    });
+
+    it('should be false with a single visible provider', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectCalendarProviders, [makeProvider('only')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(false);
+    });
+
+    it('should be true when the only enabled provider is hidden (C2 regression)', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectCalendarProviders, [makeProvider('only')]);
+      store.refreshState();
+      const hidden = TestBed.inject(HiddenCalendarProvidersService);
+      hidden.setHidden(['only']);
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(true);
+    });
+
+    it('should be true with multiple enabled providers', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectCalendarProviders, [
+        makeProvider('a'),
+        makeProvider('b'),
+      ]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(true);
     });
   });
 

@@ -28,7 +28,10 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
   isLocalRestApiEnabled?: boolean;
+  /** @deprecated Legacy hour-only representation. Use `startOfNextDayTime` as canonical source of truth. */
   startOfNextDay: number;
+  /** Canonical start-of-next-day value, including minute precision. */
+  startOfNextDayTime?: string;
   isDisableAnimations: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;
@@ -247,7 +250,18 @@ export type FocusModeConfig = Readonly<{
   /** @deprecated Use focusModeSound instead. Kept for backward-compat validation of old data. */
   isPlayTick?: boolean;
   isPauseTrackingDuringBreak?: boolean;
-  isSyncSessionWithTracking?: boolean;
+  /**
+   * When true, pressing the time-tracking play button on a task also starts a
+   * focus session (using the persistent mode the user last chose). The session
+   * runs quietly via the header indicator — no overlay, no preparation screen.
+   * Off by default; opt-in for users who want play = tracking + focus.
+   */
+  autoStartFocusOnPlay?: boolean;
+  /**
+   * @deprecated The auto-spawned session is now indicator-only by design — the
+   * overlay never opens automatically — so this flag has no behavioural effect.
+   * Kept on the type so old persisted configs deserialize without errors.
+   */
   isStartInBackground?: boolean;
   isManualBreakStart?: boolean;
 }>;

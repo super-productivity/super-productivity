@@ -171,10 +171,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "چگونه و کجا امتیاز دهیم",
-      "BTN_DONT_BOTHER": "دوباره مزاحم من نکن",
-      "TITLE": "🙈 لطفا ما را ببخشید، اما...",
-      "TXT": "اگر دوست دارید، با <strong>دادن امتیاز خوب، به پروژه کمک زیادی خواهید کرد!</strong>"
+      "A_HOW": "چگونه امتیاز دهیم",
+      "BTN_DONT_BOTHER": "دیگر نپرس",
+      "BTN_FEEDBACK": "ارسال بازخورد",
+      "BTN_LATER": "شاید بعداً",
+      "BTN_RATE_APP_STORE": "در App Store امتیاز دهید",
+      "BTN_RATE_PLAY_STORE": "در Play Store امتیاز دهید",
+      "FEEDBACK_BACK": "بازگشت",
+      "FEEDBACK_CONTRIBUTE": "مشارکت در پروژه",
+      "FEEDBACK_CONTRIBUTE_DESC": "کد، طراحی، ترجمه و موارد دیگر",
+      "FEEDBACK_PRIVATE": "ایمیل به نگهدارنده",
+      "FEEDBACK_PRIVATE_DESC": "ارسال پیام خصوصی",
+      "FEEDBACK_PUBLIC": "ارسال در GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "دیگران می‌بینند و پاسخ می‌دهند",
+      "FEEDBACK_TITLE": "چگونه دوست دارید کمک کنید؟",
+      "TITLE": "از Super Productivity لذت می‌برید؟",
+      "TXT": "این یک پروژه <strong>رایگان و متن‌باز</strong> ساخته‌شده توسط علاقه‌مندان است — بدون ردیابی، بدون تبلیغات. یک امتیاز یا پیام کوتاه کمک می‌کند افراد بیشتری آن را پیدا کنند."
     },
     "DROPBOX": {
       "S": {

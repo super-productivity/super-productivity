@@ -13,11 +13,12 @@
           ></play-button>
         }
 
-        <!-- Desktop: FocusMode button remains inline if enabled -->
+        <!-- Focus button: always inline on desktop; on mobile only while a
+             session/break is active, so the running countdown stays reachable. -->
+        @if (isFocusButtonVisible()) {
+          <focus-button></focus-button>
+        }
         @if (showDesktopButtons()) {
-          @if (isFocusModeEnabled() && !isXxxs()) {
-            <focus-button></focus-button>
-          }
           @for (
             simpleCounter of enabledSimpleCounters();
             track trackById($index, simpleCounter)

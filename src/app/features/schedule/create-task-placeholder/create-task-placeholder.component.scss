@@ -147,6 +147,9 @@
       opacity: 0.8;
       margin-top: auto;
       border-top: 1px dashed var(--extra-border-color);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
 
       @include mq(xs, max) {
         font-size: 11px;

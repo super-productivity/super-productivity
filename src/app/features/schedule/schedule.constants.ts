@@ -18,8 +18,12 @@ export const SCHEDULE_CONSTANTS = {
   BREAKPOINTS: {
     /** Width threshold for tablet devices (768px) */
     TABLET: 768,
+    /** Width threshold below which the schedule header switches to its compact form. Mirrors `$layout-xs` in `_media-queries.scss`. */
+    XS: 600,
     /** Width threshold for mobile devices (480px) */
     MOBILE: 480,
+    /** Width threshold below which the schedule header drops the date range and shows only the week number. */
+    XXS: 420,
   },
 
   /**

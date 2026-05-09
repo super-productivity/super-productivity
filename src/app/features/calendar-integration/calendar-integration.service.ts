@@ -60,6 +60,7 @@ import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
 import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
+const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
 const PLUGIN_CALENDAR_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 @Injectable({
@@ -333,6 +334,13 @@ export class CalendarIntegrationService {
             calProvider.icalUrl,
           ),
         ),
+        map((events) =>
+          events.map((ev) => ({
+            ...ev,
+            isReferenceCalendar: !!calProvider.isReferenceCalendar,
+            color: calProvider.color,
+          })),
+        ),
         catchError((err) => {
           Log.err(err);
           if (err instanceof NotIcalResponseError) {
@@ -363,7 +371,7 @@ export class CalendarIntegrationService {
   ): Observable<CalendarIntegrationEvent[]> {
     return this.requestEvents$(
       calProvider,
-      Date.now(),
+      Date.now() - ONE_WEEK,
       Date.now() + ONE_MONTHS,
       isForwardError,
     );
@@ -380,11 +388,11 @@ export class CalendarIntegrationService {
 
     return (
       cached
-        // filter out cached past entries
+        // filter out cached entries older than one week
         .map((provider) => ({
           ...provider,
           items: provider.items
-            .filter((item) => item.start + item.duration >= now)
+            .filter((item) => item.start + item.duration >= now - ONE_WEEK)
             // Backfill issueProviderKey for events cached before it became required
             .map((item) =>
               item.issueProviderKey ? item : { ...item, issueProviderKey: 'ICAL' },

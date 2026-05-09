@@ -208,10 +208,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Nasıl ve nerede değerlendirilir",
-      "BTN_DONT_BOTHER": "Beni bir daha rahatsız etme",
-      "TITLE": "🙈 Lütfen bizi affedin ama...",
-      "TXT": "Beğenirseniz, <strong>iyi bir puan vererek projeye son derece yardımcı olursunuz!</strong>"
+      "A_HOW": "Nasıl değerlendirilir",
+      "BTN_DONT_BOTHER": "Bir daha sorma",
+      "BTN_FEEDBACK": "Geri bildirim gönder",
+      "BTN_LATER": "Belki daha sonra",
+      "BTN_RATE_APP_STORE": "App Store'da değerlendir",
+      "BTN_RATE_PLAY_STORE": "Play Store'da değerlendir",
+      "FEEDBACK_BACK": "Geri",
+      "FEEDBACK_CONTRIBUTE": "Projeye katkıda bulun",
+      "FEEDBACK_CONTRIBUTE_DESC": "Kod, tasarım, çeviri ve daha fazlası",
+      "FEEDBACK_PRIVATE": "Geliştiriciye e-posta gönder",
+      "FEEDBACK_PRIVATE_DESC": "Özel bir mesaj gönder",
+      "FEEDBACK_PUBLIC": "GitHub Discussions'a yaz",
+      "FEEDBACK_PUBLIC_DESC": "Başkaları görebilir ve yanıtlayabilir",
+      "FEEDBACK_TITLE": "Nasıl yardım etmek istersin?",
+      "TITLE": "Super Productivity'yi beğeniyor musun?",
+      "TXT": "Bu, meraklılar tarafından yapılmış <strong>ücretsiz ve açık kaynaklı</strong> bir projedir — takip yok, reklam yok. Bir puan veya kısa bir mesaj, daha fazla kişinin uygulamayı bulmasına yardımcı olur."
     },
     "DROPBOX": {
       "S": {

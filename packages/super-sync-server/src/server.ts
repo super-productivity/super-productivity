@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyError, FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import helmet from '@fastify/helmet';
@@ -105,6 +105,25 @@ export const createServer = (
         // the real client IP instead of the proxy's IP. Using 1 instead of true
         // prevents attackers from spoofing IPs when no proxy is present.
         trustProxy: 1,
+      });
+
+      // Sanitize 5xx responses so internal details (e.g. raw Prisma errors
+      // exposing DB hostnames or ORM call shapes) never reach clients/log
+      // exports. 4xx errors are passed through — those are typically Fastify
+      // validation messages or auth failures that are safe and actionable.
+      fastifyServer.setErrorHandler((error: FastifyError, req, reply) => {
+        const statusCode = error.statusCode ?? 500;
+        Logger.error(
+          `Request failed ${statusCode} ${req.method} ${req.url}: ${error.name}: ${error.message}`,
+          error.stack,
+        );
+        if (statusCode >= 500) {
+          return reply.status(500).send({
+            statusCode: 500,
+            error: 'Internal Server Error',
+          });
+        }
+        return reply.send(error);
       });
 
       // Security Headers

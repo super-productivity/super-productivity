@@ -1,0 +1,787 @@
+{
+  "_doc": "Seed template for the screenshot pipeline. Date fields are written as offsets (e.g. dueDayOffset: 0 = today, -1 = yesterday). build-seed.ts materializes them against SCREENSHOT_BASE_DATE before import. Schema mirrors e2e/fixtures/test-backup.json.",
+  "crossModelVersion": 4.5,
+  "data": {
+    "project": {
+      "ids": ["INBOX_PROJECT", "personal", "work", "openSource"],
+      "entities": {
+        "INBOX_PROJECT": {
+          "id": "INBOX_PROJECT",
+          "title": "Inbox",
+          "isHiddenFromMenu": false,
+          "taskIds": [],
+          "backlogTaskIds": ["t-research-1"],
+          "noteIds": [],
+          "theme": {
+            "primary": "rgb(144, 187, 165)",
+            "accent": "#ff4081",
+            "warn": "#e11826",
+            "isAutoContrast": true,
+            "huePrimary": "500",
+            "hueAccent": "500",
+            "hueWarn": "500",
+            "backgroundImageDark": "",
+            "backgroundImageLight": null,
+            "backgroundOverlayOpacity": 20,
+            "isDisableBackgroundTint": false
+          },
+          "icon": "inbox",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "personal": {
+          "id": "personal",
+          "title": "Personal",
+          "isHiddenFromMenu": false,
+          "taskIds": ["t-call-mom"],
+          "backlogTaskIds": ["t-book-flight", "t-renew-passport"],
+          "noteIds": ["n-ideas", "n-week-goals"],
+          "theme": {
+            "primary": "#26a69a",
+            "accent": "#ffab40",
+            "warn": "#e57373",
+            "isAutoContrast": true
+          },
+          "icon": "self_improvement",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "work": {
+          "id": "work",
+          "title": "Work",
+          "isHiddenFromMenu": false,
+          "taskIds": ["t-design-review", "t-pr-review", "t-quarterly-plan"],
+          "backlogTaskIds": ["t-onboarding-doc", "t-team-1on1"],
+          "noteIds": ["n-meeting"],
+          "theme": {
+            "primary": "#3f51b5",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "icon": "work",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "openSource": {
+          "id": "openSource",
+          "title": "Open Source",
+          "isHiddenFromMenu": false,
+          "taskIds": ["t-issue-triage", "t-release-notes"],
+          "backlogTaskIds": [],
+          "noteIds": ["n-checklist"],
+          "theme": {
+            "primary": "#7e57c2",
+            "accent": "#ffd54f",
+            "warn": "#ef5350",
+            "isAutoContrast": true
+          },
+          "icon": "code",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        }
+      }
+    },
+    "menuTree": {
+      "tagTree": [],
+      "projectTree": [
+        { "k": "PROJECT", "id": "personal" },
+        { "k": "PROJECT", "id": "work" },
+        { "k": "PROJECT", "id": "openSource" }
+      ]
+    },
+    "globalConfig": {
+      "misc": {
+        "isConfirmBeforeExit": false,
+        "isConfirmBeforeExitWithoutFinishDay": false,
+        "isNotifyWhenTimeEstimateExceeded": false,
+        "isAutMarkParentAsDone": true,
+        "isAutoStartNextTask": true,
+        "isTurnOffMarkdown": false,
+        "isAutoAddWorkedOnToToday": true,
+        "isDisableInitialDialog": true,
+        "firstDayOfWeek": 1,
+        "startOfNextDay": 0,
+        "daysToShowForPastDates": 14,
+        "isMinimizeToTray": false,
+        "isEnableAdvanced": false,
+        "isTrayShowCurrentTask": true,
+        "taskNotesTpl": "",
+        "isDisableAnimations": true
+      },
+      "appFeatures": {
+        "isTimeTrackingEnabled": true,
+        "isFocusModeEnabled": true,
+        "isSchedulerEnabled": true,
+        "isPlannerEnabled": true,
+        "isBoardsEnabled": true,
+        "isScheduleDayPanelEnabled": true,
+        "isIssuesPanelEnabled": true,
+        "isProjectNotesEnabled": true,
+        "isSyncIconEnabled": true,
+        "isDonatePageEnabled": false,
+        "isEnableUserProfiles": false
+      },
+      "localization": {},
+      "evaluation": { "isHideEvaluationSheet": true },
+      "idle": {
+        "isEnableIdleTimeTracking": false,
+        "isUnTrackedIdleResetsBreakTimer": false,
+        "minIdleTime": 60000,
+        "isOnlyOpenIdleWhenCurrentTask": false
+      },
+      "takeABreak": {
+        "isTakeABreakEnabled": false,
+        "takeABreakMinWorkingTime": 60,
+        "takeABreakSnoozeTime": 15,
+        "motivationalImgs": [],
+        "isLockScreen": false,
+        "isTimedFullScreenBlocker": false,
+        "timedFullScreenBlockerDuration": 8000,
+        "isFocusWindow": false,
+        "takeABreakMessage": "Take a break!"
+      },
+      "pomodoro": {
+        "isEnabled": false,
+        "duration": 1500000,
+        "breakDuration": 300000,
+        "longerBreakDuration": 900000,
+        "cyclesBeforeLongerBreak": 4,
+        "isStopTrackingOnBreak": true,
+        "isStopTrackingOnLongBreak": true,
+        "isManualContinue": false,
+        "isPlaySound": true,
+        "isPlaySoundAfterBreak": false,
+        "isEnabled2": false
+      },
+      "keyboard": {},
+      "localBackup": { "isEnabled": false },
+      "lang": {},
+      "sync": {
+        "isEnabled": false,
+        "isCompressionEnabled": true,
+        "syncInterval": 0,
+        "isEncryptionEnabled": false,
+        "syncProvider": null
+      },
+      "timeline": {
+        "isWorkStartEndEnabled": false,
+        "workStart": "9:00",
+        "workEnd": "17:00"
+      },
+      "reminder": { "isCountdownBannerEnabled": true, "countdownDuration": 600000 },
+      "focusMode": { "isAlwaysUseFocusMode": false, "isSkipPreparation": false },
+      "sound": {
+        "volume": 70,
+        "isPlayDoneSound": true,
+        "doneSound": "done2.mp3",
+        "isPlayTickSound": false,
+        "isIncreaseDoneSoundPitch": true,
+        "breakReminderSound": null
+      },
+      "timeTracking": {
+        "trackingInterval": 1000,
+        "defaultEstimate": 0,
+        "defaultEstimateSubTasks": 0,
+        "isNotifyWhenTimeEstimateExceeded": true,
+        "isAutoStartNextTask": false,
+        "isTrackingReminderEnabled": false,
+        "isTrackingReminderShowOnMobile": false,
+        "trackingReminderMinTime": 300000
+      },
+      "quickNotes": {},
+      "dominaMode": {
+        "isEnabled": false,
+        "text": "Your current task is: ${currentTaskTitle}",
+        "interval": 300000,
+        "volume": 75
+      },
+      "shortSyntax": {
+        "isEnableProject": true,
+        "isEnableDue": true,
+        "isEnableTag": true
+      },
+      "schedule": {
+        "isWorkStartEndEnabled": true,
+        "workStart": "9:00",
+        "workEnd": "17:00",
+        "isLunchBreakEnabled": false,
+        "lunchBreakStart": "13:00",
+        "lunchBreakEnd": "14:00"
+      }
+    },
+    "task": {
+      "ids": [
+        "t-design-review",
+        "t-pr-review",
+        "t-quarterly-plan",
+        "t-quarterly-plan-sub-1",
+        "t-quarterly-plan-sub-2",
+        "t-call-mom",
+        "t-book-flight",
+        "t-renew-passport",
+        "t-onboarding-doc",
+        "t-team-1on1",
+        "t-issue-triage",
+        "t-release-notes",
+        "t-research-1"
+      ],
+      "entities": {
+        "t-design-review": {
+          "id": "t-design-review",
+          "title": "Design review with Carla",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 1800000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": ["tag-deep-work"],
+          "created": 0,
+          "attachments": [],
+          "dueWithTimeOffsetMs": 18000000,
+          "projectId": "work"
+        },
+        "t-pr-review": {
+          "id": "t-pr-review",
+          "title": "Review PRs in queue",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 2700000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": ["EM_URGENT", "EM_IMPORTANT"],
+          "created": 0,
+          "attachments": [],
+          "dueDayOffset": 0,
+          "projectId": "work"
+        },
+        "t-quarterly-plan": {
+          "id": "t-quarterly-plan",
+          "title": "Draft Q3 planning outline",
+          "subTaskIds": ["t-quarterly-plan-sub-1", "t-quarterly-plan-sub-2"],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 5400000,
+          "isDone": false,
+          "notes": "Outline goals, owners, milestones.",
+          "tagIds": ["tag-deep-work", "EM_IMPORTANT"],
+          "created": 0,
+          "attachments": [],
+          "dueDayOffset": 1,
+          "projectId": "work"
+        },
+        "t-quarterly-plan-sub-1": {
+          "id": "t-quarterly-plan-sub-1",
+          "title": "Collect input from team leads",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 1800000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": [],
+          "parentId": "t-quarterly-plan",
+          "created": 0,
+          "attachments": [],
+          "projectId": "work"
+        },
+        "t-quarterly-plan-sub-2": {
+          "id": "t-quarterly-plan-sub-2",
+          "title": "Draft milestones doc",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 3600000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": [],
+          "parentId": "t-quarterly-plan",
+          "created": 0,
+          "attachments": [],
+          "projectId": "work"
+        },
+        "t-call-mom": {
+          "id": "t-call-mom",
+          "title": "Call mom",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 900000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": ["tag-calls"],
+          "created": 0,
+          "attachments": [],
+          "dueDayOffset": 0,
+          "projectId": "personal"
+        },
+        "t-book-flight": {
+          "id": "t-book-flight",
+          "title": "Book Lisbon flight",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 1800000,
+          "isDone": false,
+          "notes": "Compare prices on Friday.",
+          "tagIds": [],
+          "created": 0,
+          "attachments": [],
+          "dueDayOffset": 4,
+          "projectId": "personal"
+        },
+        "t-renew-passport": {
+          "id": "t-renew-passport",
+          "title": "Renew passport",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 3600000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": [],
+          "parentId": null,
+          "created": 0,
+          "attachments": [],
+          "projectId": "personal"
+        },
+        "t-onboarding-doc": {
+          "id": "t-onboarding-doc",
+          "title": "Update onboarding doc for new hires",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 5400000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": [],
+          "created": 0,
+          "attachments": [],
+          "projectId": "work"
+        },
+        "t-team-1on1": {
+          "id": "t-team-1on1",
+          "title": "Prep notes for 1:1 with Sam",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 1200000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": ["tag-calls", "EM_URGENT"],
+          "created": 0,
+          "attachments": [],
+          "projectId": "work"
+        },
+        "t-issue-triage": {
+          "id": "t-issue-triage",
+          "title": "Triage GitHub issues",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 2700000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": ["tag-deep-work"],
+          "created": 0,
+          "attachments": [],
+          "dueDayOffset": 0,
+          "projectId": "openSource"
+        },
+        "t-release-notes": {
+          "id": "t-release-notes",
+          "title": "Write release notes for 14.4",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 3600000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": [],
+          "created": 0,
+          "attachments": [],
+          "dueDayOffset": 2,
+          "projectId": "openSource"
+        },
+        "t-research-1": {
+          "id": "t-research-1",
+          "title": "Research e-bike commute options",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 0,
+          "isDone": false,
+          "notes": "",
+          "tagIds": [],
+          "created": 0,
+          "attachments": [],
+          "projectId": "INBOX_PROJECT"
+        }
+      },
+      "currentTaskId": null,
+      "selectedTaskId": null,
+      "lastCurrentTaskId": null,
+      "isDataLoaded": false
+    },
+    "tag": {
+      "ids": [
+        "TODAY",
+        "EM_URGENT",
+        "EM_IMPORTANT",
+        "tag-home",
+        "tag-deep-work",
+        "tag-calls"
+      ],
+      "entities": {
+        "TODAY": {
+          "id": "TODAY",
+          "title": "Today",
+          "taskIds": ["t-pr-review", "t-call-mom", "t-design-review", "t-issue-triage"],
+          "icon": "wb_sunny",
+          "color": null,
+          "created": 0,
+          "theme": {
+            "primary": "#6495ED",
+            "accent": "#ff4081",
+            "warn": "#e11826",
+            "isAutoContrast": true,
+            "huePrimary": "400",
+            "hueAccent": "500",
+            "hueWarn": "500",
+            "backgroundImageDark": "",
+            "backgroundImageLight": null,
+            "backgroundOverlayOpacity": 20,
+            "isDisableBackgroundTint": false
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "EM_URGENT": {
+          "id": "EM_URGENT",
+          "title": "urgent",
+          "taskIds": [],
+          "icon": "emergency",
+          "color": null,
+          "created": 0,
+          "theme": {
+            "primary": "#ef5350",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true,
+            "backgroundImageDark": "",
+            "isDisableBackgroundTint": false
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "EM_IMPORTANT": {
+          "id": "EM_IMPORTANT",
+          "title": "important",
+          "taskIds": [],
+          "icon": "priority_high",
+          "color": null,
+          "created": 0,
+          "theme": {
+            "primary": "#ffa726",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true,
+            "backgroundImageDark": "",
+            "isDisableBackgroundTint": false
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "tag-home": {
+          "id": "tag-home",
+          "title": "home",
+          "taskIds": [],
+          "icon": "home",
+          "created": 0,
+          "theme": {
+            "primary": "#66bb6a",
+            "accent": "#ffd54f",
+            "warn": "#ef5350",
+            "isAutoContrast": true
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "tag-deep-work": {
+          "id": "tag-deep-work",
+          "title": "deep work",
+          "taskIds": [
+            "t-design-review",
+            "t-pr-review",
+            "t-quarterly-plan",
+            "t-issue-triage"
+          ],
+          "icon": "psychology",
+          "created": 0,
+          "theme": {
+            "primary": "#546e7a",
+            "accent": "#ffab40",
+            "warn": "#ef5350",
+            "isAutoContrast": true
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "tag-calls": {
+          "id": "tag-calls",
+          "title": "calls",
+          "taskIds": ["t-call-mom", "t-team-1on1"],
+          "icon": "call",
+          "created": 0,
+          "theme": {
+            "primary": "#ec407a",
+            "accent": "#ffeb3b",
+            "warn": "#ef5350",
+            "isAutoContrast": true
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        }
+      }
+    },
+    "simpleCounter": { "ids": [], "entities": {} },
+    "taskRepeatCfg": { "ids": [], "entities": {} },
+    "reminders": [],
+    "note": {
+      "ids": ["n-meeting", "n-ideas", "n-week-goals", "n-checklist"],
+      "entities": {
+        "n-meeting": {
+          "id": "n-meeting",
+          "content": "## Standup notes — Wed\n\n**Shipped**\n- Vector clock pruning (#7488)\n- Planner drag polish\n\n**In flight**\n- Onboarding doc rewrite\n- CalDAV RRULE expansion\n\n**Blocked**\n- Waiting on design for sync banner copy",
+          "createdOffsetMs": -3600000,
+          "modifiedOffsetMs": 0,
+          "projectId": "work"
+        },
+        "n-ideas": {
+          "id": "n-ideas",
+          "content": "## Side project ideas\n\n- 🌱 Garden tracker — pictures + watering schedule\n- ⌨️ Pomodoro keyboard widget\n- 📊 Open source maintainer dashboard\n- 🎧 \"Listening club\" — async track recommendations",
+          "createdOffsetMs": -86400000,
+          "modifiedOffsetMs": -1800000,
+          "projectId": "personal"
+        },
+        "n-week-goals": {
+          "id": "n-week-goals",
+          "content": "## This week\n\n- [x] Ship Q3 planning draft to leadership\n- [ ] Finish PR backlog under 5\n- [ ] Long run Saturday morning\n- [ ] Book Lisbon flight (Friday cutoff)",
+          "createdOffsetMs": -172800000,
+          "modifiedOffsetMs": -7200000,
+          "projectId": "personal"
+        },
+        "n-checklist": {
+          "id": "n-checklist",
+          "content": "## Release checklist v14.4\n\n1. Bump version in package.json\n2. Update CHANGELOG\n3. Tag + push\n4. Verify Snap + Flathub auto-build\n5. Post in #releases",
+          "createdOffsetMs": -7200000,
+          "modifiedOffsetMs": -3600000,
+          "projectId": "openSource"
+        }
+      },
+      "todayOrder": ["n-week-goals", "n-meeting"]
+    },
+    "metric": { "ids": [], "entities": {} },
+    "planner": {
+      "days": {
+        "@@PLANNER_OFFSET_+1": ["t-quarterly-plan", "t-onboarding-doc"],
+        "@@PLANNER_OFFSET_+2": ["t-release-notes", "t-team-1on1"],
+        "@@PLANNER_OFFSET_+3": ["t-renew-passport"],
+        "@@PLANNER_OFFSET_+4": ["t-book-flight"]
+      }
+    },
+    "issueProvider": { "ids": [], "entities": {} },
+    "boards": {
+      "boardCfgs": [
+        {
+          "id": "EISENHOWER_MATRIX",
+          "title": "Eisenhower Matrix",
+          "cols": 2,
+          "panels": [
+            {
+              "id": "URGENT_AND_IMPORTANT",
+              "title": "Urgent & Important",
+              "includedTagIds": ["EM_IMPORTANT", "EM_URGENT"],
+              "excludedTagIds": [],
+              "taskIds": [],
+              "taskDoneState": 1,
+              "scheduledState": 1,
+              "backlogState": 1,
+              "isParentTasksOnly": true
+            },
+            {
+              "id": "NOT_URGENT_AND_IMPORTANT",
+              "title": "Important",
+              "includedTagIds": ["EM_IMPORTANT"],
+              "excludedTagIds": ["EM_URGENT"],
+              "taskIds": [],
+              "taskDoneState": 1,
+              "scheduledState": 1,
+              "backlogState": 1,
+              "isParentTasksOnly": true
+            },
+            {
+              "id": "URGENT_AND_NOT_IMPORTANT",
+              "title": "Urgent",
+              "includedTagIds": ["EM_URGENT"],
+              "excludedTagIds": ["EM_IMPORTANT"],
+              "taskIds": [],
+              "taskDoneState": 1,
+              "scheduledState": 1,
+              "backlogState": 1,
+              "isParentTasksOnly": true
+            },
+            {
+              "id": "NOT_URGENT_AND_NOT_IMPORTANT",
+              "title": "Inbox",
+              "includedTagIds": [],
+              "excludedTagIds": ["EM_IMPORTANT", "EM_URGENT"],
+              "taskIds": [],
+              "taskDoneState": 1,
+              "scheduledState": 1,
+              "backlogState": 1,
+              "isParentTasksOnly": true
+            }
+          ]
+        }
+      ]
+    },
+    "timeTracking": { "project": {}, "tag": {} },
+    "archiveYoung": {
+      "task": { "ids": [], "entities": {} },
+      "timeTracking": { "project": {}, "tag": {} }
+    },
+    "archiveOld": {
+      "task": { "ids": [], "entities": {} },
+      "timeTracking": { "project": {}, "tag": {} }
+    },
+    "pluginMetadata": [],
+    "pluginUserData": []
+  }
+}

@@ -18,6 +18,7 @@ import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import {
   compareVectorClocks,
@@ -32,6 +33,7 @@ import {
   getPayloadKey,
   isAdapterEntity,
   isSingletonEntity,
+  isSingletonEntityId,
   isMapEntity,
   isArrayEntity,
 } from '../core/entity-registry';
@@ -84,6 +86,7 @@ export class ConflictResolutionService {
   private opLogStore = inject(OperationLogStoreService);
   private snackService = inject(SnackService);
   private validateStateService = inject(ValidateStateService);
+  private sessionValidation = inject(SyncSessionValidationService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -121,13 +124,28 @@ export class ConflictResolutionService {
     // NOT in the ActionType enum. They are dynamically constructed here and matched
     // by regex in lwwUpdateMetaReducer. This is by design - LWW ops are synthetic,
     // created during conflict resolution to carry the winning local state to remote clients.
+
+    // Force payload.id to the canonical entityId for adapter entities.
+    // lwwUpdateMetaReducer bails with "Entity data has no id" when an adapter
+    // payload lacks a top-level id; a malformed/partial entityState (e.g. an
+    // NgRx selector returning a stripped shape) would silently lose the LWW
+    // write on remote clients. Singletons use the '*' sentinel for entityId
+    // and have no `id` field — injecting `id: '*'` would pollute the singleton
+    // feature state when the consumer reducer spreads entityData. (#7330)
+    const basePayload =
+      entityState && typeof entityState === 'object'
+        ? (entityState as Record<string, unknown>)
+        : {};
+    const payload = isSingletonEntityId(entityId)
+      ? basePayload
+      : { ...basePayload, id: entityId };
     return {
       id: uuidv7(),
       actionType: toLwwUpdateActionType(entityType),
       opType: OpType.Update,
       entityType,
       entityId,
-      payload: entityState,
+      payload,
       clientId,
       vectorClock,
       timestamp,
@@ -165,10 +183,13 @@ export class ConflictResolutionService {
    *
    * @see ValidateStateService for the full validation and repair logic
    */
-  private async _validateAndRepairAfterResolution(): Promise<void> {
-    await this.validateStateService.validateAndRepairCurrentState('conflict-resolution', {
-      callerHoldsLock: true,
-    });
+  private async _validateAndRepairAfterResolution(): Promise<boolean> {
+    return this.validateStateService.validateAndRepairCurrentState(
+      'conflict-resolution',
+      {
+        callerHoldsLock: true,
+      },
+    );
   }
 
   /**
@@ -568,8 +589,11 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 8: Validate and repair state after resolution
+    // Validation failure flips the SyncSessionValidationService latch — the
+    // wrapper reads it before deciding IN_SYNC vs ERROR. (#7330)
     // ─────────────────────────────────────────────────────────────────────────
-    await this._validateAndRepairAfterResolution();
+    const isValid = await this._validateAndRepairAfterResolution();
+    if (!isValid) this.sessionValidation.setFailed();
 
     return { localWinOpsCreated: newLocalWinOps.length };
   }
@@ -877,7 +901,13 @@ export class ConflictResolutionService {
             remoteOp.payload,
             conflict.entityType,
           );
-          const mergedEntity = { ...baseEntity, ...updateChanges };
+          // Force top-level id from the canonical conflict.entityId for
+          // adapter entities — defensive against malformed DELETE payloads
+          // whose embedded entity lacks one. Singletons use '*' as entityId
+          // and have no `id` field; don't inject one. (#7330)
+          const mergedEntity = isSingletonEntityId(conflict.entityId)
+            ? { ...baseEntity, ...updateChanges }
+            : { ...baseEntity, ...updateChanges, id: conflict.entityId };
           return {
             ...remoteOp,
             actionType: toLwwUpdateActionType(remoteOp.entityType),

@@ -71,7 +71,7 @@ describe('autoFixTypiaErrors', () => {
     expect(validateResult.success).toBe(false);
     const result = autoFixTypiaErrors(d, (validateResult as any).errors);
     expect(result.globalConfig.misc.startOfNextDay).not.toEqual(111);
-    expect(result.globalConfig.misc.startOfNextDay).toEqual(0 as any);
+    expect(result.globalConfig.misc.startOfNextDay).toEqual(0);
   });
 
   it('should sanitize null to undefined if model requests it', () => {

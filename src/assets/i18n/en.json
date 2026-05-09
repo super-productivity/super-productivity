@@ -71,6 +71,7 @@
   },
   "F": {
     "ATTACHMENT": {
+      "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Add Attachment",
         "EDIT_ATTACHMENT": "Edit Attachment",
@@ -218,10 +219,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "How and where to rate",
-      "BTN_DONT_BOTHER": "Don't bother me again",
-      "TITLE": "🙈 Please forgive us, but...",
-      "TXT": "You will help the project immensely by <strong>giving it a good rating, if you like it!</strong>"
+      "A_HOW": "How to rate",
+      "BTN_DONT_BOTHER": "Don't ask again",
+      "BTN_FEEDBACK": "Give feedback",
+      "BTN_LATER": "Maybe later",
+      "BTN_RATE_APP_STORE": "Rate on App Store",
+      "BTN_RATE_PLAY_STORE": "Rate on Play Store",
+      "FEEDBACK_BACK": "Back",
+      "FEEDBACK_CONTRIBUTE": "Contribute to the project",
+      "FEEDBACK_CONTRIBUTE_DESC": "Code, design, translations, and more",
+      "FEEDBACK_PRIVATE": "Email maintainer",
+      "FEEDBACK_PRIVATE_DESC": "Send a private message",
+      "FEEDBACK_PUBLIC": "Post on GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Others can see and respond",
+      "FEEDBACK_TITLE": "How would you like to help?",
+      "TITLE": "Enjoying Super Productivity?",
+      "TXT": "It's a free, open-source project built by enthusiasts – no tracking, no ads. A rating or short message helps more people find it."
     },
     "DROPBOX": {
       "S": {
@@ -232,7 +245,14 @@
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "There are {{nr}} completed tasks in your Today list not yet moved to the archive. Are you sure you want to quit without finishing your day?"
+        "DONT_QUIT": "Don't quit",
+        "FINISH_DAY": "Finish Day",
+        "QUIT": "Quit",
+        "TITLE": "Finish your day before quitting?",
+        "UNARCHIVED_TASKS": {
+          "ONE": "1 completed task in your Today list hasn't been moved to the archive yet.",
+          "OTHER": "{{nr}} completed tasks in your Today list haven't been moved to the archive yet."
+        }
       }
     },
     "FOCUS_MODE": {
@@ -988,6 +1008,7 @@
       "S_REMINDER_ERR": "Error for reminder interface"
     },
     "SCHEDULE": {
+      "CALENDAR_VISIBILITY": "Calendar visibility",
       "D_INITIAL": {
         "TEXT": "<p>The Schedule will provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended), regular tasks will never be placed outside of these boundaries.</p>",
         "TITLE": "Schedule"
@@ -996,6 +1017,12 @@
       "INSERT_BEFORE": "Before",
       "LUNCH_BREAK": "Lunch Break",
       "MONTH": "Month",
+      "NEXT_MONTH": "Next Month",
+      "NEXT_WEEK": "Next Week",
+      "PREVIOUS_MONTH": "Previous Month",
+      "PREVIOUS_WEEK": "Previous Week",
+      "VIEW_MONTH": "View Month",
+      "VIEW_WEEK": "View Week",
       "NO_TASKS": "Currently there are no tasks. Please add some tasks via the plus (+) button in the top bar.",
       "NOW": "Now",
       "PLAN_END_DAY": "End of {{date}}",
@@ -1473,7 +1500,8 @@
         "LABEL": "Tags"
       },
       "FORM_BASIC": {
-        "L_COLOR": "Color (if undefined primary theme color is used)",
+        "D_COLOR": "If not set, defaults to the theme's Primary color.",
+        "L_COLOR": "Tag Color",
         "L_ICON": "Icon",
         "L_TITLE": "Tag Name",
         "TITLE": "Basic Settings"
@@ -1563,13 +1591,16 @@
         "ADD_SUB_TASK": "Add subtask",
         "ADD_TO_MY_DAY": "Add to Today",
         "ADD_TO_PROJECT": "Add to a project",
+        "CLEAR_ESTIMATE": "Clear estimate",
         "CONVERT_TO_PARENT_TASK": "Convert to parent task",
+        "CUSTOM_ESTIMATE": "Custom…",
         "DELETE": "Delete task",
         "DELETE_REPEAT_INSTANCE": "Delete recurring task instance",
         "DROP_ATTACHMENT": "Drop here to attach to \"{{title}}\"",
         "DUPLICATE": "Duplicate",
         "EDIT_DEADLINE": "Edit deadline",
         "EDIT_SCHEDULED": "Reschedule",
+        "ESTIMATE": "Estimate",
         "FOCUS_SESSION": "Start focus session",
         "MARK_DONE": "Mark as completed",
         "MOVE_TO_BACKLOG": "Move to backlog",
@@ -1923,6 +1954,7 @@
         "TOTAL_TIME": "Time spent total:",
         "VIEW_TASK_DETAILS": "View task details",
         "WEEK_NR": "Week {{nr}}",
+        "WEEK_NR_SHORT": "W{{nr}}",
         "WORKED": "Worked"
       },
       "D_CONFIRM_RESTORE": "Are you sure you want to move the task <strong>\"{{title}}\"</strong> into your Today task list?",
@@ -2074,10 +2106,14 @@
       "TITLE": "Automatic Backups"
     },
     "CALENDARS": {
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "Auto import events as tasks for current day",
       "BROWSER_WARNING": "Due to cross-origin restrictions <b>this will likely NOT work with the web browser version of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
+      "CAL_COLOR": "Calendar color",
       "CAL_PATH": "URL of the iCal source",
       "CHECK_UPDATES": "Check for remote updates every X",
+      "DISABLE_FOR_WEB_APP": "Disable when using web application",
       "HELP": "You can integrate calendars to be reminded and add them as tasks within Super Productivity. The integration works by using the iCal format. For this to work your calendars need to be accessible either over the internet or via file system.",
+      "REFERENCE_CALENDAR": "Reference calendar (display only, no task creation)",
       "SHOW_BANNER_THRESHOLD": "Show a notification X before the event (blank for disabled)"
     },
     "CLIPBOARD_IMAGES": {
@@ -2118,13 +2154,12 @@
       "FOCUS_MODE_SOUND_OFF": "Off",
       "FOCUS_MODE_SOUND_TICK": "Ticking",
       "FOCUS_MODE_SOUND_WHITE_NOISE": "White Noise",
-      "HELP": "Focus mode opens a distraction-free screen to help you focus on your current task.",
+      "HELP": "Focus mode opens a distraction-free screen to help you focus on your current task. Time tracking and the focus session timer are always kept in sync — pausing one pauses the other.",
+      "L_AUTO_START_FOCUS_ON_PLAY": "Start a focus session when I start tracking a task",
       "L_FOCUS_MODE_SOUND": "Ambient sound during focus sessions",
       "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
       "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",
-      "L_START_IN_BACKGROUND": "Start focus sessions with banner only (no overlay)",
-      "L_SYNC_SESSION_WITH_TRACKING": "Sync focus sessions with time tracking",
       "TITLE": "Focus Mode"
     },
     "TASK_WIDGET": {
@@ -2275,9 +2310,15 @@
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Use custom title bar (Windows/Linux only)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requires restart to take effect.",
       "START_OF_NEXT_DAY": "Start time of the next day",
-      "START_OF_NEXT_DAY_HINT": "Time (hour) from which you want to determine the next day has started. Default is midnight, which is 0.",
+      "START_OF_NEXT_DAY_HINT": "The time when your day starts (Format: HH:mm, e.g. 02:30)",
       "THEME": "Theme",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
+      "THEME_INSTALL_BUTTON": "Install theme…",
+      "THEME_INSTALL_TOOLTIP": "Upload a CSS theme file. Themes only change visuals — never run code — but they can still affect how your data is rendered. Only install themes from sources you trust.",
+      "THEME_INSTALLED_WITH_WARNINGS": "Theme installed. Missing tokens: {{tokens}}",
+      "THEME_INVALID_CSS_FILE": "Could not install theme: invalid or unsafe CSS file.",
+      "THEME_REMOVE_BUTTON": "Remove theme",
+      "THEME_REMOVED_TOAST": "Theme removed; reverted to Default.",
       "THEME_SELECT_LABEL": "Select Theme",
       "TITLE": "Misc Settings"
     },

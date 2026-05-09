@@ -118,4 +118,17 @@ describe('DateService — logical clock helpers', () => {
     service.setStartOfNextDayDiff(0);
     expect(service.getStartOfNextDayDiffMs()).toBe(0);
   });
+
+  it('setStartOfNextDayDiff() accepts HH:mm strings and stores minutes precision', () => {
+    service.setStartOfNextDayDiff('02:30');
+    expect(service.getStartOfNextDayDiffMs()).toBe(2.5 * 60 * 60 * 1000);
+  });
+
+  it('setStartOfNextDayDiff() falls back to zero for malformed or empty strings', () => {
+    service.setStartOfNextDayDiff('');
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+
+    service.setStartOfNextDayDiff('not-a-time');
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+  });
 });

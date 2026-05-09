@@ -176,10 +176,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Hoe en waar te beoordelen",
-      "BTN_DONT_BOTHER": "Val me niet meer lastig",
-      "TITLE": "🙈 Vergeef ons alstublieft, maar...",
-      "TXT": "Je zou het project enorm helpen door het <strong>een goede beoordeling te geven, als je het leuk vindt!</strong>"
+      "A_HOW": "Hoe te beoordelen",
+      "BTN_DONT_BOTHER": "Niet meer vragen",
+      "BTN_FEEDBACK": "Feedback geven",
+      "BTN_LATER": "Misschien later",
+      "BTN_RATE_APP_STORE": "Beoordeel in App Store",
+      "BTN_RATE_PLAY_STORE": "Beoordeel in Play Store",
+      "FEEDBACK_BACK": "Terug",
+      "FEEDBACK_CONTRIBUTE": "Bijdragen aan het project",
+      "FEEDBACK_CONTRIBUTE_DESC": "Code, design, vertalingen en meer",
+      "FEEDBACK_PRIVATE": "E-mail de maintainer",
+      "FEEDBACK_PRIVATE_DESC": "Stuur een privébericht",
+      "FEEDBACK_PUBLIC": "Plaats op GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Anderen kunnen meelezen en reageren",
+      "FEEDBACK_TITLE": "Hoe wil je helpen?",
+      "TITLE": "Gebruik je Super Productivity graag?",
+      "TXT": "Het is een <strong>gratis open-sourceproject</strong> gemaakt door enthousiastelingen — geen tracking, geen advertenties. Een beoordeling of korte boodschap helpt meer mensen het te vinden."
     },
     "DROPBOX": {
       "S": {

@@ -30,23 +30,15 @@ const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
     await page.waitForTimeout(300);
   }
 
-  const toggle1 = page
+  const toggle = page
     .locator('mat-slide-toggle')
-    .filter({ hasText: 'Sync focus sessions with time tracking' })
+    .filter({ hasText: 'Start a focus session when I start tracking a task' })
     .first();
-  await expect(toggle1).toBeVisible({ timeout: 5000 });
-  if (!(await toggle1.getAttribute('class'))?.includes('mat-checked')) {
-    await toggle1.click();
-    await page.waitForTimeout(300);
-  }
 
-  const toggle2 = page
-    .locator('mat-slide-toggle')
-    .filter({ hasText: 'Start focus sessions with banner only (no overlay)' })
-    .first();
-  await expect(toggle2).toBeVisible({ timeout: 5000 });
-  if (!(await toggle2.getAttribute('class'))?.includes('mat-checked')) {
-    await toggle2.click();
+  await expect(toggle).toBeVisible({ timeout: 5000 });
+  const cls = (await toggle.getAttribute('class')) ?? '';
+  if (!cls.includes('mat-checked')) {
+    await toggle.click();
     await page.waitForTimeout(300);
   }
 };

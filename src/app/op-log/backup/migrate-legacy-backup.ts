@@ -36,6 +36,8 @@ import {
 } from '../../features/project/project.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../util/is-today.util';
+// Matches DateService.setStartOfNextDayDiff semantics for legacy backup normalization.
+import { getStartOfNextDayDiffMs } from '../../util/start-of-next-day.util';
 import { LanguageCode } from '../../core/locale.constants';
 import {
   initialPluginUserDataState,
@@ -371,8 +373,10 @@ function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, a
   }
 
   // Fix TODAY_TAG tasks
-  const startOfNextDayDiffMs =
-    (data.globalConfig?.misc?.startOfNextDay || 0) * 60 * 60 * 1000;
+  const startOfNextDayDiffMs = getStartOfNextDayDiffMs(
+    data.globalConfig?.misc?.startOfNextDayTime,
+    data.globalConfig?.misc?.startOfNextDay,
+  );
   const todayStr = getDbDateStr(new Date(Date.now() - startOfNextDayDiffMs));
   const todayTag = data.tag?.entities?.[TODAY_TAG.id];
   if (todayTag?.taskIds) {

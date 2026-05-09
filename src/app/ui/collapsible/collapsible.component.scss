@@ -31,6 +31,10 @@
 .collapsible-title {
   flex-grow: 1;
 
+  &.is-drag-handle {
+    cursor: move;
+  }
+
   :host.isInline & {
     //display: inline-block;
   }

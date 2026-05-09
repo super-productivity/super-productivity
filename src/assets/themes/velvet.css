@@ -1,0 +1,938 @@
+/**
+ * Velvet — soft dark theme for Super Productivity.
+ * Warm near-black surfaces, frosted-glass vibrancy, generous radii, and a
+ * subtle gradient tinted by the user's primary color. Inspired by Raycast's
+ * native-feeling aesthetic — gentle shadows, smooth transitions, no flash.
+ */
+
+:root {
+  --transition-fast: 130ms cubic-bezier(0.2, 0, 0.13, 1);
+  --transition-normal: 220ms cubic-bezier(0.2, 0, 0.13, 1);
+
+  /* Frosted-glass backdrop-filter tokens — single source of truth for
+     blur/saturate intensities. Pair with a per-surface bg color. */
+  --velvet-frost: blur(20px) saturate(180%);
+  --velvet-frost-strong: blur(28px) saturate(180%);
+  --velvet-frost-deep: blur(32px) saturate(180%);
+  --velvet-frost-tooltip: blur(12px) saturate(160%);
+  --velvet-frost-tile: blur(8px);
+}
+
+body.isDarkTheme {
+  /* ===============================
+   * VELVET PALETTE — neutral surfaces only.
+   * Accent comes from the user's --c-primary / --c-accent (no custom
+   * brand color baked in here). Surfaces are warm near-blacks, used as
+   * the dark base; everything tinted goes through color-mix(--c-primary).
+   * ===============================*/
+
+  --velvet-bg: #131013;
+  --velvet-bg-deep: #0a080a;
+  --velvet-surface: #1a171a;
+  --velvet-surface-2: #221f22;
+  --velvet-surface-3: #2a272a;
+  --velvet-surface-4: #322f32;
+  --velvet-border: var(--velvet-fill-2);
+  --velvet-border-strong: var(--velvet-fill-5);
+  --velvet-fg: #e6e6e6;
+  --velvet-fg-muted: #7a7779;
+
+  /* Fill scale — white-alpha overlays for tiles, hovers, borders, chips.
+     Repeated rgba(255,255,255,*) literals throughout this file map to one of
+     these stops; use the comment trailing each callsite to convey intent. */
+  --velvet-fill-1: rgba(255, 255, 255, 0.02);
+  --velvet-fill-2: rgba(255, 255, 255, 0.04);
+  --velvet-fill-3: rgba(255, 255, 255, 0.06);
+  --velvet-fill-4: rgba(255, 255, 255, 0.08);
+  --velvet-fill-5: rgba(255, 255, 255, 0.1);
+  --velvet-fill-6: rgba(255, 255, 255, 0.14);
+
+  /* Pane scale — frosted-glass surfaces (sidenav, dialogs, tooltips, …).
+     Single canonical warm-black with stepped alpha so every translucent panel
+     reads as the same material at different transparencies. */
+  --velvet-pane-rgb: 30, 27, 29;
+  --velvet-pane-1: rgba(var(--velvet-pane-rgb), 0.55);
+  --velvet-pane-2: rgba(var(--velvet-pane-rgb), 0.65);
+  --velvet-pane-3: rgba(var(--velvet-pane-rgb), 0.78);
+  --velvet-pane-4: rgba(var(--velvet-pane-rgb), 0.88);
+  --velvet-pane-5: rgba(var(--velvet-pane-rgb), 0.94);
+
+  /* ===============================
+   * BACKGROUNDS
+   * ===============================*/
+
+  --bg: var(--velvet-bg);
+  --bg-darker: var(--velvet-bg-deep);
+  --bg-slightly-lighter: var(--velvet-surface);
+  --bg-lighter: var(--velvet-surface-2);
+  --bg-lightest: var(--velvet-surface-3);
+  --bg-super-light: var(--velvet-surface-4);
+
+  --card-bg: var(--velvet-surface);
+  --sidenav-bg: var(--velvet-bg-deep);
+  --selected-task-bg-color: var(--velvet-surface-2);
+  --banner-bg: var(--velvet-surface-2);
+
+  --task-c-bg: var(--velvet-surface);
+  --task-c-selected-bg: var(--velvet-surface-2);
+  --sub-task-c-bg: #1c1c1c;
+  --sub-task-c-bg-done: #181818;
+  --task-c-bg-done: #181818;
+  --task-c-current-bg: var(--velvet-surface-3);
+  --task-c-drag-drop-bg: var(--velvet-surface-3);
+  --sub-task-c-bg-in-selected: var(--velvet-surface);
+
+  --standard-note-bg: var(--velvet-surface);
+  --standard-note-bg-hovered: var(--velvet-surface-2);
+
+  /* ===============================
+   * TEXT
+   * ===============================*/
+
+  --text-color: var(--velvet-fg);
+  --text-color-less-intense: rgba(237, 237, 237, 0.85);
+  --text-color-muted: var(--velvet-fg-muted);
+  --text-color-more-intense: #f5f5f5;
+  --text-color-most-intense: #ffffff;
+
+  --standard-note-fg: var(--velvet-fg);
+  --task-detail-value-color: rgba(237, 237, 237, 0.7);
+
+  /* ===============================
+   * BORDERS
+   * ===============================*/
+
+  --extra-border-color: var(--velvet-border);
+  --separator-color: var(--velvet-border);
+  --divider-color: var(--velvet-fill-3);
+  --chip-outline-color: var(--velvet-border-strong);
+
+  /* ===============================
+   * ACCENT — keep the user's chosen primary/accent untouched.
+   * Real Raycast doesn't have a single brand accent: it uses different
+   * tints (red, green, blue, purple) per category. The neutral white-alpha
+   * pills below provide the active/selected language; the user's accent
+   * still shows on focus rings, links, and primary buttons.
+   * ===============================*/
+
+  /* ===============================
+   * UI
+   * ===============================*/
+
+  --scrollbar-thumb: #3a3a3a;
+  --scrollbar-thumb-hover: #4a4a4a;
+  --scrollbar-track: var(--velvet-bg);
+
+  --close-btn-bg: var(--velvet-surface-3);
+  --close-btn-border: transparent;
+
+  --select-hover-bg: color-mix(in srgb, var(--c-primary) 12%, transparent);
+  --options-border-color: color-mix(in srgb, var(--c-primary) 22%, transparent);
+
+  --attachment-bg: var(--velvet-surface-2);
+  --attachment-border: var(--velvet-border);
+  --attachment-control-bg: rgba(0, 0, 0, 0.45);
+  --attachment-control-border: transparent;
+  --attachment-control-hover-bg: rgba(0, 0, 0, 0.75);
+
+  --grid-color: var(--velvet-fill-2);
+  --progress-bg: var(--velvet-fill-5);
+
+  --improvement-text: #f5f5f5;
+  --improvement-border: color-mix(in srgb, var(--c-primary) 32%, transparent);
+  --improvement-button-text: #ffffff;
+
+  /* Soft elevation — subtle but present */
+  --shadow-key-umbra-opacity: 0.18;
+  --shadow-key-penumbra-opacity: 0.12;
+  --shadow-ambient-shadow-opacity: 0.1;
+  --task-current-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--velvet-border-strong);
+  --task-selected-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--velvet-border-strong);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--velvet-border);
+
+  --hover-controls-border: 1px solid var(--velvet-border);
+  --hover-controls-border-opacity: 1;
+
+  --hover-bg-opacity: 0.06;
+  --focus-bg-opacity: 0.1;
+  --pressed-bg-opacity: 0.14;
+  --disabled-opacity: 0.4;
+
+  /* Generous radii — Raycast feel */
+  --card-border-radius: 10px;
+  --task-border-radius: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Sidenav — neutral pill, matching the actual Raycast aesthetic. */
+  --sidenav-item-active-bg: var(--velvet-fill-3);
+  --sidenav-active-text: #ffffff;
+  --sidenav-hover-bg: var(--velvet-fill-2); /* was 0.035, rounded up */
+  --sidenav-text: rgba(255, 255, 255, 0.78);
+  --sidenav-text-secondary: rgba(255, 255, 255, 0.55);
+
+  /* Task detail panel surfaces — match the side panel's frosted feel */
+  --task-detail-bg: var(--velvet-fill-2);
+  --task-detail-bg-hover: var(--velvet-fill-3);
+  --task-detail-shadow: none;
+  --task-detail-value-color: rgba(237, 237, 237, 0.85);
+
+  /* Schedule events read as cards, not list rows — they have borders, a
+     project-color left edge, and distinct shapes — so they sit a few stops
+     above the task-row default. Side-panel variant stays one stop lower
+     so events nested inside the side panel don't compete with its own
+     frosted surface. */
+  --schedule-event-bg: var(--velvet-fill-5);
+  --schedule-event-bg-in-side-panel: var(--velvet-fill-3);
+
+  /* Tighter vertical rhythm — Raycast list rows sit closer together than
+     SP's defaults. Cuts ~3px between every task row. */
+  --task-inner-padding-top-bottom: 1px;
+}
+
+/* Top-level task gap — boxes sit edge-to-edge for a denser list. */
+body.isDarkTheme task .inner-wrapper > .box {
+  top: 0 !important;
+  bottom: 0 !important;
+}
+
+/* Subtasks need a bit more breathing room — they're nested and benefit
+   from a small visible gap to read as their own grouped sub-list. */
+body.isDarkTheme task .sub-tasks task .inner-wrapper > .box {
+  top: 1px !important;
+  bottom: 1px !important;
+}
+
+/* Planner-task: match the regular task aesthetic. The component uses
+   --task-c-bg (a solid surface color) on its host, while regular tasks
+   use a translucent .box override. Force the same translucent styling
+   here so both list types share a single visual language. */
+body.isDarkTheme planner-task {
+  background: var(--velvet-fill-1) !important;
+}
+
+body.isDarkTheme planner-task:hover {
+  background: var(--velvet-fill-2) !important;
+}
+
+body.isDarkTheme planner-task.isSelected {
+  background: linear-gradient(
+    180deg,
+    var(--velvet-fill-5) 0%,
+    var(--velvet-fill-2) 100%
+  ) !important;
+}
+
+/* Sidenav: drive everything through CSS variables that the nav-item
+   component already uses (--sidenav-item-active-bg, --sidenav-hover-bg).
+   Adding explicit per-button rules on top caused inconsistent rendering
+   between regular nav-items, tree headers, mat-menu items, and the
+   mode-toggle button. The vars are overridden up in the :root section. */
+
+/* Tighter typography — Raycast is dense and precisely-tuned. Body text is
+   slightly smaller with a subtle negative tracking; headings are bolder
+   with tighter tracking. */
+body.isDarkTheme {
+  letter-spacing: -0.006em;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+
+body.isDarkTheme h1,
+body.isDarkTheme h2,
+body.isDarkTheme h3,
+body.isDarkTheme h4,
+body.isDarkTheme .mat-h1,
+body.isDarkTheme .mat-h2,
+body.isDarkTheme .mat-h3 {
+  letter-spacing: -0.02em !important;
+  font-weight: 600 !important;
+}
+
+/* Task title — slightly tighter and more readable */
+body.isDarkTheme task .first-line .title-and-tags-wrapper,
+body.isDarkTheme task .title {
+  font-weight: 500 !important;
+  letter-spacing: -0.008em !important;
+}
+
+/* Muted text uses a quieter color overall */
+body.isDarkTheme .mat-mdc-form-field-hint,
+body.isDarkTheme .secondary-text,
+body.isDarkTheme [class*='muted'],
+body.isDarkTheme .task-detail-hint {
+  color: var(--velvet-fg-muted) !important;
+}
+
+/* Mac-keyboard-style kbd chips — Raycast shows shortcuts everywhere as
+   little 3D keys with a subtle inset highlight. */
+body.isDarkTheme kbd,
+body.isDarkTheme .key-combo-chip,
+body.isDarkTheme .keyboard-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--velvet-fill-5);
+  border: 1px solid var(--velvet-fill-4);
+  border-bottom-color: var(--velvet-fill-2);
+  border-radius: 4px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--velvet-fg);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 var(--velvet-fill-4);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Frosted-glass dialogs/menus/cards — macOS vibrancy feel */
+body.isDarkTheme .mat-mdc-dialog-surface,
+body.isDarkTheme .mat-mdc-menu-panel,
+body.isDarkTheme .cdk-overlay-pane .mat-mdc-autocomplete-panel,
+body.isDarkTheme .mat-mdc-card {
+  background: var(--velvet-pane-3) !important;
+  backdrop-filter: var(--velvet-frost);
+  -webkit-backdrop-filter: var(--velvet-frost);
+  border: 1px solid var(--velvet-fill-3);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 var(--velvet-fill-2);
+}
+
+/* Pill-shaped global add-task bar — Raycast command-bar */
+body.isDarkTheme add-task-bar.global .add-task-container {
+  border-radius: 14px !important;
+  background: var(--velvet-pane-5) !important;
+  backdrop-filter: var(--velvet-frost-strong);
+  -webkit-backdrop-filter: var(--velvet-frost-strong);
+  border: 1px solid var(--velvet-fill-4);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.65),
+    0 6px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 var(--velvet-fill-2);
+}
+
+/* Form fields: dark, rounded, with coral focus glow — Raycast input feel */
+body.isDarkTheme input.mat-mdc-input-element,
+body.isDarkTheme textarea.mat-mdc-input-element,
+body.isDarkTheme .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+  background: var(--velvet-fill-2) !important;
+  border-radius: 8px !important;
+  transition:
+    background 120ms ease-out,
+    box-shadow 120ms ease-out !important;
+}
+
+body.isDarkTheme
+  .mat-mdc-form-field.mat-focused
+  .mdc-text-field--filled:not(.mdc-text-field--disabled),
+body.isDarkTheme .mdc-text-field--focused:not(.mdc-text-field--disabled) {
+  background: color-mix(in srgb, var(--c-primary) 6%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-primary) 40%, transparent) !important;
+}
+
+/* Hide the underline-style line-ripple — Raycast inputs are bordered, not
+   underlined. */
+body.isDarkTheme .mdc-line-ripple,
+body.isDarkTheme .mdc-text-field--filled .mdc-line-ripple::before,
+body.isDarkTheme .mdc-text-field--filled .mdc-line-ripple::after {
+  display: none !important;
+}
+
+/* Primary buttons get a subtle coral gradient — like Raycast's CTAs */
+body.isDarkTheme .mat-mdc-raised-button.mat-primary,
+body.isDarkTheme .mat-mdc-unelevated-button.mat-primary,
+body.isDarkTheme button[mat-flat-button][color='primary'],
+body.isDarkTheme button[mat-raised-button][color='primary'] {
+  background: linear-gradient(
+    180deg,
+    var(--c-primary) 0%,
+    color-mix(in srgb, var(--c-primary) 70%, black) 100%
+  ) !important;
+  color: #ffffff !important;
+  /* Rest/hover top-inset alphas (0.12 → 0.16) are a tuned pair off the fill
+     scale; tokenizing them collapses the +0.04 hover lift, so left inline. */
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 2px 6px color-mix(in srgb, var(--c-primary) 32%, transparent) !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.005em !important;
+}
+
+body.isDarkTheme .mat-mdc-raised-button.mat-primary:hover,
+body.isDarkTheme .mat-mdc-unelevated-button.mat-primary:hover,
+body.isDarkTheme button[mat-flat-button][color='primary']:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--c-primary) 70%, white) 0%,
+    var(--c-primary) 100%
+  ) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.16) inset,
+    0 4px 12px color-mix(in srgb, var(--c-primary) 40%, transparent) !important;
+}
+
+/* (task box bg/states defined further below — duplicates removed for cascade clarity) */
+
+body.isDarkTheme {
+  background-color: var(--bg);
+  color: var(--text-color);
+  transition:
+    background-color var(--transition-normal),
+    color var(--transition-normal);
+}
+
+body.isDarkTheme .page-wrapper {
+  color: var(--text-color);
+}
+
+body.isDarkTheme a[href] {
+  color: var(--c-accent);
+  text-decoration: none;
+  transition:
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+body.isDarkTheme a[href]:hover {
+  color: color-mix(in srgb, var(--c-primary) 70%, white);
+}
+
+/* (task transitions and isCurrent border defined inline with bg rules below) */
+
+.task-c:hover,
+.sub-task-c:hover {
+  background-color: var(--task-c-selected-bg);
+}
+
+/* Coral focus ring with offset glow — Raycast uses a soft 2px coral outline
+   on every focusable element. Skip elements that have their own border-based
+   focus state, otherwise we get a doubled-border effect (1px coral border +
+   2px coral outline). */
+body.isDarkTheme *:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+body.isDarkTheme task-detail-item .input-item:focus-visible,
+body.isDarkTheme task-detail-item .mat-expansion-panel:focus-visible,
+body.isDarkTheme task-detail-item .input-item:focus-within,
+body.isDarkTheme task-detail-item .mat-expansion-panel:focus-within,
+body.isDarkTheme task:focus-visible,
+body.isDarkTheme task:focus,
+body.isDarkTheme planner-task:focus-visible,
+body.isDarkTheme planner-task:focus {
+  outline: none !important;
+}
+
+/* Section labels in the sidebar — Raycast uses regular case + muted color,
+   NOT uppercase small-caps. Looking at actual Raycast screenshots: "Today",
+   "Suggestions", "Commands", "Results" are regular sentence case. */
+body.isDarkTheme magic-side-nav .section-label,
+body.isDarkTheme magic-side-nav .nav-section-title,
+body.isDarkTheme nav-folder > .folder-title {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.005em !important;
+  color: var(--velvet-fg-muted) !important;
+}
+
+/* Banner: warm-tinted, frosted */
+body.isDarkTheme banner .content-wrapper {
+  background: var(--velvet-pane-4) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-radius: 8px;
+  margin: 4px 8px;
+}
+
+/* Body fallback color — near-black, matches Raycast's actual window bg. */
+body.isDarkTheme {
+  background-color: #0a080a !important;
+}
+
+/* THE shared background — painted on .app-container so it covers BOTH the
+   side nav and the main content area as one continuous gradient. The
+   sidenav's translucent panel lets the gradient show through (frosted-glass
+   effect), main.main-content is transparent below, so a single gradient
+   defines the visual character across every view.
+
+   Why .app-container and not body: with a wallpaper set, .bg-image and
+   .bg-overlay sit between body and .app-container, so a body-level gradient
+   would be hidden. .app-container sits ABOVE the wallpaper layers, matching
+   the original intent of layering the primary-tinted gradient on top of
+   the blurred wallpaper + overlay.
+
+   var(--c-primary) tracks the user's chosen primary palette; color-mix
+   gives alpha control. */
+body.isDarkTheme .app-container {
+  background-color: transparent !important;
+  background-image:
+    radial-gradient(
+      ellipse 95% 70% at 10% -10%,
+      color-mix(in srgb, var(--c-primary) 16%, transparent) 0%,
+      transparent 65%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--c-primary) 7%, transparent) 0%,
+      transparent 100%
+    ) !important;
+  background-attachment: fixed !important;
+}
+
+/* Neutralize SP's body:before flat tint. That layer paints a brightness(0.1)
+   primary-900 wash over the body whenever the user has bg-tint ENABLED, and
+   it shows through the transparent regions of the gradient — making the
+   tint-enabled and tint-disabled states look noticeably different. With
+   :before hidden, the .app-container gradient is the single source of
+   primary tint and both states render identically. */
+body.isDarkTheme:before {
+  display: none !important;
+}
+
+/* Everything below .app-container must be transparent so the gradient
+   painted on .app-container shows through the side nav, header, route
+   wrapper, and right panel equally. .app-container itself owns the
+   gradient and is not in this list. */
+body.isDarkTheme main.main-content,
+body.isDarkTheme .header-wrapper,
+body.isDarkTheme header.header-wrapper,
+body.isDarkTheme right-panel,
+body.isDarkTheme right-panel > div,
+body.isDarkTheme main-header,
+body.isDarkTheme main-header > .wrapper,
+body.isDarkTheme .route-wrapper,
+body.isDarkTheme banner {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Blur the user's wallpaper image so the frosted-glass surfaces above it
+   read as proper macOS-style vibrancy instead of crisp desktop showing
+   through. Real Raycast does this — the desktop behind the window is
+   visibly out of focus. */
+body.isDarkTheme .bg-image {
+  filter: blur(24px) saturate(1.2);
+  /* compensate for the soft edges blur creates by scaling slightly */
+  transform: scale(1.06);
+}
+
+/* Sidenav: one consistent translucent panel. Apply blur+bg to the OUTER
+   host AND make every inner wrapper (.nav-sidenav, .nav-list) transparent
+   so the host's bg shows through uniformly — otherwise the inner solid bg
+   covers up the host's translucency and produces inconsistent edges. */
+body.isDarkTheme magic-side-nav {
+  background: var(--velvet-pane-2) !important;
+  backdrop-filter: var(--velvet-frost-deep);
+  -webkit-backdrop-filter: var(--velvet-frost-deep);
+  border-right: 1px solid var(--velvet-fill-2);
+}
+
+/* When a wallpaper is set, .bg-image is already heavily blurred (24px), and
+   the bg-overlay + .app-container gradient already provide tint and contrast.
+   Drop both the sidenav's backdrop blur (which re-blurs already-blurred pixels
+   into mud) and its dark bg, so the wallpaper + overlay + gradient read as one
+   continuous surface across sidenav and main content. */
+body.isDarkTheme.hasBgImage magic-side-nav {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: transparent !important;
+}
+
+body.isDarkTheme magic-side-nav .nav-sidenav,
+body.isDarkTheme magic-side-nav .nav-list,
+body.isDarkTheme magic-side-nav nav-list,
+body.isDarkTheme magic-side-nav .side-nav {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Thin neutral scrollbars — Raycast's are unobtrusive, not branded. */
+body.isDarkTheme ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body.isDarkTheme ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body.isDarkTheme ::-webkit-scrollbar-thumb {
+  background: var(--velvet-fill-5);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+body.isDarkTheme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+  background-clip: padding-box;
+}
+
+/* right-panel: the host is transparent so the gradient shows through, but
+   the actual sliding side panel (.side) gets the Raycast frosted-glass
+   treatment when open — distinct from the main content area. */
+body.isDarkTheme right-panel .side {
+  background: var(--velvet-pane-3) !important;
+  backdrop-filter: var(--velvet-frost-strong);
+  -webkit-backdrop-filter: var(--velvet-frost-strong);
+  border-left: 1px solid var(--velvet-fill-3) !important;
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.3);
+}
+
+/* Resize handle: coral on hover, like Raycast's resizers */
+body.isDarkTheme right-panel .resize-handle:hover,
+body.isDarkTheme right-panel .resize-handle:focus,
+body.isDarkTheme right-panel .resize-handle:active {
+  background-color: var(--c-primary) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--c-primary) 40%, transparent);
+}
+
+/* Edge close-handle: frosted bg with coral icon on hover */
+body.isDarkTheme right-panel .edge-close-handle {
+  background: var(--velvet-pane-4) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--velvet-fill-3);
+  border-right: none;
+  transition:
+    background-color 130ms ease-out,
+    color 130ms ease-out;
+}
+
+body.isDarkTheme right-panel .edge-close-handle:hover {
+  background: color-mix(in srgb, var(--c-primary) 18%, transparent) !important;
+}
+
+body.isDarkTheme right-panel .edge-close-handle:hover mat-icon {
+  color: var(--c-primary) !important;
+}
+
+/* Default task: very subtle bg — Raycast list rows are mostly transparent
+   over the gradient, only revealing a bg on hover or selection. */
+body.isDarkTheme task .box {
+  background: var(--velvet-fill-1) !important;
+  transition:
+    background-color 100ms ease-out,
+    border-color 100ms ease-out !important;
+}
+
+/* Hover: subtle neutral pill, matches Raycast list rows on hover */
+body.isDarkTheme task:hover .box,
+body.isDarkTheme task .box:hover {
+  background: var(--velvet-fill-2) !important;
+}
+
+/* Selected: subtle neutral white-alpha gradient pill, like Raycast's
+   actual selected list rows — no coral, no offset. */
+body.isDarkTheme task.isSelected .box {
+  background: linear-gradient(
+    180deg,
+    var(--velvet-fill-5) 0%,
+    var(--velvet-fill-2) 100%
+  ) !important;
+}
+
+/* Task hover-controls share the schedule-event surface (fill-5) so the swing-
+   in panel reads as the same translucent material as the row it attaches to,
+   instead of an opaque warm-black patch (the default --task-c-bg). Override
+   spans every state since the controls aren't differentiating task state —
+   they just need to look like an interactive surface. */
+body.isDarkTheme .first-line:hover task-hover-controls {
+  background: var(--velvet-fill-5) !important;
+}
+
+/* Currently-running task — leave the original component styling alone
+   (no leading-edge offset, no override) so its layout stays consistent
+   with other states. The state distinction comes through Raycast's
+   coral done-toggle halo, defined elsewhere. */
+
+/* Symmetric padding so content sits at the visual center of the translucent box.
+   Need !important to beat Angular's view-encapsulation specificity. The original
+   has -1px on top — only noticeable once the box becomes translucent. */
+body.isDarkTheme task .inner-wrapper {
+  padding: var(--task-inner-padding-top-bottom) 0 var(--task-inner-padding-top-bottom) !important;
+}
+
+/* (No row separators — testing whether the bg/hover state alone is enough
+   to read as a list, which is how Raycast typically renders list rows
+   without explicit dividers.) */
+
+/* Suppress the default rectangular focus border on .box. The state cues now
+   come from the bg + leading-edge inset shadow defined further up; both are
+   declared above this rule so the cascade lands correctly for non-:focus
+   states. (Plain :focus still suppressed so it doesn't double-up.) */
+body.isDarkTheme task:focus .box,
+body.isDarkTheme task:focus-visible .box {
+  border-color: transparent !important;
+}
+
+body.isDarkTheme note .note,
+body.isDarkTheme .standard-note {
+  background: var(--velvet-pane-1) !important;
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+/* Inner top highlight — the macOS frosted-glass tell */
+body.isDarkTheme .mat-mdc-card,
+body.isDarkTheme .mat-mdc-dialog-surface,
+body.isDarkTheme .mat-mdc-menu-panel {
+  position: relative;
+}
+
+body.isDarkTheme .mat-mdc-dialog-surface::before,
+body.isDarkTheme .mat-mdc-menu-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, var(--velvet-fill-2) 0%, transparent 30%);
+}
+
+/* Task detail panel items — frosted-glass tiles with rounded corners
+   and a coral accent on focus, matching the side panel's aesthetic. */
+body.isDarkTheme task-detail-item .input-item,
+body.isDarkTheme task-detail-item .mat-expansion-panel {
+  background: var(--velvet-fill-2) !important;
+  border: 1px solid var(--velvet-fill-2) !important;
+  border-radius: 10px !important;
+  margin: 6px 8px !important;
+  backdrop-filter: var(--velvet-frost-tile);
+  -webkit-backdrop-filter: var(--velvet-frost-tile);
+  transition:
+    background 130ms ease-out,
+    border-color 130ms ease-out !important;
+}
+
+body.isDarkTheme task-detail-item .input-item:hover,
+body.isDarkTheme task-detail-item .mat-expansion-panel:hover,
+body.isDarkTheme task-detail-item .mat-expansion-panel-header:not(.mat-expanded):hover {
+  background: var(--velvet-fill-3) !important;
+  border-color: var(--velvet-fill-4) !important;
+}
+
+/* Expanded panel uses the same neutral hover bg, just held — no coral.
+   Real Raycast doesn't tint expanded sections with the brand color. */
+body.isDarkTheme task-detail-item .mat-expansion-panel.mat-expanded {
+  background: var(--velvet-fill-2) !important;
+  border-color: var(--velvet-fill-3) !important;
+}
+
+body.isDarkTheme task-detail-item .input-item.isFocused {
+  background: var(--velvet-fill-3) !important;
+  border-color: var(--velvet-fill-4) !important;
+}
+
+/* Component CSS adds an accent border on :focus via:
+     :host-context(.isNoTouchOnly):focus & { border-color: --palette-primary-400 !important }
+   Suppress entirely — no border on focused items, just the bg shift.
+   The body.isDarkTheme prefix already wins on specificity over the
+   component's :host-context rule, so the .isNoTouchOnly variants are
+   not needed. */
+body.isDarkTheme task-detail-item:focus .input-item,
+body.isDarkTheme task-detail-item:focus .mat-expansion-panel {
+  border-color: transparent !important;
+}
+
+/* Markdown notes inside task detail — same frosted treatment */
+body.isDarkTheme task-detail-item .markdown-wrapper,
+body.isDarkTheme task-detail-item .markdown-parsed,
+body.isDarkTheme task-detail-item .markdown-unparsed {
+  background: var(--velvet-fill-2) !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--velvet-fill-2) !important;
+}
+
+/* Material chips (tags / labels) — pill shape with subtle border, like
+   Raycast's category chips. */
+body.isDarkTheme mat-chip,
+body.isDarkTheme .mat-mdc-chip,
+body.isDarkTheme .mat-mdc-standard-chip {
+  background: var(--velvet-fill-3) !important;
+  border: 1px solid var(--velvet-fill-3) !important;
+  border-radius: 999px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.005em;
+  height: 22px !important;
+}
+
+body.isDarkTheme mat-chip:hover,
+body.isDarkTheme .mat-mdc-chip:hover {
+  background: var(--velvet-fill-5) !important;
+  border-color: var(--velvet-fill-6) !important;
+}
+
+/* Done-toggle (the round task-completion checkbox): coral-ringed when
+   currently running. */
+body.isDarkTheme done-toggle button,
+body.isDarkTheme done-toggle .ico-btn {
+  transition: all 150ms cubic-bezier(0.2, 0, 0.13, 1) !important;
+}
+
+body.isDarkTheme task.isCurrent done-toggle button,
+body.isDarkTheme task.isCurrent done-toggle .ico-btn {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--c-primary) 25%, transparent),
+    0 0 12px color-mix(in srgb, var(--c-primary) 30%, transparent) !important;
+}
+
+/* Smooth Raycast-style transitions globally on interactive elements */
+body.isDarkTheme button,
+body.isDarkTheme a,
+body.isDarkTheme [role='button'] {
+  transition:
+    background-color 130ms cubic-bezier(0.2, 0, 0.13, 1),
+    color 130ms cubic-bezier(0.2, 0, 0.13, 1),
+    box-shadow 130ms cubic-bezier(0.2, 0, 0.13, 1),
+    transform 130ms cubic-bezier(0.2, 0, 0.13, 1);
+}
+
+/* mat-icon coloring inside main-header buttons — coral when active */
+body.isDarkTheme main-header button.isActive mat-icon,
+body.isDarkTheme main-header button.isActive2 mat-icon {
+  color: var(--c-primary) !important;
+}
+
+/* Work-context title (current project/tag name in the header) — bold,
+   tight tracking, like a Raycast page title. */
+body.isDarkTheme main-header .current-work-context-title {
+  font-weight: 600 !important;
+  letter-spacing: -0.018em !important;
+  font-size: 16px;
+}
+
+/* Subtasks: indented but visually consistent — same hover/select states as
+   parent tasks but slightly subtler. */
+body.isDarkTheme task .sub-tasks task::after {
+  background: var(--velvet-fill-2) !important;
+}
+
+body.isDarkTheme task .sub-tasks task .box {
+  background: var(--velvet-fill-1) !important; /* was 0.015, rounded up */
+}
+
+body.isDarkTheme task .sub-tasks task:hover .box {
+  background: var(--velvet-fill-2) !important;
+}
+
+body.isDarkTheme task .sub-tasks task.isSelected .box {
+  background: linear-gradient(
+    180deg,
+    var(--velvet-fill-4) 0%,
+    var(--velvet-fill-2) 100%
+  ) !important;
+}
+
+/* Done tasks: muted but still legible. The dim opacity gives them the
+   subtle, calm feel Raycast uses for completed/dismissed items. */
+body.isDarkTheme task.isDone .first-line,
+body.isDarkTheme task.isDone .title-and-tags-wrapper {
+  opacity: 0.55;
+  text-decoration: line-through;
+  text-decoration-color: rgba(237, 237, 237, 0.4);
+  text-decoration-thickness: 1px;
+}
+
+/* Dialog titles: Raycast uses bold, tight, pulled-in dialog headers */
+body.isDarkTheme .mat-mdc-dialog-title,
+body.isDarkTheme h2.mat-mdc-dialog-title,
+body.isDarkTheme [mat-dialog-title] {
+  font-weight: 600 !important;
+  letter-spacing: -0.018em !important;
+  font-size: 17px !important;
+}
+
+/* Mat-tab group (settings tabs): coral underline on active tab */
+body.isDarkTheme .mat-mdc-tab-group {
+  --mdc-tab-indicator-active-indicator-color: var(--c-primary);
+  --mat-tab-header-active-label-text-color: var(--c-primary);
+  --mat-tab-header-active-focus-label-text-color: var(--c-primary);
+  --mat-tab-header-active-hover-label-text-color: var(--c-primary);
+  --mat-tab-header-active-ripple-color: var(--c-primary);
+}
+
+body.isDarkTheme .mat-mdc-tab .mdc-tab__text-label {
+  font-weight: 500 !important;
+  letter-spacing: -0.005em !important;
+}
+
+/* Mat-select trigger: subtle bg + 8px radius */
+body.isDarkTheme .mat-mdc-select-trigger,
+body.isDarkTheme .mat-mdc-form-field-flex {
+  border-radius: 8px;
+}
+
+/* Mat-checkbox: coral when checked */
+body.isDarkTheme .mat-mdc-checkbox.mat-mdc-checkbox-checked {
+  --mdc-checkbox-selected-icon-color: var(--c-primary);
+  --mdc-checkbox-selected-hover-icon-color: color-mix(
+    in srgb,
+    var(--c-primary) 70%,
+    white
+  );
+  --mdc-checkbox-selected-focus-icon-color: var(--c-primary);
+  --mdc-checkbox-selected-pressed-icon-color: color-mix(
+    in srgb,
+    var(--c-primary) 70%,
+    black
+  );
+}
+
+/* Mat-slide-toggle: coral when on */
+body.isDarkTheme .mat-mdc-slide-toggle.mat-mdc-slide-toggle-checked {
+  --mdc-switch-selected-track-color: var(--c-primary);
+  --mdc-switch-selected-handle-color: #fff;
+  --mdc-switch-selected-hover-track-color: color-mix(
+    in srgb,
+    var(--c-primary) 70%,
+    white
+  );
+  --mdc-switch-selected-pressed-track-color: color-mix(
+    in srgb,
+    var(--c-primary) 70%,
+    black
+  );
+  --mdc-switch-selected-focus-track-color: var(--c-primary);
+}
+
+/* Tooltips: dark frosted, like Raycast's tooltips */
+body.isDarkTheme .mat-mdc-tooltip,
+body.isDarkTheme .mdc-tooltip__surface {
+  background: var(--velvet-pane-5) !important;
+  backdrop-filter: var(--velvet-frost-tooltip);
+  -webkit-backdrop-filter: var(--velvet-frost-tooltip);
+  color: var(--velvet-fg) !important;
+  border: 1px solid var(--velvet-fill-3);
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.005em !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Drag-and-drop: neutral surface bg + a soft drop shadow to indicate
+   "in-flight" — no accent tint. */
+body.isDarkTheme task.isDragReady:not(.cdk-drag-placeholder) .box,
+body.isDarkTheme .cdk-drag-preview {
+  background: var(--velvet-pane-5) !important;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--velvet-fill-4) !important;
+}
+
+body.isDarkTheme {
+  --mat-theme-surface: var(--velvet-surface);
+  --mat-theme-on-surface: var(--text-color);
+  --mat-theme-background: var(--bg);
+}

@@ -29,6 +29,23 @@
           var(--nr-of-days),
           minmax(var(--schedule-day-width), 1fr)
         );
+
+      // Pin the corner cell above the sticky time column. Border on the
+      // right side of the *time* column instead of the left side of the
+      // first day, so it stays visible (sticky) when scrolling horizontally.
+      .filler {
+        position: sticky;
+        left: 0;
+        // Topmost element in the week-header's stacking context, so the
+        // corner stays in front of the day cells next to it.
+        z-index: 1;
+        @include extraBorder('-right');
+      }
+
+      // First day's left border is now drawn by .filler's right border.
+      .filler + .day {
+        border-left: 0;
+      }
     }
 
     .grid-container {
@@ -40,6 +57,40 @@
       // Force grid to size based on content, not container
       width: fit-content;
       min-width: 100%;
+    }
+
+    // Pin the time labels to the left edge while scrolling horizontally.
+    // The right border stays with the time column (sticky) instead of with
+    // the first day column (scrolls), so the divider remains visible.
+    .time-column-bg {
+      display: block;
+      grid-column: 1;
+      grid-row: 1 / -1;
+      position: sticky;
+      left: 0;
+      z-index: 4;
+      border-right: 1px solid var(--grid-color);
+      pointer-events: none;
+    }
+
+    // First day's left border is now drawn by .time-column-bg's right border.
+    // .row + .col selects the first .col in the grid (it sits right after the
+    // last .row in DOM order; subsequent .col follow other .col).
+    .row + .col {
+      border-left: 0;
+    }
+
+    .time {
+      position: sticky;
+      left: 0;
+      z-index: 5;
+    }
+
+    // The sticky time column only needs a background once the user has
+    // actually scrolled horizontally — that's when day content starts
+    // sliding under it.
+    &[data-hscrolled] .time-column-bg {
+      background: var(--bg-lighter);
     }
   }
 
@@ -133,10 +184,12 @@
   position: sticky;
   top: 0;
   @include extraBorder('-bottom');
-  box-shadow: var(--whiteframe-shadow-1dp);
-  z-index: 10;
+  // Above the sticky time column (z-index 4–5) so it visually sits in front
+  // of it both at rest and while scrolling.
+  z-index: 12;
   color: var(--text-color);
   background: var(--bg-lighter);
+  box-shadow: var(--whiteframe-shadow-1dp);
 
   &.isInPanel {
     //border: 0;
@@ -183,6 +236,9 @@
   align-self: end;
   font-size: 80%;
   position: relative;
+  // Pull the label up so its visual center sits on the hour line instead
+  // of sitting slightly below it.
+  top: -0.7em;
   color: var(--text-color-muted);
   padding-right: 6px;
   line-height: 1.2;
@@ -192,6 +248,12 @@
   &:first-of-type {
     height: 5px;
   }
+}
+
+// Background strip behind the time column. Only shown in horizontal-scroll mode
+// (see &[data-horizontal-scroll] above) where it becomes sticky-left.
+.time-column-bg {
+  display: none;
 }
 
 .col {

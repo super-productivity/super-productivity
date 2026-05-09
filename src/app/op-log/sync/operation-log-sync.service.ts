@@ -310,7 +310,7 @@ export class OperationLogSyncService {
               `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
           );
 
-          const resolution = await this._handleSyncImportConflict(
+          const conflictResult = await this._handleSyncImportConflict(
             syncProvider,
             {
               filteredOpCount: pendingOps.length,
@@ -320,10 +320,12 @@ export class OperationLogSyncService {
             },
             'OperationLogSyncService (piggybacked full-state op)',
           );
-          if (resolution === 'CANCEL') {
+          if (conflictResult === 'CANCEL') {
             return { kind: 'cancelled' };
           }
-          // USE_LOCAL or USE_REMOTE was handled — report as completed with no further work
+          // USE_LOCAL or USE_REMOTE was handled — report as completed with no further work.
+          // Validation failure (if any during USE_REMOTE force-download) is on the
+          // session-validation latch already; the wrapper reads it. (#7330)
           return {
             kind: 'completed',
             uploadedCount: result.uploadedCount,
@@ -346,6 +348,7 @@ export class OperationLogSyncService {
         result.piggybackedOps,
       );
       localWinOpsCreated = processResult.localWinOpsCreated;
+      // Validation failure (if any) is on the session-validation latch.
     }
 
     // STEP 2: Handle server-rejected operations
@@ -359,6 +362,8 @@ export class OperationLogSyncService {
       forceFromSeq0?: boolean;
     }): Promise<DownloadResultForRejection> => {
       const outcome = await this.downloadRemoteOps(syncProvider, downloadOptions);
+      // Validation failure (if any during the nested download) is on the
+      // session-validation latch — no need to thread the boolean back. (#7330)
       switch (outcome.kind) {
         case 'ops_processed':
           return {
@@ -739,7 +744,7 @@ export class OperationLogSyncService {
             `with ${pendingLocalOps.length} pending local ops. Showing conflict dialog.`,
         );
 
-        const resolution = await this._handleSyncImportConflict(
+        const conflictResult = await this._handleSyncImportConflict(
           syncProvider,
           {
             filteredOpCount: pendingLocalOps.length,
@@ -749,9 +754,11 @@ export class OperationLogSyncService {
           },
           'OperationLogSyncService (incoming full-state op)',
         );
-        if (resolution === 'CANCEL') {
+        if (conflictResult === 'CANCEL') {
           return { kind: 'cancelled' };
         }
+        // Validation failure (if any during USE_REMOTE force-download) is on
+        // the session-validation latch — wrapper reads it. (#7330)
         return { kind: 'no_new_ops' };
       } else {
         OpLog.normal(
@@ -785,7 +792,7 @@ export class OperationLogSyncService {
           `Showing conflict resolution dialog (local import detected).`,
       );
 
-      const resolution = await this._handleSyncImportConflict(
+      const conflictResult = await this._handleSyncImportConflict(
         syncProvider,
         {
           filteredOpCount: processResult.filteredOpCount,
@@ -795,9 +802,11 @@ export class OperationLogSyncService {
         },
         'OperationLogSyncService (local SYNC_IMPORT filters remote)',
       );
-      if (resolution === 'CANCEL') {
+      if (conflictResult === 'CANCEL') {
         return { kind: 'cancelled' };
       }
+      // Validation failure (if any during USE_REMOTE force-download) is on
+      // the session-validation latch — wrapper reads it. (#7330)
       return { kind: 'no_new_ops' };
     } else if (
       processResult.allOpsFilteredBySyncImport &&
@@ -869,6 +878,7 @@ export class OperationLogSyncService {
         OpLog.normal(
           `${logPrefix}: User chose USE_REMOTE. Force downloading remote state.`,
         );
+        // Validation failure (if any) is on the session-validation latch.
         await this.forceDownloadRemoteState(syncProvider);
         return 'USE_REMOTE';
       case 'CANCEL':
@@ -1052,9 +1062,10 @@ export class OperationLogSyncService {
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
-      // Process all remote ops (no confirmation needed - user already chose USE_REMOTE)
+      // Process all remote ops (no confirmation needed - user already chose USE_REMOTE).
       // Skip conflict detection because the NgRx store was just reset to empty state,
       // which causes all entities to appear missing and CONCURRENT ops to be discarded.
+      // Validation failure is surfaced via the session-validation latch. (#7330)
       await this.remoteOpsProcessingService.processRemoteOps(result.newOps, {
         skipConflictDetection: true,
       });

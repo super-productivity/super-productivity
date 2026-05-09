@@ -4,9 +4,12 @@ import { RootState } from '../../root-state';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { PROJECT_FEATURE_NAME } from '../../../features/project/store/project.reducer';
 import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
+import { SECTION_FEATURE_NAME } from '../../../features/section/store/section.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { Project } from '../../../features/project/project.model';
 import { Tag } from '../../../features/tag/tag.model';
+import { Section } from '../../../features/section/section.model';
+import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../../features/project/project.const';
 import { OpLog } from '../../../core/log';
@@ -23,6 +26,7 @@ describe('lwwUpdateMetaReducer', () => {
   const TASK_ID = 'task1';
   const PROJECT_ID = 'project1';
   const TAG_ID = 'tag1';
+  const SECTION_ID = 'section1';
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -86,6 +90,15 @@ describe('lwwUpdateMetaReducer', () => {
       ...overrides,
     }) as Tag;
 
+  const createMockSection = (overrides: Partial<Section> = {}): Section => ({
+    id: SECTION_ID,
+    contextId: PROJECT_ID,
+    contextType: WorkContextType.PROJECT,
+    title: 'Original Section',
+    taskIds: [],
+    ...overrides,
+  });
+
   const createMockState = (taskOverrides?: Partial<Task>[]): Partial<RootState> =>
     ({
       [TASK_FEATURE_NAME]: {
@@ -110,6 +123,12 @@ describe('lwwUpdateMetaReducer', () => {
         ids: [TAG_ID],
         entities: {
           [TAG_ID]: createMockTag(),
+        },
+      },
+      [SECTION_FEATURE_NAME]: {
+        ids: [SECTION_ID],
+        entities: {
+          [SECTION_ID]: createMockSection(),
         },
       },
       [appStateFeatureKey]: {
@@ -647,7 +666,7 @@ describe('lwwUpdateMetaReducer', () => {
       expect(OpLog.warn).toHaveBeenCalledWith(
         jasmine.stringMatching(/Filtered orphaned taskIds from PROJECT/),
         jasmine.objectContaining({
-          removed: ['non-existent-task'],
+          taskIdsRemoved: ['non-existent-task'],
         }),
       );
     });
@@ -677,10 +696,12 @@ describe('lwwUpdateMetaReducer', () => {
         PROJECT_ID
       ] as Project;
       expect(updatedProject.backlogTaskIds).toEqual([TASK_ID]);
+      // Shared helper logs a single warn per filtered payload (vs. one-per-array
+      // before #7330). Removed entries are split via structured fields.
       expect(OpLog.warn).toHaveBeenCalledWith(
-        jasmine.stringMatching(/Filtered orphaned backlogTaskIds from PROJECT/),
+        jasmine.stringMatching(/Filtered orphaned.*from PROJECT LWW Update/),
         jasmine.objectContaining({
-          removed: ['non-existent-backlog-task'],
+          backlogTaskIdsRemoved: ['non-existent-backlog-task'],
         }),
       );
     });
@@ -762,9 +783,9 @@ describe('lwwUpdateMetaReducer', () => {
       const updatedTag = updatedState[TAG_FEATURE_NAME]?.entities[TAG_ID] as Tag;
       expect(updatedTag.taskIds).toEqual([TASK_ID]);
       expect(OpLog.warn).toHaveBeenCalledWith(
-        jasmine.stringMatching(/Filtered orphaned taskIds from TAG/),
+        jasmine.stringMatching(/Filtered orphaned.*TAG LWW Update/),
         jasmine.objectContaining({
-          removed: ['non-existent-task-1', 'non-existent-task-2'],
+          taskIdsRemoved: ['non-existent-task-1', 'non-existent-task-2'],
         }),
       );
     });
@@ -851,8 +872,89 @@ describe('lwwUpdateMetaReducer', () => {
       ] as Project;
       expect(updatedProject.taskIds).toEqual([TASK_ID]);
       expect(updatedProject.backlogTaskIds).toEqual([TASK_ID]);
-      // Both warnings should have fired
-      expect(OpLog.warn).toHaveBeenCalledTimes(2);
+      // Single warn covers both arrays (one log per filtered payload after #7330).
+      expect(OpLog.warn).toHaveBeenCalledTimes(1);
+      expect(OpLog.warn).toHaveBeenCalledWith(
+        jasmine.stringMatching(/Filtered orphaned.*from PROJECT LWW Update/),
+        jasmine.objectContaining({
+          taskIdsRemoved: ['deleted-task-1'],
+          backlogTaskIdsRemoved: ['deleted-task-2'],
+        }),
+      );
+    });
+  });
+
+  describe('[SECTION] LWW Update', () => {
+    // Regression: SECTION was missing from ENTITY_CONFIGS so this whole code
+    // path bailed out at the "Unknown entity type" warn. These tests pin the
+    // registry wiring so the gap can't reappear silently.
+    it('should update section entity with LWW winning state', () => {
+      const state = createMockState();
+      const action = {
+        type: '[SECTION] LWW Update',
+        id: SECTION_ID,
+        title: 'LWW Winning Section Title',
+        contextId: PROJECT_ID,
+        contextType: WorkContextType.PROJECT,
+        taskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'SECTION',
+          entityId: SECTION_ID,
+          isRemote: true,
+        },
+      };
+
+      spyOn(OpLog, 'warn');
+      reducer(state, action);
+
+      expect(OpLog.warn).not.toHaveBeenCalledWith(
+        jasmine.stringMatching(/Unknown entity type: SECTION/),
+      );
+      expect(mockReducer).toHaveBeenCalled();
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedSection = updatedState[SECTION_FEATURE_NAME]?.entities[
+        SECTION_ID
+      ] as Section;
+      expect(updatedSection.title).toBe('LWW Winning Section Title');
+    });
+
+    it('should recreate section if it does not exist (LWW update won over delete)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[SECTION] LWW Update',
+        id: 'recreated-section',
+        title: 'Recreated Section',
+        contextId: PROJECT_ID,
+        contextType: WorkContextType.PROJECT,
+        taskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'SECTION',
+          entityId: 'recreated-section',
+        },
+      };
+
+      spyOn(OpLog, 'log');
+      spyOn(OpLog, 'warn');
+      reducer(state, action);
+
+      expect(OpLog.warn).not.toHaveBeenCalledWith(
+        jasmine.stringMatching(/Unknown entity type: SECTION/),
+      );
+      expect(OpLog.log).toHaveBeenCalledWith(
+        jasmine.stringMatching(
+          /Entity SECTION:recreated-section not found, recreating from LWW update/,
+        ),
+      );
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[SECTION_FEATURE_NAME]?.entities[
+        'recreated-section'
+      ] as Section;
+      expect(recreated).toBeDefined();
+      expect(recreated.id).toBe('recreated-section');
+      expect(recreated.title).toBe('Recreated Section');
+      expect(recreated.contextId).toBe(PROJECT_ID);
     });
   });
 

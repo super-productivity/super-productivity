@@ -5,6 +5,7 @@ import type {
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
+import ICAL from 'ical.js';
 
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
@@ -40,22 +41,39 @@ const getServerUrl = (cfg: CaldavCalendarConfig): string => {
 
 // --- Compound IDs ---
 // With multiple read calendars, CRUD methods need to know which calendar
-// an event belongs to. Format: "calendarHref::eventHref"
+// an event belongs to. Format: "calendarHref::eventHref" with an optional
+// "#occ=<ms>" suffix to disambiguate expanded RRULE occurrences while
+// keeping the eventHref portion resolvable as a real CalDAV resource.
+// The '#' fragment marker is used because URL.pathname strips fragments,
+// so a server-controlled href can never legitimately contain it.
 
 const COMPOUND_SEP = '::';
+const OCCURRENCE_SEP = '#occ=';
 
-const toCompoundId = (calendarHref: string, eventHref: string): string =>
-  `${calendarHref}${COMPOUND_SEP}${eventHref}`;
+const toCompoundId = (
+  calendarHref: string,
+  eventHref: string,
+  occurrenceMs?: number,
+): string => {
+  const base = `${calendarHref}${COMPOUND_SEP}${eventHref}`;
+  return occurrenceMs !== undefined ? `${base}${OCCURRENCE_SEP}${occurrenceMs}` : base;
+};
 
 const parseCompoundId = (
   id: string,
   fallbackCalendarHref: string,
 ): { calendarHref: string; eventHref: string } => {
-  const sep = id.indexOf(COMPOUND_SEP);
-  if (sep === -1) return { calendarHref: fallbackCalendarHref, eventHref: id };
+  // Strip the occurrence suffix first so the remaining base id is unambiguous.
+  const occIdx = id.lastIndexOf(OCCURRENCE_SEP);
+  const baseId =
+    occIdx !== -1 && /^\d+$/.test(id.slice(occIdx + OCCURRENCE_SEP.length))
+      ? id.slice(0, occIdx)
+      : id;
+  const sep = baseId.indexOf(COMPOUND_SEP);
+  if (sep === -1) return { calendarHref: fallbackCalendarHref, eventHref: baseId };
   return {
-    calendarHref: id.slice(0, sep),
-    eventHref: id.slice(sep + COMPOUND_SEP.length),
+    calendarHref: baseId.slice(0, sep),
+    eventHref: baseId.slice(sep + COMPOUND_SEP.length),
   };
 };
 
@@ -603,38 +621,274 @@ const discoverCalendars = async (
     }));
 };
 
-/** Map a parsed VEVENT to a PluginSearchResult.
- * eventHref is the actual resource href from the CalDAV REPORT response. */
-const mapEventToSearchResult = (
-  event: ParsedVEvent,
+// --- ical.js-based RRULE expansion ---
+// CalDAV servers often return the master VEVENT with RRULE intact and expect
+// the client to expand occurrences within the requested time window.
+// Implementation mirrors src/app/features/schedule/ical/get-relevant-events-from-ical.ts.
+
+interface ICalVEvent {
+  getFirstPropertyValue(name: string): unknown;
+  getAllProperties(name: string): { getValues(): unknown[] }[];
+  getAllSubcomponents(name: string): ICalVEvent[];
+  getFirstSubcomponent(name: string): ICalVEvent | null;
+}
+
+// ical.js's published types don't expose the runtime ICAL namespace cleanly.
+const ICAL_NS = ICAL as unknown as {
+  parse: (s: string) => unknown;
+  Component: new (jcal: unknown) => ICalVEvent;
+  Timezone: new (opts: { tzid: unknown; component: ICalVEvent }) => { tzid: string };
+  TimezoneService: {
+    has: (tzid: string) => boolean;
+    register: (tz: { tzid: string }) => void;
+    remove: (tzid: string) => void;
+  };
+  helpers: { updateTimezones: (comp: ICalVEvent) => ICalVEvent };
+};
+
+const MAX_OCCURRENCES_PER_EVENT = 1000;
+
+const icalTimeToMs = (t: unknown): number | null => {
+  if (!t || typeof (t as { toJSDate?: () => Date }).toJSDate !== 'function') return null;
+  const d = (t as { toJSDate: () => Date }).toJSDate();
+  const ms = d.getTime();
+  return isNaN(ms) ? null : ms;
+};
+
+const isAllDayIcal = (vevent: ICalVEvent): boolean => {
+  const dtstart = vevent.getFirstPropertyValue('dtstart');
+  return (dtstart as { isDate?: boolean })?.isDate === true;
+};
+
+const calcDurationMs = (vevent: ICalVEvent, startMs: number): number => {
+  const dtend = vevent.getFirstPropertyValue('dtend');
+  if (dtend) {
+    const endMs = icalTimeToMs(dtend);
+    if (endMs !== null) return endMs - startMs;
+  }
+  const dur = vevent.getFirstPropertyValue('duration');
+  if (dur && typeof (dur as { toSeconds?: () => number }).toSeconds === 'function') {
+    return (dur as { toSeconds: () => number }).toSeconds() * 1000;
+  }
+  return 0;
+};
+
+const getExdateMs = (vevent: ICalVEvent): number[] => {
+  const out: number[] = [];
+  const props = vevent.getAllProperties('exdate');
+  for (const p of props) {
+    for (const v of p.getValues()) {
+      const ms = icalTimeToMs(v);
+      if (ms !== null) out.push(ms);
+    }
+  }
+  return out;
+};
+
+const isCancelledStatus = (status: unknown): boolean => {
+  if (typeof status === 'string') return status.toUpperCase() === 'CANCELLED';
+  const fn = (status as { toUpperCase?: () => string })?.toUpperCase;
+  return typeof fn === 'function' && fn.call(status) === 'CANCELLED';
+};
+
+interface ExceptionInstance {
+  vevent: ICalVEvent;
+  recurrenceMs: number;
+  isCancelled: boolean;
+}
+
+const buildExceptionMap = (vevents: ICalVEvent[]): Map<string, ExceptionInstance[]> => {
+  const map = new Map<string, ExceptionInstance[]>();
+  for (const ve of vevents) {
+    const recurrenceMs = icalTimeToMs(ve.getFirstPropertyValue('recurrence-id'));
+    if (recurrenceMs === null) continue;
+    const uid = ve.getFirstPropertyValue('uid');
+    if (!uid) continue;
+    const isCancelled = isCancelledStatus(ve.getFirstPropertyValue('status'));
+    const uidStr = String(uid);
+    if (!map.has(uidStr)) map.set(uidStr, []);
+    map.get(uidStr)!.push({ vevent: ve, recurrenceMs, isCancelled });
+  }
+  return map;
+};
+
+const veventToOccurrence = (
+  vevent: ICalVEvent,
+  startMs: number,
+  durationMs: number,
+  isAllDay: boolean,
   calendarHref: string,
   eventHref: string,
+  occurrenceMs?: number,
 ): PluginSearchResult => {
-  const startDate = parseIcalDateTime(event.dtstart, event.dtstartParams);
-  const endDate = parseIcalDateTime(event.dtend, event.dtendParams);
-  const allDay = isDateOnly(event.dtstart, event.dtstartParams);
-  const startMs = startDate?.getTime();
-  const endMs = endDate?.getTime();
+  const summary = vevent.getFirstPropertyValue('summary');
+  const description = vevent.getFirstPropertyValue('description');
+  const status = vevent.getFirstPropertyValue('status');
+  return {
+    id: toCompoundId(calendarHref, eventHref, occurrenceMs),
+    title: (typeof summary === 'string' && summary) || '(No title)',
+    status: (typeof status === 'string' && status) || 'CONFIRMED',
+    start: startMs,
+    dueWithTime: isAllDay ? undefined : startMs,
+    duration: durationMs,
+    isAllDay,
+    description: typeof description === 'string' ? description : undefined,
+  };
+};
 
-  let duration = 0;
-  if (event.duration) {
-    duration = parseDuration(event.duration);
-  } else if (startMs && endMs) {
-    duration = endMs - startMs;
-  } else if (allDay) {
-    duration = 24 * 60 * 60 * 1000;
+/**
+ * Parse iCal data with ical.js and emit one PluginSearchResult per occurrence
+ * within [rangeStartMs, rangeEndMs). Handles RRULE, EXDATE, and RECURRENCE-ID
+ * exception instances (overrides + cancellations).
+ */
+const expandIcalToSearchResults = (
+  icalData: string,
+  calendarHref: string,
+  eventHref: string,
+  rangeStartMs: number,
+  rangeEndMs: number,
+): PluginSearchResult[] => {
+  let parsed: unknown;
+  try {
+    parsed = ICAL_NS.parse(icalData);
+  } catch {
+    return [];
+  }
+  let comp: ICalVEvent;
+  try {
+    comp = new ICAL_NS.Component(parsed);
+  } catch {
+    return [];
   }
 
-  return {
-    id: toCompoundId(calendarHref, eventHref),
-    title: event.summary || '(No title)',
-    status: event.status || 'CONFIRMED',
-    start: startMs,
-    dueWithTime: allDay ? undefined : startMs,
-    duration,
-    isAllDay: allDay,
-    description: event.description,
-  };
+  // Register any embedded VTIMEZONE blocks so TZID lookups during expansion succeed.
+  const tzAdded: string[] = [];
+  if (comp.getFirstSubcomponent('vtimezone')) {
+    for (const vtz of comp.getAllSubcomponents('vtimezone')) {
+      try {
+        const tz = new ICAL_NS.Timezone({
+          tzid: vtz.getFirstPropertyValue('tzid'),
+          component: vtz,
+        });
+        if (!ICAL_NS.TimezoneService.has(tz.tzid)) {
+          ICAL_NS.TimezoneService.register(tz);
+          tzAdded.push(tz.tzid);
+        }
+      } catch {
+        // ignore malformed VTIMEZONE
+      }
+    }
+  }
+
+  let vevents: ICalVEvent[];
+  try {
+    vevents = ICAL_NS.helpers.updateTimezones(comp).getAllSubcomponents('vevent');
+  } catch {
+    vevents = comp.getAllSubcomponents('vevent');
+  }
+
+  const exceptionMap = buildExceptionMap(vevents);
+  const out: PluginSearchResult[] = [];
+
+  for (const ve of vevents) {
+    // Per-event guard: a single malformed VEVENT must not drop the rest of
+    // the calendar's events. Mirrors the pattern in get-relevant-events-from-ical.ts.
+    try {
+      // Skip exception events here; they're handled together with their master.
+      if (icalTimeToMs(ve.getFirstPropertyValue('recurrence-id')) !== null) continue;
+      if (isCancelledStatus(ve.getFirstPropertyValue('status'))) continue;
+
+      const dtstart = ve.getFirstPropertyValue('dtstart');
+      const startMs = icalTimeToMs(dtstart);
+      if (startMs === null) continue;
+      const isAllDay = isAllDayIcal(ve);
+      const durationMs = calcDurationMs(ve, startMs);
+
+      const rrule = ve.getFirstPropertyValue('rrule');
+      if (!rrule) {
+        if (startMs >= rangeStartMs && startMs < rangeEndMs) {
+          out.push(
+            veventToOccurrence(
+              ve,
+              startMs,
+              durationMs,
+              isAllDay,
+              calendarHref,
+              eventHref,
+            ),
+          );
+        }
+        continue;
+      }
+
+      const uid = ve.getFirstPropertyValue('uid');
+      const exceptions: ExceptionInstance[] = uid
+        ? exceptionMap.get(String(uid)) || []
+        : [];
+      const exceptionTimes = new Set(exceptions.map((e) => e.recurrenceMs));
+      for (const ms of getExdateMs(ve)) exceptionTimes.add(ms);
+
+      let iter: { next: () => unknown };
+      try {
+        iter = (rrule as { iterator: (s: unknown) => { next: () => unknown } }).iterator(
+          dtstart,
+        );
+      } catch {
+        continue;
+      }
+
+      // Cap counts EMITTED occurrences only — past-window skips and out-of-range
+      // breaks must not consume the budget, otherwise a master event with
+      // DTSTART years before `rangeStartMs` (common when the server returns the
+      // un-expanded master) silently produces zero in-window results.
+      let emitted = 0;
+      for (
+        let next = iter.next() as { toJSDate: () => Date } | null;
+        next != null;
+        next = iter.next() as { toJSDate: () => Date } | null
+      ) {
+        const ms = next.toJSDate().getTime();
+        if (isNaN(ms)) continue;
+        if (ms >= rangeEndMs) break;
+        if (ms < rangeStartMs) continue;
+        if (exceptionTimes.has(ms)) continue;
+        out.push(
+          veventToOccurrence(ve, ms, durationMs, isAllDay, calendarHref, eventHref, ms),
+        );
+        if (++emitted >= MAX_OCCURRENCES_PER_EVENT) break;
+      }
+
+      for (const ex of exceptions) {
+        if (ex.isCancelled) continue;
+        const exStartMs = icalTimeToMs(ex.vevent.getFirstPropertyValue('dtstart'));
+        if (exStartMs === null) continue;
+        if (exStartMs < rangeStartMs || exStartMs >= rangeEndMs) continue;
+        out.push(
+          veventToOccurrence(
+            ex.vevent,
+            exStartMs,
+            calcDurationMs(ex.vevent, exStartMs),
+            isAllDayIcal(ex.vevent),
+            calendarHref,
+            eventHref,
+            ex.recurrenceMs,
+          ),
+        );
+      }
+    } catch {
+      // Skip a malformed VEVENT, keep processing the rest.
+    }
+  }
+
+  for (const tzid of tzAdded) {
+    try {
+      ICAL_NS.TimezoneService.remove(tzid);
+    } catch {
+      // ignore
+    }
+  }
+
+  return out;
 };
 
 /** Fetch events from a single calendar via REPORT */
@@ -645,10 +899,17 @@ const fetchEventsForCalendar = async (
 ): Promise<PluginSearchResult[]> => {
   const syncRangeWeeks = Math.max(parseInt(cfg.syncRangeWeeks || '', 10) || 2, 1);
   const now = new Date();
-  const start = toIcalUtcDateTime(now);
-  const end = toIcalUtcDateTime(
-    new Date(now.getTime() + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000),
+  // Anchor the window to start-of-today (UTC) so events already in progress
+  // earlier on the same day stay visible. Using `now` as the lower bound would
+  // hide an ongoing meeting. UTC anchor keeps the math timezone-independent.
+  const rangeStartMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
   );
+  const rangeEndMs = rangeStartMs + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000;
+  const start = toIcalUtcDateTime(new Date(rangeStartMs));
+  const end = toIcalUtcDateTime(new Date(rangeEndMs));
 
   const calUrl = resolveHref(cfg, calendarHref);
   const xml = await http.request<string>(
@@ -662,12 +923,15 @@ const fetchEventsForCalendar = async (
   );
 
   const responses = parseEventResponses(xml);
-  return responses.flatMap((r) => {
-    const events = parseVEvents(r.calendarData);
-    return events
-      .filter((e) => e.status !== 'CANCELLED')
-      .map((e) => mapEventToSearchResult(e, calendarHref, r.href));
-  });
+  return responses.flatMap((r) =>
+    expandIcalToSearchResults(
+      r.calendarData,
+      calendarHref,
+      r.href,
+      rangeStartMs,
+      rangeEndMs,
+    ),
+  );
 };
 
 /** Fetch events from all read calendars, merged and sorted by start time */

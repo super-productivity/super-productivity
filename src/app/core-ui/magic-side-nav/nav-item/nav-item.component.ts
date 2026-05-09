@@ -174,16 +174,13 @@ export class NavItemComponent {
     if (defaultIcon === 'today' || defaultIcon === 'inbox') {
       return null;
     }
-    const themeColor = wc.theme?.primary;
-    if (themeColor) {
-      return themeColor;
-    }
-
     if (wcType === WorkContextType.TAG) {
       const tag = wc as Tag;
-      return tag.color || null;
+      if (tag.color) {
+        return tag.color;
+      }
     }
-    return null;
+    return wc.theme?.primary || null;
   });
 
   // Emoji detection for presentational icons

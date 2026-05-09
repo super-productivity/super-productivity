@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   effect,
   inject,
   input,
@@ -30,6 +31,10 @@ import { T } from '../../t.const';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { IS_ANDROID_NATIVE } from '../../util/is-native-platform';
 
+// Latches true after the first cold-start entrance fires in this JS session,
+// so resume/back/remount paths never re-hide the FAB.
+let _hasFiredColdStartEntrance = false;
+
 @Component({
   selector: 'mobile-bottom-nav',
   standalone: true,
@@ -57,15 +62,18 @@ export class MobileBottomNavComponent {
   readonly isAndroid = IS_ANDROID_NATIVE;
 
   // Tracks whether the slide-up entrance animation is actively running.
-  // On Android, the web FAB is hidden only during this animation (not the full
-  // entrance duration) so that the button appears as soon as the nav settles —
-  // even if the native startup overlay was not shown (e.g. process-death recreation).
+  // On Android, the web FAB is hidden only during this animation, and only on
+  // a true cold start — remounts from back/resume/focus-mode toggle must not
+  // re-trigger the hide.
   readonly isEntranceAnimating = signal(false);
   private _entranceAnimationTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
-    effect((onCleanup) => {
-      if (this.isEntrance() && this.isAndroid) {
+    inject(DestroyRef).onDestroy(() => clearTimeout(this._entranceAnimationTimeout));
+
+    effect(() => {
+      if (!_hasFiredColdStartEntrance && this.isAndroid && this.isEntrance()) {
+        _hasFiredColdStartEntrance = true;
         this.isEntranceAnimating.set(true);
         // Safety fallback: clear if animationend doesn't fire
         // (e.g. prefers-reduced-motion: reduce → animation: none).
@@ -73,7 +81,6 @@ export class MobileBottomNavComponent {
         this._entranceAnimationTimeout = setTimeout(() => {
           this.isEntranceAnimating.set(false);
         }, 700);
-        onCleanup(() => clearTimeout(this._entranceAnimationTimeout));
       }
     });
   }

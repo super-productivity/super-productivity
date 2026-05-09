@@ -383,8 +383,27 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         return;
       }
       if (srcIsSection) {
-        // Dragged out of a section into the no-section area.
-        this._sectionService.removeTaskFromSection(src as string, taskId);
+        // Dragged out of a section into the no-section area. Single op:
+        // section-shared meta-reducer strips section membership AND
+        // repositions in workContext.taskIds so the task lands at the
+        // dropped slot atomically (no partial-replay window).
+        //
+        // `afterTaskId` is computed from `newOrderedIds` (the visible
+        // no-section bucket) but is then applied against the FULL
+        // workContext.taskIds list — `moveItemAfterAnchor` preserves the
+        // relative order of all unmoved items, so any sectioned tasks
+        // interleaved before the anchor stay where they are and the
+        // displayed no-section order is correct.
+        const workContextType = this._workContextService
+          .activeWorkContextType as WorkContextType;
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        this._sectionService.removeTaskFromSection(
+          src as string,
+          taskId,
+          workContextId,
+          workContextType,
+          afterTaskId,
+        );
         return;
       }
     }

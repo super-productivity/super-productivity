@@ -447,13 +447,14 @@ describe('FocusModeMainComponent', () => {
       );
     });
 
-    it('should dispatch even when no current task', () => {
+    it('should open the task selector when no task is selected', () => {
       currentTaskSubject.next(null);
       fixture.detectChanges();
 
       component.startSession();
 
-      expect(mockStore.dispatch).toHaveBeenCalledWith(actions.startFocusPreparation());
+      expect(mockStore.dispatch).not.toHaveBeenCalled();
+      expect(component.isTaskSelectorOpen()).toBe(true);
     });
   });
 
@@ -764,7 +765,6 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
     // Create writable signal for focusModeConfig to test computed signals
     focusModeConfigSignal = signal({
       isSkipPreparation: false,
-      isSyncSessionWithTracking: false,
     });
 
     const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
@@ -853,9 +853,10 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
   });
 
   describe('isPlayButtonDisabled', () => {
-    it('should return true when sync with tracking is enabled and no task selected', () => {
+    // Tracking and focus session lifecycles are now always synced —
+    // starting a session without a task would orphan tracking.
+    it('should return true when no task is selected', () => {
       focusModeConfigSignal.set({
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
       });
       currentTaskSubject.next(null);
@@ -864,31 +865,8 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       expect(component.isPlayButtonDisabled()).toBe(true);
     });
 
-    it('should return false when sync with tracking is enabled and task is selected', () => {
+    it('should return false when a task is selected', () => {
       focusModeConfigSignal.set({
-        isSyncSessionWithTracking: true,
-        isSkipPreparation: false,
-      });
-      currentTaskSubject.next(mockTask);
-      fixture.detectChanges();
-
-      expect(component.isPlayButtonDisabled()).toBe(false);
-    });
-
-    it('should return false when sync with tracking is disabled and no task selected', () => {
-      focusModeConfigSignal.set({
-        isSyncSessionWithTracking: false,
-        isSkipPreparation: false,
-      });
-      currentTaskSubject.next(null);
-      fixture.detectChanges();
-
-      expect(component.isPlayButtonDisabled()).toBe(false);
-    });
-
-    it('should return false when sync with tracking is disabled and task is selected', () => {
-      focusModeConfigSignal.set({
-        isSyncSessionWithTracking: false,
         isSkipPreparation: false,
       });
       currentTaskSubject.next(mockTask);
@@ -921,10 +899,9 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
     });
   });
 
-  describe('startSession with sync tracking', () => {
-    it('should open task selector when sync is enabled and no task selected', () => {
+  describe('startSession', () => {
+    it('should open task selector when no task is selected', () => {
       focusModeConfigSignal.set({
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
       });
       currentTaskSubject.next(null);
@@ -936,9 +913,8 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       expect(component.isTaskSelectorOpen()).toBe(true);
     });
 
-    it('should dispatch startFocusPreparation when sync is enabled and task is selected', () => {
+    it('should dispatch startFocusPreparation when a task is selected and skip preparation is off', () => {
       focusModeConfigSignal.set({
-        isSyncSessionWithTracking: true,
         isSkipPreparation: false,
       });
       currentTaskSubject.next(mockTask);
@@ -950,23 +926,9 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       expect(component.isTaskSelectorOpen()).toBe(false);
     });
 
-    it('should dispatch startFocusPreparation when sync is disabled and no task selected', () => {
-      focusModeConfigSignal.set({
-        isSyncSessionWithTracking: false,
-        isSkipPreparation: false,
-      });
-      currentTaskSubject.next(null);
-      fixture.detectChanges();
-
-      component.startSession();
-
-      expect(mockStore.dispatch).toHaveBeenCalledWith(actions.startFocusPreparation());
-    });
-
-    it('should dispatch startFocusSession when sync is enabled, task is selected, and skip preparation is enabled', () => {
+    it('should dispatch startFocusSession when task is selected and skip preparation is enabled', () => {
       component.displayDuration.set(1500000);
       focusModeConfigSignal.set({
-        isSyncSessionWithTracking: true,
         isSkipPreparation: true,
       });
       currentTaskSubject.next(mockTask);

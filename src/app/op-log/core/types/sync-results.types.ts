@@ -144,6 +144,10 @@ export interface UploadOptions {
 
 /**
  * Result from a download operation, used for concurrent modification resolution.
+ *
+ * Validation failure (if any during a nested download) is surfaced via the
+ * SyncSessionValidationService latch — the wrapper reads it once before
+ * deciding IN_SYNC vs ERROR. (#7330)
  */
 export interface DownloadResultForRejection {
   newOpsCount: number;

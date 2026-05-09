@@ -20,6 +20,7 @@ import { nanoid } from 'nanoid';
 import { DEFAULT_TAG } from './tag.const';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { sortByTitle } from '../../util/sort-by-title';
+import { getRandomWorkContextColor } from '../work-context/work-context-color';
 
 @Injectable({
   providedIn: 'root',
@@ -89,9 +90,9 @@ export class TagService {
       title: tag.title || 'EMPTY',
       created: Date.now(),
       icon: null,
-      color: tag.color || null,
       taskIds: [],
       ...tag,
+      color: tag.color || getRandomWorkContextColor(),
     };
   }
 

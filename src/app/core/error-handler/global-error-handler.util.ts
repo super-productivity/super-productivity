@@ -114,12 +114,14 @@ export const createErrorAlert = (
   errorAlert.classList.add('global-error-alert');
   errorAlert.style.color = 'black';
   errorAlert.style.maxHeight = '100vh';
+  // Static structure only — every interpolated value below is injected via
+  // textContent/setAttribute so attacker-controlled error data (e.g. a sync
+  // error that wraps a malicious task title) cannot break out into HTML.
   errorAlert.innerHTML = `
     <div id="error-alert-inner-wrapper">
-    <h2 style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${errEscaped}<h2>
-    <p><a href="${githubUrl}" class="github-issue-urlX" target="_blank">! Please copy & report !</a></p>
-    <!-- second error is needed, because it might be too long -->
-    ${typeof origErr === 'object' && origErr && 'additionalLog' in origErr ? `<pre style="line-height: 1; font-size: 11px;">${origErr.additionalLog}</pre>` : ''}
+    <h2 id="error-alert-title" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;"></h2>
+    <p><a id="error-alert-github-link" class="github-issue-urlX" target="_blank">! Please copy & report !</a></p>
+    <pre id="error-alert-additional-log" style="line-height: 1; font-size: 11px; display: none;"></pre>
 
     <div id="error-fetching-info-wrapper">
       <div>Trying to load more info...</div>
@@ -127,10 +129,26 @@ export const createErrorAlert = (
     </div>
 
     <pre id="stack-trace"
-         style="line-height: 1.3; text-align: left; max-height: 240px; font-size: 12px; overflow: auto;">${stackTrace}</pre>
-    <pre style="line-height: 1.3; font-size: 12px;">${getSimpleMeta()}</pre>
+         style="line-height: 1.3; text-align: left; max-height: 240px; font-size: 12px; overflow: auto;"></pre>
+    <pre id="error-alert-meta" style="line-height: 1.3; font-size: 12px;"></pre>
     </div>
   `;
+
+  const titleEl = errorAlert.querySelector('#error-alert-title');
+  if (titleEl) titleEl.textContent = errEscaped;
+  const linkEl = errorAlert.querySelector('#error-alert-github-link');
+  if (linkEl) linkEl.setAttribute('href', githubUrl);
+  if (typeof origErr === 'object' && origErr && 'additionalLog' in origErr) {
+    const logEl = errorAlert.querySelector<HTMLElement>('#error-alert-additional-log');
+    if (logEl) {
+      logEl.textContent = String((origErr as { additionalLog: unknown }).additionalLog);
+      logEl.style.display = '';
+    }
+  }
+  const stackEl = errorAlert.querySelector('#stack-trace');
+  if (stackEl) stackEl.textContent = stackTrace;
+  const metaEl = errorAlert.querySelector('#error-alert-meta');
+  if (metaEl) metaEl.textContent = getSimpleMeta();
 
   document.body.append(errorAlert);
   const innerWrapper = document.getElementById(

@@ -194,10 +194,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "如何以及在哪里评分",
-      "BTN_DONT_BOTHER": "不要再打扰我",
-      "TITLE": "🙈 请原谅我们，但是...",
-      "TXT": "如果您喜欢它，<strong>给它一个好评</strong>，您将极大地帮助这个项目！"
+      "A_HOW": "如何评分",
+      "BTN_DONT_BOTHER": "不再询问",
+      "BTN_FEEDBACK": "提供反馈",
+      "BTN_LATER": "稍后再说",
+      "BTN_RATE_APP_STORE": "在 App Store 评分",
+      "BTN_RATE_PLAY_STORE": "在 Play Store 评分",
+      "FEEDBACK_BACK": "返回",
+      "FEEDBACK_CONTRIBUTE": "为项目做贡献",
+      "FEEDBACK_CONTRIBUTE_DESC": "代码、设计、翻译等",
+      "FEEDBACK_PRIVATE": "向维护者发邮件",
+      "FEEDBACK_PRIVATE_DESC": "发送一条私信",
+      "FEEDBACK_PUBLIC": "在 GitHub Discussions 发帖",
+      "FEEDBACK_PUBLIC_DESC": "他人可以看到并回复",
+      "FEEDBACK_TITLE": "您想如何帮助？",
+      "TITLE": "喜欢 Super Productivity 吗？",
+      "TXT": "这是一个由爱好者打造的<strong>免费开源项目</strong> —— 没有追踪，没有广告。一条评分或简短留言能帮助更多人发现它。"
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {

@@ -54,35 +54,16 @@ export class FocusModeEffects {
   private storageService = inject(FocusModeStorageService);
   private takeABreakService = inject(TakeABreakService);
 
-  // Auto-show overlay when task is selected (if sync session with tracking is enabled)
-  // Skip showing overlay if isStartInBackground is enabled
-  // Only triggers when focus mode feature is enabled
-  // Fix #6521: Use currentTaskId$ as the driver and config as a gate check (withLatestFrom)
-  // so that config changes don't re-trigger the overlay
-  autoShowOverlay$ = createEffect(() =>
-    this.taskService.currentTaskId$.pipe(
-      skipWhileApplyingRemoteOps(),
-      // currentTaskId$ is local UI state (not synced), so distinctUntilChanged is sufficient
-      distinctUntilChanged(),
-      filter((id) => !!id),
-      withLatestFrom(
-        this.store.select(selectFocusModeConfig),
-        this.store.select(selectIsFocusModeEnabled),
-      ),
-      filter(
-        ([_id, cfg, isFocusModeEnabled]) =>
-          isFocusModeEnabled &&
-          !!cfg?.isSyncSessionWithTracking &&
-          !cfg?.isStartInBackground,
-      ),
-      map(() => actions.showFocusOverlay()),
-    ),
-  );
-
-  // Sync: When tracking starts → start/unpause focus session
-  // Only triggers when isSyncSessionWithTracking is enabled and focus mode feature is enabled
-  // Fix #6521: Use currentTaskId$ as the driver and config as a gate check (withLatestFrom)
-  // so that config changes don't re-trigger session start
+  // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
+  //
+  // Sync (always): if a session/break is in progress, keep it in lockstep with
+  // tracking — resume paused work, skip a stale break, etc.
+  //
+  // Auto-spawn (opt-in via `autoStartFocusOnPlay`): if no session is active and
+  // the user has opted in, start a new session quietly. The overlay is NOT
+  // dispatched — surface comes from the existing banner / future indicator.
+  // Inside the overlay we still respect `isSkipPreparation` so #7384's
+  // rocket-prep flow keeps working for users who entered via F-key.
   syncTrackingStartToSession$ = createEffect(() =>
     this.taskService.currentTaskId$.pipe(
       skipWhileApplyingRemoteOps(),
@@ -93,21 +74,25 @@ export class FocusModeEffects {
         this.store.select(selectFocusModeConfig),
         this.store.select(selectIsFocusModeEnabled),
       ),
-      filter(
-        ([_taskId, cfg, isFocusModeEnabled]) =>
-          isFocusModeEnabled && !!cfg?.isSyncSessionWithTracking,
-      ),
+      filter(([_taskId, _cfg, isFocusModeEnabled]) => isFocusModeEnabled),
       withLatestFrom(
         this.store.select(selectors.selectTimer),
         this.store.select(selectors.selectMode),
         this.store.select(selectors.selectCurrentScreen),
-        this.store.select(selectors.selectPausedTaskId),
+        this.store.select(selectors.selectIsOverlayShown),
         // Bug #5995 Fix: Get the LATEST value of isResumingBreak here
         // to avoid using stale value from outer closure
         this.store.select(selectors.selectIsResumingBreak),
       ),
       switchMap(
-        ([[_taskId, cfg], timer, mode, currentScreen, pausedTaskId, isResumingBreak]) => {
+        ([
+          [_taskId, cfg],
+          timer,
+          mode,
+          currentScreen,
+          isOverlayShown,
+          isResumingBreak,
+        ]) => {
           // If session is paused (purpose is 'work' but not running), resume it
           if (timer.purpose === 'work' && !timer.isRunning) {
             return of(actions.unPauseFocusSession());
@@ -126,14 +111,15 @@ export class FocusModeEffects {
             // Bug #6726 fix: Don't pass pausedTaskId — the user already chose a new task
             return of(actions.skipBreak({ pausedTaskId: undefined }));
           }
-          // If no session active, start a new one (only from Main screen).
-          // Bug #7384 fix: respect isSkipPreparation. When off, leave the user on
-          // the preparation screen so they must click 'Start' (and see the rocket
-          // animation), matching the manual-start flow in focus-mode-main.component.
-          // However, if we are starting in the background (no overlay), we must bypass this
-          // because the user will not see the preparation screen to click 'Start'.
+          // No session active: auto-spawn only when the user opted in.
           if (timer.purpose === null && currentScreen === FocusScreen.Main) {
-            if (!cfg?.isSkipPreparation && !cfg?.isStartInBackground) {
+            if (!cfg?.autoStartFocusOnPlay) {
+              return EMPTY;
+            }
+            // Bug #7384: respect isSkipPreparation only inside the overlay
+            // (preparation screen is overlay-bound). For the quiet auto-spawn
+            // path there's no overlay → no rocket → bypass the prep gate.
+            if (isOverlayShown && !cfg?.isSkipPreparation) {
               return EMPTY;
             }
             const strategy = this.strategyFactory.getStrategy(mode);
@@ -162,14 +148,12 @@ export class FocusModeEffects {
       skipWhileApplyingRemoteOps(),
       pairwise(),
       withLatestFrom(
-        this.store.select(selectFocusModeConfig),
         this.store.select(selectors.selectTimer),
         this.store.select(selectIsFocusModeEnabled),
       ),
       filter(
-        ([[prevTaskId, currTaskId], cfg, timer, isFocusModeEnabled]) =>
+        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled]) =>
           isFocusModeEnabled &&
-          !!cfg?.isSyncSessionWithTracking &&
           (timer.purpose === 'work' || timer.purpose === 'break') &&
           timer.isRunning &&
           !!prevTaskId &&
@@ -186,13 +170,11 @@ export class FocusModeEffects {
     this.actions$.pipe(
       ofType(actions.pauseFocusSession),
       withLatestFrom(
-        this.store.select(selectFocusModeConfig),
         this.store.select(selectors.selectTimer),
         this.taskService.currentTaskId$,
       ),
       filter(
-        ([action, cfg, timer, currentTaskId]) =>
-          !!cfg?.isSyncSessionWithTracking &&
+        ([action, timer, currentTaskId]) =>
           (timer.purpose === 'work' || timer.purpose === 'break') &&
           !!action.pausedTaskId &&
           !!currentTaskId,
@@ -213,10 +195,7 @@ export class FocusModeEffects {
         this.taskService.currentTaskId$,
       ),
       switchMap(([_action, cfg, timer, pausedTaskId, currentTaskId]) => {
-        if (
-          !cfg?.isSyncSessionWithTracking ||
-          (timer.purpose !== 'work' && timer.purpose !== 'break')
-        ) {
+        if (timer.purpose !== 'work' && timer.purpose !== 'break') {
           return EMPTY;
         }
         // Bug #6534 Fix: Clear _isResumingBreak flag when not resuming tracking during break.
@@ -245,18 +224,15 @@ export class FocusModeEffects {
     this.actions$.pipe(
       ofType(actions.startFocusSession),
       withLatestFrom(
-        this.store.select(selectFocusModeConfig),
         this.store.select(selectors.selectPausedTaskId),
         this.taskService.currentTaskId$,
         this.store.select(selectLastCurrentTask),
       ),
       filter(
-        ([_action, cfg, pausedTaskId, currentTaskId, lastCurrentTask]) =>
-          !!cfg?.isSyncSessionWithTracking &&
-          !currentTaskId &&
-          (!!pausedTaskId || !!lastCurrentTask),
+        ([_action, pausedTaskId, currentTaskId, lastCurrentTask]) =>
+          !currentTaskId && (!!pausedTaskId || !!lastCurrentTask),
       ),
-      switchMap(([_action, _cfg, pausedTaskId, _currentTaskId, lastCurrentTask]) => {
+      switchMap(([_action, pausedTaskId, _currentTaskId, lastCurrentTask]) => {
         // Prefer pausedTaskId, fall back to lastCurrentTask
         const taskIdToResume = pausedTaskId || lastCurrentTask?.id;
         if (!taskIdToResume) return EMPTY;
@@ -351,7 +327,7 @@ export class FocusModeEffects {
         this.taskService.currentTaskId$,
       ),
       filter(([action, config, mode, taskId]) => {
-        if (!config?.isSyncSessionWithTracking || !config?.isPauseTrackingDuringBreak) {
+        if (!config?.isPauseTrackingDuringBreak) {
           return false;
         }
         if (!taskId) {
@@ -363,8 +339,8 @@ export class FocusModeEffects {
         }
         // Bug #6510 fix: For automatic completion, only stop tracking if no break will start.
         // When a break will start (auto or manual), tracking pause is deferred to break-start:
-        // - Auto: autoStartBreakOnSessionComplete$ (line 368)
-        // - Manual: _handleStartAfterSessionComplete() / startBreakManually()
+        // - Auto: autoStartBreakOnSessionComplete$
+        // - Manual: FocusModeService.startAfterSessionComplete()
         const strategy = this.strategyFactory.getStrategy(mode);
         const breakWillStart = strategy.shouldStartBreakAfterSession;
         return !breakWillStart;
@@ -650,19 +626,13 @@ export class FocusModeEffects {
     ),
   );
 
-  // Stop tracking when exiting break to planning (if sync enabled)
+  // Stop tracking when exiting break to planning
   // Without this, tracking continues running orphaned after the focus session is reset
   stopTrackingOnExitBreakToPlanning$ = createEffect(() =>
     this.actions$.pipe(
       ofType(actions.exitBreakToPlanning),
-      withLatestFrom(
-        this.store.select(selectFocusModeConfig),
-        this.taskService.currentTaskId$,
-      ),
-      filter(
-        ([_, config, currentTaskId]) =>
-          !!config?.isSyncSessionWithTracking && !!currentTaskId,
-      ),
+      withLatestFrom(this.taskService.currentTaskId$),
+      filter(([_, currentTaskId]) => !!currentTaskId),
       map(() => unsetCurrentTask()),
     ),
   );

@@ -170,7 +170,6 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
     // Set up default selectors
     store.overrideSelector(selectFocusModeConfig, {
       isSkipPreparation: false,
-      isSyncSessionWithTracking: true,
       isPauseTrackingDuringBreak: false,
     });
     store.overrideSelector(selectIsFocusModeEnabled, true);
@@ -261,7 +260,6 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
       // Setup: Break is paused, isPauseTrackingDuringBreak = true, tracking stopped
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
-        isSyncSessionWithTracking: true,
         isPauseTrackingDuringBreak: true,
       });
 
@@ -296,7 +294,6 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
       // Setup: Break is running, isPauseTrackingDuringBreak = true, _isResumingBreak = false
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
-        isSyncSessionWithTracking: true,
         isPauseTrackingDuringBreak: true,
       });
 
@@ -334,7 +331,6 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
       // Without the fix, step 2 would dispatch clearResumingBreakFlag instead of skipBreak.
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
-        isSyncSessionWithTracking: true,
         isPauseTrackingDuringBreak: true,
       });
 
@@ -456,40 +452,6 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
       tick(10);
 
       // Verify: NO action dispatched (tracking already active)
-      expect(dispatchedActions.length).toBe(0);
-
-      flush();
-    }));
-
-    it('should NOT resume tracking if sync is disabled', fakeAsync(() => {
-      // Setup: Sync disabled
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isSyncSessionWithTracking: false,
-        isPauseTrackingDuringBreak: false,
-      });
-
-      const pausedBreakTimer = createMockTimer({
-        purpose: 'break',
-        isRunning: false,
-        elapsed: 2 * 60 * 1000,
-        duration: 5 * 60 * 1000,
-      });
-
-      store.overrideSelector(selectors.selectTimer, pausedBreakTimer);
-      store.overrideSelector(selectors.selectPausedTaskId, 'test-task-id');
-      currentTaskId$.next(null);
-
-      const dispatchedActions: Action[] = [];
-      effects.syncSessionResumeToTracking$.subscribe((action) => {
-        dispatchedActions.push(action);
-      });
-
-      // Action: Resume the break
-      actions$.next(actions.unPauseFocusSession());
-      tick(10);
-
-      // Verify: NO action dispatched (sync disabled)
       expect(dispatchedActions.length).toBe(0);
 
       flush();

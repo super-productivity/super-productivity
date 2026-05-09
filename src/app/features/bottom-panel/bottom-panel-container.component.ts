@@ -26,6 +26,7 @@ import { Log } from '../../core/log';
 import { PanelContentService, PanelContentType } from '../panels/panel-content.service';
 import { BottomPanelStateService } from '../../core-ui/bottom-panel-state.service';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
+import { BodyClass } from '../../app.constants';
 
 export interface BottomPanelData {
   panelContent: PanelContentType;
@@ -66,6 +67,9 @@ const KEYBOARD_DETECT_THRESHOLD = 100;
 const KEYBOARD_SAFE_HEIGHT_MIN = 200;
 const KEYBOARD_SAFE_HEIGHT_RATIO = 0.85;
 const KEYBOARD_RESIZE_DEBOUNCE_MS = 100;
+const CSS_VAR_KEYBOARD_HEIGHT = '--keyboard-height';
+const CSS_VAR_KEYBOARD_OVERLAY_OFFSET = '--keyboard-overlay-offset';
+const CSS_VAR_VISUAL_VIEWPORT_HEIGHT = '--visual-viewport-height';
 
 @Component({
   selector: 'bottom-panel-container',
@@ -124,8 +128,13 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _cachedContainer: HTMLElement | null = null;
 
   private _isKeyboardWatcherInitialized = false;
-  private _originalHeight: string = '';
   private _vvResizeTimer: number | null = null;
+  private _bodyClassObserver: MutationObserver | null = null;
+  private _keyboardAdjustedStyles: {
+    height: string;
+    maxHeight: string;
+    bottom: string;
+  } | null = null;
 
   private readonly _boundOnPointerDown = this._onPointerDown.bind(this);
   private readonly _boundOnPointerMove = this._onPointerMove.bind(this);
@@ -436,19 +445,25 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     if ('visualViewport' in window && window.visualViewport) {
       window.visualViewport.addEventListener('resize', this._boundOnViewportResize);
     }
+
+    this._bodyClassObserver = new MutationObserver(() => this._onViewportResize());
+    this._bodyClassObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
   }
 
   private _removeKeyboardWatcher(): void {
     if (typeof window !== 'undefined' && window.visualViewport) {
       window.visualViewport.removeEventListener('resize', this._boundOnViewportResize);
     }
-    if (this._originalHeight) {
-      const container = this._getSheetContainer();
-      if (container) {
-        container.style.maxHeight = this._originalHeight;
-        container.style.removeProperty('height');
-      }
+    this._bodyClassObserver?.disconnect();
+    this._bodyClassObserver = null;
+    if (this._vvResizeTimer) {
+      window.clearTimeout(this._vvResizeTimer);
+      this._vvResizeTimer = null;
     }
+    this._restoreKeyboardAdjustedStyles();
   }
 
   private _onViewportResize(): void {
@@ -467,37 +482,86 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _handleViewportResize(): void {
     if (typeof window === 'undefined') return;
 
-    const visualViewport = window.visualViewport;
-    if (!visualViewport) return;
-
     const windowHeight = window.innerHeight;
-    const viewportHeight = visualViewport.height;
-    const keyboardHeight = windowHeight - viewportHeight;
+    const viewportHeight = window.visualViewport?.height ?? windowHeight;
+    const rootStyle = getComputedStyle(document.documentElement);
+    const cssVisualViewportHeight = this._parseCssPx(
+      rootStyle.getPropertyValue(CSS_VAR_VISUAL_VIEWPORT_HEIGHT),
+    );
+    const cssKeyboardHeight = this._parseCssPx(
+      rootStyle.getPropertyValue(CSS_VAR_KEYBOARD_HEIGHT),
+    );
+    const cssKeyboardOverlayOffset = this._parseCssPx(
+      rootStyle.getPropertyValue(CSS_VAR_KEYBOARD_OVERLAY_OFFSET),
+    );
+    const keyboardHeight = Math.max(windowHeight - viewportHeight, cssKeyboardHeight);
+    const isIOS = document.body.classList.contains(BodyClass.isIOS);
 
-    const isKeyboardVisible = keyboardHeight > KEYBOARD_DETECT_THRESHOLD;
+    const isKeyboardVisible =
+      document.body.classList.contains(BodyClass.isKeyboardVisible) ||
+      keyboardHeight > KEYBOARD_DETECT_THRESHOLD;
 
     const container = this._getSheetContainer();
     if (!container) return;
 
     if (isKeyboardVisible) {
-      if (!this._originalHeight) {
-        this._originalHeight = container.style.maxHeight || '';
-      }
+      this._captureKeyboardAdjustedStyles(container);
 
+      const visibleHeight =
+        cssVisualViewportHeight > 0 ? cssVisualViewportHeight : viewportHeight;
       const safeHeight = Math.max(
         KEYBOARD_SAFE_HEIGHT_MIN,
-        viewportHeight * KEYBOARD_SAFE_HEIGHT_RATIO,
+        visibleHeight * KEYBOARD_SAFE_HEIGHT_RATIO,
       );
 
+      // CDK bottom sheets are fixed overlays outside the app shell, so they
+      // need their own keyboard offset on iOS where the WebView may not resize.
+      container.style.setProperty(
+        'bottom',
+        `${isIOS ? cssKeyboardOverlayOffset : 0}px`,
+        'important',
+      );
       container.style.setProperty('max-height', `${safeHeight}px`, 'important');
 
       if (container.offsetHeight > safeHeight) {
         container.style.setProperty('height', `${safeHeight}px`, 'important');
       }
     } else {
-      container.style.removeProperty('max-height');
-      container.style.removeProperty('height');
-      this._originalHeight = '';
+      this._restoreKeyboardAdjustedStyles();
     }
+  }
+
+  private _captureKeyboardAdjustedStyles(container: HTMLElement): void {
+    if (this._keyboardAdjustedStyles) {
+      return;
+    }
+
+    this._keyboardAdjustedStyles = {
+      height: container.style.height,
+      maxHeight: container.style.maxHeight,
+      bottom: container.style.bottom,
+    };
+  }
+
+  private _restoreKeyboardAdjustedStyles(): void {
+    if (!this._keyboardAdjustedStyles) {
+      return;
+    }
+
+    const container = this._getSheetContainer();
+    if (container) {
+      container.style.height = this._keyboardAdjustedStyles.height;
+      container.style.maxHeight = this._keyboardAdjustedStyles.maxHeight;
+      container.style.bottom = this._keyboardAdjustedStyles.bottom;
+    }
+    this._keyboardAdjustedStyles = null;
+  }
+
+  private _parseCssPx(value: string): number {
+    if (!value.trim().endsWith('px')) {
+      return 0;
+    }
+    const parsedValue = Number.parseFloat(value);
+    return Number.isFinite(parsedValue) ? parsedValue : 0;
   }
 }

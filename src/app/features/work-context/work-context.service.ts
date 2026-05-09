@@ -27,6 +27,8 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { TODAY_TAG } from '../tag/tag.const';
+import { Tag } from '../tag/tag.model';
+import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
 import { hasTasksToWorkOn, mapEstimateRemainingFromTasks } from './work-context.util';
@@ -222,7 +224,20 @@ export class WorkContextService {
   );
 
   currentTheme$: Observable<WorkContextThemeCfg> = this.activeWorkContext$.pipe(
-    map((awc) => awc.theme),
+    map((awc) => {
+      // For tags: theme.primary is the explicit override. If it's still at
+      // the auto-default (or unset) and tag.color is set, fall back to
+      // tag.color so newly created tags drive Material theming with their
+      // randomized color while still letting users override explicitly.
+      if (awc.type === WorkContextType.TAG) {
+        const tagColor = (awc as unknown as Tag).color;
+        const primary = awc.theme?.primary;
+        if (tagColor && (!primary || primary === DEFAULT_TAG_COLOR)) {
+          return { ...awc.theme, primary: tagColor };
+        }
+      }
+      return awc.theme;
+    }),
     distinctUntilChanged<WorkContextThemeCfg>(isShallowEqual),
   );
 

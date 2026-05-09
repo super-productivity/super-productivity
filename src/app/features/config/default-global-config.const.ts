@@ -50,6 +50,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isLocalRestApiEnabled: false,
     isTrayShowCurrentCountdown: true,
     startOfNextDay: 0,
+    startOfNextDayTime: '00:00',
     isDisableAnimations: false,
     isDisableCelebration: false,
     isShowProductivityTipLonger: false,
@@ -95,8 +96,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isPlayTick: false,
     focusModeSound: 'off',
     isPauseTrackingDuringBreak: true,
-    isSyncSessionWithTracking: false,
-    isStartInBackground: false,
+    autoStartFocusOnPlay: false,
+    isManualBreakStart: false,
   },
   flowtime: {
     isBreakEnabled: false,

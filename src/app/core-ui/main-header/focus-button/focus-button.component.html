@@ -23,6 +23,9 @@
 
   @if (runningTimeMs(); as runningMs) {
     <div class="focus-label focus-running-label">
+      @if (cycleLabel(); as cycle) {
+        <span class="focus-cycle">#{{ cycle }}</span>
+      }
       {{ runningMs | msToMinuteClockString }}
     </div>
   }

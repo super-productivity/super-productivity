@@ -21,6 +21,8 @@ import {
   MatMenuItem,
   MatMenuTrigger,
 } from '@angular/material/menu';
+import { MatDivider } from '@angular/material/divider';
+import { ESTIMATE_OPTIONS } from '../../add-task-bar/add-task-bar.const';
 import { Task, TaskCopy, TaskWithSubTasks } from '../../task.model';
 import { EMPTY, forkJoin, from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
@@ -86,6 +88,7 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
     MatMenu,
     MatMenuContent,
     MatMenuItem,
+    MatDivider,
     TranslateModule,
     MatMenuTrigger,
     MatIconButton,
@@ -118,6 +121,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
+  readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
 
   isAdvancedControls = input<boolean>(false);
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
@@ -431,6 +435,13 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       })
       .afterClosed()
       .subscribe(() => this.focusRelatedTaskOrNext());
+  }
+
+  setEstimate(ms: number): void {
+    if (ms === this.task.timeEstimate) {
+      return;
+    }
+    this._taskService.update(this.task.id, { timeEstimate: ms });
   }
 
   addSubTask(): void {

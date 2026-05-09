@@ -49,6 +49,8 @@ import { TaskAttachmentService } from '../../features/tasks/task-attachment/task
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 import { HISTORY_STATE } from 'src/app/app.constants';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
+import { IS_IOS } from 'src/app/util/is-ios';
+import { Keyboard } from '@capacitor/keyboard';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -133,6 +135,15 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       .subscribe((value) => {
         this._updateResolvedContent(value);
       });
+
+    // Show the iOS keyboard accessory bar while this dialog is open so the
+    // Done button is available; the bar is globally hidden elsewhere.
+    if (IS_IOS) {
+      Keyboard.setAccessoryBarVisible({ isVisible: true });
+      this._destroyRef.onDestroy(() => {
+        Keyboard.setAccessoryBarVisible({ isVisible: false });
+      });
+    }
 
     // Handle Escape key - save and close
     this._matDialogRef.disableClose = true;

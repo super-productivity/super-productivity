@@ -12,6 +12,15 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     // Wait for task to be visible
     const firstTask = page.locator('task').first();
     await expect(firstTask).toBeVisible();
+
+    // Start tracking the task so the focus-mode play button is enabled.
+    // Focus mode now requires a current task — sync between focus session
+    // and tracking is always on.
+    await firstTask.hover();
+    const taskPlayBtn = page.locator('.play-btn.tour-playBtn').first();
+    await taskPlayBtn.waitFor({ state: 'visible' });
+    await taskPlayBtn.click();
+    await expect(firstTask).toHaveClass(/isCurrent/, { timeout: 5000 });
   });
 
   // NOTE: Pause/resume break functionality is NOT tested in E2E because:

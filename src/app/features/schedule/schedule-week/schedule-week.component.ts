@@ -59,6 +59,7 @@ const D_HOURS = 24;
     '[class.is-resizing-event]': 'isAnyEventResizing()',
     '[class]': 'dragEventTypeClass()',
     '[attr.data-horizontal-scroll]': 'isHorizontalScrollMode() || null',
+    '[attr.data-hscrolled]': 'isHScrolled() || null',
   },
 })
 export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -68,6 +69,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
 
   isInPanel = input<boolean>(false);
   isHorizontalScrollMode = input<boolean>(false);
+  isHScrolled = input<boolean>(false);
   events = input<ScheduleEvent[] | null>([]);
   beyondBudget = input<ScheduleEvent[][] | null>([]);
   daysToShow = input<string[]>([]);

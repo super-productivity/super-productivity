@@ -249,6 +249,21 @@
     </button>
   }
 
+  @if (!task.subTaskIds.length) {
+    <button
+      #estimateMenuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="estimateMenu"
+      mat-menu-item
+      [menuTouchFix]="estimateMenuTrigger"
+    >
+      <span class="menuItemLeft">
+        <mat-icon>hourglass_empty</mat-icon>
+        {{ T.F.TASK.CMP.ESTIMATE | translate }}
+      </span>
+      <span class="key-i">{{ kb.taskOpenEstimationDialog }}</span>
+    </button>
+  }
+
   <button
     [matMenuTriggerFor]="tagMenu"
     mat-menu-item
@@ -304,6 +319,45 @@
     </span>
     <span class="key-i">{{ kb.taskDelete }}</span>
   </button>
+</mat-menu>
+
+<mat-menu
+  #estimateMenu="matMenu"
+  (closed)="focusRelatedTaskOrNext()"
+>
+  <ng-template matMenuContent>
+    @for (option of ESTIMATE_OPTIONS; track option.value) {
+      <button
+        mat-menu-item
+        menuTouchFix
+        (click)="setEstimate(option.ms)"
+      >
+        @if (option.ms === task.timeEstimate) {
+          <mat-icon>check</mat-icon>
+        }
+        {{ option.label }}
+      </button>
+    }
+    <mat-divider></mat-divider>
+    <button
+      mat-menu-item
+      menuTouchFix
+      (click)="estimateTime()"
+    >
+      <mat-icon>tune</mat-icon>
+      {{ T.F.TASK.CMP.CUSTOM_ESTIMATE | translate }}
+    </button>
+    @if (task.timeEstimate > 0) {
+      <button
+        mat-menu-item
+        menuTouchFix
+        (click)="setEstimate(0)"
+      >
+        <mat-icon>clear</mat-icon>
+        {{ T.F.TASK.CMP.CLEAR_ESTIMATE | translate }}
+      </button>
+    }
+  </ng-template>
 </mat-menu>
 
 <mat-menu

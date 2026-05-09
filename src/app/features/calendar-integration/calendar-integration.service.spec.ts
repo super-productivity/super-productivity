@@ -1,4 +1,10 @@
-import { TestBed, fakeAsync, tick, discardPeriodicTasks } from '@angular/core/testing';
+import {
+  TestBed,
+  fakeAsync,
+  tick,
+  discardPeriodicTasks,
+  flushMicrotasks,
+} from '@angular/core/testing';
 import {
   HttpClientTestingModule,
   HttpTestingController,
@@ -24,6 +30,12 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
 import { PluginHttpService } from '../../plugins/issue-provider/plugin-http.service';
 import { IssueProviderPluginType } from '../issue/issue.model';
 import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
+// Static import forces ical.js into the main test bundle so the dynamic
+// import() inside loadIcalModule resolves from the webpack module cache
+// without a JSONP chunk request — which times out in Karma's test runner.
+import 'ical.js';
+import { loadIcalModule } from '../schedule/ical/ical-lazy-loader';
+import { CalendarIntegrationEvent } from './calendar-integration.model';
 
 describe('CalendarIntegrationService', () => {
   let service: CalendarIntegrationService;
@@ -165,24 +177,33 @@ END:VCALENDAR`;
         discardPeriodicTasks();
       }));
 
-      it('should filter out past events from cache', fakeAsync(() => {
+      it('should filter out events older than one week from cache', fakeAsync(() => {
+        const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
         const cachedData = [
           {
             items: [
               {
-                id: 'past-event',
+                id: 'old-event',
                 calProviderId: 'provider-1',
                 issueProviderKey: 'ICAL',
-                title: 'Past Event',
+                title: 'Old Event',
+                start: Date.now() - ONE_WEEK - 7200000, // more than 1 week ago
+                duration: 3600000,
+              },
+              {
+                id: 'recent-past-event',
+                calProviderId: 'provider-1',
+                issueProviderKey: 'ICAL',
+                title: 'Recent Past Event',
                 start: Date.now() - 7200000, // 2 hours ago
-                duration: 3600000, // 1 hour - so end is 1 hour ago
+                duration: 3600000,
               },
               {
                 id: 'future-event',
                 calProviderId: 'provider-1',
                 issueProviderKey: 'ICAL',
                 title: 'Future Event',
-                start: Date.now() + 60000, // Future event
+                start: Date.now() + 60000,
                 duration: 3600000,
               },
             ],
@@ -199,9 +220,10 @@ END:VCALENDAR`;
         subscriptions.push(sub);
 
         tick(0);
-        // Should only have the future event
-        expect((emittedValue as any[])[0].items.length).toBe(1);
-        expect((emittedValue as any[])[0].items[0].id).toBe('future-event');
+        // Old event (> 1 week) is filtered; recent past and future events are kept
+        expect((emittedValue as any[])[0].items.length).toBe(2);
+        expect((emittedValue as any[])[0].items[0].id).toBe('recent-past-event');
+        expect((emittedValue as any[])[0].items[1].id).toBe('future-event');
         discardPeriodicTasks();
       }));
     });
@@ -616,6 +638,90 @@ END:VCALENDAR`;
   });
 
   describe('requestEvents$', () => {
+    // iCal fixture with a single event on 2026-05-14 (inside any reasonable test window).
+    const MOCK_ICAL_NEAR_FUTURE = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'DTSTART:20260514T100000Z',
+      'DTEND:20260514T110000Z',
+      'SUMMARY:Near Future Test Event',
+      'UID:near-future-1',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const FIXTURE_START = new Date('2026-01-01').getTime();
+    const FIXTURE_END = new Date('2027-01-01').getTime();
+
+    // Pre-load the ical.js module before each stamping test so that the
+    // module-level cache in ical-lazy-loader is warm.  Once warm, calls to
+    // loadIcalModule() return a synchronously-resolved Promise that
+    // flushMicrotasks() can drain inside fakeAsync.
+    beforeEach(async () => {
+      await loadIcalModule();
+    });
+
+    const requestAndFlush = (
+      provider: IssueProviderCalendar,
+    ): CalendarIntegrationEvent[] => {
+      let result: CalendarIntegrationEvent[] = [];
+      service.requestEvents$(provider, FIXTURE_START, FIXTURE_END).subscribe((v) => {
+        result = v;
+      });
+      httpMock.expectOne(provider.icalUrl).flush(MOCK_ICAL_NEAR_FUTURE);
+      // Drain the Promise microtasks from the async ICAL parser
+      flushMicrotasks();
+      return result;
+    };
+
+    describe('isReferenceCalendar stamping', () => {
+      it('should stamp isReferenceCalendar: true on every event when provider is a reference calendar', fakeAsync(() => {
+        const result = requestAndFlush(createMockProvider({ isReferenceCalendar: true }));
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => expect((ev as any).isReferenceCalendar).toBe(true));
+      }));
+
+      it('should not set isReferenceCalendar on events from a regular provider', fakeAsync(() => {
+        const result = requestAndFlush(
+          createMockProvider({ isReferenceCalendar: false }),
+        );
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => expect((ev as any).isReferenceCalendar).toBeFalsy());
+      }));
+
+      it('should not set isReferenceCalendar when provider flag is absent', fakeAsync(() => {
+        const result = requestAndFlush(createMockProvider());
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => expect((ev as any).isReferenceCalendar).toBeFalsy());
+      }));
+    });
+
+    describe('color stamping', () => {
+      it('should stamp color on every event when the provider has a color configured', fakeAsync(() => {
+        const result = requestAndFlush(createMockProvider({ color: '#4caf50' }));
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => expect((ev as any).color).toBe('#4caf50'));
+      }));
+
+      it('should not add a color property when the provider has no color configured', fakeAsync(() => {
+        const result = requestAndFlush(createMockProvider({ color: undefined }));
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => expect((ev as any).color).toBeFalsy());
+      }));
+
+      it('should stamp both color and isReferenceCalendar when both are set', fakeAsync(() => {
+        const result = requestAndFlush(
+          createMockProvider({ color: '#ff5722', isReferenceCalendar: true }),
+        );
+        expect(result.length).toBeGreaterThan(0);
+        result.forEach((ev) => {
+          expect((ev as any).color).toBe('#ff5722');
+          expect((ev as any).isReferenceCalendar).toBe(true);
+        });
+      }));
+    });
+
     it('should fetch events from provider URL', fakeAsync(() => {
       const mockProvider = createMockProvider();
 

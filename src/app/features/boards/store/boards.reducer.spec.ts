@@ -5,7 +5,13 @@ import {
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
 } from '../boards.model';
-import { boardsReducer, BoardsState, deduplicatePanelIds } from './boards.reducer';
+import {
+  boardsReducer,
+  BoardsState,
+  deduplicatePanelIds,
+  fixBuggyDefaultBoardFilters,
+} from './boards.reducer';
+import { IN_PROGRESS_TAG } from '../../tag/tag.const';
 import { BoardsActions } from './boards.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { AppDataComplete } from '../../../op-log/model/model-config';
@@ -262,5 +268,175 @@ describe('Boards Reducer - panel cfg sanitization', () => {
     expect(panel.sortBy).toBe('dueDate');
     expect(panel.sortDir).toBe('desc');
     expect('sortByDue' in panel).toBe(false);
+  });
+});
+
+describe('fixBuggyDefaultBoardFilters (#7498)', () => {
+  const eisenhowerPanelIds = [
+    'URGENT_AND_IMPORTANT',
+    'NOT_URGENT_AND_IMPORTANT',
+    'URGENT_AND_NOT_IMPORTANT',
+    'NOT_URGENT_AND_NOT_IMPORTANT',
+  ];
+
+  it('flips taskDoneState UnDone → All on the four default Eisenhower quadrants', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'EISENHOWER_MATRIX',
+          panels: eisenhowerPanelIds.map((id) =>
+            makePanel({ id, taskDoneState: BoardPanelCfgTaskDoneState.UnDone }),
+          ),
+        }),
+      ],
+    };
+
+    const result = fixBuggyDefaultBoardFilters(state);
+
+    for (const panel of result.boardCfgs[0].panels) {
+      expect(panel.taskDoneState).toBe(BoardPanelCfgTaskDoneState.All);
+    }
+  });
+
+  it('does not touch Eisenhower panels with non-default IDs (user customization)', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'EISENHOWER_MATRIX',
+          panels: [
+            makePanel({
+              id: 'CUSTOM_PANEL',
+              taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+            }),
+          ],
+        }),
+      ],
+    };
+
+    const result = fixBuggyDefaultBoardFilters(state);
+
+    expect(result).toBe(state);
+    expect(result.boardCfgs[0].panels[0].taskDoneState).toBe(
+      BoardPanelCfgTaskDoneState.UnDone,
+    );
+  });
+
+  it('does not touch Eisenhower panels already set to All (idempotent)', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'EISENHOWER_MATRIX',
+          panels: eisenhowerPanelIds.map((id) =>
+            makePanel({ id, taskDoneState: BoardPanelCfgTaskDoneState.All }),
+          ),
+        }),
+      ],
+    };
+
+    const result = fixBuggyDefaultBoardFilters(state);
+
+    expect(result).toBe(state);
+  });
+
+  it('does not touch a Done-state Eisenhower panel (user-added Done quadrant)', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'EISENHOWER_MATRIX',
+          panels: [
+            makePanel({
+              id: 'URGENT_AND_IMPORTANT',
+              taskDoneState: BoardPanelCfgTaskDoneState.Done,
+            }),
+          ],
+        }),
+      ],
+    };
+
+    const result = fixBuggyDefaultBoardFilters(state);
+
+    expect(result).toBe(state);
+  });
+
+  it('strips IN_PROGRESS_TAG from the Kanban DONE panel excludedTagIds', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'KANBAN_DEFAULT',
+          panels: [
+            makePanel({
+              id: 'DONE',
+              excludedTagIds: [IN_PROGRESS_TAG.id, 'OTHER_TAG'],
+            }),
+          ],
+        }),
+      ],
+    };
+
+    const result = fixBuggyDefaultBoardFilters(state);
+
+    expect(result.boardCfgs[0].panels[0].excludedTagIds).toEqual(['OTHER_TAG']);
+  });
+
+  it('does not touch Kanban DONE if IN_PROGRESS_TAG already absent (idempotent)', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'KANBAN_DEFAULT',
+          panels: [makePanel({ id: 'DONE', excludedTagIds: [] })],
+        }),
+      ],
+    };
+
+    const result = fixBuggyDefaultBoardFilters(state);
+
+    expect(result).toBe(state);
+  });
+
+  it('does not touch a panel named DONE on a non-Kanban board', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'CUSTOM_BOARD',
+          panels: [makePanel({ id: 'DONE', excludedTagIds: [IN_PROGRESS_TAG.id] })],
+        }),
+      ],
+    };
+
+    const result = fixBuggyDefaultBoardFilters(state);
+
+    expect(result).toBe(state);
+  });
+
+  it('migrates both Eisenhower and Kanban defaults in one pass', () => {
+    const state: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'EISENHOWER_MATRIX',
+          panels: [
+            makePanel({
+              id: 'URGENT_AND_IMPORTANT',
+              taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+            }),
+          ],
+        }),
+        makeBoard({
+          id: 'KANBAN_DEFAULT',
+          panels: [
+            makePanel({
+              id: 'DONE',
+              excludedTagIds: [IN_PROGRESS_TAG.id],
+            }),
+          ],
+        }),
+      ],
+    };
+
+    const result = fixBuggyDefaultBoardFilters(state);
+
+    expect(result.boardCfgs[0].panels[0].taskDoneState).toBe(
+      BoardPanelCfgTaskDoneState.All,
+    );
+    expect(result.boardCfgs[1].panels[0].excludedTagIds).toEqual([]);
   });
 });

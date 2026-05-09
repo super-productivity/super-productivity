@@ -6,6 +6,7 @@ import { Tag, TagState } from './tag.model';
 import { DEFAULT_TAG } from './tag.const';
 import { deleteTag, deleteTags, updateTag, updateTagOrder } from './store/tag.actions';
 import { selectAllTags, selectTagById, selectTagsByIds } from './store/tag.reducer';
+import { PRESET_COLORS } from '../work-context/work-context-color';
 
 describe('TagService', () => {
   let service: TagService;
@@ -251,10 +252,11 @@ describe('TagService', () => {
       expect(tag.color).toBe('#abcdef');
     });
 
-    it('should use null color if not provided', () => {
+    it('should assign a random preset color to tag.color if not provided', () => {
       const tag = service.createTagObject({ title: 'No Color' });
 
-      expect(tag.color).toBeNull();
+      expect(tag.color).not.toBeNull();
+      expect(PRESET_COLORS).toContain(tag.color as string);
     });
 
     it('should merge additional properties', () => {

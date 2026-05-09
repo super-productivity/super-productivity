@@ -5,6 +5,7 @@
   <string name="webview_block_detected_major">Detected Chromium major version: %1$d</string>
   <string name="webview_block_detected_full">Detected WebView version: %1$s</string>
   <string name="webview_block_provider">Provider package: %1$s</string>
+  <string name="webview_block_source">Detection source: %1$s</string>
   <string name="webview_block_update">Update WebView</string>
   <string name="webview_block_close">Close app</string>
   <string name="webview_block_try_anyway">Try anyway (not recommended)</string>

@@ -181,6 +181,10 @@ export class TaskElectronEffects {
     () =>
       this._actions$.pipe(
         ofType(TimeTrackingActions.addTimeSpent),
+        // The OS taskbar progress bar moves imperceptibly per second; throttling
+        // collapses 1 IPC/sec into ~1 IPC/3s. Leading+trailing keeps the first
+        // tick after start instant and the final value at the end of a window.
+        throttleTime(3000, undefined, { leading: true, trailing: true }),
         withLatestFrom(this._store$.select(selectIsOverlayShown)),
         // Don't show progress bar when focus session is running
         filter(([a, isFocusSessionRunning]) => !isFocusSessionRunning),

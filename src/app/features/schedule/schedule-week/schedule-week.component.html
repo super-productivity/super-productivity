@@ -20,6 +20,9 @@
   (click)="onGridClick($event)"
   (mousemove)="onMoveOverGrid($event)"
 >
+  <!-- Sticky background strip behind the time column (only when horizontally scrolled) -->
+  <div class="time-column-bg"></div>
+
   <!-- Time -->
   @for (time of times(); track $index) {
     <div

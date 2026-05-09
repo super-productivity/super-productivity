@@ -10,26 +10,21 @@ import { TASK_FEATURE_NAME } from '../../tasks/store/task.reducer';
 import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 
+// Helper to create a timestamp for a specific day at noon local time
+const getLocalNoon = (year: number, month: number, day: number): number => {
+  return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
+};
+
+// Helper to create a timestamp for a specific day at a given hour local time
+const getLocalTime = (year: number, month: number, day: number, hour: number): number => {
+  return new Date(year, month - 1, day, hour, 0, 0, 0).getTime();
+};
+
 // Helper to test getIcalEventsForDay logic
 // Since it's a private function, we test it through selectPlannerDays behavior
 // For now, we test the separation logic directly
 
 describe('Planner Selectors - All Day Events', () => {
-  // Helper to create a timestamp for a specific day at noon local time
-  const getLocalNoon = (year: number, month: number, day: number): number => {
-    return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
-  };
-
-  // Helper to create a timestamp for a specific day at a given hour local time
-  const getLocalTime = (
-    year: number,
-    month: number,
-    day: number,
-    hour: number,
-  ): number => {
-    return new Date(year, month - 1, day, hour, 0, 0, 0).getTime();
-  };
-
   // Replicate the getIcalEventsForDay logic for testing
   const getIcalEventsForDay = (
     calendarEvents: ScheduleCalendarMapEntry[],
@@ -319,6 +314,12 @@ describe('Planner Selectors - All Day Events', () => {
 describe('Planner Selectors - selectPlannerDays', () => {
   const today = getDbDateStr();
 
+  // Helper to create a local timestamp for today at a specific hour
+  const todayAtHour = (hour: number): number => {
+    const [y, m, d] = today.split('-').map(Number);
+    return new Date(y, m - 1, d, hour, 0, 0, 0).getTime();
+  };
+
   const createMockTask = (overrides: Partial<Task> & { id: string }): Task => {
     const { id, ...rest } = overrides;
     return {
@@ -496,6 +497,157 @@ describe('Planner Selectors - selectPlannerDays', () => {
     );
 
     expect(result[0].tasks.length).toBe(0);
+  });
+
+  it('should include calendar event durations in timeEstimate for timed events', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+
+    // Create a timed calendar event (2 hours = 7200000 ms)
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      {
+        items: [
+          {
+            id: 'timed-cal-event',
+            calProviderId: 'provider-1',
+            issueProviderKey: 'ICAL',
+            title: 'Timed Meeting',
+            start: todayAtHour(10),
+            duration: 7200000, // 2 hours
+          },
+        ],
+      },
+    ];
+
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      [],
+      calendarEvents,
+      [],
+      today,
+    );
+    const result = selector.projector(
+      emptyTaskState,
+      emptyPlannerState,
+      scheduleConfig,
+      0,
+    );
+
+    // timeEstimate should include the timed event duration (7200000 ms = 2 hours)
+    expect(result[0].timeEstimate).toBe(7200000);
+    // availableHours = 8 hours = 28800000 ms
+    expect(result[0].availableHours).toBe(28800000);
+    // progressPercentage = (7200000 / 28800000) * 100 = 25%
+    expect(result[0].progressPercentage).toBe(25);
+  });
+
+  it('should NOT include all-day event durations in timeEstimate', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+
+    // Create an all-day event (24 hours = 86400000 ms)
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      {
+        items: [
+          {
+            id: 'all-day-event',
+            calProviderId: 'provider-1',
+            issueProviderKey: 'ICAL',
+            title: 'All Day Conference',
+            start: todayAtHour(12),
+            duration: 86400000, // 24 hours
+            isAllDay: true,
+          },
+        ],
+      },
+    ];
+
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      [],
+      calendarEvents,
+      [],
+      today,
+    );
+    const result = selector.projector(
+      emptyTaskState,
+      emptyPlannerState,
+      scheduleConfig,
+      0,
+    );
+
+    // timeEstimate should NOT include all-day events (they use raw 24h duration)
+    // so it should be 0 when there are no timed events
+    expect(result[0].timeEstimate).toBe(0);
+  });
+
+  it('should combine task time estimates with calendar event durations', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+
+    const task = createMockTask({
+      id: 't1',
+      title: 'Task with estimate',
+      timeEstimate: 3600000,
+    }); // 1 hour
+    const taskState: TaskState = {
+      ...emptyTaskState,
+      ids: ['t1'],
+      entities: { t1: task },
+    };
+    const plannerState: PlannerState = {
+      ...emptyPlannerState,
+      days: { [today]: ['t1'] },
+    };
+
+    // Create a timed calendar event (2 hours = 7200000 ms)
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      {
+        items: [
+          {
+            id: 'timed-cal-event',
+            calProviderId: 'provider-1',
+            issueProviderKey: 'ICAL',
+            title: 'Timed Meeting',
+            start: todayAtHour(10),
+            duration: 7200000, // 2 hours
+          },
+        ],
+      },
+    ];
+
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      ['t1'],
+      calendarEvents,
+      [],
+      today,
+    );
+    const result = selector.projector(taskState, plannerState, scheduleConfig, 0);
+
+    // timeEstimate = task (3600000) + timed event (7200000) = 10800000 ms = 3 hours
+    expect(result[0].timeEstimate).toBe(10800000);
   });
 });
 

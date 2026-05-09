@@ -42,7 +42,7 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
               : '../dist/static/break-reminder-overlay.html',
           ),
         )}` +
-          `#msg=${encodeURI(msg)}&img=${encodeURI(randomImgUrl)}&time=${
+          `#msg=${encodeURIComponent(msg)}&img=${encodeURIComponent(randomImgUrl ?? '')}&time=${
             takeABreakCfg.timedFullScreenBlockerDuration
           }`,
       );

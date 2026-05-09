@@ -6,12 +6,15 @@
   --split-extra-border-radius: 20px;
   --margin-bottom: 6px;
   --margin-right: 10px;
+  // Small left margin so events don't sit flush against the day column's
+  // left edge (and, for the first day, the sticky time column).
+  --margin-left: 4px;
   --offset: 20px;
   --offset-short-event: 15px;
   --standard-border-radius: 6px;
 
   border-radius: var(--standard-border-radius);
-  margin: 0 var(--margin-right) var(--margin-bottom) 0;
+  margin: 0 var(--margin-right) var(--margin-bottom) var(--margin-left);
   scroll-margin-top: 120px;
   scroll-padding-top: 120px;
   line-height: 1;
@@ -119,7 +122,19 @@
   }
 
   &.CalendarEvent {
-    @include extraBorder('-left');
+    border-left: 3px solid var(--project-color, var(--extra-border-color));
+  }
+
+  &.CalendarEvent.is-reference-calendar {
+    border-style: solid;
+    opacity: 0.55;
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      rgba(128, 128, 128, 0.08) 4px,
+      rgba(128, 128, 128, 0.08) 8px
+    );
   }
 
   &.ScheduledRepeatProjection .ico {

@@ -4,9 +4,10 @@
       mat-icon-button
       class="week-month-btn"
       [class.active]="!isMonthView()"
+      [attr.aria-pressed]="!isMonthView()"
       (click)="selectTimeView('week')"
-      matTooltip="View Week"
-      aria-label="View Week"
+      [matTooltip]="T.F.SCHEDULE.VIEW_WEEK | translate"
+      [attr.aria-label]="T.F.SCHEDULE.VIEW_WEEK | translate"
     >
       <mat-icon>view_week</mat-icon>
     </button>
@@ -14,21 +15,66 @@
       mat-icon-button
       class="week-month-btn"
       [class.active]="isMonthView()"
+      [attr.aria-pressed]="isMonthView()"
       (click)="selectTimeView('month')"
-      matTooltip="View Month"
-      aria-label="View Month"
+      [matTooltip]="T.F.SCHEDULE.VIEW_MONTH | translate"
+      [attr.aria-label]="T.F.SCHEDULE.VIEW_MONTH | translate"
     >
       <mat-icon>calendar_month</mat-icon>
     </button>
   </div>
+
+  @if (showCalFilterBtn()) {
+    <button
+      mat-icon-button
+      [matMenuTriggerFor]="calFilterMenu"
+      [matTooltip]="T.F.SCHEDULE.CALENDAR_VISIBILITY | translate"
+      [attr.aria-label]="T.F.SCHEDULE.CALENDAR_VISIBILITY | translate"
+    >
+      <mat-icon>event_note</mat-icon>
+    </button>
+    <mat-menu #calFilterMenu="matMenu">
+      <ng-template matMenuContent>
+        <div (click)="$event.stopPropagation()">
+          @for (provider of enabledCalendarProviders(); track provider.id) {
+            <button
+              mat-menu-item
+              role="menuitemcheckbox"
+              [attr.aria-checked]="!hiddenCalendarProviderIds().includes(provider.id)"
+              (click)="toggleCalProvider(provider.id)"
+            >
+              @if (hiddenCalendarProviderIds().includes(provider.id)) {
+                <mat-icon>check_box_outline_blank</mat-icon>
+              } @else {
+                <mat-icon>check_box</mat-icon>
+              }
+              @if (provider.color) {
+                <span
+                  class="cal-color-dot"
+                  [style.background]="provider.color"
+                ></span>
+              }
+              {{ calProviderLabel(provider) }}
+            </button>
+          }
+        </div>
+      </ng-template>
+    </mat-menu>
+  }
 
   <div class="date-nav-group">
     <button
       mat-icon-button
       (click)="goToPreviousPeriod()"
       [disabled]="isViewingToday()"
-      [attr.aria-label]="isMonthView() ? 'Go to previous month' : 'Go to previous week'"
-      [matTooltip]="isMonthView() ? 'Previous Month' : 'Previous Week'"
+      [attr.aria-label]="
+        (isMonthView() ? T.F.SCHEDULE.PREVIOUS_MONTH : T.F.SCHEDULE.PREVIOUS_WEEK)
+          | translate
+      "
+      [matTooltip]="
+        (isMonthView() ? T.F.SCHEDULE.PREVIOUS_MONTH : T.F.SCHEDULE.PREVIOUS_WEEK)
+          | translate
+      "
     >
       <mat-icon>chevron_left</mat-icon>
     </button>
@@ -47,8 +93,12 @@
     <button
       mat-icon-button
       (click)="goToNextPeriod()"
-      [attr.aria-label]="isMonthView() ? 'Go to next month' : 'Go to next week'"
-      [matTooltip]="isMonthView() ? 'Next Month' : 'Next Week'"
+      [attr.aria-label]="
+        (isMonthView() ? T.F.SCHEDULE.NEXT_MONTH : T.F.SCHEDULE.NEXT_WEEK) | translate
+      "
+      [matTooltip]="
+        (isMonthView() ? T.F.SCHEDULE.NEXT_MONTH : T.F.SCHEDULE.NEXT_WEEK) | translate
+      "
     >
       <mat-icon>chevron_right</mat-icon>
     </button>
@@ -60,6 +110,7 @@
 <div
   class="scroll-wrapper"
   [attr.data-horizontal-scroll]="shouldEnableHorizontalScroll() || null"
+  (scroll)="onScrollWrapperScroll($event)"
 >
   @if (isMonthView()) {
     <schedule-month
@@ -77,6 +128,7 @@
       [currentTimeRow]="currentTimeRow()"
       [todayDateStr]="_todayDateStr()"
       [isHorizontalScrollMode]="shouldEnableHorizontalScroll()"
+      [isHScrolled]="isHScrolled()"
     ></schedule-week>
   }
 </div>

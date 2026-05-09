@@ -157,10 +157,15 @@ button.isActive2 {
   }
 
   > button.sync-btn .mat-icon:not(.sync-state-ico) {
-    font-size: 23px;
-    width: 23px;
-    height: 23px;
-    line-height: 23px;
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center center;
+    backface-visibility: hidden;
   }
 }
 
@@ -266,6 +271,7 @@ page-title {
 .spin {
   animation: spin 1.5s linear infinite;
   will-change: transform;
+  transform-origin: center center;
 }
 
 @keyframes spin {
@@ -318,30 +324,5 @@ page-title {
   @media (forced-colors: active) {
     outline: 2px solid CanvasText;
     outline-offset: -2px;
-  }
-}
-
-.focus-btn-wrapper {
-  position: relative;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-
-  button {
-    margin: 0;
-  }
-
-  .focus-label {
-    position: absolute;
-    line-height: 1;
-    padding: var(--s-quarter) var(--s-half) 1px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-weight: bold;
-    border-radius: 8px;
-    pointer-events: none;
-    bottom: calc(var(--s) * -0.25);
-    background: var(--bg-lighter);
-    color: var(--text-color-most-intense);
   }
 }

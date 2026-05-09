@@ -47,6 +47,11 @@ object WebViewCompatibilityChecker {
         PACKAGE,
         USER_AGENT,
         UNKNOWN,
+
+        // The WebView could not be instantiated at all (factory threw, bridge.webView
+        // null, etc.). Set by call sites that force BLOCK for non-version reasons so
+        // user screenshots distinguish "version too old" from "WebView refused to init".
+        INIT_FAILURE,
     }
 
     data class Result(
@@ -260,7 +265,8 @@ object WebViewCompatibilityChecker {
         return CHROME_REGEX.find(userAgent)?.groupValues?.getOrNull(1)?.toIntOrNull()
     }
 
-    private fun parseMajorVersion(versionName: String?): Int? {
+    @VisibleForTesting
+    internal fun parseMajorVersion(versionName: String?): Int? {
         if (versionName.isNullOrBlank()) {
             return null
         }

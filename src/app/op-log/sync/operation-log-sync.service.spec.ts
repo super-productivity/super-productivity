@@ -7,6 +7,7 @@ import { VectorClockService } from './vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { RepairOperationService } from '../validation/repair-operation.service';
 import { OperationLogUploadService } from './operation-log-upload.service';
 import { OperationLogDownloadService } from './operation-log-download.service';
@@ -510,6 +511,62 @@ describe('OperationLogSyncService', () => {
             [],
             jasmine.any(Function),
           );
+        });
+
+        // Issue #7330 follow-up: a download triggered from inside the
+        // rejected-op handler can run post-sync validation. If validation
+        // fails on that path, the boolean must surface through the eventual
+        // uploadPendingOps return — otherwise sync-wrapper reports IN_SYNC.
+        it('should surface validationFailed from a download triggered by handleRejectedOps callback', async () => {
+          uploadServiceSpy.uploadPendingOps.and.returnValue(
+            Promise.resolve({
+              uploadedCount: 0,
+              piggybackedOps: [],
+              rejectedCount: 1,
+              rejectedOps: [
+                {
+                  opId: 'local-op-1',
+                  error: 'Concurrent',
+                  errorCode: 'CONFLICT_CONCURRENT',
+                },
+              ],
+            }),
+          );
+
+          rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
+            async (_ops, callback) => {
+              // Real handler invokes the download callback for concurrent-mod
+              // resolution. The latch is flipped inside the nested download's
+              // validateAfterSync — here we just exercise the call.
+              await callback?.();
+              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+            },
+          );
+
+          // Simulate the nested download triggering validation failure by
+          // flipping the latch directly, which the real
+          // RemoteOpsProcessingService.validateAfterSync would do. The flow
+          // runs inside a withSession() in production (opened by the wrapper);
+          // mirror that here so setFailed() doesn't trip the no-session guard.
+          const latch = TestBed.inject(SyncSessionValidationService);
+          latch._resetForTest();
+          spyOn(service, 'downloadRemoteOps').and.callFake(async () => {
+            latch.setFailed();
+            return {
+              kind: 'ops_processed' as const,
+              newOpsCount: 1,
+              localWinOpsCreated: 0,
+            };
+          });
+
+          await latch.withSession(async () => {
+            await service.uploadPendingOps(mockProvider);
+          });
+
+          // The latch is the canonical signal that reaches the wrapper. The
+          // upload result no longer carries validationFailed — that field is
+          // gone (#7330 simplification).
+          expect(latch.hasFailed()).toBe(true);
         });
       });
     });
@@ -1753,6 +1810,50 @@ describe('OperationLogSyncService', () => {
 
       await expectAsync(service.forceDownloadRemoteState(mockProvider)).toBeRejectedWith(
         error,
+      );
+    });
+
+    // Issue #7330: post-sync validation failure must be surfaced so
+    // SyncWrapperService can refuse IN_SYNC. After the latch refactor,
+    // failure flows via SyncSessionValidationService rather than the return
+    // shape — but processRemoteOps is the layer that flips the latch via
+    // validateAfterSync. We assert here that forceDownloadRemoteState
+    // delegates through processRemoteOps, leaving the latch intact for the
+    // wrapper to read. (The flip itself is unit-tested in
+    // remote-ops-processing.service.spec.ts.)
+    it('forceDownloadRemoteState invokes processRemoteOps with skipConflictDetection', async () => {
+      const mockOps: Operation[] = [
+        {
+          id: 'op1',
+          actionType: 'ACTION' as ActionType,
+          opType: 'UPDATE' as OpType,
+          entityType: 'TASK',
+          entityId: 'task1',
+          payload: {},
+          clientId: 'remote',
+          vectorClock: {},
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ];
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: mockOps,
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        latestServerSeq: 1,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+        mockOps,
+        { skipConflictDetection: true },
       );
     });
   });

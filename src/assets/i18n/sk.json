@@ -176,10 +176,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Ako a kde hodnotiť",
-      "BTN_DONT_BOTHER": "Už ma neobťažuj",
-      "TITLE": "🙈 Prosím, odpusťte nám, ale...",
-      "TXT": "Projektu by ste nesmierne pomohli, keby ste mu <strong>dali dobré hodnotenie, ak sa vám páči!</strong>"
+      "A_HOW": "Ako hodnotiť",
+      "BTN_DONT_BOTHER": "Už sa nepýtať",
+      "BTN_FEEDBACK": "Poslať spätnú väzbu",
+      "BTN_LATER": "Možno neskôr",
+      "BTN_RATE_APP_STORE": "Ohodnotiť v App Store",
+      "BTN_RATE_PLAY_STORE": "Ohodnotiť v Play Store",
+      "FEEDBACK_BACK": "Späť",
+      "FEEDBACK_CONTRIBUTE": "Prispieť do projektu",
+      "FEEDBACK_CONTRIBUTE_DESC": "Kód, dizajn, preklady a viac",
+      "FEEDBACK_PRIVATE": "Napísať e-mail správcovi",
+      "FEEDBACK_PRIVATE_DESC": "Poslať súkromnú správu",
+      "FEEDBACK_PUBLIC": "Napísať na GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Ostatní vidia a môžu reagovať",
+      "FEEDBACK_TITLE": "Ako chcete pomôcť?",
+      "TITLE": "Páči sa vám Super Productivity?",
+      "TXT": "Je to <strong>bezplatný projekt s otvoreným zdrojovým kódom</strong> vytváraný nadšencami – žiadne sledovanie, žiadne reklamy. Hodnotenie alebo krátka správa pomáha, aby ho našlo viac ľudí."
     },
     "DROPBOX": {
       "S": {

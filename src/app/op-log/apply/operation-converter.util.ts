@@ -4,7 +4,10 @@ import {
   Operation,
   OpType,
 } from '../core/operation.types';
+import { isLwwUpdateActionType } from '../core/lww-update-action-types';
+import { isSingletonEntityId } from '../core/entity-registry';
 import { PersistentAction } from '../core/persistent-action.interface';
+import { SyncLog } from '../../core/log';
 
 /**
  * Maps old/renamed action types to their current names.
@@ -57,9 +60,41 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
   // Handle full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair) specially
   // These need their payload wrapped in appDataComplete for the loadAllData action
   const isFullStateOp = FULL_STATE_OP_TYPES.has(op.opType as OpType);
-  const actionPayload = isFullStateOp
+  let actionPayload: Record<string, unknown> = isFullStateOp
     ? extractFullStatePayload(op.payload)
-    : extractActionPayload(op.payload);
+    : (extractActionPayload(op.payload) as Record<string, unknown>);
+
+  // Force `payload.id = op.entityId` for non-singleton LWW Update ops. The
+  // op's `entityId` is the canonical identifier — producers also enforce
+  // this when creating ops, but a malformed/older remote op (or any path
+  // that ever drifts) could carry a payload.id that disagrees with
+  // op.entityId, in which case the consumer reducer at
+  // task-shared-meta-reducers/lww-update.meta-reducer.ts trusts payload.id
+  // and would update the WRONG entity. Forcing here makes "entityId is
+  // canonical" a hard invariant at the apply boundary regardless of
+  // producer or wire shape. Singletons use `SINGLETON_ENTITY_ID` and have
+  // no `id` field. Issue #7330.
+  if (
+    !isFullStateOp &&
+    isLwwUpdateActionType(actionType) &&
+    op.entityId &&
+    !isSingletonEntityId(op.entityId) &&
+    actionPayload &&
+    typeof actionPayload === 'object' &&
+    actionPayload['id'] !== op.entityId
+  ) {
+    // The hard rewrite is correct in direction (canonical entityId wins),
+    // but it silently fixes a producer/wire bug. Surface it so we can
+    // detect if the assumption ever breaks in production. Log only the
+    // ids — never the payload content (op log is exportable). #7330.
+    SyncLog.warn(`[convertOpToAction] payload.id mismatch — forcing to op.entityId`, {
+      actionType,
+      entityType: op.entityType,
+      entityId: op.entityId,
+      payloadId: actionPayload['id'],
+    });
+    actionPayload = { ...actionPayload, id: op.entityId };
+  }
 
   // IMPORTANT: Spread actionPayload FIRST, then set type, to prevent entity properties
   // named 'type' (like SimpleCounter.type = 'ClickCounter') from overwriting the action type.

@@ -49,6 +49,11 @@ import { plannerFeatureKey } from '../../features/planner/store/planner.reducer'
 import { BOARDS_FEATURE_NAME } from '../../features/boards/store/boards.reducer';
 import { menuTreeFeatureKey } from '../../features/menu-tree/store/menu-tree.reducer';
 import { REMINDER_FEATURE_NAME } from '../../features/reminder/store/reminder.reducer';
+import {
+  SECTION_FEATURE_NAME,
+  adapter as sectionAdapter,
+  selectEntities as selectSectionEntitiesFromAdapter,
+} from '../../features/section/store/section.reducer';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTS - Selectors
@@ -101,6 +106,10 @@ import {
   selectContextFeatureState,
   WORK_CONTEXT_FEATURE_NAME,
 } from '../../features/work-context/store/work-context.selectors';
+import {
+  selectSectionFeatureState,
+  selectSectionById,
+} from '../../features/section/store/section.selectors';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -273,6 +282,18 @@ export const ENTITY_CONFIGS = {
     selectById: selectIssueProviderById,
   },
 
+  SECTION: {
+    storagePattern: 'adapter',
+    featureName: SECTION_FEATURE_NAME,
+    payloadKey: 'section',
+    adapter: sectionAdapter,
+    selectEntities: createSelector(
+      selectSectionFeatureState,
+      selectSectionEntitiesFromAdapter,
+    ),
+    selectById: selectSectionById,
+  },
+
   // ── SINGLETON ENTITIES ─────────────────────────────────────────────────────
   GLOBAL_CONFIG: {
     storagePattern: 'singleton',
@@ -351,6 +372,19 @@ export const getEntityConfig = (entityType: EntityType): EntityConfig | undefine
 
 export const getPayloadKey = (entityType: EntityType): string | undefined =>
   ENTITY_CONFIGS[entityType]?.payloadKey;
+
+/**
+ * Sentinel `entityId` value used for singleton entities (`globalConfig`,
+ * `metric`, etc.). These have no per-entity primary key, so the op-log
+ * uses `'*'` to denote "the one and only" instance.
+ *
+ * Used wherever singleton ops need to be distinguished from adapter ops,
+ * e.g. when conditionally injecting `id` into LWW payloads.
+ */
+export const SINGLETON_ENTITY_ID = '*' as const;
+
+export const isSingletonEntityId = (entityId: string | null | undefined): boolean =>
+  entityId === SINGLETON_ENTITY_ID;
 
 export const isAdapterEntity = (config: EntityConfig): boolean =>
   config.storagePattern === 'adapter';

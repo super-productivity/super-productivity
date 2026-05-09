@@ -189,11 +189,10 @@ export class FocusModeMainComponent {
   );
   isPomodoro = computed(() => this.mode() === FocusModeMode.Pomodoro);
 
-  // Play button should be disabled when sync with tracking is enabled but no task is selected
-  isPlayButtonDisabled = computed(() => {
-    const config = this.focusModeConfig();
-    return config?.isSyncSessionWithTracking && !this.currentTask();
-  });
+  // Play button should be disabled when no task is selected.
+  // Sync between focus session and tracking is always on, so starting a session
+  // without a task would leave tracking with nothing to bind to.
+  isPlayButtonDisabled = computed(() => !this.currentTask());
 
   // Mode selector options
   readonly modeOptions: ReadonlyArray<SegmentedButtonOption> = [
@@ -376,8 +375,9 @@ export class FocusModeMainComponent {
   startSession(): void {
     const config = this.focusModeConfig();
 
-    // If sync with tracking is enabled, require a task to be selected
-    if (config?.isSyncSessionWithTracking && !this.currentTask()) {
+    // Sync between focus session and tracking is always on — require a task
+    // before starting so tracking has something to bind to.
+    if (!this.currentTask()) {
       this.openTaskSelector();
       return;
     }
