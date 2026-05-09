@@ -231,22 +231,16 @@ export class TaskRepeatCfgService {
 
     // If waitForCompletion is enabled, only create the next task after the previous one is completed
     if (taskRepeatCfg.waitForCompletion) {
-      // Check if there are any uncompleted instances of this repeat config
-      const hasUncompletedInstances = existingTaskInstances.some((task) => !task.isDone);
+      // Check both live and archived instances for uncompleted tasks
+      const archivedInstances = await this._taskService.getArchiveTasksForRepeatCfgId(
+        taskRepeatCfg.id,
+      );
+      const allInstances = [...existingTaskInstances, ...archivedInstances];
+      const hasUncompletedInstances = allInstances.some((task) => !task.isDone);
       if (hasUncompletedInstances) {
         // Don't create the next task yet; wait for completion of the current instance
-        // But advance lastTaskCreationDay to avoid re-evaluating the same date on every app open
-        return [
-          updateTaskRepeatCfg({
-            taskRepeatCfg: {
-              id: taskRepeatCfg.id,
-              changes: {
-                lastTaskCreation: targetCreated.getTime(),
-                lastTaskCreationDay: targetDateStr,
-              },
-            },
-          }),
-        ];
+        // IMPORTANT: Do NOT update lastTaskCreationDay here - we haven't processed this occurrence
+        return [];
       }
     }
     // If skipOverdue is enabled, silently skip instances that are in the past (before today).

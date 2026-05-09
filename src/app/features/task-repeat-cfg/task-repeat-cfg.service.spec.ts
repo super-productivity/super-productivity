@@ -75,6 +75,7 @@ describe('TaskRepeatCfgService', () => {
       'createNewTaskWithDefaults',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getTasksByRepeatCfgId$',
+      'getArchiveTasksForRepeatCfgId',
     ]);
     const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
       activeWorkContextType: WorkContextType.PROJECT,
@@ -1509,7 +1510,6 @@ describe('TaskRepeatCfgService', () => {
     it('should block task creation when prior instance is uncompleted', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
-      const todayStr = formatIsoDate(today);
 
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
@@ -1532,18 +1532,15 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask]),
       );
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithWaitForCompletion,
         targetDayDate,
       );
 
-      // Should return only updateTaskRepeatCfg to advance lastTaskCreationDay
-      expect(actions.length).toBe(1);
-      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
-      const updateAction = actions[0] as ReturnType<typeof updateTaskRepeatCfg>;
-      expect(updateAction.taskRepeatCfg.changes.lastTaskCreationDay).toBe(todayStr);
-      expect(updateAction.taskRepeatCfg.changes.lastTaskCreation).toBeDefined();
+      // Should return empty array - cursor does NOT advance when blocked
+      expect(actions).toEqual([]);
     });
 
     it('should create task when prior instance is completed', async () => {
@@ -1569,6 +1566,7 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -1599,6 +1597,7 @@ describe('TaskRepeatCfgService', () => {
 
       // No prior instances exist
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -1615,7 +1614,6 @@ describe('TaskRepeatCfgService', () => {
     it('should work with repeatFromCompletionDate when both flags are enabled', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
-      const todayStr = formatIsoDate(today);
 
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
@@ -1639,17 +1637,15 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask]),
       );
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithBothFlags,
         targetDayDate,
       );
 
-      // Should block creation and advance lastTaskCreationDay
-      expect(actions.length).toBe(1);
-      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
-      const updateAction = actions[0] as ReturnType<typeof updateTaskRepeatCfg>;
-      expect(updateAction.taskRepeatCfg.changes.lastTaskCreationDay).toBe(todayStr);
+      // Should block creation - cursor does NOT advance when blocked
+      expect(actions).toEqual([]);
     });
 
     it('should create task when both flags enabled and prior is completed', async () => {
@@ -1676,6 +1672,7 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -1724,6 +1721,7 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask1, uncompletedTask2]),
       );
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithWaitForCompletion,
@@ -1731,14 +1729,12 @@ describe('TaskRepeatCfgService', () => {
       );
 
       // Should block creation because at least one uncompleted instance exists
-      expect(actions.length).toBe(1);
-      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+      expect(actions).toEqual([]);
     });
 
-    it('should advance lastTaskCreationDay even when blocked to prevent re-evaluation', async () => {
+    it('should check archived instances when determining if blocked', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
-      const todayStr = formatIsoDate(today);
 
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
@@ -1749,19 +1745,18 @@ describe('TaskRepeatCfgService', () => {
         startDate: yesterdayStr,
         lastTaskCreationDay: yesterdayStr,
         waitForCompletion: true,
-        repeatEvery: 1,
-        repeatCycle: 'DAILY',
       };
 
-      // Uncompleted task exists
-      const uncompletedTask: TaskWithSubTasks = {
+      // No live instances, but archived uncompleted task exists
+      const archivedUncompletedTask: TaskWithSubTasks = {
         ...mockTaskWithSubTasks,
         id: getRepeatableTaskId(cfgWithWaitForCompletion.id, yesterdayStr),
         created: yesterday.getTime(),
         isDone: false,
       };
-      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
-        of([uncompletedTask]),
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([archivedUncompletedTask]),
       );
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -1769,17 +1764,50 @@ describe('TaskRepeatCfgService', () => {
         targetDayDate,
       );
 
-      // Verify lastTaskCreationDay is advanced
-      expect(actions.length).toBe(1);
-      const updateAction = actions[0] as ReturnType<typeof updateTaskRepeatCfg>;
-      expect(updateAction.taskRepeatCfg.changes.lastTaskCreationDay).toBe(todayStr);
-      expect(updateAction.taskRepeatCfg.changes.lastTaskCreation).toBeDefined();
+      // Should block creation because archived uncompleted instance exists
+      expect(actions).toEqual([]);
+      expect(taskService.getArchiveTasksForRepeatCfgId).toHaveBeenCalledWith(
+        cfgWithWaitForCompletion.id,
+      );
+    });
 
-      // Verify the timestamp represents today
-      const updatedTimestamp = updateAction.taskRepeatCfg.changes
-        .lastTaskCreation as number;
-      const updatedDate = new Date(updatedTimestamp);
-      expect(formatIsoDate(updatedDate)).toBe(todayStr);
+    it('should create task when archived instance is completed', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const cfgWithWaitForCompletion: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: yesterdayStr,
+        lastTaskCreationDay: yesterdayStr,
+        waitForCompletion: true,
+      };
+
+      // Archived completed task exists
+      const archivedCompletedTask: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithWaitForCompletion.id, yesterdayStr),
+        created: yesterday.getTime(),
+        isDone: true,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([archivedCompletedTask]),
+      );
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithWaitForCompletion,
+        targetDayDate,
+      );
+
+      // Should create new task (addTask + updateTaskRepeatCfg)
+      expect(actions.length).toBe(2);
+      expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
+      expect(actions[1].type).toBe(updateTaskRepeatCfg.type);
     });
   });
 

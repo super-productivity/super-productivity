@@ -553,23 +553,34 @@ export class TaskRepeatCfgEffects {
           (cfg.repeatFromCompletionDate === true || cfg.waitForCompletion === true),
       ),
       filter(({ task, cfg }) => this._isLatestInstance(task, cfg)),
-      map(({ cfg }) => {
+      concatMap(({ task, cfg }) => {
         const today = this._dateService.todayStr();
 
-        return updateTaskRepeatCfg({
-          taskRepeatCfg: {
-            id: cfg.id as string,
-            changes: {
-              ...(cfg.repeatFromCompletionDate
-                ? {
-                    startDate: today,
-                  }
-                : {}),
-              lastTaskCreationDay: today,
-            },
-          },
-        });
+        // For repeatFromCompletionDate, update startDate to anchor future occurrences on today
+        if (cfg.repeatFromCompletionDate) {
+          return rxOf([
+            updateTaskRepeatCfg({
+              taskRepeatCfg: {
+                id: cfg.id as string,
+                changes: {
+                  startDate: today,
+                },
+              },
+            }),
+          ]);
+        }
+
+        // For waitForCompletion, immediately create the next task
+        // Let _getActionsForTaskRepeatCfg handle the cursor update itself
+        if (cfg.waitForCompletion) {
+          return from(
+            this._taskRepeatCfgService._getActionsForTaskRepeatCfg(cfg, Date.now()),
+          ).pipe(map((nextTaskActions) => nextTaskActions));
+        }
+
+        return rxOf([]);
       }),
+      mergeMap((actions) => actions),
     ),
   );
 
