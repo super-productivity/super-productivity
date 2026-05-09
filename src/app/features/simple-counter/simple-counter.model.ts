@@ -25,6 +25,9 @@ export interface SimpleCounterCfgFields {
   // adv cfg
   // repeated countdown reminder
   countdownDuration?: number;
+
+  // audio feedback
+  isAudioEnabled?: boolean;
 }
 
 export interface SimpleCounterCopy extends SimpleCounterCfgFields {
