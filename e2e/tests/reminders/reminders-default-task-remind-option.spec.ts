@@ -8,7 +8,7 @@ test.describe('Default task reminder option', () => {
   // Should match the option set inside the default global configuration
   const defaultOptionText = 'when it starts';
   // Any other option different to the default to test the settings change
-  const changedOptionText = 'never';
+  const changedOptionText = 'Never';
 
   const changeDefaultTaskReminderOption = async (page: Page): Promise<void> => {
     await page.getByRole('menuitem', { name: 'Settings' }).click();
@@ -33,13 +33,16 @@ test.describe('Default task reminder option', () => {
     await remindersSection.click();
 
     // Should match the option set inside the default global configuration
-    const selectedOption = remindersSection.getByText(defaultOptionText);
+    const selectedOption = remindersSection.getByText(defaultOptionText, {
+      exact: true,
+    });
     await expect(selectedOption).toBeVisible();
 
     // Change it to another option to check whether the setting takes effect
-    // across other application areas where a reminder option can be chosen
+    // across other application areas where a reminder option can be chosen.
+    // Use an exact text match to avoid matching unrelated tooltip text.
     await selectedOption.click();
-    await page.getByText(changedOptionText).click();
+    await page.getByText(changedOptionText, { exact: true }).click();
   };
 
   test('should apply when scheduling a task using the due action', async ({
