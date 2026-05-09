@@ -7,13 +7,16 @@ test.describe('Default task reminder option', () => {
 
   // Should match the option set inside the default global configuration
   const defaultOptionText = 'when it starts';
-  // Any other option different to the default to test the settings change
+  // Any other option different to the default to test the settings change.
+  // Use exact-cased label so we can target the mat-option / mat-select trigger
+  // text precisely and not collide with substrings like the "...never run code..."
+  // tooltip on the theme upload button in the General tab.
   const changedOptionText = 'Never';
 
   const changeDefaultTaskReminderOption = async (page: Page): Promise<void> => {
     await page.getByRole('menuitem', { name: 'Settings' }).click();
 
-    // Navigate to Time & Tracking tab first (2nd tab with timer icon)
+    // Navigate to Time & Tracking tab first (3rd tab with timer icon)
     await page.evaluate(() => {
       const timeTrackingTab = Array.from(
         document.querySelectorAll('mat-tab-header .mat-mdc-tab'),
@@ -40,9 +43,9 @@ test.describe('Default task reminder option', () => {
 
     // Change it to another option to check whether the setting takes effect
     // across other application areas where a reminder option can be chosen.
-    // Use an exact text match to avoid matching unrelated tooltip text.
+    // Target the mat-option by role to avoid matching unrelated text on the page.
     await selectedOption.click();
-    await page.getByText(changedOptionText, { exact: true }).click();
+    await page.getByRole('option', { name: changedOptionText, exact: true }).click();
   };
 
   test('should apply when scheduling a task using the due action', async ({
@@ -92,8 +95,12 @@ test.describe('Default task reminder option', () => {
     await timeInput.waitFor({ state: 'visible', timeout: 10000 });
     await timeInput.click();
 
-    // Wait for the reminder dropdown to appear and check the default option
-    await expect(page.getByText(changedOptionText)).toBeVisible({ timeout: 5000 });
+    // Wait for the reminder dropdown to appear and check the default option.
+    // Scope to the dialog so we hit the mat-select trigger text, not unrelated
+    // matches elsewhere on the page (e.g. tooltip strings).
+    await expect(
+      scheduleDialog.getByText(changedOptionText, { exact: true }),
+    ).toBeVisible({ timeout: 5000 });
   });
 
   test('should apply when scheduling a task using short syntax', async ({
@@ -134,7 +141,11 @@ test.describe('Default task reminder option', () => {
     await rescheduleBtn.waitFor({ state: 'visible', timeout: 10000 });
     await rescheduleBtn.click();
 
-    await expect(page.getByText(changedOptionText)).toBeVisible();
+    const scheduleDialog = page.locator('dialog-schedule-task');
+    await scheduleDialog.waitFor({ state: 'visible', timeout: 10000 });
+    await expect(
+      scheduleDialog.getByText(changedOptionText, { exact: true }),
+    ).toBeVisible();
   });
 
   test('should apply when scheduling a task via the week schedule view', async ({
@@ -164,6 +175,10 @@ test.describe('Default task reminder option', () => {
     await scheduleItem.waitFor({ state: 'visible', timeout: 10000 });
     await scheduleItem.click();
 
-    await expect(page.getByText(changedOptionText)).toBeVisible();
+    const scheduleDialog = page.locator('dialog-schedule-task');
+    await scheduleDialog.waitFor({ state: 'visible', timeout: 10000 });
+    await expect(
+      scheduleDialog.getByText(changedOptionText, { exact: true }),
+    ).toBeVisible();
   });
 });
