@@ -77,8 +77,30 @@ export class CalendarIntegrationService {
   private _refreshTrigger$ = new Subject<void>();
 
   calendarEvents$: Observable<ScheduleCalendarMapEntry[]> = merge(
-    // NOTE: we're using this rather than startWith since we want to use the freshest available cached value
-    defer(() => of(this._getCalProviderFromCache())),
+    // NOTE: we're using this rather than startWith since we want to use the freshest available cached value.
+    // We combine with selectCalendarProviders so regex filters are applied even to the initial cached emission.
+    defer(() =>
+      this._store.select(selectCalendarProviders).pipe(
+        first(),
+        map((providers) => {
+          const providerMap = new Map(providers.map((p) => [p.id, p]));
+          return this._getCalProviderFromCache().map((entry) => {
+            const providerId = entry.items[0]?.calProviderId;
+            const providerCfg = providerId ? providerMap.get(providerId) : undefined;
+            return {
+              ...entry,
+              items: entry.items.filter((calEv) =>
+                passesCalendarEventRegexFilter(
+                  calEv,
+                  providerCfg?.filterIncludeRegex,
+                  providerCfg?.filterExcludeRegex,
+                ),
+              ),
+            };
+          });
+        }),
+      ),
+    ),
     combineLatest([
       this._store
         .select(selectCalendarProviders)
