@@ -1,3 +1,4 @@
+import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 import { Store } from '@ngrx/store';
@@ -8,6 +9,9 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { Task } from '../task.model';
 import { Project } from '../../project/project.model';
 import { selectAllProjects } from '../../project/store/project.selectors';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { ShortSyntaxConfig } from '../../config/global-config.model';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 
 describe('SelectTaskComponent', () => {
   let component: SelectTaskComponent;
@@ -15,6 +19,7 @@ describe('SelectTaskComponent', () => {
   let mockStore: jasmine.SpyObj<Store>;
   let tasksSubject: BehaviorSubject<Task[]>;
   let projectsSubject: BehaviorSubject<Project[]>;
+  let shortSyntaxConfig: WritableSignal<ShortSyntaxConfig | undefined>;
 
   const validTask: Task = {
     id: 'task-1',
@@ -46,6 +51,7 @@ describe('SelectTaskComponent', () => {
   beforeEach(async () => {
     tasksSubject = new BehaviorSubject<Task[]>([validTask]);
     projectsSubject = new BehaviorSubject<Project[]>([]);
+    shortSyntaxConfig = signal(DEFAULT_GLOBAL_CONFIG.shortSyntax);
 
     mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch']);
     mockStore.select.and.callFake((selector) =>
@@ -62,6 +68,12 @@ describe('SelectTaskComponent', () => {
       providers: [
         { provide: Store, useValue: mockStore },
         { provide: WorkContextService, useValue: mockWorkContextService },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            shortSyntax: shortSyntaxConfig,
+          },
+        },
       ],
     }).compileComponents();
 
@@ -131,6 +143,29 @@ describe('SelectTaskComponent', () => {
 
       const result = component.filteredTasks();
       expect(result.map((task) => task.id)).toEqual(['task-1', 'task-3']);
+    });
+
+    it('should treat project short syntax as literal search text when disabled', () => {
+      shortSyntaxConfig.set({
+        ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
+        isEnableProject: false,
+      });
+      projectsSubject.next([{ id: 'project-1', title: 'Work' } as Project]);
+      tasksSubject.next([
+        { ...validTask, id: 'task-1', title: 'Write report', projectId: 'project-1' },
+        {
+          ...validTask,
+          id: 'task-2',
+          title: 'Write +wor report',
+          projectId: 'project-1',
+        },
+      ]);
+
+      component.taskSelectCtrl.setValue('write +wor');
+      fixture.detectChanges();
+
+      const result = component.filteredTasks();
+      expect(result.map((task) => task.id)).toEqual(['task-2']);
     });
   });
 });

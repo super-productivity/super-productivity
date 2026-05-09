@@ -38,6 +38,7 @@ import { TagComponent } from '../../tag/tag/tag.component';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { parseProjectChanges } from '../short-syntax';
 import { MatTooltip } from '@angular/material/tooltip';
+import { GlobalConfigService } from '../../config/global-config.service';
 
 @Component({
   selector: 'select-task',
@@ -63,6 +64,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 })
 export class SelectTaskComponent {
   private readonly _workContextService = inject(WorkContextService);
+  private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _store = inject(Store);
 
   T: typeof T = T;
@@ -115,12 +117,14 @@ export class SelectTaskComponent {
   readonly filteredTasks = computed(() => {
     const taskOrTitle = this._taskOrTitle();
     if (typeof taskOrTitle === 'string') {
-      const projectParseResult = parseProjectChanges(
-        { title: taskOrTitle },
-        this._projects().filter(
-          (project) => !project.isArchived && !project.isHiddenFromMenu,
-        ),
-      );
+      const projectParseResult = this._globalConfigService.shortSyntax()?.isEnableProject
+        ? parseProjectChanges(
+            { title: taskOrTitle },
+            this._projects().filter(
+              (project) => !project.isArchived && !project.isHiddenFromMenu,
+            ),
+          )
+        : {};
       const searchTerm = (projectParseResult.title ?? taskOrTitle).trim().toLowerCase();
       const projectId = projectParseResult.projectId;
 
