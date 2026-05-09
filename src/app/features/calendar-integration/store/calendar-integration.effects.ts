@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { distinctUntilChanged, first, map, switchMap, tap } from 'rxjs/operators';
+import { distinctUntilChanged, first, map, skip, switchMap, tap } from 'rxjs/operators';
 import { BehaviorSubject, EMPTY, forkJoin, timer } from 'rxjs';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { BannerService } from '../../../core/banner/banner.service';
@@ -154,6 +154,30 @@ export class CalendarIntegrationEffects {
     {
       dispatch: false,
     },
+  );
+
+  reconcileBannersOnProviderChange = createEffect(
+    () =>
+      this._store.select(selectCalendarProviders).pipe(
+        skip(1),
+        tap((providers) => {
+          const providerMap = new Map(providers.map((p) => [p.id, p]));
+          const current = this._currentlyShownBanners$.getValue();
+          const filtered = current.filter(({ calEv, calProvider }) => {
+            const cfg = providerMap.get(calProvider.id);
+            if (!cfg) return false;
+            return passesCalendarEventRegexFilter(
+              calEv,
+              cfg.filterIncludeRegex,
+              cfg.filterExcludeRegex,
+            );
+          });
+          if (filtered.length !== current.length) {
+            this._currentlyShownBanners$.next(filtered);
+          }
+        }),
+      ),
+    { dispatch: false },
   );
 
   private _addEvToShow(
