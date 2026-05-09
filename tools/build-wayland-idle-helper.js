@@ -25,7 +25,7 @@ const hasCargo = () => {
   return result.status === 0;
 };
 
-const isTruthyEnv = (value) => value === '1' || value === 'true';
+const isTruthyEnv = (value) => value === '1' || value?.toLowerCase() === 'true';
 
 const isExplicitlySkipped = () =>
   isTruthyEnv(process.env.SP_SKIP_WAYLAND_IDLE_HELPER_BUILD);
