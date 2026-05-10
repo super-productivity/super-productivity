@@ -342,6 +342,12 @@ export class ScheduleComponent {
     this._selectedDate.set(null); // Resets to "today" mode
   }
 
+  displayTodayDate = computed(() => {
+    const todayDateStr = this._globalTrackingIntervalService.todayDateStr();
+    const locale = this._dateTimeFormatService.currentLocale();
+    return safeFormatDate(todayDateStr, 'EEEE, MMM dd, yyyy', locale);
+  });
+
   // Tracks whether the scroll-wrapper has been scrolled horizontally. Used
   // by schedule-week so the sticky time column gets a background only once
   // day-content is actually sliding under it.
