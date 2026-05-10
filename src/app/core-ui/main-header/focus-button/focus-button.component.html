@@ -1,25 +1,27 @@
 <div class="focus-btn-wrapper">
-  @if (circleVisible()) {
-    <progress-circle
-      [progress]="circleProgress()"
-      [isPulsing]="circleShouldPulse()"
-    ></progress-circle>
-  }
-
-  <button
-    mat-icon-button
-    matTooltip="{{ T.MH.ENTER_FOCUS_MODE | translate }}{{ tooltipSuffix() }}"
-    [color]="buttonColor()"
-    (click)="enableFocusMode()"
-    (contextmenu)="openFocusSessionDialog(); $event.preventDefault()"
-    (longPress)="openFocusSessionDialog()"
-  >
-    @if (isBreakActive()) {
-      <mat-icon>free_breakfast</mat-icon>
-    } @else {
-      <mat-icon>center_focus_strong</mat-icon>
+  <div class="focus-btn-anchor">
+    @if (circleVisible()) {
+      <progress-circle
+        [progress]="circleProgress()"
+        [isPulsing]="circleShouldPulse()"
+      ></progress-circle>
     }
-  </button>
+
+    <button
+      mat-icon-button
+      matTooltip="{{ T.MH.ENTER_FOCUS_MODE | translate }}{{ tooltipSuffix() }}"
+      [color]="buttonColor()"
+      (click)="enableFocusMode()"
+      (contextmenu)="openFocusSessionDialog(); $event.preventDefault()"
+      (longPress)="openFocusSessionDialog()"
+    >
+      @if (isBreakActive()) {
+        <mat-icon>free_breakfast</mat-icon>
+      } @else {
+        <mat-icon>center_focus_strong</mat-icon>
+      }
+    </button>
+  </div>
 
   @if (runningTimeMs(); as runningMs) {
     <div class="focus-label focus-running-label">
