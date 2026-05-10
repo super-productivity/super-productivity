@@ -83,20 +83,17 @@ export class CalendarIntegrationService {
         first(),
         map((providers) => {
           const providerMap = new Map(providers.map((p) => [p.id, p]));
-          return this._getCalProviderFromCache().map((entry) => {
-            const providerId = entry.items[0]?.calProviderId;
-            const providerCfg = providerId ? providerMap.get(providerId) : undefined;
-            return {
-              ...entry,
-              items: entry.items.filter((calEv) =>
-                passesCalendarEventRegexFilter(
-                  calEv,
-                  providerCfg?.filterIncludeRegex,
-                  providerCfg?.filterExcludeRegex,
-                ),
-              ),
-            };
-          });
+          return this._getCalProviderFromCache().map((entry) => ({
+            ...entry,
+            items: entry.items.filter((calEv) => {
+              const cfg = providerMap.get(calEv.calProviderId);
+              return passesCalendarEventRegexFilter(
+                calEv,
+                cfg?.filterIncludeRegex,
+                cfg?.filterExcludeRegex,
+              );
+            }),
+          }));
         }),
       ),
     ),

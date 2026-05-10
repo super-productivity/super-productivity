@@ -228,6 +228,92 @@ END:VCALENDAR`;
       }));
     });
 
+    describe('regex filter in initial cached emission', () => {
+      it('should resolve provider config per-event so mixed-provider cache entries are filtered correctly', fakeAsync(() => {
+        const providerA: IssueProviderCalendar = createMockProvider({
+          id: 'provider-a',
+          filterExcludeRegex: 'Lunch',
+        });
+        const providerB: IssueProviderCalendar = createMockProvider({
+          id: 'provider-b',
+          filterExcludeRegex: null,
+        });
+
+        // A single cache entry whose items belong to different providers —
+        // this can happen because _groupCachedEventsByProvider() groups by calProviderId
+        // while the cache itself stores flat ScheduleCalendarMapEntry arrays.
+        const cachedData = [
+          {
+            items: [
+              {
+                id: 'event-a-lunch',
+                calProviderId: 'provider-a',
+                issueProviderKey: 'ICAL',
+                title: 'Lunch',
+                start: Date.now() + 60000,
+                duration: 3600000,
+              },
+              {
+                id: 'event-a-standup',
+                calProviderId: 'provider-a',
+                issueProviderKey: 'ICAL',
+                title: 'Standup',
+                start: Date.now() + 120000,
+                duration: 1800000,
+              },
+              {
+                id: 'event-b-lunch',
+                calProviderId: 'provider-b',
+                issueProviderKey: 'ICAL',
+                title: 'Lunch',
+                start: Date.now() + 180000,
+                duration: 3600000,
+              },
+            ],
+          },
+        ];
+        localStorage.setItem('SUP_CAL_EVENTS_CACHE', JSON.stringify(cachedData));
+
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({
+          imports: [HttpClientTestingModule],
+          providers: [
+            CalendarIntegrationService,
+            provideMockStore({
+              selectors: [
+                { selector: selectCalendarProviders, value: [providerA, providerB] },
+                { selector: selectEnabledIssueProviders, value: [] },
+                { selector: selectAllCalendarTaskEventIds, value: [] },
+              ],
+            }),
+            { provide: SnackService, useValue: mockSnackService },
+          ],
+        });
+
+        const freshService = TestBed.inject(CalendarIntegrationService);
+
+        let emittedValue: any;
+        const sub = freshService.calendarEvents$.pipe(take(1)).subscribe((val) => {
+          emittedValue = val;
+        });
+
+        tick(0);
+
+        const allItems = emittedValue?.flatMap((e: any) => e.items ?? []) ?? [];
+        const ids = allItems.map((i: any) => i.id);
+
+        // Provider A has filterExcludeRegex='Lunch' → 'event-a-lunch' must be gone
+        expect(ids).not.toContain('event-a-lunch');
+        // Provider A standup is not excluded
+        expect(ids).toContain('event-a-standup');
+        // Provider B has no filter → its 'Lunch' event must survive
+        expect(ids).toContain('event-b-lunch');
+
+        sub.unsubscribe();
+        discardPeriodicTasks();
+      }));
+    });
+
     describe('interval behavior', () => {
       it('should use LOCAL_FILE_CHECK_INTERVAL for file:// URLs', () => {
         const fileProvider = createMockProvider({
