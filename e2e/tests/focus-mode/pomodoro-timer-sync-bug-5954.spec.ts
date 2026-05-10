@@ -17,48 +17,6 @@ import { Page, Locator } from '@playwright/test';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForAngularStability } from '../../utils/waits';
 
-const enableSyncSessionWithTracking = async (page: Page): Promise<void> => {
-  await page.goto('/#/config');
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(500);
-
-  // Navigate to Productivity tab
-  const productivityTab = page.locator('[role="tab"]', { hasText: /Productivity/i });
-  if (await productivityTab.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await productivityTab.click();
-    await page.waitForTimeout(500);
-  }
-
-  // Find and expand the Focus Mode section
-  const focusModeSection = page
-    .locator('config-section')
-    .filter({ hasText: 'Focus Mode' })
-    .first();
-  await focusModeSection.scrollIntoViewIfNeeded();
-
-  const collapsible = focusModeSection.locator('collapsible');
-  const isExpanded = await collapsible
-    .evaluate((el) => el.classList.contains('isExpanded'))
-    .catch(() => false);
-
-  if (!isExpanded) {
-    const header = collapsible.locator('.collapsible-header');
-    await header.click();
-    await page.waitForTimeout(500);
-  }
-
-  // Find and enable the toggle
-  const toggle = page
-    .locator('mat-slide-toggle')
-    .filter({ hasText: 'Sync focus sessions with time tracking' })
-    .first();
-  await expect(toggle).toBeVisible({ timeout: 5000 });
-  if (!(await toggle.getAttribute('class'))?.includes('mat-checked')) {
-    await toggle.click();
-    await page.waitForTimeout(300);
-  }
-};
-
 // Helper to open focus mode and select a task
 const openFocusModeWithTask = async (
   page: Page,
@@ -312,10 +270,7 @@ test.describe('Bug #5954: Pomodoro timer sync issues', () => {
         .getByRole('button')
         .filter({ hasText: 'center_focus_strong' });
 
-      // Enable the setting that requires a task for focus sessions
-      await enableSyncSessionWithTracking(page);
-
-      // Navigate back to work view
+      // Navigate to work view
       await page.goto('/');
 
       // Step 1: Create a task and mark it as done immediately
@@ -360,10 +315,7 @@ test.describe('Bug #5954: Pomodoro timer sync issues', () => {
         .getByRole('button')
         .filter({ hasText: 'center_focus_strong' });
 
-      // Enable the setting that requires a task for focus sessions
-      await enableSyncSessionWithTracking(page);
-
-      // Navigate back to work view
+      // Navigate to work view
       await page.goto('/');
 
       // Step 1: Create task and start tracking
@@ -383,21 +335,10 @@ test.describe('Bug #5954: Pomodoro timer sync issues', () => {
       await page.waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 });
       await page.waitForTimeout(1000);
 
-      // With isSyncSessionWithTracking enabled, the focus overlay auto-opens
-      // when we start tracking, covering the task list. We'll work with the overlay.
-      const isOverlayOpen = await focusModeOverlay.isVisible().catch(() => false);
-
-      if (isOverlayOpen) {
-        // Close the overlay so we can access the task to mark it as done
-        const closeButton = page.locator('focus-mode-overlay button.close-btn');
-        await closeButton.click();
-        await page.waitForTimeout(500);
-      }
-
       // Wait for task list to be visible
       await workViewPage.waitForTaskList();
 
-      // Re-locate the task after navigation and overlay close
+      // Re-locate the task after navigation
       const trackedTask = page.locator('task').first();
       await expect(trackedTask).toBeVisible({ timeout: 5000 });
       await expect(trackedTask).toHaveClass(/isCurrent/, { timeout: 5000 });
