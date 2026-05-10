@@ -39,7 +39,6 @@ import {
   selectAllUnprocessedTaskRepeatCfgs,
   selectTaskRepeatCfgsForExactDay,
 } from './store/task-repeat-cfg.selectors';
-import { devError } from '../../util/dev-error';
 import { getRepeatableTaskId } from './get-repeatable-task-id.util';
 
 @Injectable({
@@ -193,10 +192,9 @@ export class TaskRepeatCfgService {
       new Date(targetDayDate),
     );
 
-    // there is no creation date in the present
+    // No occurrence is due yet (e.g., completing a waitForCompletion task on the same day
+    // it was created). This is expected behavior, not an error.
     if (targetCreated === null) {
-      // not sure if we should always expect one when this is called, so we throw a dev error for evaluation
-      devError('No target creation date found for repeatable task');
       return [];
     } else if (!targetCreated) {
       throw new Error('Unable to getNewestPossibleDueDate()');

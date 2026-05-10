@@ -726,24 +726,13 @@ describe('TaskRepeatCfgService', () => {
       const pastTargetDate = new Date(2022, 0, 1).getTime();
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
 
-      // Mock confirm to return false to prevent throwing
-      const confirmSpy = window.confirm as jasmine.Spy;
-      confirmSpy.and.returnValue(false);
-
       const result = await service._getActionsForTaskRepeatCfg(
         cfgFutureStart as any,
         pastTargetDate,
       );
 
+      // Should return empty array when no valid target date can be computed
       expect(result).toEqual([]);
-
-      // Verify that confirm was called (devError will always call confirm)
-      expect(confirmSpy).toHaveBeenCalledWith(
-        'Throw an error for error? ––– No target creation date found for repeatable task',
-      );
-
-      // Restore default behavior
-      confirmSpy.and.returnValue(true);
     });
   });
 
@@ -1808,6 +1797,39 @@ describe('TaskRepeatCfgService', () => {
       expect(actions.length).toBe(2);
       expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
       expect(actions[1].type).toBe(updateTaskRepeatCfg.type);
+    });
+
+    it('should return empty array when completing waitForCompletion task before next occurrence is due', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+      const todayStr = formatIsoDate(today);
+
+      const cfgWithWaitForCompletion: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr, // Already created today
+        waitForCompletion: true,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+      };
+
+      // Today's task exists and is completed
+      const completedTask: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfgWithWaitForCompletion.id, todayStr),
+        created: today.getTime(),
+        isDone: true,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithWaitForCompletion,
+        targetDayDate,
+      );
+
+      // Should return empty array without devError - next occurrence is tomorrow, not due yet
+      expect(actions).toEqual([]);
     });
   });
 
