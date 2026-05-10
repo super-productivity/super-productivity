@@ -961,6 +961,22 @@ describe('FocusModeEffects', () => {
       expect(metricServiceMock.logFocusSession).toHaveBeenCalledWith(25 * 60 * 1000);
     });
 
+    it('should call metricService.logFocusSession with duration on offerFlowtimeBreak', () => {
+      actions$ = of(
+        actions.offerFlowtimeBreak({
+          duration: 5 * 60 * 1000,
+          isLongBreak: false,
+          pausedTaskId: 'task-123',
+        }),
+      );
+      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
+      store.refreshState();
+
+      effects.logFocusSession$.subscribe();
+
+      expect(metricServiceMock.logFocusSession).toHaveBeenCalledWith(25 * 60 * 1000);
+    });
+
     it('should NOT log when duration is 0', () => {
       actions$ = of(actions.completeFocusSession({ isManual: false }));
       store.overrideSelector(selectors.selectLastSessionDuration, 0);

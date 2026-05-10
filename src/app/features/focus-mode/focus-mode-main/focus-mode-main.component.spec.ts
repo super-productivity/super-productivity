@@ -74,9 +74,14 @@ describe('FocusModeMainComponent', () => {
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
-    const taskServiceSpy = jasmine.createSpyObj('TaskService', ['update'], {
-      currentTask$: currentTaskSubject.asObservable(),
-    });
+    const taskServiceSpy = jasmine.createSpyObj(
+      'TaskService',
+      ['currentTaskId', 'update'],
+      {
+        currentTask$: currentTaskSubject.asObservable(),
+      },
+    );
+    taskServiceSpy.currentTaskId.and.returnValue(mockTask.id);
 
     const taskAttachmentServiceSpy = jasmine.createSpyObj('TaskAttachmentService', [
       'createFromDrop',
@@ -455,6 +460,32 @@ describe('FocusModeMainComponent', () => {
 
       expect(mockStore.dispatch).not.toHaveBeenCalled();
       expect(component.isTaskSelectorOpen()).toBe(true);
+    });
+  });
+
+  describe('completeFocusSession', () => {
+    it('should dispatch completeFocusSession for non-Flowtime modes', () => {
+      focusModeServiceSpy.mode.and.returnValue(FocusModeMode.Pomodoro);
+
+      component.completeFocusSession();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.completeFocusSession({ isManual: true }),
+      );
+    });
+
+    it('should dispatch endFlowtimeSession with the current task id in Flowtime mode', () => {
+      focusModeServiceSpy.mode.and.returnValue(FocusModeMode.Flowtime);
+      mockTaskService.currentTaskId.and.returnValue(mockTask.id);
+
+      component.completeFocusSession();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.endFlowtimeSession({ pausedTaskId: mockTask.id }),
+      );
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+        actions.completeFocusSession({ isManual: true }),
+      );
     });
   });
 
