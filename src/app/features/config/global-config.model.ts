@@ -142,6 +142,14 @@ export interface NextcloudConfig {
   syncFolderPath?: string | null;
 }
 
+export interface OneDriveConfig {
+  /** View-model only: false = use built-in official app (if available), true = use custom app */
+  useCustomApp?: boolean | null;
+  clientId?: string | null;
+  tenantId?: string | null;
+  syncFolderPath?: string | null;
+}
+
 export interface LocalFileSyncConfig {
   // TODO remove and migrate
   syncFilePath?: string | null;
@@ -191,6 +199,8 @@ export type SyncConfig = Readonly<{
   localFileSync?: LocalFileSyncConfig;
   /* NOTE: view model for form only*/
   nextcloud?: NextcloudConfig;
+  /* NOTE: view model for form only*/
+  oneDrive?: OneDriveConfig;
 }>;
 
 export type ScheduleConfig = Readonly<{

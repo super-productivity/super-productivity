@@ -1,4 +1,8 @@
 import { environment } from '../../../environments/environment';
+import {
+  HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+  OFFICIAL_ONEDRIVE_CLIENT_ID,
+} from '../../imex/sync/onedrive-auth-mode.const';
 
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { GlobalConfigState } from './global-config.model';
@@ -235,6 +239,13 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
       userName: null,
       password: null,
       syncFolderPath: 'super-productivity',
+    },
+
+    oneDrive: {
+      useCustomApp: !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+      clientId: OFFICIAL_ONEDRIVE_CLIENT_ID,
+      tenantId: 'common',
+      syncFolderPath: 'Super Productivity',
     },
   },
 } as const;

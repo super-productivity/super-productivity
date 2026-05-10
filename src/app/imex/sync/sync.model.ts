@@ -64,6 +64,7 @@ export interface LocalSyncMetaForProvider {
 export interface LocalSyncMetaModel {
   [SyncProviderId.WebDAV]: LocalSyncMetaForProvider;
   [SyncProviderId.Dropbox]: LocalSyncMetaForProvider;
+  [SyncProviderId.OneDrive]: LocalSyncMetaForProvider;
   [SyncProviderId.LocalFile]: LocalSyncMetaForProvider;
 }
 

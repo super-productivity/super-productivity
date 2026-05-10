@@ -14,6 +14,7 @@ import { SyncLog } from '../../core/log';
 import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
 import { SyncWrapperService } from './sync-wrapper.service';
+import { HAS_OFFICIAL_ONEDRIVE_CLIENT_ID } from './onedrive-auth-mode.const';
 
 // Maps sync providers to their corresponding form field in SyncConfig
 // Dropbox is null because it doesn't store settings in the form (uses OAuth)
@@ -22,6 +23,7 @@ const PROP_MAP_TO_FORM: Record<SyncProviderId, keyof SyncConfig | null> = {
   [SyncProviderId.WebDAV]: 'webDav',
   [SyncProviderId.SuperSync]: 'superSync',
   [SyncProviderId.Nextcloud]: 'nextcloud',
+  [SyncProviderId.OneDrive]: 'oneDrive',
   [SyncProviderId.Dropbox]: null,
 };
 
@@ -58,7 +60,7 @@ const redactSensitiveFields = (obj: unknown): unknown => {
 
 const PROVIDER_FIELD_DEFAULTS: Record<
   SyncProviderId,
-  Record<string, string | boolean>
+  Record<string, string | boolean | number>
 > = {
   [SyncProviderId.WebDAV]: {
     baseUrl: '',
@@ -88,6 +90,16 @@ const PROVIDER_FIELD_DEFAULTS: Record<
     encryptKey: '',
   },
   [SyncProviderId.Dropbox]: {
+    encryptKey: '',
+  },
+  [SyncProviderId.OneDrive]: {
+    useCustomApp: !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+    clientId: '',
+    tenantId: 'common',
+    syncFolderPath: 'Super Productivity',
+    accessToken: '',
+    refreshToken: '',
+    tokenExpiresAt: 0,
     encryptKey: '',
   },
 };
@@ -166,6 +178,10 @@ export class SyncConfigService {
           ...DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
           ...syncCfg?.nextcloud,
         },
+        oneDrive: {
+          ...DEFAULT_GLOBAL_CONFIG.sync.oneDrive,
+          ...syncCfg?.oneDrive,
+        },
       };
 
       // If no provider is active, return base config with empty encryption key
@@ -219,6 +235,7 @@ export class SyncConfigService {
         webDav: DEFAULT_GLOBAL_CONFIG.sync.webDav,
         superSync: DEFAULT_GLOBAL_CONFIG.sync.superSync,
         nextcloud: DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
+        oneDrive: DEFAULT_GLOBAL_CONFIG.sync.oneDrive,
       };
 
       // Add current provider config if applicable
@@ -287,12 +304,22 @@ export class SyncConfigService {
     this._lastSettings = newSettings;
 
     const providerId = newSettings.syncProvider as SyncProviderId | null;
+    type SyncPublicConfig = Omit<
+      SyncConfig,
+      'encryptKey' | 'webDav' | 'localFileSync' | 'superSync' | 'nextcloud' | 'oneDrive'
+    >;
 
     // Split settings into public (global config) and private (credentials/secrets)
     // to maintain security boundaries - credentials never go to global config
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { encryptKey, webDav, localFileSync, superSync, nextcloud, ...globalConfig } =
-      newSettings;
+    const superSync = newSettings.superSync;
+    let globalConfig: SyncPublicConfig = {
+      isEnabled: newSettings.isEnabled,
+      isEncryptionEnabled: newSettings.isEncryptionEnabled,
+      isCompressionEnabled: newSettings.isCompressionEnabled,
+      syncProvider: newSettings.syncProvider,
+      syncInterval: newSettings.syncInterval,
+      isManualSyncOnly: newSettings.isManualSyncOnly,
+    };
     // Provider-specific settings (URLs, credentials) must be stored securely
     if (providerId) {
       await this._updatePrivateConfig(providerId, newSettings);
@@ -311,10 +338,13 @@ export class SyncConfigService {
         (savedPrivateCfg as { isEncryptionEnabled?: boolean } | null)
           ?.isEncryptionEnabled ??
         false;
-      globalConfig.isEncryptionEnabled = isEncryptionEnabled;
+      globalConfig = {
+        ...globalConfig,
+        isEncryptionEnabled,
+      };
     }
 
-    this._globalConfigService.updateSection('sync', globalConfig);
+    this._globalConfigService.updateSection('sync', globalConfig as SyncConfig);
   }
 
   private async _updatePrivateConfig(

@@ -28,6 +28,7 @@ import {
   openEncryptionPasswordChangeDialog,
   openEncryptionPasswordChangeDialogForFileBased,
 } from '../../../imex/sync/encryption-password-dialog-opener.service';
+import { HAS_OFFICIAL_ONEDRIVE_CLIENT_ID } from '../../../imex/sync/onedrive-auth-mode.const';
 
 /**
  * Creates form fields for WebDAV-based sync providers.
@@ -119,6 +120,17 @@ const createWebdavFormFields = (options: {
   ];
 };
 
+const isOneDriveClientIdRequired = (field: FormlyFieldConfig): boolean => {
+  if (field?.parent?.parent?.model?.syncProvider !== SyncProviderId.OneDrive) {
+    return false;
+  }
+
+  // If no official app client ID is available, users must provide their own.
+  // If an official app client ID is available, clientId is only required when
+  // users explicitly switch to custom app mode.
+  return !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID || !!field?.parent?.model?.useCustomApp;
+};
+
 export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
   title: T.F.SYNC.FORM.TITLE,
   key: 'sync',
@@ -141,6 +153,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
+          { label: 'Microsoft 365 (OneDrive)', value: SyncProviderId.OneDrive },
           { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
           {
             label: 'WebDAV (not recommended / no support)',
@@ -329,6 +342,120 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           },
         },
       ],
+    },
+    // OneDrive provider form fields
+    {
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider !== SyncProviderId.OneDrive,
+      resetOnHide: false,
+      key: 'oneDrive',
+      fieldGroup: [
+        ...(HAS_OFFICIAL_ONEDRIVE_CLIENT_ID
+          ? [
+              {
+                type: 'tpl',
+                hideExpression: (m: any) => !!m?.useCustomApp,
+                templateOptions: {
+                  tag: 'p',
+                  text: T.F.SYNC.FORM.ONEDRIVE.OFFICIAL_MODE_INFO,
+                },
+              },
+              {
+                key: 'useCustomApp',
+                type: 'checkbox',
+                defaultValue: false,
+                templateOptions: {
+                  label: T.F.SYNC.FORM.ONEDRIVE.L_USE_CUSTOM_APP,
+                  description: T.F.SYNC.FORM.ONEDRIVE.USE_CUSTOM_APP_DESCRIPTION,
+                },
+              },
+            ]
+          : []),
+        {
+          key: 'clientId',
+          type: 'input',
+          hideExpression: (m: any) => HAS_OFFICIAL_ONEDRIVE_CLIENT_ID && !m?.useCustomApp,
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_CLIENT_ID,
+            description: T.F.SYNC.FORM.ONEDRIVE.CLIENT_ID_DESCRIPTION,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              isOneDriveClientIdRequired(field),
+          },
+        },
+        {
+          key: 'tenantId',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_TENANT_ID,
+            description: T.F.SYNC.FORM.ONEDRIVE.TENANT_ID_DESCRIPTION,
+          },
+        },
+        {
+          key: 'syncFolderPath',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_SYNC_FOLDER_PATH,
+            description: T.F.SYNC.FORM.ONEDRIVE.SYNC_FOLDER_PATH_DESCRIPTION,
+          },
+        },
+      ],
+    },
+
+    // OneDrive provider authentication panel
+    {
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider !== SyncProviderId.OneDrive,
+      resetOnHide: false,
+      props: { oneDriveAuth: true } as any,
+      fieldGroup: [
+        {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            text: T.F.SYNC.FORM.ONEDRIVE.INFO_TEXT,
+          },
+        },
+        {
+          type: 'tpl',
+          key: 'authStatus',
+          className: 'auth-status-indicator',
+          templateOptions: {
+            tag: 'p',
+            text: '',
+          },
+        },
+      ],
+    },
+
+    {
+      key: 'syncInterval',
+      type: 'duration',
+      // NOTE: we don't hide because model updates don't seem to work properly for this
+      // hideExpression: ((model: DropboxSyncConfig) => !model.accessToken),
+      // Hide for SuperSync (uses fixed interval) and when manual sync only is enabled
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider === SyncProviderId.SuperSync ||
+        field?.parent?.model.isManualSyncOnly === true,
+      resetOnHide: true,
+      templateOptions: {
+        required: true,
+        isAllowSeconds: true,
+        label: T.F.SYNC.FORM.L_SYNC_INTERVAL,
+        description: T.G.DURATION_DESCRIPTION,
+      },
+    },
+    {
+      key: 'isManualSyncOnly',
+      type: 'checkbox',
+      // Show for all non-SuperSync providers when one is selected.
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider === SyncProviderId.SuperSync ||
+        field?.parent?.model.syncProvider === null,
+      templateOptions: {
+        label: T.F.SYNC.FORM.L_MANUAL_SYNC_ONLY,
+      },
     },
 
     // Encryption status box - shown when encryption is enabled (for any provider)
