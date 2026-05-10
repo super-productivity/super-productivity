@@ -331,6 +331,44 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       expect(taskService.update).not.toHaveBeenCalled();
     });
 
+    it('should update task created when first occurrence is today but task was created earlier', () => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const taskCreatedYesterday: TaskWithSubTasks = {
+        ...mockTask,
+        subTasks: [],
+        dueDay: todayStr,
+        created: yesterday.getTime(),
+      };
+
+      const dailyRepeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+      };
+
+      const firstOccurrence = getFirstRepeatOccurrence(dailyRepeatCfg as any)!;
+      const action = addTaskRepeatCfgToTask({
+        taskRepeatCfg: dailyRepeatCfg,
+        taskId: 'parent-task-id',
+      });
+
+      actions$ = of(action);
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskCreatedYesterday));
+
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      effects.updateTaskAfterMakingItRepeatable$.subscribe().unsubscribe();
+
+      expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
+        created: firstOccurrence.getTime(),
+      });
+    });
+
     it('should dispatch planTaskForDay and update created for daily repeat with future start date (#6433)', (done) => {
       // Scenario: Task created today, but start date is 7 days in the future
       const today = new Date();

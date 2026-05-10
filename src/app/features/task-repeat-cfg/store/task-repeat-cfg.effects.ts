@@ -197,10 +197,18 @@ export class TaskRepeatCfgEffects {
           // planner days and TODAY_TAG removal
         } else {
           // TODAY FIRST OCCURRENCE:
-          // Update dueDay if it differs
+          // Keep the stable occurrence identity aligned even if the task was
+          // originally created before it became repeatable.
           const currentDueDay = task.dueDay || getDbDateStr(task.created);
+          const update: Partial<TaskCopy> = {};
+          if (firstOccurrence && getDbDateStr(task.created) !== firstOccurrenceStr) {
+            update.created = firstOccurrence.getTime();
+          }
           if (currentDueDay !== firstOccurrenceStr) {
-            this._taskService.update(task.id, { dueDay: firstOccurrenceStr });
+            update.dueDay = firstOccurrenceStr;
+          }
+          if (Object.keys(update).length > 0) {
+            this._taskService.update(task.id, update);
           }
         }
 
