@@ -79,18 +79,28 @@ export class CalendarIntegrationService {
     // NOTE: we're using this rather than startWith since we want to use the freshest available cached value.
     // We combine with selectCalendarProviders so regex filters are applied even to the initial cached emission.
     defer(() =>
-      this._store.select(selectCalendarProviders).pipe(
+      combineLatest([
+        this._store.select(selectCalendarProviders),
+        this._store.select(selectAllCalendarTaskEventIds),
+        this.skippedEventIds$,
+        this._hiddenEventsService.hiddenEventIds$,
+      ]).pipe(
         first(),
-        map((providers) => {
+        map(([providers, allCalendarTaskEventIds, skippedEventIds, hiddenEventIds]) => {
           const providerMap = new Map(providers.map((p) => [p.id, p]));
           return this._getCalProviderFromCache().map((entry) => ({
             ...entry,
             items: entry.items.filter((calEv) => {
               const cfg = providerMap.get(calEv.calProviderId);
-              return passesCalendarEventRegexFilter(
-                calEv,
-                cfg?.filterIncludeRegex,
-                cfg?.filterExcludeRegex,
+              return (
+                passesCalendarEventRegexFilter(
+                  calEv,
+                  cfg?.filterIncludeRegex,
+                  cfg?.filterExcludeRegex,
+                ) &&
+                !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
+                !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
+                !matchesAnyCalendarEventId(calEv, hiddenEventIds)
               );
             }),
           }));

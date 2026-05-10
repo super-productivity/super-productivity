@@ -36,6 +36,7 @@ import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 import 'ical.js';
 import { loadIcalModule } from '../schedule/ical/ical-lazy-loader';
 import { CalendarIntegrationEvent } from './calendar-integration.model';
+import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
 
 describe('CalendarIntegrationService', () => {
   let service: CalendarIntegrationService;
@@ -308,6 +309,90 @@ END:VCALENDAR`;
         expect(ids).toContain('event-a-standup');
         // Provider B has no filter → its 'Lunch' event must survive
         expect(ids).toContain('event-b-lunch');
+
+        sub.unsubscribe();
+        discardPeriodicTasks();
+      }));
+
+      it('should filter out task-imported, skipped, and hidden events from initial cached emission', fakeAsync(() => {
+        const provider = createMockProvider({ id: 'provider-x' });
+        const cachedData = [
+          {
+            items: [
+              {
+                id: 'event-task',
+                calProviderId: 'provider-x',
+                issueProviderKey: 'ICAL',
+                title: 'Already a Task',
+                start: Date.now() + 60000,
+                duration: 3600000,
+              },
+              {
+                id: 'event-skipped',
+                calProviderId: 'provider-x',
+                issueProviderKey: 'ICAL',
+                title: 'Skipped Event',
+                start: Date.now() + 120000,
+                duration: 1800000,
+              },
+              {
+                id: 'event-hidden',
+                calProviderId: 'provider-x',
+                issueProviderKey: 'ICAL',
+                title: 'Hidden Event',
+                start: Date.now() + 180000,
+                duration: 3600000,
+              },
+              {
+                id: 'event-visible',
+                calProviderId: 'provider-x',
+                issueProviderKey: 'ICAL',
+                title: 'Visible Event',
+                start: Date.now() + 240000,
+                duration: 1800000,
+              },
+            ],
+          },
+        ];
+        localStorage.setItem('SUP_CAL_EVENTS_CACHE', JSON.stringify(cachedData));
+
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({
+          imports: [HttpClientTestingModule],
+          providers: [
+            CalendarIntegrationService,
+            provideMockStore({
+              selectors: [
+                { selector: selectCalendarProviders, value: [provider] },
+                { selector: selectEnabledIssueProviders, value: [] },
+                { selector: selectAllCalendarTaskEventIds, value: ['event-task'] },
+              ],
+            }),
+            { provide: SnackService, useValue: mockSnackService },
+          ],
+        });
+
+        const freshService = TestBed.inject(CalendarIntegrationService);
+
+        // Seed skipped and hidden IDs before subscribing
+        freshService.skippedEventIds$.next(['event-skipped']);
+        const hiddenEventsService = TestBed.inject(HiddenCalendarEventsService);
+        hiddenEventsService.hiddenEventIds$.next(['event-hidden']);
+
+        let emittedValue: any;
+        const sub = freshService.calendarEvents$.pipe(take(1)).subscribe((val) => {
+          emittedValue = val;
+        });
+
+        tick(0);
+
+        const allItems = emittedValue?.flatMap((e: any) => e.items ?? []) ?? [];
+        const ids = allItems.map((i: any) => i.id);
+
+        expect(ids).not.toContain('event-task');
+        expect(ids).not.toContain('event-skipped');
+        expect(ids).not.toContain('event-hidden');
+        expect(ids).toContain('event-visible');
 
         sub.unsubscribe();
         discardPeriodicTasks();
