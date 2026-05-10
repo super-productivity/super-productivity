@@ -150,7 +150,8 @@ Each previously-public symbol path keeps working via thin shims:
   factory with `ENTITY_TYPES`.
 - `src/app/op-log/core/sync-state-corrupted.error.ts` re-exports from the
   package.
-- `src/app/op-log/util/entity-key.util.ts` re-exports from the package.
+- `src/app/op-log/util/entity-key.util.ts` delegates to the package while
+  preserving the app's `EntityType`-narrowed API.
 - `src/app/op-log/core/action-types.enum.ts` stays full source in the app.
 - `src/app/op-log/sync-providers/provider.const.ts` stays full source in the app.
 
@@ -248,6 +249,7 @@ export type SyncLogMeta = Record<string, string | number | boolean | null | unde
 
 export interface SyncLogger {
   log(message: string, meta?: SyncLogMeta): void;
+  error(message: string, error?: unknown, meta?: SyncLogMeta): void;
   err(message: string, error?: unknown, meta?: SyncLogMeta): void;
   normal(message: string, meta?: SyncLogMeta): void;
   verbose(message: string, meta?: SyncLogMeta): void;
@@ -259,6 +261,10 @@ export interface SyncLogger {
 ```
 
 Also provide a `NOOP_SYNC_LOGGER` for tests and package defaults.
+
+Keep both `error()` and `err()` initially because current movable code uses both
+`OpLog` spellings. If a follow-up PR normalizes calls to one spelling, do that
+explicitly in the same PR instead of silently shrinking the port surface.
 
 Privacy rule: logger metadata must not include full entities, operation payloads,
 task titles, note text, raw provider responses, credentials, or encryption
@@ -298,7 +304,8 @@ sync correctness.
 
 ### Preferred Direction
 
-Make `@sp/sync-core` own generic vector-clock algorithms:
+Decide the dependency direction before PR 3a moves code. The preferred outcome
+is that `@sp/sync-core` owns generic vector-clock algorithms:
 
 - `compareVectorClocks`
 - `mergeVectorClocks`
@@ -306,10 +313,15 @@ Make `@sp/sync-core` own generic vector-clock algorithms:
 - `MAX_VECTOR_CLOCK_SIZE`
 - validation/sanitization helpers if they are shared by client/server
 
-Then update the current server/shared package path to consume or re-export that
-implementation. If dependency direction makes that awkward, create a smaller
-shared vector-clock package instead. The important constraint is one
-implementation, not two copies.
+This is acceptable only if current server/shared consumers can depend on
+`@sp/sync-core` without creating a bad package direction or build cycle. In that
+case, update build order so `sync-core` is available before those consumers, or
+make the server consume `@sp/sync-core` directly.
+
+If that dependency direction is awkward, create a tiny leaf package such as
+`@sp/vector-clock` and have both `@sp/sync-core` and server/shared code consume
+it. Do not make `@sp/sync-core` depend on `@sp/shared-schema`; the important
+constraint is one implementation, not two copies.
 
 ### Migration Notes
 
