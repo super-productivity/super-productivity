@@ -397,6 +397,80 @@ END:VCALENDAR`;
         sub.unsubscribe();
         discardPeriodicTasks();
       }));
+
+      it('should reapply regex filters to cached events immediately when provider config changes', fakeAsync(() => {
+        const provider = createMockProvider({ id: 'provider-x' });
+        const cachedData = [
+          {
+            items: [
+              {
+                id: 'event-lunch',
+                calProviderId: 'provider-x',
+                issueProviderKey: 'ICAL',
+                title: 'Lunch',
+                start: Date.now() + 60000,
+                duration: 3600000,
+              },
+              {
+                id: 'event-standup',
+                calProviderId: 'provider-x',
+                issueProviderKey: 'ICAL',
+                title: 'Standup',
+                start: Date.now() + 120000,
+                duration: 1800000,
+              },
+            ],
+          },
+        ];
+        localStorage.setItem('SUP_CAL_EVENTS_CACHE', JSON.stringify(cachedData));
+
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({
+          imports: [HttpClientTestingModule],
+          providers: [
+            CalendarIntegrationService,
+            provideMockStore({
+              selectors: [
+                { selector: selectCalendarProviders, value: [provider] },
+                { selector: selectEnabledIssueProviders, value: [] },
+                { selector: selectAllCalendarTaskEventIds, value: [] },
+              ],
+            }),
+            { provide: SnackService, useValue: mockSnackService },
+          ],
+        });
+
+        const freshService = TestBed.inject(CalendarIntegrationService);
+        const freshStore = TestBed.inject(MockStore);
+        const freshHttpMock = TestBed.inject(HttpTestingController);
+        const emissions: string[][] = [];
+        const sub = freshService.calendarEvents$.subscribe((entries) => {
+          emissions.push(entries.flatMap((entry) => entry.items.map((item) => item.id)));
+        });
+
+        tick(0);
+        expect(emissions[0]).toContain('event-lunch');
+        expect(emissions[0]).toContain('event-standup');
+
+        freshStore.overrideSelector(selectCalendarProviders, [
+          createMockProvider({
+            id: 'provider-x',
+            filterExcludeRegex: 'Lunch',
+          }),
+        ]);
+        freshStore.refreshState();
+        tick(0);
+
+        expect(emissions[emissions.length - 1]).not.toContain('event-lunch');
+        expect(emissions[emissions.length - 1]).toContain('event-standup');
+
+        freshHttpMock
+          .match(provider.icalUrl)
+          .filter((req) => !req.cancelled)
+          .forEach((req) => req.flush(MOCK_ICAL_DATA));
+        sub.unsubscribe();
+        discardPeriodicTasks();
+      }));
     });
 
     describe('interval behavior', () => {
