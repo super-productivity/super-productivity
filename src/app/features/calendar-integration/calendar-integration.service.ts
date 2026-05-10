@@ -92,10 +92,7 @@ export class CalendarIntegrationService {
   ]).pipe(
     switchMap(([icalProviders, pluginCalProviders]) => {
       if (!icalProviders?.length && !pluginCalProviders?.length) {
-        return merge(
-          this._getFilteredCalProviderFromCache$(icalProviders).pipe(first()),
-          of([]),
-        );
+        return of([]) as Observable<ScheduleCalendarMapEntry[]>;
       }
       const minInterval = this._getCombinedRefreshInterval(
         icalProviders,
@@ -103,7 +100,9 @@ export class CalendarIntegrationService {
       );
       return merge(
         // Emit from the raw cache immediately on subscription and provider changes.
-        this._getFilteredCalProviderFromCache$(icalProviders).pipe(first()),
+        this._getFilteredCalProviderFromCache$(icalProviders, pluginCalProviders).pipe(
+          first(),
+        ),
         merge(timer(0, minInterval), this._refreshTrigger$).pipe(
           switchMap(() => this._fetchAllCombined(icalProviders, pluginCalProviders)),
         ),
@@ -186,18 +185,24 @@ export class CalendarIntegrationService {
         );
         saveToRealLs(LS.CAL_EVENTS_CACHE, unfilteredEntries);
 
-        return this._getViewFilteredCalendarEntries$(unfilteredEntries, icalProviders);
+        return this._getViewFilteredCalendarEntries$(
+          unfilteredEntries,
+          icalProviders,
+          pluginCalProviders,
+        );
       }),
     );
   }
 
   private _getFilteredCalProviderFromCache$(
     icalProviders: IssueProviderCalendar[],
+    pluginCalProviders: IssueProviderPluginType[],
   ): Observable<ScheduleCalendarMapEntry[]> {
     return defer(() =>
       this._getViewFilteredCalendarEntries$(
         this._getCalProviderFromCache(),
         icalProviders,
+        pluginCalProviders,
       ),
     );
   }
@@ -205,8 +210,13 @@ export class CalendarIntegrationService {
   private _getViewFilteredCalendarEntries$(
     entries: ScheduleCalendarMapEntry[],
     icalProviders: IssueProviderCalendar[],
+    pluginCalProviders: IssueProviderPluginType[],
   ): Observable<ScheduleCalendarMapEntry[]> {
     const icalProviderMap = new Map(icalProviders.map((p) => [p.id, p]));
+    const activeProviderIds = new Set([
+      ...icalProviders.map((p) => p.id),
+      ...pluginCalProviders.map((p) => p.id),
+    ]);
 
     return combineLatest([
       this._store
@@ -220,6 +230,7 @@ export class CalendarIntegrationService {
       map(([allCalendarTaskEventIds, skippedEventIds, hiddenEventIds]) =>
         this._filterCalendarEntriesForView(
           entries,
+          activeProviderIds,
           icalProviderMap,
           allCalendarTaskEventIds,
           skippedEventIds,
@@ -231,6 +242,7 @@ export class CalendarIntegrationService {
 
   private _filterCalendarEntriesForView(
     entries: ScheduleCalendarMapEntry[],
+    activeProviderIds: Set<string>,
     icalProviderMap: Map<string, IssueProviderCalendar>,
     allCalendarTaskEventIds: string[],
     skippedEventIds: string[],
@@ -239,6 +251,9 @@ export class CalendarIntegrationService {
     return entries.map((entry) => ({
       ...entry,
       items: entry.items.filter((calEv) => {
+        if (!activeProviderIds.has(calEv.calProviderId)) {
+          return false;
+        }
         const cfg = icalProviderMap.get(calEv.calProviderId);
         return (
           passesCalendarEventRegexFilter(
