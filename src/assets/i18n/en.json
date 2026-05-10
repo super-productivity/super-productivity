@@ -1503,7 +1503,7 @@
         "LABEL": "Tags"
       },
       "FORM_BASIC": {
-        "D_COLOR": "If not set, defaults to the theme's Primary color.",
+        "D_COLOR": "If not set, defaults to the Tag Color.",
         "L_COLOR": "Tag Color",
         "L_ICON": "Icon",
         "L_TITLE": "Tag Name",

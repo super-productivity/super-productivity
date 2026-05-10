@@ -30,7 +30,6 @@ export const buildWorkContextSettingsFormCfg = (
       type: 'color',
       templateOptions: {
         label: T.F.TAG.FORM_BASIC.L_COLOR,
-        description: T.F.TAG.FORM_BASIC.D_COLOR,
       },
     });
   }
@@ -55,7 +54,17 @@ export const buildWorkContextSettingsFormCfg = (
   }
 
   const sharedItems = WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG.items!;
-  const colorFields = sharedItems.slice(0, 3);
+  const colorFields = sharedItems.slice(0, 3).map((field, index) =>
+    !isProject && index === 0
+      ? {
+          ...field,
+          templateOptions: {
+            ...field.templateOptions,
+            description: T.F.TAG.FORM_BASIC.D_COLOR,
+          },
+        }
+      : field,
+  );
   const remainingFields = sharedItems.slice(3);
 
   const themeFields: FormlyFieldConfig[] = [
