@@ -34,8 +34,14 @@ const isBuildRequired = () =>
   isTruthyEnv(process.env.CI) ||
   isTruthyEnv(process.env.SP_REQUIRE_WAYLAND_IDLE_HELPER_BUILD);
 
+const removeBuiltHelper = () => {
+  fs.rmSync(OUTPUT_PATH, { force: true });
+  fs.rmSync(`${OUTPUT_PATH}.tmp`, { force: true });
+};
+
 const buildHelper = () => {
   if (isExplicitlySkipped()) {
+    removeBuiltHelper();
     console.warn(
       '[build-wayland-idle-helper] Skipping Wayland idle helper because SP_SKIP_WAYLAND_IDLE_HELPER_BUILD is set.',
     );
@@ -56,6 +62,7 @@ const buildHelper = () => {
     console.warn(
       `${message} Skipping for this local build. Set SP_REQUIRE_WAYLAND_IDLE_HELPER_BUILD=1 to enforce helper builds outside CI.`,
     );
+    removeBuiltHelper();
     return;
   }
 
