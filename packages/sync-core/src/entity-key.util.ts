@@ -1,5 +1,3 @@
-import { EntityType } from './operation.types';
-
 /**
  * Creates a unique key for an entity by combining its type and ID.
  * Used for indexing and looking up entities across the operation log system.
@@ -8,7 +6,7 @@ import { EntityType } from './operation.types';
  * @param entityId The unique ID of the entity
  * @returns A composite key in the format "ENTITY_TYPE:entityId"
  */
-export const toEntityKey = (entityType: EntityType, entityId: string): string =>
+export const toEntityKey = (entityType: string, entityId: string): string =>
   `${entityType}:${entityId}`;
 
 /**
@@ -17,15 +15,13 @@ export const toEntityKey = (entityType: EntityType, entityId: string): string =>
  * @param key The composite entity key
  * @returns An object containing entityType and entityId
  */
-export const parseEntityKey = (
-  key: string,
-): { entityType: EntityType; entityId: string } => {
+export const parseEntityKey = (key: string): { entityType: string; entityId: string } => {
   const colonIndex = key.indexOf(':');
   if (colonIndex === -1) {
     throw new Error(`Invalid entity key format: ${key}`);
   }
   return {
-    entityType: key.substring(0, colonIndex) as EntityType,
+    entityType: key.substring(0, colonIndex),
     entityId: key.substring(colonIndex + 1),
   };
 };

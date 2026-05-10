@@ -6,7 +6,8 @@
     "types": ["jasmine", "node"],
     "paths": {
       "@super-productivity/plugin-api": ["packages/plugin-api/src/index.ts"],
-      "@sp/shared-schema": ["packages/shared-schema/src/index.ts"]
+      "@sp/shared-schema": ["packages/shared-schema/src/index.ts"],
+      "@sp/sync-core": ["packages/sync-core/src/index.ts"]
     }
   },
   "files": ["test.ts", "polyfills.ts"],

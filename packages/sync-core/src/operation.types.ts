@@ -1,8 +1,10 @@
-import type { VectorClock, EntityType as SharedEntityType } from '@sp/shared-schema';
-import { ENTITY_TYPES } from '@sp/shared-schema';
-import { ActionType } from './action-types.enum';
-export type { VectorClock };
-export { ActionType, ENTITY_TYPES };
+/**
+ * Vector clock data structure.
+ * Maps client IDs to their respective monotonically-increasing clock values.
+ *
+ * Defined locally so the lib has no dependency on application-specific schema.
+ */
+export type VectorClock = Record<string, number>;
 
 export enum OpType {
   Create = 'CRT',
@@ -10,31 +12,13 @@ export enum OpType {
   Delete = 'DEL',
   Move = 'MOV', // For list reordering
   Batch = 'BATCH', // For bulk operations (import, mass update)
-  /** Replaces entire app state from remote sync. All concurrent ops are discarded. See CLAUDE.md #12. */
+  /** Replaces entire app state from remote sync. All concurrent ops are discarded. */
   SyncImport = 'SYNC_IMPORT',
-  /** Replaces entire app state from backup file. All concurrent ops are discarded. See CLAUDE.md #12. */
+  /** Replaces entire app state from backup file. All concurrent ops are discarded. */
   BackupImport = 'BACKUP_IMPORT',
   /** Auto-repair operation containing full repaired state. */
   Repair = 'REPAIR',
 }
-
-/**
- * Entity type - identifies the kind of data entity being operated on.
- * Re-exported from @sp/shared-schema to ensure client/server consistency.
- */
-export type EntityType = SharedEntityType;
-
-/**
- * Reason for a full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
- * Used in the conflict dialog to explain WHY the import happened.
- */
-export type SyncImportReason =
-  | 'PASSWORD_CHANGED'
-  | 'FILE_IMPORT'
-  | 'BACKUP_RESTORE'
-  | 'FORCE_UPLOAD'
-  | 'SERVER_MIGRATION'
-  | 'REPAIR';
 
 export interface Operation {
   /**
@@ -46,11 +30,11 @@ export interface Operation {
 
   // ACTION MAPPING
   /**
-   * The specific NgRx Action type (e.g., '[Task] Update').
-   * Used to replay the operation against the store during application or testing.
-   * Must be a value from the ActionType enum to ensure type safety.
+   * The action type string this operation replays (e.g., '[Task] Update').
+   * Carried as an opaque string here; the host app's action-type enum is the
+   * source of truth for valid values.
    */
-  actionType: ActionType;
+  actionType: string;
 
   /**
    * High-level operation category (Create, Update, Delete, etc.).
@@ -60,9 +44,10 @@ export interface Operation {
 
   // SCOPE
   /**
-   * The type of the data model entity being modified (e.g., 'TASK', 'PROJECT').
+   * The type of the data model entity being modified.
+   * Carried as an opaque string here; the host app supplies the valid set.
    */
-  entityType: EntityType;
+  entityType: string;
 
   /**
    * The specific ID of the entity being modified.
@@ -81,7 +66,6 @@ export interface Operation {
    * - For 'CRT', this is the full object.
    * - For 'UPD', this is a partial object (changeset).
    * - For 'DEL', this might be empty or a tombstone.
-   * Validated by Typia at runtime.
    */
   payload: unknown;
 
@@ -95,14 +79,12 @@ export interface Operation {
   /**
    * Represents the causal state of the world AFTER this operation was applied.
    * Used to detect concurrency: if two ops have unordered vector clocks, they are concurrent.
-   * This is the primary mechanism for ensuring consistency across distributed devices.
    */
   vectorClock: VectorClock;
 
   /**
    * Wall clock time (epoch ms) from the **originating** device.
-   * - Used as a tie-breaker for concurrent operations (Last-Write-Wins logic).
-   * - NOT used for garbage collection or local maintenance.
+   * Used as a tie-breaker for concurrent operations (Last-Write-Wins logic).
    */
   timestamp: number;
 
@@ -112,13 +94,6 @@ export interface Operation {
    * Allows the system to migrate or transform payloads if the data structure changes in the future.
    */
   schemaVersion: number;
-
-  /**
-   * Optional reason for full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
-   * Used in the conflict dialog to explain why the import was created.
-   * Old operations without this field gracefully show a generic message.
-   */
-  syncImportReason?: SyncImportReason;
 }
 
 export interface OperationLogEntry {
@@ -135,9 +110,7 @@ export interface OperationLogEntry {
 
   /**
    * Local timestamp (epoch ms) indicating when this operation was written to the LOCAL database.
-   * - **Usage:** Strictly for local maintenance, such as garbage collection (compaction).
-   * - **Compaction:** Old entries are deleted based on `Date.now() - appliedAt > Retention`.
-   * - **Sync:** This value is NOT synchronized and implies nothing about the global order of events.
+   * Used strictly for local maintenance, such as garbage collection (compaction).
    */
   appliedAt: number;
 
@@ -150,8 +123,7 @@ export interface OperationLogEntry {
 
   /**
    * Timestamp (epoch ms) when this operation was successfully acknowledged by the remote server.
-   * - Null/Undefined if the operation is still pending upload.
-   * - Used to determine which operations are safe to compact (must be synced first).
+   * Null/undefined if the operation is still pending upload.
    */
   syncedAt?: number;
 
@@ -162,28 +134,24 @@ export interface OperationLogEntry {
   rejectedAt?: number;
 
   /**
-   * For remote ops only: tracks whether the op was successfully applied to the local NgRx store.
-   * - 'pending': Stored in DB but not yet dispatched to state (e.g., during initial download).
-   * - 'applied': Successfully dispatched to NgRx.
-   * - 'failed': Attempted to apply but failed (e.g., missing dependency). Will be retried on startup.
+   * For remote ops only: tracks whether the op was successfully applied to local state.
    * Used for crash recovery: on startup, any 'pending' or 'failed' remote ops are re-dispatched.
    */
   applicationStatus?: 'pending' | 'applied' | 'failed';
 
   /**
    * For 'failed' ops: number of retry attempts.
-   * After MAX_CONFLICT_RETRY_ATTEMPTS, the op is marked as rejected.
    */
   retryCount?: number;
 }
 
 export interface EntityConflict {
-  entityType: EntityType;
+  entityType: string;
   entityId: string;
-  localOps: Operation[]; // Local ops affecting this entity
-  remoteOps: Operation[]; // Remote ops affecting the same entity
+  localOps: Operation[];
+  remoteOps: Operation[];
   suggestedResolution: 'local' | 'remote' | 'merge' | 'manual';
-  mergedPayload?: unknown; // If auto-mergeable
+  mergedPayload?: unknown;
 }
 
 export interface ConflictResult {
@@ -191,35 +159,12 @@ export interface ConflictResult {
   conflicts: EntityConflict[];
 }
 
-/**
- * Minimal summary of repairs performed, used in REPAIR operation payload.
- * Keeps repair log lightweight while providing debugging info.
- */
-export interface RepairSummary {
-  entityStateFixed: number; // Fixed ids/entities array sync
-  orphanedEntitiesRestored: number; // Tasks restored from archive, orphaned notes fixed
-  invalidReferencesRemoved: number; // Non-existent project/tag IDs removed
-  relationshipsFixed: number; // Project/tag ID consistency, subtask parent relationships
-  structureRepaired: number; // Menu tree, inbox project creation
-  typeErrorsFixed: number; // Typia errors auto-fixed (type coercion)
-}
-
-/**
- * Payload structure for REPAIR operations.
- * Contains the fully repaired state and a summary of what was fixed.
- */
-export interface RepairPayload {
-  appDataComplete: unknown; // AppDataComplete - using unknown to avoid circular deps
-  repairSummary: RepairSummary;
-}
-
 // =============================================================================
-// FULL-STATE OPERATION PAYLOADS
+// FULL-STATE OPERATION HELPERS
 // =============================================================================
 
 /**
  * OpTypes that contain full application state in their payload.
- * Used for type guards and validation.
  */
 export const FULL_STATE_OP_TYPES = new Set<OpType>([
   OpType.SyncImport,
@@ -233,109 +178,22 @@ export const FULL_STATE_OP_TYPES = new Set<OpType>([
 export const isFullStateOpType = (opType: OpType | string): boolean =>
   FULL_STATE_OP_TYPES.has(opType as OpType);
 
-/**
- * Legacy wrapper format for full-state payloads.
- * Some older code wrapped the state in { appDataComplete: ... }.
- * New code should use unwrapped format directly.
- */
-export interface WrappedFullStatePayload {
-  appDataComplete: Record<string, unknown>;
-}
-
-/**
- * Type guard to check if a payload is in the wrapped format.
- */
-export const isWrappedFullStatePayload = (
-  payload: unknown,
-): payload is WrappedFullStatePayload =>
-  typeof payload === 'object' &&
-  payload !== null &&
-  'appDataComplete' in payload &&
-  typeof (payload as WrappedFullStatePayload).appDataComplete === 'object' &&
-  (payload as WrappedFullStatePayload).appDataComplete !== null;
-
-/**
- * Extracts the raw application state from a full-state operation payload.
- * Handles both wrapped ({ appDataComplete: ... }) and unwrapped formats.
- *
- * IMPORTANT: This should be used when uploading snapshots to ensure
- * consistent format in sync files.
- *
- * @param payload - The operation payload (wrapped or unwrapped)
- * @returns The raw application state
- */
-export const extractFullStateFromPayload = (
-  payload: unknown,
-): Record<string, unknown> => {
-  if (isWrappedFullStatePayload(payload)) {
-    return payload.appDataComplete;
-  }
-  // Unwrapped format - payload IS the state
-  return payload as Record<string, unknown>;
-};
-
-/**
- * Validates that a full-state payload has the expected structure.
- * Throws an error if the payload is malformed.
- *
- * @param payload - The payload to validate
- * @param context - Description of where this is being called from (for error messages)
- * @throws Error if payload is not a valid full-state payload
- */
-export const assertValidFullStatePayload: (
-  payload: unknown,
-  context: string,
-) => asserts payload is Record<string, unknown> = (payload, context) => {
-  const state = extractFullStateFromPayload(payload);
-
-  if (typeof state !== 'object' || state === null) {
-    throw new Error(
-      `[${context}] Invalid full-state payload: expected object, got ${typeof state}`,
-    );
-  }
-
-  // Check for expected top-level properties (not exhaustive, just key ones)
-  const expectedKeys = ['task', 'project', 'tag', 'globalConfig'];
-  const hasExpectedKeys = expectedKeys.some((key) => key in state);
-
-  if (!hasExpectedKeys) {
-    const actualKeys = Object.keys(state).slice(0, 5).join(', ');
-    throw new Error(
-      `[${context}] Invalid full-state payload: missing expected keys. ` +
-        `Expected some of [${expectedKeys.join(', ')}], got [${actualKeys}...]`,
-    );
-  }
-};
-
 // =============================================================================
 // MULTI-ENTITY OPERATIONS
 // =============================================================================
 
 /**
  * Represents a single entity change within a multi-entity operation.
- * Captures the exact changes made to one entity as part of an atomic operation.
  */
 export interface EntityChange {
-  /**
-   * The type of entity being changed.
-   */
-  entityType: EntityType;
-
-  /**
-   * The ID of the entity being changed.
-   */
+  entityType: string;
   entityId: string;
-
-  /**
-   * The type of change (Create, Update, Delete).
-   */
   opType: OpType;
-
   /**
    * The actual changes:
    * - For Create: Full entity object
    * - For Update: Partial object with only changed fields
-   * - For Delete: Minimal tombstone { id: string }
+   * - For Delete: Minimal tombstone
    */
   changes: unknown;
 }
@@ -345,15 +203,7 @@ export interface EntityChange {
  * Contains the original action payload plus all entity changes computed from state diff.
  */
 export interface MultiEntityPayload {
-  /**
-   * The original action payload (for replaying the action on remote clients).
-   */
   actionPayload: Record<string, unknown>;
-
-  /**
-   * All entity changes that resulted from this action.
-   * Computed by diffing state before and after the action.
-   */
   entityChanges: EntityChange[];
 }
 

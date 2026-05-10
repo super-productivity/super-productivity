@@ -17,9 +17,6 @@
       }
     }
   },
-  "dependencies": {
-    "@sp/shared-schema": "1.0.0"
-  },
   "scripts": {
     "build": "tsup",
     "build:tsc": "tsc"

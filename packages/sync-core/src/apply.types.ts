@@ -1,16 +1,13 @@
 import { Operation } from './operation.types';
 
 /**
- * Result of applying operations to the NgRx store.
+ * Result of applying a batch of operations.
  *
- * This allows callers to handle partial success scenarios where some operations
+ * Allows callers to handle partial success scenarios where some operations
  * were applied before an error occurred.
  */
 export interface ApplyOperationsResult {
-  /**
-   * Operations that were successfully applied to the NgRx store.
-   * These ops have already been dispatched and should be marked as applied.
-   */
+  /** Operations that were successfully applied. */
   appliedOps: Operation[];
 
   /**
@@ -23,14 +20,11 @@ export interface ApplyOperationsResult {
   };
 }
 
-/**
- * Options for applying operations to the NgRx store.
- */
 export interface ApplyOperationsOptions {
   /**
-   * When true, skip archive handling (already persisted from original execution).
-   * Use ONLY for local hydration where operations are replaying
-   * previously validated local operations from SUP_OPS.
+   * When true, skip side effects that would normally fire on first application
+   * (e.g. writing to archive storage) — used when replaying already-persisted
+   * local operations during hydration.
    */
   isLocalHydration?: boolean;
 }
