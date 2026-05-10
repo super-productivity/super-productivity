@@ -7,7 +7,6 @@ import {
   map,
   shareReplay,
   switchMap,
-  tap,
 } from 'rxjs/operators';
 import { getRelevantEventsForCalendarIntegrationFromIcal } from '../schedule/ical/get-relevant-events-from-ical';
 import {
@@ -203,33 +202,39 @@ export class CalendarIntegrationService {
               this._getCalProviderFromCache(),
             );
             const icalProviderMap = new Map(icalProviders.map((p) => [p.id, p]));
-            return resultForProviders.map(
-              ({ itemsForProvider, providerId, didError }) => {
-                const sourceItems: ScheduleFromCalendarEvent[] = didError
+
+            // Build unfiltered entries first so the cache preserves raw fetch data.
+            // Regex filters are intentionally excluded here — they are view-level concerns
+            // and must not permanently remove events that could reappear if the filter changes.
+            const unfilteredEntries: ScheduleCalendarMapEntry[] = resultForProviders.map(
+              ({ itemsForProvider, providerId, didError }) => ({
+                items: didError
                   ? (cachedByProviderId.get(providerId) ?? [])
-                  : (itemsForProvider as ScheduleFromCalendarEvent[]);
-                const providerCfg = icalProviderMap.get(providerId);
-                return {
-                  items: sourceItems.filter(
-                    (calEv) =>
-                      passesCalendarEventRegexFilter(
-                        calEv,
-                        providerCfg?.filterIncludeRegex,
-                        providerCfg?.filterExcludeRegex,
-                      ) &&
-                      !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
-                      !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
-                      !matchesAnyCalendarEventId(calEv, hiddenEventIds),
-                  ),
-                } as ScheduleCalendarMapEntry;
-              },
+                  : (itemsForProvider as ScheduleFromCalendarEvent[]),
+              }),
             );
+            saveToRealLs(LS.CAL_EVENTS_CACHE, unfilteredEntries);
+
+            return unfilteredEntries.map(({ items }, index) => {
+              const { providerId } = resultForProviders[index];
+              const providerCfg = icalProviderMap.get(providerId);
+              return {
+                items: items.filter(
+                  (calEv) =>
+                    passesCalendarEventRegexFilter(
+                      calEv,
+                      providerCfg?.filterIncludeRegex,
+                      providerCfg?.filterExcludeRegex,
+                    ) &&
+                    !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
+                    !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
+                    !matchesAnyCalendarEventId(calEv, hiddenEventIds),
+                ),
+              } as ScheduleCalendarMapEntry;
+            });
           }),
         ),
       ),
-      tap((val) => {
-        saveToRealLs(LS.CAL_EVENTS_CACHE, val);
-      }),
     );
   }
 
