@@ -544,11 +544,18 @@ export class TaskRepeatCfgEffects {
       ofType(TaskSharedActions.updateTask),
       filter((a) => a.task.changes.isDone === true),
       switchMap(({ task }) =>
-        this._taskService
-          .getByIdOnce$(task.id as string)
-          .pipe(map((fullTask) => fullTask)),
+        this._taskService.getByIdOnce$(task.id as string).pipe(
+          switchMap((fullTask) => {
+            if (fullTask) {
+              return rxOf(fullTask);
+            }
+            return from(this._taskArchiveService.load()).pipe(
+              map((archive) => archive.entities[task.id as string]),
+            );
+          }),
+        ),
       ),
-      filter((task) => !!task?.repeatCfgId),
+      filter((task): task is Task => !!task?.repeatCfgId),
       switchMap((task) =>
         this._taskRepeatCfgService.getTaskRepeatCfgById$(task.repeatCfgId as string).pipe(
           take(1),
@@ -824,10 +831,16 @@ export class TaskRepeatCfgEffects {
       return true;
     }
     // Use the stable task.created date (set to noon on the repeat occurrence day)
-    // instead of the mutable task.dueDay. dueDay changes when tasks are rescheduled
-    // (e.g., "Add to Today"), which would cause waitForCompletion to miss the
-    // completion event after the task is moved.
-    const taskDay = getDbDateStr(task.created);
-    return taskDay === lastCreationDay;
+    // as the primary identity. Some existing converted repeat tasks predate this
+    // invariant, so allow due date matching only when created is older than the
+    // repeat cursor. That keeps rescheduled current instances working without
+    // regressing legacy repeat-from-completion configs.
+    const createdDay = getDbDateStr(task.created);
+    if (createdDay === lastCreationDay) {
+      return true;
+    }
+    const dueDay =
+      task.dueDay || (task.dueWithTime ? getDbDateStr(task.dueWithTime) : undefined);
+    return !!dueDay && dueDay === lastCreationDay && createdDay < lastCreationDay;
   }
 }
