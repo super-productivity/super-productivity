@@ -17,17 +17,31 @@ import { Page } from '@playwright/test';
 const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
   await page.goto('/#/config');
   await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(500);
 
-  // The setting lives in the Productivity → Focus Mode section.
+  // Navigate to Productivity tab
   const productivityTab = page.locator('[role="tab"]', { hasText: /Productivity/i });
   if (await productivityTab.isVisible({ timeout: 3000 }).catch(() => false)) {
     await productivityTab.click();
+    await page.waitForTimeout(500);
   }
 
-  const focusModeHeader = page.locator('text=Focus Mode').first();
-  if (await focusModeHeader.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await focusModeHeader.click();
-    await page.waitForTimeout(300);
+  // Find and expand the Focus Mode section
+  const focusModeSection = page
+    .locator('config-section')
+    .filter({ hasText: 'Focus Mode' })
+    .first();
+  await focusModeSection.scrollIntoViewIfNeeded();
+
+  const collapsible = focusModeSection.locator('collapsible');
+  const isExpanded = await collapsible
+    .evaluate((el) => el.classList.contains('isExpanded'))
+    .catch(() => false);
+
+  if (!isExpanded) {
+    const header = collapsible.locator('.collapsible-header');
+    await header.click();
+    await page.waitForTimeout(500);
   }
 
   const toggle = page

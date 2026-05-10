@@ -40,13 +40,10 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     }
   });
 
-  // The banner-based focus-session surface this test exercised was removed —
-  // the header focus-button now indicates the running session and pause/resume
-  // of breaks is only available inside the focus-mode-break component (whose
-  // pause/resume buttons are not E2E-testable per the note in
-  // focus-mode-break.spec.ts; that path is covered by 48 reducer + 14
-  // component unit tests).
-  test.skip('CRITICAL: Resuming paused break should continue break, not start next session', async ({
+  // The break pause/resume buttons are available in the focus-mode-break component.
+  // This test verifies that resuming a paused break continues the break instead of
+  // starting the next work session (the original bug).
+  test('CRITICAL: Resuming paused break should continue break, not start next session', async ({
     page,
     workViewPage,
   }) => {
@@ -73,17 +70,34 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     await page.waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 });
 
     // Step 3: Start Pomodoro session
-    const focusButton = page
-      .getByRole('button')
-      .filter({ hasText: 'center_focus_strong' });
-    await focusButton.click();
-    await page.waitForTimeout(500);
+    // Note: With isSyncSessionWithTracking enabled, the focus overlay may auto-open
+    // when we start tracking. Check if it's already open before clicking the button.
+    const focusOverlay = page.locator('focus-mode-overlay');
+    const isOverlayAlreadyOpen = await focusOverlay.isVisible().catch(() => false);
+
+    if (!isOverlayAlreadyOpen) {
+      const focusButton = page
+        .getByRole('button')
+        .filter({ hasText: 'center_focus_strong' });
+      await focusButton.click();
+      await page.waitForTimeout(500);
+    }
+
+    // Ensure overlay is visible
+    await expect(focusOverlay).toBeVisible({ timeout: 5000 });
 
     const pomodoroButton = page.locator(
       'segmented-button-group button:has-text("Pomodoro")',
     );
-    await pomodoroButton.click();
-    await page.waitForTimeout(300);
+    // Check if Pomodoro is already selected
+    const isPomodoroActive = await pomodoroButton
+      .evaluate((el) => el.classList.contains('is-active'))
+      .catch(() => false);
+
+    if (!isPomodoroActive) {
+      await pomodoroButton.click();
+      await page.waitForTimeout(300);
+    }
 
     const playButton = page.locator('focus-mode-main button.play-button');
     await playButton.click();
@@ -99,20 +113,18 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     // Wait for break to start
     await page.waitForTimeout(2000);
 
-    // Step 5: Close overlay to show banner
-    const closeButton = page.locator('focus-mode-overlay button.close-btn');
-    await closeButton.click();
-    await page.waitForTimeout(500);
-
-    // Verify banner is visible with break running
-    const banner = page.locator('banner');
-    await expect(banner).toBeVisible({ timeout: 3000 });
-    await expect(banner).toContainText('Break', { timeout: 2000 });
+    // Step 5: Verify we're on the break screen
+    const breakScreen = page.locator('focus-mode-break');
+    await expect(breakScreen).toBeVisible({ timeout: 5000 });
+    // The break screen shows "Short break" or "Long break" (lowercase)
+    await expect(breakScreen).toContainText('break', { timeout: 2000 });
 
     console.log('\n=== STEP: About to pause break ===');
 
-    // Step 6: Pause the break
-    const pauseBtn = banner.getByRole('button', { name: 'Pause' });
+    // Step 6: Pause the break using the pause button in focus-mode-break
+    const pauseBtn = breakScreen.locator(
+      'button.pause-resume-btn mat-icon:has-text("pause")',
+    );
     await expect(pauseBtn).toBeVisible({ timeout: 2000 });
     await pauseBtn.click();
     await page.waitForTimeout(1000);
@@ -120,7 +132,9 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     console.log('\n=== STEP: Break paused, about to resume ===');
 
     // Step 7: Resume the break - THIS IS WHERE THE BUG HAPPENS
-    const resumeBtn = banner.getByRole('button', { name: 'Resume' });
+    const resumeBtn = breakScreen.locator(
+      'button.pause-resume-btn mat-icon:has-text("play_arrow")',
+    );
     await expect(resumeBtn).toBeVisible({ timeout: 2000 });
     await resumeBtn.click();
 
@@ -130,32 +144,22 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     console.log('\n=== STEP: Checking result ===');
 
     // Step 8: CRITICAL ASSERTION
-    // The banner should still show "Break" text (break is continuing)
-    // If the bug exists, it will show work session text instead
-    const bannerText = await banner.textContent();
-    console.log(`\n>>> BANNER TEXT AFTER RESUME: "${bannerText}"`);
-
-    // Check what's in the banner
-    const hasBreakText = bannerText?.includes('Break');
-    const hasSessionText =
-      bannerText?.includes('Session') || bannerText?.includes('Pomodoro');
-
-    console.log(`>>> Has 'Break' text: ${hasBreakText}`);
-    console.log(`>>> Has 'Session' text: ${hasSessionText}`);
-
-    // THE TEST: Break text should be present, session text should not
-    expect(hasBreakText).toBe(true);
-    expect(hasSessionText).toBe(false);
-
-    // Additional verification: Open overlay and check we're on break screen
-    await banner.getByRole('button', { name: /focus overlay/i }).click();
-    await page.waitForTimeout(500);
-
-    const breakScreen = page.locator('focus-mode-break');
-    const mainScreen = page.locator('focus-mode-main');
-
+    // The break screen should still be visible (break is continuing)
+    // If the bug exists, it will switch to focus-mode-main (work session)
     await expect(breakScreen).toBeVisible({ timeout: 2000 });
+
+    const mainScreen = page.locator('focus-mode-main');
     await expect(mainScreen).not.toBeVisible();
+
+    // Verify the break screen still shows break content
+    const breakText = await breakScreen.textContent();
+    console.log(`\n>>> BREAK SCREEN TEXT AFTER RESUME: "${breakText}"`);
+
+    const hasBreakText = breakText?.toLowerCase().includes('break');
+    console.log(`>>> Has 'break' text: ${hasBreakText}`);
+
+    // THE TEST: Break text should be present
+    expect(hasBreakText).toBe(true);
   });
 });
 
@@ -164,32 +168,38 @@ const enableSyncSetting = async (page: Page): Promise<void> => {
 
   await page.goto('/#/config');
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForURL(/\/#\/config/, { timeout: 10000 });
+  await page.waitForTimeout(500);
 
   // Navigate to Productivity tab
-  const tabs = page.locator('[role="tab"]');
-  const productivityTab = tabs.filter({ hasText: /Productivity/i });
-
-  if ((await productivityTab.count()) > 0) {
+  const productivityTab = page.locator('[role="tab"]', { hasText: /Productivity/i });
+  if (await productivityTab.isVisible({ timeout: 3000 }).catch(() => false)) {
     await productivityTab.click();
     await page.waitForTimeout(500);
   }
 
-  // Find Focus Mode section
-  const sections = page.locator('config-section');
-  const focusModeSection = sections.filter({ hasText: 'Focus Mode' }).first();
+  // Find and expand the Focus Mode section
+  const focusModeSection = page
+    .locator('config-section')
+    .filter({ hasText: 'Focus Mode' })
+    .first();
+  await focusModeSection.scrollIntoViewIfNeeded();
 
-  // Try to expand it
-  const header = focusModeSection.locator('.section-header, h2, h3').first();
-  if (await header.isVisible({ timeout: 2000 }).catch(() => false)) {
+  const collapsible = focusModeSection.locator('collapsible');
+  const isExpanded = await collapsible
+    .evaluate((el) => el.classList.contains('isExpanded'))
+    .catch(() => false);
+
+  if (!isExpanded) {
+    const header = collapsible.locator('.collapsible-header');
     await header.click();
     await page.waitForTimeout(500);
   }
 
   // Find and enable the sync toggle
-  const syncText = 'Sync focus sessions with time tracking';
-  const toggles = page.locator('mat-slide-toggle');
-  const syncToggle = toggles.filter({ hasText: syncText }).first();
+  const syncToggle = page
+    .locator('mat-slide-toggle')
+    .filter({ hasText: 'Sync focus sessions with time tracking' })
+    .first();
 
   if (await syncToggle.isVisible({ timeout: 3000 }).catch(() => false)) {
     const classes = await syncToggle.getAttribute('class');
