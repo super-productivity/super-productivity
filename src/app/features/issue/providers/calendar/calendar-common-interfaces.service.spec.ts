@@ -136,6 +136,53 @@ describe('CalendarCommonInterfacesService', () => {
     });
   });
 
+  describe('searchIssues', () => {
+    it('should apply calendar regex filters', async () => {
+      const mockCalendarCfg = {
+        id: 'provider-1',
+        isEnabled: true,
+        icalUrl: 'https://example.com/calendar.ics',
+        filterIncludeRegex: 'Meeting|Lunch',
+        filterExcludeRegex: 'Lunch',
+      };
+      const calendarEvents: CalendarIntegrationEvent[] = [
+        {
+          id: 'meeting-event',
+          calProviderId: 'provider-1',
+          title: 'Team Meeting',
+          start: new Date('2025-01-15T10:00:00Z').getTime(),
+          duration: 3600000,
+          issueProviderKey: 'ICAL',
+        },
+        {
+          id: 'lunch-event',
+          calProviderId: 'provider-1',
+          title: 'Lunch',
+          start: new Date('2025-01-15T12:00:00Z').getTime(),
+          duration: 3600000,
+          issueProviderKey: 'ICAL',
+        },
+        {
+          id: 'focus-event',
+          calProviderId: 'provider-1',
+          title: 'Focus Block',
+          start: new Date('2025-01-15T14:00:00Z').getTime(),
+          duration: 3600000,
+          issueProviderKey: 'ICAL',
+        },
+      ];
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(mockCalendarCfg as any));
+      calendarIntegrationServiceSpy.requestEventsForSchedule$.and.returnValue(
+        of(calendarEvents),
+      );
+
+      const result = await service.searchIssues('', 'provider-1');
+
+      expect(result.map((item) => item.title)).toEqual(['Team Meeting']);
+      expect(result[0].issueData.id).toBe('meeting-event');
+    });
+  });
+
   describe('getFreshDataForIssueTask', () => {
     const mockCalendarCfg = {
       id: 'provider-1',
