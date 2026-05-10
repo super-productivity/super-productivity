@@ -9,55 +9,11 @@
  *   4. exit focus mode
  *   expected: task is paused (current task cleared)
  *
- * This behavior requires the `isSyncSessionWithTracking` setting to be enabled,
- * which gates the syncSessionPauseToTracking$ effect in focus-mode.effects.ts.
- * The test now explicitly enables this setting before running the scenario.
+ * This behavior is now always enabled via the syncSessionPauseToTracking$ effect
+ * in focus-mode.effects.ts (no longer gated by a config setting).
  */
 
 import { test, expect } from '../../fixtures/test.fixture';
-import { Page } from '@playwright/test';
-
-const enableSyncSessionWithTracking = async (page: Page): Promise<void> => {
-  await page.goto('/#/config');
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(500);
-
-  // Navigate to Productivity tab
-  const productivityTab = page.locator('[role="tab"]', { hasText: /Productivity/i });
-  if (await productivityTab.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await productivityTab.click();
-    await page.waitForTimeout(500);
-  }
-
-  // Find and expand the Focus Mode section
-  const focusModeSection = page
-    .locator('config-section')
-    .filter({ hasText: 'Focus Mode' })
-    .first();
-  await focusModeSection.scrollIntoViewIfNeeded();
-
-  const collapsible = focusModeSection.locator('collapsible');
-  const isExpanded = await collapsible
-    .evaluate((el) => el.classList.contains('isExpanded'))
-    .catch(() => false);
-
-  if (!isExpanded) {
-    const header = collapsible.locator('.collapsible-header');
-    await header.click();
-    await page.waitForTimeout(500);
-  }
-
-  // Find and enable the toggle
-  const toggle = page
-    .locator('mat-slide-toggle')
-    .filter({ hasText: 'Sync focus sessions with time tracking' })
-    .first();
-  await expect(toggle).toBeVisible({ timeout: 5000 });
-  if (!(await toggle.getAttribute('class'))?.includes('mat-checked')) {
-    await toggle.click();
-    await page.waitForTimeout(300);
-  }
-};
 
 test.describe('Issue #6731: Pause in focus mode stops task time tracking', () => {
   test('pause + close overlay clears the current task', async ({
@@ -77,10 +33,7 @@ test.describe('Issue #6731: Pause in focus mode stops task time tracking', () =>
     );
     const closeOverlayButton = page.locator('focus-mode-overlay button.close-btn');
 
-    // Enable the setting that syncs focus sessions with time tracking
-    await enableSyncSessionWithTracking(page);
-
-    // Navigate back to work view
+    // Navigate to work view
     await page.goto('/');
     await workViewPage.waitForTaskList();
 
@@ -99,9 +52,8 @@ test.describe('Issue #6731: Pause in focus mode stops task time tracking', () =>
     await page.waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 });
     await page.waitForTimeout(1000);
 
-    // Step 1: start focus mode
-    // Note: With isSyncSessionWithTracking enabled, the focus overlay auto-opens
-    // when we start tracking. Verify it's open.
+    // Step 1: start focus mode by clicking the focus button
+    await mainFocusButton.click();
     await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
 
     // Start the focus session and wait through the prep countdown.

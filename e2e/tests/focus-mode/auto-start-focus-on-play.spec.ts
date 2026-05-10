@@ -12,24 +12,8 @@
  */
 
 import { test, expect } from '../../fixtures/test.fixture';
-import { Locator, Page } from '@playwright/test';
-import { waitForAngularStability } from '../../utils/waits';
-
-const expandConfigSection = async (section: Locator): Promise<void> => {
-  const collapsible = section.locator('collapsible').first();
-  await collapsible.waitFor({ state: 'visible', timeout: 10000 });
-
-  const isExpanded = await collapsible.evaluate((el) =>
-    el.classList.contains('isExpanded'),
-  );
-  if (!isExpanded) {
-    await collapsible.locator('.collapsible-header').click();
-  }
-
-  await collapsible
-    .locator('.collapsible-panel')
-    .waitFor({ state: 'visible', timeout: 5000 });
-};
+import { Page } from '@playwright/test';
+import { ensureSettingState } from '../../utils/config-helpers';
 
 const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
   await page.goto('/#/config');
@@ -44,22 +28,25 @@ const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
       has: page.locator('.collapsible-title', { hasText: /^Focus Mode$/ }),
     })
     .first();
-  await focusModeSection.waitFor({ state: 'visible', timeout: 10000 });
-  await expandConfigSection(focusModeSection);
+  await focusModeSection.scrollIntoViewIfNeeded();
 
-  const toggle = focusModeSection
-    .locator('mat-slide-toggle')
-    .filter({ hasText: 'Start a focus session when I start tracking a task' })
-    .locator('button[role="switch"]')
-    .first();
+  const collapsible = focusModeSection.locator('collapsible');
+  const isExpanded = await collapsible
+    .evaluate((el) => el.classList.contains('isExpanded'))
+    .catch(() => false);
 
-  await expect(toggle).toBeVisible({ timeout: 5000 });
-  const isChecked = (await toggle.getAttribute('aria-checked')) === 'true';
-  if (!isChecked) {
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  if (!isExpanded) {
+    const header = collapsible.locator('.collapsible-header');
+    await header.click();
+    await page.waitForTimeout(500);
   }
-  await waitForAngularStability(page).catch(() => {});
+
+  // Use shared helper that handles both mat-slide-toggle and mat-checkbox
+  await ensureSettingState(
+    page,
+    'Start a focus session when I start tracking a task',
+    true,
+  );
 };
 
 test.describe('autoStartFocusOnPlay', () => {
