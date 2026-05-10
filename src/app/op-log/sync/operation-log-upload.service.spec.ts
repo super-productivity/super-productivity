@@ -97,7 +97,8 @@ describe('OperationLogUploadService', () => {
           'uploadOps',
           'setLastServerSeq',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         // Add privateCfg mock for E2E encryption support
         (mockApiProvider as any).privateCfg = {
           load: jasmine
@@ -546,7 +547,8 @@ describe('OperationLogUploadService', () => {
           'setLastServerSeq',
           'uploadSnapshot',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         (mockApiProvider as any).privateCfg = {
           load: jasmine
             .createSpy('privateCfg.load')
@@ -1133,7 +1135,8 @@ describe('OperationLogUploadService', () => {
           'uploadOps',
           'setLastServerSeq',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         (mockApiProvider as any).privateCfg = {
           load: jasmine
             .createSpy('privateCfg.load')
@@ -1313,7 +1316,8 @@ describe('OperationLogUploadService', () => {
           'uploadOps',
           'setLastServerSeq',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         (mockApiProvider as any).privateCfg = {
           load: jasmine
             .createSpy('privateCfg.load')

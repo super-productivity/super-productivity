@@ -2,9 +2,10 @@
 //
 // Renames the main Electron binary to `superproductivity-bin` and installs
 // a shell wrapper at the original name. The wrapper forces
-// --ozone-platform=x11 when running in our Snap sandbox on a Wayland
-// session; non-Snap launches (AppImage, .deb, .rpm) and X11 sessions hit
-// a no-op passthrough, so behavior for those targets is unchanged.
+// --class=superproductivity for stable desktop-file matching and forces
+// --ozone-platform=x11 when running in our Snap sandbox on a Wayland session.
+// Non-Snap launches (AppImage, .deb, .rpm) and X11 sessions only receive the
+// stable class flag.
 //
 // Context: field reports on issue #7270 (v18.2.4/v18.2.5) show that
 // app.commandLine.appendSwitch('ozone-platform','x11') from inside the

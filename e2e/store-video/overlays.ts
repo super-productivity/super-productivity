@@ -68,6 +68,10 @@ export type OverlayHandle = {
   hide: () => Promise<void>;
 };
 
+export type CaptionHandle = OverlayHandle & {
+  update: (text: string, options?: { fadeMs?: number }) => Promise<void>;
+};
+
 /**
  * One line on the end card. Plain string renders as-is. The object form
  * animates the `{n}` placeholder in `template` from 0 up to `to` over the
@@ -115,6 +119,7 @@ export type IntegrationsCardContent = {
 const STYLE_ID = '__sp-video-overlay-style';
 const OVERLAY_ID_PREFIX = '__sp-video-overlay-';
 const END_CARD_ID = '__sp-video-end-card';
+const CAPTION_ID = '__sp-video-caption';
 
 let overlayCounter = 0;
 
@@ -156,6 +161,11 @@ const ensureStyleInjected = async (page: Page): Promise<void> => {
       }
       .__sp-video-overlay.visible .__sp-video-overlay-bg {
         transform: translateY(0);
+      }
+      .__sp-video-caption .__sp-video-overlay-text {
+        transition:
+          opacity var(--__sp-caption-text-ms, 170ms) ease-out,
+          transform var(--__sp-caption-text-ms, 170ms) ease-out;
       }
       .__sp-video-overlay.center .__sp-video-overlay-bg {
         border-radius: 14px;
@@ -426,6 +436,89 @@ export const showOverlay = async (
   };
 };
 
+export const showCaption = async (
+  page: Page,
+  text: string,
+  options: Pick<OverlayOptions, 'fadeMs' | 'noWait' | 'position'> = {},
+): Promise<CaptionHandle> => {
+  const position: OverlayPosition = options.position ?? 'lower';
+  const fadeMs = options.fadeMs ?? 420;
+  await ensureStyleInjected(page);
+  await page.evaluate(
+    (args) => {
+      document.getElementById(args.id)?.remove();
+
+      const el = document.createElement('div');
+      el.id = args.id;
+      el.className = `__sp-video-overlay __sp-video-caption ${args.position}`;
+      el.style.setProperty('--__sp-fade-ms', `${args.fadeMs}ms`);
+
+      const bg = document.createElement('div');
+      bg.className = '__sp-video-overlay-bg';
+
+      const p = document.createElement('p');
+      p.className = '__sp-video-overlay-text';
+      p.textContent = args.text;
+      bg.appendChild(p);
+
+      el.appendChild(bg);
+      document.body.appendChild(el);
+      void el.offsetWidth;
+      el.classList.add('visible');
+    },
+    { id: CAPTION_ID, text, position, fadeMs },
+  );
+  if (!options.noWait) {
+    await page.waitForTimeout(fadeMs);
+  }
+
+  return {
+    update: async (nextText, updateOptions = {}): Promise<void> => {
+      const textFadeMs = updateOptions.fadeMs ?? 170;
+      const shouldUpdate = await page.evaluate(
+        (args) => {
+          const textEl = document.querySelector<HTMLElement>(
+            `#${args.id} .__sp-video-overlay-text`,
+          );
+          if (!textEl || textEl.textContent === args.text) return false;
+          textEl.style.setProperty('--__sp-caption-text-ms', `${args.fadeMs}ms`);
+          textEl.style.opacity = '0';
+          textEl.style.transform = 'translateY(8px)';
+          return true;
+        },
+        { id: CAPTION_ID, text: nextText, fadeMs: textFadeMs },
+      );
+      if (!shouldUpdate) return;
+
+      await page.waitForTimeout(textFadeMs);
+      await page.evaluate(
+        (args) => {
+          const textEl = document.querySelector<HTMLElement>(
+            `#${args.id} .__sp-video-overlay-text`,
+          );
+          if (!textEl) return;
+          textEl.textContent = args.text;
+          textEl.style.transform = 'translateY(-8px)';
+          void textEl.offsetWidth;
+          textEl.style.opacity = '1';
+          textEl.style.transform = 'translateY(0)';
+        },
+        { id: CAPTION_ID, text: nextText },
+      );
+      await page.waitForTimeout(textFadeMs);
+    },
+    hide: async (): Promise<void> => {
+      await page.evaluate((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('visible');
+      }, CAPTION_ID);
+      await page.waitForTimeout(fadeMs);
+      await page.evaluate((id) => document.getElementById(id)?.remove(), CAPTION_ID);
+    },
+  };
+};
+
 const INT_CARD_ID = '__sp-video-int-card';
 const TRANSITION_ID = '__sp-video-transition';
 const LOOP_BOUNDARY_ID = '__sp-video-loop-boundary';
@@ -520,6 +613,7 @@ export const loopBoundary = async (
   await page.evaluate(
     (args) => {
       let el = document.getElementById(args.id);
+      const transition = `opacity ${args.durationMs}ms cubic-bezier(0.4, 0, 0.2, 1)`;
       if (!el) {
         el = document.createElement('div');
         el.id = args.id;
@@ -532,19 +626,21 @@ export const loopBoundary = async (
           // Material's standard motion curve (cubic-bezier(0.4, 0, 0.2, 1)
           // — slow start, fast middle, slow finish, asymmetrically biased
           // toward a snappier reveal) reads smoother for scene cuts than
-          // a generic `ease-in-out`. At the gif's 24fps a 200ms fade is
+          // a generic `ease-in-out`. At the gif's 25fps a 200ms fade is
           // ~5 frames; the curve concentrates the visible opacity change
           // into the middle frames so it reads as a gradient rather than
           // a stepped staircase.
-          `transition:opacity ${args.durationMs}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+          `transition:${transition}`,
           // Start opacity matches the mode: 'in' starts opaque (revealing
           // SP underneath); 'out' starts transparent (covering it back up).
           `opacity:${args.mode === 'in' ? 1 : 0}`,
         ].join(';');
         document.body.appendChild(el);
-        // Force a paint before the opacity flip so the transition fires.
-        void el.offsetWidth;
       }
+      el.style.transition = transition;
+      // Force a paint before the opacity flip so duration changes on the
+      // reused boundary element take effect for this transition.
+      void el.offsetWidth;
       el.style.opacity = args.mode === 'in' ? '0' : '1';
     },
     { id: LOOP_BOUNDARY_ID, mode, durationMs },
@@ -576,10 +672,10 @@ export const loopBoundary = async (
 export const cutToScene = async (
   page: Page,
   setupNextScene: () => Promise<void> | void,
-  options: { fadeMs?: number } = {},
+  options: { fadeMs?: number; label?: string } = {},
 ): Promise<void> => {
   // 200ms × 2 (fade-to-black + fade-from-black) = 400ms per scene cut.
-  // At the gif's 24fps that's ~5 frames per fade. Combined with Material
+  // At the gif's 25fps that's ~5 frames per fade. Combined with Material
   // motion curve and sierra2_4a dither (see build-video.ts) this reads as
   // a smooth gradient at this duration. Going shorter starts to look
   // stepped; much longer drags out the reel.
@@ -588,7 +684,13 @@ export const cutToScene = async (
   // higher than any beat overlay/card, so it covers everything).
   await loopBoundary(page, 'out', fadeMs);
   // Behind black: prepare next scene.
+  const setupStartedAt = Date.now();
   await setupNextScene();
+  if (options.label) {
+    console.log(
+      `[video] ${options.label}: setup behind black ${Date.now() - setupStartedAt}ms`,
+    );
+  }
   // Fade black away to reveal the next scene.
   await loopBoundary(page, 'in', fadeMs);
 };
@@ -604,7 +706,7 @@ export const cutToScene = async (
 export const fadeTransition = async (
   page: Page,
   during: () => Promise<void> | void,
-  options: { fadeMs?: number; opacity?: number } = {},
+  options: { fadeMs?: number; opacity?: number; label?: string } = {},
 ): Promise<void> => {
   // Slightly longer fade with a softer dim — the lower-third overlay
   // text rides above the dim layer (higher z-index), so reducing the
@@ -634,7 +736,13 @@ export const fadeTransition = async (
     { id: TRANSITION_ID, fadeMs, opacity },
   );
   await page.waitForTimeout(fadeMs);
+  const setupStartedAt = Date.now();
   await during();
+  if (options.label) {
+    console.log(
+      `[video] ${options.label}: setup under dim ${Date.now() - setupStartedAt}ms`,
+    );
+  }
   await page.evaluate(
     (args) => {
       const el = document.getElementById(args.id);
@@ -645,6 +753,43 @@ export const fadeTransition = async (
     { id: TRANSITION_ID, fadeMs },
   );
   await page.waitForTimeout(fadeMs);
+};
+
+const easeInOutCubic = (t: number): number => {
+  if (t < 0.5) {
+    return 4 * t * t * t;
+  }
+  const scaled = -2 * t;
+  const shifted = scaled + 2;
+  const cubed = Math.pow(shifted, 3);
+  const halved = cubed / 2;
+  return 1 - halved;
+};
+
+export const smoothMouseMove = async (
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  options: { durationMs?: number; steps?: number } = {},
+): Promise<void> => {
+  const durationMs = options.durationMs ?? 520;
+  const steps = options.steps ?? Math.max(10, Math.round(durationMs / 16));
+  const delayMs = Math.max(8, Math.round(durationMs / steps));
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  for (let i = 1; i <= steps; i += 1) {
+    const t = i / steps;
+    const eased = easeInOutCubic(t);
+    const xDelta = dx * eased;
+    const yDelta = dy * eased;
+    const x = from.x + xDelta;
+    const y = from.y + yDelta;
+    await page.mouse.move(x, y);
+    if (i < steps) {
+      await page.waitForTimeout(delayMs);
+    }
+  }
 };
 
 export const showIntegrationsCard = async (

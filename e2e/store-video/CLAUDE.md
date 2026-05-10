@@ -11,6 +11,7 @@ npm run video:full    # full variant (~21s) → dist/video/reel-full*.{...}
 # under the hood
 npm run video:capture # Playwright records to .tmp/video/recordings/
 npm run video:build   # ffmpeg → dist/video/, picks the most recent webm
+npm run video:open    # opens an autoplay browser preview, skips in CI
 ```
 
 `REEL_VARIANT=<name>` switches the spec branch and adds a filename suffix so multiple variants coexist in `dist/video/`. `full` is the only one wired up so far; add more by branching on `isFull`-style flags in the spec.
@@ -23,22 +24,23 @@ npm run video:build   # ffmpeg → dist/video/, picks the most recent webm
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `playwright.store-video.config.ts`              | Single chromium project, `video: 'off'` at project level (the fixture handles `recordVideo` itself because `browser.newContext()` doesn't inherit `use.video`).                                                 |
 | `store-video/fixture.ts`                        | Custom context with `recordVideo` enabled at 1024×1024 / DPR 2. Reuses the screenshot pipeline's seed builder. Init scripts handle: cursor highlight ring, dialog/snack/tooltip/mention suppression, app zoom. |
-| `store-video/overlays.ts`                       | DOM-injected overlay primitives: `showOverlay`, `showIntegrationsCard`, `showEndCard`, `cutToScene`, `fadeTransition`, `loopBoundary`, `attachDragGhost`. Plus inline brand SVGs in the `LOGOS` constant.       |
+| `store-video/overlays.ts`                       | DOM-injected overlay primitives: `showOverlay`, `showCaption`, `showIntegrationsCard`, `showEndCard`, `cutToScene`, `fadeTransition`, `loopBoundary`, `attachDragGhost`, `smoothMouseMove`. Plus inline brand SVGs in the `LOGOS` constant. |
 | `store-video/scenarios/reel.spec.ts`            | Six-beat choreography. `REEL_VARIANT=full` triggers the optional "No account. No tracking." beat and relaxes hold timings.                                                                                      |
 | `store-video/build-video.ts`                    | Picks the most recent `.webm` under `.tmp/video/recordings/`, applies the trim sidecar (cuts the seed-import lead-in), produces mp4/webm/gif via ffmpeg, optionally `gifsicle`-optimizes.                       |
+| `store-video/open-video.ts`                     | Opens an autoplay browser preview after `npm run video`. Prefers mp4, respects `REEL_VARIANT`, seeks slightly past the black first frame for preview only, and skips auto-open in CI.                           |
 
 ## Beat structure (current)
 
 ```
 Lead-in   black fades to SP UI with schedule day-panel already open
-1  Capture in seconds.        global add-task-bar (scaled 1.45×, max-width
-                              520px); types "A task 1h #urgent @17" with
-                              55ms keystroke delay. Captured task carries
-                              through to beats 2 and 3.
+1  Capture in seconds.        global add-task-bar; types
+                              "A task 1h" with 55ms keystroke delay.
+                              Captured task carries through to beats 2 and 3.
 1.5 [full only]               No account. No tracking.
-2  Plan your day.             drags first task onto schedule panel with
-                              `attachDragGhost` cloning the source element
-                              under the cursor.
+2  Plan your day.             drags the newly captured "A task" item onto
+                              the schedule panel with the app's native CDK
+                              drag behavior and Playwright's stepped mouse
+                              movement.
 3  Focus on what matters.     dispatches `[Task] SetCurrentTask` /
                               `[FocusMode] Show Overlay` /
                               `[FocusMode] Start Session` directly via
@@ -56,17 +58,16 @@ Lead-in   black fades to SP UI with schedule day-panel already open
 Boundary  black fades in so the gif loop seam is black-to-black
 ```
 
-## Scene transitions: cutToScene
+## Scene transitions
 
-Every beat handoff uses `cutToScene(page, async () => { ... })` for a fade-to-black scene cut. The helper:
+The main reel uses two transition styles:
 
-1. Fades a max-z-index black overlay from transparent to opaque (covers everything, including any beat overlays/cards).
-2. Runs the callback while the screen is fully black — this is where state changes happen (close add-task-bar, dispatch focus mode, hide previous overlay, prime next overlay/card).
-3. Fades the black back out to reveal whatever the callback set up.
+1. `cutToScene(page, async () => { ... })` for app state changes and bigger app-to-screen jumps. It fades a max-z-index black overlay in, runs setup while black covers the app, then fades back out. Beat 1 → 2 closes the add-task-bar by clicking the real backdrop inside this covered callback, so list reflow and cursor reset are hidden before the drag starts. Pass a `label` to log how long setup spent behind black.
+2. Direct card crossfade for controlled full-screen cards. Beat 4 → 5 shows the end card above the integrations card, then hides the integrations card underneath once the end card is mostly opaque.
 
-**Always pass `noWait: true` to the next overlay/card inside the callback.** Without it, the call awaits its own fade-in (and stagger animation, for `showIntegrationsCard`/`showEndCard`) — which would play behind the still-opaque black and be wasted. With `noWait`, the call returns as soon as the DOM is in place, so the fade-in animates concurrently with `cutToScene`'s fade-from-black. The viewer sees: scene → black → next-scene-emerging-with-its-animation.
+**Always pass `noWait: true` to the next overlay/card inside a `cutToScene` callback.** Without it, the call awaits its own fade-in (and stagger animation, for `showIntegrationsCard`/`showEndCard`) — which would play behind the still-opaque black and be wasted. With `noWait`, the call returns as soon as the DOM is in place, so the fade-in animates concurrently with `cutToScene`'s fade-from-black. The viewer sees: scene → black → next-scene-emerging-with-its-animation.
 
-`fadeTransition` (partial-dim, lower z-index) is no longer used by the main spec — it was unreliable for big scene jumps because the dim's transparent regions let the underlying state change show through. Kept in `overlays.ts` in case a future beat wants a softer mid-beat dim, but `cutToScene` is the default.
+`fadeTransition` remains available in `overlays.ts`, but keep it out of the drag setup path: its transparent dim can let underlying app reflow leak through and make the first drag frames look wrong.
 
 ## Architecture decisions / gotchas
 
@@ -80,15 +81,17 @@ Every beat handoff uses `cutToScene(page, async () => { ... })` for a fade-to-bl
 
 **Schedule day-panel width.** Pre-seeded in `ONBOARDING_INIT` via `localStorage.setItem('SUP_RIGHT_PANEL_WIDTH', '250')` — that's `RIGHT_PANEL_CONFIG.MIN_WIDTH`, the smallest the panel allows before its 200px CLOSE_THRESHOLD kicks in. Pre-seeding through the panel's own persistence path means the inner schedule grid computes its column widths against 250 and the event blocks don't overflow. Earlier iterations forced `width !important` on `.side`, which sized the chrome but didn't propagate to the grid — events then spilled past the panel's right edge and required ugly `overflow-x: hidden` belt-and-braces clips. Don't go that route.
 
-**Add-task-bar overlays.** The fixture only hides the *overlay surfaces* that pop on top of the bar while typing (mat-autocomplete suggestions, mention-list, loading spinner) — those would otherwise read as glitchy white boxes mid-gif. The bar itself is not styled by the fixture; it uses its real `:host` rules.
+**Add-task-bar overlays.** The fixture only hides the *overlay surfaces* that pop on top of the bar while typing (mat-autocomplete suggestions, mention-list, loading spinner) — those would otherwise read as glitchy white boxes mid-gif. The bar itself is not styled by the fixture; it uses its real `:host` rules. Beat 1 → 2 closes it by clicking the real `.backdrop`, matching normal UI behavior instead of dispatching layout state directly.
 
 **Cursor highlight.** Soft white radial-gradient ring at `z-index: 2147483640`, follows mousemove. Toggle visibility per-beat via `body.__sp-hide-cursor-highlight` — used during the capture beat where the focused input would otherwise show the ring as a stray dot.
 
 **Main-text consistency.** `.__sp-video-overlay-text`, `.__sp-video-int-card-title`, `.__sp-video-end-card-title` share a single rule with `font-size: clamp(48px, 6.4vw, 96px) !important`. The `!important` flag is required because `.mat-typography h1` has specificity (0,1,1) which outranks our class-only selector. Card titles are `<p>` rather than `<h1>` for belt-and-braces — even with `!important`, the typography font shorthand can sneak through.
 
-**Drag ghost.** Beat 2 uses `attachDragGhost(page, sourceLocator)` which clones the source via `outerHTML`, attaches a mousemove listener, and follows the cursor with a 2° tilt + drop shadow. Detaches on mouse-up. SP's cdkDrag may or may not show its own preview depending on the drop target's `cdkDropList` wiring; the ghost guarantees the act of dragging reads regardless.
+**Drag preview.** Beat 2 intentionally does not use a synthetic video ghost. It relies on the app's real CDK drag behavior so the visual preview matches what a user sees while dragging a task onto the schedule panel. Keep the source locator tied to `CAPTURED_TASK_DISPLAY_TITLE`; using `task().first()` can accidentally drag a larger seeded task and make the preview look zoomed.
 
 **Loop boundary.** `loopBoundary(page, 'in', ms)` shows full-black opacity 1 then fades to 0 over `ms` (lead-in). `loopBoundary(page, 'out', ms)` fades from 0 to 1 (closing). Gif seam is black-to-black, no jump cut. `z-index: 2147483647` (max safe) so it covers everything including end card.
+
+**Output cadence.** Playwright's recorder emits 25fps webm in this pipeline. `build-video.ts` keeps MP4, WebM, and GIF at 25fps to avoid duplicate/drop-frame judder during fades and cursor movement.
 
 **Build script picks most-recent webm.** No need to clean `.tmp/video/recordings/` between runs. Old webms accumulate but only the most recent `.mtime` is built into outputs.
 

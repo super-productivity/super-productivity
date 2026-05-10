@@ -1,4 +1,5 @@
 import { Operation, VectorClock } from '../operation.types';
+import { OperationSyncProviderMode } from '../../sync-providers/provider.interface';
 
 /**
  * Information about an operation rejected by the server during upload.
@@ -17,11 +18,13 @@ export interface RejectedOpInfo {
 /**
  * Result of a download operation.
  */
-export interface DownloadResult {
+export interface DownloadResultBase {
+  /**
+   * Distinguishes pure SuperSync operation results from file-based snapshot adapter results.
+   */
+  providerMode: OperationSyncProviderMode;
   /** New operations that need to be processed */
   newOps: Operation[];
-  /** Whether download completed successfully (vs partial/failed) */
-  success: boolean;
   /** Number of files that failed to download (file-based sync only) */
   failedFileCount: number;
   /**
@@ -49,12 +52,6 @@ export interface DownloadResult {
    */
   snapshotVectorClock?: VectorClock;
   /**
-   * Full state snapshot from file-based sync providers.
-   * Only set when downloading from seq 0 (fresh download) from a file-based provider.
-   * Contains the complete application state for bootstrapping a new client.
-   */
-  snapshotState?: unknown;
-  /**
    * True when operations were downloaded AND ALL of them have isPayloadEncrypted: false.
    * This indicates another client disabled encryption. The receiving client should
    * update its local config to match (isEncryptionEnabled: false, encryptKey: undefined).
@@ -65,6 +62,40 @@ export interface DownloadResult {
    */
   serverHasOnlyUnencryptedData?: boolean;
 }
+
+export interface DownloadUnavailableResult extends Omit<
+  DownloadResultBase,
+  'providerMode'
+> {
+  /** Whether download completed successfully (vs partial/failed) */
+  success: false;
+  providerMode?: never;
+  snapshotState?: never;
+}
+
+export interface SuperSyncDownloadResult extends DownloadResultBase {
+  /** Whether download completed successfully (vs partial/failed) */
+  success: true;
+  providerMode: 'superSyncOps';
+  snapshotState?: never;
+}
+
+export interface FileSnapshotDownloadResult extends DownloadResultBase {
+  /** Whether download completed successfully (vs partial/failed) */
+  success: true;
+  providerMode: 'fileSnapshotOps';
+  /**
+   * Full state snapshot from file-based sync providers.
+   * Only set when downloading from seq 0 (fresh download) from a file-based provider.
+   * Contains the complete application state for bootstrapping a new client.
+   */
+  snapshotState?: unknown;
+}
+
+export type DownloadResult =
+  | DownloadUnavailableResult
+  | SuperSyncDownloadResult
+  | FileSnapshotDownloadResult;
 
 /**
  * Result of an upload operation. May contain piggybacked operations

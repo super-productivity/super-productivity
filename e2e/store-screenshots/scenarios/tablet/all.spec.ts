@@ -18,6 +18,7 @@ import {
   applyTheme,
   gotoAndSettle,
   resetView,
+  scrollScheduleUp,
   showMarketingOverlay,
 } from '../../helpers';
 import { MARKETING_HEADLINE, MARKETING_SUBLINE } from '../../marketing-copy';
@@ -46,6 +47,7 @@ const captureDarkScenes = async (
   // 03 — Schedule (week strip stretches well at tablet widths)
   await gotoAndSettle(page, '/#/schedule');
   await page.locator('schedule, schedule-week').first().waitFor({ state: 'visible' });
+  await scrollScheduleUp(page);
   await shoot('tablet-03-schedule', 'schedule');
   await resetView(page);
 

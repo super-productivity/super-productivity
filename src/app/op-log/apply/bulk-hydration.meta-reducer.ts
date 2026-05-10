@@ -1,10 +1,9 @@
 import { Action, ActionReducer } from '@ngrx/store';
 import { bulkApplyOperations } from './bulk-hydration.action';
 import { convertOpToAction } from './operation-converter.util';
-import { ActionType } from '../core/operation.types';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import {
-  collectCascadedSubTaskIds,
+  collectArchivingOrDeletingEntityIdsFromBatch,
   stripBatchArchivedTaskIdsFromLwwPayload,
 } from './bulk-archive-filter.util';
 import { OpLog } from '../../core/log';
@@ -51,23 +50,10 @@ export const bulkOperationsMetaReducer = <T>(
       // Pre-scan: collect entity IDs being archived or deleted in this batch.
       // LWW Update ops for these entities must be skipped to prevent
       // lwwUpdateMetaReducer.addOne() from resurrecting archived/deleted tasks.
-      const archivingOrDeletingEntityIds = new Set<string>();
-      for (const op of operations) {
-        if (
-          op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
-          op.actionType === ActionType.TASK_SHARED_DELETE ||
-          op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE
-        ) {
-          if (op.entityIds) {
-            for (const id of op.entityIds) {
-              archivingOrDeletingEntityIds.add(id);
-            }
-          } else if (op.entityId) {
-            archivingOrDeletingEntityIds.add(op.entityId);
-          }
-          collectCascadedSubTaskIds(op, archivingOrDeletingEntityIds, state);
-        }
-      }
+      const archivingOrDeletingEntityIds = collectArchivingOrDeletingEntityIdsFromBatch(
+        operations,
+        state,
+      );
 
       let currentState = state;
       const hasArchives = archivingOrDeletingEntityIds.size > 0;

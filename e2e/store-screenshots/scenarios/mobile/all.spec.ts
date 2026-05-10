@@ -16,6 +16,7 @@ import {
   applyTimeTrackingEnabled,
   gotoAndSettle,
   resetView,
+  scrollScheduleUp,
   setPlannerCalendarExpanded,
   showMarketingOverlay,
 } from '../../helpers';
@@ -53,6 +54,7 @@ const captureDarkScenes = async (
   // 05 — Schedule
   await gotoAndSettle(page, '/#/schedule');
   await page.locator('schedule, schedule-week').first().waitFor({ state: 'visible' });
+  await scrollScheduleUp(page);
   await shoot('mobile-05-schedule', 'schedule');
   await resetView(page);
 
@@ -72,6 +74,15 @@ const captureLightScenes = async (
   await page.locator('planner-calendar-nav').waitFor({ state: 'visible' });
   await setPlannerCalendarExpanded(page, true);
   await shoot('mobile-04-planner-expanded-light', 'planner-expanded-light');
+  await resetView(page);
+
+  // 02 — Planner expanded (light variant, slot-02). Distinct scenario name
+  // from the dark slot so both land in the master tree without overwriting.
+  await gotoAndSettle(page, '/#/planner');
+  await page.locator('planner, planner-day').first().waitFor({ state: 'visible' });
+  await page.locator('planner-calendar-nav').waitFor({ state: 'visible' });
+  await setPlannerCalendarExpanded(page, true);
+  await shoot('mobile-02-planner-expanded-light', 'planner-expanded-light-02');
 };
 
 test.describe('@screenshot mobile all', () => {

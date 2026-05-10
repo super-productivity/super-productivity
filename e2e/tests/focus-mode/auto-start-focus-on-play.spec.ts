@@ -12,49 +12,54 @@
  */
 
 import { test, expect } from '../../fixtures/test.fixture';
-import { Page } from '@playwright/test';
+import { Locator, Page } from '@playwright/test';
+import { waitForAngularStability } from '../../utils/waits';
+
+const expandConfigSection = async (section: Locator): Promise<void> => {
+  const collapsible = section.locator('collapsible').first();
+  await collapsible.waitFor({ state: 'visible', timeout: 10000 });
+
+  const isExpanded = await collapsible.evaluate((el) =>
+    el.classList.contains('isExpanded'),
+  );
+  if (!isExpanded) {
+    await collapsible.locator('.collapsible-header').click();
+  }
+
+  await collapsible
+    .locator('.collapsible-panel')
+    .waitFor({ state: 'visible', timeout: 5000 });
+};
 
 const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
   await page.goto('/#/config');
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(500);
+  await page.locator('.page-settings').waitFor({ state: 'visible', timeout: 10000 });
 
-  // Navigate to Productivity tab
-  const productivityTab = page.locator('[role="tab"]', { hasText: /Productivity/i });
-  if (await productivityTab.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await productivityTab.click();
-    await page.waitForTimeout(500);
-  }
+  // The setting lives in the Productivity → Focus Mode section.
+  await page.getByRole('tab', { name: /Productivity/i }).click();
 
-  // Find and expand the Focus Mode section
   const focusModeSection = page
     .locator('config-section')
-    .filter({ hasText: 'Focus Mode' })
+    .filter({
+      has: page.locator('.collapsible-title', { hasText: /^Focus Mode$/ }),
+    })
     .first();
-  await focusModeSection.scrollIntoViewIfNeeded();
+  await focusModeSection.waitFor({ state: 'visible', timeout: 10000 });
+  await expandConfigSection(focusModeSection);
 
-  const collapsible = focusModeSection.locator('collapsible');
-  const isExpanded = await collapsible
-    .evaluate((el) => el.classList.contains('isExpanded'))
-    .catch(() => false);
-
-  if (!isExpanded) {
-    const header = collapsible.locator('.collapsible-header');
-    await header.click();
-    await page.waitForTimeout(500);
-  }
-
-  const toggle = page
+  const toggle = focusModeSection
     .locator('mat-slide-toggle')
     .filter({ hasText: 'Start a focus session when I start tracking a task' })
+    .locator('button[role="switch"]')
     .first();
 
   await expect(toggle).toBeVisible({ timeout: 5000 });
-  const cls = (await toggle.getAttribute('class')) ?? '';
-  if (!cls.includes('mat-checked')) {
+  const isChecked = (await toggle.getAttribute('aria-checked')) === 'true';
+  if (!isChecked) {
     await toggle.click();
-    await page.waitForTimeout(300);
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
   }
+  await waitForAngularStability(page).catch(() => {});
 };
 
 test.describe('autoStartFocusOnPlay', () => {
@@ -81,7 +86,7 @@ test.describe('autoStartFocusOnPlay', () => {
 
     // Step 3: start tracking via the task's play button.
     await firstTask.hover();
-    const trackingPlayBtn = page.locator('.play-btn.tour-playBtn').first();
+    const trackingPlayBtn = firstTask.locator('.start-task-btn').first();
     await trackingPlayBtn.waitFor({ state: 'visible' });
     await trackingPlayBtn.click();
     await expect(firstTask).toHaveClass(/isCurrent/, { timeout: 5000 });
@@ -106,7 +111,7 @@ test.describe('autoStartFocusOnPlay', () => {
     await expect(firstTask).toBeVisible();
 
     await firstTask.hover();
-    const trackingPlayBtn = page.locator('.play-btn.tour-playBtn').first();
+    const trackingPlayBtn = firstTask.locator('.start-task-btn').first();
     await trackingPlayBtn.waitFor({ state: 'visible' });
     await trackingPlayBtn.click();
     await expect(firstTask).toHaveClass(/isCurrent/, { timeout: 5000 });

@@ -215,7 +215,7 @@ export const shortSyntax = async (
   };
 };
 
-const parseProjectChanges = (
+export const parseProjectChanges = (
   task: Partial<TaskCopy>,
   allProjects?: Project[],
 ): ProjectChanges => {

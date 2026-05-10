@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { CustomThemeService } from './custom-theme.service';
+import { CustomThemeService, pickInitialActiveRef } from './custom-theme.service';
 import { LS } from '../persistence/storage-keys.const';
 import { StoredTheme, ThemeStorageService } from './theme-storage.service';
 
@@ -242,6 +242,49 @@ describe('CustomThemeService', () => {
       const el = document.getElementById(STYLESHEET_ID);
       expect(el?.tagName).toBe('LINK');
       expect((el as HTMLLinkElement).href).toContain('assets/themes/dracula.css');
+    });
+  });
+
+  describe('pickInitialActiveRef', () => {
+    // First-run platform default. The Apple Silicon branch is exercised
+    // here because the module-level `IS_APPLE_SILICON` constant can't be
+    // toggled per test without monkey-patching window.ea.
+
+    it('honors a stored selection regardless of platform', () => {
+      expect(pickInitialActiveRef('builtin:dracula', true)).toEqual({
+        kind: 'builtin',
+        id: 'dracula',
+      });
+      expect(pickInitialActiveRef('builtin:dracula', false)).toEqual({
+        kind: 'builtin',
+        id: 'dracula',
+      });
+    });
+
+    it('falls back to default when stored value is missing or malformed', () => {
+      expect(pickInitialActiveRef(null, false)).toEqual({
+        kind: 'builtin',
+        id: 'default',
+      });
+      expect(pickInitialActiveRef('garbage', false)).toEqual({
+        kind: 'builtin',
+        id: 'default',
+      });
+    });
+
+    it('picks Liquid Glass on first run for Apple Silicon Macs', () => {
+      expect(pickInitialActiveRef(null, true)).toEqual({
+        kind: 'builtin',
+        id: 'liquid-glass',
+      });
+    });
+
+    it('does not write the platform default to LS — leaves it for legacy migration', () => {
+      // `migrateLegacyCustomTheme` short-circuits when LS already has a
+      // value. Persisting on first run would lock new Apple Silicon Macs
+      // out of inheriting a synced device's theme choice.
+      pickInitialActiveRef(null, true);
+      expect(localStorage.getItem(LS.CUSTOM_THEME)).toBeNull();
     });
   });
 });

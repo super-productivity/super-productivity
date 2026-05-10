@@ -160,6 +160,8 @@ export interface FileDownloadResponse extends FileRevResponse {
 
 // ===== Operation Sync Types =====
 
+export type OperationSyncProviderMode = 'superSyncOps' | 'fileSnapshotOps';
+
 /**
  * Operation structure for server sync
  */
@@ -224,10 +226,15 @@ export interface OpUploadResponse {
 /**
  * Response from downloading operations
  */
-export interface OpDownloadResponse {
+export interface OpDownloadResponseBase {
   ops: ServerSyncOperation[];
   hasMore: boolean;
   latestSeq: number;
+  /**
+   * Server sequence of the latest full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
+   * Fresh clients can use this to understand where the effective state starts.
+   */
+  latestSnapshotSeq?: number;
   /**
    * Whether a gap was detected in the operation sequence.
    * This can happen when:
@@ -253,6 +260,19 @@ export interface OpDownloadResponse {
    * For clock drift detection, we need the server's CURRENT time, not old timestamps.
    */
   serverTime?: number;
+}
+
+/**
+ * Response from pure SuperSync operation downloads.
+ */
+export interface SuperSyncOpDownloadResponse extends OpDownloadResponseBase {
+  snapshotState?: never;
+}
+
+/**
+ * Response from file-based providers wrapped as operation sync.
+ */
+export interface FileSnapshotOpDownloadResponse extends OpDownloadResponseBase {
   /**
    * Full state snapshot from file-based sync providers.
    * Only set when downloading from seq 0 (fresh download) from a file-based provider.
@@ -261,14 +281,30 @@ export interface OpDownloadResponse {
   snapshotState?: unknown;
 }
 
+export type OpDownloadResponse =
+  | SuperSyncOpDownloadResponse
+  | FileSnapshotOpDownloadResponse;
+
+export type OpDownloadResponseForMode<M extends OperationSyncProviderMode> =
+  M extends 'fileSnapshotOps'
+    ? FileSnapshotOpDownloadResponse
+    : SuperSyncOpDownloadResponse;
+
 /**
  * Extended sync provider interface with operation sync support
  */
-export interface OperationSyncCapable {
+export interface OperationSyncCapable<
+  M extends OperationSyncProviderMode = OperationSyncProviderMode,
+> {
   /**
    * Whether this provider supports direct operation sync (vs file-based)
    */
   supportsOperationSync: boolean;
+  /**
+   * Distinguishes pure SuperSync operation transport from file-based providers
+   * that expose operation sync through a snapshot-backed adapter.
+   */
+  providerMode: M;
 
   /**
    * Upload operations to the server
@@ -292,7 +328,7 @@ export interface OperationSyncCapable {
     sinceSeq: number,
     excludeClient?: string,
     limit?: number,
-  ): Promise<OpDownloadResponse>;
+  ): Promise<OpDownloadResponseForMode<M>>;
 
   /**
    * Get the last known server sequence for this user

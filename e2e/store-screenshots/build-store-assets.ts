@@ -1,7 +1,7 @@
 /**
  * Per-store layout builder.
  *
- * Reads master captures from `.tmp/screenshots/_master/<viewport>/<locale>/<theme>/<scenario>/<name>.png`
+ * Reads master captures from `dist/screenshots/_master/<viewport>/<locale>/<theme>/<scenario>/<name>.png`
  * and writes per-store directory layouts to `dist/screenshots/`.
  *
  * Captures are made at each store's native pixel size (see playwright.store-screenshots.config.ts),
@@ -20,11 +20,12 @@ import {
   LOCALES,
   MASTER_DIR_ELECTRON,
   MASTER_DIR_WEB,
+  SCREENSHOTS_OUT_DIR,
   STORE_RULES,
   type StoreRule,
 } from './matrix';
 
-const OUT_DIR = path.resolve(__dirname, '..', '..', 'dist', 'screenshots');
+const OUT_DIR = SCREENSHOTS_OUT_DIR;
 
 const masterDirFor = (which: 'web' | 'electron'): string =>
   which === 'electron' ? MASTER_DIR_ELECTRON : MASTER_DIR_WEB;
@@ -190,6 +191,18 @@ const buildOneRule = async (
   return { written, skipped };
 };
 
+const cleanDerivedOutput = (): void => {
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  const preserved = new Set([
+    path.basename(MASTER_DIR_WEB),
+    path.basename(MASTER_DIR_ELECTRON),
+  ]);
+  for (const entry of fs.readdirSync(OUT_DIR)) {
+    if (preserved.has(entry)) continue;
+    fs.rmSync(path.join(OUT_DIR, entry), { recursive: true, force: true });
+  }
+};
+
 const main = async (): Promise<void> => {
   if (!fs.existsSync(MASTER_DIR_WEB) && !fs.existsSync(MASTER_DIR_ELECTRON)) {
     console.error('No master captures found.');
@@ -199,8 +212,7 @@ const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  fs.rmSync(OUT_DIR, { recursive: true, force: true });
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+  cleanDerivedOutput();
 
   let total = 0;
   for (const rule of STORE_RULES) {

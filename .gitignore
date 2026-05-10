@@ -74,6 +74,7 @@ src/app/**/*.js
 src/app/**/*.js.map
 # added
 build/hub
+build/generated-release-notes/
 electron/**/*.js
 !electron/scripts/bundle-preload.js
 electron/**/*.js.map

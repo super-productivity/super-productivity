@@ -45,8 +45,9 @@ describe('SnapshotUploadService', () => {
     mockSyncProvider.privateCfg = {
       load: jasmine.createSpy('load').and.resolveTo(mockExistingCfg),
     } as any;
-    // Mark as operation-sync capable (isOperationSyncCapable checks for this property)
-    (mockSyncProvider as any).supportsOperationSync = true;
+    // Mark as operation-sync capable (isOperationSyncCapable checks for these properties)
+    mockSyncProvider.supportsOperationSync = true;
+    mockSyncProvider.providerMode = 'superSyncOps';
     mockSyncProvider.deleteAllData.and.resolveTo({ success: true });
     mockSyncProvider.uploadSnapshot.and.resolveTo({
       accepted: true,
@@ -118,7 +119,7 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should throw when provider is not operation-sync capable', () => {
-      (mockSyncProvider as any).supportsOperationSync = false;
+      mockSyncProvider.supportsOperationSync = false;
       expect(() => service.getValidatedSuperSyncProvider()).toThrowError(
         /does not support operation sync/,
       );

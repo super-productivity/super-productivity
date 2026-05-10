@@ -25,7 +25,8 @@
     "RELOAD_AFTER_IDB_ERROR": "Veritabanına erişilemiyor :( Olası nedenler, arka planda uygulama güncellemesi veya düşük disk alanıdır.Eğer uygulamayı linux da snap aracılığıyla yüklediyseniz, onlar bu sorunu kendi taraflarında çözene kadar haberdar olma yenilemesini 'snap set core experimental.refresh-app-awareness=true' etkinleştirmeyi isteyebilirsiniz. Uygulamayı yeniden yüklemek için Tamam'a basın (bazı platformlarda uygulamanın manuel olarak yeniden başlatılması gerekebilir).",
     "RESTORE_FILE_BACKUP": "HİÇ VERİ YOK gibi görünüyor, ancak \"{{dir}}\" adresinde yedeklemeler var. En son yedeklemeyi {{from}}kaynağından geri yüklemek istiyor musunuz?",
     "RESTORE_FILE_BACKUP_ANDROID": "HİÇ VERİ yok gibi görünüyor, ancak bir yedek mevcut. Yüklemek istiyor musun?",
-    "RESTORE_STRAY_BACKUP": "Son senkronizasyon sırasında bazı hatalar olabilir. Son yedeği geri yüklemek istiyor musunuz?"
+    "RESTORE_STRAY_BACKUP": "Son senkronizasyon sırasında bazı hatalar olabilir. Son yedeği geri yüklemek istiyor musunuz?",
+    "DELETE_SECTION": "Bu bölümü silmek istediğinizden emin misiniz? İçindeki görevler görev listesine taşınacak."
   },
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "Kaydetmek için tekrar enter tuşuna basın"
@@ -75,7 +76,8 @@
           "IMG": "Resim (küçük resim olarak gösterilir)",
           "LINK": "Bağlantı (tarayıcıda açılır)"
         }
-      }
+      },
+      "LOCAL_FILE_UNAVAILABLE": "Bu ek yalnızca eklendiği cihazda kullanılabilir."
     },
     "BOARDS": {
       "DEFAULT": {
@@ -145,7 +147,8 @@
         "TWO_WAY_SYNC_PUSH_ONLY": "Yalnızca gönderme (CalDAV'a yaz)",
         "TWO_WAY_SYNC_SECTION": "Çift Yönlü Senkronizasyon (deneysel)",
         "TWO_WAY_SYNC_STATUS": "Durum senkronizasyon yönü",
-        "TWO_WAY_SYNC_TITLE": "Başlık senkronizasyon yönü"
+        "TWO_WAY_SYNC_TITLE": "Başlık senkronizasyon yönü",
+        "IS_ADD_SUB_TASKS": "Bir görev eklendiğinde alt görevleri de içe aktar"
       },
       "FORM_SECTION": {
         "HELP": "<p>Burada, SuperProductivity'yi günlük planlama görünümündeki görev oluşturma panelinde belirli bir proje için tamamlanmamış CalDav yapılacak işleri listeleyecek şekilde yapılandırabilirsiniz. Öneriler olarak listelenecekler ve yapılacaklar için bir bağlantı ve bununla ilgili daha fazla bilgi sağlayacaklar.</p> <p>Ek olarak, tamamlanmamış tüm görevleri görev biriktirme listesine otomatik olarak ekleyebilir ve senkronize edebilirsiniz.</p>"
@@ -234,7 +237,15 @@
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "Bugün listenizde henüz arşive taşınmamış {{nr}} tamamlanmış görev var. Gününüzü bitirmeden gerçekten çıkış yapmak istiyor musunuz?"
+        "FINISH_DAY_BEFORE_EXIT": "Bugün listenizde henüz arşive taşınmamış {{nr}} tamamlanmış görev var. Gününüzü bitirmeden gerçekten çıkış yapmak istiyor musunuz?",
+        "DONT_QUIT": "Çıkma",
+        "FINISH_DAY": "Günü bitir",
+        "QUIT": "Çık",
+        "TITLE": "Çıkmadan önce günü bitirmek ister misiniz?",
+        "UNARCHIVED_TASKS": {
+          "ONE": "Bugün listenizdeki 1 tamamlanmış görev henüz arşive taşınmadı.",
+          "OTHER": "Bugün listenizdeki {{nr}} tamamlanmış görev henüz arşive taşınmadı."
+        }
       }
     },
     "FOCUS_MODE": {
@@ -310,7 +321,11 @@
         "SCOPE_ALL": "Hepsi",
         "SCOPE_ASSIGNED": "Bana atanan",
         "SCOPE_CREATED": "Benim tarafımdan oluşturuldu",
-        "TOKEN": "Erişim Jetonu"
+        "TOKEN": "Erişim Jetonu",
+        "EXCLUDE_LABELS": "Etiketleri hariç tut (isteğe bağlı)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Virgülle ayrılmış etiket adları listesi. Bu etiketlerden herhangi birini taşıyan konular hariç tutulur.",
+        "FILTER_LABELS": "Etiketlere göre filtrele (isteğe bağlı)",
+        "FILTER_LABELS_DESCRIPTION": "Virgülle ayrılmış etiket adları listesi. Yalnızca bu etiketlerin tümünü taşıyan konular eşitlenir. Kapsama uyan tüm konuları eşitlemek için boş bırakın."
       },
       "FORM_SECTION": {
         "HELP": "<p>Burada SuperProductivity'yi, günlük planlama görünümündeki görev oluşturma panelinde belirli bir depo için açık Gitea sorunlarını listeleyecek şekilde yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili bir bağlantının yanı sıra konuyla ilgili daha fazla bilgi sağlayacaklar.</p> <p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listenize ekleyebilir ve senkronize edebilirsiniz.</p><p>Kullanım sınırlarını aşmak ve erişim sağlamak için bir erişim jetonu sağlayabilirsiniz."
@@ -439,7 +454,8 @@
         "OAUTH_FAILED": "Kimlik doğrulama başarısız oldu.",
         "REMOTE_ISSUE_DELETED": "Uzak sorun silindi. Bağlı olan \"{{taskTitle}}\" görevi silinsin mi?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Uzak sorun silindi ancak \"{{taskTitle}}\" görevinin izlenen zamanı var. Yine de silinsin mi?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Çift yönlü senkronizasyon gönderimi başarısız: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Çift yönlü senkronizasyon gönderimi başarısız: {{errorMsg}}",
+        "OAUTH_FAILED_WITH_DETAIL": "Kimlik doğrulama başarısız: {{detail}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Yeni görevler için otomatik sorun oluştur",
@@ -984,7 +1000,14 @@
       "PLAN_END_DAY": "Günün sonunda planla",
       "PLAN_START_DAY": "Günün başında planla",
       "SHIFT_KEY_INFO": "Shift tuşunu basılı tutarak gün planlama modunu değiştirin",
-      "START": "İş Başlangıcı"
+      "START": "İş Başlangıcı",
+      "CALENDAR_VISIBILITY": "Takvim görünürlüğü",
+      "NEXT_MONTH": "Sonraki ay",
+      "NEXT_WEEK": "Sonraki hafta",
+      "PREVIOUS_MONTH": "Önceki ay",
+      "PREVIOUS_WEEK": "Önceki hafta",
+      "VIEW_MONTH": "Ayı görüntüle",
+      "VIEW_WEEK": "Haftayı görüntüle"
     },
     "SEARCH_BAR": {
       "INFO": "Arşivlenmiş görevleri aramak için liste simgesine tıklayın",
@@ -1043,7 +1066,8 @@
       "BTN_RESTORE_FROM_HISTORY": "Geçmişten Geri Yükle",
       "BTN_SYNC_NOW": "Şimdi Senkronize Et",
       "C": {
-        "FORCE_UPLOAD": "Yine de Lokal veriler yüklensin mi?"
+        "FORCE_UPLOAD": "Yine de Lokal veriler yüklensin mi?",
+        "DECRYPT_OVERWRITE": "Bu işlem sunucudaki şifrelenmiş verileri bu cihazın yerel kopyasıyla DEĞİŞTİRİR ve yeni parolayla yeniden şifreler. Diğer tüm cihazların parolayı tekrar girmesi ve değiştirilen verileri indirmesi gerekir. Bu cihazlardaki eşitlenmemiş değişiklikler kalıcı olarak kaybolur. Devam edilsin mi?"
       },
       "D_AUTH_CODE": {
         "COPY_URL": "URL'yi kopyala",
@@ -1052,7 +1076,8 @@
         "GET_AUTH_CODE": "Onay Kodu Al",
         "L_AUTH_CODE": "Yetki Kodunu Girin",
         "TITLE": "Giriş: {{provider}}",
-        "WAITING_FOR_AUTH": "Kimlik doğrulama bekleniyor..."
+        "WAITING_FOR_AUTH": "Kimlik doğrulama bekleniyor...",
+        "MANUAL_URL_HINT": "Tarayıcı açılmadı mı? Bu URL'yi elle kopyalayın:"
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "Ek Bilgi",
@@ -1342,7 +1367,7 @@
       "S": {
         "ALREADY_IN_SYNC": "Zaten senkronize",
         "ARCHIVE_OPERATION_FAILED": "Arşiv işlemi başarısız. Bazı temizlik tamamlanmamış olabilir.",
-        "AUTH_SETUP_FAILED": "Kimlik doğrulama kurulumu başarısız. Web uygulamasını kullanıyorsanız, HTTPS üzerinden eriştiğinizden emin olun. Aksi takdirde, lütfen kararlı sürümü deneyin veya bunu bir hata olarak bildirin.",
+        "AUTH_SETUP_FAILED": "Kimlik doğrulama kurulamadı. Lütfen tekrar deneyin. Web uygulamasını kullanıyorsanız HTTPS üzerinden eriştiğinizden emin olun. Sorun devam ederse lütfen bunu hata olarak bildirin.",
         "AUTH_TOKEN_REJECTED": "Senkronizasyon jetonu sunucu tarafından reddedildi: {{reason}}. Lütfen yeni bir jeton alın.",
         "BTN_CONFIGURE": "Yapılandırmak",
         "BTN_FORCE_OVERWRITE": "Üzerine Yazmaya Zorla",
@@ -1459,7 +1484,8 @@
         "L_COLOR": "Renk (tanımlanmamış ana tema rengi kullanılıyorsa)",
         "L_ICON": "İkon",
         "L_TITLE": "Etiket adı",
-        "TITLE": "Temel ayarlar"
+        "TITLE": "Temel ayarlar",
+        "D_COLOR": "Ayarlanmazsa varsayılan olarak temanın birincil rengi kullanılır."
       },
       "S": {
         "ARCHIVE_CLEANUP_FAILED": "Silinen etiket için arşivlenmiş veri temizlenemedi",
@@ -1574,7 +1600,10 @@
         "TRACK_TIME": "İzlemeye başla",
         "TRACK_TIME_STOP": "İzleme zamanını duraklat",
         "UNSCHEDULE_TASK": "Görevin zamanlamasını kaldır",
-        "UPDATE_ISSUE_DATA": "Sorun verilerini güncelle"
+        "UPDATE_ISSUE_DATA": "Sorun verilerini güncelle",
+        "CLEAR_ESTIMATE": "Tahmini temizle",
+        "CUSTOM_ESTIMATE": "Özel…",
+        "ESTIMATE": "Tahmin"
       },
       "D_CONFIRM_DELETE": {
         "MSG": "\"{{title}}\" görevini silmek istediğinizden emin misiniz?",
@@ -1785,7 +1814,16 @@
         "THURSDAY": "Perşembe",
         "TITLE": "Görevin Başlığı",
         "TUESDAY": "Salı",
-        "WEDNESDAY": "Çarşamba"
+        "WEDNESDAY": "Çarşamba",
+        "MONTHLY_MODE_DAY_OF_MONTH": "Ayın günü",
+        "ORD_FIRST": "ilk",
+        "ORD_FOURTH": "dördüncü",
+        "ORD_LAST": "son",
+        "ORD_SECOND": "ikinci",
+        "ORD_THIRD": "üçüncü",
+        "Q_MONTHLY_NTH_WEEKDAY": "Her ay {{ordinalStr}} {{weekdayStr}}",
+        "WEEK_OF_MONTH": "Ayın haftası",
+        "WEEKDAY": "Haftanın günü"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Tekrar yapılandırma diyaloğu açılamadı. Görev menüsünden yapılandırabilirsiniz."
     },
@@ -1897,7 +1935,8 @@
         "TOTAL_TIME": "Toplam harcanan zaman:",
         "VIEW_TASK_DETAILS": "Görev ayrıntılarını görüntüle",
         "WEEK_NR": "{{nr}} haftası",
-        "WORKED": "Çalışılmış"
+        "WORKED": "Çalışılmış",
+        "WEEK_NR_SHORT": "H{{nr}}"
       },
       "D_CONFIRM_RESTORE": " <strong>\"{{title}}\"</strong> görevini bugünün görev listenize taşımak istediğinizden emin misiniz?",
       "D_EXPORT_TITLE": " {{start}}-{{end}}Görev Günlüğünü Dışa Aktarma",
@@ -2052,7 +2091,11 @@
       "CAL_PATH": "iCal kaynağının URL'si",
       "CHECK_UPDATES": "Her X'te bir uzaktan güncellemeleri kontrol edin",
       "HELP": "Hatırlatılacak takvimleri entegre edebilir ve bunları Super Productivity içinde görev olarak ekleyebilirsiniz. Entegrasyon iCal biçimini kullanarak çalışır. Bunun çalışması için takvimlerinizin internet üzerinden veya dosya sistemi aracılığıyla erişilebilir olması gerekir.",
-      "SHOW_BANNER_THRESHOLD": "Etkinlikten önce bir bildirim X göster (devre dışı bırakmak için boş)"
+      "SHOW_BANNER_THRESHOLD": "Etkinlikten önce bir bildirim X göster (devre dışı bırakmak için boş)",
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "Geçerli günün etkinliklerini otomatik olarak görev olarak içe aktar",
+      "CAL_COLOR": "Takvim rengi",
+      "DISABLE_FOR_WEB_APP": "Web uygulaması kullanılırken devre dışı bırak",
+      "REFERENCE_CALENDAR": "Referans takvim (yalnızca görüntüleme, görev oluşturma yok)"
     },
     "CLIPBOARD_IMAGES": {
       "DELETE": "Görseli sil",
@@ -2099,7 +2142,8 @@
       "L_SKIP_PREPARATION_SCREEN": "Hazırlık ekranını atlayın (esnetme vb.)",
       "L_START_IN_BACKGROUND": "Odak oturumlarını yalnızca kapak ile başlat (kaplama yok)",
       "L_SYNC_SESSION_WITH_TRACKING": "Odak oturumunu zaman takibi ile senkronize et",
-      "TITLE": "Odak modu"
+      "TITLE": "Odak modu",
+      "L_AUTO_START_FOCUS_ON_PLAY": "Bir görevi izlemeye başladığımda odak oturumu başlat"
     },
     "TASK_WIDGET": {
       "TITLE": "Görev Araç Takımı",
@@ -2253,7 +2297,13 @@
       "THEME": "Tema",
       "THEME_EXPERIMENTAL": "Tema (Deneysel)",
       "THEME_SELECT_LABEL": "Tema seç",
-      "TITLE": "Diğer ayarlar"
+      "TITLE": "Diğer ayarlar",
+      "THEME_INSTALL_BUTTON": "Tema yükle…",
+      "THEME_INSTALL_TOOLTIP": "Bir CSS tema dosyası yükleyin. Temalar yalnızca görselleri değiştirir; asla kod çalıştırmaz, ancak verilerinizin nasıl görüntülendiğini etkileyebilir. Yalnızca güvendiğiniz kaynaklardan tema yükleyin.",
+      "THEME_INSTALLED_WITH_WARNINGS": "Tema yüklendi. Eksik belirteçler: {{tokens}}",
+      "THEME_INVALID_CSS_FILE": "Tema yüklenemedi: geçersiz veya güvenli olmayan CSS dosyası.",
+      "THEME_REMOVE_BUTTON": "Temayı kaldır",
+      "THEME_REMOVED_TOAST": "Tema kaldırıldı; Varsayılan'a geri dönüldü."
     },
     "POMODORO": {
       "BREAK_DURATION": "Kısa molaların süresi",
@@ -2462,7 +2512,8 @@
     "TOGGLE_TRACK_TIME": "Başlat / Durdur takip süresi",
     "TRIGGER_SYNC": "Senkronizasyonu manuel olarak tetikle",
     "UNPLAN_ALL_TASKS": "Tüm görevlerin plandan kaldır",
-    "WORKLOG": "Görev günlüğü"
+    "WORKLOG": "Görev günlüğü",
+    "ADD_SECTION": "Bölüm ekle"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Eski verilerinizin bir yedeğini indirmek istiyor musunuz (Süper Üretkenlik'in eski sürümleriyle kullanılabilir)?",
@@ -2668,7 +2719,14 @@
     },
     "TAG_SETTINGS": "Etiket Ayarları",
     "TOGGLE_DARK_MODE": "Koyu Modu Aç/Kapat",
-    "UPDATE_APP": "Uygulamayı Güncelle"
+    "UPDATE_APP": "Uygulamayı Güncelle",
+    "SYNC": {
+      "CONFIGURE": "Yapılandır",
+      "EMPTY_STATE_HINT": "Verilerinizi Dropbox, WebDAV, Nextcloud veya yerel dosya ile eşitleyin.",
+      "ENCRYPTED": "Şifreli",
+      "NEEDS_AUTH": "Kimlik doğrulama gerekli",
+      "SET_UP_SYNC": "Eşitlemeyi kur"
+    }
   },
   "SCHEDULE": {
     "LAST": "Son:",
@@ -2750,6 +2808,17 @@
     "TODAY_REMAINING": "Bugün kalan:",
     "WITHOUT_BREAK": "Mola vermeden:",
     "WORKING_TODAY": "Bugün çalışıyorum:",
-    "WORKING_TODAY_ARCHIVED": "Arşivlenen görevlerde bugün çalışılan süre"
+    "WORKING_TODAY_ARCHIVED": "Arşivlenen görevlerde bugün çalışılan süre",
+    "ADD_SECTION_TITLE": "Bölüm ekle",
+    "SECTION_OPTIONS": "Bölüm seçenekleri",
+    "NO_TASKS_IN_MAIN_LIST": "Tüm görevler bölümler halinde düzenlenmiştir"
+  },
+  "DIALOG_LOGS": {
+    "COPY": "Kopyala",
+    "HINT": "Bu oturumun günlükleri. Kısa günlükler için Kopyala'yı kullanın (hata raporuna yapıştırın) veya dosyanın tamamını göndermek için Dosya paylaş'ı kullanın.",
+    "S_COPY_FAILED": "Günlükler panoya kopyalanamadı",
+    "S_SHARE_FAILED": "Günlükler paylaşılamadı",
+    "SHARE_FILE": "Dosya paylaş",
+    "TITLE": "Günlükler"
   }
 }

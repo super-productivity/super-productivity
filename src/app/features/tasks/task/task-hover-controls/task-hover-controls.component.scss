@@ -69,7 +69,7 @@
       background: var(--task-c-selected-bg);
     }
 
-    :host-context(.isDarkTheme .isCurrent) & {
+    :host-context(.isCurrent) & {
       background: var(--task-c-current-bg);
     }
 
@@ -81,7 +81,7 @@
       background: var(--task-c-selected-bg);
     }
 
-    :host-context(.isDarkTheme .sub-tasks.sub-tasks .isCurrent) ::ng-deep & {
+    :host-context(.sub-tasks.sub-tasks .isCurrent) ::ng-deep & {
       background: var(--task-c-current-bg);
     }
   }

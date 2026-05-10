@@ -64,6 +64,7 @@ import { WorkContextType } from './features/work-context/work-context.model';
 import { SectionService } from './features/section/section.service';
 import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
 import { TODAY_TAG } from './features/tag/tag.const';
+import { normalizeBackgroundImageBlur } from './features/work-context/work-context.const';
 import type { WorkContextSettingsDialogData } from './features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
@@ -374,6 +375,18 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
 
     return baseOpacity * 0.01;
+  });
+
+  readonly bgImageBlur = computed((): number => {
+    const context = this._activeWorkContext();
+
+    return normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
+  });
+
+  readonly bgImageBlurFilter = computed((): string => {
+    const blur = this.bgImageBlur();
+
+    return blur > 0 ? `blur(${blur}px)` : 'none';
   });
 
   async openSettings(): Promise<void> {

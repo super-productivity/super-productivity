@@ -1172,6 +1172,35 @@ describe('RemoteOpsProcessingService', () => {
       );
     });
 
+    it('should flip the session-validation latch when partial-failure validation fails', async () => {
+      const remoteOps: Operation[] = [
+        createFullOp({ id: 'op-1' }),
+        createFullOp({ id: 'op-2' }),
+      ];
+
+      opLogStoreSpy.markFailed.and.resolveTo();
+      operationApplierServiceSpy.applyOperations.and.resolveTo({
+        appliedOps: [remoteOps[0]],
+        failedOp: { op: remoteOps[1], error: new Error('Test error') },
+      });
+      validateStateServiceSpy.validateAndRepairCurrentState.and.resolveTo(false);
+
+      const latch = TestBed.inject(SyncSessionValidationService);
+      latch._resetForTest();
+
+      await expectAsync(
+        latch.withSession(async () => {
+          await service.applyNonConflictingOps(remoteOps);
+        }),
+      ).toBeRejected();
+
+      expect(validateStateServiceSpy.validateAndRepairCurrentState).toHaveBeenCalledWith(
+        'partial-apply-failure',
+        { callerHoldsLock: false },
+      );
+      expect(latch.hasFailed()).toBe(true);
+    });
+
     // =========================================================================
     // Issue #6343: Atomic duplicate skipping (replaces issue #6213 retry logic)
     // =========================================================================

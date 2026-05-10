@@ -62,6 +62,7 @@ class MockOperationSyncProvider
 {
   id = SyncProviderId.SuperSync;
   supportsOperationSync = true;
+  providerMode = 'superSyncOps' as const;
   maxConcurrentRequests = 1;
 
   // Mock configuration

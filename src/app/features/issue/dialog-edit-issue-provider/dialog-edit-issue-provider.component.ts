@@ -60,6 +60,7 @@ import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provi
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { OAuthFlowConfig } from '@super-productivity/plugin-api';
+import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 // ClickUp is now a plugin — no built-in config component needed
 import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
@@ -350,6 +351,9 @@ export class DialogEditIssueProviderComponent {
   }
 
   async connectOAuth(oauthConfig: OAuthFlowConfig): Promise<void> {
+    if (this.isOAuthUnavailableInWeb(oauthConfig)) {
+      return;
+    }
     const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
     if (!pluginId) {
       return;
@@ -394,6 +398,10 @@ export class DialogEditIssueProviderComponent {
   protected readonly IS_ANDROID_WEB_VIEW = IS_ANDROID_WEB_VIEW;
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
+
+  protected isOAuthUnavailableInWeb(oauthConfig: OAuthFlowConfig): boolean {
+    return !IS_ELECTRON && !IS_NATIVE_PLATFORM && !oauthConfig.webClientId;
+  }
 
   /**
    * @returns true if all fields loaded successfully, false if any failed

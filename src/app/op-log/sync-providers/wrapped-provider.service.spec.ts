@@ -25,13 +25,19 @@ describe('WrappedProviderService', () => {
       },
     });
     if (supportsOperationSync) {
-      (provider as any).supportsOperationSync = true;
+      const operationProvider = provider as unknown as {
+        supportsOperationSync: true;
+        providerMode: 'superSyncOps';
+      };
+      operationProvider.supportsOperationSync = true;
+      operationProvider.providerMode = 'superSyncOps';
     }
     return provider;
   };
 
-  const createMockSyncCapableAdapter = (): OperationSyncCapable => ({
+  const createMockSyncCapableAdapter = (): OperationSyncCapable<'fileSnapshotOps'> => ({
     supportsOperationSync: true,
+    providerMode: 'fileSnapshotOps',
     uploadOps: jasmine.createSpy('uploadOps'),
     downloadOps: jasmine.createSpy('downloadOps'),
     getLastServerSeq: jasmine.createSpy('getLastServerSeq'),

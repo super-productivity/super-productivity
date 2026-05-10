@@ -98,14 +98,10 @@ export const TABLET_VIEWPORTS = [
 
 import * as path from 'path';
 const repoRoot = path.resolve(__dirname, '..', '..');
+export const SCREENSHOTS_OUT_DIR = path.join(repoRoot, 'dist', 'screenshots');
 /** Roots that hold raw scenario captures, separated by capture pipeline. */
-export const MASTER_DIR_WEB = path.join(repoRoot, '.tmp', 'screenshots', '_master');
-export const MASTER_DIR_ELECTRON = path.join(
-  repoRoot,
-  '.tmp',
-  'screenshots',
-  '_master_electron',
-);
+export const MASTER_DIR_WEB = path.join(SCREENSHOTS_OUT_DIR, '_master');
+export const MASTER_DIR_ELECTRON = path.join(SCREENSHOTS_OUT_DIR, '_master_electron');
 
 /**
  * Per-store derivation rules used by `build-store-assets.ts`. Each rule maps
@@ -149,14 +145,9 @@ export const STORE_RULES: readonly StoreRule[] = [
     // captured. Run on a Mac via `npm run screenshots:capture:electron`.
     masterDir: 'electron',
   },
-  {
-    // Folder is `microsoft-store` (not `msstore`) so it isn't mistaken for
-    // "Mac Store" when browsing the dist/ tree alongside `macappstore/`.
-    store: 'microsoft-store',
-    source: 'desktopMaster',
-    localeLayout: 'per-locale-dir',
-    maxCount: 10,
-  },
+  // Web and Microsoft Store use the same desktop Chromium captures. Keep one
+  // derived folder and pick at most 10 from it when submitting to MS Store.
+  { store: 'desktop', source: 'desktopMaster', localeLayout: 'per-locale-dir' },
   // Snap technically caps at 5 entries, ≤2 MB each — pick which to upload
   // manually before submission. The 2 MB cap forces JPEG re-encode in the
   // post-processor; everything else stays lossless PNG.
@@ -175,7 +166,6 @@ export const STORE_RULES: readonly StoreRule[] = [
     localeLayout: 'global',
     masterDir: 'electron',
   },
-  { store: 'web', source: 'desktopMaster', localeLayout: 'per-locale-dir' },
   {
     store: 'ios/iphone-69',
     source: 'iphone69',

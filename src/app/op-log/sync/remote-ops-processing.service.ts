@@ -469,10 +469,10 @@ export class RemoteOpsProcessingService {
         );
         await this.opLogStore.markFailed(failedOpIds);
 
-        // Run validation after partial failure to detect/repair any state inconsistencies
-        await this.validateStateService.validateAndRepairCurrentState(
+        await this._validateAndFlagSession(
           'partial-apply-failure',
-          { callerHoldsLock },
+          callerHoldsLock,
+          'RemoteOpsProcessingService: State validation failed after partial apply failure',
         );
 
         this.snackService.open({
@@ -650,17 +650,33 @@ export class RemoteOpsProcessingService {
    *          flipped so the wrapper can refuse to claim IN_SYNC (#7330).
    */
   async validateAfterSync(callerHoldsLock: boolean = false): Promise<boolean> {
-    const isValid = await this.validateStateService.validateAndRepairCurrentState(
+    return await this._validateAndFlagSession(
       'sync',
+      callerHoldsLock,
+      'RemoteOpsProcessingService: State validation failed after sync',
+      T.F.SYNC.S.SYNC_VALIDATION_FAILED,
+    );
+  }
+
+  private async _validateAndFlagSession(
+    context: 'sync' | 'partial-apply-failure',
+    callerHoldsLock: boolean,
+    errorMessage: string,
+    snackMessage?: string,
+  ): Promise<boolean> {
+    const isValid = await this.validateStateService.validateAndRepairCurrentState(
+      context,
       { callerHoldsLock },
     );
     if (!isValid) {
-      OpLog.err('RemoteOpsProcessingService: State validation failed after sync');
+      OpLog.err(errorMessage);
       this.sessionValidation.setFailed();
-      this.snackService.open({
-        type: 'ERROR',
-        msg: T.F.SYNC.S.SYNC_VALIDATION_FAILED,
-      });
+      if (snackMessage) {
+        this.snackService.open({
+          type: 'ERROR',
+          msg: snackMessage,
+        });
+      }
     }
     return isValid;
   }

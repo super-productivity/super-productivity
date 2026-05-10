@@ -3,13 +3,11 @@
  *
  *   Lead-in       Black fades to SP UI with schedule panel open.
  *   1  Capture in seconds.        type a task with short syntax
- *                                 (`A task 1h #urgent @17`).
+ *                                 (`A task 1h`).
  *   1.5 [full only]               No account. No tracking.
  *   2  Plan your day.             drag the captured task onto the
- *                                 schedule panel; a synthetic ghost
- *                                 follows the cursor so the act of
- *                                 dragging reads regardless of SP's
- *                                 cdkDrag wiring.
+ *                                 schedule panel using the app's real
+ *                                 cdkDrag behavior.
  *   3  Focus on what matters.     focus-mode in progress on the
  *                                 captured task. clock.resume() lets
  *                                 the timer tick visibly.
@@ -31,7 +29,6 @@ import { test } from '../fixture';
 import type { OverlayHandle } from '../overlays';
 import {
   LOGOS,
-  attachDragGhost,
   cutToScene,
   loopBoundary,
   showEndCard,
@@ -56,10 +53,9 @@ const parkCursor = async (page: import('@playwright/test').Page): Promise<void> 
  * Short-syntax string typed into the global add-task bar in beat 1.
  *   "A task"      title
  *   "1h"          time estimate
- *   "#urgent"     tag (auto-created if missing)
- *   "@17"         due time today at 17:00
  */
-const CAPTURED_TASK_TITLE = 'A task 1h #urgent @17';
+const CAPTURED_TASK_TITLE = 'A task 1h';
+const CAPTURED_TASK_DISPLAY_TITLE = 'A task';
 
 test.describe('@video reel', () => {
   test.use({ locale: 'en', theme: 'dark' });
@@ -132,52 +128,75 @@ test.describe('@video reel', () => {
     let capturedTaskId: string | null = null;
     let bExtra: OverlayHandle | undefined;
     let b2: OverlayHandle | undefined;
-    await cutToScene(page, async () => {
-      await page.evaluate(() => {
-        const helper = (
-          window as unknown as {
-            __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
-          }
-        ).__e2eTestHelpers;
-        helper?.store?.dispatch({ type: '[Layout] Hide AddTaskBar' });
-      });
-      await page
-        .locator('add-task-bar.global')
-        .first()
-        .waitFor({ state: 'hidden', timeout: 3_000 })
-        .catch(() => undefined);
-      capturedTaskId = await page
-        .locator('task')
-        .first()
-        .getAttribute('data-task-id')
-        .catch(() => null);
-      // Restore the cursor highlight — drag in beat 2 needs it visible.
-      await page.evaluate(() =>
-        document.body.classList.remove('__sp-hide-cursor-highlight'),
-      );
-      await parkCursor(page);
-      void b1.hide();
-      if (isFull) {
-        bExtra = await showOverlay(page, 'No account. No tracking.', {
-          noWait: true,
+    await cutToScene(
+      page,
+      async () => {
+        const backdrop = page.locator('.backdrop').first();
+        await backdrop.waitFor({ state: 'visible', timeout: 1_000 }).catch(() => {
+          /* Add-task bar may have already closed itself after Enter. */
         });
-      } else {
-        b2 = await showOverlay(page, 'Plan your day.', { noWait: true });
-      }
-    });
+        if (await backdrop.isVisible().catch(() => false)) {
+          await backdrop.click({ force: true });
+          await backdrop.waitFor({ state: 'hidden', timeout: 3_000 }).catch(() => {
+            /* Non-fatal: backdrop can detach during the cut. */
+          });
+        }
+        await page
+          .locator('add-task-bar.global')
+          .first()
+          .waitFor({ state: 'hidden', timeout: 3_000 })
+          .catch(() => undefined);
+        const capturedTask = page
+          .locator('task')
+          .filter({ hasText: CAPTURED_TASK_DISPLAY_TITLE })
+          .first();
+        await capturedTask.waitFor({ state: 'visible', timeout: 3_000 });
+        capturedTaskId = await capturedTask
+          .getAttribute('data-task-id')
+          .catch(() => null);
+        // Restore the cursor highlight — drag in beat 2 needs it visible.
+        await page.evaluate(() =>
+          document.body.classList.remove('__sp-hide-cursor-highlight'),
+        );
+        await parkCursor(page);
+        void b1.hide();
+        if (isFull) {
+          bExtra = await showOverlay(page, 'No account. No tracking.', {
+            noWait: true,
+          });
+        } else {
+          b2 = await showOverlay(page, 'Plan your day.', { noWait: true });
+        }
+      },
+      {
+        fadeMs: 260,
+        label: isFull ? 'beat 1 to 1.5' : 'beat 1 to 2',
+      },
+    );
 
     // ── Beat 1.5 → 2 transition (full variant only) ──────────────────────
     if (isFull) {
       await page.waitForTimeout(1500);
-      await cutToScene(page, async () => {
-        void bExtra!.hide();
-        b2 = await showOverlay(page, 'Plan your day.', { noWait: true });
-      });
+      await cutToScene(
+        page,
+        async () => {
+          void bExtra!.hide();
+          b2 = await showOverlay(page, 'Plan your day.', { noWait: true });
+        },
+        {
+          fadeMs: 260,
+          label: 'beat 1.5 to 2',
+        },
+      );
     }
 
-    // ── Beat 2 — Plan your day. (drag with ghost preview) ────────────────
+    // ── Beat 2 — Plan your day. (native app drag) ────────────────────────
     const schedulePanel = page.locator('schedule-day-panel').first();
-    const dragSource = page.locator('task').first();
+    const dragSource = page
+      .locator('task')
+      .filter({ hasText: CAPTURED_TASK_DISPLAY_TITLE })
+      .first();
+    await dragSource.waitFor({ state: 'visible', timeout: 5_000 });
     const taskBox = await dragSource.boundingBox();
     const panelBox = await schedulePanel.boundingBox();
     if (taskBox && panelBox) {
@@ -192,14 +211,10 @@ test.describe('@video reel', () => {
       await page.mouse.move(startX, startY);
       await page.waitForTimeout(120);
       await page.mouse.down();
-      // Ghost attaches AFTER mouse.down so the initial cursor-arrives-on-
-      // task moment isn't visually competing with the ghost popping in.
-      const ghost = await attachDragGhost(page, dragSource);
       await page.waitForTimeout(120);
       await page.mouse.move(endX, endY, { steps: 25 });
       await page.waitForTimeout(180);
       await page.mouse.up();
-      await ghost.detach();
       await page.waitForTimeout(isFull ? 250 : 150);
       await parkCursor(page);
     }
@@ -207,103 +222,116 @@ test.describe('@video reel', () => {
 
     // ── Beat 2 → 3 transition: cut to black, dispatch focus mode ─────────
     let b3: OverlayHandle | undefined;
-    await cutToScene(page, async () => {
-      void b2!.hide();
-      if (await scheduleBtn.isVisible().catch(() => false)) {
-        await scheduleBtn.click();
-      }
-      if (capturedTaskId) {
-        await page.evaluate((id) => {
+    await cutToScene(
+      page,
+      async () => {
+        void b2!.hide();
+        if (await scheduleBtn.isVisible().catch(() => false)) {
+          await scheduleBtn.click();
+        }
+        if (capturedTaskId) {
+          await page.evaluate((id) => {
+            const helper = (
+              window as unknown as {
+                __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
+              }
+            ).__e2eTestHelpers;
+            if (!helper?.store) return;
+            helper.store.dispatch({ type: '[Task] SetCurrentTask', id });
+            helper.store.dispatch({ type: '[FocusMode] Show Overlay' });
+            helper.store.dispatch({
+              type: '[FocusMode] Start Session',
+              duration: 1500000,
+            });
+          }, capturedTaskId);
+          await page
+            .locator('focus-mode-main')
+            .first()
+            .waitFor({ state: 'visible', timeout: 10_000 })
+            .catch(() => undefined);
+          await page.clock.runFor(5500).catch(() => undefined);
+          await page
+            .locator('focus-mode-main .bottom-controls')
+            .first()
+            .waitFor({ state: 'visible', timeout: 5_000 })
+            .catch(() => undefined);
+          await page.clock.resume().catch(() => undefined);
+        }
+        await parkCursor(page);
+        b3 = await showOverlay(page, 'Focus on what matters.', { noWait: true });
+      },
+      {
+        fadeMs: 260,
+        label: 'beat 2 to 3',
+      },
+    );
+    await page.waitForTimeout(isFull ? 1800 : 1200);
+
+    // ── Beat 3 → 4 transition: cut to black, swap to integrations card ──
+    let b4: OverlayHandle | undefined;
+    await cutToScene(
+      page,
+      async () => {
+        if (b3) void b3.hide();
+        await page.evaluate(() => {
           const helper = (
             window as unknown as {
               __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
             }
           ).__e2eTestHelpers;
-          if (!helper?.store) return;
-          helper.store.dispatch({ type: '[Task] SetCurrentTask', id });
-          helper.store.dispatch({ type: '[FocusMode] Show Overlay' });
-          helper.store.dispatch({
-            type: '[FocusMode] Start Session',
-            duration: 1500000,
-          });
-        }, capturedTaskId);
+          helper?.store?.dispatch({ type: '[FocusMode] Hide Overlay' });
+          helper?.store?.dispatch({ type: '[FocusMode] Cancel Session' });
+        });
         await page
           .locator('focus-mode-main')
           .first()
-          .waitFor({ state: 'visible', timeout: 10_000 })
+          .waitFor({ state: 'hidden', timeout: 3_000 })
           .catch(() => undefined);
-        await page.clock.runFor(5500).catch(() => undefined);
-        await page
-          .locator('focus-mode-main .bottom-controls')
-          .first()
-          .waitFor({ state: 'visible', timeout: 5_000 })
-          .catch(() => undefined);
-        await page.clock.resume().catch(() => undefined);
-      }
-      await parkCursor(page);
-      b3 = await showOverlay(page, 'Focus on what matters.', { noWait: true });
-    });
-    await page.waitForTimeout(isFull ? 1800 : 1200);
-
-    // ── Beat 3 → 4 transition: cut to black, swap to integrations card ──
-    let b4: OverlayHandle | undefined;
-    await cutToScene(page, async () => {
-      if (b3) void b3.hide();
-      await page.evaluate(() => {
-        const helper = (
-          window as unknown as {
-            __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
-          }
-        ).__e2eTestHelpers;
-        helper?.store?.dispatch({ type: '[FocusMode] Hide Overlay' });
-        helper?.store?.dispatch({ type: '[FocusMode] Cancel Session' });
-      });
-      await page
-        .locator('focus-mode-main')
-        .first()
-        .waitFor({ state: 'hidden', timeout: 3_000 })
-        .catch(() => undefined);
-      b4 = await showIntegrationsCard(
-        page,
-        {
-          title: 'Plays well with GitHub, Jira & many more',
-          logos: [
-            { svg: LOGOS.github, label: 'GitHub' },
-            { svg: LOGOS.gitlab, label: 'GitLab', color: '#fc6d26' },
-            { svg: LOGOS.jira, label: 'Jira', color: '#2684ff' },
-            { svg: LOGOS.linear, label: 'Linear', color: '#5e6ad2' },
-            { svg: LOGOS.trello, label: 'Trello', color: '#0079bf' },
-            { svg: LOGOS.calendar, label: 'Calendar' },
-          ],
-        },
-        { noWait: true },
-      );
-    });
+        b4 = await showIntegrationsCard(
+          page,
+          {
+            title: 'Plays well with GitHub, Jira & many more',
+            logos: [
+              { svg: LOGOS.github, label: 'GitHub' },
+              { svg: LOGOS.gitlab, label: 'GitLab', color: '#fc6d26' },
+              { svg: LOGOS.jira, label: 'Jira', color: '#2684ff' },
+              { svg: LOGOS.linear, label: 'Linear', color: '#5e6ad2' },
+              { svg: LOGOS.trello, label: 'Trello', color: '#0079bf' },
+              { svg: LOGOS.calendar, label: 'Calendar' },
+            ],
+          },
+          { noWait: true },
+        );
+      },
+      {
+        fadeMs: 260,
+        label: 'beat 3 to 4',
+      },
+    );
     await page.waitForTimeout(isFull ? 2500 : 2000);
 
-    // ── Beat 4 → 5 transition: cut to black, swap to end card ────────────
-    await cutToScene(page, async () => {
-      if (b4) void b4.hide();
-      await showEndCard(
-        page,
-        {
-          logo: {
-            src: '/assets/icons/sp.svg',
-            alt: 'Super Productivity',
-            monochrome: true,
-          },
-          title: 'Free and open source.',
-          subtitle: 'superproductivity.com',
-          stats: [
-            { template: '★ {n}K on GitHub', to: 19 },
-            { template: '{n} ★ on Google Play', to: 4.8, decimals: 1 },
-            'Web · iOS · Android · macOS · Linux · Windows & many more',
-          ],
+    // ── Beat 4 → 5 transition: crossfade between controlled cards ───────
+    await showEndCard(
+      page,
+      {
+        logo: {
+          src: '/assets/icons/sp.svg',
+          alt: 'Super Productivity',
+          monochrome: true,
         },
-        { noWait: true },
-      );
-    });
-    await page.waitForTimeout(isFull ? 3000 : 2500);
+        title: 'Free and open source.',
+        subtitle: 'superproductivity.com',
+        stats: [
+          { template: '★ {n}K on GitHub', to: 19 },
+          { template: '{n} ★ on Google Play', to: 4.8, decimals: 1 },
+          'Web · iOS · Android · macOS · Linux · Windows & many more',
+        ],
+      },
+      { fadeMs: 560, noWait: true },
+    );
+    await page.waitForTimeout(260);
+    if (b4) void b4.hide();
+    await page.waitForTimeout(isFull ? 2740 : 2240);
 
     // ── Loop boundary ────────────────────────────────────────────────────
     // Don't hide the end card — let it stay live. The loop boundary

@@ -28,6 +28,46 @@ export const openSchedulePanel = async (page: Page): Promise<void> => {
   await btn.click();
 };
 
+/** Toggle the issue provider panel via the e2e-tagged header button. */
+export const openIssueProviderPanel = async (page: Page): Promise<void> => {
+  const btn = page.locator('.e2e-toggle-issue-provider-panel').first();
+  await btn.waitFor({ state: 'visible', timeout: 10_000 });
+  await btn.click();
+};
+
+/** Open the right-hand task detail panel for a known seeded task id. */
+export const openTaskDetailPanel = async (page: Page, taskId: string): Promise<void> => {
+  await dispatchInPage(page, {
+    type: '[Task] SetSelectedTask',
+    id: taskId,
+    taskDetailTargetPanel: 'Default',
+    isSkipToggle: true,
+  });
+  await page.locator('right-panel-content task-detail-panel').waitFor({
+    state: 'visible',
+    timeout: 10_000,
+  });
+};
+
+/**
+ * Nudge the schedule's scroll container up by `pxUp` pixels so the
+ * captured frame shows a bit of context before work-start (default
+ * scroll lands flush at work-start, which crops anything earlier in the
+ * day). Pass through to the schedule scroll-wrapper rather than the
+ * page scroll so we don't disturb non-schedule layouts.
+ */
+export const scrollScheduleUp = async (page: Page, pxUp = 80): Promise<void> => {
+  await page.evaluate((delta) => {
+    const wrapper = document.querySelector(
+      'schedule .scroll-wrapper, schedule-week .scroll-wrapper, .scroll-wrapper',
+    ) as HTMLElement | null;
+    if (!wrapper) return;
+    wrapper.scrollTop = Math.max(0, wrapper.scrollTop - delta);
+  }, pxUp);
+  // Beat for sticky-header repaint to settle before the capture fires.
+  await page.waitForTimeout(120);
+};
+
 /** Standard scenario boot: navigate to a hash route + settle. */
 export const gotoAndSettle = async (page: Page, hashRoute: string): Promise<void> => {
   await page.goto(hashRoute);

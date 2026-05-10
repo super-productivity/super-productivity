@@ -502,6 +502,7 @@
         "LOAD_OPTIONS": "Load Options",
         "LOAD_OPTIONS_FAILED": "Failed to load options",
         "LOADING_OPTIONS": "Loading options...",
+        "OAUTH_UNAVAILABLE_WEB": "Available in the desktop and mobile apps. Synced settings stay saved, but live data cannot be loaded in the web app.",
         "OPTIONS_LOADED": "Options loaded",
         "RELOAD_OPTIONS": "Reload Options",
         "SETUP_TITLE": "Setup {{title}} Config",
@@ -905,8 +906,10 @@
         "TITLE": "Basic Settings"
       },
       "FORM_THEME": {
+        "D_BACKGROUND_IMAGE_BLUR": "Adjust this value to blur the background image. The default is 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Adjust this value to make the background more or less transparent. The default is 20%.",
         "HELP": "Theme settings for your project.",
+        "L_BACKGROUND_IMAGE_BLUR": "Blur background image",
         "L_BACKGROUND_IMAGE_DARK": "Background Image URL (Dark Theme)",
         "L_BACKGROUND_IMAGE_LIGHT": "Background Image URL (Light Theme)",
         "L_BACKGROUND_OVERLAY_OPACITY": "Darken/lighten background image for better contrast",
@@ -1386,7 +1389,7 @@
       "S": {
         "ALREADY_IN_SYNC": "Already in sync",
         "ARCHIVE_OPERATION_FAILED": "Archive operation failed. Some cleanup may not have completed.",
-        "AUTH_SETUP_FAILED": "Failed to set up authentication. If you're using the web app, make sure you're accessing it over HTTPS. Otherwise, please try the stable version or report this as a bug.",
+        "AUTH_SETUP_FAILED": "Failed to set up authentication. Please try again. If you're using the web app, make sure you're accessing it over HTTPS. Otherwise, please report this as a bug if it keeps happening.",
         "AUTH_TOKEN_REJECTED": "Sync token was rejected by the server: {{reason}}. Please get a new token.",
         "BTN_CONFIGURE": "Configure",
         "BTN_FORCE_OVERWRITE": "Force Overwrite",

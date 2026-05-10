@@ -9,6 +9,7 @@ import { TAG_FEATURE_NAME } from '../../features/tag/store/tag.reducer';
 import { Task } from '../../features/tasks/task.model';
 import { Project } from '../../features/project/project.model';
 import { Tag } from '../../features/tag/tag.model';
+import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 
 // Set to true to run stress tests (10k+ operations)
 // These tests take 1-2 seconds each and are skipped by default to speed up test runs
@@ -26,6 +27,7 @@ describe('bulkHydrationMetaReducer', () => {
   const TASK_ID_2 = 'task2';
   const PROJECT_ID = 'project1';
   const TAG_ID = 'tag1';
+  const TASK_LWW_TYPE = toLwwUpdateActionType('TASK');
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -585,7 +587,7 @@ describe('bulkHydrationMetaReducer', () => {
     const createLwwUpdateOp = (entityId: string): Operation =>
       createMockOperation({
         id: `lww-update-${entityId}`,
-        actionType: `[TASK] LWW Update` as ActionType,
+        actionType: TASK_LWW_TYPE,
         opType: OpType.Update,
         entityType: 'TASK',
         entityId,
@@ -791,8 +793,8 @@ describe('bulkHydrationMetaReducer', () => {
   // after wake from hibernate.
   // =========================================================================
   describe('TAG/PROJECT LWW Updates referencing same-batch archives (#7330)', () => {
-    const TAG_LWW_TYPE = '[TAG] LWW Update';
-    const PROJECT_LWW_TYPE = '[PROJECT] LWW Update';
+    const TAG_LWW_TYPE = toLwwUpdateActionType('TAG');
+    const PROJECT_LWW_TYPE = toLwwUpdateActionType('PROJECT');
 
     const createMoveToArchiveOp = (entityIds: string[]): Operation =>
       createMockOperation({
@@ -816,7 +818,7 @@ describe('bulkHydrationMetaReducer', () => {
 
       const tagLwwOp = createMockOperation({
         id: 'tag-lww',
-        actionType: TAG_LWW_TYPE as ActionType,
+        actionType: TAG_LWW_TYPE,
         opType: OpType.Update,
         entityType: 'TAG',
         entityId: TAG_ID,
@@ -852,7 +854,7 @@ describe('bulkHydrationMetaReducer', () => {
 
       const projectLwwOp = createMockOperation({
         id: 'project-lww',
-        actionType: PROJECT_LWW_TYPE as ActionType,
+        actionType: PROJECT_LWW_TYPE,
         opType: OpType.Update,
         entityType: 'PROJECT',
         entityId: PROJECT_ID,
@@ -887,7 +889,7 @@ describe('bulkHydrationMetaReducer', () => {
 
       const tagLwwOp = createMockOperation({
         id: 'tag-lww-after-archive',
-        actionType: TAG_LWW_TYPE as ActionType,
+        actionType: TAG_LWW_TYPE,
         opType: OpType.Update,
         entityType: 'TAG',
         entityId: TAG_ID,
@@ -921,7 +923,7 @@ describe('bulkHydrationMetaReducer', () => {
       const SUB_TASK_ID = 'sub-task-1';
       const tagLwwOp = createMockOperation({
         id: 'tag-lww-with-subtask',
-        actionType: TAG_LWW_TYPE as ActionType,
+        actionType: TAG_LWW_TYPE,
         opType: OpType.Update,
         entityType: 'TAG',
         entityId: TAG_ID,
@@ -968,6 +970,106 @@ describe('bulkHydrationMetaReducer', () => {
       expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
     });
 
+    it('strips state-derived orphan subtask IDs when moveToArchive payload omits subtasks', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const SUB_TASK_ID = 'state-only-sub-of-archived';
+      const state = {
+        ...createMockState(),
+        [TASK_FEATURE_NAME]: {
+          ids: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          entities: {
+            [TASK_ID]: createMockTask({
+              id: TASK_ID,
+              subTaskIds: [],
+            }),
+            [SUB_TASK_ID]: createMockTask({
+              id: SUB_TASK_ID,
+              parentId: TASK_ID,
+            }),
+            [TASK_ID_2]: createMockTask({
+              id: TASK_ID_2,
+            }),
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+          lastCurrentTaskId: null,
+        },
+      } as Partial<RootState>;
+
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-state-only-archive-subtask',
+        actionType: TAG_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      // Stale archive payload: the task reducer still removes SUB_TASK_ID via
+      // deleteTaskHelper's child.parentId lookup, even when the payload missed it.
+      const archiveOp = createMoveToArchiveOp([TASK_ID]);
+
+      const operations = [tagLwwOp, archiveOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+
+    it('strips subtask IDs created earlier in the same batch before a stale moveToArchive', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+      const SUB_TASK_ID = 'same-batch-created-sub';
+
+      const taskLwwOp = createMockOperation({
+        id: 'task-lww-create-subtask',
+        actionType: TASK_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: SUB_TASK_ID,
+        payload: {
+          id: SUB_TASK_ID,
+          title: 'Sub created by earlier op',
+          parentId: TASK_ID,
+          subTaskIds: [],
+        },
+      });
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-after-subtask-before-archive',
+        actionType: TAG_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      const archiveOp = createMoveToArchiveOp([TASK_ID]);
+
+      const operations = [taskLwwOp, tagLwwOp, archiveOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+
     // deleteTasks (DELETE_MULTIPLE) only carries flat taskIds in its payload.
     // The reducer cascades to subtasks via state lookup at apply time, so the
     // pre-scan must do the same — otherwise a co-batched TAG/PROJECT LWW
@@ -999,7 +1101,7 @@ describe('bulkHydrationMetaReducer', () => {
 
       const tagLwwOp = createMockOperation({
         id: 'tag-lww-bulk-delete',
-        actionType: TAG_LWW_TYPE as ActionType,
+        actionType: TAG_LWW_TYPE,
         opType: OpType.Update,
         entityType: 'TAG',
         entityId: TAG_ID,
@@ -1037,6 +1139,71 @@ describe('bulkHydrationMetaReducer', () => {
       expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
     });
 
+    it('does not strip state-only orphan subtask IDs for deleteTasks because that reducer does not remove them', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const SUB_TASK_ID = 'state-only-sub-of-bulk-deleted';
+      const state = {
+        ...createMockState(),
+        [TASK_FEATURE_NAME]: {
+          ids: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          entities: {
+            [TASK_ID]: createMockTask({
+              id: TASK_ID,
+              subTaskIds: [],
+            }),
+            [SUB_TASK_ID]: createMockTask({
+              id: SUB_TASK_ID,
+              parentId: TASK_ID,
+            }),
+            [TASK_ID_2]: createMockTask({
+              id: TASK_ID_2,
+            }),
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+          lastCurrentTaskId: null,
+        },
+      } as Partial<RootState>;
+
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-bulk-delete-state-only-subtask',
+        actionType: TAG_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      const deleteMultipleOp = createMockOperation({
+        id: 'delete-multiple-state-only-subtask',
+        actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        entityIds: [TASK_ID],
+        payload: {
+          actionPayload: { taskIds: [TASK_ID] },
+          entityChanges: [],
+        },
+      });
+
+      const operations = [tagLwwOp, deleteMultipleOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      expect(tagAction!.taskIds).toEqual([SUB_TASK_ID, TASK_ID_2]);
+    });
+
     // The strip helper is the canonical cleanup point for taskIds — non-string
     // entries (type violations from a malformed remote payload) must not be
     // preserved verbatim into the consumer reducer.
@@ -1046,7 +1213,7 @@ describe('bulkHydrationMetaReducer', () => {
 
       const tagLwwOp = createMockOperation({
         id: 'tag-lww-malformed',
-        actionType: TAG_LWW_TYPE as ActionType,
+        actionType: TAG_LWW_TYPE,
         opType: OpType.Update,
         entityType: 'TAG',
         entityId: TAG_ID,
@@ -1082,7 +1249,7 @@ describe('bulkHydrationMetaReducer', () => {
       const SUB_TASK_ID = 'sub-of-deleted';
       const tagLwwOp = createMockOperation({
         id: 'tag-lww-delete-subtask',
-        actionType: TAG_LWW_TYPE as ActionType,
+        actionType: TAG_LWW_TYPE,
         opType: OpType.Update,
         entityType: 'TAG',
         entityId: TAG_ID,
@@ -1107,6 +1274,76 @@ describe('bulkHydrationMetaReducer', () => {
               title: 'Parent',
               subTasks: [{ id: SUB_TASK_ID, title: 'Sub' }],
               subTaskIds: [SUB_TASK_ID],
+            },
+          },
+          entityChanges: [],
+        },
+      });
+
+      const operations = [tagLwwOp, deleteOp];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+
+    it('strips state-derived orphan subtask IDs when deleteTask payload omits subtasks', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const SUB_TASK_ID = 'state-only-sub-of-deleted';
+      const state = {
+        ...createMockState(),
+        [TASK_FEATURE_NAME]: {
+          ids: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          entities: {
+            [TASK_ID]: createMockTask({
+              id: TASK_ID,
+              subTaskIds: [],
+            }),
+            [SUB_TASK_ID]: createMockTask({
+              id: SUB_TASK_ID,
+              parentId: TASK_ID,
+            }),
+            [TASK_ID_2]: createMockTask({
+              id: TASK_ID_2,
+            }),
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+          lastCurrentTaskId: null,
+        },
+      } as Partial<RootState>;
+
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-state-only-delete-subtask',
+        actionType: TAG_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          id: TAG_ID,
+          title: 'Today',
+          taskIds: [TASK_ID, SUB_TASK_ID, TASK_ID_2],
+          color: '#000',
+          icon: null,
+        },
+      });
+      const deleteOp: Operation = createMockOperation({
+        id: 'delete-op-state-only-sub',
+        actionType: ActionType.TASK_SHARED_DELETE,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        payload: {
+          actionPayload: {
+            task: {
+              id: TASK_ID,
+              title: 'Parent',
+              subTaskIds: [],
             },
           },
           entityChanges: [],

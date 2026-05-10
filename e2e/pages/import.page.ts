@@ -35,8 +35,8 @@ export class ImportPage extends BasePage {
    * Navigate to the import/export settings page.
    */
   async navigateToImportPage(): Promise<void> {
-    await this.page.goto('/#/config');
-    await this.page.waitForLoadState('networkidle');
+    await this.page.goto('/#/config', { waitUntil: 'domcontentloaded' });
+    await this.page.locator('config-page').waitFor({ state: 'visible', timeout: 10000 });
     // Wait for page content to fully render
     await this.page.waitForTimeout(1000);
 

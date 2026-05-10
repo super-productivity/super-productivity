@@ -50,6 +50,7 @@ describe('ImmediateUploadService', () => {
     mockProvider = {
       id: SyncProviderId.SuperSync,
       supportsOperationSync: true, // Required for isOperationSyncCapable check
+      providerMode: 'superSyncOps',
       uploadOperations: jasmine.createSpy('uploadOperations'),
       isReady: jasmine.createSpy('isReady').and.returnValue(Promise.resolve(true)),
     };

@@ -1,8 +1,8 @@
 /**
  * Post-process the latest Playwright video capture into shippable formats:
- *   - reel.mp4   1920×1080, 30fps, H.264 yuv420p   landing-page fallback
- *   - reel.webm  1920×1080, 30fps, VP9             landing-page primary
- *   - reel.gif   1024 wide, 24fps, two-pass palette README embed
+ *   - reel.mp4   1024×1024, 25fps, H.264 yuv420p   landing-page fallback
+ *   - reel.webm  1024×1024, 25fps, VP9             landing-page primary
+ *   - reel.gif   1024 wide, 25fps, two-pass palette README embed
  *
  * Inputs: the most recent `.webm` under `.tmp/video/recordings/` (where the
  * fixture's `recordVideo` setting writes). Outputs: `dist/video/`.
@@ -29,6 +29,9 @@ const OUT_DIR = path.join(REPO_ROOT, 'dist', 'video');
  */
 const VARIANT = process.env.REEL_VARIANT ?? '';
 const SUFFIX = VARIANT ? `-${VARIANT}` : '';
+// Playwright's recorder currently emits 25fps VP8 webm. Keeping all derived
+// formats on that cadence avoids duplicate/drop-frame judder in fades.
+const OUTPUT_FPS = 25;
 
 /**
  * Read the trim offset (seconds) from the sidecar the fixture writes when
@@ -99,9 +102,11 @@ const main = (): void => {
   console.log(`[video] source: ${path.relative(REPO_ROOT, src)}`);
 
   const trimSeconds = readTrimSeconds();
-  // `-ss` BEFORE `-i` is input seek (fast, frame-accurate when re-encoding).
-  // Empty array when no trim, so the ffmpeg arg list is clean.
-  const trimArgs = trimSeconds > 0 ? ['-ss', trimSeconds.toFixed(3)] : [];
+  // Trim in the filter graph so ffmpeg decodes to the exact trim point for
+  // every output. Seeking before `-i` is faster, but VP8 keyframes can be
+  // sparse enough to drop the opening beat from the generated reel.
+  const trimFilter =
+    trimSeconds > 0 ? `trim=start=${trimSeconds.toFixed(3)},setpts=PTS-STARTPTS,` : '';
   if (trimSeconds > 0) {
     console.log(
       `[video] trimming first ${trimSeconds.toFixed(3)}s (seed-import lead-in)`,
@@ -113,11 +118,10 @@ const main = (): void => {
   const palette = path.join(OUT_DIR, `.palette${SUFFIX}.png`);
   const gif = path.join(OUT_DIR, `reel${SUFFIX}.gif`);
 
-  // 1. mp4 — Playwright records VFR; force CFR 30fps for predictable playback.
+  // 1. mp4 — Playwright records VFR; force CFR for predictable playback.
   console.log('[video] -> mp4');
   run('ffmpeg', [
     '-y',
-    ...trimArgs,
     '-i',
     src,
     '-c:v',
@@ -129,7 +133,7 @@ const main = (): void => {
     '-pix_fmt',
     'yuv420p',
     '-vf',
-    'fps=30',
+    `${trimFilter}fps=${OUTPUT_FPS}`,
     '-movflags',
     '+faststart',
     '-an',
@@ -140,7 +144,6 @@ const main = (): void => {
   console.log('[video] -> webm');
   run('ffmpeg', [
     '-y',
-    ...trimArgs,
     '-i',
     src,
     '-c:v',
@@ -152,7 +155,7 @@ const main = (): void => {
     '-pix_fmt',
     'yuv420p',
     '-vf',
-    'fps=30',
+    `${trimFilter}fps=${OUTPUT_FPS}`,
     '-an',
     webm,
   ]);
@@ -168,23 +171,21 @@ const main = (): void => {
   console.log('[video] -> gif (palette pass)');
   run('ffmpeg', [
     '-y',
-    ...trimArgs,
     '-i',
     src,
     '-vf',
-    'fps=24,scale=1024:-1:flags=lanczos,palettegen=stats_mode=full',
+    `${trimFilter}fps=${OUTPUT_FPS},scale=1024:-1:flags=lanczos,palettegen=stats_mode=full`,
     palette,
   ]);
   console.log('[video] -> gif (paletteuse)');
   run('ffmpeg', [
     '-y',
-    ...trimArgs,
     '-i',
     src,
     '-i',
     palette,
     '-lavfi',
-    'fps=24,scale=1024:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=sierra2_4a',
+    `${trimFilter}fps=${OUTPUT_FPS},scale=1024:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=sierra2_4a`,
     gif,
   ]);
   fs.unlinkSync(palette);

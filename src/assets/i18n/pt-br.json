@@ -25,7 +25,8 @@
     "RELOAD_AFTER_IDB_ERROR": "Erro no Banco de Dados - O App Será Reiniciado\n\nO Super Productivity não consegue salvar os dados! Isso geralmente é causado por:\n• Pouco espaço em disco (mais comum)\n• Atualização do app em segundo plano\n• Usuários de Linux Snap: execute 'snap set core experimental.refresh-app-awareness=true'\n\nSuas alterações recentes podem não ter sido salvas. Por favor, libere espaço em disco se estiver baixo. O app será reiniciado após você fechar esta mensagem.",
     "RESTORE_FILE_BACKUP": "Parece NÃO HAVER DADOS, mas existem backups disponíveis em \"{{dir}}\". Você deseja restaurar o backup mais recente de {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "Parece NÃO HAVER DADOS, mas existe um backup disponível. Você deseja carregá-lo?",
-    "RESTORE_STRAY_BACKUP": "Durante a última sincronização, pode ter ocorrido um erro. Você deseja restaurar o último backup?"
+    "RESTORE_STRAY_BACKUP": "Durante a última sincronização, pode ter ocorrido um erro. Você deseja restaurar o último backup?",
+    "DELETE_SECTION": "Tem certeza de que deseja excluir esta seção? As tarefas nela serão movidas para a lista de tarefas."
   },
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "Pressione Enter novamente para salvar"
@@ -75,7 +76,8 @@
           "IMG": "Imagem (exibida como miniatura)",
           "LINK": "Link (abre no navegador)"
         }
-      }
+      },
+      "LOCAL_FILE_UNAVAILABLE": "Este anexo só está disponível no dispositivo onde foi adicionado."
     },
     "BOARDS": {
       "DEFAULT": {
@@ -145,7 +147,8 @@
         "TWO_WAY_SYNC_PUSH_ONLY": "Apenas Push (escrever no CalDAV)",
         "TWO_WAY_SYNC_SECTION": "Sincronização de Duas Vias (experimental)",
         "TWO_WAY_SYNC_STATUS": "Direção da sincronização de Status",
-        "TWO_WAY_SYNC_TITLE": "Direção da sincronização de Título"
+        "TWO_WAY_SYNC_TITLE": "Direção da sincronização de Título",
+        "IS_ADD_SUB_TASKS": "Importar também subtarefas quando uma tarefa for adicionada"
       },
       "FORM_SECTION": {
         "HELP": "<p>Aqui você pode configurar o Super Productivity para listar tarefas CalDAV não concluídas de um projeto específico no painel de criação de tarefas na visualização de agendamento diário. Elas serão listadas como sugestões e fornecerão um link para a tarefa, bem como mais informações sobre ela.</p><p>Além disso, você pode adicionar e sincronizar automaticamente todas as tarefas não concluídas ao seu backlog de tarefas.</p><p>Para fazer funcionar com o Nextcloud no webapp, você pode precisar permitir \"https://app.super-productivity.com\" no app do Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
@@ -234,7 +237,15 @@
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "Existem {{nr}} tarefas concluídas na sua lista de Hoje que ainda não foram movidas para o arquivo. Tem certeza de que deseja sair sem encerrar o dia?"
+        "FINISH_DAY_BEFORE_EXIT": "Existem {{nr}} tarefas concluídas na sua lista de Hoje que ainda não foram movidas para o arquivo. Tem certeza de que deseja sair sem encerrar o dia?",
+        "DONT_QUIT": "Não sair",
+        "FINISH_DAY": "Finalizar dia",
+        "QUIT": "Sair",
+        "TITLE": "Finalizar seu dia antes de sair?",
+        "UNARCHIVED_TASKS": {
+          "ONE": "1 tarefa concluída na sua lista Hoje ainda não foi movida para o arquivo.",
+          "OTHER": "{{nr}} tarefas concluídas na sua lista Hoje ainda não foram movidas para o arquivo."
+        }
       }
     },
     "FOCUS_MODE": {
@@ -310,7 +321,11 @@
         "SCOPE_ALL": "Todos",
         "SCOPE_ASSIGNED": "Atribuído a mim",
         "SCOPE_CREATED": "Criado por mim",
-        "TOKEN": "Token de Acesso"
+        "TOKEN": "Token de Acesso",
+        "EXCLUDE_LABELS": "Excluir rótulos (opcional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Lista de nomes de rótulos separados por vírgula. Issues com qualquer um desses rótulos serão excluídas.",
+        "FILTER_LABELS": "Filtrar por rótulos (opcional)",
+        "FILTER_LABELS_DESCRIPTION": "Lista de nomes de rótulos separados por vírgula. Somente issues com todos esses rótulos serão sincronizadas. Deixe em branco para sincronizar todas as issues que correspondem ao escopo."
       },
       "FORM_SECTION": {
         "HELP": "<p>Aqui você pode configurar o Super Productivity para listar issues abertas do Gitea de um repositório específico no painel de criação de tarefas na visualização de planejador. Elas serão listadas como sugestões e fornecerão um link para a issue, bem como mais informações sobre ela.</p><p>Além disso, você pode adicionar e importar automaticamente todas as issues abertas.</p><p>Para contornar limites de uso e para ter acesso, você pode fornecer um token de acesso."
@@ -439,7 +454,8 @@
         "OAUTH_FAILED": "Falha na autenticação.",
         "REMOTE_ISSUE_DELETED": "A issue remota foi excluída. Excluir tarefa vinculada \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "A issue remota foi excluída, mas a tarefa \"{{taskTitle}}\" possui tempo registrado. Excluir mesmo assim?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Falha no push da sincronização de duas vias: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Falha no push da sincronização de duas vias: {{errorMsg}}",
+        "OAUTH_FAILED_WITH_DETAIL": "Falha na autenticação: {{detail}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Criar issues automaticamente para novas tarefas",
@@ -984,7 +1000,14 @@
       "PLAN_END_DAY": "Fim de {{date}}",
       "PLAN_START_DAY": "Início de {{date}}",
       "SHIFT_KEY_INFO": "Segure Shift para alternar o modo de agendamento do dia",
-      "START": "Início do Trabalho"
+      "START": "Início do Trabalho",
+      "CALENDAR_VISIBILITY": "Visibilidade do calendário",
+      "NEXT_MONTH": "Próximo mês",
+      "NEXT_WEEK": "Próxima semana",
+      "PREVIOUS_MONTH": "Mês anterior",
+      "PREVIOUS_WEEK": "Semana anterior",
+      "VIEW_MONTH": "Ver mês",
+      "VIEW_WEEK": "Ver semana"
     },
     "SEARCH_BAR": {
       "INFO": "Comece a digitar para pesquisar tarefas",
@@ -1043,7 +1066,8 @@
       "BTN_RESTORE_FROM_HISTORY": "Restaurar do Histórico",
       "BTN_SYNC_NOW": "Sincronizar Agora",
       "C": {
-        "FORCE_UPLOAD": "Forçar o envio dos seus dados pode levar à perda de informações. Tem certeza de que deseja continuar?"
+        "FORCE_UPLOAD": "Forçar o envio dos seus dados pode levar à perda de informações. Tem certeza de que deseja continuar?",
+        "DECRYPT_OVERWRITE": "Isso SUBSTITUIRÁ os dados criptografados no servidor pela cópia local deste dispositivo e os criptografará novamente com a nova senha. Todos os outros dispositivos precisarão inserir a senha novamente e baixar os dados substituídos. Quaisquer alterações não sincronizadas nesses dispositivos serão perdidas permanentemente. Continuar?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Por favor, abra o link a seguir e copie o código de autorização fornecido para o campo abaixo.",
@@ -1341,7 +1365,7 @@
       "S": {
         "ALREADY_IN_SYNC": "Já está em sincronia",
         "ARCHIVE_OPERATION_FAILED": "Operação de arquivamento falhou. Algumas limpezas podem não ter sido concluídas.",
-        "AUTH_SETUP_FAILED": "Falha ao configurar a autenticação. Se estiver usando o app web, certifique-se de acessá-lo via HTTPS. Caso contrário, tente a versão estável ou relate como bug.",
+        "AUTH_SETUP_FAILED": "Falha ao configurar a autenticação. Tente novamente. Se estiver usando o app web, certifique-se de acessá-lo via HTTPS. Caso continue acontecendo, relate isso como bug.",
         "AUTH_TOKEN_REJECTED": "O token de sincronização foi rejeitado pelo servidor: {{reason}}. Por favor, obtenha um novo token.",
         "BTN_CONFIGURE": "Configurar",
         "BTN_FORCE_OVERWRITE": "Forçar Sobrescrita",
@@ -1458,7 +1482,8 @@
         "L_COLOR": "Cor (se não definida, a cor primária do tema será usada)",
         "L_ICON": "Ícone",
         "L_TITLE": "Nome da Etiqueta",
-        "TITLE": "Configurações Básicas"
+        "TITLE": "Configurações Básicas",
+        "D_COLOR": "Se não definido, usa por padrão a cor primária do tema."
       },
       "S": {
         "ARCHIVE_CLEANUP_FAILED": "Falha ao limpar dados arquivados da etiqueta excluída",
@@ -1573,7 +1598,10 @@
         "TRACK_TIME": "Iniciar registro de trabalho",
         "TRACK_TIME_STOP": "Pausar registro de trabalho",
         "UNSCHEDULE_TASK": "Desagendar",
-        "UPDATE_ISSUE_DATA": "Atualizar dados da issue"
+        "UPDATE_ISSUE_DATA": "Atualizar dados da issue",
+        "CLEAR_ESTIMATE": "Limpar estimativa",
+        "CUSTOM_ESTIMATE": "Personalizado…",
+        "ESTIMATE": "Estimativa"
       },
       "D_CONFIRM_DELETE": {
         "MSG": "Tem certeza de que deseja excluir a tarefa \"{{title}}\"?",
@@ -1784,7 +1812,16 @@
         "THURSDAY": "Quinta-feira",
         "TITLE": "Título da tarefa",
         "TUESDAY": "Terça-feira",
-        "WEDNESDAY": "Quarta-feira"
+        "WEDNESDAY": "Quarta-feira",
+        "MONTHLY_MODE_DAY_OF_MONTH": "Dia do mês",
+        "ORD_FIRST": "primeiro",
+        "ORD_FOURTH": "quarto",
+        "ORD_LAST": "último",
+        "ORD_SECOND": "segundo",
+        "ORD_THIRD": "terceiro",
+        "Q_MONTHLY_NTH_WEEKDAY": "Todo mês em {{ordinalStr}} {{weekdayStr}}",
+        "WEEK_OF_MONTH": "Semana do mês",
+        "WEEKDAY": "Dia da semana"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Não foi possível abrir o diálogo de repetição. Você pode configurá-lo através do menu da tarefa."
     },
@@ -1896,7 +1933,8 @@
         "TOTAL_TIME": "Tempo total:",
         "VIEW_TASK_DETAILS": "Ver detalhes da tarefa",
         "WEEK_NR": "Semana {{nr}}",
-        "WORKED": "Trabalhado"
+        "WORKED": "Trabalhado",
+        "WEEK_NR_SHORT": "S{{nr}}"
       },
       "D_CONFIRM_RESTORE": "Tem certeza de que deseja mover a tarefa <strong>\"{{title}}\"</strong> para sua lista de tarefas de Hoje?",
       "D_EXPORT_TITLE": "Exportação de Registro de Trabalho {{start}}–{{end}}",
@@ -2051,7 +2089,11 @@
       "CAL_PATH": "URL da fonte iCal",
       "CHECK_UPDATES": "Verificar atualizações remotas a cada X",
       "HELP": "Você pode integrar calendários para receber lembretes e adicioná-los como tarefas no Super Productivity. A integração utiliza o formato iCal. Para funcionar, seus calendários precisam estar acessíveis pela internet ou via sistema de arquivos.",
-      "SHOW_BANNER_THRESHOLD": "Mostrar uma notificação X antes do evento (vazio para desativar)"
+      "SHOW_BANNER_THRESHOLD": "Mostrar uma notificação X antes do evento (vazio para desativar)",
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "Importar eventos automaticamente como tarefas para o dia atual",
+      "CAL_COLOR": "Cor do calendário",
+      "DISABLE_FOR_WEB_APP": "Desativar ao usar o aplicativo web",
+      "REFERENCE_CALENDAR": "Calendário de referência (somente exibição, sem criação de tarefas)"
     },
     "CLIPBOARD_IMAGES": {
       "DELETE": "Excluir imagem",
@@ -2098,7 +2140,8 @@
       "L_SKIP_PREPARATION_SCREEN": "Pular tela de preparação (animação do foguete)",
       "L_START_IN_BACKGROUND": "Iniciar sessões de foco apenas com banner (sem sobreposição)",
       "L_SYNC_SESSION_WITH_TRACKING": "Sincronizar sessões de foco com o registro de trabalho",
-      "TITLE": "Modo Foco"
+      "TITLE": "Modo Foco",
+      "L_AUTO_START_FOCUS_ON_PLAY": "Iniciar uma sessão de foco quando eu começar a rastrear uma tarefa"
     },
     "TASK_WIDGET": {
       "TITLE": "Widget de Tarefa",
@@ -2252,7 +2295,13 @@
       "THEME": "Tema",
       "THEME_EXPERIMENTAL": "Tema (experimental)",
       "THEME_SELECT_LABEL": "Selecionar Tema",
-      "TITLE": "Configurações Diversas"
+      "TITLE": "Configurações Diversas",
+      "THEME_INSTALL_BUTTON": "Instalar tema…",
+      "THEME_INSTALL_TOOLTIP": "Envie um arquivo de tema CSS. Temas alteram apenas o visual — nunca executam código — mas ainda podem afetar como seus dados são renderizados. Instale apenas temas de fontes em que você confia.",
+      "THEME_INSTALLED_WITH_WARNINGS": "Tema instalado. Tokens ausentes: {{tokens}}",
+      "THEME_INVALID_CSS_FILE": "Não foi possível instalar o tema: arquivo CSS inválido ou inseguro.",
+      "THEME_REMOVE_BUTTON": "Remover tema",
+      "THEME_REMOVED_TOAST": "Tema removido; revertido para o padrão."
     },
     "POMODORO": {
       "BREAK_DURATION": "Duração da pausa curta",
@@ -2461,7 +2510,8 @@
     "TOGGLE_TRACK_TIME": "Iniciar/parar registro de trabalho",
     "TRIGGER_SYNC": "Sincronizar!",
     "UNPLAN_ALL_TASKS": "Desagendar tudo",
-    "WORKLOG": "Registro de Trabalho"
+    "WORKLOG": "Registro de Trabalho",
+    "ADD_SECTION": "Adicionar seção"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Deseja baixar um backup dos seus dados legados (pode ser usado com versões mais antigas do Super Productivity)?",
@@ -2756,6 +2806,17 @@
     "TODAY_REMAINING": "Restante hoje:",
     "WITHOUT_BREAK": "Sem pausa:",
     "WORKING_TODAY": "Trabalhado hoje:",
-    "WORKING_TODAY_ARCHIVED": "Tempo trabalhado hoje em tarefas arquivadas"
+    "WORKING_TODAY_ARCHIVED": "Tempo trabalhado hoje em tarefas arquivadas",
+    "ADD_SECTION_TITLE": "Adicionar seção",
+    "SECTION_OPTIONS": "Opções da seção",
+    "NO_TASKS_IN_MAIN_LIST": "Todas as tarefas estão organizadas em seções"
+  },
+  "DIALOG_LOGS": {
+    "COPY": "Copiar",
+    "HINT": "Logs desta sessão. Use Copiar para logs curtos (cole em um relatório de bug) ou Compartilhar arquivo para enviar o arquivo completo.",
+    "S_COPY_FAILED": "Falha ao copiar logs para a área de transferência",
+    "S_SHARE_FAILED": "Falha ao compartilhar logs",
+    "SHARE_FILE": "Compartilhar arquivo",
+    "TITLE": "Logs"
   }
 }

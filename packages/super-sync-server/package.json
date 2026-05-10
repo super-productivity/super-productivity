@@ -45,7 +45,7 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^8.0.5",
     "uuidv7": "^1.1.0",
-    "zod": "^4.3.5"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

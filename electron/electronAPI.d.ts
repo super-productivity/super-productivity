@@ -91,6 +91,8 @@ export interface ElectronAPI {
 
   isMacOS(): boolean;
 
+  isAppleSilicon(): boolean;
+
   isSnap(): boolean;
 
   isFlatpak(): boolean;

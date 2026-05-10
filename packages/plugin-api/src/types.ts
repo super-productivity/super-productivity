@@ -347,21 +347,12 @@ export interface OAuthFlowConfig {
    */
   iosClientId?: string;
   /**
-   * Client ID for the web build (Google "Web application" client).
-   * Overrides `clientId` in the browser (non-Electron, non-native).
-   * The deployed origin's `/assets/oauth-callback.html` must be registered as an
-   * Authorized redirect URI on the Google Cloud Console OAuth client, and the
-   * deployed origin must be listed in Authorized JavaScript origins.
+   * Client ID for the web build, for providers that support public browser
+   * clients via Authorization Code + PKCE without a client secret.
+   * Overrides `clientId` in the browser (non-Electron, non-native) and omits
+   * `clientSecret`.
    */
   webClientId?: string;
-  /**
-   * Client secret paired with `webClientId`, sent on the token exchange.
-   * Required for IdPs (e.g. Google "Web application" clients) that classify
-   * web clients as confidential and reject PKCE-only exchanges. Ships in
-   * client-side JS like the auth code itself — only set this if you accept
-   * that the secret is visible to anyone running the web build.
-   */
-  webClientSecret?: string;
   scopes: string[];
   /** Additional query parameters to append to the authorization URL (e.g. access_type, prompt). */
   extraAuthParams?: Record<string, string>;

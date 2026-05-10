@@ -214,6 +214,29 @@ export const startApp = (): void => {
 
   // APP EVENT LISTENERS
   // -------------------
+
+  // Force "regular" activation policy + show the dock icon when running
+  // under the screenshot pipeline. Playwright's `_electron.launch` spawns
+  // Electron as a child of node, and macOS doesn't always promote child-
+  // spawned Electron processes to a full GUI app — the result is a window
+  // with no traffic-lights despite `titleBarStyle: 'hiddenInset'`. The
+  // installed SP build doesn't hit this because it's launched as an .app
+  // bundle. Gating on `SP_SCREENSHOT_MODE=1` so normal users are unaffected.
+  if (IS_MAC && process.env.SP_SCREENSHOT_MODE === '1') {
+    appIN.on('ready', () => {
+      try {
+        appIN.setActivationPolicy?.('regular');
+      } catch {
+        /* setActivationPolicy is macOS-only — guarded above, but swallow */
+      }
+      try {
+        appIN.dock?.show();
+      } catch {
+        /* dock.show is macOS-only — guarded above, but swallow */
+      }
+    });
+  }
+
   appIN.on('ready', () => {
     // Clear GPU cache when Electron version changes to prevent blank/black screens.
     // Stale GPU shader caches from old Electron versions cause rendering failures.

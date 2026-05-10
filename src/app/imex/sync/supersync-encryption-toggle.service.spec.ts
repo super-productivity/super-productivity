@@ -35,7 +35,8 @@ describe('SuperSyncEncryptionToggleService', () => {
     mockSyncProvider.privateCfg = {
       load: jasmine.createSpy('load').and.resolveTo(mockExistingCfg),
     } as any;
-    (mockSyncProvider as any).supportsOperationSync = true;
+    mockSyncProvider.supportsOperationSync = true;
+    mockSyncProvider.providerMode = 'superSyncOps';
 
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'getActiveProvider',

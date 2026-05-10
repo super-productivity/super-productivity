@@ -82,6 +82,9 @@ describe('DropboxApi', () => {
 
       await dropboxApi.updateAccessTokenFromRefreshTokenIfAvailable();
 
+      expect(fetchSpy.calls.mostRecent().args[0]).toBe(
+        'https://api.dropboxapi.com/oauth2/token',
+      );
       expect(mockPrivateCfgStore.updatePartial).toHaveBeenCalledWith({
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
@@ -740,7 +743,7 @@ xdescribe('DropboxApi Native Platform Routing', () => {
 
       expect(capacitorHttpSpy).toHaveBeenCalled();
       const callArgs = capacitorHttpSpy.calls.mostRecent().args[0];
-      expect(callArgs.url).toBe('https://api.dropbox.com/oauth2/token');
+      expect(callArgs.url).toBe('https://api.dropboxapi.com/oauth2/token');
       expect(callArgs.method).toBe('POST');
       expect(callArgs.headers['Content-Type']).toBe(
         'application/x-www-form-urlencoded;charset=UTF-8',
@@ -765,6 +768,9 @@ xdescribe('DropboxApi Native Platform Routing', () => {
       await dropboxApi.updateAccessTokenFromRefreshTokenIfAvailable();
 
       expect(fetchSpy).toHaveBeenCalled();
+      expect(fetchSpy.calls.mostRecent().args[0]).toBe(
+        'https://api.dropboxapi.com/oauth2/token',
+      );
       expect(capacitorHttpSpy).not.toHaveBeenCalled();
     });
   });

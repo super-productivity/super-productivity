@@ -125,6 +125,7 @@
   }
 
   :host.isCurrent.isCurrent.isCurrent.isCurrent.isCurrent & {
+    background: var(--task-c-current-bg);
     border-radius: var(--task-border-radius);
     box-shadow: var(--task-current-shadow);
     // because of the shadow, this looks better
@@ -148,17 +149,6 @@
     @include mq(xl) {
       right: calc(-1 * var(--task-border-radius));
     }
-  }
-
-  :host-context(.isLightTheme).isCurrent.isCurrent.isCurrent.isCurrent & {
-    border-color: var(--c-accent) !important;
-    border-width: 1px !important;
-    border-style: dashed;
-  }
-
-  :host-context(.isDarkTheme).isCurrent.isCurrent.isCurrent.isCurrent & {
-    background: var(--task-c-current-bg);
-    box-shadow: var(--task-current-shadow);
   }
 
   :host:first-child .inner-wrapper > & {

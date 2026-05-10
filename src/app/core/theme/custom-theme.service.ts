@@ -5,6 +5,7 @@ import { LS } from '../persistence/storage-keys.const';
 import { ThemeStorageService } from './theme-storage.service';
 import { validateThemeCss } from './validate-theme-css.util';
 import { ThemeCssWarning } from './theme-contract.const';
+import { IS_APPLE_SILICON } from '../../app.constants';
 
 /**
  * A theme entry surfaced in the picker.
@@ -39,6 +40,8 @@ const STYLESHEET_ID = 'custom-theme-stylesheet';
 
 const DEFAULT_REF: CustomThemeRef = { kind: 'builtin', id: 'default' };
 
+const LIQUID_GLASS_REF: CustomThemeRef = { kind: 'builtin', id: 'liquid-glass' };
+
 const parseRef = (raw: string | null): CustomThemeRef => {
   if (!raw) return DEFAULT_REF;
   const idx = raw.indexOf(':');
@@ -52,6 +55,29 @@ const parseRef = (raw: string | null): CustomThemeRef => {
 };
 
 const serializeRef = (ref: CustomThemeRef): string => `${ref.kind}:${ref.id}`;
+
+/**
+ * Pick the cold-start theme. Honors any stored selection first; otherwise
+ * Apple Silicon Macs land on Liquid Glass (backdrop-filter is cheap on
+ * M-series GPUs, the macOS aesthetic feels at home), everyone else stays
+ * on the default theme.
+ *
+ * Deliberately does *not* write to LS on first run — leaving LS untouched
+ * lets `migrateLegacyCustomTheme` still detect the "no choice yet" state
+ * and import a synced device's preference. The consequence is that a
+ * future change to this rule will silently re-pick for users who never
+ * touched the picker, which is the expected behavior of a default.
+ *
+ * Exported so tests can exercise both branches without monkey-patching
+ * the module-level `IS_APPLE_SILICON` constant.
+ */
+export const pickInitialActiveRef = (
+  stored: string | null,
+  isAppleSilicon: boolean,
+): CustomThemeRef => {
+  if (stored) return parseRef(stored);
+  return isAppleSilicon ? LIQUID_GLASS_REF : DEFAULT_REF;
+};
 
 export const BUILT_IN_THEMES: CustomTheme[] = [
   { id: 'default', name: 'Default', kind: 'builtin', url: '', requiredMode: 'system' },
@@ -161,7 +187,7 @@ export class CustomThemeService {
   private _themeStorage = inject(ThemeStorageService);
 
   private _activeRef = signal<CustomThemeRef>(
-    parseRef(localStorage.getItem(LS.CUSTOM_THEME)),
+    pickInitialActiveRef(localStorage.getItem(LS.CUSTOM_THEME), IS_APPLE_SILICON),
   );
 
   /** The currently selected theme reference. */

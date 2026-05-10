@@ -47,7 +47,7 @@ export class PluginOAuthBridgeService {
     // Pick the platform-specific client. The default `clientId` is the desktop
     // client (loopback redirect, used by Electron); other platforms override it.
     // - Android/iOS authenticate via app signing → no client secret
-    // - Web uses an IdP-specific "Web application" client → may ship a secret
+    // - Web can only use providers that support public browser clients via PKCE
     // Order matters: Android-WebView sets both IS_ANDROID_NATIVE and IS_NATIVE_PLATFORM,
     // so it lands in the Android branch (correct) and never reaches the web branch.
     const effectiveConfig = ((): OAuthFlowConfig => {
@@ -58,15 +58,16 @@ export class PluginOAuthBridgeService {
         return { ...config, clientId: config.iosClientId, clientSecret: undefined };
       }
       if (!IS_ELECTRON && !IS_NATIVE_PLATFORM) {
-        if (!config.webClientId) {
+        const webClientId = config.webClientId;
+        if (!webClientId) {
           throw new Error(
-            'OAuth: this plugin does not support the web build (no webClientId configured). Connect from the desktop or mobile app instead.',
+            'OAuth: this plugin is not available in the web build. Connect from the desktop or mobile app instead.',
           );
         }
         return {
           ...config,
-          clientId: config.webClientId,
-          clientSecret: config.webClientSecret,
+          clientId: webClientId,
+          clientSecret: undefined,
         };
       }
       return config;
@@ -108,18 +109,36 @@ export class PluginOAuthBridgeService {
     await this._clearPersistedOAuthTokens(pluginId);
   }
 
-  async restoreAndCheckOAuthTokens(pluginId: string): Promise<boolean> {
+  async restoreAndCheckOAuthTokens(
+    pluginId: string,
+    config?: OAuthFlowConfig,
+  ): Promise<boolean> {
+    if (this._isUnavailableInWeb(config)) {
+      await this.clearOAuthTokens(pluginId);
+      return false;
+    }
     if (!this._pluginOAuthService.hasTokens(pluginId)) {
       await this._restoreOAuthTokens(pluginId);
     }
     return this._pluginOAuthService.hasTokens(pluginId);
   }
 
-  async getOAuthToken(pluginId: string): Promise<string | null> {
+  async getOAuthToken(
+    pluginId: string,
+    config?: OAuthFlowConfig,
+  ): Promise<string | null> {
+    if (this._isUnavailableInWeb(config)) {
+      await this.clearOAuthTokens(pluginId);
+      return null;
+    }
     if (!this._pluginOAuthService.hasTokens(pluginId)) {
       await this._restoreOAuthTokens(pluginId);
     }
     return this._pluginOAuthService.getValidToken(pluginId);
+  }
+
+  private _isUnavailableInWeb(config?: OAuthFlowConfig): boolean {
+    return !!config && !IS_ELECTRON && !IS_NATIVE_PLATFORM && !config.webClientId;
   }
 
   private _openOAuthWindow(url: string): void {

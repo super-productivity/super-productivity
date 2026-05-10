@@ -102,8 +102,14 @@ export const createWindow = async ({
   const isUseCustomWindowTitleBar = IS_GNOME_DESKTOP
     ? false
     : userPrefersCustomWindowTitleBar;
-  const titleBarStyle: BrowserWindowConstructorOptions['titleBarStyle'] =
-    isUseCustomWindowTitleBar || IS_MAC ? 'hidden' : 'default';
+  // On macOS use 'hiddenInset' so AppKit positions the traffic lights at the
+  // standard inset other native apps use (Notes, Mail, VS Code) instead of
+  // crowding the top-left corner. Other platforms keep the existing logic.
+  const titleBarStyle: BrowserWindowConstructorOptions['titleBarStyle'] = IS_MAC
+    ? 'hiddenInset'
+    : isUseCustomWindowTitleBar
+      ? 'hidden'
+      : 'default';
   // Determine initial symbol color based on system theme preference
   const initialSymbolColor = nativeTheme.shouldUseDarkColors ? '#fff' : '#000';
   const titleBarOverlay: BrowserWindowConstructorOptions['titleBarOverlay'] =
@@ -115,6 +121,16 @@ export const createWindow = async ({
         }
       : undefined;
 
+  // The store-screenshot pipeline forces a fixed 1280×800 window so the
+  // PNG dimensions match what the Mac App Store accepts (2560×1600 @2x).
+  // On laptop displays, menu bar + dock leave less than 800pt available
+  // below the menu bar, so by default macOS clamps `setBounds(800)` down
+  // to the available area and the captured PNG ends up 20–40 px short of
+  // the required height. Setting `enableLargerThanScreen` lets the
+  // window keep its configured 800pt outer height regardless. Gated on
+  // the env var the screenshot fixture sets so normal users still get
+  // the default screen-clamping behavior.
+  const isScreenshotMode = process.env.SP_SCREENSHOT_MODE === '1';
   mainWin = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
@@ -125,6 +141,7 @@ export const createWindow = async ({
     title: IS_DEV ? 'Super Productivity D' : 'Super Productivity',
     titleBarStyle,
     titleBarOverlay,
+    enableLargerThanScreen: isScreenshotMode,
     show: false,
     webPreferences: {
       scrollBounce: true,

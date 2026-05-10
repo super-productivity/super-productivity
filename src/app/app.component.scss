@@ -192,6 +192,10 @@ mat-sidenav {
   background-size: cover !important;
   background-position: center !important;
   background-attachment: fixed;
+
+  &.is-blurred {
+    transform: scale(1.12);
+  }
 }
 
 // App entrance animation after onboarding preset selection

@@ -9,7 +9,7 @@ import { VIEWPORTS, type ViewportSpec } from './store-screenshots/matrix';
  * fixture in `store-screenshots/fixture.ts` branches to Electron when
  * `SCREENSHOT_MODE=electron` is set (the npm script does that).
  *
- * Outputs land in `.tmp/screenshots/_master_electron/` and feed the Mac App
+ * Outputs land in `dist/screenshots/_master_electron/` and feed the Mac App
  * Store rule (and Flathub later). Run with:
  *
  *   npm run screenshots:capture:electron

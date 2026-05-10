@@ -158,7 +158,11 @@ export class OperationLogDownloadService implements OnDestroy {
 
         // Capture snapshot state from first response (file-based sync providers only)
         // This is only present when downloading from seq 0 (fresh download)
-        if (!snapshotState && response.snapshotState) {
+        if (
+          syncProvider.providerMode === 'fileSnapshotOps' &&
+          !snapshotState &&
+          response.snapshotState
+        ) {
           snapshotState = response.snapshotState;
           OpLog.normal(
             'OperationLogDownloadService: Received snapshotState for fresh download bootstrap',
@@ -381,9 +385,9 @@ export class OperationLogDownloadService implements OnDestroy {
 
     // Return latestServerSeq so caller can persist it AFTER storing ops in IndexedDB.
     // This ensures localStorage (lastServerSeq) and IndexedDB (ops) stay in sync.
-    return {
+    const baseResult = {
       newOps: allNewOps,
-      success: true,
+      success: true as const,
       failedFileCount: 0,
       needsFullStateUpload,
       latestServerSeq: finalLatestSeq,
@@ -391,10 +395,22 @@ export class OperationLogDownloadService implements OnDestroy {
       ...(forceFromSeq0 && allOpClocks.length > 0 ? { allOpClocks } : {}),
       // Include snapshot vector clock when snapshot optimization was used
       ...(snapshotVectorClock ? { snapshotVectorClock } : {}),
-      // Include snapshot state for file-based sync fresh downloads
-      ...(snapshotState ? { snapshotState } : {}),
       // Include encryption state detection for mismatch handling
       ...(serverHasOnlyUnencryptedData ? { serverHasOnlyUnencryptedData } : {}),
+    };
+
+    if (syncProvider.providerMode === 'fileSnapshotOps') {
+      return {
+        ...baseResult,
+        providerMode: 'fileSnapshotOps',
+        // Include snapshot state for file-based sync fresh downloads
+        ...(snapshotState ? { snapshotState } : {}),
+      };
+    }
+
+    return {
+      ...baseResult,
+      providerMode: 'superSyncOps',
     };
   }
 

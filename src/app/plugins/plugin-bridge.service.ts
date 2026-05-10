@@ -260,7 +260,10 @@ export class PluginBridgeService implements OnDestroy {
       startOAuthFlow: (config: OAuthFlowConfig): Promise<OAuthTokenResult> =>
         this._pluginOAuthBridge.startOAuthFlow(pluginId, config),
       getOAuthToken: (): Promise<string | null> =>
-        this._pluginOAuthBridge.getOAuthToken(pluginId),
+        this._pluginOAuthBridge.getOAuthToken(
+          pluginId,
+          this._getOAuthConfigForPlugin(pluginId),
+        ),
       clearOAuthToken: (): Promise<void> =>
         this._pluginOAuthBridge.clearOAuthTokens(pluginId),
 
@@ -370,7 +373,20 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   async restoreAndCheckOAuthTokens(pluginId: string): Promise<boolean> {
-    return this._pluginOAuthBridge.restoreAndCheckOAuthTokens(pluginId);
+    return this._pluginOAuthBridge.restoreAndCheckOAuthTokens(
+      pluginId,
+      this._getOAuthConfigForPlugin(pluginId),
+    );
+  }
+
+  private _getOAuthConfigForPlugin(pluginId: string): OAuthFlowConfig | undefined {
+    const registeredKey = this._pluginIssueProviderRegistry.getRegisteredKey(pluginId);
+    if (!registeredKey) {
+      return undefined;
+    }
+    return this._pluginIssueProviderRegistry
+      .getConfigFields(registeredKey)
+      .find((f) => f.type === 'oauthButton' && f.oauthConfig)?.oauthConfig;
   }
 
   private async _downloadFile(filename: string, data: string): Promise<void> {
