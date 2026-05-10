@@ -567,14 +567,14 @@ export class TaskRepeatCfgEffects {
           !!cfg &&
           (cfg.repeatFromCompletionDate === true || cfg.waitForCompletion === true),
       ),
-      filter(({ task, cfg }) => this._isLatestInstance(task, cfg)),
       concatMap(({ task, cfg }) => {
         const today = this._dateService.todayStr();
+        const isLatestInstance = this._isLatestInstance(task, cfg);
 
         // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay
         // because getEffectiveRepeatStartDate() prioritizes lastTaskCreationDay when set.
         // Without updating lastTaskCreationDay, the recurrence stays anchored to the old date.
-        if (cfg.repeatFromCompletionDate) {
+        if (cfg.repeatFromCompletionDate && isLatestInstance) {
           return rxOf([
             updateTaskRepeatCfg({
               taskRepeatCfg: {
@@ -588,8 +588,10 @@ export class TaskRepeatCfgEffects {
           ]);
         }
 
-        // For waitForCompletion, immediately create the next task
-        // Let _getActionsForTaskRepeatCfg handle the cursor update itself
+        // For waitForCompletion, probe creation after any repeat instance is
+        // completed. The service checks whether any live or archived instance
+        // still blocks the gate, so completing an older final blocker can
+        // materialize the next due task immediately.
         if (cfg.waitForCompletion) {
           return from(
             this._taskRepeatCfgService._getActionsForTaskRepeatCfg(cfg, Date.now()),

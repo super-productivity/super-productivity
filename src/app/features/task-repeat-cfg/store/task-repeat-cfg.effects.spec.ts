@@ -1084,6 +1084,49 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         error: done.fail,
       });
     });
+
+    it('should probe waitForCompletion creation path when completing a non-latest blocker', (done) => {
+      const today = getDbDateStr();
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'parent-task-id', changes: { isDone: true } },
+      });
+      const oldTask: Task = {
+        ...mockTask,
+        created: dateStrToUtcDate('2020-01-01').getTime(),
+        dueDay: '2020-01-01',
+      };
+      const repeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatFromCompletionDate: false,
+        waitForCompletion: true,
+        lastTaskCreationDay: today,
+      };
+      const expectedAction = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { lastTaskCreationDay: today },
+        },
+      });
+
+      actions$ = of(action);
+      taskService.getByIdOnce$.and.returnValue(of(oldTask));
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(repeatCfg));
+      taskRepeatCfgService._getActionsForTaskRepeatCfg.and.returnValue(
+        Promise.resolve([expectedAction]),
+      );
+
+      effects.updateStartDateOnComplete$.subscribe({
+        next: (result) => {
+          expect(result).toEqual(expectedAction);
+          expect(taskRepeatCfgService._getActionsForTaskRepeatCfg).toHaveBeenCalledWith(
+            repeatCfg,
+            jasmine.any(Number),
+          );
+          done();
+        },
+        error: done.fail,
+      });
+    });
   });
 
   describe('autoSyncSubtaskTemplatesFromNewest$', () => {
