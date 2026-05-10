@@ -5,7 +5,7 @@ import {
   OperationSyncCapable,
   SyncOperation,
   OpUploadResponse,
-  OpDownloadResponse,
+  SuperSyncOpDownloadResponse,
   SnapshotUploadResponse,
   RestoreCapable,
   RestorePoint,
@@ -55,13 +55,14 @@ const SUPERSYNC_REQUEST_TIMEOUT_MS = 75000;
 export class SuperSyncProvider
   implements
     SyncProviderBase<SyncProviderId.SuperSync>,
-    OperationSyncCapable,
+    OperationSyncCapable<'superSyncOps'>,
     RestoreCapable
 {
   readonly id = SyncProviderId.SuperSync;
   readonly isUploadForcePossible = false;
   readonly maxConcurrentRequests = 10;
   readonly supportsOperationSync = true;
+  readonly providerMode = 'superSyncOps';
 
   public privateCfg: SyncCredentialStore<SyncProviderId.SuperSync>;
   private _cachedServerSeqKey: string | null = null;
@@ -156,7 +157,7 @@ export class SuperSyncProvider
     sinceSeq: number,
     excludeClient?: string,
     limit?: number,
-  ): Promise<OpDownloadResponse> {
+  ): Promise<SuperSyncOpDownloadResponse> {
     SyncLog.debug(this.logLabel, 'downloadOps', { sinceSeq, excludeClient, limit });
     const cfg = await this._cfgOrError();
 

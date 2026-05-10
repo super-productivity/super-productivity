@@ -46,7 +46,7 @@
           "id": "personal",
           "title": "Personal",
           "isHiddenFromMenu": false,
-          "taskIds": ["t-yoga", "t-call-mom"],
+          "taskIds": ["t-call-mom", "t-water-plants"],
           "backlogTaskIds": ["t-book-flight", "t-renew-passport"],
           "noteIds": ["n-ideas", "n-week-goals"],
           "theme": {
@@ -76,7 +76,12 @@
           "id": "work",
           "title": "Work",
           "isHiddenFromMenu": false,
-          "taskIds": ["t-design-review", "t-pr-review", "t-quarterly-plan"],
+          "taskIds": [
+            "t-design-review",
+            "t-pr-review",
+            "t-release-handoff",
+            "t-quarterly-plan"
+          ],
           "backlogTaskIds": ["t-onboarding-doc", "t-team-1on1"],
           "noteIds": ["n-meeting"],
           "theme": {
@@ -266,11 +271,12 @@
       "ids": [
         "t-design-review",
         "t-pr-review",
+        "t-release-handoff",
         "t-quarterly-plan",
         "t-quarterly-plan-sub-1",
         "t-quarterly-plan-sub-2",
-        "t-yoga",
         "t-call-mom",
+        "t-water-plants",
         "t-book-flight",
         "t-renew-passport",
         "t-onboarding-doc",
@@ -304,7 +310,22 @@
           "timeEstimate": 2700000,
           "isDone": false,
           "notes": "",
-          "tagIds": ["tag-deep-work", "EM_URGENT", "EM_IMPORTANT"],
+          "tagIds": ["EM_URGENT", "EM_IMPORTANT"],
+          "created": 0,
+          "attachments": [],
+          "dueDayOffset": 0,
+          "projectId": "work"
+        },
+        "t-release-handoff": {
+          "id": "t-release-handoff",
+          "title": "Prepare release handoff",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 2400000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": ["tag-deep-work"],
           "created": 0,
           "attachments": [],
           "dueDayOffset": 0,
@@ -332,7 +353,7 @@
           "timeSpentOnDay": {},
           "timeSpent": 0,
           "timeEstimate": 1800000,
-          "isDone": true,
+          "isDone": false,
           "notes": "",
           "tagIds": [],
           "parentId": "t-quarterly-plan",
@@ -355,22 +376,6 @@
           "attachments": [],
           "projectId": "work"
         },
-        "t-yoga": {
-          "id": "t-yoga",
-          "title": "Morning yoga",
-          "subTaskIds": [],
-          "timeSpentOnDayKeysAreOffsets": true,
-          "timeSpentOnDayOffsets": { "0": 1500000 },
-          "timeSpent": 1500000,
-          "timeEstimate": 1800000,
-          "isDone": true,
-          "notes": "",
-          "tagIds": ["tag-home"],
-          "created": 0,
-          "attachments": [],
-          "dueDayOffset": 0,
-          "projectId": "personal"
-        },
         "t-call-mom": {
           "id": "t-call-mom",
           "title": "Call mom",
@@ -381,6 +386,21 @@
           "isDone": false,
           "notes": "",
           "tagIds": ["tag-calls"],
+          "created": 0,
+          "attachments": [],
+          "dueDayOffset": 0,
+          "projectId": "personal"
+        },
+        "t-water-plants": {
+          "id": "t-water-plants",
+          "title": "Water balcony plants",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 600000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": ["tag-home"],
           "created": 0,
           "attachments": [],
           "dueDayOffset": 0,
@@ -508,10 +528,11 @@
           "id": "TODAY",
           "title": "Today",
           "taskIds": [
-            "t-yoga",
             "t-pr-review",
             "t-call-mom",
             "t-design-review",
+            "t-release-handoff",
+            "t-water-plants",
             "t-issue-triage"
           ],
           "icon": "wb_sunny",
@@ -608,7 +629,7 @@
         "tag-home": {
           "id": "tag-home",
           "title": "home",
-          "taskIds": ["t-yoga"],
+          "taskIds": ["t-water-plants"],
           "icon": "home",
           "created": 0,
           "theme": {
@@ -638,6 +659,7 @@
           "taskIds": [
             "t-design-review",
             "t-pr-review",
+            "t-release-handoff",
             "t-quarterly-plan",
             "t-issue-triage"
           ],

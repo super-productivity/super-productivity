@@ -666,7 +666,7 @@ describe('lwwUpdateMetaReducer', () => {
       expect(OpLog.warn).toHaveBeenCalledWith(
         jasmine.stringMatching(/Filtered orphaned taskIds from PROJECT/),
         jasmine.objectContaining({
-          removed: ['non-existent-task'],
+          taskIdsRemoved: ['non-existent-task'],
         }),
       );
     });
@@ -696,10 +696,12 @@ describe('lwwUpdateMetaReducer', () => {
         PROJECT_ID
       ] as Project;
       expect(updatedProject.backlogTaskIds).toEqual([TASK_ID]);
+      // Shared helper logs a single warn per filtered payload (vs. one-per-array
+      // before #7330). Removed entries are split via structured fields.
       expect(OpLog.warn).toHaveBeenCalledWith(
-        jasmine.stringMatching(/Filtered orphaned backlogTaskIds from PROJECT/),
+        jasmine.stringMatching(/Filtered orphaned.*from PROJECT LWW Update/),
         jasmine.objectContaining({
-          removed: ['non-existent-backlog-task'],
+          backlogTaskIdsRemoved: ['non-existent-backlog-task'],
         }),
       );
     });
@@ -781,9 +783,9 @@ describe('lwwUpdateMetaReducer', () => {
       const updatedTag = updatedState[TAG_FEATURE_NAME]?.entities[TAG_ID] as Tag;
       expect(updatedTag.taskIds).toEqual([TASK_ID]);
       expect(OpLog.warn).toHaveBeenCalledWith(
-        jasmine.stringMatching(/Filtered orphaned taskIds from TAG/),
+        jasmine.stringMatching(/Filtered orphaned.*TAG LWW Update/),
         jasmine.objectContaining({
-          removed: ['non-existent-task-1', 'non-existent-task-2'],
+          taskIdsRemoved: ['non-existent-task-1', 'non-existent-task-2'],
         }),
       );
     });
@@ -870,8 +872,15 @@ describe('lwwUpdateMetaReducer', () => {
       ] as Project;
       expect(updatedProject.taskIds).toEqual([TASK_ID]);
       expect(updatedProject.backlogTaskIds).toEqual([TASK_ID]);
-      // Both warnings should have fired
-      expect(OpLog.warn).toHaveBeenCalledTimes(2);
+      // Single warn covers both arrays (one log per filtered payload after #7330).
+      expect(OpLog.warn).toHaveBeenCalledTimes(1);
+      expect(OpLog.warn).toHaveBeenCalledWith(
+        jasmine.stringMatching(/Filtered orphaned.*from PROJECT LWW Update/),
+        jasmine.objectContaining({
+          taskIdsRemoved: ['deleted-task-1'],
+          backlogTaskIdsRemoved: ['deleted-task-2'],
+        }),
+      );
     });
   });
 

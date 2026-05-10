@@ -1,6 +1,7 @@
-import { Page } from 'playwright/test';
+import { Locator, Page } from '@playwright/test';
 
 import { expect, test } from '../../fixtures/test.fixture';
+import { waitForAngularStability } from '../../utils/waits';
 
 test.describe('Default task reminder option', () => {
   test.use({ locale: 'en-US', timezoneId: 'UTC' });
@@ -12,40 +13,43 @@ test.describe('Default task reminder option', () => {
   // text precisely and not collide with substrings like the "...never run code..."
   // tooltip on the theme upload button in the General tab.
   const changedOptionText = 'Never';
+  const expandConfigSection = async (section: Locator): Promise<void> => {
+    const collapsible = section.locator('collapsible').first();
+    await collapsible.waitFor({ state: 'visible', timeout: 10000 });
+
+    const isExpanded = await collapsible.evaluate((el) =>
+      el.classList.contains('isExpanded'),
+    );
+    if (!isExpanded) {
+      await collapsible.locator('.collapsible-header').click();
+    }
+
+    await collapsible
+      .locator('.collapsible-panel')
+      .waitFor({ state: 'visible', timeout: 5000 });
+  };
 
   const changeDefaultTaskReminderOption = async (page: Page): Promise<void> => {
-    await page.getByRole('menuitem', { name: 'Settings' }).click();
+    await page.goto('/#/config');
+    await page.locator('.page-settings').waitFor({ state: 'visible', timeout: 10000 });
 
-    // Navigate to Time & Tracking tab first (3rd tab with timer icon)
-    await page.evaluate(() => {
-      const timeTrackingTab = Array.from(
-        document.querySelectorAll('mat-tab-header .mat-mdc-tab'),
-      ).find((tab) => {
-        const icon = tab.querySelector('mat-icon');
-        return icon?.textContent?.trim() === 'timer';
-      });
+    await page.getByRole('tab', { name: /Time & Tracking/i }).click();
 
-      if (timeTrackingTab) {
-        (timeTrackingTab as HTMLElement).click();
-      }
-    });
-
-    await page.waitForTimeout(500);
-
-    const remindersSection = await page.locator('section', { hasText: 'Reminders' });
-    await remindersSection.click();
+    const remindersSection = page.locator('section.section-reminder').first();
+    await remindersSection.waitFor({ state: 'visible', timeout: 10000 });
+    await expandConfigSection(remindersSection);
 
     // Should match the option set inside the default global configuration
-    const selectedOption = remindersSection.getByText(defaultOptionText, {
-      exact: true,
-    });
-    await expect(selectedOption).toBeVisible();
+    const reminderSelect = remindersSection.locator('mat-select').first();
+    await expect(reminderSelect).toContainText(defaultOptionText);
 
     // Change it to another option to check whether the setting takes effect
     // across other application areas where a reminder option can be chosen.
     // Target the mat-option by role to avoid matching unrelated text on the page.
-    await selectedOption.click();
+    await reminderSelect.click();
     await page.getByRole('option', { name: changedOptionText, exact: true }).click();
+    await expect(reminderSelect).toContainText(changedOptionText);
+    await waitForAngularStability(page).catch(() => {});
   };
 
   test('should apply when scheduling a task using the due action', async ({
@@ -156,13 +160,17 @@ test.describe('Default task reminder option', () => {
     await changeDefaultTaskReminderOption(page);
 
     await page.getByRole('menuitem', { name: 'Schedule' }).click();
+    await page.locator('schedule-week').waitFor({ state: 'visible', timeout: 10000 });
     // Click somewhere during the final day column to create a placeholder task
     await page.locator('schedule-week [data-day]').last().click();
     const taskInput = page.getByPlaceholder('Schedule task...');
+    await taskInput.waitFor({ state: 'visible', timeout: 10000 });
     await taskInput.fill('task');
     await taskInput.press('Enter');
     // Click the scheduled task to reveal the details panel
-    await page.locator('schedule-event').click();
+    const scheduleEvent = page.locator('schedule-event').first();
+    await scheduleEvent.waitFor({ state: 'visible', timeout: 10000 });
+    await scheduleEvent.click();
 
     // Click on the schedule item in the detail panel (using icon-based selector for robustness)
     const scheduleItem = page

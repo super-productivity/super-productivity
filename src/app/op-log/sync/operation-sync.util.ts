@@ -2,6 +2,7 @@ import { ActionType, OpType, Operation, SyncImportReason } from '../core/operati
 import {
   SyncProviderBase,
   OperationSyncCapable,
+  OperationSyncProviderMode,
   SyncOperation,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
@@ -14,6 +15,11 @@ const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
   SyncProviderId.Nextcloud,
 ]);
 
+const OPERATION_SYNC_PROVIDER_MODES: Set<OperationSyncProviderMode> = new Set([
+  'superSyncOps',
+  'fileSnapshotOps',
+]);
+
 /**
  * Type guard to check if a provider supports operation-based sync (API sync).
  * This is for providers like SuperSync that have a dedicated API endpoint.
@@ -21,9 +27,13 @@ const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
 export const isOperationSyncCapable = (
   provider: SyncProviderBase<SyncProviderId>,
 ): provider is SyncProviderBase<SyncProviderId> & OperationSyncCapable => {
+  const providerMode = (provider as { providerMode?: OperationSyncProviderMode })
+    .providerMode;
   return (
     'supportsOperationSync' in provider &&
-    (provider as unknown as OperationSyncCapable).supportsOperationSync === true
+    (provider as unknown as OperationSyncCapable).supportsOperationSync === true &&
+    providerMode !== undefined &&
+    OPERATION_SYNC_PROVIDER_MODES.has(providerMode)
   );
 };
 

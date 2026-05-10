@@ -1,7 +1,7 @@
 /**
  * Per-store layout builder.
  *
- * Reads master captures from `.tmp/screenshots/_master/<viewport>/<locale>/<theme>/<scenario>/<name>.png`
+ * Reads master captures from `dist/screenshots/_master/<viewport>/<locale>/<theme>/<scenario>/<name>.png`
  * and writes per-store directory layouts to `dist/screenshots/`.
  *
  * Captures are made at each store's native pixel size (see playwright.store-screenshots.config.ts),
@@ -12,6 +12,7 @@
  * Run: npm run screenshots:build
  */
 
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import sharp from 'sharp';
@@ -19,11 +20,12 @@ import {
   LOCALES,
   MASTER_DIR_ELECTRON,
   MASTER_DIR_WEB,
+  SCREENSHOTS_OUT_DIR,
   STORE_RULES,
   type StoreRule,
 } from './matrix';
 
-const OUT_DIR = path.resolve(__dirname, '..', '..', 'dist', 'screenshots');
+const OUT_DIR = SCREENSHOTS_OUT_DIR;
 
 const masterDirFor = (which: 'web' | 'electron'): string =>
   which === 'electron' ? MASTER_DIR_ELECTRON : MASTER_DIR_WEB;
@@ -189,6 +191,18 @@ const buildOneRule = async (
   return { written, skipped };
 };
 
+const cleanDerivedOutput = (): void => {
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  const preserved = new Set([
+    path.basename(MASTER_DIR_WEB),
+    path.basename(MASTER_DIR_ELECTRON),
+  ]);
+  for (const entry of fs.readdirSync(OUT_DIR)) {
+    if (preserved.has(entry)) continue;
+    fs.rmSync(path.join(OUT_DIR, entry), { recursive: true, force: true });
+  }
+};
+
 const main = async (): Promise<void> => {
   if (!fs.existsSync(MASTER_DIR_WEB) && !fs.existsSync(MASTER_DIR_ELECTRON)) {
     console.error('No master captures found.');
@@ -198,8 +212,7 @@ const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  fs.rmSync(OUT_DIR, { recursive: true, force: true });
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+  cleanDerivedOutput();
 
   let total = 0;
   for (const rule of STORE_RULES) {
@@ -214,7 +227,142 @@ const main = async (): Promise<void> => {
     );
   }
   console.log(`\nTotal files written: ${total}`);
+  const previewPath = writePreviewSheet();
   console.log(`Output: ${OUT_DIR}`);
+  console.log(`Preview: ${previewPath}`);
+  openFolder(OUT_DIR);
+};
+
+type PreviewEntry = { relPath: string; group: string; label: string };
+
+/** Walk OUT_DIR and collect every emitted png/jpg as a preview entry. */
+const collectPreviewEntries = (root: string, base = ''): PreviewEntry[] => {
+  const out: PreviewEntry[] = [];
+  if (!fs.existsSync(root)) return out;
+  for (const entry of fs.readdirSync(root)) {
+    const absPath = path.join(root, entry);
+    const relPath = base ? `${base}/${entry}` : entry;
+    const stat = fs.statSync(absPath);
+    if (stat.isDirectory()) {
+      out.push(...collectPreviewEntries(absPath, relPath));
+      continue;
+    }
+    if (!/\.(png|jpe?g)$/i.test(entry)) continue;
+    // Group is everything up to the last directory separator; label is filename.
+    const lastSlash = relPath.lastIndexOf('/');
+    const group = lastSlash === -1 ? '(root)' : relPath.slice(0, lastSlash);
+    out.push({ relPath, group, label: entry });
+  }
+  return out;
+};
+
+/**
+ * Emit `_preview.html` — a single-page contact sheet of every capture in
+ * `dist/screenshots/`, grouped by store + locale. Open it in a browser to
+ * eyeball the whole batch instead of drilling through ~14 subfolders.
+ */
+const writePreviewSheet = (): string => {
+  const entries = collectPreviewEntries(OUT_DIR).sort((a, b) =>
+    a.relPath.localeCompare(b.relPath),
+  );
+  const grouped = new Map<string, PreviewEntry[]>();
+  for (const e of entries) {
+    const list = grouped.get(e.group) ?? [];
+    list.push(e);
+    grouped.set(e.group, list);
+  }
+  const escape = (s: string): string =>
+    s.replace(/[&<>"']/g, (c) => {
+      switch (c) {
+        case '&':
+          return '&amp;';
+        case '<':
+          return '&lt;';
+        case '>':
+          return '&gt;';
+        case '"':
+          return '&quot;';
+        default:
+          return '&#39;';
+      }
+    });
+  const renderCard = (it: PreviewEntry): string => {
+    const href = escape(it.relPath);
+    const label = escape(it.label);
+    return [
+      `<a class="card" href="${href}" target="_blank" rel="noopener">`,
+      `<img loading="lazy" src="${href}" alt="${label}">`,
+      `<div class="label">${label}</div>`,
+      `</a>`,
+    ].join('');
+  };
+  const sections = Array.from(grouped.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([group, items]) => {
+      const cards = items.map(renderCard).join('');
+      const heading =
+        `<h2>${escape(group)} ` + `<span class="count">${items.length}</span></h2>`;
+      return `<section>${heading}<div class="grid">${cards}</div></section>`;
+    })
+    .join('');
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Screenshots preview</title>
+<style>
+:root { color-scheme: light dark; }
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #111; color: #eee; margin: 0; padding: 24px; }
+h1 { margin: 0 0 4px; font-size: 22px; }
+.summary { color: #888; font-size: 13px; margin-bottom: 24px; }
+h2 {
+  font-size: 14px; font-weight: 600; color: #ccc; margin: 28px 0 12px;
+  letter-spacing: 0.02em; text-transform: uppercase;
+  border-bottom: 1px solid #2a2a2a; padding-bottom: 6px;
+}
+h2 .count { color: #666; font-weight: 400; margin-left: 8px; }
+.grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.card {
+  display: block; background: #1a1a1a; border: 1px solid #262626;
+  border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit;
+  transition: transform 0.12s, border-color 0.12s;
+}
+.card:hover { transform: translateY(-2px); border-color: #444; }
+.card img { display: block; width: 100%; height: 280px; object-fit: contain; background: #000; }
+.label { padding: 8px 10px; font-size: 12px; color: #aaa; word-break: break-all; }
+</style>
+</head><body>
+<h1>Store screenshots preview</h1>
+<div class="summary">${entries.length} captures across ${grouped.size} groups · ${OUT_DIR}</div>
+${sections}
+</body></html>
+`;
+  const target = path.join(OUT_DIR, '_preview.html');
+  fs.writeFileSync(target, html, 'utf-8');
+  return target;
+};
+
+/**
+ * Reveal `dir` in the OS file manager. Detached + unref'd so the build script
+ * exits immediately. Silently no-ops on headless / CI environments where the
+ * platform opener isn't available. Opt out with `SP_SCREENSHOTS_NO_OPEN=1`.
+ */
+const openFolder = (dir: string): void => {
+  if (process.env.SP_SCREENSHOTS_NO_OPEN) return;
+  const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+  const cmd = isWin ? 'cmd' : isMac ? 'open' : 'xdg-open';
+  const args = isWin ? ['/c', 'start', '', dir] : [dir];
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+    child.on('error', () => {
+      /* opener not available on this system */
+    });
+    child.unref();
+  } catch {
+    /* ignore */
+  }
 };
 
 main().catch((err) => {

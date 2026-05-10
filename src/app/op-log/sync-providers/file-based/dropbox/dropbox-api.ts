@@ -80,6 +80,8 @@ const NATIVE_REQUEST_READ_TIMEOUT = 120000;
 /** Timeout for auth endpoints (token refresh, token exchange) — 30s */
 const NATIVE_AUTH_READ_TIMEOUT = 30000;
 
+const DROPBOX_OAUTH_TOKEN_URL = 'https://api.dropboxapi.com/oauth2/token' as const;
+
 /**
  * API class for Dropbox integration
  */
@@ -330,7 +332,7 @@ export class DropboxApi {
         // Use CapacitorHttp on native platforms (except iOS), with retry for transient errors
         const response = await executeNativeRequestWithRetry(
           {
-            url: 'https://api.dropbox.com/oauth2/token',
+            url: DROPBOX_OAUTH_TOKEN_URL,
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -359,7 +361,7 @@ export class DropboxApi {
         data = response.data as TokenResponse;
       } else {
         // Use fetch on web/Electron/iOS
-        const response = await this._fetch('https://api.dropbox.com/oauth2/token', {
+        const response = await this._fetch(DROPBOX_OAUTH_TOKEN_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -442,7 +444,7 @@ export class DropboxApi {
         // No retry wrapper here: this is a one-time user-initiated auth code exchange.
         // If it fails, the user retries the OAuth flow manually.
         const response = await CapacitorHttp.request({
-          url: 'https://api.dropboxapi.com/oauth2/token',
+          url: DROPBOX_OAUTH_TOKEN_URL,
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -464,7 +466,7 @@ export class DropboxApi {
         data = response.data as TokenResponse;
       } else {
         // Use fetch on web/Electron/iOS
-        const response = await this._fetch('https://api.dropboxapi.com/oauth2/token', {
+        const response = await this._fetch(DROPBOX_OAUTH_TOKEN_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',

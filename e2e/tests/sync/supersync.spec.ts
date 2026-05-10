@@ -14,6 +14,7 @@ import {
   renameTask,
   startTimeTracking,
   stopTimeTracking,
+  waitForTaskTimeSpent,
   getTaskCount,
   hasTaskOnClient,
   type SimulatedE2EClient,
@@ -805,9 +806,10 @@ test.describe('@supersync SuperSync E2E', () => {
       console.log('[TimeTrack Test] Time tracking active');
 
       // ============ PHASE 3: Accumulate Time ============
-      // Wait for time to accumulate (reduced from 5s to 2s for faster tests)
-      console.log('[TimeTrack Test] Waiting 2 seconds for time to accumulate...');
-      await clientA.page.waitForTimeout(2000);
+      // Wait for the first global tracking tick before stopping. A fixed sleep can
+      // race the app timer under CI load and leave the task with 0 recorded time.
+      await waitForTaskTimeSpent(clientA, taskName, 10000);
+      console.log('[TimeTrack Test] Time accumulated');
 
       // ============ PHASE 4: Stop Time Tracking ============
       await stopTimeTracking(clientA, taskName);
@@ -816,12 +818,11 @@ test.describe('@supersync SuperSync E2E', () => {
       // Wait for tracking to stop
       await expect(playIndicator).not.toBeVisible({ timeout: 5000 });
 
-      // Verify time was recorded on Client A
-      // Time is displayed in .time-wrapper .time-val
-      const timeValA = taskLocatorA.locator('.time-wrapper .time-val').first();
-      await expect(timeValA).toBeVisible({ timeout: 5000 });
-      const timeTextA = await timeValA.textContent();
-      console.log(`[TimeTrack Test] Client A recorded time: ${timeTextA}`);
+      // Verify time was recorded on Client A via persisted state. The row can
+      // hide the visual time while hover controls are mounted, and sub-minute
+      // values render as "-" in the UI.
+      const timeSpentA = await waitForTaskTimeSpent(clientA, taskName, 5000);
+      console.log(`[TimeTrack Test] Client A recorded time: ${timeSpentA}ms`);
 
       // ============ PHASE 5: Sync to Server ============
       await clientA.sync.syncAndWait();
@@ -855,21 +856,13 @@ test.describe('@supersync SuperSync E2E', () => {
       }
 
       await expectTaskVisible(clientB, taskName);
-      const taskLocatorB = getTaskElement(clientB, taskName);
 
-      // Verify time is displayed on Client B
-      const timeValB = taskLocatorB.locator('.time-wrapper .time-val').first();
-      await expect(timeValB).toBeVisible({ timeout: 10000 });
-      const timeTextB = await timeValB.textContent();
-      console.log(`[TimeTrack Test] Client B shows time: ${timeTextB}`);
+      // Verify time synced to Client B
+      const timeSpentB = await waitForTaskTimeSpent(clientB, taskName, 10000);
+      console.log(`[TimeTrack Test] Client B shows time: ${timeSpentB}ms`);
 
-      // Verify time is non-zero (should show something like "0h 0m 3s" or similar)
-      // The time text should not be empty and should not be "0s" or equivalent
-      expect(timeTextB).toBeTruthy();
-      expect(timeTextB?.trim()).not.toBe('');
-
-      // Both clients should show the same time
-      expect(timeTextB?.trim()).toBe(timeTextA?.trim());
+      // Both clients should have the same synced timeSpent value
+      expect(timeSpentB).toBe(timeSpentA);
       console.log('[TimeTrack Test] Time values match on both clients');
 
       console.log('[TimeTrack Test] ✓ All verifications passed!');

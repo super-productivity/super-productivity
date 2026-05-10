@@ -720,6 +720,11 @@ export const stopTimeTracking = async (
   const pauseBtn = task.locator('button:has(mat-icon:has-text("pause"))');
   await pauseBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
   await pauseBtn.click();
+  await client.page.mouse.move(0, 0);
+  await task
+    .locator('task-hover-controls')
+    .waitFor({ state: 'detached', timeout: UI_VISIBLE_TIMEOUT_SHORT })
+    .catch(() => {});
 };
 
 // ============================================================================
@@ -759,7 +764,7 @@ export const getTaskTitles = async (client: SimulatedE2EClient): Promise<string[
  *
  * @param client - The simulated E2E client
  * @param taskName - The task name
- * @returns The time display text or null if not visible
+ * @returns The time display text or null if not present
  */
 export const getTaskTimeDisplay = async (
   client: SimulatedE2EClient,
@@ -767,10 +772,168 @@ export const getTaskTimeDisplay = async (
 ): Promise<string | null> => {
   const task = getTaskElement(client, taskName);
   const timeVal = task.locator('.time-wrapper .time-val').first();
-  if (await timeVal.isVisible()) {
+  if ((await timeVal.count()) > 0) {
     return timeVal.textContent();
   }
   return null;
+};
+
+/**
+ * Wait for a task's tracked time text to be present.
+ *
+ * The task row intentionally hides `.time-wrapper` while hover controls are mounted,
+ * so time-tracking assertions should read the rendered text instead of requiring
+ * visual visibility.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @param timeout - Maximum time to wait for non-empty time text
+ * @returns The trimmed time display text
+ */
+export const waitForTaskTimeDisplay = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+  timeout = UI_VISIBLE_TIMEOUT,
+): Promise<string> => {
+  await expect
+    .poll(
+      async () => {
+        const text = await getTaskTimeDisplay(client, taskName);
+        return text?.trim() ?? '';
+      },
+      {
+        timeout,
+        intervals: [250, 500, 1000],
+      },
+    )
+    .not.toBe('');
+
+  return (await getTaskTimeDisplay(client, taskName))!.trim();
+};
+
+/**
+ * Get a task's persisted timeSpent from the app state cache.
+ *
+ * This avoids relying on the task row's time label: sub-minute values render as
+ * "-" in the UI, and the label can be hidden while hover controls are mounted.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @returns The persisted timeSpent value in milliseconds, or null if not found
+ */
+export const getTaskTimeSpentFromState = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+): Promise<number | null> =>
+  client.page.evaluate(async (name) => {
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null;
+
+    const getTimeSpentFromRootState = (state: Record<string, unknown>): number | null => {
+      const taskState = state.tasks ?? state.task;
+      if (!isRecord(taskState) || !isRecord(taskState.entities)) {
+        return null;
+      }
+
+      for (const task of Object.values(taskState.entities)) {
+        if (
+          isRecord(task) &&
+          typeof task.title === 'string' &&
+          task.title.includes(name)
+        ) {
+          return typeof task.timeSpent === 'number' ? task.timeSpent : 0;
+        }
+      }
+
+      return null;
+    };
+
+    type StoreSubscription = { unsubscribe: () => void };
+    type StoreLike = {
+      subscribe: (next: (state: unknown) => void) => StoreSubscription;
+    };
+
+    const helpers = (
+      window as unknown as {
+        __e2eTestHelpers?: {
+          store?: StoreLike;
+        };
+      }
+    ).__e2eTestHelpers;
+
+    if (helpers?.store) {
+      const liveState = await new Promise<Record<string, unknown> | null>((resolve) => {
+        let isDone = false;
+        const subscriptionRef: { current?: StoreSubscription } = {};
+        const finish = (state: unknown): void => {
+          if (isDone) {
+            return;
+          }
+          isDone = true;
+          window.setTimeout(() => subscriptionRef.current?.unsubscribe());
+          resolve(isRecord(state) ? state : null);
+        };
+
+        subscriptionRef.current = helpers.store.subscribe(finish);
+        window.setTimeout(() => finish(null), 1000);
+      });
+
+      if (liveState) {
+        const timeSpent = getTimeSpentFromRootState(liveState);
+        if (timeSpent !== null) {
+          return timeSpent;
+        }
+      }
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('SUP_OPS');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const stateCacheEntry = await new Promise<
+      { state?: Record<string, unknown> } | undefined
+    >((resolve, reject) => {
+      const tx = db.transaction('state_cache', 'readonly');
+      const store = tx.objectStore('state_cache');
+      const request = store.get('current');
+      request.onsuccess = () =>
+        resolve(
+          isRecord(request.result)
+            ? (request.result as { state?: Record<string, unknown> })
+            : undefined,
+        );
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+
+    return stateCacheEntry?.state
+      ? getTimeSpentFromRootState(stateCacheEntry.state)
+      : null;
+  }, taskName);
+
+/**
+ * Wait for a task's persisted timeSpent to be greater than zero.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @param timeout - Maximum time to wait for timeSpent
+ * @returns The persisted timeSpent value in milliseconds
+ */
+export const waitForTaskTimeSpent = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+  timeout = UI_VISIBLE_TIMEOUT,
+): Promise<number> => {
+  await expect
+    .poll(async () => (await getTaskTimeSpentFromState(client, taskName)) ?? 0, {
+      timeout,
+      intervals: [250, 500, 1000],
+    })
+    .toBeGreaterThan(0);
+
+  return (await getTaskTimeSpentFromState(client, taskName))!;
 };
 
 /**

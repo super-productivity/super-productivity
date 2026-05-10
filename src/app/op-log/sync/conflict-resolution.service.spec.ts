@@ -1209,6 +1209,7 @@ describe('ConflictResolutionService', () => {
       it('should return { localWinOpsCreated: 0 } when no conflicts', async () => {
         const result = await service.autoResolveConflictsLWW([]);
 
+        // Early-exit path: no validation runs.
         expect(result).toEqual({ localWinOpsCreated: 0 });
       });
 
@@ -3516,6 +3517,129 @@ describe('ConflictResolutionService', () => {
 
       expect(mockOpLogStore.markFailed).toHaveBeenCalled();
       expect(mockSnackService.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('LWW Update payload always has top-level id (#7330)', () => {
+    // The lwwUpdateMetaReducer bails with "Entity data has no id" when an LWW
+    // Update payload lacks a top-level id. createLWWUpdateOp is the choke point
+    // for two of three LWW Update producers (_createLocalWinUpdateOp and the
+    // superseded-operation-resolver). Both pass the canonical entityId — so the
+    // payload should always carry it, even when entityState was malformed.
+
+    it('should backfill payload.id from entityId when entityState lacks id', () => {
+      const entityStateWithoutId = { title: 'Local winner', projectId: 'proj-1' };
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        entityStateWithoutId,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+    });
+
+    it('should overwrite a mismatched payload.id with the canonical entityId', () => {
+      const entityStateWithStaleId = {
+        id: 'wrong-id',
+        title: 'Local winner',
+      };
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        entityStateWithStaleId,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+    });
+
+    it('should handle non-object entityState by producing { id } payload', () => {
+      // Defensive: producers should never pass non-objects, but if they do
+      // we still want a usable payload rather than something the reducer rejects.
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        undefined,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+    });
+
+    it('should ensure _convertToLWWUpdatesIfNeeded merged payload has id even when base entity lacks id', () => {
+      // Edge case: a malformed local DELETE payload whose embedded entity
+      // somehow lacks an id (e.g. corruption). The merged LWW Update payload
+      // should still carry id from conflict.entityId.
+      const localClientId = 'client-a';
+      const remoteClientId = 'client-b';
+      const conflict: EntityConflict = {
+        entityType: 'TASK',
+        entityId: 'task-1',
+        suggestedResolution: 'manual',
+        localOps: [
+          {
+            id: 'local-del',
+            clientId: localClientId,
+            actionType: 'test' as ActionType,
+            opType: OpType.Delete,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { task: { title: 'No id here', projectId: 'proj-1' } },
+            vectorClock: { [localClientId]: 1 },
+            timestamp: Date.now() - 1000,
+            schemaVersion: 1,
+          },
+        ],
+        remoteOps: [
+          {
+            id: 'remote-upd',
+            clientId: remoteClientId,
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { task: { id: 'task-1', changes: { title: 'New title' } } },
+            vectorClock: { [remoteClientId]: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        ],
+      };
+
+      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+
+      expect(result.length).toBe(1);
+      expect(result[0].actionType).toBe('[TASK] LWW Update');
+      expect(result[0].payload.id).toBe('task-1');
+      expect(result[0].payload.title).toBe('New title');
+      expect(result[0].payload.projectId).toBe('proj-1');
+    });
+
+    // Singletons (GLOBAL_CONFIG, app-state, time-tracking) use entityId='*'
+    // as a sentinel. Injecting `id: '*'` into the payload would pollute the
+    // singleton feature state — which has no `id` field — when the consumer
+    // reducer spreads entityData into the feature state.
+    it('should NOT inject id when entityId is the singleton sentinel "*"', () => {
+      const singletonState = { sync: { syncProvider: null }, misc: { foo: 'bar' } };
+      const op = service.createLWWUpdateOp(
+        'GLOBAL_CONFIG',
+        '*',
+        singletonState,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBeUndefined();
+      // Original payload shape preserved (no synthetic field injected).
+      expect(op.payload).toEqual(singletonState);
     });
   });
 });

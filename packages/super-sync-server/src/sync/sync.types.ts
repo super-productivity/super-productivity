@@ -1,5 +1,8 @@
 import { Logger } from '../logger';
 import {
+  SUPER_SYNC_MAX_OPS_PER_UPLOAD,
+  SUPER_SYNC_OP_TYPES,
+  type SuperSyncOpType,
   VectorClock,
   VectorClockComparison,
   compareVectorClocks,
@@ -68,18 +71,9 @@ export interface ConflictResult {
 }
 
 // Operation types - single source of truth
-export const OP_TYPES = [
-  'CRT',
-  'UPD',
-  'DEL',
-  'MOV',
-  'BATCH',
-  'SYNC_IMPORT',
-  'BACKUP_IMPORT',
-  'REPAIR',
-] as const;
+export const OP_TYPES = SUPER_SYNC_OP_TYPES;
 
-export type OpType = (typeof OP_TYPES)[number];
+export type OpType = SuperSyncOpType;
 
 // VectorClock, VectorClockComparison, and compareVectorClocks are imported from @sp/shared-schema
 // and re-exported above. This ensures client and server use identical implementations.
@@ -393,7 +387,7 @@ export const RETENTION_MS = RETENTION_DAYS * MS_PER_DAY;
 export const ONLINE_DEVICE_THRESHOLD_MS = 5 * MS_PER_MINUTE; // 5 minutes
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
-  maxOpsPerUpload: 100,
+  maxOpsPerUpload: SUPER_SYNC_MAX_OPS_PER_UPLOAD,
   maxPayloadSizeBytes: 20 * 1024 * 1024, // 20MB - needed for large imports
   downloadLimit: 1000,
   uploadRateLimit: { max: 100, windowMs: MS_PER_MINUTE },

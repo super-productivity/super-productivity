@@ -67,7 +67,11 @@ const isRecord = (v: unknown): v is AnyRecord =>
 export type SeedOptions = {
   /** Two-letter locale code; written into globalConfig.localization.lng. */
   locale?: string;
-  /** Custom theme id (e.g. 'catppuccin-mocha'); written into globalConfig.misc.customTheme. */
+  /**
+   * Custom theme id (e.g. 'catppuccin-mocha'). Written into LS via the
+   * fixture's addInitScript before the page loads — no field is set on the
+   * imported globalConfig.
+   */
   customTheme?: string;
 };
 
@@ -92,12 +96,10 @@ export const buildSeed = (baseDate: Date, opts: SeedOptions = {}): AnyRecord => 
     gc.localization = { ...(gc.localization as AnyRecord), lng: opts.locale };
   }
 
-  // Custom theme: stored at globalConfig.misc.customTheme; ids defined in
-  // src/app/core/theme/custom-theme.service.ts (e.g. 'catppuccin-mocha').
-  if (opts.customTheme) {
-    const gc = data.globalConfig as AnyRecord;
-    gc.misc = { ...(gc.misc as AnyRecord), customTheme: opts.customTheme };
-  }
+  // Custom theme: the active selection lives in localStorage (LS.CUSTOM_THEME)
+  // and is wired by `fixture.ts` via addInitScript. No write into the seed
+  // is required; `opts.customTheme` flows through to the fixture's init
+  // script, not into the imported globalConfig.
 
   // Planner: materialize @@PLANNER_OFFSET_+N keys into YYYY-MM-DD strings.
   const planner = data.planner as AnyRecord;

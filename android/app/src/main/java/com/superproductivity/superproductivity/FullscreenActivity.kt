@@ -77,10 +77,15 @@ class FullscreenActivity : AppCompatActivity() {
         if (!initWebView()) {
             // Reuse the already-computed compatibility info so the block screen
             // keeps the detected WebView provider/version (useful when a user
-            // on a buggy beta channel needs to identify which package to swap).
+            // on a buggy beta channel needs to identify which package to swap),
+            // but tag the source as INIT_FAILURE so the screen does not falsely
+            // blame the version-detection path for a factory-init crash.
             WebViewBlockActivity.present(
                 this,
-                compatibility.copy(status = WebViewCompatibilityChecker.Status.BLOCK),
+                compatibility.copy(
+                    status = WebViewCompatibilityChecker.Status.BLOCK,
+                    source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
+                ),
             )
             finish()
             return

@@ -173,4 +173,50 @@ class WebViewCompatibilityCheckerTest {
         assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion(0))
         assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion(-1))
     }
+
+    @Test
+    fun `parseMajorVersion returns null for null or blank versionName`() {
+        assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion(null as String?))
+        assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion(""))
+        assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion("   "))
+    }
+
+    @Test
+    fun `parseMajorVersion parses a bare major number`() {
+        assertEquals(147, WebViewCompatibilityChecker.parseMajorVersion("147"))
+    }
+
+    @Test
+    fun `parseMajorVersion parses standard chrome dotted versionName`() {
+        assertEquals(147, WebViewCompatibilityChecker.parseMajorVersion("147.0.7390.131"))
+    }
+
+    @Test
+    fun `parseMajorVersion stops at non-digit non-dot suffix`() {
+        // Some OEM builds append channel/build suffixes like "-arm64" or " (stable)".
+        assertEquals(147, WebViewCompatibilityChecker.parseMajorVersion("147.0.7390.131-arm64"))
+        assertEquals(147, WebViewCompatibilityChecker.parseMajorVersion("147.0 stable"))
+    }
+
+    @Test
+    fun `parseMajorVersion returns null when versionName starts with a non-digit`() {
+        // Documents current behaviour: a leading letter (e.g. "M147" milestone prefix
+        // some Chromium builds historically used) yields null and forces the caller
+        // into the longVersionCode fallback.
+        assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion("M147.0"))
+        assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion(" 147.0"))
+    }
+
+    @Test
+    fun `parseMajorVersion returns null for non-numeric versionName`() {
+        assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion("unknown"))
+        assertEquals(null, WebViewCompatibilityChecker.parseMajorVersion("..."))
+    }
+
+    @Test
+    fun `parseMajorVersion returns zero for explicit 0 versionName`() {
+        // "0" is technically parseable; statusForVersion still treats it as old → BLOCK.
+        // This guards against silently returning null and skipping to versionCode.
+        assertEquals(0, WebViewCompatibilityChecker.parseMajorVersion("0"))
+    }
 }

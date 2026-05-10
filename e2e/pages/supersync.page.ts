@@ -32,6 +32,13 @@ export interface SuperSyncConfig {
   enableWebSocket?: boolean;
 }
 
+type SyncCompletionSnapshot = {
+  checkVisible: boolean;
+  spinnerVisible: boolean;
+  errorVisible: boolean;
+  unsyncedCount: number | null;
+};
+
 /**
  * Page object for SuperSync configuration and sync operations.
  * Used for E2E tests that verify multi-client sync via the super-sync-server.
@@ -1625,6 +1632,99 @@ export class SuperSyncPage extends BasePage {
     return false;
   }
 
+  private async _getUnsyncedOperationCount(): Promise<number | null> {
+    return this.page
+      .evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('SUP_OPS');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+
+        try {
+          if (!db.objectStoreNames.contains('ops')) {
+            return null;
+          }
+
+          const entries = await new Promise<{ syncedAt?: number; rejectedAt?: number }[]>(
+            (resolve, reject) => {
+              const tx = db.transaction('ops', 'readonly');
+              const request = tx.objectStore('ops').getAll();
+              request.onsuccess = () =>
+                resolve(request.result as { syncedAt?: number; rejectedAt?: number }[]);
+              request.onerror = () => reject(request.error);
+              tx.onabort = () => reject(tx.error);
+            },
+          );
+
+          return entries.filter((entry) => !entry.syncedAt && !entry.rejectedAt).length;
+        } finally {
+          db.close();
+        }
+      })
+      .catch((err) => {
+        console.log(`[syncAndWait] Could not read SUP_OPS pending state: ${String(err)}`);
+        return null;
+      });
+  }
+
+  private async _getSyncCompletionSnapshot(): Promise<SyncCompletionSnapshot> {
+    const [checkVisible, spinnerVisible, errorVisible, unsyncedCount] = await Promise.all(
+      [
+        this.syncCheckIcon.isVisible().catch(() => false),
+        this.syncSpinner.isVisible().catch(() => false),
+        this.syncErrorIcon.isVisible().catch(() => false),
+        this._getUnsyncedOperationCount(),
+      ],
+    );
+
+    return { checkVisible, spinnerVisible, errorVisible, unsyncedCount };
+  }
+
+  private async _waitForSyncCompletion(options: {
+    timeout: number;
+    useLocal: boolean;
+  }): Promise<void> {
+    const startTime = Date.now();
+    let lastSnapshot: SyncCompletionSnapshot | undefined;
+
+    while (Date.now() - startTime < options.timeout) {
+      const handledDialog = await this._handleSyncDialogs(options.useLocal);
+      if (handledDialog) {
+        await this.page.waitForTimeout(500);
+        continue;
+      }
+
+      lastSnapshot = await this._getSyncCompletionSnapshot();
+
+      if (lastSnapshot.errorVisible) {
+        await this.page.waitForTimeout(500);
+        const handledErrorDialog = await this._handleSyncDialogs(options.useLocal);
+        if (handledErrorDialog) {
+          continue;
+        }
+        throw new Error('Sync failed with error state during syncAndWait()');
+      }
+
+      if (lastSnapshot.checkVisible) {
+        return;
+      }
+
+      if (!lastSnapshot.spinnerVisible && lastSnapshot.unsyncedCount === 0) {
+        console.log(
+          '[syncAndWait] Sync check icon not visible, but SUP_OPS has no pending operations',
+        );
+        return;
+      }
+
+      await this.page.waitForTimeout(250);
+    }
+
+    throw new Error(
+      `syncAndWait timed out waiting for completion indicator after ${options.timeout}ms. Last state: ${JSON.stringify(lastSnapshot)}`,
+    );
+  }
+
   /**
    * Trigger a manual sync and wait for it to complete, handling any dialogs that appear.
    * This is the main method to use for syncing in tests.
@@ -1764,8 +1864,8 @@ export class SuperSyncPage extends BasePage {
       // The sync may have ended with ERROR status and opened a dialog.
       await this._handleSyncDialogs(useLocal);
 
-      // Now wait for check icon to appear (whether spinner appeared or not)
-      await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+      // Now wait for sync to settle (whether spinner appeared or not)
+      await this._waitForSyncCompletion({ timeout: 10000, useLocal });
 
       // Post-sync dialog check: _promptSuperSyncEncryptionIfNeeded() runs AFTER
       // sync completes (check icon visible) and may open enable_encryption or
@@ -1786,7 +1886,7 @@ export class SuperSyncPage extends BasePage {
         if (reSpinner) {
           await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
         }
-        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+        await this._waitForSyncCompletion({ timeout: 10000, useLocal });
 
         // Check for another dialog after re-sync (e.g., enter_password after enable_encryption)
         await this.page.waitForTimeout(1500);
@@ -1802,7 +1902,7 @@ export class SuperSyncPage extends BasePage {
           if (reSpinner2) {
             await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
           }
-          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+          await this._waitForSyncCompletion({ timeout: 10000, useLocal });
         }
       }
     } finally {

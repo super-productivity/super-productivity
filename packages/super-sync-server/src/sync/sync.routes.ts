@@ -1,8 +1,11 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import * as zlib from 'zlib';
-import { promisify } from 'util';
 import { uuidv7 } from 'uuidv7';
+import {
+  SuperSyncDownloadOpsQuerySchema,
+  SuperSyncUploadOpsRequestSchema,
+  SuperSyncUploadSnapshotRequestSchema,
+} from '@sp/shared-schema';
 import { authenticate, getAuthUser } from '../middleware';
 import { getSyncService } from './sync.service';
 import { getWsConnectionService } from './services/websocket-connection.service';
@@ -14,12 +17,12 @@ import {
   DownloadOpsResponse,
   SnapshotResponse,
   SyncStatusResponse,
-  DEFAULT_SYNC_CONFIG,
-  OP_TYPES,
   SYNC_ERROR_CODES,
 } from './sync.types';
-
-const gunzipAsync = promisify(zlib.gunzip);
+import {
+  parseCompressedJsonBody,
+  type CompressedJsonBodyParseResult,
+} from './compressed-body-parser';
 
 /**
  * Helper to create validation error response.
@@ -34,9 +37,6 @@ const createValidationErrorResponse = (
   return { error: 'Validation failed', details: zodIssues };
 };
 
-// Validation constants
-import { CLIENT_ID_REGEX, MAX_CLIENT_ID_LENGTH } from './sync.const';
-
 // Two-stage protection against zip bombs:
 // 1. Pre-check: Reject compressed data > limit (typical ratio ~10:1)
 // 2. Post-check: Reject decompressed data > limit (catches edge cases)
@@ -48,99 +48,42 @@ const MAX_COMPRESSED_SIZE_OPS = 10 * 1024 * 1024; // 10MB for /ops
 const MAX_COMPRESSED_SIZE_SNAPSHOT = 30 * 1024 * 1024; // 30MB for /snapshot (matches bodyLimit)
 const MAX_DECOMPRESSED_SIZE = 100 * 1024 * 1024; // 100MB - catches malicious high-ratio compression
 
-// Zod Schemas
-const ClientIdSchema = z
-  .string()
-  .min(1)
-  .max(MAX_CLIENT_ID_LENGTH)
-  .regex(CLIENT_ID_REGEX, 'clientId must be alphanumeric with underscores/hyphens only');
-
-const OperationSchema = z.object({
-  id: z.string().min(1).max(255),
-  clientId: ClientIdSchema,
-  actionType: z.string().min(1).max(255),
-  opType: z.enum(OP_TYPES),
-  entityType: z.string().min(1).max(255),
-  entityId: z.string().max(255).optional(),
-  entityIds: z.array(z.string().max(255)).optional(), // For batch operations
-  payload: z.unknown(),
-  vectorClock: z.record(z.string(), z.number()),
-  timestamp: z.number(),
-  schemaVersion: z.number(),
-  isPayloadEncrypted: z.boolean().optional(), // True if payload is E2E encrypted
-  syncImportReason: z
-    .enum([
-      'PASSWORD_CHANGED',
-      'FILE_IMPORT',
-      'BACKUP_RESTORE',
-      'FORCE_UPLOAD',
-      'SERVER_MIGRATION',
-      'REPAIR',
-    ])
-    .optional(),
-});
-
-const UploadOpsSchema = z.object({
-  ops: z.array(OperationSchema).min(1).max(DEFAULT_SYNC_CONFIG.maxOpsPerUpload),
-  clientId: ClientIdSchema,
-  lastKnownServerSeq: z.number().optional(),
-  requestId: z.string().min(1).max(64).optional(), // For request deduplication
-  isCleanSlate: z.boolean().optional(), // If true, server deletes all user data before accepting ops
-});
-
-const DownloadOpsQuerySchema = z.object({
-  sinceSeq: z.coerce.number().int().min(0),
-  limit: z.coerce.number().int().min(1).max(1000).optional(),
-  excludeClient: ClientIdSchema.optional(),
-});
-
-const UploadSnapshotSchema = z.object({
-  state: z.unknown(),
-  clientId: ClientIdSchema,
-  reason: z.enum(['initial', 'recovery', 'migration']),
-  vectorClock: z.record(z.string(), z.number()),
-  schemaVersion: z.number().optional(),
-  isPayloadEncrypted: z.boolean().optional(),
-  syncImportReason: z
-    .enum([
-      'PASSWORD_CHANGED',
-      'FILE_IMPORT',
-      'BACKUP_RESTORE',
-      'FORCE_UPLOAD',
-      'SERVER_MIGRATION',
-      'REPAIR',
-    ])
-    .optional(),
-  // Client's operation ID - server MUST use this to prevent ID mismatch bugs
-  opId: z.string().uuid().optional(),
-  isCleanSlate: z.boolean().optional(),
-  // Client-provided opType for correct operation typing (optional for backward compat)
-  snapshotOpType: z.enum(['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR']).optional(),
-});
-
 // Error helper
 const errorMessage = (err: unknown): string =>
   err instanceof Error ? err.message : 'Unknown error';
 
-/**
- * Decompress gzip body, handling base64 encoding from Android clients.
- * Android WebView can't send binary fetch bodies, so the client sends
- * base64-encoded gzip data with Content-Transfer-Encoding: base64 header.
- */
-const decompressBody = async (
-  rawBody: Buffer,
-  contentTransferEncoding: string | undefined,
-): Promise<Buffer> => {
-  // Check if body is base64-encoded (from Android CapacitorHttp)
-  if (contentTransferEncoding === 'base64') {
-    // Body is base64 string encoded as buffer - decode it first
-    const base64String = rawBody.toString('utf-8');
-    const binaryData = Buffer.from(base64String, 'base64');
-    return gunzipAsync(binaryData);
+type CompressedJsonBodyParseFailure = Extract<
+  CompressedJsonBodyParseResult,
+  { ok: false }
+>;
+
+interface CompressedBodyFailureLogOptions {
+  payloadLabel: 'upload' | 'snapshot';
+  decompressFailureLabel: 'ops upload' | 'snapshot';
+  maxCompressedSize: number;
+}
+
+const sendCompressedBodyParseFailure = (
+  reply: FastifyReply,
+  userId: number,
+  failure: CompressedJsonBodyParseFailure,
+  options: CompressedBodyFailureLogOptions,
+): FastifyReply => {
+  if (failure.reason === 'compressed-payload-too-large') {
+    Logger.warn(
+      `[user:${userId}] Compressed ${options.payloadLabel} too large: ${failure.compressedSize} bytes (max ${options.maxCompressedSize})`,
+    );
+  } else if (failure.reason === 'decompressed-payload-too-large') {
+    Logger.warn(
+      `[user:${userId}] Decompressed ${options.payloadLabel} too large: ${failure.decompressedSize} bytes (max ${MAX_DECOMPRESSED_SIZE})`,
+    );
+  } else if (failure.reason === 'decompress-failed') {
+    Logger.warn(
+      `[user:${userId}] Failed to decompress ${options.decompressFailureLabel}: ${errorMessage(failure.cause)}`,
+    );
   }
 
-  // Standard binary gzip body
-  return gunzipAsync(rawBody);
+  return reply.status(failure.statusCode).send({ error: failure.error });
 };
 
 /**
@@ -256,56 +199,34 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const contentEncoding = req.headers['content-encoding'];
 
         if (contentEncoding === 'gzip') {
-          const rawBody = req.body as unknown as Buffer;
-          if (!Buffer.isBuffer(rawBody)) {
-            return reply.status(400).send({
-              error: 'Expected compressed body with Content-Encoding: gzip',
+          const contentTransferEncoding = req.headers['content-transfer-encoding'] as
+            | string
+            | undefined;
+          const compressedBodyResult = await parseCompressedJsonBody(
+            req.body,
+            contentTransferEncoding,
+            {
+              maxCompressedSize: MAX_COMPRESSED_SIZE_OPS,
+              maxDecompressedSize: MAX_DECOMPRESSED_SIZE,
+            },
+          );
+
+          if (!compressedBodyResult.ok) {
+            return sendCompressedBodyParseFailure(reply, userId, compressedBodyResult, {
+              payloadLabel: 'upload',
+              decompressFailureLabel: 'ops upload',
+              maxCompressedSize: MAX_COMPRESSED_SIZE_OPS,
             });
           }
 
-          try {
-            // Handle base64-encoded gzip from Android clients
-            const contentTransferEncoding = req.headers['content-transfer-encoding'] as
-              | string
-              | undefined;
-
-            // Pre-check: reject if compressed size exceeds limit (prevents memory exhaustion)
-            if (rawBody.length > MAX_COMPRESSED_SIZE_OPS) {
-              Logger.warn(
-                `[user:${userId}] Compressed upload too large: ${rawBody.length} bytes (max ${MAX_COMPRESSED_SIZE_OPS})`,
-              );
-              return reply.status(413).send({
-                error: 'Compressed payload too large',
-              });
-            }
-
-            const decompressed = await decompressBody(rawBody, contentTransferEncoding);
-
-            // Post-check: reject if decompressed size exceeds limit (catches high-ratio attacks)
-            if (decompressed.length > MAX_DECOMPRESSED_SIZE) {
-              Logger.warn(
-                `[user:${userId}] Decompressed upload too large: ${decompressed.length} bytes (max ${MAX_DECOMPRESSED_SIZE})`,
-              );
-              return reply.status(413).send({
-                error: 'Decompressed payload too large',
-              });
-            }
-            body = JSON.parse(decompressed.toString('utf-8'));
-            Logger.debug(
-              `[user:${userId}] Ops upload decompressed: ${rawBody.length} -> ${decompressed.length} bytes (base64: ${contentTransferEncoding === 'base64'})`,
-            );
-          } catch (decompressErr) {
-            Logger.warn(
-              `[user:${userId}] Failed to decompress ops upload: ${errorMessage(decompressErr)}`,
-            );
-            return reply.status(400).send({
-              error: 'Failed to decompress gzip body',
-            });
-          }
+          body = compressedBodyResult.body;
+          Logger.debug(
+            `[user:${userId}] Ops upload decompressed: ${compressedBodyResult.compressedSize} -> ${compressedBodyResult.decompressedSize} bytes (base64: ${compressedBodyResult.isBase64})`,
+          );
         }
 
         // Validate request body
-        const parseResult = UploadOpsSchema.safeParse(body);
+        const parseResult = SuperSyncUploadOpsRequestSchema.safeParse(body);
         if (!parseResult.success) {
           Logger.warn(
             `[user:${userId}] Upload validation failed`,
@@ -513,7 +434,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const userId = getAuthUser(req).userId;
 
         // Validate query params
-        const parseResult = DownloadOpsQuerySchema.safeParse(req.query);
+        const parseResult = SuperSyncDownloadOpsQuerySchema.safeParse(req.query);
         if (!parseResult.success) {
           Logger.warn(
             `[user:${userId}] Download validation failed`,
@@ -622,57 +543,34 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const contentEncoding = req.headers['content-encoding'];
 
         if (contentEncoding === 'gzip') {
-          // Body comes as Buffer when compressed
-          const rawBody = req.body as Buffer;
-          if (!Buffer.isBuffer(rawBody)) {
-            return reply.status(400).send({
-              error: 'Expected compressed body with Content-Encoding: gzip',
+          const contentTransferEncoding = req.headers['content-transfer-encoding'] as
+            | string
+            | undefined;
+          const compressedBodyResult = await parseCompressedJsonBody(
+            req.body,
+            contentTransferEncoding,
+            {
+              maxCompressedSize: MAX_COMPRESSED_SIZE_SNAPSHOT,
+              maxDecompressedSize: MAX_DECOMPRESSED_SIZE,
+            },
+          );
+
+          if (!compressedBodyResult.ok) {
+            return sendCompressedBodyParseFailure(reply, userId, compressedBodyResult, {
+              payloadLabel: 'snapshot',
+              decompressFailureLabel: 'snapshot',
+              maxCompressedSize: MAX_COMPRESSED_SIZE_SNAPSHOT,
             });
           }
 
-          try {
-            // Handle base64-encoded gzip from Android clients
-            const contentTransferEncoding = req.headers['content-transfer-encoding'] as
-              | string
-              | undefined;
-
-            // Pre-check: reject if compressed size exceeds limit (prevents memory exhaustion)
-            if (rawBody.length > MAX_COMPRESSED_SIZE_SNAPSHOT) {
-              Logger.warn(
-                `[user:${userId}] Compressed snapshot too large: ${rawBody.length} bytes (max ${MAX_COMPRESSED_SIZE_SNAPSHOT})`,
-              );
-              return reply.status(413).send({
-                error: 'Compressed payload too large',
-              });
-            }
-
-            const decompressed = await decompressBody(rawBody, contentTransferEncoding);
-
-            // Post-check: reject if decompressed size exceeds limit (catches high-ratio attacks)
-            if (decompressed.length > MAX_DECOMPRESSED_SIZE) {
-              Logger.warn(
-                `[user:${userId}] Decompressed snapshot too large: ${decompressed.length} bytes (max ${MAX_DECOMPRESSED_SIZE})`,
-              );
-              return reply.status(413).send({
-                error: 'Decompressed payload too large',
-              });
-            }
-            body = JSON.parse(decompressed.toString('utf-8'));
-            Logger.debug(
-              `[user:${userId}] Snapshot decompressed: ${rawBody.length} -> ${decompressed.length} bytes (base64: ${contentTransferEncoding === 'base64'})`,
-            );
-          } catch (decompressErr) {
-            Logger.warn(
-              `[user:${userId}] Failed to decompress snapshot: ${errorMessage(decompressErr)}`,
-            );
-            return reply.status(400).send({
-              error: 'Failed to decompress gzip body',
-            });
-          }
+          body = compressedBodyResult.body;
+          Logger.debug(
+            `[user:${userId}] Snapshot decompressed: ${compressedBodyResult.compressedSize} -> ${compressedBodyResult.decompressedSize} bytes (base64: ${compressedBodyResult.isBase64})`,
+          );
         }
 
         // Validate request body
-        const parseResult = UploadSnapshotSchema.safeParse(body);
+        const parseResult = SuperSyncUploadSnapshotRequestSchema.safeParse(body);
         if (!parseResult.success) {
           Logger.warn(
             `[user:${userId}] Snapshot upload validation failed`,

@@ -5,6 +5,7 @@ import { OperationLogSyncService } from './operation-log-sync.service';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { BehaviorSubject } from 'rxjs';
 import { RejectedOpInfo } from '../core/types/sync-results.types';
 
@@ -49,6 +50,7 @@ describe('ImmediateUploadService', () => {
     mockProvider = {
       id: SyncProviderId.SuperSync,
       supportsOperationSync: true, // Required for isOperationSyncCapable check
+      providerMode: 'superSyncOps',
       uploadOperations: jasmine.createSpy('uploadOperations'),
       isReady: jasmine.createSpy('isReady').and.returnValue(Promise.resolve(true)),
     };
@@ -163,6 +165,110 @@ describe('ImmediateUploadService', () => {
 
       // Piggybacked ops are processed internally, no checkmark shown
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalled();
+    }));
+  });
+
+  // #7330 follow-up: uploadPendingOps() processes piggybacked remote ops
+  // through validateAfterSync(). Without an explicit withSession() wrapper
+  // the latch flip would either fire outside any session (silently dropped
+  // by the next normal sync's reset) or — worse — go unread while
+  // _performUpload set IN_SYNC based purely on result.uploadedCount.
+  describe('post-sync validation (#7330 latch)', () => {
+    it('reports ERROR (not IN_SYNC) when validation fails during piggybacked-op processing', fakeAsync(() => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        // Simulate post-sync validation flipping the latch from inside
+        // uploadPendingOps -> processRemoteOps -> validateAfterSync.
+        latch.setFailed();
+        return completedResult({ uploadedCount: 2, piggybackedOpsCount: 1 });
+      });
+
+      service.initialize();
+      service.trigger();
+      tick(2100);
+
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    }));
+
+    it('reports ERROR when validation fails during a clean upload (no piggyback)', fakeAsync(() => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        latch.setFailed();
+        return completedResult({ uploadedCount: 3 });
+      });
+
+      service.initialize();
+      service.trigger();
+      tick(2100);
+
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    }));
+
+    it('reports ERROR when validation fails on the LWW re-upload pass', fakeAsync(() => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      let call = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        call += 1;
+        if (call === 1) {
+          // First pass: LWW created local-win ops; no validation failure yet.
+          return completedResult({ uploadedCount: 1, localWinOpsCreated: 2 });
+        }
+        // Re-upload pass: validation fails (e.g., on piggybacked ops returned
+        // alongside the re-upload).
+        latch.setFailed();
+        return completedResult({ uploadedCount: 0 });
+      });
+
+      service.initialize();
+      service.trigger();
+      tick(2100);
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    }));
+
+    it('resets the latch on each immediate-upload session', fakeAsync(() => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      // Seed stale state via the test-only helper (mirrors "a prior session
+      // left the latch flipped"). setFailed() outside a session would log a
+      // warning we don't want in test output.
+      latch._resetForTest();
+      (latch as unknown as { _failed: boolean })._failed = true;
+
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2100);
+
+      // After withSession's entry-reset and a clean upload, the latch is
+      // back to false and IN_SYNC is reported normally.
+      expect(latch.hasFailed()).toBe(false);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
+    }));
+
+    it('reports ERROR when validation flipped the latch and the upload then threw', fakeAsync(() => {
+      const latch = TestBed.inject(SyncSessionValidationService);
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        latch.setFailed();
+        throw new Error('Network error after validation failure');
+      });
+
+      service.initialize();
+      service.trigger();
+      tick(2100);
+
+      // Validation failure is structural state corruption — surface it
+      // even though the upload itself threw. Transient errors with no
+      // latch flip remain silent (existing 'should NOT show checkmark when
+      // upload fails' test).
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
     }));
   });
 

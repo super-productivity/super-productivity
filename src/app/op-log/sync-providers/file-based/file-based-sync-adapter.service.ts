@@ -5,7 +5,7 @@ import {
   OperationSyncCapable,
   SyncOperation,
   OpUploadResponse,
-  OpDownloadResponse,
+  FileSnapshotOpDownloadResponse,
   ServerSyncOperation,
   SnapshotUploadResponse,
   RestorePointType,
@@ -233,7 +233,7 @@ export class FileBasedSyncAdapterService {
     provider: SyncProviderServiceInterface<SyncProviderId>,
     encryptAndCompressCfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
-  ): OperationSyncCapable {
+  ): OperationSyncCapable<'fileSnapshotOps'> {
     // Load persisted state before creating adapter
     this._loadPersistedState();
 
@@ -241,6 +241,7 @@ export class FileBasedSyncAdapterService {
 
     return {
       supportsOperationSync: true,
+      providerMode: 'fileSnapshotOps',
 
       uploadOps: async (
         ops: SyncOperation[],
@@ -261,7 +262,7 @@ export class FileBasedSyncAdapterService {
         sinceSeq: number,
         excludeClient?: string,
         limit?: number,
-      ): Promise<OpDownloadResponse> => {
+      ): Promise<FileSnapshotOpDownloadResponse> => {
         return this._downloadOps(
           provider,
           encryptAndCompressCfg,
@@ -593,7 +594,7 @@ export class FileBasedSyncAdapterService {
     sinceSeq: number,
     excludeClient?: string,
     limit: number = 500,
-  ): Promise<OpDownloadResponse> {
+  ): Promise<FileSnapshotOpDownloadResponse> {
     const providerKey = this._getProviderKey(provider);
 
     let syncData: FileBasedSyncData;

@@ -488,6 +488,7 @@
         "LOAD_OPTIONS": "Load Options",
         "LOAD_OPTIONS_FAILED": "Failed to load options",
         "LOADING_OPTIONS": "Loading options...",
+        "OAUTH_UNAVAILABLE_WEB": "Available in the desktop and mobile apps. Synced settings stay saved, but live data cannot be loaded in the web app.",
         "OPTIONS_LOADED": "Options loaded",
         "RELOAD_OPTIONS": "Reload Options",
         "SETUP_TITLE": "Setup {{title}} Config",
@@ -891,8 +892,10 @@
         "TITLE": "Basic Settings"
       },
       "FORM_THEME": {
+        "D_BACKGROUND_IMAGE_BLUR": "Adjust this value to blur the background image. The default is 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Adjust this value to make the background more or less transparent. The default is 20%.",
         "HELP": "Theme settings for your project.",
+        "L_BACKGROUND_IMAGE_BLUR": "Blur background image",
         "L_BACKGROUND_IMAGE_DARK": "Background Image URL (Dark Theme)",
         "L_BACKGROUND_IMAGE_LIGHT": "Background Image URL (Light Theme)",
         "L_BACKGROUND_OVERLAY_OPACITY": "Darken/lighten background image for better contrast",
@@ -1372,7 +1375,7 @@
       "S": {
         "ALREADY_IN_SYNC": "Already in sync",
         "ARCHIVE_OPERATION_FAILED": "Archive operation failed. Some cleanup may not have completed.",
-        "AUTH_SETUP_FAILED": "Failed to set up authentication. If you're using the web app, make sure you're accessing it over HTTPS. Otherwise, please try the stable version or report this as a bug.",
+        "AUTH_SETUP_FAILED": "Failed to set up authentication. Please try again. If you're using the web app, make sure you're accessing it over HTTPS. Otherwise, please report this as a bug if it keeps happening.",
         "AUTH_TOKEN_REJECTED": "Sync token was rejected by the server: {{reason}}. Please get a new token.",
         "BTN_CONFIGURE": "Configure",
         "BTN_FORCE_OVERWRITE": "Force Overwrite",
@@ -1940,6 +1943,7 @@
         "TOTAL_TIME": "Time spent total:",
         "VIEW_TASK_DETAILS": "View task details",
         "WEEK_NR": "Week {{nr}}",
+        "WEEK_NR_SHORT": "W{{nr}}",
         "WORKED": "Worked"
       },
       "D_CONFIRM_RESTORE": "Are you sure you want to move the task <strong>\"{{title}}\"</strong> into your Today task list?",
@@ -2298,6 +2302,12 @@
       "START_OF_NEXT_DAY_HINT": "The time when your day starts (Format: HH:mm, e.g. 02:30)",
       "THEME": "Theme",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
+      "THEME_INSTALL_BUTTON": "Install theme…",
+      "THEME_INSTALL_TOOLTIP": "Upload a CSS theme file. Themes only change visuals — never run code — but they can still affect how your data is rendered. Only install themes from sources you trust.",
+      "THEME_INSTALLED_WITH_WARNINGS": "Theme installed. Missing tokens: {{tokens}}",
+      "THEME_INVALID_CSS_FILE": "Could not install theme: invalid or unsafe CSS file.",
+      "THEME_REMOVE_BUTTON": "Remove theme",
+      "THEME_REMOVED_TOAST": "Theme removed; reverted to Default.",
       "THEME_SELECT_LABEL": "Select Theme",
       "TITLE": "Misc Settings"
     },

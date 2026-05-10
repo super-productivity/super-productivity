@@ -1,0 +1,1175 @@
+/**
+ * Liquid Glass Theme — macOS Tahoe / iOS 26
+ *
+ * Two clear tiers (this is what macOS Tahoe actually does):
+ *
+ *  TIER A — Window / Sidebar / Content / Cards
+ *    Substantially opaque (~0.78 light, ~0.72 dark).
+ *    Subtle vibrancy blur, no saturate boost.
+ *    Heavy ambient drop shadow.
+ *    Big rounded corners (16–18px).
+ *    The wallpaper FRAMES these surfaces — it does not
+ *    bleed through them. (See: macOS Settings, Finder.)
+ *
+ *  TIER B — Popovers / Dialogs / Menus / Control Center modules
+ *    Heavily translucent (~0.30).
+ *    Heavy blur + saturate boost (the "Liquid Glass" material).
+ *    Bright top rim highlight — the showpiece glow.
+ *    Larger corners (20–22px).
+ *    Wallpaper visibly bleeds through and tints the surface.
+ *
+ *  Wallpaper is tinted with the user's primary color so the
+ *  edges around windows pick up the app's identity.
+ *
+ *  Works in light and dark mode (requiredMode: 'system').
+ */
+
+/* ---------------------------------------------------------
+ * Tokens
+ * --------------------------------------------------------- */
+
+:root {
+  --lg-accent: #007aff;
+  --lg-accent-hover: #1a8aff;
+  --lg-accent-active: #0062cc;
+
+  /* Route theme-private radius names through the design-system scale.
+   * --radius-md = 8px, --radius-xl = 16px. 22px is novel (between xl
+   * and pill), so it stays declared inline. */
+  --lg-radius-sm: var(--radius-md);
+  --lg-radius-md: var(--radius-xl);
+  --lg-radius-lg: 22px;
+
+  /* Tier A blur — subtle vibrancy with mild saturation so the
+   * wallpaper color picks up through cards and tasks. */
+  --lg-blur-vibrancy: 18px;
+  --lg-saturate-vibrancy: 140%;
+  /* Sidebar sits between window glass and overlay chrome. It should
+   * feel translucent, but not as liquid or loud as dialogs/menus. */
+  --lg-blur-sidebar: 30px;
+  --lg-saturate-sidebar: 150%;
+  --lg-blur-mobile-nav: 34px;
+  --lg-saturate-mobile-nav: 150%;
+  /* Tier B blur — full Liquid Glass material for overlays/chrome. */
+  --lg-blur-chrome: 24px;
+  --lg-blur-overlay: 50px;
+  --lg-saturate: 180%;
+
+  /* Apple's spring eases. lg-ease-spring overshoots (1.5) for
+   * a slight bounce on press/hover — adapted from the
+   * nitnelav CodePen liquid-glass button. */
+  --lg-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --lg-ease-snap: cubic-bezier(0.4, 0, 0.2, 1);
+  --lg-ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.5);
+}
+
+/* ---------------------------------------------------------
+ * Light mode
+ * --------------------------------------------------------- */
+
+body {
+  /* Theme-contract primitives — what the theme would look like
+   * stripped of translucency. Aliases below override these with
+   * the actual translucent glass values; the primitives keep the
+   * theme's color identity addressable for forks and for the
+   * design system's --brand / --focus-ring / state-overlay
+   * derivations. */
+  --surface-0: #f3f5fa;
+  --surface-1: #fafbff;
+  --surface-2: #ffffff;
+  --surface-3: #ffffff;
+  --surface-4: #ffffff;
+  --lg-solid-utility-bg: var(--surface-2);
+  --ink-strong: rgb(0, 0, 0);
+  --ink: rgb(28, 28, 30);
+  --ink-muted: rgba(60, 60, 67, 0.62);
+  --ink-on-channel: 0, 0, 0;
+  --separator: rgba(60, 60, 67, 0.2);
+  --divider: rgba(60, 60, 67, 0.12);
+  --scrim: rgba(0, 0, 0, 0.4);
+  /* Apple convention: focus ring is system blue, independent of the
+   * user's picker color. --brand stays as the picker primary so the
+   * sidenav-active-text and resize-handle hover follow user choice. */
+  --focus-ring: var(--lg-accent);
+
+  /* Three-radial wallpaper tinted by the user's primary colour.
+   * Top-left and bottom-right carry the bulk of the wash; the
+   * smaller top-right radial breaks up the symmetry and adds
+   * depth without introducing a competing hue. */
+  --lg-wallpaper:
+    radial-gradient(
+      ellipse 1400px 900px at 18% -10%,
+      color-mix(in srgb, var(--palette-primary-500) 32%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 1100px 800px at 92% 108%,
+      color-mix(in srgb, var(--palette-primary-500) 22%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 900px 700px at 95% 10%,
+      color-mix(in srgb, var(--palette-primary-500) 12%, transparent),
+      transparent 65%
+    ),
+    linear-gradient(180deg, #fafbff 0%, #f3f5fa 100%);
+
+  --bg: transparent;
+  --bg-darker: rgba(255, 255, 255, 0.55);
+  --bg-slightly-lighter: rgba(255, 255, 255, 0.7);
+  --bg-lighter: rgba(255, 255, 255, 0.78);
+  --bg-lightest: rgba(255, 255, 255, 0.88);
+  --bg-super-light: rgba(255, 255, 255, 0.95);
+
+  /* Tier A — substantial fills. Surface alpha is high (0.78–0.95)
+   * so text reads cleanly whether the body wallpaper is the soft
+   * primary-radial gradient or a user-selected photo. The slight
+   * remaining translucency lets the wallpaper "frame" surfaces
+   * without bleeding through them. */
+  --card-bg: rgba(255, 255, 255, 0.88);
+  --sidenav-bg: rgba(255, 255, 255, 0.78);
+  --sidenav-bg-mobile: rgba(255, 255, 255, 0.85);
+  /* Active item = "more opaque" version of the glass.
+   * Reads as a highlighted zone of the same material, not a
+   * colored selection. Same value as the mobile bottom nav. */
+  --sidenav-item-active-bg: rgba(255, 255, 255, 0.92);
+  --sidenav-hover-bg: rgba(255, 255, 255, 0.55);
+
+  --right-panel-bg: rgba(255, 255, 255, 0.92);
+  --right-panel-bg-mobile: rgba(255, 255, 255, 0.92);
+  --bottom-panel-bg: rgba(255, 255, 255, 0.95);
+  --banner-bg: rgba(255, 255, 255, 0.92);
+
+  /* Slightly stronger contrast since cards are more transparent */
+  --text-color: rgba(28, 28, 30, 1);
+  --text-color-less-intense: rgba(28, 28, 30, 0.78);
+  --text-color-muted: rgba(60, 60, 67, 0.62);
+  --text-color-more-intense: rgba(0, 0, 0, 1);
+  --text-color-most-intense: rgba(0, 0, 0, 1);
+
+  --task-c-bg: rgba(255, 255, 255, 0.85);
+  --task-c-selected-bg: rgba(255, 255, 255, 0.92);
+  --selected-task-bg-color: rgba(255, 255, 255, 0.92);
+  --sub-task-c-bg: rgba(255, 255, 255, 0.62);
+  --sub-task-c-bg-done: rgba(255, 255, 255, 0.42);
+  --task-c-bg-done: rgba(255, 255, 255, 0.62);
+  /* Current task is `position: sticky`, so it floats over other tasks
+   * scrolling underneath it. Translucent fills bleed that scroll
+   * through and make it unreadable — use an opaque blend of the
+   * user's primary color over the solid card surface. */
+  --task-c-current-bg: color-mix(
+    in srgb,
+    var(--palette-primary-500) 18%,
+    var(--lg-solid-utility-bg)
+  );
+  --task-c-drag-drop-bg: rgba(0, 122, 255, 0.14);
+  --sub-task-c-bg-in-selected: rgba(255, 255, 255, 0.78);
+  --task-detail-bg: rgba(255, 255, 255, 0.88);
+  --task-detail-bg-hover: rgba(255, 255, 255, 0.95);
+
+  /* Notes: glass-like translucent fill (was warm-yellow). The
+   * main-content blur underneath provides the glass material;
+   * a faint warm hint preserves note "personality" without
+   * the sticky-note look. */
+  --standard-note-bg: rgba(255, 250, 235, 0.78);
+  --standard-note-bg-hovered: rgba(255, 250, 235, 0.92);
+  --standard-note-fg: rgba(28, 28, 30, 0.94);
+
+  --extra-border-color: rgba(60, 60, 67, 0.18);
+  --separator-color: rgba(60, 60, 67, 0.2);
+  --divider-color: rgba(60, 60, 67, 0.12);
+  --chip-outline-color: rgba(60, 60, 67, 0.22);
+
+  /* Edge model colors */
+  --lg-rim-top: rgba(255, 255, 255, 0.7);
+  --lg-rim-bottom: rgba(0, 0, 0, 0.08);
+  --lg-hairline: rgba(0, 0, 0, 0.08);
+  --lg-shine: rgba(255, 255, 255, 0.55);
+
+  /* Dual inset rim — bright at top-left AND bottom-right.
+   * The CodePen technique. Used on tasks, notes, planner items,
+   * schedule events, cards. Smaller offsets than buttons because
+   * these are wide surfaces; 1.5px would look exaggerated. */
+  --lg-rim-dual:
+    inset 1px 1px 1px 0 rgba(255, 255, 255, 0.32),
+    inset -1px -1px 1px 0 rgba(255, 255, 255, 0.18);
+
+  /* Quieter row rim for repeated surfaces like task lists. Full
+   * dual-corner highlights on every row read busy; selected/current
+   * rows and larger cards keep the stronger --lg-rim-dual treatment. */
+  --lg-rim-quiet:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.24), inset 0 -0.5px 0 rgba(0, 0, 0, 0.04);
+
+  /* Tier B fill — heavily translucent, the wallpaper shows through */
+  --lg-overlay-bg: rgba(255, 255, 255, 0.36);
+  --lg-mobile-nav-bg: rgba(255, 255, 255, 0.5);
+  --lg-overlay-rim: rgba(255, 255, 255, 0.7);
+
+  /* Don't overwrite --palette-accent-500 / --c-accent — the user picks
+   * their accent color in the theme picker, and forcing Apple system
+   * blue here would clobber that choice (and tint links + accent
+   * surfaces blue regardless of what the user wanted). --lg-accent is
+   * still used directly for the focus ring (Apple convention: focus
+   * rings stay system blue) and for --c-info (info-blue convention). */
+  --c-info: var(--lg-accent);
+  --c-success: #34c759;
+  --c-warning: #ff9f0a;
+  --c-error: #ff3b30;
+
+  /* Repeated rows stay quiet; selected/current rows and larger cards
+   * use the stronger dual inset rim so elevation still has hierarchy. */
+  --task-shadow: var(--lg-rim-quiet), 0 1px 2px rgba(60, 60, 67, 0.05);
+  /* Sub-tasks sit on the parent task's surface, not the wallpaper,
+   * so they don't need a rim / hairline of their own — the parent
+   * already carries the perimeter. The slight --sub-task-c-bg alpha
+   * drop differentiates them on its own. */
+  --task-shadow-sub-task: none;
+  --task-current-shadow:
+    var(--lg-rim-dual), 0 2px 6px rgba(60, 60, 67, 0.1),
+    0 8px 22px color-mix(in srgb, var(--palette-primary-500) 11%, transparent),
+    0 0 0 0.5px color-mix(in srgb, var(--palette-primary-500) 14%, transparent);
+  --task-selected-shadow:
+    var(--lg-rim-dual), 0 2px 6px rgba(60, 60, 67, 0.12),
+    0 14px 36px rgba(60, 60, 67, 0.16);
+  --card-shadow:
+    var(--lg-rim-dual), 0 2px 8px rgba(60, 60, 67, 0.1),
+    0 18px 44px rgba(60, 60, 67, 0.18);
+  --banner-shadow:
+    var(--lg-rim-dual), 0 1px 3px rgba(60, 60, 67, 0.06),
+    0 6px 16px rgba(60, 60, 67, 0.08);
+
+  --close-btn-bg: rgba(0, 0, 0, 0.06);
+  --close-btn-border: transparent;
+  --select-hover-bg: rgba(0, 122, 255, 0.1);
+  --options-border-color: rgba(60, 60, 67, 0.12);
+  --attachment-bg: rgba(255, 255, 255, 0.85);
+  --attachment-border: transparent;
+  --grid-color: rgba(60, 60, 67, 0.1);
+  --progress-bg: rgba(60, 60, 67, 0.12);
+  --schedule-event-bg: rgba(255, 255, 255, 0.9);
+
+  --hover-controls-border: 1px solid;
+  --hover-controls-border-opacity: 0.25;
+
+  --state-hover-alpha: 0.05;
+  --state-focus-alpha: 0.08;
+  --state-pressed-alpha: 0.12;
+}
+
+/* ---------------------------------------------------------
+ * Dark mode
+ * --------------------------------------------------------- */
+
+body.isDarkTheme {
+  --lg-accent: #0a84ff;
+
+  /* Theme-contract primitives (dark) */
+  --surface-0: #07090f;
+  --surface-1: #0a0d18;
+  --surface-2: #1a1c22;
+  --surface-3: #242831;
+  --surface-4: #2c303a;
+  --lg-solid-utility-bg: var(--surface-3);
+  --ink-strong: rgb(255, 255, 255);
+  --ink: rgb(245, 245, 247);
+  --ink-muted: rgba(235, 235, 245, 0.55);
+  --ink-on-channel: 255, 255, 255;
+  --separator: rgba(255, 255, 255, 0.12);
+  --divider: rgba(255, 255, 255, 0.08);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --focus-ring: var(--lg-accent);
+
+  --lg-wallpaper:
+    radial-gradient(
+      ellipse 1400px 900px at 18% -10%,
+      color-mix(in srgb, var(--palette-primary-500) 22%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 1100px 800px at 92% 108%,
+      color-mix(in srgb, var(--palette-primary-500) 14%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 900px 700px at 95% 10%,
+      color-mix(in srgb, var(--palette-primary-500) 8%, transparent),
+      transparent 65%
+    ),
+    linear-gradient(180deg, #0a0d18 0%, #07090f 100%);
+
+  --bg: transparent;
+  --bg-darker: rgba(20, 22, 28, 0.6);
+  --bg-slightly-lighter: rgba(40, 42, 50, 0.55);
+  --bg-lighter: rgba(50, 52, 60, 0.55);
+  --bg-lightest: rgba(60, 62, 70, 0.6);
+  --bg-super-light: rgba(80, 82, 90, 0.65);
+
+  --card-bg: rgba(36, 38, 44, 0.88);
+  --sidenav-bg: rgba(28, 30, 38, 0.78);
+  --sidenav-bg-mobile: rgba(20, 22, 28, 0.92);
+  --sidenav-item-active-bg: rgba(255, 255, 255, 0.32);
+  --sidenav-hover-bg: rgba(255, 255, 255, 0.18);
+
+  --right-panel-bg: rgba(28, 30, 38, 0.92);
+  --right-panel-bg-mobile: rgba(20, 22, 28, 0.94);
+  --bottom-panel-bg: rgba(28, 30, 38, 0.95);
+  --banner-bg: rgba(40, 42, 50, 0.92);
+
+  --text-color: rgba(245, 245, 247, 0.96);
+  --text-color-less-intense: rgba(235, 235, 240, 0.78);
+  --text-color-muted: rgba(235, 235, 245, 0.55);
+  --text-color-more-intense: rgba(255, 255, 255, 1);
+  --text-color-most-intense: rgba(255, 255, 255, 1);
+
+  /* Dark task rows keep a high-alpha fill: enough translucency to
+   * avoid slabby blocks, but still readable over wallpaper/content. */
+  --task-c-bg: rgba(32, 34, 42, 0.94);
+  --task-c-selected-bg: rgba(72, 78, 94, 0.96);
+  --selected-task-bg-color: rgba(72, 78, 94, 0.96);
+  --sub-task-c-bg: rgba(26, 28, 34, 0.92);
+  --sub-task-c-bg-done: rgba(20, 22, 28, 0.88);
+  --task-c-bg-done: rgba(22, 24, 30, 0.9);
+  /* See light-mode rationale — sticky current task needs an opaque
+   * fill so scrolling tasks underneath don't bleed through. */
+  --task-c-current-bg: color-mix(
+    in srgb,
+    var(--palette-primary-500) 28%,
+    var(--lg-solid-utility-bg)
+  );
+  --task-c-drag-drop-bg: rgba(10, 132, 255, 0.16);
+  --sub-task-c-bg-in-selected: rgba(56, 58, 68, 0.94);
+  --task-detail-bg: rgb(40, 42, 50);
+  --task-detail-bg-hover: rgb(60, 62, 70);
+
+  /* Glass-like translucent fill, faint warm hint preserved */
+  --standard-note-bg: rgba(56, 50, 38, 0.78);
+  --standard-note-bg-hovered: rgba(70, 62, 46, 0.92);
+  --standard-note-fg: rgba(245, 240, 220, 0.96);
+
+  --extra-border-color: rgba(255, 255, 255, 0.1);
+  --separator-color: rgba(255, 255, 255, 0.12);
+  --divider-color: rgba(255, 255, 255, 0.08);
+  --chip-outline-color: rgba(255, 255, 255, 0.18);
+
+  --lg-rim-top: rgba(255, 255, 255, 0.42);
+  --lg-rim-bottom: rgba(0, 0, 0, 0.36);
+  /* Soft dark hairline — was bright white-on-dark which read as
+   * a second border alongside the rim's bottom-dark stop. */
+  --lg-hairline: rgba(255, 255, 255, 0.06);
+  --lg-shine: rgba(255, 255, 255, 0.18);
+
+  /* Dark dual rim — kept low so the white corner halos don't
+   * glare against deep surfaces. The sidenav's edge reads quiet
+   * because it's a sharp top band on a tall surface; on small
+   * surfaces like tasks, blurred corner halos eat a much larger
+   * share of the visible edge, so we halve again here. */
+  --lg-rim-dual:
+    inset 1px 1px 1px 0 rgba(255, 255, 255, 0.1),
+    inset -1px -1px 1px 0 rgba(255, 255, 255, 0.04);
+
+  --lg-rim-quiet:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.06), inset 0 -0.5px 0 rgba(0, 0, 0, 0.24);
+
+  --lg-overlay-bg: rgba(40, 42, 50, 0.42);
+  --lg-mobile-nav-bg: rgba(40, 42, 50, 0.56);
+  --lg-overlay-rim: rgba(255, 255, 255, 0.32);
+
+  /* See light-mode rationale — accent stays from the user's picker. */
+  --c-info: var(--lg-accent);
+  --c-success: #30d158;
+  --c-warning: #ff9f0a;
+  --c-error: #ff453a;
+
+  /* Outer 0.5px hairline added on dark — drop shadows can't lift a
+   * dark surface off a near-black wallpaper, so cards rely on a
+   * subtle perimeter stroke (Apple's iOS Control Center technique)
+   * for boundary definition. Skipped on --task-current-shadow,
+   * which already carries a blue 0.5px ring. */
+  --task-shadow:
+    var(--lg-rim-quiet), 0 1px 2px rgba(0, 0, 0, 0.28),
+    0 0 0 0.5px rgba(255, 255, 255, 0.05);
+  /* See light-mode rationale: sub-tasks inherit the parent's
+   * perimeter and don't need their own edge treatment. */
+  --task-shadow-sub-task: none;
+  --task-current-shadow:
+    var(--lg-rim-dual), 0 2px 6px rgba(0, 0, 0, 0.5),
+    0 10px 26px color-mix(in srgb, var(--palette-primary-500) 20%, transparent),
+    0 0 0 0.5px color-mix(in srgb, var(--palette-primary-500) 20%, transparent);
+  --task-selected-shadow:
+    var(--lg-rim-dual), 0 2px 6px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 0.5px rgba(255, 255, 255, 0.07);
+  --card-shadow:
+    var(--lg-rim-dual), 0 2px 8px rgba(0, 0, 0, 0.4), 0 24px 56px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --banner-shadow:
+    var(--lg-rim-dual), 0 1px 3px rgba(0, 0, 0, 0.28), 0 6px 18px rgba(0, 0, 0, 0.32),
+    0 0 0 0.5px rgba(255, 255, 255, 0.05);
+
+  --close-btn-bg: rgba(255, 255, 255, 0.1);
+  --close-btn-border: transparent;
+  --select-hover-bg: rgba(10, 132, 255, 0.18);
+  --options-border-color: rgba(255, 255, 255, 0.12);
+  --attachment-bg: rgba(40, 42, 50, 0.85);
+  --attachment-border: transparent;
+  --grid-color: rgba(255, 255, 255, 0.06);
+  --progress-bg: rgba(255, 255, 255, 0.12);
+  --schedule-event-bg: rgb(32, 34, 42);
+
+  --hover-controls-border: none;
+  --hover-controls-border-opacity: 0;
+
+  /* White-on-dark overlays read perceptually weaker than the
+   * black-on-light equivalents, so dark mode roughly 1.5–1.6×s
+   * the alphas to keep hover/focus/pressed feedback parity with
+   * light. */
+  --state-hover-alpha: 0.08;
+  --state-focus-alpha: 0.12;
+  --state-pressed-alpha: 0.16;
+}
+
+/* ---------------------------------------------------------
+ * Wallpaper
+ * --------------------------------------------------------- */
+
+body {
+  background: var(--lg-wallpaper) fixed !important;
+  background-attachment: fixed !important;
+  transition:
+    background-color var(--transition-duration-l) var(--lg-ease),
+    color var(--transition-duration-l) var(--lg-ease);
+}
+
+body::before {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------
+ * User-selected wallpaper (.bg-image)
+ *
+ * `.bg-overlay` is a flat white/black scrim layered above
+ * `.bg-image` and below the app. It adds a milky wash that fights
+ * the translucent glass surfaces, so Liquid Glass neutralizes it.
+ *
+ * Wallpaper blur is controlled by the user background image blur
+ * setting, not by this theme.
+ * --------------------------------------------------------- */
+
+body.hasBgImage .bg-overlay {
+  display: none !important;
+}
+
+/* Schedule weekday / week-column headers — bind to a solid surface
+ * so the axis label band reads as a firm divider, not as glass.
+ * Scope `.week-header` to schedule-week: worklog uses the same class
+ * for plain "Week N" headings and should remain unboxed. */
+schedule-week .week-header:not(.isInPanel),
+.weekday-header {
+  background: var(--lg-solid-utility-bg) !important;
+}
+
+worklog .week-header {
+  background: transparent !important;
+}
+
+/* The add-task bar is an input command surface, not decorative glass.
+ * Keep it solid so typed text and suggestions don't float over busy
+ * wallpaper/content. */
+add-task-bar .add-task-container,
+.mat-mdc-autocomplete-panel.add-task-bar-panel {
+  background-color: var(--lg-solid-utility-bg) !important;
+}
+
+/* Task time-badge / repeat-date-badge sits as a small pill on top
+ * of the schedule / alarm icon. Defaults bind it to --card-bg
+ * (light) / --bg-lighter (dark), both translucent in this theme —
+ * so the icon underneath was bleeding through. Pin to a solid
+ * utility surface so the badge reads as a raised label rather
+ * than a recessed hole. */
+.time-badge,
+.repeat-date-badge {
+  background: var(--lg-solid-utility-bg) !important;
+}
+
+/* Respect the "disable colored background tint" setting —
+ * drop the primary-color radials, keep only the soft
+ * neutral base gradient. */
+body.isDisableBackgroundTint {
+  --lg-wallpaper: linear-gradient(180deg, #fafbff 0%, #f3f5fa 100%);
+}
+
+body.isDisableBackgroundTint.isDarkTheme {
+  /* Neutral dark — no color cast since "disable tint" means exactly
+   * that. A flat 1a1a1a → 141414 linear gradient bands visibly on
+   * tall screens (the eye is very sensitive to stripes in deep
+   * shadow), so we layer two off-axis neutral-white radials at very
+   * low alpha to break the linear progression and add ambient depth.
+   * Base values are dropped to ~0d / ~08 so the page feels properly
+   * dark rather than a charcoal mid-grey. */
+  --lg-wallpaper:
+    radial-gradient(
+      ellipse 1400px 900px at 18% -10%,
+      rgba(255, 255, 255, 0.03),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 1100px 800px at 92% 108%,
+      rgba(255, 255, 255, 0.018),
+      transparent 70%
+    ),
+    linear-gradient(180deg, #0d0d0f 0%, #08080a 100%);
+}
+
+/* Small mobile — desktop radial sizes (1400×900 / 1100×800) are
+ * 3–4× a phone viewport and flood the screen with primary tint.
+ * Shrink to viewport-relative ellipses with lower alpha so the
+ * tint reads as a gentle wash instead of a wall of color. */
+@media (max-width: 900px) {
+  body {
+    --lg-wallpaper:
+      radial-gradient(
+        ellipse 80vw 50vh at 18% -10%,
+        color-mix(in srgb, var(--palette-primary-500) 20%, transparent),
+        transparent 65%
+      ),
+      radial-gradient(
+        ellipse 70vw 45vh at 92% 108%,
+        color-mix(in srgb, var(--palette-primary-500) 12%, transparent),
+        transparent 65%
+      ),
+      radial-gradient(
+        ellipse 60vw 40vh at 95% 10%,
+        color-mix(in srgb, var(--palette-primary-500) 7%, transparent),
+        transparent 60%
+      ),
+      linear-gradient(180deg, #fafbff 0%, #f3f5fa 100%);
+  }
+
+  body.isDarkTheme {
+    --lg-wallpaper:
+      radial-gradient(
+        ellipse 80vw 50vh at 18% -10%,
+        color-mix(in srgb, var(--palette-primary-500) 12%, transparent),
+        transparent 65%
+      ),
+      radial-gradient(
+        ellipse 70vw 45vh at 92% 108%,
+        color-mix(in srgb, var(--palette-primary-500) 8%, transparent),
+        transparent 65%
+      ),
+      radial-gradient(
+        ellipse 60vw 40vh at 95% 10%,
+        color-mix(in srgb, var(--palette-primary-500) 5%, transparent),
+        transparent 60%
+      ),
+      linear-gradient(180deg, #0a0d18 0%, #07090f 100%);
+  }
+}
+
+/* ---------------------------------------------------------
+ * Tier A — single unified blur on the main content area.
+ *
+ * Apply backdrop-filter ONCE on `.main-content`, the
+ * container that sits above the bg-image / wallpaper. All
+ * children (header, banner, right-panel, route content,
+ * cards, tasks, notes, etc.) inherit the already-blurred
+ * backdrop through their translucent fills — no per-child
+ * blur, so no visible seam between header and content
+ * and no compounded "milky plastic" look. */
+
+.main-content {
+  backdrop-filter: blur(var(--lg-blur-vibrancy)) saturate(var(--lg-saturate-vibrancy));
+  -webkit-backdrop-filter: blur(var(--lg-blur-vibrancy))
+    saturate(var(--lg-saturate-vibrancy));
+}
+
+/* ---------------------------------------------------------
+ * Side nav as floating glass.
+ *
+ * Apple's Tahoe sidebar is translucent, but calmer than menus
+ * and dialogs. We float it inward from the screen edges to give
+ * the all-corners-rounded, elevated context-menu look the user
+ * wanted.
+ * --------------------------------------------------------- */
+
+/* Filter on the inner .nav-sidenav, not the host. Host
+ * backdrop-filter becomes the containing block for fixed-pos
+ * descendants; on mobile the host is width:0, which collapses
+ * the drawer + backdrop and slides them off-screen on open. */
+magic-side-nav .nav-sidenav,
+side-nav,
+better-drawer-container .side {
+  backdrop-filter: blur(var(--lg-blur-sidebar)) saturate(var(--lg-saturate-sidebar));
+  -webkit-backdrop-filter: blur(var(--lg-blur-sidebar))
+    saturate(var(--lg-saturate-sidebar));
+}
+
+/* Hide the scrollbar entirely on the sidenav.
+ * The default styled scrollbar shows arrow buttons that
+ * Chromium won't reliably hide via CSS, and a visible
+ * scrollbar inside the floating glass panel reads as noisy.
+ * macOS sidebars typically auto-hide when not scrolling. */
+magic-side-nav,
+magic-side-nav * {
+  scrollbar-width: none !important;
+}
+
+magic-side-nav ::-webkit-scrollbar,
+magic-side-nav *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* The host (magic-side-nav) provides the float inset margin
+ * but stays free of overflow:hidden so the resize-handle
+ * (positioned at right: -2px) renders at full 4px width.
+ * The visible bar is the inner .nav-sidenav, which gets the
+ * rounded corners + shadow + overflow clipping directly. */
+magic-side-nav {
+  margin: 8px 0 8px 8px;
+  position: relative;
+  isolation: isolate;
+}
+
+/* On macOS Electron the traffic lights sit at ~y=14–28 in the
+ * frameless title-bar area (`titleBarStyle: hiddenInset`). Push
+ * the panel down so its top edge clears the controls with a
+ * comfortable gap above. */
+body.isMac.isElectron magic-side-nav {
+  margin-top: calc(var(--mac-title-bar-padding) + 12px);
+}
+
+magic-side-nav .nav-sidenav {
+  border-radius: var(--lg-radius-lg);
+  overflow: hidden;
+  /* Softer than dialog/menu shadows — the sidebar is large
+   * so the same numbers read much heavier. */
+  box-shadow:
+    inset 0 1.5px 0 var(--lg-overlay-rim),
+    inset 0 -1px 0 var(--lg-rim-bottom),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 8px 20px rgba(0, 0, 0, 0.08),
+    0 0 0 0.5px var(--lg-hairline);
+}
+
+body.isDarkTheme magic-side-nav .nav-sidenav {
+  box-shadow:
+    inset 0 1.5px 0 var(--lg-overlay-rim),
+    inset 0 -1px 0 var(--lg-rim-bottom),
+    0 2px 8px rgba(0, 0, 0, 0.22),
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    0 0 0 0.5px var(--lg-hairline);
+}
+
+/* Drop the right-edge hairline now that the sidebar is a
+ * floating panel, not a flush-left rail. */
+side-nav,
+better-drawer-container .side {
+  border-right: none !important;
+}
+
+/* Rounder collapse toggle. !important needed because the
+ * component CSS (border-radius: 6px) gets Angular's
+ * view-encapsulation attribute selector, which beats a
+ * plain class selector. */
+magic-side-nav .mode-toggle {
+  border-radius: 10px !important;
+}
+
+/* On macOS Electron we've moved the panel itself below the
+ * title bar via the host margin, so the inner mac-title-bar
+ * padding the component adds to the toggle's `top` would push
+ * it down twice. Match the existing `right: 8px` so the button
+ * sits equidistant from the top and right corners of the panel,
+ * and trim the nav-list padding so items don't fall too far. */
+body.isMac.isElectron magic-side-nav .mode-toggle {
+  top: 8px !important;
+}
+
+body.isMac.isElectron magic-side-nav .nav-list {
+  padding-top: 48px !important;
+}
+
+/* ---------------------------------------------------------
+ * Mobile bottom nav — calm floating glass, iOS-style.
+ *
+ * Floats inset from screen edges with rounded corners,
+ * medium translucency, and a bright rim. It is persistent
+ * navigation, so keep it quieter than dialogs/menus. */
+
+.mobile-bottom-nav {
+  left: 8px !important;
+  right: 8px !important;
+  bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  border-top: none !important;
+  border-radius: var(--lg-radius-lg);
+  background: var(--lg-mobile-nav-bg) !important;
+  backdrop-filter: blur(var(--lg-blur-mobile-nav)) saturate(var(--lg-saturate-mobile-nav));
+  -webkit-backdrop-filter: blur(var(--lg-blur-mobile-nav))
+    saturate(var(--lg-saturate-mobile-nav));
+  box-shadow:
+    inset 0 1.5px 0 var(--lg-overlay-rim),
+    inset 0 -1px 0 var(--lg-rim-bottom),
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.12),
+    0 0 0 0.5px var(--lg-hairline) !important;
+}
+
+body.isDarkTheme .mobile-bottom-nav {
+  box-shadow:
+    inset 0 1.5px 0 var(--lg-overlay-rim),
+    inset 0 -1px 0 var(--lg-rim-bottom),
+    0 4px 16px rgba(0, 0, 0, 0.32),
+    0 14px 36px rgba(0, 0, 0, 0.42),
+    0 0 0 0.5px var(--lg-hairline) !important;
+}
+
+/* Bottom-nav active item — clean rounded pill, no offset.
+ * Default theme uses a tiny negative-Y box-shadow and a
+ * margin-bottom nudge that read as broken on glass. */
+.mobile-bottom-nav .nav-button.active {
+  background: rgba(255, 255, 255, 0.62) !important;
+  box-shadow: none !important;
+  margin-bottom: 0 !important;
+}
+
+body.isDarkTheme .mobile-bottom-nav .nav-button.active {
+  background: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* ---------------------------------------------------------
+ * Bottom-sheet panel — Tier B glass, top-rounded.
+ *
+ * Material bottom sheet is rendered via CDK overlay outside
+ * .main-content, so it gets its own dedicated blur. Keeping
+ * top-only corners (it's anchored to the screen bottom) and
+ * matching dialog/menu translucency. */
+
+.bottom-panel-sheet .mat-bottom-sheet-container {
+  background: var(--lg-overlay-bg) !important;
+  backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate));
+  box-shadow:
+    inset 0 1.5px 0 var(--lg-overlay-rim),
+    0 -2px 12px rgba(0, 0, 0, 0.08),
+    0 -8px 28px rgba(0, 0, 0, 0.1) !important;
+}
+
+body.isDarkTheme .bottom-panel-sheet .mat-bottom-sheet-container {
+  box-shadow:
+    inset 0 1.5px 0 var(--lg-overlay-rim),
+    0 -2px 12px rgba(0, 0, 0, 0.32),
+    0 -10px 32px rgba(0, 0, 0, 0.42) !important;
+}
+
+/* ---------------------------------------------------------
+ * Modal backdrops — replace the dark/light scrim with a
+ * pure blur. Opening a dialog/sheet/menu blurs the app
+ * behind it without dimming or tinting. */
+
+.nav-backdrop-mobile,
+.cdk-overlay-backdrop,
+.cdk-overlay-dark-backdrop,
+.mat-bottom-sheet-backdrop,
+.mat-mdc-dialog-backdrop {
+  background-color: transparent !important;
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+/* Global add-task bar backdrop — command palette feel. Keep only
+ * a small focus blur so the solid input remains the clear focal point. */
+add-task-bar.global + .backdrop {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+  backdrop-filter: blur(3px) saturate(105%);
+  -webkit-backdrop-filter: blur(3px) saturate(105%);
+}
+
+body.isDarkTheme add-task-bar.global + .backdrop {
+  background-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* ---------------------------------------------------------
+ * Tier B — Popovers / Dialogs / Menus / Snackbar.
+ *
+ * Full Liquid Glass material — heavy blur, saturate boost,
+ * highly translucent fill. The wallpaper visibly bleeds
+ * through and tints the surface (the iOS Control Center look).
+ * --------------------------------------------------------- */
+
+.mat-mdc-dialog-surface,
+.mat-mdc-menu-panel,
+.mat-mdc-select-panel,
+.mat-mdc-autocomplete-panel,
+.mat-mdc-snack-bar-container {
+  backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate)) !important;
+  -webkit-backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate)) !important;
+  background-color: var(--lg-overlay-bg) !important;
+}
+
+/* Tier B small chrome (chips, mini-FAB) — full glass at smaller blur */
+.mat-mdc-chip,
+.mat-mdc-mini-fab {
+  backdrop-filter: blur(var(--lg-blur-chrome)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-chrome)) saturate(var(--lg-saturate));
+}
+
+/* ---------------------------------------------------------
+ * Edge model — gradient rim + bottom dark rim + hairline.
+ *
+ * The 1px-ring trick:
+ *   - a linear gradient is painted across the full element
+ *   - mask-composite: exclude clips it to a 1px ring so only
+ *     the rim shows
+ *   - top of gradient is bright, fades through transparent,
+ *     then a faint dark on the bottom edge
+ *   - reads as light arriving from above
+ * --------------------------------------------------------- */
+
+mat-card,
+.mat-mdc-card,
+note,
+banner,
+.banner,
+schedule-event,
+planner-task,
+task .box {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--lg-radius-md);
+}
+
+/* Larger/elevated glass surfaces get their dual inset rim via
+ * --card-shadow / --banner-shadow / selected-current task tokens
+ * (see :root and body.isDarkTheme above). Normal task rows use
+ * --lg-rim-quiet through --task-shadow to keep dense lists calm.
+ * The diagonal gradient ::after is not used anymore — it created
+ * a dark bottom-right stripe that conflicted with hairlines. */
+
+/* Notes and schedule events don't go through our shadow
+ * tokens (note uses --whiteframe-shadow-3dp, schedule-event
+ * uses --whiteframe-shadow-6dp). Apply the quieter row shadow
+ * directly so dense content stays calm. */
+note,
+schedule-event {
+  box-shadow: var(--task-shadow) !important;
+}
+
+/* Sub-task edge model. _task-base.scss:184-194 sets a 4-side
+ * border via --extra-border-color in light mode, which reads as
+ * a card-within-a-card frame on translucent surfaces. We want a
+ * single top-edge separator between siblings instead — same role
+ * as a list divider. --ink-on-channel keeps it mode-correct
+ * (black hairline in light, white in dark) at 0.06 alpha. */
+.sub-tasks .box {
+  border-color: transparent !important;
+  border-top-color: rgba(var(--ink-on-channel), 0.06) !important;
+}
+
+/* Current task fill — applied in both modes. _task-base.scss only
+ * sets a background for the current task in dark mode (light mode
+ * gets only a dashed accent border), but with `position: sticky`
+ * the task floats over scrolling content underneath it; on a
+ * translucent fill that bleed-through is unreadable. The opaque
+ * --task-c-current-bg blend keeps the active state legible while
+ * still picking up the user's primary tint. */
+task.isCurrent.isCurrent .box {
+  background: var(--task-c-current-bg) !important;
+}
+
+/* Drag state — opaque utility surface. The default --bg-lighter /
+ * --bg-lightest tokens that the task component and CDK overlay
+ * use are translucent in this theme, so a dragged card reads as
+ * see-through against the wallpaper. Covers the floating preview
+ * clone, the source task, and the planner/schedule equivalents. */
+.cdk-drag-preview,
+task.isDragReady:not(.cdk-drag-placeholder),
+planner-task.isDragReady:not(.cdk-drag-placeholder) {
+  background: var(--lg-solid-utility-bg) !important;
+}
+
+/* Smooth material state changes. The base task styles only animate
+ * transform + shadow, so selected/current fills snap between glass
+ * recipes. Keep selected task left/right transitions untouched. */
+task:not(.isSelected) .box,
+planner-task {
+  transition-property: transform, box-shadow, background, background-color !important;
+  transition-duration: var(--transition-duration-s) !important;
+  transition-timing-function: var(--lg-ease) !important;
+}
+
+/* ---------------------------------------------------------
+ * Overlay rim — the glowy border on dialogs / menus / popovers.
+ *
+ * Dialog gets the gradient ::before rim (gives a richer look).
+ * Menu / select / autocomplete use inset box-shadows instead —
+ * adding `position: relative` to those panels breaks Material's
+ * CDK overlay positioning, so we use a CSS technique that
+ * doesn't require a positioning context.
+ * --------------------------------------------------------- */
+
+.mat-mdc-dialog-surface {
+  border-radius: var(--lg-radius-lg) !important;
+  position: relative;
+  isolation: isolate;
+}
+
+.mat-mdc-dialog-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    155deg,
+    var(--lg-overlay-rim) 0%,
+    transparent 30%,
+    transparent 70%,
+    var(--lg-rim-bottom) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000, #000) content-box,
+    linear-gradient(#000, #000);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000, #000) content-box,
+    linear-gradient(#000, #000);
+  mask-composite: exclude;
+}
+
+.mat-mdc-menu-panel,
+.mat-mdc-select-panel,
+.mat-mdc-autocomplete-panel {
+  border-radius: var(--lg-radius-lg) !important;
+  /* Inset top highlight + outer ambient shadow.
+   * Inset shadows respect border-radius, so the rim curves
+   * around the corners. No pseudo-element / positioning
+   * context required, so CDK overlay positioning stays intact. */
+  box-shadow:
+    inset 0 1.5px 0 var(--lg-overlay-rim),
+    inset 0 -1px 0 var(--lg-rim-bottom),
+    0 8px 24px rgba(0, 0, 0, 0.18),
+    0 16px 48px rgba(0, 0, 0, 0.22),
+    0 0 0 0.5px var(--lg-hairline) !important;
+}
+
+/* ---------------------------------------------------------
+ * Buttons
+ * --------------------------------------------------------- */
+
+.mat-mdc-button,
+.mat-mdc-outlined-button,
+.mat-mdc-raised-button,
+.mat-mdc-unelevated-button {
+  border-radius: var(--lg-radius-sm) !important;
+  /* Springy ease on press/hover */
+  transition:
+    background-color var(--transition-duration-s) var(--lg-ease),
+    box-shadow var(--transition-duration-s) var(--lg-ease),
+    transform var(--transition-duration-s) var(--lg-ease-spring) !important;
+}
+
+.mat-mdc-button:hover,
+.mat-mdc-outlined-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+body.isDarkTheme .mat-mdc-button:hover,
+body.isDarkTheme .mat-mdc-outlined-button:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* WWDC: glass "instantly flexes" on press */
+.mat-mdc-button:active,
+.mat-mdc-outlined-button:active,
+.mat-mdc-raised-button:active,
+.mat-mdc-unelevated-button:active {
+  transform: scale(0.985);
+}
+
+/* Primary buttons + mini-FAB use a "dual rim" inset highlight
+ * (top-left + bottom-right both bright) — adapted from the
+ * nitnelav CodePen. Gives a pillowy, wet-glass feel that the
+ * standard top-only shine can't.
+ *
+ * Color comes from the user's picker (--palette-primary-500), not
+ * --lg-accent — Apple's system-blue stays reserved for focus rings
+ * and links (the macOS convention) while interactive surfaces follow
+ * the app's chosen identity. The drop-shadow glow is tinted from
+ * the same source via color-mix so it matches whatever primary the
+ * user picked. */
+.mat-mdc-raised-button.mat-primary,
+.mat-mdc-unelevated-button.mat-primary {
+  background-color: var(--palette-primary-500) !important;
+  color: var(--palette-primary-contrast-500) !important;
+  box-shadow:
+    inset 1.5px 1.5px 1px 0 rgba(255, 255, 255, 0.35),
+    inset -1.5px -1.5px 2px 0 rgba(255, 255, 255, 0.2),
+    0 2px 6px color-mix(in srgb, var(--palette-primary-500) 25%, transparent),
+    0 8px 22px color-mix(in srgb, var(--palette-primary-500) 30%, transparent) !important;
+}
+
+.mat-mdc-raised-button.mat-primary:hover,
+.mat-mdc-unelevated-button.mat-primary:hover {
+  background-color: var(--palette-primary-400) !important;
+  box-shadow:
+    inset 1.5px 1.5px 1px 0 rgba(255, 255, 255, 0.4),
+    inset -1.5px -1.5px 2px 0 rgba(255, 255, 255, 0.25),
+    0 3px 8px color-mix(in srgb, var(--palette-primary-500) 30%, transparent),
+    0 12px 28px color-mix(in srgb, var(--palette-primary-500) 36%, transparent) !important;
+}
+
+.mat-mdc-mini-fab {
+  box-shadow:
+    inset 1.5px 1.5px 1px 0 rgba(255, 255, 255, 0.35),
+    inset -1.5px -1.5px 2px 0 rgba(255, 255, 255, 0.2),
+    0 2px 6px rgba(0, 0, 0, 0.14),
+    0 8px 22px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ---------------------------------------------------------
+ * Form fields
+ * --------------------------------------------------------- */
+
+.mat-mdc-form-field .mdc-text-field--outlined {
+  background-color: var(--bg-lightest);
+  border-radius: var(--lg-radius-sm);
+}
+
+.mat-mdc-form-field
+  .mdc-text-field--outlined:not(.mdc-text-field--focused):not(.mdc-text-field--invalid)
+  .mdc-notched-outline__leading,
+.mat-mdc-form-field
+  .mdc-text-field--outlined:not(.mdc-text-field--focused):not(.mdc-text-field--invalid)
+  .mdc-notched-outline__notch,
+.mat-mdc-form-field
+  .mdc-text-field--outlined:not(.mdc-text-field--focused):not(.mdc-text-field--invalid)
+  .mdc-notched-outline__trailing {
+  border-color: var(--extra-border-color);
+}
+
+/* ---------------------------------------------------------
+ * Links
+ * --------------------------------------------------------- */
+
+a,
+body a[href],
+body.isDarkTheme a[href] {
+  color: var(--c-accent);
+  text-decoration: none;
+  transition: opacity var(--transition-duration-xs) var(--lg-ease);
+}
+
+a:hover,
+body a[href]:hover,
+body.isDarkTheme a[href]:hover {
+  opacity: 0.8;
+}
+
+/* ---------------------------------------------------------
+ * Header
+ *
+ * Drop the scroll separator line — with glass surfaces a
+ * 1px bottom border reads as a hard divider; the elevation
+ * shadow on cards is enough visual separation. */
+
+.header-wrapper {
+  border-color: transparent !important;
+}
+
+/* The component adds `padding-top: calc(--mac-title-bar-padding
+ * - 8px)` on the main-header host for Mac+Electron, giving the
+ * header a thicker top inset than on other platforms. With
+ * `titleBarStyle: hiddenInset` AppKit positions the traffic
+ * lights for us, so this theme drops the extra inset to keep the
+ * header flush — matching the look on Linux/Windows. */
+body.isMac.isElectron main-header {
+  padding-top: 0 !important;
+}
+
+/* ---------------------------------------------------------
+ * Focus ring
+ * --------------------------------------------------------- */
+
+*:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------
+ * Scrollbars
+ * --------------------------------------------------------- */
+
+/* Theme-specific thumb color. Buttons / track are handled
+ * globally now in src/styles/components/scrollbars.scss. */
+.isNoMac ::-webkit-scrollbar-thumb,
+.isNoTouchOnly ::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
+  background-color: rgba(60, 60, 67, 0.3) !important;
+  border-radius: 999px !important;
+}
+
+body.isDarkTheme ::-webkit-scrollbar-thumb,
+body.isDarkTheme.isNoMac ::-webkit-scrollbar-thumb,
+body.isDarkTheme.isNoTouchOnly ::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* ---------------------------------------------------------
+ * Accessibility & performance fallbacks
+ *
+ * prefers-reduced-transparency: macOS / iOS "Reduce
+ *   Transparency" accessibility setting. Drop all
+ *   translucency to solid surfaces.
+ *
+ * @supports not (backdrop-filter): older browsers — surfaces
+ *   stay translucent but without live blur.
+ * --------------------------------------------------------- */
+
+@media (prefers-reduced-transparency: reduce) {
+  body {
+    background: linear-gradient(180deg, #eef2f8 0%, #e6ecf4 100%) !important;
+    --card-bg: #ffffff;
+    --sidenav-bg: #f5f7fa;
+    --task-c-bg: #ffffff;
+    --task-c-selected-bg: #f0f3f7;
+    --selected-task-bg-color: #f0f3f7;
+    --banner-bg: #ffffff;
+    --task-detail-bg: #ffffff;
+    --right-panel-bg: #ffffff;
+    --schedule-event-bg: #ffffff;
+  }
+  body.isDarkTheme {
+    background: linear-gradient(180deg, #0d1018 0%, #0a0c12 100%) !important;
+    --card-bg: #1a1c22;
+    --sidenav-bg: #14161c;
+    --task-c-bg: #1a1c22;
+    --task-c-selected-bg: #242831;
+    --selected-task-bg-color: #242831;
+    --banner-bg: #1a1c22;
+    --task-detail-bg: #1a1c22;
+    --right-panel-bg: #1a1c22;
+    --schedule-event-bg: #1a1c22;
+  }
+  *,
+  *::before,
+  *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  :root {
+    --card-bg: rgba(255, 255, 255, 0.92);
+    --task-c-bg: rgba(255, 255, 255, 0.92);
+    --sidenav-bg: rgba(255, 255, 255, 0.92);
+  }
+  body.isDarkTheme {
+    --card-bg: rgba(40, 42, 50, 0.95);
+    --task-c-bg: rgba(50, 52, 60, 0.92);
+    --sidenav-bg: rgba(20, 22, 28, 0.95);
+  }
+}

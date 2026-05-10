@@ -16,6 +16,16 @@ beforeAll(async () => {
 });
 
 describe('Google Calendar Plugin', () => {
+  describe('OAuth config', () => {
+    it('does not expose a browser web OAuth client', () => {
+      const oauthField = definition.configFields.find((field) => field.key === 'oauth');
+      const oauthConfig = oauthField?.oauthConfig as Record<string, unknown>;
+
+      expect(oauthConfig.webClientId).toBeUndefined();
+      expect(oauthConfig.webClientSecret).toBeUndefined();
+    });
+  });
+
   describe('fieldMappings', () => {
     const ctx = { issueId: 'event-1' };
 
@@ -309,7 +319,7 @@ describe('Google Calendar Plugin', () => {
       expect(body.start.date).toBeDefined();
       expect(body.end.date).toBeDefined();
       expect(body.start.dateTime).toBeUndefined();
-      expect(result.issueId).toBe('new-event-1');
+      expect(result.issueId).toBe('test-cal::new-event-1');
     });
   });
 });

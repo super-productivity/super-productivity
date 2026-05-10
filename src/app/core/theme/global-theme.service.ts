@@ -44,7 +44,6 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { SafeArea } from 'capacitor-plugin-safe-area';
 import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
-import { CustomThemeService } from './custom-theme.service';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 
@@ -79,7 +78,6 @@ export class GlobalThemeService {
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _imexMetaService = inject(ImexViewService);
   private _http = inject(HttpClient);
-  private _customThemeService = inject(CustomThemeService);
   private _platformService = inject(CapacitorPlatformService);
   private _environmentInjector = inject(EnvironmentInjector);
   private _destroyRef = inject(DestroyRef);
@@ -151,9 +149,6 @@ export class GlobalThemeService {
         const darkMode = this.darkMode();
         localStorage.setItem(LS.DARK_MODE, darkMode);
       });
-
-      // Set up reactive custom theme updates
-      this._setupCustomThemeEffect();
     });
   }
 
@@ -464,23 +459,6 @@ export class GlobalThemeService {
           scales: {},
         };
     chartThemeService.setColorschemesOptions(overrides);
-  }
-
-  private _setupCustomThemeEffect(): void {
-    // Track previous theme to avoid unnecessary reloads
-    let previousThemeId: string | null = null;
-
-    // Set up effect to reactively update custom theme when config changes
-    effect(() => {
-      const misc = this._globalConfigService.misc();
-      const themeId = misc?.customTheme || 'default';
-
-      // Only load theme if it has changed
-      if (themeId !== previousThemeId) {
-        this._customThemeService.loadTheme(themeId);
-        previousThemeId = themeId;
-      }
-    });
   }
 
   /**

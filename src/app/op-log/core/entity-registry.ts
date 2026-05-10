@@ -373,6 +373,19 @@ export const getEntityConfig = (entityType: EntityType): EntityConfig | undefine
 export const getPayloadKey = (entityType: EntityType): string | undefined =>
   ENTITY_CONFIGS[entityType]?.payloadKey;
 
+/**
+ * Sentinel `entityId` value used for singleton entities (`globalConfig`,
+ * `metric`, etc.). These have no per-entity primary key, so the op-log
+ * uses `'*'` to denote "the one and only" instance.
+ *
+ * Used wherever singleton ops need to be distinguished from adapter ops,
+ * e.g. when conditionally injecting `id` into LWW payloads.
+ */
+export const SINGLETON_ENTITY_ID = '*' as const;
+
+export const isSingletonEntityId = (entityId: string | null | undefined): boolean =>
+  entityId === SINGLETON_ENTITY_ID;
+
 export const isAdapterEntity = (config: EntityConfig): boolean =>
   config.storagePattern === 'adapter';
 

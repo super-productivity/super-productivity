@@ -17,6 +17,8 @@
 <div
   #gridContainer
   class="grid-container"
+  [style.--schedule-row-height]="scheduleRowHeightCss()"
+  [style.--schedule-row-height-mobile]="scheduleRowHeightMobileCss()"
   (click)="onGridClick($event)"
   (mousemove)="onMoveOverGrid($event)"
 >

@@ -1,2 +1,4 @@
-export const CLIENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
-export const MAX_CLIENT_ID_LENGTH = 255;
+export {
+  SUPER_SYNC_CLIENT_ID_REGEX as CLIENT_ID_REGEX,
+  SUPER_SYNC_MAX_CLIENT_ID_LENGTH as MAX_CLIENT_ID_LENGTH,
+} from '@sp/shared-schema';

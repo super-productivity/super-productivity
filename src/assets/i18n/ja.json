@@ -7,7 +7,9 @@
     },
     "B_OFFLINE": "インターネットに接続していません。課題プロバイダーデータの同期と要求は機能しません。",
     "CONTEXT_MENU": {
-      "CHANGE_BACKGROUND": "変更の背景"
+      "CHANGE_BACKGROUND": "変更の背景",
+      "CHANGE_PROJECT_SETTINGS": "プロジェクト設定を変更",
+      "CHANGE_TAG_SETTINGS": "タグ設定を変更"
     },
     "UPDATE_WEB_APP": "新しいバージョンがあります。新しいバージョンをロードしますか？",
     "SKIP_SYNC_WAIT": "同期の待機をスキップ"
@@ -24,7 +26,8 @@
     "RELOAD_AFTER_IDB_ERROR": "データベースにアクセスできません:(考えられる原因は、バックグラウンドでのアプリの更新またはディスク容量の不足です。[OK]を押してアプリをリロードします（一部のプラットフォームではアプリを手動で再起動する必要がある場合があります）。",
     "RESTORE_FILE_BACKUP": "データがないようですが、「{{dir}}」で利用可能なバックアップがあります。 {{from}}から最新のバックアップを復元しますか？",
     "RESTORE_FILE_BACKUP_ANDROID": "データがないようですが、利用可能なバックアップがあります。ロードしますか？",
-    "RESTORE_STRAY_BACKUP": "最後の同期中に、エラーが発生した可能性があります。最後のバックアップを復元しますか？"
+    "RESTORE_STRAY_BACKUP": "最後の同期中に、エラーが発生した可能性があります。最後のバックアップを復元しますか？",
+    "DELETE_SECTION": "このセクションを削除しますか？含まれるタスクはタスクリストに移動されます。"
   },
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "保存するにはもう一度Enterキーを押してください"
@@ -69,7 +72,8 @@
           "IMG": "画像（サムネイル表示）",
           "LINK": "リンク（ブラウザで開きます）"
         }
-      }
+      },
+      "LOCAL_FILE_UNAVAILABLE": "この添付ファイルは、追加されたデバイスでのみ利用できます。"
     },
     "BOARDS": {
       "DEFAULT": {
@@ -96,7 +100,22 @@
         "TASK_DONE_STATE": "タスク完了状態",
         "TASK_DONE_STATE_ALL": "すべての",
         "TASK_DONE_STATE_DONE": "完成です",
-        "TASK_DONE_STATE_UNDONE": "取り消す"
+        "TASK_DONE_STATE_UNDONE": "取り消す",
+        "SORT_BY": "並び替え",
+        "SORT_BY_CREATED": "作成日",
+        "SORT_BY_DUE": "期限",
+        "SORT_BY_MANUAL": "手動",
+        "SORT_BY_TIME_ESTIMATE": "時間見積もり",
+        "SORT_BY_TITLE": "タイトル",
+        "SORT_DIR": "方向",
+        "SORT_DIR_ASC": "昇順",
+        "SORT_DIR_DESC": "降順",
+        "TAGS_EXCLUDED_MATCH_ALL": "すべて一致する場合のみ除外（AND）",
+        "TAGS_EXCLUDED_MATCH_ANY": "いずれかが一致する場合に除外（OR）",
+        "TAGS_EXCLUDED_MATCH_MODE": "除外ラベルの一致条件",
+        "TAGS_MATCH_ALL": "すべて一致（AND）",
+        "TAGS_MATCH_ANY": "いずれか一致（OR）",
+        "TAGS_MATCH_MODE": "必須ラベルの一致条件"
       },
       "V": {
         "ADD_NEW_BOARD": "新しいボードを追加",
@@ -124,7 +143,8 @@
         "TWO_WAY_SYNC_PUSH_ONLY": "送信のみ (CalDAVへ書き込み)",
         "TWO_WAY_SYNC_SECTION": "双方向同期 (実験的)",
         "TWO_WAY_SYNC_STATUS": "ステータスの同期方向",
-        "TWO_WAY_SYNC_TITLE": "タイトルの同期方向"
+        "TWO_WAY_SYNC_TITLE": "タイトルの同期方向",
+        "IS_ADD_SUB_TASKS": "タスクが追加されたときにサブタスクもインポートする"
       },
       "FORM_SECTION": {
         "HELP": "<p>ここでは、SuperProductivityを構成して、特定のプロジェクトの未完了のCalDavタスクを日次計画ビューのタスク作成パネルに一覧表示できます。それらは提案としてリストされ、todoへのリンクとそれに関する詳細情報を提供します。</p> <p>さらに、未完了のすべてのToDoをタスクバックログに自動的に追加して同期することができます。</p>"
@@ -162,7 +182,18 @@
         "EVENTS_STR": "イベント"
       },
       "S": {
-        "CAL_PROVIDER_ERROR": "カレンダー プロバイダー エラー: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "カレンダー プロバイダー エラー: {{errTxt}}",
+        "CAL_PROVIDER_NOT_ICAL": "カレンダーURLからiCalデータが返されませんでした。共有リンクの期限切れ、取り消し、またはサインインが必要な可能性があります。新しい共有URLを生成してください。",
+        "EVENT_HIDDEN": "カレンダーイベントを非表示にしました",
+        "EVENT_RESCHEDULED": "イベントを再スケジュールしました",
+        "EVENT_DELETED": "イベントを削除しました",
+        "TIME_BLOCK_ERROR": "時間ブロックの同期に失敗しました: {{errTxt}}"
+      },
+      "CONTEXT_MENU": {
+        "CREATE_TASK": "タスクとして作成",
+        "OPEN_IN_CALENDAR": "カレンダーで開く",
+        "RESCHEDULE": "再スケジュール",
+        "DELETE_EVENT": "イベントを削除"
       }
     },
     "CONFIG": {
@@ -197,7 +228,15 @@
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "今日のリストには、まだアーカイブに移動されていない {{nr}} の完了したタスクがあります。あなたは本当にあなたの一日を終えることなくやめたいですか？"
+        "FINISH_DAY_BEFORE_EXIT": "今日のリストには、まだアーカイブに移動されていない {{nr}} の完了したタスクがあります。あなたは本当にあなたの一日を終えることなくやめたいですか？",
+        "DONT_QUIT": "終了しない",
+        "FINISH_DAY": "一日を終了",
+        "QUIT": "終了",
+        "TITLE": "終了する前に一日を終了しますか？",
+        "UNARCHIVED_TASKS": {
+          "ONE": "今日リストの完了済みタスク 1 件はまだアーカイブに移動されていません。",
+          "OTHER": "今日リストの完了済みタスク {{nr}} 件はまだアーカイブに移動されていません。"
+        }
       }
     },
     "FOCUS_MODE": {
@@ -212,7 +251,8 @@
         "END_SESSION": "セッションを終了",
         "PAUSE": "一時停止",
         "RESUME": "再開",
-        "START": "開始"
+        "START": "開始",
+        "SESSION_OVERTIME": "セッション時間を超過しました。準備ができたら休憩してください"
       },
       "BACK_TO_PLANNING": "計画に戻る",
       "BREAK_RELAX_MSG": "少しリラックスしてください",
@@ -260,7 +300,8 @@
       "RESET_CYCLES": "セッションカウンターをリセット",
       "RESUME_BREAK": "休憩を再開",
       "SELECT_TASK_FIRST": "トラッキングを開始するにはタスクを選択してください",
-      "START_BREAK": "休憩を開始"
+      "START_BREAK": "休憩を開始",
+      "OVERTIME_MSG": "時間です。準備ができたら休憩してください"
     },
     "GITEA": {
       "FORM": {
@@ -271,7 +312,11 @@
         "SCOPE_ALL": "全て",
         "SCOPE_ASSIGNED": "私に割り当てられた",
         "SCOPE_CREATED": "私が作った",
-        "TOKEN": "アクセストークン"
+        "TOKEN": "アクセストークン",
+        "EXCLUDE_LABELS": "ラベルを除外（任意）",
+        "EXCLUDE_LABELS_DESCRIPTION": "カンマ区切りのラベル名リストです。これらのいずれかのラベルが付いた課題は除外されます。",
+        "FILTER_LABELS": "ラベルで絞り込み（任意）",
+        "FILTER_LABELS_DESCRIPTION": "カンマ区切りのラベル名リストです。これらすべてのラベルが付いた課題のみ同期されます。空のままにすると、範囲に一致するすべての課題を同期します。"
       },
       "FORM_SECTION": {
         "HELP": "<p>ここで SuperProductivity を設定し、日次計画ビューのタスク作成パネルで特定のリポジトリに対して未解決の Gitea 課題を一覧表示させることができます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報が提供されます。</p> <p>さらに、すべてのオープン課題を自動的に追加してインポートすることもできます。</p><p>利用制限を通過してアクセスするには、アクセストークンを提供することができます。"
@@ -383,11 +428,29 @@
         "CONNECTION_FAILED": "接続に失敗しました",
         "CONNECTION_SUCCESS": "接続に成功しました！",
         "PLUGIN_NOT_INSTALLED": "必要なプラグイン「{{pluginName}}」がインストールされていません。",
-        "TWO_WAY_SYNC_PUSH_FAILED": "双方向同期の送信に失敗しました: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "双方向同期の送信に失敗しました: {{errorMsg}}",
+        "OAUTH_FAILED_WITH_DETAIL": "認証に失敗しました: {{detail}}",
+        "DELETE_REMOTE_FAILED": "リモート課題を削除できませんでした",
+        "LOAD_OPTIONS_FAILED": "{{fieldKey}} のオプションを読み込めませんでした",
+        "OAUTH_CONNECTED": "OAuthアカウントを接続しました。",
+        "OAUTH_DISCONNECTED": "OAuthアカウントを切断しました。",
+        "OAUTH_FAILED": "認証に失敗しました。",
+        "REMOTE_ISSUE_DELETED": "リモート課題は削除されました。リンクされたタスク「{{taskTitle}}」を削除しますか？",
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "リモート課題は削除されましたが、タスク「{{taskTitle}}」には記録済み時間があります。それでも削除しますか？"
       },
       "DIALOG": {
         "ADVANCED_CONFIG": "詳細設定",
-        "DELETE_CONFIRM": "この課題プロバイダーを削除してもよろしいですか？削除すると、<strong>以前にインポートされたすべての課題タスクの参照が失われます</strong>。この操作は取り消せません！"
+        "DELETE_CONFIRM": "この課題プロバイダーを削除してもよろしいですか？削除すると、<strong>以前にインポートされたすべての課題タスクの参照が失われます</strong>。この操作は取り消せません！",
+        "CONNECTED": "接続済み",
+        "DISCONNECT": "切断",
+        "EDIT_TITLE": "{{title}} の設定を編集",
+        "LOAD_OPTIONS": "オプションを読み込む",
+        "LOAD_OPTIONS_FAILED": "オプションを読み込めませんでした",
+        "LOADING_OPTIONS": "オプションを読み込み中...",
+        "OPTIONS_LOADED": "オプションを読み込みました",
+        "RELOAD_OPTIONS": "オプションを再読み込み",
+        "SETUP_TITLE": "{{title}} を設定",
+        "TEST_CONNECTION": "接続をテスト"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "新しいタスクの課題を自動作成",
@@ -399,7 +462,20 @@
         "PUSH_ONLY": "送信のみ",
         "SECTION": "双方向同期 (実験的)",
         "STATUS": "ステータスの同期方向",
-        "TITLE": "タイトルの同期方向"
+        "TITLE": "タイトルの同期方向",
+        "DUE_DAY": "期限日",
+        "DUE_WITH_TIME": "期限日時",
+        "TIME_ESTIMATE": "時間見積もり"
+      },
+      "DEFAULT_NOTE_LABEL": "インポートしたタスクの既定メモ",
+      "DEFAULT_TAGS_LABEL": "インポートしたタスクの既定タグ",
+      "FORM": {
+        "AUTO_ADD_TO_BACKLOG": "既定プロジェクトに自動インポート（既定プロジェクトが必要）",
+        "AUTO_POLL": "インポート済み項目の変更を確認して通知",
+        "POLLING_MODE": "ポーリングのトリガー",
+        "POLLING_MODE_DESCRIPTION": "ポーリングのタイミング: 関連するプロジェクトまたはタグを開いている間のみ、または常にバックグラウンドで",
+        "POLLING_MODE_WHEN_PROJECT_OPEN": "コンテキストが開いているとき",
+        "POLLING_MODE_ALWAYS": "常に（バックグラウンド）"
       }
     },
     "ISSUE_PANEL": {
@@ -888,7 +964,14 @@
       "LUNCH_BREAK": "昼休み",
       "MONTH": "月",
       "NO_TASKS": "現在タスクがありません。上部バーのプラス (+) ボタンからタスクを追加してください。",
-      "NOW": "今"
+      "NOW": "今",
+      "CALENDAR_VISIBILITY": "カレンダーの表示",
+      "NEXT_MONTH": "翌月",
+      "NEXT_WEEK": "翌週",
+      "PREVIOUS_MONTH": "前月",
+      "PREVIOUS_WEEK": "前週",
+      "VIEW_MONTH": "月表示",
+      "VIEW_WEEK": "週表示"
     },
     "SEARCH_BAR": {
       "INFO": "リストアイコンをクリックして、アーカイブされたタスクを検索します",
@@ -946,7 +1029,8 @@
       },
       "BTN_SYNC_NOW": "今すぐ同期",
       "C": {
-        "FORCE_UPLOAD": "とにかくローカルデータをアップロードしますか？"
+        "FORCE_UPLOAD": "とにかくローカルデータをアップロードしますか？",
+        "DECRYPT_OVERWRITE": "これにより、サーバー上の暗号化データがこのデバイスのローカルコピーで置き換えられ、新しいパスワードで再暗号化されます。他のすべてのデバイスでは、パスワードを再入力して置き換えられたデータをダウンロードする必要があります。それらのデバイス上の未同期の変更は完全に失われます。続行しますか？"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "次のリンクを開き、そこに提供されている認証コードを下の入力フィールドにコピーしてください。",
@@ -954,7 +1038,8 @@
         "L_AUTH_CODE": "認証コードを入力してください",
         "TITLE": "ログイン： {{provider}}",
         "FOLLOW_LINK_MOBILE": "下のボタンをタップして認証してください。自動的にアプリに戻ります。",
-        "WAITING_FOR_AUTH": "認証を待っています..."
+        "WAITING_FOR_AUTH": "認証を待っています...",
+        "MANUAL_URL_HINT": "ブラウザーが開きませんでしたか？このURLを手動でコピーしてください:"
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "追加情報",
@@ -1162,6 +1247,12 @@
           "SETUP_ENCRYPTION_BTN": "パスワードを設定",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "すべてのデバイスで同じパスワードを使用してください。忘れたパスワードはリモートデータの上書きでリセットできます。",
           "SETUP_ENCRYPTION_TITLE": "SuperSync: パスワードを設定"
+        },
+        "NEXTCLOUD": {
+          "L_SERVER_URL": "NextcloudサーバーURL",
+          "SERVER_URL_DESCRIPTION": "例: https://cloud.example.com または https://example.com/nextcloud",
+          "L_APP_PASSWORD": "アプリパスワード",
+          "APP_PASSWORD_DESCRIPTION": "Nextcloud → 設定 → セキュリティ → アプリパスワードで生成してください"
         }
       },
       "S": {
@@ -1175,7 +1266,7 @@
         "SUCCESS_VIA_BUTTON": "データが正常に同期されました",
         "UNKNOWN_ERROR": "同期中に不明なエラーが発生しました。コンソールを確認してください。",
         "ARCHIVE_OPERATION_FAILED": "アーカイブ操作に失敗しました。一部のクリーンアップが完了していない可能性があります。",
-        "AUTH_SETUP_FAILED": "認証の設定に失敗しました。Webアプリを使用している場合は、HTTPSでアクセスしていることを確認してください。それ以外の場合は、安定版をお試しいただくか、バグとして報告してください。",
+        "AUTH_SETUP_FAILED": "認証の設定に失敗しました。もう一度お試しください。Webアプリを使用している場合は、HTTPSでアクセスしていることを確認してください。問題が続く場合はバグとして報告してください。",
         "AUTH_TOKEN_REJECTED": "同期トークンがサーバーに拒否されました: {{reason}}。新しいトークンを取得してください。",
         "CHANGE_PASSWORD_FAILED": "パスワードの変更に失敗しました: {{message}}",
         "CLOCK_DRIFT_WARNING": "デバイスの時計が{{minutes}}分ずれているようです。同期に問題が発生する可能性があります。",
@@ -1230,7 +1321,14 @@
         "VECTOR_CLOCK_LIMIT_REACHED": "同期が{{originalSize}}台のデバイス/ブラウザーを追跡しており、{{maxSize}}の制限を超えています。非アクティブなデバイスエントリーが削除されました。問題が発生した場合は同期のリセットを検討してください。",
         "VERSION_TOO_OLD": "アプリのバージョンが同期データに対して古すぎます。アップデートしてください！",
         "VERSION_UNSUPPORTED": "同期できません: データにはより新しいアプリバージョンが必要です。アップデートしてください。",
-        "WEB_CRYPTO_NOT_AVAILABLE": "このデバイスでは暗号化を利用できません。Androidでは、暗号化にはHTTPSによるセキュアなコンテキストが必要ですが、利用できません。同期設定で暗号化を無効にするか、デスクトップWebブラウザーから同期してください。"
+        "WEB_CRYPTO_NOT_AVAILABLE": "このデバイスでは暗号化を利用できません。Androidでは、暗号化にはHTTPSによるセキュアなコンテキストが必要ですが、利用できません。同期設定で暗号化を無効にするか、デスクトップWebブラウザーから同期してください。",
+        "ERROR_REMOTE_FILE_CORRUPTED": "リモート同期データを読み取れません（切り詰められているか破損している可能性があります）。ローカルデータは安全です。ローカルデータでリモートを上書きできます。",
+        "ERROR_REMOTE_FILE_EMPTY": "リモート同期ファイルが空です。同期が中断された後に発生することがあります。ローカルデータでリモートを上書きしますか？",
+        "ERROR_REMOTE_FILE_LOCKED": "リモート同期ファイルはサーバーによってロックされています。次回の同期試行で解決する可能性があります。",
+        "ERROR_SYNC_VERSION_MISMATCH": "リモート同期データは互換性のない形式バージョンを使用しています。すべてのデバイスで同じバージョンのSuper Productivityを実行してください。",
+        "WARN_CLIENT_ID_REGENERATED": "同期デバイスIDが無効だったため再生成されました。次回の同期で競合が発生する可能性があります。",
+        "LEGACY_FORMAT_DETECTED": "同期形式が一致しません: リモートストレージは、異なる同期形式を使用する古いアプリバージョン（v16.x以前）によって最後に書き込まれました。すべてのデバイスを同じアプリバージョンに更新してください。「強制上書き」は、レガシーファイルの横に新しい形式を書き込むことでこのデバイスのブロックを解除します。古いデバイスがこのリモートに今後同期しない場合にのみ使用してください。そうしないと、それらのデバイスはこのデバイスと静かに分岐します。",
+        "SYNC_VALIDATION_FAILED": "同期後の状態検証に失敗しました。一部のデータに不整合がある可能性があります。"
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "すべてクリア",
@@ -1351,7 +1449,8 @@
         "L_COLOR": "色（未定義のプライマリテーマの色が使用されている場合）",
         "L_ICON": "アイコン",
         "L_TITLE": "タグ名",
-        "TITLE": "基本設定"
+        "TITLE": "基本設定",
+        "D_COLOR": "未設定の場合、テーマのプライマリカラーが既定で使用されます。"
       },
       "S": {
         "UPDATED": "タグ設定が更新されました",
@@ -1466,7 +1565,10 @@
         "UPDATE_ISSUE_DATA": "課題データを更新",
         "EDIT_DEADLINE": "期限を編集",
         "REMOVE_DEADLINE": "期限を削除",
-        "SET_DEADLINE": "期限を設定"
+        "SET_DEADLINE": "期限を設定",
+        "CLEAR_ESTIMATE": "見積もりをクリア",
+        "CUSTOM_ESTIMATE": "カスタム…",
+        "ESTIMATE": "見積もり"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "新しいタグ {{tagsTxt}}を作成しますか？",
@@ -1677,9 +1779,24 @@
         "Q_MONTHLY_FIRST_DAY": "毎月初日",
         "Q_MONTHLY_LAST_DAY": "毎月末日",
         "SKIP_OVERDUE": "期限超過のインスタンスをスキップ",
-        "SKIP_OVERDUE_DESCRIPTION": "有効にすると、予定された実行日を逃した後にアプリを開いた場合 (例: 今日が予定日でない週次タスク)、逃したインスタンスは期限超過タスクとして作成されず、静かにスキップされます"
+        "SKIP_OVERDUE_DESCRIPTION": "有効にすると、予定された実行日を逃した後にアプリを開いた場合 (例: 今日が予定日でない週次タスク)、逃したインスタンスは期限超過タスクとして作成されず、静かにスキップされます",
+        "MONTHLY_MODE_DAY_OF_MONTH": "日付",
+        "ORD_FIRST": "第1",
+        "ORD_FOURTH": "第4",
+        "ORD_LAST": "最後",
+        "ORD_SECOND": "第2",
+        "ORD_THIRD": "第3",
+        "Q_MONTHLY_NTH_WEEKDAY": "毎月{{ordinalStr}}の{{weekdayStr}}",
+        "WEEK_OF_MONTH": "月内の週",
+        "WEEKDAY": "曜日",
+        "SKIP_FOR_DATE": "{{date}} をスキップ",
+        "SKIP_INSTANCE": "今日はスキップ"
       },
-      "SNACK_REPEAT_DIALOG_FAIL": "繰り返し設定ダイアログを開けませんでした。タスクメニューから設定できます。"
+      "SNACK_REPEAT_DIALOG_FAIL": "繰り返し設定ダイアログを開けませんでした。タスクメニューから設定できます。",
+      "D_SKIP_INSTANCE": {
+        "MSG": "{{date}} の繰り返しタスクをスキップしますか？この日だけタスクが作成されなくなります。",
+        "OK": "スキップ"
+      }
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1716,7 +1833,17 @@
         "TIME_2HOUR": "> 2時間",
         "TIME_10MIN": "> 10分間",
         "TIME_30MIN": ">30分",
-        "TIME_SPENT": "滞在時間"
+        "TIME_SPENT": "滞在時間",
+        "DEADLINE_NEXT_MONTH": "来月が期限",
+        "DEADLINE_NEXT_WEEK": "来週が期限",
+        "DEADLINE_THIS_MONTH": "今月が期限",
+        "DEADLINE_THIS_WEEK": "今週が期限",
+        "DEADLINE_TODAY": "今日が期限",
+        "DEADLINE_TOMORROW": "明日が期限",
+        "FILTER_DEADLINE": "期限",
+        "GROUP_DEADLINE": "期限",
+        "GROUP_DEADLINE_NONE": "期限なし",
+        "SORT_DEADLINE": "期限"
       }
     },
     "TIME_TRACKING": {
@@ -1790,7 +1917,8 @@
         "WEEK_NR": "{{nr}}週目",
         "WORKED": "消費時間",
         "RESTORE_TASK_FROM_ARCHIVE": "アーカイブからタスクを復元",
-        "VIEW_TASK_DETAILS": "タスクの詳細を表示"
+        "VIEW_TASK_DETAILS": "タスクの詳細を表示",
+        "WEEK_NR_SHORT": "{{nr}}週"
       },
       "D_CONFIRM_RESTORE": "タスク <strong>\"{{title}}\"</strong> を今日のタスクリストに移動しますか？",
       "D_EXPORT_TITLE": "作業ログのエクスポート {{start}} - {{end}}",
@@ -1939,7 +2067,9 @@
     "PASSWORD_STRENGTH_WEAK": "弱い",
     "PROCESSING": "処理中",
     "SHARE": "共有",
-    "TOGGLE_PASSWORD_VISIBILITY": "パスワードの表示/非表示を切り替え"
+    "TOGGLE_PASSWORD_VISIBILITY": "パスワードの表示/非表示を切り替え",
+    "COMMENT": "コメント",
+    "OPEN_IN_BROWSER": "ブラウザーで開く"
   },
   "GCF": {
     "AUTO_BACKUPS": {
@@ -1953,7 +2083,11 @@
       "CAL_PATH": "ICalソースのURL",
       "CHECK_UPDATES": "リモートのアップデートを毎X回チェックする",
       "HELP": "カレンダーを統合してリマインドしたり、Super Productivity内でタスクとして追加することができます。統合はiCal形式を使用して動作します。この機能を使用するには、カレンダーにインターネット経由またはファイルシステム経由でアクセスできる必要があります。",
-      "SHOW_BANNER_THRESHOLD": "イベント前に通知Xを表示（無効は空白）"
+      "SHOW_BANNER_THRESHOLD": "イベント前に通知Xを表示（無効は空白）",
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "今日のイベントをタスクとして自動インポート",
+      "CAL_COLOR": "カレンダーの色",
+      "DISABLE_FOR_WEB_APP": "Webアプリ使用時は無効にする",
+      "REFERENCE_CALENDAR": "参照カレンダー（表示のみ、タスク作成なし）"
     },
     "EVALUATION": {
       "IS_HIDE_EVALUATION_SHEET": "日次サマリーの評価シートを非表示",
@@ -1967,7 +2101,12 @@
       "L_MANUAL_BREAK_START": "手動で休憩を開始 (ポモドーロ)",
       "L_PAUSE_TRACKING_DURING_BREAK": "休憩中のタスクトラッキングを一時停止",
       "L_START_IN_BACKGROUND": "集中セッションをバナーのみで開始 (オーバーレイなし)",
-      "L_SYNC_SESSION_WITH_TRACKING": "集中セッションを時間トラッキングと同期"
+      "L_SYNC_SESSION_WITH_TRACKING": "集中セッションを時間トラッキングと同期",
+      "L_AUTO_START_FOCUS_ON_PLAY": "タスクの計測を開始したらフォーカスセッションを開始する",
+      "FOCUS_MODE_SOUND_OFF": "オフ",
+      "FOCUS_MODE_SOUND_TICK": "チクタク音",
+      "FOCUS_MODE_SOUND_WHITE_NOISE": "ホワイトノイズ",
+      "L_FOCUS_MODE_SOUND": "フォーカスセッション中の環境音"
     },
     "IDLE": {
       "HELP": "<div><p>アイドル時間処理が有効になっていると、アイドル時間が経過したときに、どのタスクで時間を追跡するかを確認するために、指定した時間が経過した後にダイアログが開きます。</p></div>",
@@ -2034,7 +2173,8 @@
       "ZOOM_DEFAULT": "ズームのデフォルト（デスクトップのみ）",
       "ZOOM_IN": "ズームイン（デスクトップのみ）",
       "ZOOM_OUT": "ズームアウト（デスクトップのみ）",
-      "TASK_UNSCHEDULE": "タスクのスケジュールを解除"
+      "TASK_UNSCHEDULE": "タスクのスケジュールを解除",
+      "TASK_OPEN_NOTES_FULLSCREEN": "メモ/チェックリストを全画面で開く"
     },
     "LANG": {
       "AR": "عربى",
@@ -2085,7 +2225,8 @@
       "RO_MD": "Română (Moldova)",
       "SV": "Svenska",
       "TIME_LOCALE_RO_MD": "ルーマニア語 (モルドバ): 24時間, DD.MM.YYYY",
-      "TIME_LOCALE_RO_RO": "ルーマニア語: 24時間, DD.MM.YYYY"
+      "TIME_LOCALE_RO_RO": "ルーマニア語: 24時間, DD.MM.YYYY",
+      "TIME_LOCALE_PL_PL": "ポーランド語: 24時間制、DD.MM.YYYY"
     },
     "MISC": {
       "DARK_MODE": "ダークモード",
@@ -2112,7 +2253,15 @@
       "TITLE": "その他の設定",
       "DEFAULT_START_PAGE": "デフォルトのスタートページ",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "カスタムタイトルバーを使用する (Windows/Linuxのみ)",
-      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "有効にするには再起動が必要です。"
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "有効にするには再起動が必要です。",
+      "THEME_INSTALL_BUTTON": "テーマをインストール…",
+      "THEME_INSTALL_TOOLTIP": "CSSテーマファイルをアップロードします。テーマは見た目だけを変更し、コードを実行することはありませんが、データの表示方法には影響する可能性があります。信頼できる提供元のテーマのみをインストールしてください。",
+      "THEME_INSTALLED_WITH_WARNINGS": "テーマをインストールしました。不足しているトークン: {{tokens}}",
+      "THEME_INVALID_CSS_FILE": "テーマをインストールできませんでした: CSSファイルが無効または安全ではありません。",
+      "THEME_REMOVE_BUTTON": "テーマを削除",
+      "THEME_REMOVED_TOAST": "テーマを削除しました。既定に戻しました。",
+      "IS_LOCAL_REST_API_ENABLED": "ローカルREST APIを有効にする（デスクトップのみ）",
+      "IS_LOCAL_REST_API_ENABLED_HINT": "ローカルスクリプトが http://127.0.0.1:3876 経由で実行中のアプリを操作できるようにします。このコンピューターで実行中の任意のアプリケーションが、タスクを読み取ったり変更したりできるようになります。"
     },
     "POMODORO": {
       "BREAK_DURATION": "短い休憩時間",
@@ -2220,7 +2369,10 @@
       "TITLE": "アプリ機能",
       "USER_PROFILES": "ユーザープロフィール (実験的 — 削除される可能性があります)",
       "USER_PROFILES_HINT": "異なるユーザープロフィールを作成して切り替えることができます。各プロフィールには個別の設定、タスク、同期設定があります。有効にすると、プロフィール管理ボタンが右上に表示されます。注意: この機能を無効にするとUIは非表示になりますが、プロフィールデータは保持されます。(実験的機能。保証なし。バックアップを取ってください！)",
-      "USER_PROFILES_WARNING": "<strong>実験的機能:</strong> この機能はまだ開発中であり、将来のアップデートで削除または大幅に変更される可能性があります。自己責任でご使用いただき、データのバックアップを取ってください。"
+      "USER_PROFILES_WARNING": "<strong>実験的機能:</strong> この機能はまだ開発中であり、将来のアップデートで削除または大幅に変更される可能性があります。自己責任でご使用いただき、データのバックアップを取ってください。",
+      "FINISH_DAY": "一日を終了",
+      "EXPERIMENTAL_WARNING_TITLE": "実験的な機能",
+      "EXPERIMENTAL_WARNING_MSG": "この機能は実験的です。不具合がある、今後大きく変更される、または将来の更新で削除される可能性があります。データのバックアップを必ず保持してください。<br/><br/>有効にしますか？"
     },
     "CLIPBOARD_IMAGES": {
       "DELETE": "画像を削除",
@@ -2251,6 +2403,12 @@
       "TITLE": "クリップボード画像",
       "TOTAL_IMAGES": "合計画像数",
       "TOTAL_SIZE": "合計サイズ"
+    },
+    "TASK_WIDGET": {
+      "TITLE": "タスクウィジェット",
+      "IS_ENABLED": "タスクウィジェットを有効にする",
+      "IS_ALWAYS_SHOW": "タスクウィジェットを常に表示（メインウィンドウが表示されている場合も）",
+      "OPACITY": "タスクウィジェットの不透明度"
     }
   },
   "GLOBAL_RELATIVE_TIME": {
@@ -2367,7 +2525,8 @@
     "SHOW_TRACKED_TASK": "トラッキング中のタスクを表示",
     "TASK_LIST": "タスクリスト",
     "TASKS": "タスク",
-    "TOGGLE_SHOW_BOOKMARKS": "ブックマークの表示/非表示"
+    "TOGGLE_SHOW_BOOKMARKS": "ブックマークの表示/非表示",
+    "ADD_SECTION": "セクションを追加"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "レガシーデータのバックアップをダウンロードしますか(古いバージョンのSuper Productivityで使用できます)?",
@@ -2536,7 +2695,9 @@
     "UNABLE_TO_PERSIST_DATA": "プラグインストレージにデータを保存できません",
     "UNKNOWN_ERROR": "不明なエラーが発生しました",
     "UPLOAD_PLUGIN_INSTRUCTION": "プラグインZIPファイルをアップロードしてインストール:",
-    "VALIDATION_FAILED": "検証に失敗しました"
+    "VALIDATION_FAILED": "検証に失敗しました",
+    "ICON_TOO_LARGE": "プラグインアイコンが大きすぎます（最大 {{maxSize}}KB）",
+    "INDEX_HTML_TOO_LARGE": "プラグインのindex.htmlが大きすぎます（最大 {{maxSize}}KB）"
   },
   "PM": {
     "TITLE": "プロジェクトメトリクス",
@@ -2562,7 +2723,14 @@
       "TIME_TRACKING": "時間とトラッキング"
     },
     "TOGGLE_DARK_MODE": "ダークモードを切り替え",
-    "UPDATE_APP": "アプリを更新"
+    "UPDATE_APP": "アプリを更新",
+    "SYNC": {
+      "CONFIGURE": "設定",
+      "EMPTY_STATE_HINT": "Dropbox、WebDAV、Nextcloud、またはローカルファイルでデータを同期します。",
+      "ENCRYPTED": "暗号化済み",
+      "NEEDS_AUTH": "認証が必要",
+      "SET_UP_SYNC": "同期を設定"
+    }
   },
   "SCHEDULE": {
     "NEXT": "次に",
@@ -2575,7 +2743,9 @@
     "LAST": "最後:",
     "NO_DEADLINES": "現在期限付きのタスクはありません。タスクのコンテキストメニューまたは詳細パネルから期限を設定できます。",
     "START_TASK": "タスクを開始してリマインダーを削除",
-    "TASKS_WITH_DEADLINES": "期限付きタスク"
+    "TASKS_WITH_DEADLINES": "期限付きタスク",
+    "NO_SCHEDULED_FOR_DAY": "特定の日に予定されたタスクはまだありません。タスクを右クリックして「スケジュール」を選ぶと、日にちを指定できます。",
+    "NO_SCHEDULED_WITH_TIME": "開始時刻付きで予定されたタスクはまだありません。タスクを右クリックして「スケジュール」を選ぶと、具体的な時刻を設定できます。"
   },
   "USER_PROFILES": {
     "ACTIVE": "アクティブ",
@@ -2592,7 +2762,8 @@
     "PROFILE_NAME": "プロファイル名",
     "PROFILE_NAME_PLACEHOLDER": "例：仕事、個人",
     "RENAME": "名前を変更",
-    "SAVE": "保存"
+    "SAVE": "保存",
+    "DEPRECATION_WARNING": "実験的なユーザープロファイル機能は将来の更新で削除されます。バックアップとしてプロファイルデータをエクスポートしてください。"
   },
   "V": {
     "E_DATETIME": "入力された値は日時ではありません",
@@ -2624,7 +2795,10 @@
     "WORKING_TODAY": "今日：",
     "WORKING_TODAY_ARCHIVED": "アーカイブされたタスクの今日の作業時間",
     "LATER_TODAY": "今日の後で",
-    "RECURRING_TASKS": "繰り返しタスク"
+    "RECURRING_TASKS": "繰り返しタスク",
+    "ADD_SECTION_TITLE": "セクションを追加",
+    "SECTION_OPTIONS": "セクションオプション",
+    "NO_TASKS_IN_MAIN_LIST": "すべてのタスクはセクションに整理されています"
   },
   "DONATE_PAGE": {
     "BUTTON_TEXT": "GitHub Sponsorsで寄付する",
@@ -2661,5 +2835,13 @@
     "SELECT_THEME": "テーマを選択",
     "teal": "ティール",
     "yellow": "イエロー"
+  },
+  "DIALOG_LOGS": {
+    "COPY": "コピー",
+    "HINT": "このセッションのログです。短いログはコピーしてバグ報告に貼り付け、完全なファイルを送る場合はファイル共有を使用してください。",
+    "S_COPY_FAILED": "ログをクリップボードにコピーできませんでした",
+    "S_SHARE_FAILED": "ログを共有できませんでした",
+    "SHARE_FILE": "ファイルを共有",
+    "TITLE": "ログ"
   }
 }

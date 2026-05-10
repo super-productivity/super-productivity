@@ -272,6 +272,8 @@ PluginAPI.registerIssueProvider({
         clientSecret: CLIENT_SECRET,
         mobileClientId: MOBILE_CLIENT_ID,
         iosClientId: IOS_CLIENT_ID,
+        // Intentionally no webClientId: durable Google Calendar web OAuth
+        // requires a confidential client secret, which browser JS cannot keep.
         scopes: [CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE],
         extraAuthParams: { access_type: 'offline', prompt: 'consent' },
       },

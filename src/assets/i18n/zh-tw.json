@@ -7,7 +7,9 @@
     },
     "B_OFFLINE": "您已斷開與網際網路的連接。同步和資料請求將失效。",
     "CONTEXT_MENU": {
-      "CHANGE_BACKGROUND": "更改背景"
+      "CHANGE_BACKGROUND": "更改背景",
+      "CHANGE_PROJECT_SETTINGS": "變更專案設定",
+      "CHANGE_TAG_SETTINGS": "變更標籤設定"
     },
     "SKIP_SYNC_WAIT": "跳過同步等待",
     "UPDATE_WEB_APP": "有可用的新版本。是否載入新版本？"
@@ -24,7 +26,8 @@
     "RELOAD_AFTER_IDB_ERROR": "資料庫錯誤 - 應用程式即將重新啟動\n\nSuper Productivity 無法儲存資料！這通常是由以下原因造成的：\n• 硬碟空間不足（最常見）\n• 應用程式在背景更新\n• Linux Snap 使用者：請執行 'snap set core experimental.refresh-app-awareness=true'\n\n您最近的變更可能尚未儲存。如果硬碟空間不足，請釋放空間。關閉此對話方塊後應用程式將重新啟動。",
     "RESTORE_FILE_BACKUP": "似乎沒有資料，但是\"{{dir}}\"處有可用的備份。您是否要從 {{from}} 恢復最新備份？",
     "RESTORE_FILE_BACKUP_ANDROID": "似乎沒有資料，但是有可用備份。是否要從備份載入？",
-    "RESTORE_STRAY_BACKUP": "在上次同步期間，可能有一些錯誤。您要還原上一個備份嗎？"
+    "RESTORE_STRAY_BACKUP": "在上次同步期間，可能有一些錯誤。您要還原上一個備份嗎？",
+    "DELETE_SECTION": "確定要刪除此區段嗎？其中的任務會移到任務清單。"
   },
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "再次按 Enter 以儲存"
@@ -74,7 +77,8 @@
           "IMG": "圖像（顯示為縮圖）",
           "LINK": "連結（在瀏覽器中打開）"
         }
-      }
+      },
+      "LOCAL_FILE_UNAVAILABLE": "此附件僅可在新增它的裝置上使用。"
     },
     "BOARDS": {
       "DEFAULT": {
@@ -101,7 +105,22 @@
         "TASK_DONE_STATE": "工作完成狀態",
         "TASK_DONE_STATE_ALL": "全部",
         "TASK_DONE_STATE_DONE": "完成",
-        "TASK_DONE_STATE_UNDONE": "未完成"
+        "TASK_DONE_STATE_UNDONE": "未完成",
+        "SORT_BY": "排序依據",
+        "SORT_BY_CREATED": "建立時間",
+        "SORT_BY_DUE": "到期日",
+        "SORT_BY_MANUAL": "手動",
+        "SORT_BY_TIME_ESTIMATE": "時間估算",
+        "SORT_BY_TITLE": "標題",
+        "SORT_DIR": "方向",
+        "SORT_DIR_ASC": "升冪",
+        "SORT_DIR_DESC": "降冪",
+        "TAGS_EXCLUDED_MATCH_ALL": "僅在全部相符時排除（AND）",
+        "TAGS_EXCLUDED_MATCH_ANY": "任一相符時排除（OR）",
+        "TAGS_EXCLUDED_MATCH_MODE": "排除標籤相符方式",
+        "TAGS_MATCH_ALL": "符合全部（AND）",
+        "TAGS_MATCH_ANY": "符合任一（OR）",
+        "TAGS_MATCH_MODE": "必要標籤相符方式"
       },
       "V": {
         "ADD_NEW_BOARD": "新增看板",
@@ -129,7 +148,8 @@
         "TWO_WAY_SYNC_PUSH_ONLY": "僅推送（寫入 CalDAV）",
         "TWO_WAY_SYNC_SECTION": "雙向同步（實驗性）",
         "TWO_WAY_SYNC_STATUS": "狀態同步方向",
-        "TWO_WAY_SYNC_TITLE": "標題同步方向"
+        "TWO_WAY_SYNC_TITLE": "標題同步方向",
+        "IS_ADD_SUB_TASKS": "新增任務時也匯入子任務"
       },
       "FORM_SECTION": {
         "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定專案的未完成 CalDAV 待辦事項。它們將作為建議列出，並提供待辦事項的連結以及更多相關資訊。</p> <p>此外，您可以自動新增並同步所有未完成的待辦事項到您的工作待辦事項。</p><p>要在網頁應用程式中讓 Nextcloud 運作，您可能需要透過 Nextcloud 應用程式 <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a> 將 \"https://app.super-productivity.com\" 加入白名單。</p>"
@@ -167,7 +187,18 @@
         "EVENTS_STR": "事件"
       },
       "S": {
-        "CAL_PROVIDER_ERROR": "行事曆提供者錯誤：{{errTxt}}"
+        "CAL_PROVIDER_ERROR": "行事曆提供者錯誤：{{errTxt}}",
+        "CAL_PROVIDER_NOT_ICAL": "行事曆 URL 未傳回 iCal 資料。分享連結可能已過期、被撤銷或需要登入，請嘗試產生新的分享 URL。",
+        "EVENT_HIDDEN": "行事曆事件已隱藏",
+        "EVENT_RESCHEDULED": "事件已重新排程",
+        "EVENT_DELETED": "事件已刪除",
+        "TIME_BLOCK_ERROR": "同步時間區塊失敗：{{errTxt}}"
+      },
+      "CONTEXT_MENU": {
+        "CREATE_TASK": "建立為任務",
+        "OPEN_IN_CALENDAR": "在行事曆中開啟",
+        "RESCHEDULE": "重新排程",
+        "DELETE_EVENT": "刪除事件"
       }
     },
     "CLIPBOARD_IMAGE": {
@@ -207,7 +238,15 @@
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "您今天的清單中有 {{nr}} 個已完成的工作尚未移至封存。您真的要在未完成今天的工作就退出嗎？"
+        "FINISH_DAY_BEFORE_EXIT": "您今天的清單中有 {{nr}} 個已完成的工作尚未移至封存。您真的要在未完成今天的工作就退出嗎？",
+        "DONT_QUIT": "不要退出",
+        "FINISH_DAY": "結束一天",
+        "QUIT": "退出",
+        "TITLE": "退出前要結束今天嗎？",
+        "UNARCHIVED_TASKS": {
+          "ONE": "你的「今天」清單中有 1 個已完成任務尚未移至封存。",
+          "OTHER": "你的「今天」清單中有 {{nr}} 個已完成任務尚未移至封存。"
+        }
       }
     },
     "FOCUS_MODE": {
@@ -222,7 +261,8 @@
         "RESUME": "繼續",
         "SESSION_RUNNING": "專注時段進行中",
         "START": "開始",
-        "TO_FOCUS_OVERLAY": "前往專注覆蓋層"
+        "TO_FOCUS_OVERLAY": "前往專注覆蓋層",
+        "SESSION_OVERTIME": "工作階段已超時，準備好時請休息一下"
       },
       "BACK_TO_PLANNING": "返回規劃",
       "BREAK_RELAX_MSG": "花點時間放鬆",
@@ -270,7 +310,8 @@
       "START_FOCUS_SESSION": "開始專注時段",
       "START_NEXT_FOCUS_SESSION": "開始下一個專注時段",
       "SWITCH_TASK": "切換工作",
-      "WORKED_FOR": "您已工作了"
+      "WORKED_FOR": "您已工作了",
+      "OVERTIME_MSG": "時間到了，準備好時請休息一下"
     },
     "GITEA": {
       "FORM": {
@@ -281,7 +322,11 @@
         "SCOPE_ALL": "全部",
         "SCOPE_ASSIGNED": "指派給我",
         "SCOPE_CREATED": "由我建立",
-        "TOKEN": "存取權杖"
+        "TOKEN": "存取權杖",
+        "EXCLUDE_LABELS": "排除標籤（選填）",
+        "EXCLUDE_LABELS_DESCRIPTION": "以逗號分隔的標籤名稱清單。含有其中任一標籤的議題將被排除。",
+        "FILTER_LABELS": "依標籤篩選（選填）",
+        "FILTER_LABELS_DESCRIPTION": "以逗號分隔的標籤名稱清單。只會同步含有所有這些標籤的議題。留空則同步符合範圍的所有議題。"
       },
       "FORM_SECTION": {
         "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 Gitea 議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動新增和匯入所有開放議題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。"
@@ -353,7 +398,17 @@
       "DEFAULT_PROJECT_LABEL": "預設 Super Productivity 專案",
       "DIALOG": {
         "ADVANCED_CONFIG": "進階設定",
-        "DELETE_CONFIRM": "您確定要刪除此議題提供者嗎？刪除後，<strong>所有先前匯入的議題任務將失去其參考</strong>。此操作無法復原！"
+        "DELETE_CONFIRM": "您確定要刪除此議題提供者嗎？刪除後，<strong>所有先前匯入的議題任務將失去其參考</strong>。此操作無法復原！",
+        "CONNECTED": "已連線",
+        "DISCONNECT": "中斷連線",
+        "EDIT_TITLE": "編輯 {{title}} 設定",
+        "LOAD_OPTIONS": "載入選項",
+        "LOAD_OPTIONS_FAILED": "載入選項失敗",
+        "LOADING_OPTIONS": "正在載入選項...",
+        "OPTIONS_LOADED": "選項已載入",
+        "RELOAD_OPTIONS": "重新載入選項",
+        "SETUP_TITLE": "設定 {{title}}",
+        "TEST_CONNECTION": "測試連線"
       },
       "HOW_TO_GET_A_TOKEN": "如何取得權杖？",
       "ISSUE_CONTENT": {
@@ -397,7 +452,15 @@
         "PLUGIN_NOT_INSTALLED": "必要的外掛「{{pluginName}}」未安裝。",
         "POLLING_BACKLOG": "{{issueProviderName}}：輪詢新的{{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}：輪詢{{issuesStr}}的變更",
-        "TWO_WAY_SYNC_PUSH_FAILED": "雙向同步推送失敗：{{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "雙向同步推送失敗：{{errorMsg}}",
+        "OAUTH_FAILED_WITH_DETAIL": "驗證失敗：{{detail}}",
+        "DELETE_REMOTE_FAILED": "刪除遠端議題失敗",
+        "LOAD_OPTIONS_FAILED": "載入 {{fieldKey}} 的選項失敗",
+        "OAUTH_CONNECTED": "OAuth 帳戶已成功連線。",
+        "OAUTH_DISCONNECTED": "OAuth 帳戶已中斷連線。",
+        "OAUTH_FAILED": "驗證失敗。",
+        "REMOTE_ISSUE_DELETED": "遠端議題已被刪除。要刪除連結的任務「{{taskTitle}}」嗎？",
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "遠端議題已被刪除，但任務「{{taskTitle}}」已有追蹤時間。仍要刪除嗎？"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "自動為新任務建立議題",
@@ -409,7 +472,20 @@
         "PUSH_ONLY": "僅推送",
         "SECTION": "雙向同步（實驗性）",
         "STATUS": "狀態同步方向",
-        "TITLE": "標題同步方向"
+        "TITLE": "標題同步方向",
+        "DUE_DAY": "到期日",
+        "DUE_WITH_TIME": "到期日期/時間",
+        "TIME_ESTIMATE": "時間估算"
+      },
+      "DEFAULT_NOTE_LABEL": "匯入任務的預設備註",
+      "DEFAULT_TAGS_LABEL": "匯入任務的預設標籤",
+      "FORM": {
+        "AUTO_ADD_TO_BACKLOG": "自動匯入到預設專案（需要預設專案）",
+        "AUTO_POLL": "輪詢匯入項目的變更並通知",
+        "POLLING_MODE": "輪詢觸發條件",
+        "POLLING_MODE_DESCRIPTION": "何時輪詢：僅在相關專案或標籤開啟時，或一律在背景中",
+        "POLLING_MODE_WHEN_PROJECT_OPEN": "當內容開啟時",
+        "POLLING_MODE_ALWAYS": "一律（背景）"
       }
     },
     "ISSUE_PANEL": {
@@ -925,7 +1001,14 @@
       "PLAN_END_DAY": "{{date}} 結束",
       "PLAN_START_DAY": "{{date}} 開始",
       "SHIFT_KEY_INFO": "按住 Shift 鍵切換日期規劃模式",
-      "START": "工作開始"
+      "START": "工作開始",
+      "CALENDAR_VISIBILITY": "行事曆可見性",
+      "NEXT_MONTH": "下個月",
+      "NEXT_WEEK": "下週",
+      "PREVIOUS_MONTH": "上個月",
+      "PREVIOUS_WEEK": "上週",
+      "VIEW_MONTH": "查看月份",
+      "VIEW_WEEK": "查看週"
     },
     "SEARCH_BAR": {
       "INFO": "開始輸入以搜尋工作",
@@ -984,7 +1067,8 @@
       "BTN_RESTORE_FROM_HISTORY": "從歷史記錄還原",
       "BTN_SYNC_NOW": "立即同步",
       "C": {
-        "FORCE_UPLOAD": "強制上傳您的資料可能導致資料遺失。您確定要繼續嗎？"
+        "FORCE_UPLOAD": "強制上傳您的資料可能導致資料遺失。您確定要繼續嗎？",
+        "DECRYPT_OVERWRITE": "這會以此裝置的本機副本取代伺服器上的加密資料，並使用新密碼重新加密。所有其他裝置都需要重新輸入密碼並下載被取代的資料。這些裝置上任何未同步的變更都會永久遺失。要繼續嗎？"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "請開啟以下連結，並將其中提供的驗證碼複製到下方的輸入欄中。",
@@ -992,7 +1076,8 @@
         "GET_AUTH_CODE": "取得驗證碼",
         "L_AUTH_CODE": "輸入驗證碼",
         "TITLE": "登入：{{provider}}",
-        "WAITING_FOR_AUTH": "等待驗證中..."
+        "WAITING_FOR_AUTH": "等待驗證中...",
+        "MANUAL_URL_HINT": "瀏覽器沒有開啟？請手動複製此 URL："
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "額外資訊",
@@ -1273,12 +1358,18 @@
           "S_FILL_ALL_FIELDS": "請先填寫所有 WebDAV 欄位",
           "S_TEST_FAIL": "連線測試失敗：{{error}} - 目標網址：{{url}}",
           "S_TEST_SUCCESS": "連線測試成功！目標網址：{{url}}"
+        },
+        "NEXTCLOUD": {
+          "L_SERVER_URL": "Nextcloud 伺服器 URL",
+          "SERVER_URL_DESCRIPTION": "例如 https://cloud.example.com 或 https://example.com/nextcloud",
+          "L_APP_PASSWORD": "應用程式密碼",
+          "APP_PASSWORD_DESCRIPTION": "前往 Nextcloud → 設定 → 安全性 → 應用程式密碼來產生一個"
         }
       },
       "S": {
         "ALREADY_IN_SYNC": "已在同步中",
         "ARCHIVE_OPERATION_FAILED": "封存操作失敗。部分清理可能未完成。",
-        "AUTH_SETUP_FAILED": "驗證設定失敗。如果您使用網頁應用程式，請確保透過 HTTPS 存取。否則，請嘗試穩定版本或回報此問題。",
+        "AUTH_SETUP_FAILED": "驗證設定失敗。請再試一次。如果你使用的是 Web 應用程式，請確保透過 HTTPS 存取。如果問題持續發生，請將其作為錯誤回報。",
         "AUTH_TOKEN_REJECTED": "同步權杖被伺服器拒絕：{{reason}}。請取得新的權杖。",
         "BTN_CONFIGURE": "配置",
         "BTN_FORCE_OVERWRITE": "強制覆寫",
@@ -1341,7 +1432,14 @@
         "VECTOR_CLOCK_LIMIT_REACHED": "同步已追蹤 {{originalSize}} 個裝置/瀏覽器，超過 {{maxSize}} 的限制。非活躍裝置的紀錄已被清除。如果您遇到問題，請考慮重設同步。",
         "VERSION_TOO_OLD": "您的應用程式版本對於同步資料而言太舊。請更新！",
         "VERSION_UNSUPPORTED": "無法同步：資料需要較新的應用程式版本。請更新。",
-        "WEB_CRYPTO_NOT_AVAILABLE": "此裝置不支援加密。在 Android 上，加密需要安全環境（HTTPS），但目前不可用。請在同步設定中停用加密或從桌面瀏覽器同步。"
+        "WEB_CRYPTO_NOT_AVAILABLE": "此裝置不支援加密。在 Android 上，加密需要安全環境（HTTPS），但目前不可用。請在同步設定中停用加密或從桌面瀏覽器同步。",
+        "ERROR_REMOTE_FILE_CORRUPTED": "遠端同步資料無法讀取（可能被截斷或損毀）。你的本機資料是安全的。你可以用本機資料覆寫遠端資料。",
+        "ERROR_REMOTE_FILE_EMPTY": "遠端同步檔案是空的。這可能發生在同步中斷之後。要用本機資料覆寫遠端資料嗎？",
+        "ERROR_REMOTE_FILE_LOCKED": "遠端同步檔案被伺服器鎖定。下次嘗試同步時可能會解決。",
+        "ERROR_SYNC_VERSION_MISMATCH": "遠端同步資料使用不相容的格式版本。請確保所有裝置都執行相同版本的 Super Productivity。",
+        "WARN_CLIENT_ID_REGENERATED": "同步裝置 ID 無效，已重新產生。下次同步時可能會發生同步衝突。",
+        "LEGACY_FORMAT_DETECTED": "同步格式不相符：遠端儲存上次是由較舊的應用程式版本（v16.x 或更早）寫入，該版本使用不同的同步格式。請將所有裝置更新到相同的應用程式版本。「強制覆寫」會在舊版檔案旁寫入新格式以解除此裝置的阻塞；只有在沒有舊裝置會再同步到此遠端位置時才使用，否則它們會與此裝置悄悄分歧。",
+        "SYNC_VALIDATION_FAILED": "同步後狀態驗證失敗。部分資料可能不一致。"
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "清除全部",
@@ -1388,7 +1486,8 @@
         "L_COLOR": "顏色（預設使用主體色）",
         "L_ICON": "圖示",
         "L_TITLE": "標籤名稱",
-        "TITLE": "基本設定"
+        "TITLE": "基本設定",
+        "D_COLOR": "未設定時，預設使用主題的主要顏色。"
       },
       "S": {
         "ARCHIVE_CLEANUP_FAILED": "清理已刪除標籤的封存資料失敗",
@@ -1503,7 +1602,10 @@
         "TRACK_TIME": "開始追蹤時間",
         "TRACK_TIME_STOP": "暫停追蹤時間",
         "UNSCHEDULE_TASK": "取消排程工作",
-        "UPDATE_ISSUE_DATA": "更新議題資料"
+        "UPDATE_ISSUE_DATA": "更新議題資料",
+        "CLEAR_ESTIMATE": "清除估算",
+        "CUSTOM_ESTIMATE": "自訂…",
+        "ESTIMATE": "估算"
       },
       "D_CONFIRM_DELETE": {
         "MSG": "您確定要刪除任務「{{title}}」嗎？",
@@ -1714,9 +1816,24 @@
         "THURSDAY": "星期四",
         "TITLE": "工作標題",
         "TUESDAY": "星期二",
-        "WEDNESDAY": "星期三"
+        "WEDNESDAY": "星期三",
+        "MONTHLY_MODE_DAY_OF_MONTH": "每月日期",
+        "ORD_FIRST": "第一個",
+        "ORD_FOURTH": "第四個",
+        "ORD_LAST": "最後一個",
+        "ORD_SECOND": "第二個",
+        "ORD_THIRD": "第三個",
+        "Q_MONTHLY_NTH_WEEKDAY": "每月的{{ordinalStr}}{{weekdayStr}}",
+        "WEEK_OF_MONTH": "每月第幾週",
+        "WEEKDAY": "星期幾",
+        "SKIP_FOR_DATE": "跳過 {{date}}",
+        "SKIP_INSTANCE": "今天跳過"
       },
-      "SNACK_REPEAT_DIALOG_FAIL": "無法開啟重複設定對話方塊。您可以從任務選單中設定。"
+      "SNACK_REPEAT_DIALOG_FAIL": "無法開啟重複設定對話方塊。您可以從任務選單中設定。",
+      "D_SKIP_INSTANCE": {
+        "MSG": "要跳過 {{date}} 的重複任務嗎？這只會阻止該任務在這一天建立。",
+        "OK": "跳過"
+      }
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1753,7 +1870,17 @@
         "TIME_2HOUR": "> 2 小時",
         "TIME_10MIN": "> 10 分鐘",
         "TIME_30MIN": "> 30 分鐘",
-        "TIME_SPENT": "已用時間"
+        "TIME_SPENT": "已用時間",
+        "DEADLINE_NEXT_MONTH": "下個月到期",
+        "DEADLINE_NEXT_WEEK": "下週到期",
+        "DEADLINE_THIS_MONTH": "本月到期",
+        "DEADLINE_THIS_WEEK": "本週到期",
+        "DEADLINE_TODAY": "今天到期",
+        "DEADLINE_TOMORROW": "明天到期",
+        "FILTER_DEADLINE": "到期日",
+        "GROUP_DEADLINE": "到期日",
+        "GROUP_DEADLINE_NONE": "無到期日",
+        "SORT_DEADLINE": "到期日"
       }
     },
     "TIME_TRACKING": {
@@ -1827,7 +1954,8 @@
         "TOTAL_TIME": "總花費時間：",
         "VIEW_TASK_DETAILS": "檢視任務詳情",
         "WEEK_NR": "第 {{nr}} 週",
-        "WORKED": "已完成"
+        "WORKED": "已完成",
+        "WEEK_NR_SHORT": "第{{nr}}週"
       },
       "D_CONFIRM_RESTORE": "您確定要將工作 <strong>「{{title}}」</strong> 移動到今天的工作列表中嗎？",
       "D_EXPORT_TITLE": "匯出 {{start}}–{{end}} 工作日誌",
@@ -1944,7 +2072,9 @@
     "TOGGLE_PASSWORD_VISIBILITY": "切換密碼可見性",
     "UNDO": "復原",
     "WITHOUT_PROJECT": "無專案",
-    "YESTERDAY": "昨天"
+    "YESTERDAY": "昨天",
+    "COMMENT": "留言",
+    "OPEN_IN_BROWSER": "在瀏覽器中開啟"
   },
   "GCF": {
     "APP_FEATURES": {
@@ -1964,7 +2094,10 @@
       "TITLE": "應用程式功能",
       "USER_PROFILES": "使用者檔案（實驗性 — 可能會被移除）",
       "USER_PROFILES_HINT": "允許您建立並在不同使用者檔案之間切換，每個檔案具有獨立的設定、工作和同步組態。啟用後，右上角將顯示檔案管理按鈕。注意：停用此功能將隱藏使用者介面但保留您的檔案資料。（實驗性功能，無保證。請務必備份！）",
-      "USER_PROFILES_WARNING": "<strong>實驗性功能：</strong>此功能仍在開發中，未來更新中可能會被移除或大幅變更。使用風險自負，請確保保留資料備份。"
+      "USER_PROFILES_WARNING": "<strong>實驗性功能：</strong>此功能仍在開發中，未來更新中可能會被移除或大幅變更。使用風險自負，請確保保留資料備份。",
+      "FINISH_DAY": "結束一天",
+      "EXPERIMENTAL_WARNING_TITLE": "實驗性功能",
+      "EXPERIMENTAL_WARNING_MSG": "此功能為實驗性功能。它可能有錯誤、發生重大變更，或在未來更新中移除。請務必保留資料備份。<br/><br/>要啟用它嗎？"
     },
     "AUTO_BACKUPS": {
       "HELP": "自動將所有資料儲存到您的應用程式資料夾，以便在出問題時可以使用。",
@@ -1977,7 +2110,11 @@
       "CAL_PATH": "iCal 來源的網址",
       "CHECK_UPDATES": "每 X 檢查遠端更新一次",
       "HELP": "您可以整合行事曆以在 Super Productivity 中收到提醒並將其新增為工作。此整合使用 iCal 格式運作。為此，您的行事曆必須可透過網際網路或檔案系統存取。",
-      "SHOW_BANNER_THRESHOLD": "在事件前 X 顯示通知（留空則停用）"
+      "SHOW_BANNER_THRESHOLD": "在事件前 X 顯示通知（留空則停用）",
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "自動將當天事件匯入為任務",
+      "CAL_COLOR": "行事曆顏色",
+      "DISABLE_FOR_WEB_APP": "使用 Web 應用程式時停用",
+      "REFERENCE_CALENDAR": "參考行事曆（僅顯示，不建立任務）"
     },
     "CLIPBOARD_IMAGES": {
       "DELETE": "刪除圖片",
@@ -2021,7 +2158,12 @@
       "L_SKIP_PREPARATION_SCREEN": "跳過準備畫面（火箭動畫）",
       "L_START_IN_BACKGROUND": "僅以橫幅開始專注時段（無覆蓋層）",
       "L_SYNC_SESSION_WITH_TRACKING": "將專注時段與時間追蹤同步",
-      "TITLE": "專注模式"
+      "TITLE": "專注模式",
+      "L_AUTO_START_FOCUS_ON_PLAY": "當我開始追蹤任務時啟動專注工作階段",
+      "FOCUS_MODE_SOUND_OFF": "關閉",
+      "FOCUS_MODE_SOUND_TICK": "滴答聲",
+      "FOCUS_MODE_SOUND_WHITE_NOISE": "白噪音",
+      "L_FOCUS_MODE_SOUND": "專注工作階段期間的環境音"
     },
     "IDLE": {
       "HELP": "<div><p>啟用閒置時間處理後，在指定時間後將開啟對話方塊，以檢查您是否要在閒置時追蹤時間（以及追蹤在哪個工作上）。</p></div>",
@@ -2088,7 +2230,8 @@
       "TRIGGER_SYNC": "觸發同步（如已設定）",
       "ZOOM_DEFAULT": "預設縮放（僅限桌面版）",
       "ZOOM_IN": "放大（僅限桌面版）",
-      "ZOOM_OUT": "縮小（僅限桌面版）"
+      "ZOOM_OUT": "縮小（僅限桌面版）",
+      "TASK_OPEN_NOTES_FULLSCREEN": "全螢幕開啟備註/檢查清單"
     },
     "LANG": {
       "AR": "عربى",
@@ -2139,7 +2282,8 @@
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文(简体)",
-      "ZH_TW": "中文(繁體)"
+      "ZH_TW": "中文(繁體)",
+      "TIME_LOCALE_PL_PL": "波蘭文：24 小時制，DD.MM.YYYY"
     },
     "MISC": {
       "DARK_MODE": "深色模式",
@@ -2166,7 +2310,15 @@
       "THEME": "主題",
       "THEME_EXPERIMENTAL": "主題（實驗性）",
       "THEME_SELECT_LABEL": "選擇主題",
-      "TITLE": "其他設定"
+      "TITLE": "其他設定",
+      "THEME_INSTALL_BUTTON": "安裝主題…",
+      "THEME_INSTALL_TOOLTIP": "上傳 CSS 主題檔。主題只會變更視覺效果，不會執行程式碼，但仍可能影響資料的呈現方式。請只安裝來自可信來源的主題。",
+      "THEME_INSTALLED_WITH_WARNINGS": "主題已安裝。缺少的權杖：{{tokens}}",
+      "THEME_INVALID_CSS_FILE": "無法安裝主題：CSS 檔案無效或不安全。",
+      "THEME_REMOVE_BUTTON": "移除主題",
+      "THEME_REMOVED_TOAST": "主題已移除；已還原為預設。",
+      "IS_LOCAL_REST_API_ENABLED": "啟用本機 REST API（僅桌面版）",
+      "IS_LOCAL_REST_API_ENABLED_HINT": "允許本機指令碼透過 http://127.0.0.1:3876 控制執行中的應用程式。此電腦上執行的任何應用程式都能讀取和修改你的任務。"
     },
     "POMODORO": {
       "BREAK_DURATION": "短休息時間",
@@ -2256,6 +2408,12 @@
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "在行動應用程式上顯示追蹤提醒",
       "L_TRACKING_REMINDER_MIN_TIME": "顯示追蹤提醒橫幅前等待的時間",
       "TITLE": "時間追蹤"
+    },
+    "TASK_WIDGET": {
+      "TITLE": "任務小工具",
+      "IS_ENABLED": "啟用任務小工具",
+      "IS_ALWAYS_SHOW": "一律顯示任務小工具（即使主視窗可見）",
+      "OPACITY": "任務小工具不透明度"
     }
   },
   "GLOBAL": {
@@ -2375,7 +2533,8 @@
     "TOGGLE_TRACK_TIME": "開始/停止追蹤時間",
     "TRIGGER_SYNC": "同步！",
     "UNPLAN_ALL_TASKS": "取消計劃所有工作",
-    "WORKLOG": "工作日誌"
+    "WORKLOG": "工作日誌",
+    "ADD_SECTION": "新增區段"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "是否要下載舊版資料的備份（可用於較舊版本的 Super Productivity）？",
@@ -2549,7 +2708,9 @@
     "UNABLE_TO_PERSIST_DATA": "無法將資料持久化至外掛程式儲存",
     "UNKNOWN_ERROR": "發生未知錯誤",
     "UPLOAD_PLUGIN_INSTRUCTION": "上傳外掛程式 ZIP 檔案以進行安裝：",
-    "VALIDATION_FAILED": "驗證失敗"
+    "VALIDATION_FAILED": "驗證失敗",
+    "ICON_TOO_LARGE": "外掛圖示太大（最大 {{maxSize}}KB）",
+    "INDEX_HTML_TOO_LARGE": "外掛 index.html 太大（最大 {{maxSize}}KB）"
   },
   "PM": {
     "ALL_TASKS_TITLE": "指標（所有任務）",
@@ -2579,7 +2740,14 @@
     },
     "TAG_SETTINGS": "標籤特定設定",
     "TOGGLE_DARK_MODE": "切換深色模式",
-    "UPDATE_APP": "更新應用程式"
+    "UPDATE_APP": "更新應用程式",
+    "SYNC": {
+      "CONFIGURE": "設定",
+      "EMPTY_STATE_HINT": "使用 Dropbox、WebDAV、Nextcloud 或本機檔案同步你的資料。",
+      "ENCRYPTED": "已加密",
+      "NEEDS_AUTH": "需要驗證",
+      "SET_UP_SYNC": "設定同步"
+    }
   },
   "SCHEDULE": {
     "LAST": "上一個：",
@@ -2592,7 +2760,9 @@
     "SCHEDULED_TASKS": "已排程工作",
     "SCHEDULED_TASKS_WITH_TIME": "有開始時間的已排程工作",
     "START_TASK": "開始任務並移除提醒",
-    "TASKS_WITH_DEADLINES": "有截止日期的任務"
+    "TASKS_WITH_DEADLINES": "有截止日期的任務",
+    "NO_SCHEDULED_FOR_DAY": "尚未有安排到特定日期的任務。用右鍵點擊任務並選擇「排程」，即可將它安排到某一天。",
+    "NO_SCHEDULED_WITH_TIME": "尚未有安排開始時間的任務。用右鍵點擊任務並選擇「排程」，即可設定特定時間。"
   },
   "THEMES": {
     "SELECT_THEME": "選擇主題",
@@ -2628,7 +2798,8 @@
     "PROFILE_NAME": "檔案名稱",
     "PROFILE_NAME_PLACEHOLDER": "例如工作、個人",
     "RENAME": "重新命名",
-    "SAVE": "儲存"
+    "SAVE": "儲存",
+    "DEPRECATION_WARNING": "實驗性的使用者設定檔功能將在未來更新中移除。請匯出你的設定檔資料作為備份。"
   },
   "V": {
     "E_DATETIME": "輸入的值不是日期時間！",
@@ -2660,6 +2831,17 @@
     "TODAY_REMAINING": "今天剩餘：",
     "WITHOUT_BREAK": "不含休息：",
     "WORKING_TODAY": "今天工作：",
-    "WORKING_TODAY_ARCHIVED": "今天在已封存工作上工作的時間"
+    "WORKING_TODAY_ARCHIVED": "今天在已封存工作上工作的時間",
+    "ADD_SECTION_TITLE": "新增區段",
+    "SECTION_OPTIONS": "區段選項",
+    "NO_TASKS_IN_MAIN_LIST": "所有任務都已整理到區段中"
+  },
+  "DIALOG_LOGS": {
+    "COPY": "複製",
+    "HINT": "此工作階段的記錄。短記錄請使用「複製」（貼到錯誤回報中），完整檔案請使用「分享檔案」。",
+    "S_COPY_FAILED": "無法將記錄複製到剪貼簿",
+    "S_SHARE_FAILED": "無法分享記錄",
+    "SHARE_FILE": "分享檔案",
+    "TITLE": "記錄"
   }
 }

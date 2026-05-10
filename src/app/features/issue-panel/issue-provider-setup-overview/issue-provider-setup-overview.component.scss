@@ -2,33 +2,89 @@
 
 :host {
   display: block;
-  padding: 0 12px;
+  padding: 0 var(--s2) var(--s2);
   flex: 1;
   overflow-y: auto;
   min-height: 0;
 }
+
 .items {
   display: grid;
-  gap: 12px;
-  grid-template-columns: auto auto;
+  gap: var(--s);
+  grid-template-columns: repeat(auto-fit, minmax(calc(var(--s8) * 2), 1fr));
+  margin-bottom: var(--s3);
+}
 
-  > button {
-    min-height: 50px;
-    height: auto;
-    padding-top: var(--s-half);
-    padding-bottom: var(--s-half);
+.provider-tile {
+  position: relative;
+  overflow: hidden;
+  appearance: none;
+  min-height: var(--s8);
+  padding: var(--s) var(--s);
+  border: 1px solid var(--separator-color);
+  border-radius: var(--card-border-radius);
+  background: var(--card-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--s-half);
+  font: inherit;
+  line-height: var(--line-height-tight);
+  text-align: center;
+  transition: var(--transition-fast);
 
-    // allow long provider names to wrap rather than overflow the button (#7331)
-    ::ng-deep .mdc-button__label {
-      white-space: normal;
-      line-height: 1.2;
-    }
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    pointer-events: none;
+    transition: var(--transition-fast);
+  }
+
+  &:hover {
+    border-color: var(--text-color-muted);
+  }
+
+  &:hover::before {
+    background: var(--state-hover);
+  }
+
+  &:active::before {
+    background: var(--state-pressed);
+  }
+
+  mat-icon,
+  span {
+    position: relative;
+  }
+
+  mat-icon {
+    width: var(--s4);
+    height: var(--s4);
+    font-size: var(--s4);
+    color: var(--text-color-most-intense);
+  }
+
+  span {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: var(--font-size-sm);
   }
 }
 
 h4 {
-  text-align: center;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  margin-bottom: var(--s);
   margin-top: var(--s2);
+  text-align: left;
 }
 
 // keep in sync with src/app/features/issue-panel/issue-panel.component.scss#

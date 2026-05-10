@@ -1,29 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
+import {
+  decompressBody,
+  parseCompressedJsonBody,
+} from '../src/sync/compressed-body-parser';
 
 const gzipAsync = promisify(zlib.gzip);
-const gunzipAsync = promisify(zlib.gunzip);
-
-/**
- * Decompress gzip body, handling base64 encoding from Android clients.
- * This is the logic extracted from sync.routes.ts for testing.
- */
-const decompressBody = async (
-  rawBody: Buffer,
-  contentTransferEncoding: string | undefined,
-): Promise<Buffer> => {
-  // Check if body is base64-encoded (from Android CapacitorHttp)
-  if (contentTransferEncoding === 'base64') {
-    // Body is base64 string encoded as buffer - decode it first
-    const base64String = rawBody.toString('utf-8');
-    const binaryData = Buffer.from(base64String, 'base64');
-    return gunzipAsync(binaryData);
-  }
-
-  // Standard binary gzip body
-  return gunzipAsync(rawBody);
-};
 
 describe('decompressBody helper', () => {
   const testPayload = { message: 'Hello from Android', count: 42 };
@@ -130,5 +113,122 @@ describe('decompressBody helper', () => {
 
       expect(JSON.parse(decompressed.toString('utf-8'))).toEqual(unicodePayload);
     });
+  });
+});
+
+describe('parseCompressedJsonBody helper', () => {
+  const testPayload = { message: 'Hello from compressed JSON', count: 42 };
+
+  it('should parse gzip-compressed JSON', async () => {
+    const compressed = await gzipAsync(Buffer.from(JSON.stringify(testPayload), 'utf-8'));
+
+    const result = await parseCompressedJsonBody(compressed, undefined, {
+      maxCompressedSize: compressed.length,
+      maxDecompressedSize: 1024,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.body).toEqual(testPayload);
+      expect(result.isBase64).toBe(false);
+    }
+  });
+
+  it('should parse base64 gzip-compressed JSON', async () => {
+    const compressed = await gzipAsync(Buffer.from(JSON.stringify(testPayload), 'utf-8'));
+    const rawBody = Buffer.from(compressed.toString('base64'), 'utf-8');
+
+    const result = await parseCompressedJsonBody(rawBody, 'base64', {
+      maxCompressedSize: rawBody.length,
+      maxDecompressedSize: 1024,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.body).toEqual(testPayload);
+      expect(result.isBase64).toBe(true);
+    }
+  });
+
+  it('should return 400 for non-buffer gzip bodies', async () => {
+    const result = await parseCompressedJsonBody('not-a-buffer', undefined, {
+      maxCompressedSize: 1024,
+      maxDecompressedSize: 1024,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      statusCode: 400,
+      error: 'Expected compressed body with Content-Encoding: gzip',
+      reason: 'expected-compressed-buffer',
+    });
+  });
+
+  it('should return 413 when encoded payload exceeds the limit', async () => {
+    const compressed = await gzipAsync(Buffer.from(JSON.stringify(testPayload), 'utf-8'));
+
+    const result = await parseCompressedJsonBody(compressed, undefined, {
+      maxCompressedSize: compressed.length - 1,
+      maxDecompressedSize: 1024,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.statusCode).toBe(413);
+      expect(result.error).toBe('Compressed payload too large');
+      expect(result.reason).toBe('compressed-payload-too-large');
+    }
+  });
+
+  it('should return 413 when decoded payload exceeds the limit', async () => {
+    const compressed = await gzipAsync(Buffer.from(JSON.stringify(testPayload), 'utf-8'));
+
+    const result = await parseCompressedJsonBody(compressed, undefined, {
+      maxCompressedSize: compressed.length,
+      maxDecompressedSize: 1,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.statusCode).toBe(413);
+      expect(result.error).toBe('Decompressed payload too large');
+      expect(result.reason).toBe('decompressed-payload-too-large');
+    }
+  });
+
+  it('should return 400 for invalid gzip data', async () => {
+    const result = await parseCompressedJsonBody(
+      Buffer.from('not valid gzip data', 'utf-8'),
+      undefined,
+      {
+        maxCompressedSize: 1024,
+        maxDecompressedSize: 1024,
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.statusCode).toBe(400);
+      expect(result.error).toBe('Failed to decompress gzip body');
+      expect(result.reason).toBe('decompress-failed');
+    }
+  });
+
+  it('should return 400 for invalid base64 gzip data', async () => {
+    const result = await parseCompressedJsonBody(
+      Buffer.from('this is not valid base64 gzip!!!@#$%', 'utf-8'),
+      'base64',
+      {
+        maxCompressedSize: 1024,
+        maxDecompressedSize: 1024,
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.statusCode).toBe(400);
+      expect(result.error).toBe('Failed to decompress gzip body');
+      expect(result.reason).toBe('decompress-failed');
+    }
   });
 });

@@ -26,6 +26,7 @@ class WebViewBlockActivity : AppCompatActivity() {
         val detectedVersion = intent.getIntExtra(EXTRA_VERSION_MAJOR, -1)
         val versionName = intent.getStringExtra(EXTRA_VERSION_NAME)
         val provider = intent.getStringExtra(EXTRA_PROVIDER_PACKAGE)
+        val source = intent.getStringExtra(EXTRA_SOURCE)
 
         val message = getString(R.string.webview_block_message, minVersion)
         findViewById<TextView>(R.id.webview_block_title).text = message
@@ -41,6 +42,11 @@ class WebViewBlockActivity : AppCompatActivity() {
             }
             if (!provider.isNullOrBlank()) {
                 append(getString(R.string.webview_block_provider, provider))
+                append("\n")
+            }
+            if (!source.isNullOrBlank()) {
+                append(getString(R.string.webview_block_source, source))
+                append("\n")
             }
         }.trim()
         findViewById<TextView>(R.id.webview_block_details).text = details
@@ -89,6 +95,7 @@ class WebViewBlockActivity : AppCompatActivity() {
         private const val EXTRA_VERSION_NAME = "extra_version_name"
         private const val EXTRA_PROVIDER_PACKAGE = "extra_provider_package"
         private const val EXTRA_MIN_VERSION = "extra_min_version"
+        private const val EXTRA_SOURCE = "extra_source"
 
         fun present(host: Activity, result: WebViewCompatibilityChecker.Result) {
             val intent =
@@ -97,6 +104,7 @@ class WebViewBlockActivity : AppCompatActivity() {
                     .putExtra(EXTRA_VERSION_NAME, result.providerVersionName)
                     .putExtra(EXTRA_PROVIDER_PACKAGE, result.providerPackage)
                     .putExtra(EXTRA_MIN_VERSION, WebViewCompatibilityChecker.MIN_CHROMIUM_VERSION)
+                    .putExtra(EXTRA_SOURCE, result.source.name)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
             host.startActivity(intent)

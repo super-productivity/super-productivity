@@ -772,7 +772,14 @@ export class TaskService {
   focusTaskById(taskId: string, shouldStartEditing: boolean): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const taskElement = document.getElementById(`t-${taskId}`);
+        // Prefer the in-panel instance when both the main list and the side
+        // detail panel render the same task (e.g. a just-created sub-task in
+        // the parent's sub-task list). Focusing the panel copy preserves the
+        // user's current context (parent stays selected) and on mobile lands
+        // on a visible input rather than the main-list copy that the panel
+        // overlays (#7120).
+        const allEls = document.querySelectorAll<HTMLElement>(`#t-${CSS.escape(taskId)}`);
+        const taskElement = allEls[allEls.length - 1];
         if (!taskElement) return;
 
         taskElement.focus();

@@ -15,6 +15,7 @@ import { ProjectService } from '../../features/project/project.service';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
 import { LegacyPfDbService } from '../persistence/legacy-pf-db.service';
 import { DataInitStateService } from '../data-init/data-init-state.service';
+import { CustomThemeService } from '../theme/custom-theme.service';
 import { of } from 'rxjs';
 import { signal } from '@angular/core';
 import { LS } from '../persistence/storage-keys.const';
@@ -114,6 +115,11 @@ describe('StartupService', () => {
       isAllDataLoadedInitially$: of(true),
     };
 
+    const customThemeServiceSpy = jasmine.createSpyObj('CustomThemeService', [
+      'applyActiveTheme',
+    ]);
+    customThemeServiceSpy.applyActiveTheme.and.resolveTo(undefined);
+
     TestBed.configureTestingModule({
       providers: [
         StartupService,
@@ -135,6 +141,7 @@ describe('StartupService', () => {
         { provide: TrackingReminderService, useValue: trackingReminderServiceSpy },
         { provide: LegacyPfDbService, useValue: legacyPfDbServiceSpy },
         { provide: DataInitStateService, useValue: dataInitStateServiceSpy },
+        { provide: CustomThemeService, useValue: customThemeServiceSpy },
         provideMockStore({
           selectors: [
             { selector: selectSyncConfig, value: { syncProvider: null } },

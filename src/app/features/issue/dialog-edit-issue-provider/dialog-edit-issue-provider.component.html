@@ -95,7 +95,20 @@
       }
       @for (btn of oauthButtons; track btn.label) {
         <div class="action-row">
-          @if (isOAuthConnected()) {
+          @if (isOAuthUnavailableInWeb(btn.oauthConfig)) {
+            <button
+              mat-stroked-button
+              type="button"
+              disabled
+            >
+              <mat-icon>block</mat-icon>
+              {{ btn.label }}
+            </button>
+            <span class="error-status">
+              <mat-icon class="error-status-icon">info</mat-icon>
+              {{ T.F.ISSUE.DIALOG.OAUTH_UNAVAILABLE_WEB | translate }}
+            </span>
+          } @else if (isOAuthConnected()) {
             <button
               mat-stroked-button
               type="button"

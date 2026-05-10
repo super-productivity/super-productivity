@@ -346,6 +346,13 @@ export interface OAuthFlowConfig {
    * Requires "Custom URI scheme" enabled in Google Cloud Console.
    */
   iosClientId?: string;
+  /**
+   * Client ID for the web build, for providers that support public browser
+   * clients via Authorization Code + PKCE without a client secret.
+   * Overrides `clientId` in the browser (non-Electron, non-native) and omits
+   * `clientSecret`.
+   */
+  webClientId?: string;
   scopes: string[];
   /** Additional query parameters to append to the authorization URL (e.g. access_type, prompt). */
   extraAuthParams?: Record<string, string>;

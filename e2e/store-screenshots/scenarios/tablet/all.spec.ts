@@ -1,9 +1,9 @@
 /**
- * Tablet capture spec — runs against ipad13 (1032×1376 CSS portrait) and
- * android10Tablet (960×600 CSS landscape). Both render SP's desktop layout
- * (≥ 768 CSS px) but neither has the room for the right-hand notes /
- * schedule day-panel that the desktopMaster scenes rely on, so we keep the
- * scenes panel-free.
+ * Tablet capture spec — runs against ipad13 (1032×1376 CSS portrait),
+ * android7Tablet (960×600 CSS landscape) and android10Tablet (800×1280 CSS
+ * portrait). All render SP's desktop layout (≥ 768 CSS px) but none has the
+ * room for the right-hand notes / schedule day-panel that the desktopMaster
+ * scenes rely on, so we keep the scenes panel-free.
  *
  * Touch is emulated (`hasTouch: true` because the matrix marks these as
  * `isMobile`), so any hover-revealed action (e.g. desktop's
@@ -14,7 +14,14 @@
  * localized task content.
  */
 import { test } from '../../fixture';
-import { applyTheme, gotoAndSettle, resetView } from '../../helpers';
+import {
+  applyTheme,
+  gotoAndSettle,
+  resetView,
+  scrollScheduleUp,
+  showMarketingOverlay,
+} from '../../helpers';
+import { MARKETING_HEADLINE, MARKETING_SUBLINE } from '../../marketing-copy';
 import type { Page } from '@playwright/test';
 
 const captureDarkScenes = async (
@@ -40,6 +47,7 @@ const captureDarkScenes = async (
   // 03 — Schedule (week strip stretches well at tablet widths)
   await gotoAndSettle(page, '/#/schedule');
   await page.locator('schedule, schedule-week').first().waitFor({ state: 'visible' });
+  await scrollScheduleUp(page);
   await shoot('tablet-03-schedule', 'schedule');
   await resetView(page);
 
@@ -69,6 +77,14 @@ test.describe('@screenshot tablet all', () => {
   }) => {
     const page = seededPage;
     await applyTheme(page, 'dark');
+
+    // 00 — Cover/hero. Today list with a marketing caption strip overlaid.
+    await gotoAndSettle(page, '/#/tag/TODAY/tasks');
+    await page.locator('task').first().waitFor({ state: 'visible' });
+    await showMarketingOverlay(page, MARKETING_HEADLINE, MARKETING_SUBLINE);
+    await screenshotMaster('tablet-00-hero', 'hero');
+    await resetView(page);
+
     await captureDarkScenes(page, screenshotMaster);
     await applyTheme(page, 'light');
     await captureLightScenes(page, screenshotMaster);

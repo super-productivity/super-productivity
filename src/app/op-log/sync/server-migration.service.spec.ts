@@ -41,6 +41,7 @@ describe('ServerMigrationService', () => {
   const createMockSyncProvider = (): OperationSyncProvider => {
     return {
       supportsOperationSync: true,
+      providerMode: 'superSyncOps',
       id: 'SuperSync' as SyncProviderId,
       maxConcurrentRequests: 10,
       getLastServerSeq: jasmine

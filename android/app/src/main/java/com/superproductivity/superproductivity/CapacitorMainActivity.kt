@@ -82,12 +82,18 @@ class CapacitorMainActivity : BridgeActivity() {
         val webView = bridge?.webView
         if (webView == null) {
             Log.e("CapacitorMainActivity", "Bridge or WebView is null after onCreate — finishing activity")
-            val result = webViewCompatibility ?: WebViewCompatibilityChecker.Result(
+            // Force BLOCK with INIT_FAILURE source so the user-facing screen
+            // distinguishes "version too old" from "WebView refused to init".
+            // Preserve any earlier-detected version info if available.
+            val result = (webViewCompatibility ?: WebViewCompatibilityChecker.Result(
                 status = WebViewCompatibilityChecker.Status.BLOCK,
                 majorVersion = null,
                 providerPackage = null,
                 providerVersionName = null,
-                source = WebViewCompatibilityChecker.VersionSource.UNKNOWN,
+                source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
+            )).copy(
+                status = WebViewCompatibilityChecker.Status.BLOCK,
+                source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
             )
             WebViewBlockActivity.present(this, result)
             finish()

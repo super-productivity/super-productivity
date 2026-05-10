@@ -12,7 +12,7 @@ import {
  * at every required pixel size — Playwright launches one context per project
  * with the right viewport/deviceScaleFactor.
  *
- * Outputs land in `.tmp/screenshots/_master/<viewport>/<locale>/<theme>/`.
+ * Outputs land in `dist/screenshots/_master/<viewport>/<locale>/<theme>/`.
  *
  * Run all viewports:    npm run screenshots:capture
  * Run one viewport:     npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=desktopMaster
@@ -41,7 +41,6 @@ export default defineConfig({
         '--disable-setuid-sandbox',
         '--disable-extensions',
         '--disable-gpu',
-        '--disable-software-rasterizer',
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding',
