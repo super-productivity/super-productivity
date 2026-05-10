@@ -46,6 +46,14 @@ async function getPlugins() {
     skipCopy: true,
   });
 
+  // Add sync-core after shared-schema since it depends on it
+  plugins.push({
+    name: 'sync-core',
+    path: 'packages/sync-core',
+    buildCommand: 'npm run build',
+    skipCopy: true,
+  });
+
   // Add plugin-api as it's a dependency for plugins
   plugins.push({
     name: 'plugin-api',

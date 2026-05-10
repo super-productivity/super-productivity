@@ -25,7 +25,8 @@
     "lib": ["es2022", "dom"],
     "paths": {
       "@super-productivity/plugin-api": ["packages/plugin-api/src/index.ts"],
-      "@sp/shared-schema": ["packages/shared-schema/src/index.ts"]
+      "@sp/shared-schema": ["packages/shared-schema/src/index.ts"],
+      "@sp/sync-core": ["packages/sync-core/src/index.ts"]
     },
     "plugins": [
       {

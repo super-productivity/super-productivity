@@ -19,7 +19,7 @@ export {
   CurrentProviderPrivateCfg,
 } from './core/types/sync.types';
 
-// Enums and constants from provider.const.ts
+// Enums and constants — sourced from the framework-agnostic @sp/sync-core package
 export {
   SyncProviderId,
   SyncStatus,
@@ -27,7 +27,7 @@ export {
   REMOTE_FILE_CONTENT_PREFIX,
   PRIVATE_CFG_PREFIX,
   toSyncProviderId,
-} from './sync-providers/provider.const';
+} from '@sp/sync-core';
 
 // Error classes
 export {
