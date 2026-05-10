@@ -24,8 +24,9 @@
  *
  * ### How Should Callers Handle This?
  *
- * The caller (OperationLogSyncService) catches this error, marks the operations
- * as failed, and should trigger a full re-sync to restore consistent state.
+ * The host application should catch this error, mark the affected operations as
+ * failed according to its persistence model, and trigger a full re-sync to
+ * restore consistent state.
  */
 export class SyncStateCorruptedError extends Error {
   constructor(

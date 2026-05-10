@@ -1,347 +1,554 @@
 # `@sp/sync-core` Extraction Plan
 
-> **Status: In progress — PR 1 landed**
+> **Status: In progress - PR 1 is under review in #7546**
 
-**Goal:** Carve the sync engine out of `src/app/op-log/` into a reusable, framework-agnostic, **domain-agnostic** `@sp/sync-core` package, plus a sibling `@sp/sync-providers` for the bundled provider implementations.
+**Goal:** Carve the sync engine out of `src/app/op-log/` into a reusable,
+framework-agnostic, **domain-agnostic** `@sp/sync-core` package, plus a sibling
+`@sp/sync-providers` package for bundled provider implementations.
 
 ## Context
 
-The sync frontend lives in `src/app/op-log/` (the older `src/app/pfapi/` is legacy and out of scope). It already organizes itself by concern (`core`, `sync`, `apply`, `capture`, `persistence`, `encryption`, `validation`, `util`, `model`, `sync-providers`), but the boundary is convention-only: the engine reaches into NgRx state, `core/entity-registry.ts` hardcodes imports from 15+ feature reducers, and providers and engine code intermix freely.
+The sync frontend lives in `src/app/op-log/` (the older `src/app/pfapi/` is
+legacy and out of scope). It already organizes itself by concern (`core`,
+`sync`, `apply`, `capture`, `persistence`, `encryption`, `validation`, `util`,
+`model`, `sync-providers`), but the boundary is convention-only: the engine
+reaches into NgRx state, `core/entity-registry.ts` hardcodes imports from 15+
+feature reducers, and providers and engine code intermix freely.
 
 The eventual target is a **three-concern split**:
 
-1. **Sync logic / engine** — operation orchestration, vector clocks, conflict resolution, persistence interface. Framework-agnostic AND domain-agnostic (knows nothing about Super Productivity).
-2. **Configuration** — entity registry, model config, app-specific wiring, action-type enums, entity-type unions, repair payload shapes, provider lists. Lives in the app.
-3. **Provider implementations** — SuperSync, Dropbox, WebDAV, LocalFile. Pluggable, talk to the engine through a stable interface.
+1. **Sync logic / engine** - operation orchestration, vector clocks, conflict
+   resolution, persistence interfaces. Framework-agnostic and domain-agnostic.
+2. **Configuration** - entity registry, model config, app-specific wiring,
+   action-type enums, entity-type unions, repair payload shapes, provider lists.
+   Lives in the app.
+3. **Provider implementations** - SuperSync, Dropbox, WebDAV, LocalFile.
+   Pluggable, and talking to the engine through stable interfaces.
 
-## What stays in the app — domain rule
+## Domain Rule
 
-Anything that names a Super Productivity domain object, enum value, or wire convention belongs in the app, not in the lib. The lib carries `actionType` and `entityType` as plain `string`; the app narrows via `Omit`-and-extend on top of the lib's generic `Operation`.
+Anything that names a Super Productivity domain object, enum value, or wire
+convention belongs in the app, not in `@sp/sync-core`. The lib carries
+`actionType` and `entityType` as plain `string`; the app narrows via
+`Omit`-and-extend on top of the lib's generic `Operation`.
 
 App-only forever:
 
-- **`ActionType` enum** (200 lines of NgRx action strings: METRIC, BOARD, TAG, PROJECT, etc.) — host-app config, not lib content.
-- **`ENTITY_TYPES` / `EntityType` union** — TASK, PROJECT, TAG, METRIC, BOARD, etc. is SP's domain. Lib uses `string`; app narrows.
-- **`SyncImportReason` union** — `'PASSWORD_CHANGED' | 'FILE_IMPORT' | 'BACKUP_RESTORE' | 'FORCE_UPLOAD' | 'SERVER_MIGRATION' | 'REPAIR'` are SP's specific import flows.
-- **`RepairSummary`, `RepairPayload`** — SP's repair-output shape.
-- **`WrappedFullStatePayload` + `extractFullStateFromPayload` + `assertValidFullStatePayload`** — the `appDataComplete` wrapper and the `['task','project','tag','globalConfig']` key-presence check are SP wire format.
-- **`SyncProviderId` enum** (`Dropbox | WebDAV | LocalFile | SuperSync | Nextcloud`), `OAUTH_SYNC_PROVIDERS`, `REMOTE_FILE_CONTENT_PREFIX = 'pf_'`, `PRIVATE_CFG_PREFIX = '__sp_cred_'` — SP's bundled providers and SP-flavored storage prefixes.
-- **`@sp/shared-schema`** itself — that package is also SP-coupled (server + SP client), so the lib must not depend on it.
+- **`ActionType` enum** - host-app action catalog, not lib content.
+- **`ENTITY_TYPES` / `EntityType` union** - TASK, PROJECT, TAG, METRIC, BOARD,
+  etc. are SP's domain. Lib uses `string`; app narrows.
+- **`SyncImportReason` union** - SP's specific import flows.
+- **`RepairSummary`, `RepairPayload`** - SP's repair-output shape.
+- **`WrappedFullStatePayload` + `extractFullStateFromPayload` +
+  `assertValidFullStatePayload`** - the `appDataComplete` wrapper and the
+  `['task','project','tag','globalConfig']` key-presence check are SP wire
+  format.
+- **`SyncProviderId`, `OAUTH_SYNC_PROVIDERS`, `REMOTE_FILE_CONTENT_PREFIX`,
+  `PRIVATE_CFG_PREFIX`** - SP's bundled providers and SP-flavored storage
+  prefixes.
+- **`@sp/shared-schema`** - that package is SP-coupled today, so
+  `@sp/sync-core` must not depend on it.
 
-Anywhere the lib needs to enumerate domain values (e.g. LWW update action types are derived from the entity-type list), it exposes a **factory** that takes the list as input. The app instantiates the factory once with its `ENTITY_TYPES`.
+Where the lib needs host-specific enumerations, it exposes a factory or config
+object and the app supplies values at composition time. The current LWW helper
+factory is the model to follow.
 
----
+## Recommendations From PR #7546 Review
 
-## PR 1 — Thin first slice (landed)
+These adjustments should happen before the extraction proceeds beyond the thin
+first slice:
 
-Stand up `packages/sync-core/` with the pieces that are both framework-agnostic and domain-agnostic. No behavior change. Establishes the import boundary and the `@sp/sync-core` alias so subsequent PRs can do harder work against a real package boundary instead of a notional one.
+1. **Move boundary enforcement up.** Add ESLint/package-boundary checks in the
+   next PR, not at the end. Once `packages/sync-core/` exists, accidental
+   imports from Angular, NgRx, `src/app`, or `@sp/shared-schema` should fail
+   immediately.
+2. **Single-source vector-clock algorithms.** The client currently delegates
+   comparison/merge/prune behavior to `@sp/shared-schema` for client/server
+   parity. Before moving vector-clock code, pick one owner for
+   compare/merge/prune and have the other package/server import or re-export it.
+   Do not duplicate the algorithms.
+3. **Treat full-state operation classification as configuration.** PR 1 keeps
+   `OpType.SyncImport`, `OpType.BackupImport`, and `OpType.Repair` in the
+   generic package for compatibility. Before the engine becomes reusable, make
+   full-state operation classification configurable or explicitly document those
+   op types as host-defined strings.
+4. **Do not move `OperationApplierService` wholesale.** It currently coordinates
+   NgRx bulk dispatch, hydration windows, archive side effects, and deferred
+   local actions. Extract a small core replay contract/state machine first,
+   leaving the Angular/SP choreography in the app until the port boundary has
+   proven itself.
+5. **Make logger metadata privacy-safe.** `CLAUDE.md` forbids logging user
+   content into exportable logs. The `SyncLogger` port should make this explicit
+   by accepting only safe, structured metadata and documenting that payloads/full
+   entities must not be logged.
+6. **Add package tests before moving algorithms.** `@sp/sync-core` can start
+   with build-only checks, but PR 3a should first introduce the package test
+   runner and then port algorithm specs.
+7. **Keep provider extraction separate.** Do not let `@sp/sync-core` learn
+   provider IDs, file prefixes, OAuth behavior, credential storage, or bundled
+   provider lists.
+
+## PR 1 - Thin First Slice (#7546)
+
+Stand up `packages/sync-core/` with pieces that are framework-agnostic and
+mostly domain-agnostic. No behavior change. Establishes the import boundary and
+the `@sp/sync-core` alias so later PRs work against a real package boundary.
 
 ### Goals
 
-- Create `packages/sync-core/` mirroring the existing `@sp/shared-schema` package shape.
-- Move only generic, domain-agnostic primitives. The lib must contain **no Super Productivity-specific identifiers, enums, unions, or shapes** — those stay in the app and feed the lib via configuration.
-- Move only framework-agnostic code (no `@Injectable`, no `inject()`, no NgRx, no Angular Material).
-- Keep the rest of `src/app/op-log/` working unchanged via re-export stubs at the original paths.
-- Zero behavior change. All unit tests and E2E tests pass without modification.
+- Create `packages/sync-core/` mirroring the existing package shape.
+- Move only generic primitives and helpers.
+- Move only framework-agnostic code: no `@Injectable`, no `inject()`, no NgRx,
+  no Angular Material.
+- Keep existing `src/app/op-log/` call sites working through stubs at the
+  original paths.
+- Keep `ActionType`, provider constants, full-state payload wrappers, repair
+  payload shapes, and import reasons app-side.
+- Avoid behavior changes.
 
-### Non-goals (deferred to follow-up PRs)
+### Current Contents
 
-- Moving `core/entity-registry.ts` (hardcoded feature imports — needs parameterization).
-- Moving anything under `op-log/sync/`, `apply/`, `capture/`, `persistence/`, or `model/` (Angular-coupled or feature-coupled).
-- Extracting providers themselves.
-- Defining new abstract `SyncEngine` / `SyncConfig` interfaces.
-- Adding ESLint module-boundary rules.
-
-### What landed in `@sp/sync-core` initial contents
-
-Source: `packages/sync-core/src/`. All exports from `index.ts`. No Angular, no NgRx, no `@sp/shared-schema` dep, no SP identifiers.
+Source: `packages/sync-core/src/`. All exports come through `index.ts`.
 
 **Operation primitives** (`operation.types.ts`):
 
-- `OpType` enum (CRUD + sync ops: `Create | Update | Delete | Move | Batch | SyncImport | BackupImport | Repair`)
-- `Operation` (with `actionType: string`, `entityType: string`, no `syncImportReason`)
-- `OperationLogEntry`, `EntityConflict`, `ConflictResult`, `EntityChange`, `MultiEntityPayload`
-- `VectorClock = Record<string, number>` (defined locally — no shared-schema dep)
-- `FULL_STATE_OP_TYPES`, `isFullStateOpType`, `isMultiEntityPayload`, `extractActionPayload`
+- `OpType` enum.
+- `Operation` with `actionType: string` and `entityType: string`.
+- `OperationLogEntry`, `EntityConflict`, `ConflictResult`, `EntityChange`,
+  `MultiEntityPayload`.
+- `VectorClock = Record<string, number>`.
+- `FULL_STATE_OP_TYPES`, `isFullStateOpType`, `isMultiEntityPayload`,
+  `extractActionPayload`.
 
 **LWW factory** (`lww-update-action-types.ts`):
 
-- `createLwwUpdateActionTypeHelpers<TEntityType>(entityTypes)` returns `{ LWW_UPDATE_ACTION_TYPES, isLwwUpdateActionType, getLwwEntityType, toLwwUpdateActionType }`. App calls this once with its `ENTITY_TYPES`.
+- `createLwwUpdateActionTypeHelpers<TEntityType>(entityTypes)` returns
+  `LWW_UPDATE_ACTION_TYPES`, `isLwwUpdateActionType`, `getLwwEntityType`, and
+  `toLwwUpdateActionType`.
+- The app instantiates it once with `ENTITY_TYPES`.
 
 **Apply types** (`apply.types.ts`):
 
-- `ApplyOperationsResult`, `ApplyOperationsOptions` — generic over the lib's Operation.
+- `ApplyOperationsResult`, `ApplyOperationsOptions` over the lib's generic
+  `Operation`.
 
 **Utilities**:
 
-- `toEntityKey`, `parseEntityKey` (`entity-key.util.ts`) — string-typed.
-- `SyncStateCorruptedError` (`sync-state-corrupted.error.ts`).
+- `toEntityKey`, `parseEntityKey`.
+- `SyncStateCorruptedError`.
 
-Build output: ESM 2.43 KB, DTS 10.46 KB.
-
-### App stubs (preserve existing call sites)
+### App Stubs
 
 Each previously-public symbol path keeps working via thin shims:
 
-- `src/app/op-log/core/operation.types.ts` — re-exports lib's generic types, redeclares **SP-narrowed** `Operation`, `OperationLogEntry`, `EntityChange`, `EntityConflict`, `ConflictResult`, `MultiEntityPayload` via `Omit`-and-extend (narrowing `actionType` to the local `ActionType` enum and `entityType` to the `EntityType` union from `@sp/shared-schema`, adding `syncImportReason?: SyncImportReason`). Hosts SP-specific helpers locally: `WrappedFullStatePayload`, `isWrappedFullStatePayload`, `extractFullStateFromPayload`, `assertValidFullStatePayload`, `RepairSummary`, `RepairPayload`, `SyncImportReason`, plus a SP-narrowed `isMultiEntityPayload` type guard that delegates to the lib at runtime.
-- `src/app/op-log/core/types/apply.types.ts` — redeclares `ApplyOperationsResult` / `ApplyOperationsOptions` with the app's narrow `Operation`.
-- `src/app/op-log/core/lww-update-action-types.ts` — calls `createLwwUpdateActionTypeHelpers(ENTITY_TYPES)` once and re-exports the resulting helpers.
-- `src/app/op-log/core/sync-state-corrupted.error.ts` — re-exports from lib.
-- `src/app/op-log/sync-providers/provider.const.ts` — **stays as full source** (SP-specific provider enum and prefixes; never moved into the lib).
-- `src/app/op-log/core/action-types.enum.ts` — **stays as full source** (200-line SP feature action enum).
-- `src/app/op-log/sync-exports.ts` — barrel updated to source generic types via `@sp/sync-core` and SP-specific provider const from local.
+- `src/app/op-log/core/operation.types.ts` re-exports generic symbols and
+  redeclares SP-narrowed `Operation`, `OperationLogEntry`, `EntityChange`,
+  `EntityConflict`, `ConflictResult`, and `MultiEntityPayload`.
+- `src/app/op-log/core/types/apply.types.ts` redeclares app-narrowed apply
+  result/options types.
+- `src/app/op-log/core/lww-update-action-types.ts` instantiates the LWW helper
+  factory with `ENTITY_TYPES`.
+- `src/app/op-log/core/sync-state-corrupted.error.ts` re-exports from the
+  package.
+- `src/app/op-log/util/entity-key.util.ts` re-exports from the package.
+- `src/app/op-log/core/action-types.enum.ts` stays full source in the app.
+- `src/app/op-log/sync-providers/provider.const.ts` stays full source in the app.
 
-### Workspace plumbing
+### PR 1 Follow-Ups Before Merge
 
-Mirrors `packages/shared-schema/`.
+- Update the PR description if it still says `action-types.enum.ts` or
+  `provider.const.ts` moved into `@sp/sync-core`; the code correctly keeps them
+  app-side.
+- Fix comments that imply `sync-core` depends on `shared-schema`. The build may
+  run after `shared-schema`, but the package dependency direction must remain
+  absent.
+- Decide whether `FULL_STATE_OP_TYPES` is acceptable compatibility debt for PR 1
+  or whether it should already become app-configurable.
 
-- `packages/sync-core/package.json` — `@sp/sync-core`, `tsup` build, dual ESM/CJS output, no runtime deps (no `@sp/shared-schema`, no Angular, no NgRx).
-- `packages/sync-core/tsconfig.json` — strict, isolatedModules, ES2022 target.
-- `packages/sync-core/tsup.config.ts` — entry `src/index.ts`, dts on, sourcemaps on.
-- `packages/sync-core/.gitignore` — `dist/`, `node_modules/`.
-- Root `tsconfig.base.json` — `"@sp/sync-core": ["packages/sync-core/src/index.ts"]` in `paths`.
-- Root `src/tsconfig.spec.json` — same alias added (this file _overrides_ `paths`, doesn't extend; without this the spec build resolves via `node_modules/@sp/sync-core/dist/`).
-- Root `package.json` — `"sync-core:build": "cd packages/sync-core && npm run build"` chained into `prepare` after `shared-schema:build`.
-- `packages/build-packages.js` — registers `sync-core` in the explicit list (after `shared-schema`, before `plugin-api`).
+### Verification
 
-### Verification (per PR 1)
+1. `cd packages/sync-core && npx tsup` - package builds clean.
+2. `npx tsc -p src/tsconfig.app.json --noEmit` - app type-checks.
+3. `npm run checkFile` on every touched `.ts` file.
+4. `npm test` or scoped op-log specs.
+5. App boot plus manual sync smoke: sync round-trip, conflict round-trip,
+   encryption toggle.
+6. SuperSync E2E when the branch is ready for merge.
+7. Boundary check returns nothing:
 
-1. `cd packages/sync-core && npx tsup` — package builds clean, zero Angular/NgRx/shared-schema imports leak in.
-2. `npx tsc -p src/tsconfig.app.json --noEmit` — app type-checks.
-3. `npm run checkFile` on every touched `.ts` file — lint/format clean.
-4. `npm test` (or scoped op-log run via `npx ng test --watch=false --include 'src/app/op-log/**/*.spec.ts'`) — all specs pass without modification.
-5. App boot + smoke (manual sync, conflict round-trip, encryption toggle).
-6. SuperSync E2E suite.
-7. Boundary check: `grep -r "from '@angular\|from '@ngrx\|from '@sp/shared-schema\|src/app" packages/sync-core/src/` — must return nothing.
-
----
-
-## Follow-up PRs
-
-Each PR below is self-contained; do not bundle them. They are ordered so each builds on the previous one's boundaries without churn.
-
-**Domain rule applies to every PR**: nothing Super Productivity-specific lands in the lib. Any place where the engine needs a domain enum or list, expose a port or factory and feed it from the app at boot. SP `EntityType`/`ENTITY_TYPES`, `ActionType`, `SyncImportReason`, `SyncProviderId`, `appDataComplete` wire format etc. all stay app-side forever.
-
-### PR 2 — Parameterize `core/entity-registry.ts` and add a logger port
-
-**Goals (two related decouplings, can be one PR or split if it gets too big):**
-
-1. **Entity registry as config.** Move the _abstract_ `EntityConfig` / `EntityRegistry` types into `@sp/sync-core`; keep the _wiring_ (the actual feature imports) in the app. This is the single biggest decoupling step — `entity-registry.ts` is what currently makes the engine reach into 15+ feature reducers.
-2. **Logger port.** Define a tiny `SyncLogger` interface in `@sp/sync-core` so the next round of moves (`encryption/`, `core/errors/sync-errors.ts`, `util/sync-file-prefix.ts`) can drop their `OpLog` dependency. App provides an `OpLog`-backed adapter at boot.
-
-**What changes for the entity registry:**
-
-- Define `EntityConfig` and `EntityRegistry` _types_ in `@sp/sync-core/src/entity-registry.types.ts`. The lib must not enumerate SP entity types — registry keys are `string`, the app supplies the concrete keys. Shape:
-  ```ts
-  type EntityKind = 'adapter' | 'singleton' | 'map';
-  interface EntityConfig<S = unknown, A = unknown> {
-    kind: EntityKind;
-    initialState: S;
-    adapter?: EntityAdapter<A>; // for 'adapter' kind, structural shape
-    selectIds?: (s: S) => string[]; // for 'map' kind
-    // ...whatever the current registry exposes, generically typed
-  }
-  type EntityRegistry = Record<string, EntityConfig>;
-  ```
-- Replace the hardcoded registry object in `src/app/op-log/core/entity-registry.ts` with a `buildEntityRegistry()` function that returns an `EntityRegistry` constructed from the feature imports. Keep this function in the app — it is SP config, not engine.
-- Anything in `op-log/` that today imports the registry directly should instead receive it via DI (e.g. an `ENTITY_REGISTRY` `InjectionToken` provided in `AppModule`/root config).
-- Engine code in `@sp/sync-core` (added in PR 3) consumes the typed `EntityRegistry`; it never imports from `src/app/features/*`.
-
-**What changes for the logger port:**
-
-- Define `SyncLogger` interface in the lib with the methods actually used by the moveable files: `log`, `err`, `normal`, `verbose`, `info`, `warn`, `critical`, `debug`. Match the `OpLog` surface shape-only.
-- Provide a no-op default the lib's tests can use.
-- App registers an `OpLog`-backed adapter when composing the engine.
-- This unlocks moving (in this PR or PR 3a): `op-log/encryption/`, `op-log/core/errors/sync-errors.ts`, `op-log/util/sync-file-prefix.ts`.
-
-**Risks / things to verify:**
-
-- `@ngrx/entity` types: keep `EntityAdapter` typed as a structural shape (`{ getInitialState, addOne, ... }`) so the package stays free of the NgRx runtime dep.
-- Any selector-based code in `op-log/core/` that consumes the registry needs to be checked for app-store coupling (per CLAUDE.md sync-correctness rule #2).
-- The `OpLog` history-recording behavior must be preserved end-to-end — the app adapter forwards every call to the real `OpLog`. Verify by running through the log export feature manually.
-
-**Verification:**
-
-- `npm test` — registry-related specs.
-- App boot + sync round-trip (same as PR 1).
-- `grep -r "from 'src/app/features\|from '@angular\|from '@ngrx\|@sp/shared-schema" packages/sync-core/src/` returns nothing.
-- Manual: run the log export flow and confirm sync/encryption events still appear.
+   ```bash
+   grep -r "from '@angular\\|from '@ngrx\\|from '@sp/shared-schema\\|src/app" packages/sync-core/src/
+   ```
 
 ---
 
-### PR 3a — Pure algorithmic core into `@sp/sync-core`
+## PR 2 - Boundary Guardrails, Entity Registry Types, Logger Port
 
-**Goal:** Move the framework-agnostic, stateless sync algorithms — the parts that don't talk to NgRx, IndexedDB, or any UI. These are pure-ish functions plus small helpers; they only need the `SyncLogger` port from PR 2.
+This replaces the original late ESLint PR. Boundary guardrails should land
+immediately after the package exists.
 
-**Why split it from 3b:** these pieces are mechanically liftable (no port surface beyond logger) and have most of the meaningful test coverage. Landing them first lets us validate the algorithms-vs-orchestration split before introducing four new ports in PR 3b.
+### Goals
 
-**What moves into `packages/sync-core/src/`:**
+1. **Add package boundary enforcement.** Lint `packages/sync-core/**` and reject
+   imports from Angular, NgRx, `src/app`, and `@sp/shared-schema`.
+2. **Entity registry as config.** Move abstract registry types into
+   `@sp/sync-core`; keep SP feature imports and registry construction in the app.
+3. **Logger port.** Define a privacy-aware `SyncLogger` interface in
+   `@sp/sync-core` so moveable files can drop direct `OpLog` imports.
 
-- **Vector-clock client wrapper** — the `VectorClock` helpers currently in `src/app/core/util/vector-clock.ts` (`incrementVectorClock`, `mergeVectorClocks`, `compareVectorClocks` wrapper, `limitVectorClockSize` wrapper, `vectorClockToString`, `hasVectorClockChanges`, `isValidVectorClock`, `sanitizeVectorClock`). The `Subject` for prune notifications becomes a `(event) => void` callback the app wires up. `OpLog` calls go through the `SyncLogger` port.
-- **Conflict detection / resolution algorithms** — the pure parts of `op-log/sync/conflict-resolution.service.ts`: detecting concurrent ops, choosing winners by LWW timestamp+clientId tiebreak, building merged vector clocks. The `SnackService` call (the user-facing notification) stays app-side as a port adapter; the algorithm core moves.
-- **Op validation** — pure shape checks in `op-log/validation/`: `validate-operation-payload.ts` (already mostly pure), `validate-state.service.ts` shape-only checks. Anything that calls into NgRx selectors stays in PR 3b.
-- **Filtering / partitioning helpers** — anything in `op-log/sync/` that computes "which ops are local-only", "which need uploading", "which conflict" given inputs. Functions that take `OperationLogEntry[]` and return derived data.
-- **Op merging** — combining local and remote op streams by vector clock order. Currently scattered across `remote-ops-processing.service.ts` and `operation-log-sync.service.ts`; extract the pure merge into the lib.
-- **Encryption + compression** — `op-log/encryption/` (already-pure crypto, blocked in PR 1 only by `OpLog` dep, unblocked by PR 2's logger port).
-- **`op-log/util/sync-file-prefix.ts`** — was blocked in PR 1 by `sync-errors` dep; unblocked once errors move (also in this PR).
-- **`op-log/core/errors/sync-errors.ts`** — drops `OpLog` import, uses `SyncLogger` instead.
+### Boundary Enforcement
 
-**What stays in the app (ports come in PR 3b):**
+- Update `eslint.config.js` so `packages/sync-core/**` is linted.
+- Add `no-restricted-imports` for:
+  - `@angular/*`
+  - `@ngrx/*`
+  - `@sp/shared-schema`
+  - `src/app/*` and relative app imports such as `../../src/app/*`
+- Keep package exceptions explicit for packages that cannot yet be linted.
+- Add the same rule for `packages/sync-providers/**` once that package exists.
 
-- Anything that calls `Store.dispatch()` or reads from `Store.select()` directly.
-- `OperationLogStoreService` (IndexedDB).
-- The four UI-coupled services (dialogs, snack).
-- Effects, meta-reducers in `capture/`.
-- `OperationApplierService.applyOperations()` — moves in 3b once `ActionDispatchPort` exists.
-- Anything that reads sync config from NgRx state.
+### Entity Registry Types
 
-**Migration mechanics:**
+Define `EntityConfig` / `EntityRegistry` types in
+`@sp/sync-core/src/entity-registry.types.ts`, but make the shape reflect the
+current registry, not a simplified example.
 
-- Replace `inject(X)` / `@Injectable` with plain functions or classes that take dependencies as constructor args. Most of the algorithmic code is already function-shaped.
-- Specs co-located with the moved files become vitest specs in the package. Specs that depend on `TestBed` stay app-side and re-test the integrated behaviour.
-- Internal cross-imports inside the package use relative paths; app callers continue to import from the in-app stub paths (now re-exporting from `@sp/sync-core`).
+Required storage patterns:
 
-**Risks:**
+```ts
+type EntityStoragePattern = 'adapter' | 'singleton' | 'map' | 'array' | 'virtual';
+```
 
-- The vector-clock client wrapper is on the hottest sync path; touch with care. Keep behavior bit-identical — the only change is logger calls go through the port.
-- `SyncStateCorruptedError` is already in the lib (PR 1) — make sure new lib code throws it consistently.
-- Any function that _looks_ pure but secretly reaches into the NgRx Store (rare but possible) needs to be flagged before moving.
+Guidelines:
 
-**Verification:**
+- Registry keys are `string`; the app narrows them to `EntityType`.
+- Selectors are structural function types; the package must not import NgRx
+  selector types.
+- Adapter support is structural, not `@ngrx/entity`-typed. Include only the
+  methods actually consumed by op-log code.
+- Include `payloadKey`, `featureName`, `mapKey`, and `arrayKey` if current
+  consumers need them.
+- Keep `SINGLETON_ENTITY_ID` generic if it remains engine-relevant; otherwise
+  keep it in the app.
 
-- `cd packages/sync-core && npm test` — vitest suite for moved algorithms (port from Karma where they came with specs).
-- Full app `npm test` — integration specs against the in-app stub paths still pass.
-- `grep -rn "from '@angular\|from '@ngrx\|@sp/shared-schema\|src/app" packages/sync-core/src/` — still empty.
-- Manual: sync round-trip, encryption toggle, conflict scenario.
+App-side changes:
+
+- Replace the hardcoded exported registry with `buildEntityRegistry()` in
+  `src/app/op-log/core/entity-registry.ts`.
+- Provide an `ENTITY_REGISTRY` injection token in app code for services that
+  should stop importing the registry singleton directly.
+- Keep all feature reducer/selector imports in the app.
+
+### Logger Port
+
+Define `SyncLogger` in the lib:
+
+```ts
+export type SyncLogMeta = Record<string, string | number | boolean | null | undefined>;
+
+export interface SyncLogger {
+  log(message: string, meta?: SyncLogMeta): void;
+  err(message: string, error?: unknown, meta?: SyncLogMeta): void;
+  normal(message: string, meta?: SyncLogMeta): void;
+  verbose(message: string, meta?: SyncLogMeta): void;
+  info(message: string, meta?: SyncLogMeta): void;
+  warn(message: string, meta?: SyncLogMeta): void;
+  critical(message: string, meta?: SyncLogMeta): void;
+  debug(message: string, meta?: SyncLogMeta): void;
+}
+```
+
+Also provide a `NOOP_SYNC_LOGGER` for tests and package defaults.
+
+Privacy rule: logger metadata must not include full entities, operation payloads,
+task titles, note text, raw provider responses, credentials, or encryption
+material. IDs, counts, op IDs, action strings, entity types, and error names are
+acceptable.
+
+### What This Unlocks
+
+After this PR, files blocked only by `OpLog` can move without creating a package
+dependency on app logging:
+
+- `op-log/encryption/`
+- `op-log/core/errors/sync-errors.ts`
+- `op-log/util/sync-file-prefix.ts`
+
+### Verification
+
+- `npm run lint` proves package boundary rules are active.
+- Add and revert one deliberately-bad package import to prove the rule fails.
+- `npm test` for registry-related specs.
+- App boot + sync round-trip.
+- Manual log export flow: sync/encryption events still appear and do not expose
+  user content.
 
 ---
 
-### PR 3b — Orchestrators behind ports
+## PR 3a - Vector-Clock Ownership and Package Test Harness
 
-**Goal:** Move the _stateful orchestrators_ — services that drive the upload/download loop, replay ops, and coordinate with the rest of the app. These are where the app/lib boundary becomes load-bearing, so they land behind ports introduced in this PR.
+Do this before moving more algorithms. Vector-clock parity is load-bearing for
+sync correctness.
 
-**Ports introduced in `@sp/sync-core`** — all generic, no SP identifiers:
+### Goals
 
-- `OperationStorePort` — abstract over today's `OperationLogStoreService` (read/write op-log entries to IndexedDB). Method names use `Operation` / `OperationLogEntry`, never `Task` or `Project`.
-- `ActionDispatchPort` — abstract over `Store.dispatch()`. App-side adapter wraps the NgRx Store. Takes `{ type: string; meta?: ...; [key: string]: unknown }` — no app-action-type union in the lib.
-- `ConflictUiPort` — methods like `confirmImportConflict(...)`, `notifyLwwResolution(...)`. The "reason" parameter is `string`, not the SP `SyncImportReason` union — the app dialog adapter narrows.
-- `SyncConfigPort` — read sync config (provider id, encryption settings, interval). The provider-id parameter is `string`, not `SyncProviderId` (which stays SP-specific). App-side adapter selects from NgRx state via `selectSyncConfig` (`features/config/store/global-config.reducer.ts:92`).
-- `RepairPort` (if needed) — generic repair-summary shape; app's `RepairSummary` with the concrete fields stays in the stub.
+1. Pick the single source of truth for vector-clock compare/merge/prune logic.
+2. Add a package test runner for `@sp/sync-core`.
+3. Port existing vector-clock tests before changing call sites.
 
-**What moves into `packages/sync-core/src/`:**
+### Preferred Direction
 
-- `OperationLogSyncService` — upload/download orchestrator, decides what to push and pull.
-- `OperationApplierService` — replays ops via `ActionDispatchPort` (preserves the bulk-dispatch yield from CLAUDE.md rule #6).
-- `OperationLogUploadService` — batch + retry logic, uses `OperationStorePort`.
-- `RemoteOpsProcessingService` — applies remote ops, marks application status, retries failed.
-- `op-log/persistence/` — the parts that don't reach into NgRx; the `OperationLogStoreService` itself stays in app as the `OperationStorePort` implementation.
-- Whatever remains in `op-log/sync/` that isn't already moved (3a) and isn't UI-coupled.
+Make `@sp/sync-core` own generic vector-clock algorithms:
 
-**What stays in the app (cannot be moved):**
+- `compareVectorClocks`
+- `mergeVectorClocks`
+- `limitVectorClockSize`
+- `MAX_VECTOR_CLOCK_SIZE`
+- validation/sanitization helpers if they are shared by client/server
 
-Per Phase 1 exploration, four files have unavoidable Angular UI dependencies and stay app-side as adapters:
+Then update the current server/shared package path to consume or re-export that
+implementation. If dependency direction makes that awkward, create a smaller
+shared vector-clock package instead. The important constraint is one
+implementation, not two copies.
 
-- `op-log/sync/sync-import-conflict-dialog.service.ts` (MatDialog)
-- `op-log/sync/server-migration.service.ts` (MatDialog)
-- `op-log/sync/conflict-resolution.service.ts` (the SnackService call — the algorithmic core moved in 3a)
-- `op-log/sync/operation-log-download.service.ts` (SnackService — only the toast call)
+### Migration Notes
 
-Plus all NgRx-coupled glue: `OperationLogStoreService`, anything that calls `Store.dispatch()` directly, meta-reducers in `capture/`, effects using `inject(LOCAL_ACTIONS)` (CLAUDE.md rule #1).
+- Preserve client null/undefined wrapper behavior exactly.
+- Preserve `MAX_VECTOR_CLOCK_SIZE = 20`.
+- Preserve server ordering: conflict detection first, pruning before storage.
+- Replace the RxJS prune `Subject` with a callback/event hook at the package
+  boundary.
+- Route logging through `SyncLogger`.
 
-**Migration mechanics:**
+### Verification
 
-- Each moved service: replace `@Injectable` with a plain class, replace `inject(X)` with constructor parameters. The app composes the engine at boot via a small `createSyncEngine({ storePort, dispatchPort, conflictUi, syncConfig, logger })` factory, passing in adapters that satisfy the ports.
-- The four UI-coupled services stay in `src/app/op-log/sync/` as port implementations.
-- `LOCAL_ACTIONS` and meta-reducer wiring stays app-side (CLAUDE.md sync-correctness rule #1).
-
-**Risks (high — this is the biggest PR of the series):**
-
-- `OperationApplierService.applyOperations()` has the bulk-dispatch yield (`await new Promise(r => setTimeout(r, 0))` per CLAUDE.md rule #6) — preserve this exactly when moving.
-- The dispatch port must preserve action shape _and_ `meta` exactly (CLAUDE.md rule #1: effects use `inject(LOCAL_ACTIONS)` to filter remote ops; the meta-flag pattern must round-trip).
-- Many services have spec files; the ones that import Angular testing utilities need to be rewritten for vitest, or kept app-side as integration tests against the port adapters. Default: keep specs alongside the moved code, port to vitest.
-- Effects must continue to use `inject(LOCAL_ACTIONS)`. Any effect that moves needs its action stream injected via a port instead.
-- Concurrent sync race conditions are the main runtime risk — the SuperSync E2E scenarios are the primary safety net.
-
-**Verification:**
-
-- `cd packages/sync-core && npm test` — full engine spec suite.
-- Full app `npm test` — adapter specs.
-- `npm run e2e` — sync-related E2E (see `e2e/CLAUDE.md` for SuperSync setup).
-- Smoke: encryption toggle, conflict scenario, fresh-client bootstrap, and the multi-client SuperSync scenarios from `docs/sync-and-op-log/supersync-scenarios.md`.
+- Port `src/app/core/util/vector-clock.spec.ts` into package tests where possible.
+- Keep app wrapper specs for integration behavior and import compatibility.
+- Run package tests, app op-log specs, and boundary grep.
 
 ---
 
-### PR 4 — Lift providers into `@sp/sync-providers`
+## PR 3b - Pure Algorithmic Core
 
-**Goal:** Pull the four providers out of `src/app/op-log/sync-providers/` so the engine, providers, and config concerns each live in their own package.
+Move framework-agnostic, stateless sync algorithms. These should only need typed
+inputs and the logger port.
 
-**Decision: separate package, not bundled into `@sp/sync-core`.** Reasons:
+### What Moves
 
-- Engine doesn't need to know about Dropbox/WebDAV/SuperSync specifics.
-- Providers can carry their own (sometimes heavy) deps without bloating the core.
-- Keeps the "sync logic vs implementation" split visible at the file system level.
+- Conflict detection and LWW resolution algorithms from
+  `op-log/sync/conflict-resolution.service.ts`.
+- Filtering/partitioning helpers that operate on `OperationLogEntry[]`.
+- Pure op merge helpers currently scattered across `remote-ops-processing.service.ts`
+  and `operation-log-sync.service.ts`.
+- Pure operation payload validation from `op-log/validation/`, as long as it
+  does not import app schemas or NgRx selectors.
+- Encryption/compression utilities once `OpLog` is removed.
+- `sync-errors.ts` and `sync-file-prefix.ts` if they are generic after
+  logger/config cleanup.
 
-**What moves to `packages/sync-providers/src/`:**
+### What Stays App-Side
+
+- Anything that calls `Store.dispatch()` or `Store.select()`.
+- `OperationLogStoreService` and IndexedDB implementation details.
+- UI services: dialogs, snacks, Angular Material.
+- Effects, meta-reducers, and `LOCAL_ACTIONS` wiring.
+- App schema validation tied to SP model shape.
+- Full-state payload wrappers and SP repair payloads.
+
+### Verification
+
+- Package test suite for moved algorithms.
+- Full app `npm test` for integration through stubs.
+- Boundary grep stays empty.
+- Manual sync round-trip, encryption toggle, and conflict scenario.
+
+---
+
+## PR 4a - Port Contracts Only
+
+Introduce orchestration ports without moving the orchestrators yet. This reduces
+the risk of the later service moves.
+
+### Ports
+
+- `OperationStorePort` - abstract over op-log persistence. Method names use
+  `Operation` / `OperationLogEntry` only.
+- `ActionDispatchPort` - abstract over dispatching replay actions. Takes generic
+  action objects and must preserve `meta` exactly.
+- `RemoteApplyWindowPort` - abstracts `HydrationStateService` behavior: start
+  remote apply, end remote apply, post-sync cooldown.
+- `DeferredLocalActionsPort` - abstracts
+  `OperationLogEffects.processDeferredActions()`.
+- `ArchiveSideEffectPort` - abstracts archive-specific IndexedDB handling for
+  remote operations.
+- `ConflictUiPort` - app dialog/snack adapter. Reasons are strings at the
+  package boundary.
+- `SyncConfigPort` - app adapter around NgRx config selectors. Provider IDs are
+  strings at the package boundary.
+- `RepairPort` only if truly needed, and with generic shapes.
+
+### Why Split This Out
+
+`OperationApplierService` is not just replay logic. It currently coordinates:
+
+- bulk NgRx dispatch,
+- the required event-loop yield after dispatch,
+- remote apply windows and cooldowns,
+- archive side effects,
+- `remoteArchiveDataApplied`,
+- deferred local action processing.
+
+Those behaviors should first be represented as ports and tested while the
+service remains app-side.
+
+### Verification
+
+- Adapter specs prove app services satisfy the ports.
+- Existing app sync specs still pass.
+- Add contract tests for action `meta` preservation and bulk-dispatch yield
+  behavior.
+
+---
+
+## PR 4b - Move Small Orchestration Units Behind Ports
+
+Move only orchestration code whose dependencies are already represented by ports
+and whose behavior can be tested without Angular.
+
+### Candidate Moves
+
+- Upload batching/retry logic from `OperationLogUploadService` if provider and
+  store access are ported.
+- Remote op processing state machine if applying, marking, and validation are all
+  ports.
+- Pure parts of download/upload decision logic.
+
+### Keep App-Side Until Proven Safe
+
+- The Angular `OperationApplierService` shell.
+- `bulkApplyOperations` action and meta-reducer wiring.
+- `HydrationStateService` implementation.
+- `ArchiveOperationHandler` implementation.
+- Effects using `inject(LOCAL_ACTIONS)`.
+- UI-coupled conflict/import/download services.
+
+### Verification
+
+- Package orchestration tests.
+- App adapter tests.
+- Full app unit tests.
+- SuperSync scenarios focused on concurrency, fresh-client bootstrap, server
+  migration, and import conflicts.
+
+---
+
+## PR 4c - Revisit `OperationApplierService`
+
+Only after 4a/4b are stable, decide whether any part of
+`OperationApplierService` belongs in `@sp/sync-core`.
+
+Acceptable extraction:
+
+- a small generic replay coordinator that calls ports in a strict order;
+- contract tests for yielding, failure reporting, archive side-effect ordering,
+  and deferred-action flush timing.
+
+Likely app-side permanently:
+
+- NgRx action construction and `bulkApplyOperations`,
+- Angular `Injector` usage,
+- `remoteArchiveDataApplied`,
+- hydration-state implementation,
+- archive handler implementation.
+
+Hard requirements from `CLAUDE.md`:
+
+- remote operations must not trigger normal effects;
+- selector-based effects must remain guarded by the sync window;
+- bulk dispatch must yield after the dispatch;
+- remote archive side effects must still run;
+- deferred local actions must be processed after remote apply finishes.
+
+---
+
+## PR 5 - Lift Providers Into `@sp/sync-providers`
+
+Pull bundled providers out of `src/app/op-log/sync-providers/` so engine,
+providers, and app wiring each live in their own package.
+
+### What Moves
 
 - `op-log/sync-providers/super-sync/`
 - `op-log/sync-providers/file-based/dropbox/`
-- `op-log/sync-providers/file-based/webdav/` (incl. `nextcloud.ts`)
-- `op-log/sync-providers/file-based/local-file/` — **wrinkle:** local-file uses Electron APIs gated behind `IS_ELECTRON` (CLAUDE.md project rules). Keep the Electron bridge in the app, expose a port the local-file provider calls into.
-- `op-log/sync-providers/provider-manager.service.ts` — split: the _engine-facing_ provider registry/factory moves to the package; the part that reads `selectSyncConfig` from NgRx stays in the app and feeds config in via the `SyncConfigPort` from PR 3b.
+- `op-log/sync-providers/file-based/webdav/` including Nextcloud-specific code
+- `op-log/sync-providers/file-based/local-file/`, with Electron APIs behind an
+  app-provided port
+- provider registry/factory logic that does not read NgRx state directly
 
-**What stays in the app:**
+### What Stays App-Side
 
-- `op-log/sync-providers/credential-store.service.ts` — Angular `@Injectable` wrapper. The provider package depends on the `SyncCredentialStore<PID>` _interface_ (extract it in this PR — not done in PR 1 because `provider.interface.ts` couldn't move yet).
-- OAuth callback handling (`src/app/imex/sync/oauth-callback-handler.service.ts`) — Angular Router-coupled.
-- Any provider config UI / dialogs.
-- `SyncProviderId` enum and `OAUTH_SYNC_PROVIDERS` set — these are SP's bundled-provider list. The provider package defines its own per-provider IDs as `string` constants; `SyncProviderId` stays in the app as the union of all bundled IDs.
+- `SyncProviderId` and bundled provider lists.
+- Credential-store Angular service implementation.
+- OAuth callback routing.
+- Provider config UI/dialogs.
+- Electron bridge implementation.
+- Any code reading `selectSyncConfig` directly.
 
-**Risks:**
+### Provider Package Rules
 
-- HTTP clients: providers currently use `HttpClient` (Angular). The package can't depend on Angular, so providers should switch to `fetch` (already the case for some). Verify each provider before moving — non-trivial for any that use `HttpInterceptor`s.
-- Dropbox/WebDAV `webdav.config.ts` has provider-specific config that may import from `features/config` — audit and parameterize.
+- Provider IDs inside the package are string constants, not the app's
+  `SyncProviderId` enum.
+- Credential storage is an interface.
+- HTTP should use `fetch` or an injected HTTP port, not Angular `HttpClient`.
+- Provider package must not import `@sp/sync-core` internals beyond public
+  ports/types.
 
-**Verification:**
+### Verification
 
-- Per-provider unit specs in the package.
-- E2E sync round-trip per provider (Dropbox, WebDAV, LocalFile, SuperSync) — `npm run e2e:file <path>` for each.
-- Snapshot bootstrap from a fresh client (file-based providers).
-
----
-
-### PR 5 — ESLint boundary rule (belt-and-braces)
-
-**Goal:** Add a `no-restricted-imports` rule to `eslint.config.js` preventing the packages from importing app code, even by accident.
-
-**What changes:**
-
-- `eslint.config.js`: add a rule scoped to `packages/sync-core/**` and `packages/sync-providers/**`:
-  ```js
-  'no-restricted-imports': ['error', {
-    patterns: [
-      { group: ['src/app/*', '../../**/src/app/*'], message: 'Sync packages must not import from the app.' },
-      { group: ['@angular/*', '@ngrx/*'], message: 'Sync packages must stay framework-agnostic.' },
-    ],
-  }]
-  ```
-- Note: `eslint.config.js` currently _ignores_ `packages/**`. Reverse that to ignore only `packages/plugin-dev/**` / `packages/super-sync-server/**` (or whatever is appropriate) so `sync-core` / `sync-providers` are linted.
-
-**Verification:**
-
-- `npm run lint` — should pass clean.
-- Add a deliberately-bad import in a throwaway commit and verify the rule fires; revert.
+- Per-provider unit specs.
+- E2E sync round-trip per provider: Dropbox, WebDAV, LocalFile, SuperSync.
+- Fresh-client bootstrap for file-based providers.
+- Electron-gated LocalFile path smoke test.
 
 ---
 
-## Summary timeline
+## PR 6 - Final Boundary Hardening
 
-| PR             | Scope                                                                                                                                                                                   | Risk        | Touches                                                                                                                |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **1** (landed) | Stand up `@sp/sync-core` with generic, domain-agnostic primitives only (Operation/OpType/VectorClock/conflict types/LWW factory/entity-key util/error class)                            | Low         | 7 files moved as generics, ~8 in-app stubs/redeclarations, 1 alias added in two tsconfigs, 1 barrel rewritten          |
-| **2**          | Parameterize `entity-registry.ts` via DI; introduce `SyncLogger` port and move encryption + sync-errors + sync-file-prefix                                                              | Medium      | All op-log code that consumes the registry; everything that uses `OpLog` from the moveable files                       |
-| **3a**         | Pure algorithmic core into the lib (vector-clock client wrapper, conflict detection algorithms, op merge, op validation, encryption/compression) — only the `SyncLogger` port is needed | Medium      | `op-log/encryption/`, `op-log/validation/` pure parts, vector-clock util, pieces of `op-log/sync/` conflict resolution |
-| **3b**         | Orchestrators behind ports (`OperationStorePort`, `ActionDispatchPort`, `ConflictUiPort`, `SyncConfigPort`) — sync/applier/upload/remote-ops services                                   | High        | Most of `op-log/sync/`, `apply/`, `capture/`, `persistence/`                                                           |
-| **4**          | Lift providers into `@sp/sync-providers`                                                                                                                                                | Medium-High | `op-log/sync-providers/`                                                                                               |
-| **5**          | ESLint boundary rule                                                                                                                                                                    | Trivial     | `eslint.config.js`                                                                                                     |
+This is now a final audit rather than the first boundary rule.
 
-After PR 5 the three concerns are physically separate: `@sp/sync-core` is the **domain-agnostic** engine + abstractions, `@sp/sync-providers` is the implementations, and `src/app/op-log/` is just app-side wiring (NgRx adapters, dialog ports, entity-registry composition, `ActionType` enum, `EntityType` union, `SyncImportReason`, `SyncProviderId`, repair shapes, full-state wire format). The lib stays reusable for any host app that wants an op-log + vector-clock sync engine; SP is one such host.
+### Goals
+
+- Extend the boundary rules to `packages/sync-providers/**`.
+- Audit package manifests for accidental runtime deps.
+- Audit public exports for SP names and app-only concepts.
+- Add a small architecture note that explains the package boundaries and allowed
+  dependency direction.
+
+### Verification
+
+- `npm run lint`.
+- Boundary grep for both packages.
+- Package builds from a clean install.
+- Full app unit tests and selected sync E2E.
+
+---
+
+## Summary Timeline
+
+| PR     | Scope                                                      | Risk        | Notes                                  |
+| ------ | ---------------------------------------------------------- | ----------- | -------------------------------------- |
+| **1**  | Stand up `@sp/sync-core` with generic primitives and stubs | Low         | Current PR #7546                       |
+| **2**  | Boundary lint, registry types, privacy-aware logger port   | Medium      | Moves guardrails earlier               |
+| **3a** | Vector-clock ownership and package test harness            | Medium      | Prevents algorithm drift               |
+| **3b** | Pure algorithmic core                                      | Medium      | No Angular/NgRx/IndexedDB              |
+| **4a** | Port contracts only                                        | Medium      | Keeps orchestrators app-side           |
+| **4b** | Move small orchestration units behind ports                | High        | Incremental state-machine extraction   |
+| **4c** | Revisit `OperationApplierService` extraction               | High        | Extract only if the boundary is proven |
+| **5**  | Lift providers into `@sp/sync-providers`                   | Medium-High | Provider deps stay out of core         |
+| **6**  | Final boundary hardening and architecture note             | Low         | Audit and lock down                    |
+
+After the final PR, `@sp/sync-core` should be the domain-agnostic sync engine
+and abstractions, `@sp/sync-providers` should contain bundled provider
+implementations, and `src/app/op-log/` should contain SP-specific wiring: NgRx
+adapters, dialog ports, entity-registry composition, `ActionType`, `EntityType`,
+`SyncImportReason`, `SyncProviderId`, repair shapes, and full-state wire format.
