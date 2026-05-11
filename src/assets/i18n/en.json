@@ -1744,7 +1744,8 @@
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",
         "TASK_ALREADY_EXISTS": "Task <strong>{{title}}</strong> already exists",
-        "TASK_CREATED": "Created task \"{{taskTitle}}\""
+        "TASK_CREATED": "Created task \"{{taskTitle}}\"",
+        "TASK_DONE": "Marked \"{{title}}\" as done"
       },
       "SELECT_OR_CREATE": "Select or create task",
       "SUMMARY_TABLE": {

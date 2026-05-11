@@ -377,6 +377,11 @@ mat-tooltip-component {
 }
 
 // SNACK
+mat-snack-bar-container {
+  --mat-snack-bar-container-color: var(--bg-lightest);
+  --mat-snack-bar-supporting-text-color: var(--text-color);
+}
+
 // Move snack bar above mobile bottom nav for all touch devices
 @include media-queries.mq(xs, max) {
   // Apply to all touch devices, not just when mobile bottom nav is shown
