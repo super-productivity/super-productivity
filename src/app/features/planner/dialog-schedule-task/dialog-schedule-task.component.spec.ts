@@ -17,11 +17,15 @@ import { WorkContextService } from '../../../features/work-context/work-context.
 import { of } from 'rxjs';
 import { PlannerService } from '../planner.service';
 import { RootState } from '../../../root-store/root-state';
-import { CONFIG_FEATURE_NAME } from '../../config/store/global-config.reducer';
+import {
+  CONFIG_FEATURE_NAME,
+  selectTimelineConfig,
+} from '../../config/store/global-config.reducer';
 import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { ReminderService } from '../../reminder/reminder.service';
 import { PlannerActions } from '../store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 
 describe('DialogScheduleTaskComponent', () => {
   let component: DialogScheduleTaskComponent;
@@ -82,6 +86,10 @@ describe('DialogScheduleTaskComponent', () => {
               },
             } as any,
           },
+          selectors: [
+            { selector: selectAllTasksWithDueTimeSorted, value: [] },
+            { selector: selectTimelineConfig, value: null },
+          ],
         }),
         { provide: MatDialogRef, useValue: dialogRefSpy },
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },
