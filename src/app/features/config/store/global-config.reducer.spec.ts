@@ -81,6 +81,9 @@ describe('GlobalConfigReducer', () => {
       expect(result.tasks.isAutoAddWorkedOnToToday).toBe(
         DEFAULT_GLOBAL_CONFIG.tasks.isAutoAddWorkedOnToToday,
       );
+      expect(result.tasks.isNotifyOnTaskDone).toBe(
+        DEFAULT_GLOBAL_CONFIG.tasks.isNotifyOnTaskDone,
+      );
       expect(result.tasks.isTrayShowCurrent).toBe(
         DEFAULT_GLOBAL_CONFIG.tasks.isTrayShowCurrent,
       );
@@ -477,6 +480,32 @@ describe('GlobalConfigReducer', () => {
         // Migration must NOT have backfilled — the prototype key is not "owned".
         expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
       });
+
+      it('should fill missing notification settings with defaults', () => {
+        const incomingConfig = {
+          ...initialGlobalConfigState,
+          focusMode: {
+            isSkipPreparation: true,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: {
+              globalConfig: incomingConfig,
+            } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.isSkipPreparation).toBe(true);
+        expect(result.focusMode.isNotifyOnFocusSessionDone).toBe(
+          DEFAULT_GLOBAL_CONFIG.focusMode.isNotifyOnFocusSessionDone,
+        );
+        expect(result.focusMode.isNotifyOnBreakDone).toBe(
+          DEFAULT_GLOBAL_CONFIG.focusMode.isNotifyOnBreakDone,
+        );
+      });
     });
   });
 
@@ -606,6 +635,12 @@ describe('GlobalConfigReducer', () => {
       // was false, so currentTask was never unset when a Pomodoro break started.
       it('should default isPauseTrackingDuringBreak to true so break time is not counted', () => {
         expect(DEFAULT_GLOBAL_CONFIG.focusMode.isPauseTrackingDuringBreak).toBe(true);
+      });
+
+      it('should default browser notifications to off', () => {
+        expect(DEFAULT_GLOBAL_CONFIG.focusMode.isNotifyOnFocusSessionDone).toBe(false);
+        expect(DEFAULT_GLOBAL_CONFIG.focusMode.isNotifyOnBreakDone).toBe(false);
+        expect(DEFAULT_GLOBAL_CONFIG.tasks.isNotifyOnTaskDone).toBe(false);
       });
 
       it('should return default config when state is undefined', () => {

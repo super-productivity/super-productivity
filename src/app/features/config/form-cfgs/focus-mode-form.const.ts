@@ -1,5 +1,7 @@
 import { ConfigFormSection, FocusModeConfig } from '../global-config.model';
 import { T } from '../../../t.const';
+import { requestBrowserNotificationPermissionIfEnabled } from '../../../core/notify/request-browser-notification-permission.util';
+import { IS_WEB_BROWSER } from '../../../app.constants';
 
 export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
   title: T.GCF.FOCUS_MODE.TITLE,
@@ -25,6 +27,32 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
         ],
       },
     },
+    ...(IS_WEB_BROWSER
+      ? [
+          {
+            key: 'isNotifyOnFocusSessionDone' as const,
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.FOCUS_MODE.L_NOTIFY_ON_FOCUS_SESSION_DONE,
+              change: (field) =>
+                requestBrowserNotificationPermissionIfEnabled(
+                  field.model?.isNotifyOnFocusSessionDone,
+                ),
+            },
+          },
+          {
+            key: 'isNotifyOnBreakDone' as const,
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.FOCUS_MODE.L_NOTIFY_ON_BREAK_DONE,
+              change: (field) =>
+                requestBrowserNotificationPermissionIfEnabled(
+                  field.model?.isNotifyOnBreakDone,
+                ),
+            },
+          },
+        ]
+      : []),
     {
       type: 'collapsible',
       props: { label: T.G.ADVANCED_CFG },

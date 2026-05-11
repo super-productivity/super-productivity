@@ -38,6 +38,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeDelete: true,
     isAutoAddWorkedOnToToday: true,
     isAutoMarkParentAsDone: false,
+    isNotifyOnTaskDone: false,
     isTrayShowCurrent: true,
     defaultProjectId: null,
     isMarkdownFormattingInNotesEnabled: true,
@@ -97,6 +98,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     focusModeSound: 'off',
     isPauseTrackingDuringBreak: true,
     autoStartFocusOnPlay: false,
+    isNotifyOnFocusSessionDone: false,
+    isNotifyOnBreakDone: false,
     isManualBreakStart: false,
   },
   flowtime: {

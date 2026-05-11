@@ -2168,6 +2168,8 @@
       "L_AUTO_START_FOCUS_ON_PLAY": "Start a focus session when I start tracking a task",
       "L_FOCUS_MODE_SOUND": "Ambient sound during focus sessions",
       "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
+      "L_NOTIFY_ON_BREAK_DONE": "Show browser notification when a break ends",
+      "L_NOTIFY_ON_FOCUS_SESSION_DONE": "Show browser notification when a focus session ends",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
       "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",
       "TITLE": "Focus Mode"
@@ -2404,6 +2406,7 @@
       "IS_AUTO_MARK_PARENT_AS_DONE": "Automatically mark parent task as completed when all subtasks are completed",
       "IS_CONFIRM_BEFORE_DELETE": "Confirm before deleting tasks",
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Enable Markdown formatting in task notes",
+      "IS_NOTIFY_ON_TASK_DONE": "Show browser notification when a task is completed",
       "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (macOS/Windows only)",
       "NOTES_TEMPLATE": "Task description template",
       "TITLE": "Tasks"

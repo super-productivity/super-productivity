@@ -23,6 +23,8 @@ import { TaskService } from '../../tasks/task.service';
 import { playSound } from '../../../util/play-sound';
 import { startWhiteNoise, stopWhiteNoise } from '../../../util/white-noise';
 import { IS_ELECTRON } from '../../../app.constants';
+import { NotifyModel } from '../../../core/notify/notify.model';
+import { NotifyService } from '../../../core/notify/notify.service';
 import { setCurrentTask, unsetCurrentTask } from '../../tasks/store/task.actions';
 import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
 import { openIdleDialog } from '../../idle/store/idle.actions';
@@ -37,11 +39,14 @@ import { FocusModeMode, FocusScreen, getBreakCycle } from '../focus-mode.model';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
+import { T } from '../../../t.const';
 
 const SESSION_DONE_SOUND = 'positive.mp3';
 const TICK_SOUND = 'tick.mp3';
 /** Focus-mode ambient sounds play at 40% of the user's main volume to avoid being intrusive. */
 const FOCUS_SOUND_VOLUME_FACTOR = 0.4;
+const FOCUS_SESSION_NOTIFICATION_TAG = 'FOCUS_MODE_SESSION_COMPLETE';
+const FOCUS_BREAK_NOTIFICATION_TAG = 'FOCUS_MODE_BREAK_COMPLETE';
 
 @Injectable()
 export class FocusModeEffects {
@@ -53,6 +58,7 @@ export class FocusModeEffects {
   private metricService = inject(MetricService);
   private storageService = inject(FocusModeStorageService);
   private takeABreakService = inject(TakeABreakService);
+  private notifyService = inject(NotifyService);
 
   // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
   //
@@ -294,8 +300,14 @@ export class FocusModeEffects {
           (prev, curr) =>
             prev.elapsed === curr.elapsed && prev.startedAt === curr.startedAt,
         ),
-        tap(() => {
-          this._notifyUser();
+        withLatestFrom(this.store.select(selectFocusModeConfig)),
+        tap(([timer, focusModeConfig]) => {
+          this._notifyUser(
+            false,
+            focusModeConfig?.isNotifyOnBreakDone
+              ? this._getBreakCompleteNotification(timer.isLongBreak === true)
+              : undefined,
+          );
         }),
       ),
     { dispatch: false },
@@ -446,7 +458,18 @@ export class FocusModeEffects {
     () =>
       this.actions$.pipe(
         ofType(actions.completeFocusSession),
-        tap(() => this._notifyUser()),
+        withLatestFrom(
+          this.store.select(selectors.selectMode),
+          this.store.select(selectFocusModeConfig),
+        ),
+        tap(([action, mode, focusModeConfig]) =>
+          this._notifyUser(
+            false,
+            !action.isManual && focusModeConfig?.isNotifyOnFocusSessionDone
+              ? this._getSessionCompleteNotification(mode)
+              : undefined,
+          ),
+        ),
       ),
     { dispatch: false },
   );
@@ -481,8 +504,19 @@ export class FocusModeEffects {
                 timer.duration > 0 &&
                 timer.elapsed >= timer.duration,
             ),
+            withLatestFrom(
+              this.store.select(selectors.selectMode),
+              this.store.select(selectFocusModeConfig),
+            ),
             take(1),
-            tap(() => this._notifyUser()),
+            tap(([, mode, focusModeConfig]) =>
+              this._notifyUser(
+                false,
+                focusModeConfig?.isNotifyOnFocusSessionDone
+                  ? this._getSessionCompleteNotification(mode)
+                  : undefined,
+              ),
+            ),
           ),
         ),
       ),
@@ -875,7 +909,7 @@ export class FocusModeEffects {
     { dispatch: false },
   );
 
-  private _notifyUser(isHideBar = false): void {
+  private _notifyUser(isHideBar = false, desktopNotification?: NotifyModel): void {
     const soundVolume = this.globalConfigService.sound()?.volume || 0;
 
     // Play sound if enabled
@@ -892,5 +926,29 @@ export class FocusModeEffects {
         progressBarMode: isHideBar ? 'none' : 'normal',
       });
     }
+
+    if (desktopNotification && !IS_ELECTRON) {
+      void this.notifyService.notifyDesktop(desktopNotification);
+    }
+  }
+
+  private _getSessionCompleteNotification(mode: FocusModeMode): NotifyModel {
+    return {
+      tag: FOCUS_SESSION_NOTIFICATION_TAG,
+      renotify: true,
+      title:
+        mode === FocusModeMode.Pomodoro
+          ? T.F.FOCUS_MODE.POMODORO_SESSION_COMPLETED
+          : T.F.FOCUS_MODE.SESSION_COMPLETED,
+    };
+  }
+
+  private _getBreakCompleteNotification(isLongBreak: boolean): NotifyModel {
+    return {
+      tag: FOCUS_BREAK_NOTIFICATION_TAG,
+      renotify: true,
+      title: T.F.POMODORO.BREAK_IS_DONE,
+      body: isLongBreak ? T.F.FOCUS_MODE.LONG_BREAK : T.F.FOCUS_MODE.SHORT_BREAK,
+    };
   }
 }

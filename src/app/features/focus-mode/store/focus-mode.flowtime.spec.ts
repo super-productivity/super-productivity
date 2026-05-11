@@ -18,6 +18,7 @@ import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { selectFocusModeConfig } from '../../config/store/global-config.reducer';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
+import { NotifyService } from '../../../core/notify/notify.service';
 
 describe('FocusMode Flowtime behavior', () => {
   describe('Reducer: startFocusSession', () => {
@@ -126,6 +127,10 @@ describe('FocusMode Flowtime behavior', () => {
             useValue: {
               logFocusSession: () => {},
             },
+          },
+          {
+            provide: NotifyService,
+            useValue: jasmine.createSpyObj('NotifyService', ['notifyDesktop']),
           },
           {
             provide: FocusModeStorageService,
@@ -360,6 +365,10 @@ describe('FocusMode Flowtime behavior', () => {
             },
           },
           {
+            provide: NotifyService,
+            useValue: jasmine.createSpyObj('NotifyService', ['notifyDesktop']),
+          },
+          {
             provide: FocusModeStorageService,
             useValue: jasmine.createSpyObj('FocusModeStorageService', [
               'getLastCountdownDuration',
@@ -466,6 +475,10 @@ describe('FocusMode Flowtime behavior', () => {
             useValue: {
               logFocusSession: () => {},
             },
+          },
+          {
+            provide: NotifyService,
+            useValue: jasmine.createSpyObj('NotifyService', ['notifyDesktop']),
           },
           {
             provide: FocusModeStorageService,

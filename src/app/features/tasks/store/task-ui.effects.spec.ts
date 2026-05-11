@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, Subject } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 import { TaskUiEffects } from './task-ui.effects';
 import { provideMockStore } from '@ngrx/store/testing';
 import { TaskService } from '../task.service';
@@ -97,7 +97,7 @@ describe('TaskUiEffects', () => {
           { provide: WorkContextService, useValue: workContextServiceMock },
           {
             provide: NotifyService,
-            useValue: jasmine.createSpyObj('NotifyService', ['notify']),
+            useValue: jasmine.createSpyObj('NotifyService', ['notify', 'notifyDesktop']),
           },
           {
             provide: BannerService,
@@ -105,7 +105,10 @@ describe('TaskUiEffects', () => {
           },
           {
             provide: GlobalConfigService,
-            useValue: { sound$: of({ doneSound: null }) },
+            useValue: {
+              sound$: of({ doneSound: null }),
+              tasks$: of({ isNotifyOnTaskDone: false }),
+            },
           },
           { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
         ],
@@ -161,7 +164,7 @@ describe('TaskUiEffects', () => {
           { provide: WorkContextService, useValue: workContextServiceMock },
           {
             provide: NotifyService,
-            useValue: jasmine.createSpyObj('NotifyService', ['notify']),
+            useValue: jasmine.createSpyObj('NotifyService', ['notify', 'notifyDesktop']),
           },
           {
             provide: BannerService,
@@ -169,7 +172,10 @@ describe('TaskUiEffects', () => {
           },
           {
             provide: GlobalConfigService,
-            useValue: { sound$: of({ doneSound: null }) },
+            useValue: {
+              sound$: of({ doneSound: null }),
+              tasks$: of({ isNotifyOnTaskDone: false }),
+            },
           },
           { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
         ],
@@ -240,6 +246,151 @@ describe('TaskUiEffects', () => {
 
     afterEach(() => {
       localStorage.removeItem(LS.ONBOARDING_HINTS_DONE);
+    });
+  });
+
+  describe('taskDoneNotification$', () => {
+    let notifyServiceMock: jasmine.SpyObj<NotifyService>;
+    let sound$: BehaviorSubject<{ doneSound: string | null }>;
+    let tasks$: BehaviorSubject<{ isNotifyOnTaskDone: boolean }>;
+
+    beforeEach(() => {
+      actions$ = new Subject<Action>();
+      sound$ = new BehaviorSubject<{ doneSound: string | null }>({
+        doneSound: 'ding-small-bell.mp3',
+      });
+      tasks$ = new BehaviorSubject<{ isNotifyOnTaskDone: boolean }>({
+        isNotifyOnTaskDone: true,
+      });
+      snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
+      taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
+      navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
+        'navigate',
+      ]);
+      layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+      notifyServiceMock = jasmine.createSpyObj('NotifyService', [
+        'notify',
+        'notifyDesktop',
+      ]);
+
+      const workContextServiceMock = {
+        mainListTaskIds$: of([]),
+        flatDoneTodayNr$: of(0),
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskUiEffects,
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+          provideMockStore({
+            initialState: {},
+            selectors: [{ selector: selectProjectById, value: null }],
+          }),
+          { provide: SnackService, useValue: snackServiceMock },
+          { provide: TaskService, useValue: taskServiceMock },
+          { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
+          { provide: LayoutService, useValue: layoutServiceMock },
+          { provide: WorkContextService, useValue: workContextServiceMock },
+          { provide: NotifyService, useValue: notifyServiceMock },
+          {
+            provide: BannerService,
+            useValue: jasmine.createSpyObj('BannerService', ['open', 'dismiss']),
+          },
+          {
+            provide: GlobalConfigService,
+            useValue: { sound$, tasks$ },
+          },
+          { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
+        ],
+      });
+
+      effects = TestBed.inject(TaskUiEffects);
+    });
+
+    it('should show a desktop notification when a task is marked done', (done) => {
+      effects.taskDoneNotification$.subscribe(() => {
+        expect(notifyServiceMock.notifyDesktop).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            tag: 'TASK_DONE_task-123',
+            title: T.NOTIFICATION.TASK_MARKED_DONE,
+          }),
+        );
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-123', changes: { isDone: true } },
+        }),
+      );
+    });
+
+    it('should show a desktop notification even when the done sound is disabled', (done) => {
+      sound$.next({ doneSound: null });
+      effects.taskDoneNotification$.subscribe(() => {
+        expect(notifyServiceMock.notifyDesktop).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            tag: 'TASK_DONE_task-123',
+            title: T.NOTIFICATION.TASK_MARKED_DONE,
+          }),
+        );
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-123', changes: { isDone: true } },
+        }),
+      );
+    });
+
+    it('should not show a desktop notification when task done notifications are disabled', (done) => {
+      tasks$.next({ isNotifyOnTaskDone: false });
+      effects.taskDoneNotification$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-123', changes: { isDone: true } },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(notifyServiceMock.notifyDesktop).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    it('should not show a desktop notification for issue refreshes', (done) => {
+      effects.taskDoneNotification$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: {
+            id: 'task-123',
+            changes: { isDone: true, issueWasUpdated: true },
+          },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(notifyServiceMock.notifyDesktop).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    it('should not show a desktop notification when a task is marked not done', (done) => {
+      effects.taskDoneNotification$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-123', changes: { isDone: false } },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(notifyServiceMock.notifyDesktop).not.toHaveBeenCalled();
+        done();
+      }, 0);
     });
   });
 });

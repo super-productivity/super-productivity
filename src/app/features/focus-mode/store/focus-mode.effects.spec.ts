@@ -25,6 +25,8 @@ import {
 import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
 import { take, toArray } from 'rxjs/operators';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { NotifyService } from '../../../core/notify/notify.service';
+import { T } from '../../../t.const';
 
 describe('FocusModeEffects', () => {
   let actions$: Observable<any>;
@@ -36,6 +38,7 @@ describe('FocusModeEffects', () => {
   let metricServiceMock: any;
   let bannerServiceMock: any;
   let hydrationStateServiceMock: any;
+  let notifyServiceMock: jasmine.SpyObj<NotifyService>;
   let currentTaskId$: BehaviorSubject<string | null>;
 
   const createMockTimer = (overrides: Partial<TimerState> = {}): TimerState => ({
@@ -79,6 +82,8 @@ describe('FocusModeEffects', () => {
       dismiss: jasmine.createSpy('dismiss'),
     };
 
+    notifyServiceMock = jasmine.createSpyObj('NotifyService', ['notifyDesktop']);
+
     hydrationStateServiceMock = {
       isApplyingRemoteOps: jasmine
         .createSpy('isApplyingRemoteOps')
@@ -121,6 +126,7 @@ describe('FocusModeEffects', () => {
         { provide: TaskService, useValue: taskServiceMock },
         { provide: BannerService, useValue: bannerServiceMock },
         { provide: MetricService, useValue: metricServiceMock },
+        { provide: NotifyService, useValue: notifyServiceMock },
         {
           provide: FocusModeStorageService,
           useValue: { setLastCountdownDuration: jasmine.createSpy() },
@@ -379,6 +385,59 @@ describe('FocusModeEffects', () => {
             expect(result.length).toBe(0);
             done();
           },
+        });
+      });
+    });
+
+    describe('notifyOnSessionComplete$', () => {
+      it('should show a desktop notification for automatic Pomodoro completion', (done) => {
+        actions$ = of(actions.completeFocusSession({ isManual: false }));
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        store.overrideSelector(selectFocusModeConfig, {
+          isSkipPreparation: false,
+          isNotifyOnFocusSessionDone: true,
+        });
+        store.refreshState();
+
+        effects.notifyOnSessionComplete$.pipe(take(1)).subscribe(() => {
+          expect(notifyServiceMock.notifyDesktop).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              tag: 'FOCUS_MODE_SESSION_COMPLETE',
+              renotify: true,
+              title: T.F.FOCUS_MODE.POMODORO_SESSION_COMPLETED,
+            }),
+          );
+          done();
+        });
+      });
+
+      it('should not show a desktop notification when session notifications are disabled', (done) => {
+        actions$ = of(actions.completeFocusSession({ isManual: false }));
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        store.overrideSelector(selectFocusModeConfig, {
+          isSkipPreparation: false,
+          isNotifyOnFocusSessionDone: false,
+        });
+        store.refreshState();
+
+        effects.notifyOnSessionComplete$.pipe(take(1)).subscribe(() => {
+          expect(notifyServiceMock.notifyDesktop).not.toHaveBeenCalled();
+          done();
+        });
+      });
+
+      it('should not show a desktop notification for manual session completion', (done) => {
+        actions$ = of(actions.completeFocusSession({ isManual: true }));
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        store.overrideSelector(selectFocusModeConfig, {
+          isSkipPreparation: false,
+          isNotifyOnFocusSessionDone: true,
+        });
+        store.refreshState();
+
+        effects.notifyOnSessionComplete$.pipe(take(1)).subscribe(() => {
+          expect(notifyServiceMock.notifyDesktop).not.toHaveBeenCalled();
+          done();
         });
       });
     });
@@ -2357,6 +2416,63 @@ describe('FocusModeEffects', () => {
         expect(notifyUserSpy).not.toHaveBeenCalled();
         done();
       }, 50);
+    });
+
+    it('should show a desktop notification with the break type when break timer completes', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'break',
+          duration: 15 * 60 * 1000,
+          elapsed: 15 * 60 * 1000,
+          isLongBreak: true,
+        }),
+      );
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isNotifyOnBreakDone: true,
+      });
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.detectBreakTimeUp$.pipe(take(1)).subscribe(() => {
+        expect(notifyServiceMock.notifyDesktop).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            tag: 'FOCUS_MODE_BREAK_COMPLETE',
+            renotify: true,
+            title: T.F.POMODORO.BREAK_IS_DONE,
+            body: T.F.FOCUS_MODE.LONG_BREAK,
+          }),
+        );
+        done();
+      });
+    });
+
+    it('should not show a desktop notification when break notifications are disabled', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'break',
+          duration: 15 * 60 * 1000,
+          elapsed: 15 * 60 * 1000,
+          isLongBreak: true,
+        }),
+      );
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isNotifyOnBreakDone: false,
+      });
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.detectBreakTimeUp$.pipe(take(1)).subscribe(() => {
+        expect(notifyServiceMock.notifyDesktop).not.toHaveBeenCalled();
+        done();
+      });
     });
   });
 

@@ -1,5 +1,7 @@
 import { ConfigFormSection, TasksConfig } from '../global-config.model';
 import { T } from '../../../t.const';
+import { requestBrowserNotificationPermissionIfEnabled } from '../../../core/notify/request-browser-notification-permission.util';
+import { IS_WEB_BROWSER } from '../../../app.constants';
 
 export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
   title: T.GCF.TASKS.TITLE,
@@ -26,6 +28,21 @@ export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
         label: T.GCF.TASKS.IS_AUTO_MARK_PARENT_AS_DONE,
       },
     },
+    ...(IS_WEB_BROWSER
+      ? [
+          {
+            key: 'isNotifyOnTaskDone' as const,
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.TASKS.IS_NOTIFY_ON_TASK_DONE,
+              change: (field) =>
+                requestBrowserNotificationPermissionIfEnabled(
+                  field.model?.isNotifyOnTaskDone,
+                ),
+            },
+          },
+        ]
+      : []),
     {
       key: 'isTrayShowCurrent',
       type: 'checkbox',

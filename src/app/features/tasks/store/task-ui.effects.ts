@@ -41,6 +41,9 @@ import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigat
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
+import { IS_ELECTRON } from '../../../app.constants';
+
+const TASK_DONE_NOTIFICATION_TAG_PREFIX = 'TASK_DONE_';
 
 @Injectable()
 export class TaskUiEffects {
@@ -205,6 +208,26 @@ export class TaskUiEffects {
         ),
         filter(([, , soundCfg]) => !!soundCfg.doneSound),
         tap(([, doneToday, soundCfg]) => playDoneSound(soundCfg, doneToday)),
+      ),
+    { dispatch: false },
+  );
+
+  taskDoneNotification$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.updateTask),
+        filter(
+          ({ task: { changes } }) =>
+            changes.isDone === true && changes.issueWasUpdated !== true,
+        ),
+        withLatestFrom(this._globalConfigService.tasks$),
+        filter(([, taskCfg]) => taskCfg.isNotifyOnTaskDone === true && !IS_ELECTRON),
+        tap(([{ task }]) => {
+          void this._notifyService.notifyDesktop({
+            tag: `${TASK_DONE_NOTIFICATION_TAG_PREFIX}${task.id}`,
+            title: T.NOTIFICATION.TASK_MARKED_DONE,
+          });
+        }),
       ),
     { dispatch: false },
   );

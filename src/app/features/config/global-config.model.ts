@@ -59,6 +59,7 @@ export type TasksConfig = Readonly<{
   isAutoMarkParentAsDone: boolean;
   isAutoAddWorkedOnToToday: boolean;
   isConfirmBeforeDelete?: boolean;
+  isNotifyOnTaskDone?: boolean;
   isTrayShowCurrent: boolean;
   isMarkdownFormattingInNotesEnabled: boolean;
   defaultProjectId?: string | null | false; // allow 'false' because of #569
@@ -257,6 +258,8 @@ export type FocusModeConfig = Readonly<{
    * Off by default; opt-in for users who want play = tracking + focus.
    */
   autoStartFocusOnPlay?: boolean;
+  isNotifyOnFocusSessionDone?: boolean;
+  isNotifyOnBreakDone?: boolean;
   /**
    * @deprecated The auto-spawned session is now indicator-only by design — the
    * overlay never opens automatically — so this flag has no behavioural effect.
