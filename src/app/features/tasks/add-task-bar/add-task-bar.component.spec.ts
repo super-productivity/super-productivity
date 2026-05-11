@@ -598,4 +598,36 @@ describe('AddTaskBarComponent', () => {
       expect(doneSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe('IME handling (Integration)', () => {
+    it('should not add a task when Enter is pressed during IME composition', () => {
+      component.stateService.updateInputTxt('New Task');
+      fixture.detectChanges();
+
+      const inputEl = fixture.debugElement.nativeElement.querySelector('input');
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        isComposing: true,
+      });
+      inputEl.dispatchEvent(event);
+      fixture.detectChanges();
+
+      expect(mockTaskService.add).not.toHaveBeenCalled();
+    });
+
+    it('should add a task when Enter is pressed and NOT in IME composition', () => {
+      component.stateService.updateInputTxt('New Task');
+      fixture.detectChanges();
+
+      const inputEl = fixture.debugElement.nativeElement.querySelector('input');
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        isComposing: false,
+      });
+      inputEl.dispatchEvent(event);
+      fixture.detectChanges();
+
+      expect(mockTaskService.add).toHaveBeenCalled();
+    });
+  });
 });
