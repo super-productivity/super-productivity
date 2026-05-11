@@ -17,6 +17,12 @@
   <!-- Share intent -->
   <string name="share_received">Content received, creating task\u2026</string>
 
+  <!-- Widget -->
+  <string name="widget_title">Today\'s Tasks</string>
+  <string name="widget_description">Shows today\'s tasks with quick done action</string>
+  <string name="widget_empty">No tasks for today</string>
+  <string name="widget_task_done">Mark task done</string>
+
   <!-- Startup overlay -->
   <string name="startup_overlay_add_task">Add task</string>
   <string name="startup_overlay_hint">Add a task while loading\u2026</string>

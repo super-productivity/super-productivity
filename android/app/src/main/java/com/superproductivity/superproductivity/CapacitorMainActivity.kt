@@ -29,6 +29,7 @@ import com.superproductivity.superproductivity.webview.WebViewBlockActivity
 import com.superproductivity.superproductivity.webview.WebViewCompatibilityChecker
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.StartupOverlayManager
+import com.superproductivity.superproductivity.widget.TaskListWidgetProvider
 import com.superproductivity.plugins.webdavhttp.WebDavHttpPlugin
 import org.json.JSONObject
 
@@ -52,6 +53,17 @@ class CapacitorMainActivity : BridgeActivity() {
                 val isBreak = intent.getBooleanExtra(FocusModeForegroundService.EXTRA_IS_BREAK, false)
                 Log.d("SP_FOCUS", "Timer complete broadcast received, isBreak=$isBreak")
                 callJSInterfaceFunctionIfExists("next", "onFocusModeTimerComplete$", isBreak.toString())
+            }
+        }
+    }
+
+    private val widgetDoneReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TaskListWidgetProvider.ACTION_WIDGET_DONE_LOCAL) {
+                val taskId = intent.getStringExtra(TaskListWidgetProvider.EXTRA_TASK_ID) ?: return
+                val sanitizedId = taskId.replace(Regex("[^a-zA-Z0-9_-]"), "")
+                Log.d("SP_WIDGET", "Widget done broadcast received: taskId=$sanitizedId")
+                callJSInterfaceFunctionIfExists("next", "onWidgetDone$", "'$sanitizedId'")
             }
         }
     }
@@ -180,6 +192,12 @@ class CapacitorMainActivity : BridgeActivity() {
         LocalBroadcastManager.getInstance(this).registerReceiver(
             timerCompleteReceiver,
             IntentFilter(FocusModeForegroundService.ACTION_TIMER_COMPLETE)
+        )
+
+        // Register broadcast receiver for widget done actions
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            widgetDoneReceiver,
+            IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_DONE_LOCAL)
         )
 
         // Show startup overlay for quick task entry while Angular loads.
@@ -365,6 +383,7 @@ class CapacitorMainActivity : BridgeActivity() {
         startupOverlayManager = null
         super.onDestroy()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(timerCompleteReceiver)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(widgetDoneReceiver)
     }
 
     companion object {
