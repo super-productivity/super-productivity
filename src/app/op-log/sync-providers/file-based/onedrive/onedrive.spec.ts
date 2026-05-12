@@ -257,4 +257,8 @@ describe('OneDrive', () => {
 
     expect(folderCreateCalls.length).toBe(1);
   });
+
+  afterEach(() => {
+    (globalThis as any).fetch = undefined;
+  });
 });

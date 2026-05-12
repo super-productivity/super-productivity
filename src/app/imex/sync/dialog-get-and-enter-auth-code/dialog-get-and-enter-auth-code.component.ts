@@ -131,6 +131,8 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
       // Not a URL, continue with other extraction attempts.
     }
 
+    // An attacker-supplied code is harmless here — it won't match the user's
+    // PKCE verifier, so the token exchange will fail with invalid_grant.
     const codeMatch = trimmed.match(/(?:^|[?&#])code=([^&#]+)/i);
     if (codeMatch?.[1]) {
       try {

@@ -417,7 +417,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider !== SyncProviderId.OneDrive,
       resetOnHide: false,
-      props: { oneDriveAuth: true } as any,
+      props: {},
       fieldGroup: [
         {
           type: 'tpl',

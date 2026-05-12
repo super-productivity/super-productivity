@@ -57,32 +57,7 @@ interface OAuthTokenRequest {
   redirectUri?: string;
 }
 
-// OAuth state storage for CSRF protection: state -> { provider, expiresAt }
-const OAUTH_STATES_MAP = new Map<string, { provider: 'onedrive'; expiresAt: number }>();
-
-const TOKEN_STATE_VALIDITY_MS = 10 * 60 * 1000; // 10 minutes
-
-const _pruneExpiredOAuthStates = (): void => {
-  const now = Date.now();
-  for (const [state, data] of OAUTH_STATES_MAP.entries()) {
-    if (now > data.expiresAt) {
-      OAUTH_STATES_MAP.delete(state);
-    }
-  }
-};
-
-/**
- * Validate OneDrive OAuth state parameter against stored states.
- * Returns true if state is valid and belongs to OneDrive, false otherwise.
- */
-export const validateOneDriveOAuthState = (state: string | null): boolean => {
-  _pruneExpiredOAuthStates();
-  if (!state) return false;
-  const stored = OAUTH_STATES_MAP.get(state);
-  if (!stored) return false;
-  OAUTH_STATES_MAP.delete(state);
-  return true;
-};
+import { addOAuthState } from '../../../../imex/sync/oauth-state.util';
 
 export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
   readonly id = SyncProviderId.OneDrive;
@@ -94,6 +69,7 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
   private _folderEnsureInFlightPath: string | null = null;
   private _folderEnsureInFlightPromise: Promise<void> | null = null;
   private _tokenRefreshInFlightPromise: Promise<string> | null = null;
+  private _is401Retry = false;
 
   constructor(private readonly _devPath?: string) {}
 
@@ -112,6 +88,7 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
     if (!cfg) {
       return;
     }
+    this._tokenRefreshInFlightPromise = null;
     await this.privateCfg.setComplete({
       ...cfg,
       accessToken: '',
@@ -122,7 +99,6 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
 
   async getAuthHelper(): Promise<SyncProviderAuthHelper> {
     const cfg = await this._cfgOrError();
-    _pruneExpiredOAuthStates();
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const tenant = cfg.tenantId || ONEDRIVE_DEFAULTS.tenantId;
@@ -132,11 +108,7 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
     const state = Array.from(crypto.getRandomValues(new Uint8Array(32)))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    const stateExpiresAt = Date.now() + TOKEN_STATE_VALIDITY_MS;
-    OAUTH_STATES_MAP.set(state, {
-      provider: 'onedrive',
-      expiresAt: stateExpiresAt,
-    });
+    addOAuthState('onedrive', state);
 
     const authUrl =
       `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/authorize` +
@@ -163,10 +135,7 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
       const item = await this._requestJson<{ eTag?: string }>(
         this._getDriveItemPath(targetPath, cfg),
       );
-      if (!item.eTag) {
-        throw new RemoteFileNotFoundAPIError(targetPath);
-      }
-      return { rev: item.eTag };
+      return { rev: item.eTag || '' };
     } catch (e) {
       this._mapAndThrow(e, targetPath);
     }
@@ -299,6 +268,9 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
   }
 
   // Cache successful folder checks to avoid repeated path probes on every upload.
+  // A string comparison on the full resolved path (dev path + configured folder)
+  // naturally handles path changes: if the user reconfigures the folder, the
+  // cached value no longer matches and the folder is probed again.
   private async _ensureSyncFolderExistsCached(cfg: OneDrivePrivateCfg): Promise<void> {
     const folderPath = this._getSyncFolderPath(cfg);
     if (!folderPath) {
@@ -375,14 +347,11 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
     }
   }
 
-  private async _cfgOrError(requireAuth = false): Promise<OneDrivePrivateCfg> {
+  private async _cfgOrError(): Promise<OneDrivePrivateCfg> {
     const cfg = (await this.privateCfg.load()) || ({} as Partial<OneDrivePrivateCfg>);
     const resolvedClientId = this._resolveClientId(cfg);
     if (!resolvedClientId) {
       throw new MissingCredentialsSPError('OneDrive clientId is required');
-    }
-    if (requireAuth && !cfg.refreshToken) {
-      throw new MissingRefreshTokenAPIError();
     }
     return {
       ...cfg,
@@ -455,10 +424,21 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
           refreshToken: cfg.refreshToken,
         });
         const expiresInMs = tokenData.expires_in * 1000;
+
+        // Re-read current config before writing to avoid overwriting credentials
+        // cleared concurrently (e.g. by clearAuthCredentials on 401).
+        const currentCfg = await this.privateCfg.load();
+        if (!currentCfg?.refreshToken) {
+          SyncLog.warn(
+            '[OneDrive] Credentials cleared during token refresh, discarding refresh result',
+          );
+          throw new MissingRefreshTokenAPIError();
+        }
+
         const updatedCfg: OneDrivePrivateCfg = {
-          ...cfg,
+          ...currentCfg,
           accessToken: tokenData.access_token,
-          refreshToken: tokenData.refresh_token || cfg.refreshToken,
+          refreshToken: tokenData.refresh_token || currentCfg.refreshToken,
           tokenExpiresAt: Date.now() + expiresInMs,
         };
 
@@ -520,7 +500,25 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
     });
 
     if (!response.ok) {
-      throw new HttpNotOkAPIError(response, await response.text());
+      const body = await response.text();
+      if (response.status === 400) {
+        try {
+          const parsedBody = JSON.parse(body) as {
+            error?: string;
+            error_description?: string;
+          };
+          if (parsedBody.error === 'invalid_grant') {
+            SyncLog.warn(
+              '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
+            );
+            await this.clearAuthCredentials();
+            throw new MissingRefreshTokenAPIError();
+          }
+        } catch (_parseErr) {
+          /* fall through to generic HttpNotOkAPIError */
+        }
+      }
+      throw new HttpNotOkAPIError(response, body);
     }
 
     return (await response.json()) as OneDriveTokenResponse;
@@ -538,13 +536,7 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
     const accessToken = await this._refreshAccessTokenIfNeeded(cfg);
     const isUploadRequest = options.method === 'PUT' && options.path.endsWith('/content');
 
-    SyncLog.normal(
-      `[OneDrive] ${options.method} ${options.path}${isUploadRequest ? ' (upload)' : ''}`,
-    );
-
-    if (isUploadRequest) {
-      SyncLog.normal('[OneDrive] Upload request started');
-    }
+    SyncLog.log({ method: options.method, isUpload: isUploadRequest });
 
     const requestHeaders = new Headers(options.headers);
     requestHeaders.set('Authorization', `Bearer ${accessToken}`);
@@ -559,20 +551,27 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
     // details (Graph error codes/messages) without duplicate fetch body reads.
     const responseBody = response.ok ? '' : await response.text();
 
-    if (isUploadRequest && !response.ok) {
-      SyncLog.warn(`[OneDrive] Upload request failed (status=${response.status})`);
-    }
-
     if (!response.ok) {
       const parsed = this._parseGraphError(responseBody);
-      SyncLog.warn(
-        `[OneDrive] Request failed status=${response.status} path=${options.path}`,
-        parsed.code || '[no-code]',
-        parsed.message || '[no-message]',
-      );
+      SyncLog.log({ status: response.status, code: parsed.code || undefined });
     }
 
     if (response.status === 401) {
+      if (!this._is401Retry) {
+        this._is401Retry = true;
+        try {
+          const currentCfg = await this._cfgOrError();
+          await this._refreshAccessTokenIfNeeded({
+            ...currentCfg,
+            tokenExpiresAt: 0,
+          });
+          return this._request(options);
+        } catch {
+          /* fall through to auth clear */
+        } finally {
+          this._is401Retry = false;
+        }
+      }
       await this.clearAuthCredentials();
       throw new AuthFailSPError('OneDrive 401', options.path, responseBody);
     }
@@ -586,10 +585,6 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
 
     if (!response.ok) {
       throw new HttpNotOkAPIError(response, responseBody);
-    }
-
-    if (isUploadRequest) {
-      SyncLog.normal(`[OneDrive] Upload request succeeded (status=${response.status})`);
     }
 
     return response;
@@ -618,16 +613,6 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
     }
   }
 
-  private _formatHttpErrorDetails(error: HttpNotOkAPIError): string {
-    const parsed = this._parseGraphError(error.body);
-    const details = [
-      `status=${error.response.status}`,
-      parsed.code ? `code=${parsed.code}` : '',
-      parsed.message ? `message=${parsed.message}` : '',
-    ].filter(Boolean);
-    return details.join(', ');
-  }
-
   private _mapAndThrow(error: unknown, targetPath: string): never {
     if (error instanceof RemoteFileNotFoundAPIError) {
       throw error;
@@ -643,15 +628,13 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
     }
     if (error instanceof HttpNotOkAPIError) {
       const status = error.response.status;
-      const details = this._formatHttpErrorDetails(error);
-      SyncLog.warn(`[OneDrive] Mapping HTTP ${status} for ${targetPath}: ${details}`);
       if (status === 404) {
         this._ensuredFolderPath = null;
         throw new RemoteFileNotFoundAPIError(targetPath);
       }
       if (status === 429) {
         throw new TooManyRequestsAPIError(
-          `OneDrive request throttled (${details})`,
+          `OneDrive request throttled (status=${status})`,
           targetPath,
         );
       }
@@ -659,7 +642,7 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
         throw new UploadRevToMatchMismatchAPIError(targetPath);
       }
       if (status === 401 || status === 403) {
-        throw new AuthFailSPError(`OneDrive auth failed (${details})`, targetPath);
+        throw new AuthFailSPError(`OneDrive auth failed (status=${status})`, targetPath);
       }
     }
 

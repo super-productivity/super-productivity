@@ -7,7 +7,7 @@ import { IS_ELECTRON } from '../../app.constants';
 import { SyncLog } from '../../core/log';
 import { PluginOAuthService } from '../../plugins/oauth/plugin-oauth.service';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
-import { validateOneDriveOAuthState } from '../../op-log/sync-providers/file-based/onedrive/onedrive';
+import { validateOAuthState } from './oauth-state.util';
 
 type OAuthProvider = 'dropbox' | 'onedrive' | 'plugin';
 
@@ -46,7 +46,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
     this._urlListenerHandle = await App.addListener(
       'appUrlOpen',
       (event: URLOpenListenerEvent) => {
-        SyncLog.log('OAuthCallbackHandler: Received URL', event.url);
+        SyncLog.log('OAuthCallbackHandler: Received URL');
 
         if (event.url.includes('plugin-oauth-callback')) {
           this._handlePluginOAuthCallback(event.url);
@@ -65,7 +65,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
               callbackData.error_description,
             );
           } else {
-            SyncLog.warn('OAuthCallbackHandler: No auth code or error in URL', event.url);
+            SyncLog.warn('OAuthCallbackHandler: No auth code or error in URL');
           }
 
           this._authCodeReceived$.next(callbackData);
@@ -86,10 +86,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
         return;
       }
 
-      SyncLog.log(
-        'OAuthCallbackHandler: Received Electron OAuth callback URL',
-        callbackUrl,
-      );
+      SyncLog.log('OAuthCallbackHandler: Received Electron OAuth callback URL');
       this._authCodeReceived$.next(this._parseOAuthCallback(callbackUrl));
     });
   }
@@ -109,7 +106,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
       // Validate state parameter for CSRF protection (OneDrive only)
       let provider: OAuthProvider;
       if (providerRaw === 'onedrive') {
-        const stateValid = validateOneDriveOAuthState(state);
+        const stateValid = validateOAuthState('onedrive', state);
         if (!stateValid) {
           SyncLog.warn(
             'OAuthCallbackHandler: Invalid or missing state for OneDrive callback',
@@ -155,7 +152,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
         SyncLog.warn('OAuthCallbackHandler: Plugin OAuth error', error);
         this._pluginOAuthService.handleRedirectError(error, state);
       } else {
-        SyncLog.warn('OAuthCallbackHandler: No code or error in plugin OAuth URL', url);
+        SyncLog.warn('OAuthCallbackHandler: No code or error in plugin OAuth URL');
         this._pluginOAuthService.handleRedirectError('no_code_or_error', state);
       }
     } catch (e) {
