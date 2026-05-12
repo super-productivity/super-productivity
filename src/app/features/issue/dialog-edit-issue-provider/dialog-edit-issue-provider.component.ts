@@ -639,6 +639,7 @@ export class DialogEditIssueProviderComponent {
       dueDay: T.F.ISSUE.TWO_WAY_SYNC.DUE_DAY,
       dueWithTime: T.F.ISSUE.TWO_WAY_SYNC.DUE_WITH_TIME,
       timeEstimate: T.F.ISSUE.TWO_WAY_SYNC.TIME_ESTIMATE,
+      tagIds: T.F.ISSUE.TWO_WAY_SYNC.TAGS,
     };
     const syncFields: any[] = fieldMappings.map((m) => ({
       key: ('pluginConfig.twoWaySync.' + m.taskField) as keyof IssueIntegrationCfg,
@@ -660,6 +661,16 @@ export class DialogEditIssueProviderComponent {
         props: {
           label: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_ISSUES,
           description: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_ISSUES_DESCRIPTION,
+        },
+      });
+    }
+    if (provider?.definition.fieldMappings?.some((m) => m.taskField === 'tagIds')) {
+      syncFields.push({
+        key: 'pluginConfig.isAutoCreateTags',
+        type: 'checkbox',
+        props: {
+          label: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_TAGS,
+          description: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_TAGS_DESCRIPTION,
         },
       });
     }

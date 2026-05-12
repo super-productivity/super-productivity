@@ -11,6 +11,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
 import { computePushDecisions } from './compute-push-decisions';
 import { FieldMapping, FieldSyncConfig } from './issue-sync.model';
+import { IssueSyncAdapter } from './issue-sync-adapter.interface';
 import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { IssueLog } from '../../../core/log';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -24,6 +25,9 @@ import { selectEnabledIssueProviders } from '../store/issue-provider.selectors';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { T } from '../../../t.const';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
+import { TagService } from '../../tag/tag.service';
+import { createPluginSyncAdapter } from '../../../plugins/issue-provider/plugin-sync-adapter.service';
 import { PlannerActions } from '../../planner/store/planner.actions';
 
 const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
@@ -33,6 +37,7 @@ const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'dueWithTime',
   'dueDay',
   'timeEstimate',
+  'tagIds',
 ]);
 
 // Lookup map to extract taskId and changes from each action type,
@@ -91,6 +96,8 @@ export class IssueTwoWaySyncEffects {
   private readonly _snackService = inject(SnackService);
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private readonly _pluginHttp = inject(PluginHttpService);
+  private readonly _tagService = inject(TagService);
   private _syncOriginatedTaskIds = new Set<string>();
   private static readonly _MAX_SYNC_ORIGINATED_IDS = 1000;
 
@@ -139,7 +146,7 @@ export class IssueTwoWaySyncEffects {
           ) {
             return false;
           }
-          return this._adapterRegistry.has(fullTask.issueType);
+          return !!this._getAdapter(fullTask.issueType);
         }),
         concatMap(({ fullTask, changes }) =>
           this._pushChanges$(fullTask, changes).pipe(
@@ -165,7 +172,7 @@ export class IssueTwoWaySyncEffects {
         filter(
           ({ task }) => !!task.issueId && !!task.issueType && !!task.issueProviderId,
         ),
-        filter(({ task }) => this._adapterRegistry.has(task.issueType!)),
+        filter(({ task }) => !!this._getAdapter(task.issueType!)),
         concatMap(({ task }) => this._deleteRemoteIssue$(task)),
       ),
     { dispatch: false },
@@ -181,7 +188,7 @@ export class IssueTwoWaySyncEffects {
             return EMPTY;
           }
           return from(issueInfos).pipe(
-            filter((info) => this._adapterRegistry.has(info.issueType)),
+            filter((info) => !!this._getAdapter(info.issueType)),
             concatMap((info) => this._deleteRemoteIssue$(info)),
           );
         }),
@@ -207,7 +214,7 @@ export class IssueTwoWaySyncEffects {
             ),
             filter((provider): provider is IssueProvider => !!provider),
             concatMap((provider) => {
-              const adapter = this._adapterRegistry.get(provider.issueProviderKey);
+              const adapter = this._getAdapter(provider.issueProviderKey);
               if (!adapter?.createIssue) {
                 return EMPTY;
               }
@@ -336,6 +343,28 @@ export class IssueTwoWaySyncEffects {
     return false;
   }
 
+  private _getAdapter(issueType: string): IssueSyncAdapter<unknown> | undefined {
+    const existing = this._adapterRegistry.get(issueType);
+    if (existing) return existing;
+
+    const provider = this._pluginRegistry.getProvider(issueType);
+    if (!provider?.definition.fieldMappings?.length || !provider.definition.updateIssue) {
+      return undefined;
+    }
+
+    const adapter = createPluginSyncAdapter(
+      provider.definition,
+      (getHeadersFn) =>
+        this._pluginHttp.createHttpHelper(getHeadersFn, {
+          allowPrivateNetwork: provider.allowPrivateNetwork,
+        }),
+      this._tagService,
+    );
+
+    this._adapterRegistry.register(issueType, adapter);
+    return adapter;
+  }
+
   private _deleteRemoteIssue$(info: DeletedTaskIssueInfo | Task): Observable<unknown> {
     if (!info.issueType || !info.issueProviderId || !info.issueId) {
       return EMPTY;
@@ -379,7 +408,7 @@ export class IssueTwoWaySyncEffects {
     const issueType = task.issueType as IssueProviderKey;
     const issueProviderId = task.issueProviderId;
     const issueId = task.issueId;
-    const adapter = this._adapterRegistry.get(issueType);
+    const adapter = this._getAdapter(issueType);
     if (!adapter) {
       return EMPTY;
     }

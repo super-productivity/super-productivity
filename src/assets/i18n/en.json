@@ -488,6 +488,8 @@
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Auto-create issues for new tasks",
         "AUTO_CREATE_ISSUES_DESCRIPTION": "Automatically creates an issue when you add a new top-level task to the default project. Requires a default project to be set.",
+        "AUTO_CREATE_TAGS": "Auto-create tags for synced labels",
+        "AUTO_CREATE_TAGS_DESCRIPTION": "Automatically creates local tags when unknown labels are pulled from the remote provider.",
         "BOTH": "Both (bidirectional)",
         "DUE_DAY": "Due Day",
         "DUE_WITH_TIME": "Due Date/Time",
@@ -497,6 +499,7 @@
         "PUSH_ONLY": "Push only",
         "SECTION": "Two-Way Sync (experimental)",
         "STATUS": "Status sync direction",
+        "TAGS": "Tags / Categories sync direction",
         "TIME_ESTIMATE": "Time Estimate",
         "TITLE": "Title sync direction"
       },
