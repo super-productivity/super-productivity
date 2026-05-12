@@ -347,8 +347,10 @@ export class PluginBridgeService implements OnDestroy {
     if (definition.fieldMappings?.length && definition.updateIssue) {
       const registered = this._pluginIssueProviderRegistry.getProvider(registeredKey);
       const httpOpts = { allowPrivateNetwork: registered?.allowPrivateNetwork };
-      const adapter = createPluginSyncAdapter(definition, (getHeaders) =>
-        this._pluginHttpService.createHttpHelper(getHeaders, httpOpts),
+      const adapter = createPluginSyncAdapter(
+        definition,
+        (getHeaders) => this._pluginHttpService.createHttpHelper(getHeaders, httpOpts),
+        this._tagService,
       );
       this._syncAdapterRegistry.register(registeredKey, adapter);
       PluginLog.log(

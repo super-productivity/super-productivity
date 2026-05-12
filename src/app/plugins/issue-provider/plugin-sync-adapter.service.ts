@@ -10,17 +10,40 @@ import {
   PluginHttp,
 } from './plugin-issue-provider.model';
 import { Task } from '../../features/tasks/task.model';
+import { TagService } from '../../features/tag/tag.service';
 
-const convertMapping = (pm: PluginFieldMapping): FieldMapping => ({
-  taskField: pm.taskField,
-  issueField: pm.issueField,
-  defaultDirection: pm.defaultDirection,
-  toIssueValue: pm.toIssueValue,
-  toTaskValue: pm.toTaskValue,
-  ...(pm.mutuallyExclusive
-    ? { mutuallyExclusive: pm.mutuallyExclusive as (keyof Task)[] }
-    : {}),
-});
+const convertMapping = (pm: PluginFieldMapping, tagService: TagService): FieldMapping => {
+  if (pm.taskField === 'tagIds') {
+    return {
+      taskField: pm.taskField,
+      issueField: pm.issueField,
+      defaultDirection: pm.defaultDirection,
+      toIssueValue: (taskValue: unknown, ctx): unknown => {
+        const tagIds = (taskValue as string[]) || [];
+        const allTags = tagService.tags();
+        const labels = tagIds
+          .map((id) => allTags.find((t) => t.id === id)?.title || id)
+          .sort();
+        return pm.toIssueValue(labels, ctx);
+      },
+      toTaskValue: pm.toTaskValue,
+      ...(pm.mutuallyExclusive
+        ? { mutuallyExclusive: pm.mutuallyExclusive as (keyof Task)[] }
+        : {}),
+    };
+  }
+
+  return {
+    taskField: pm.taskField,
+    issueField: pm.issueField,
+    defaultDirection: pm.defaultDirection,
+    toIssueValue: pm.toIssueValue,
+    toTaskValue: pm.toTaskValue,
+    ...(pm.mutuallyExclusive
+      ? { mutuallyExclusive: pm.mutuallyExclusive as (keyof Task)[] }
+      : {}),
+  };
+};
 
 /**
  * Creates an IssueSyncAdapter for a specific plugin issue provider.
@@ -31,9 +54,10 @@ export const createPluginSyncAdapter = (
   createHttpHelper: (
     getHeaders: () => Record<string, string> | Promise<Record<string, string>>,
   ) => PluginHttp,
+  tagService: TagService,
 ): IssueSyncAdapter<IssueProviderPluginType> => {
-  const fieldMappings: FieldMapping[] = (definition.fieldMappings ?? []).map(
-    convertMapping,
+  const fieldMappings: FieldMapping[] = (definition.fieldMappings ?? []).map((pm) =>
+    convertMapping(pm, tagService),
   );
 
   const createHttp = (cfg: IssueProviderPluginType): PluginHttp =>
@@ -82,16 +106,22 @@ export const createPluginSyncAdapter = (
     },
 
     extractSyncValues: (issue: Record<string, unknown>): Record<string, unknown> => {
-      if (definition.extractSyncValues) {
-        return definition.extractSyncValues(
-          issue as Parameters<
-            NonNullable<IssueProviderPluginDefinition['extractSyncValues']>
-          >[0],
-        );
-      }
+      const data = definition.extractSyncValues
+        ? definition.extractSyncValues(
+            issue as Parameters<
+              NonNullable<IssueProviderPluginDefinition['extractSyncValues']>
+            >[0],
+          )
+        : issue;
+
       const result: Record<string, unknown> = {};
       for (const m of fieldMappings) {
-        result[m.issueField] = issue[m.issueField];
+        const value = data[m.issueField];
+        if (m.taskField === 'tagIds' && Array.isArray(value)) {
+          result[m.issueField] = (value as string[]).slice().sort();
+        } else {
+          result[m.issueField] = value;
+        }
       }
       return result;
     },
