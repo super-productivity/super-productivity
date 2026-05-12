@@ -25,6 +25,38 @@ export class FormlyImageInputComponent extends FieldType<FormlyFieldConfig> {
     return this._unsplashService.isAvailable();
   }
 
+  openFileExplorer(): void {
+    const fileInput = document.createElement('input');
+
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+
+    fileInput.addEventListener('change', (event: Event) => {
+      const target = event.target as HTMLInputElement;
+
+      if (target.files?.length) {
+        const file = target.files[0];
+
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          const result = reader.result as string;
+
+          this.formControl.setValue(result);
+          this.formControl.markAsDirty();
+          this.formControl.markAsTouched();
+
+          document.body.removeChild(fileInput);
+        };
+
+        reader.readAsDataURL(file);
+      }
+    });
+
+    document.body.appendChild(fileInput);
+    fileInput.click();
+  }
+
   openUnsplashPicker(): void {
     if (!this.isUnsplashAvailable) {
       console.warn('Unsplash service is not available - no API key configured');

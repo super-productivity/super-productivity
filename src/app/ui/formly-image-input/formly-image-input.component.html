@@ -8,6 +8,16 @@
     matInput
     placeholder="https://... or file://..."
   />
+  <button
+    mat-stroked-button
+    type="button"
+    (click)="openFileExplorer()"
+    [disabled]="props.readonly"
+    class="select-button"
+  >
+    <mat-icon>folder_open</mat-icon>
+    Select
+  </button>
   @if (isUnsplashAvailable) {
     <button
       mat-stroked-button
