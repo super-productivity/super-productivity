@@ -13,6 +13,35 @@ import { getWin } from './main-window';
 
 export const initLocalFileSyncAdapter = (): void => {
   ipcMain.handle(
+    IPC.READ_LOCAL_IMAGE_AS_DATA_URL,
+    (_, filePathOrUrl: string): string | null => {
+      try {
+        const normalized = filePathOrUrl.startsWith('file://')
+          ? decodeURIComponent(filePathOrUrl.replace(/^file:\/\//, ''))
+          : filePathOrUrl;
+
+        const buffer = readFileSync(normalized);
+        const ext = normalized.toLowerCase().split('.').pop() || '';
+        const mimeTypeByExt: Record<string, string> = {
+          png: 'image/png',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          gif: 'image/gif',
+          webp: 'image/webp',
+          svg: 'image/svg+xml',
+          bmp: 'image/bmp',
+          avif: 'image/avif',
+        };
+        const mimeType = mimeTypeByExt[ext] || 'application/octet-stream';
+        return `data:${mimeType};base64,${buffer.toString('base64')}`;
+      } catch (e) {
+        error(e);
+        return null;
+      }
+    },
+  );
+
+  ipcMain.handle(
     IPC.FILE_SYNC_SAVE,
     (
       ev,
@@ -170,13 +199,19 @@ export const initLocalFileSyncAdapter = (): void => {
     IPC.SHOW_OPEN_DIALOG,
     async (
       _,
-      options: { properties: string[]; title?: string; defaultPath?: string },
+      options: {
+        properties: string[];
+        title?: string;
+        defaultPath?: string;
+        filters?: { name: string; extensions: string[] }[];
+      },
     ): Promise<string[] | undefined> => {
       const { canceled, filePaths } = (await dialog.showOpenDialog(getWin(), {
         title: options.title || 'Select folder',
         buttonLabel: 'Select',
         properties: options.properties as any,
         defaultPath: options.defaultPath,
+        filters: options.filters,
       })) as unknown as { canceled: boolean; filePaths: string[] };
       if (canceled) {
         return undefined;
