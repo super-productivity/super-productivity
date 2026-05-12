@@ -91,7 +91,8 @@ describe('IssueService', () => {
     calendarIntegrationServiceSpy = jasmine.createSpyObj('CalendarIntegrationService', [
       'skipCalendarEvent',
     ]);
-    storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+    storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
+    storeSpy.pipe.and.returnValue(of([]));
     translateServiceSpy = jasmine.createSpyObj('TranslateService', ['instant']);
     globalProgressBarServiceSpy = jasmine.createSpyObj('GlobalProgressBarService', [
       'countUp',

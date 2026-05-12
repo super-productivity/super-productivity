@@ -86,12 +86,13 @@ describe('PluginIssueProviderAdapterService', () => {
       'getAvailableProviders',
     ]);
     pluginHttpSpy = jasmine.createSpyObj('PluginHttpService', ['createHttpHelper']);
-    storeSpy = jasmine.createSpyObj('Store', ['select']);
+    storeSpy = jasmine.createSpyObj('Store', ['select', 'pipe']);
 
     snackSpy = jasmine.createSpyObj('SnackService', ['open']);
     taskServiceSpy = jasmine.createSpyObj('TaskService', ['removeMultipleTasks']);
     pluginHttpSpy.createHttpHelper.and.returnValue(mockHttpHelper);
     storeSpy.select.and.returnValue(of(mockPluginCfg));
+    storeSpy.pipe.and.returnValue(of([]));
     registrySpy.hasProvider.and.returnValue(true);
 
     TestBed.configureTestingModule({

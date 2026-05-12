@@ -18,6 +18,7 @@ import { selectIssueProviderById } from '../../features/issue/store/issue-provid
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { TaskService } from '../../features/tasks/task.service';
+import { TagService } from '../../features/tag/tag.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { T } from '../../t.const';
 
@@ -28,6 +29,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
   private _store = inject(Store);
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
+  private _tagService = inject(TagService);
 
   // Not meaningful for a multi-plugin adapter, but required by interface
   pollInterval = 0;
@@ -344,6 +346,9 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       if (issueValue == null) {
         continue;
       }
+      if (mapping.taskField === 'tagIds') {
+        continue;
+      }
       const taskValue = mapping.toTaskValue(issueValue, ctx);
       if (taskValue != null) {
         result[mapping.taskField] = taskValue;
@@ -422,6 +427,20 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     }
   }
 
+  private _mapLabelsToTagIds(labels: string[], shouldCreate: boolean): string[] {
+    const allTags = this._tagService.tagsNoMyDayAndNoList();
+    const tagIds: string[] = [];
+    for (const label of labels) {
+      const existing = allTags.find((t) => t.title === label);
+      if (existing) {
+        tagIds.push(existing.id);
+      } else if (shouldCreate) {
+        tagIds.push(this._tagService.addTag({ title: label }));
+      }
+    }
+    return tagIds;
+  }
+
   private _applyFieldMappingPull(
     provider: RegisteredPluginIssueProvider,
     freshSyncValues: Record<string, unknown>,
@@ -450,6 +469,27 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
 
       const freshValue = freshSyncValues[mapping.issueField];
       const lastValue = lastSyncedValues[mapping.issueField];
+
+      if (mapping.taskField === 'tagIds') {
+        const toLabels = (v: unknown): string[] => {
+          const taskValue = v != null ? mapping.toTaskValue(v, ctx) : [];
+          return Array.isArray(taskValue) ? (taskValue as string[]).slice().sort() : [];
+        };
+        const labels = toLabels(freshValue);
+        const lastLabels = toLabels(lastValue);
+        if (
+          labels.length === lastLabels.length &&
+          labels.every((l, i) => l === lastLabels[i])
+        ) {
+          continue;
+        }
+        const isAutoCreateTags = !!(cfg.pluginConfig as Record<string, unknown>)?.[
+          'isAutoCreateTags'
+        ];
+        const tagIds = this._mapLabelsToTagIds(labels, isAutoCreateTags);
+        changes.tagIds = tagIds;
+        continue;
+      }
 
       // Only pull if the issue value actually changed since last sync
       if (freshValue === lastValue) {
