@@ -29,6 +29,35 @@ export type {
   SyncImportFilterKeepReason,
 } from './sync-import-filter';
 
+// Host-configured sync file prefix helpers.
+export {
+  createSyncFilePrefixHelpers,
+  SyncFilePrefixError,
+  SyncFilePrefixVersionError,
+} from './sync-file-prefix';
+export type {
+  SyncFilePrefixConfig,
+  SyncFilePrefixHelpers,
+  SyncFilePrefixInvalidPrefixDetails,
+  SyncFilePrefixParams,
+  SyncFilePrefixParamsOutput,
+} from './sync-file-prefix';
+
+// Gzip compression helpers.
+export {
+  compressWithGzip,
+  compressWithGzipToString,
+  decompressGzipFromString,
+  sanitizeBase64,
+  CompressionApiUnavailableError,
+  GzipCompressError,
+  GzipDecompressError,
+} from './compression';
+export type { GzipCompressionLogMessages, GzipCompressionOptions } from './compression';
+
+// Generic error helpers.
+export { extractErrorMessage } from './error.util';
+
 // Full-state operation classification helper. Hosts supply their own op strings.
 export {
   FULL_STATE_OP_TYPES,
@@ -44,6 +73,72 @@ export type { LwwUpdateActionTypeHelpers } from './lww-update-action-types';
 
 // Apply-operation result and option types.
 export type { ApplyOperationsResult, ApplyOperationsOptions } from './apply.types';
+
+// Generic operation replay coordinator.
+export { replayOperationBatch, yieldToEventLoop } from './replay-coordinator';
+export type {
+  OperationReplayArchiveFailureContext,
+  OperationReplayCoordinatorOptions,
+} from './replay-coordinator';
+
+// Remote operation application coordinator.
+export { applyRemoteOperations } from './remote-apply';
+export type {
+  ApplyRemoteOperationsOptions,
+  RemoteApplyOperationsResult,
+  RemoteOperationAppendResult,
+  RemoteOperationApplyStorePort,
+} from './remote-apply';
+
+// Upload planning helpers.
+export {
+  planRegularOpsAfterFullStateUpload,
+  planUploadLastServerSeqUpdate,
+} from './upload-planning';
+export type {
+  PlanRegularOpsAfterFullStateUploadOptions,
+  PlanUploadLastServerSeqUpdateOptions,
+  RegularOpsAfterFullStateUploadPlan,
+  UploadLastServerSeqUpdatePlan,
+  UploadLastServerSeqUpdateReason,
+} from './upload-planning';
+
+// Download planning helpers.
+export {
+  planDownloadFullStateUpload,
+  planDownloadGapReset,
+  planDownloadedDataEncryptionState,
+  planSnapshotHydration,
+} from './download-planning';
+export type {
+  DownloadFullStateUploadPlan,
+  DownloadFullStateUploadReason,
+  DownloadGapResetPlan,
+  PlanDownloadFullStateUploadOptions,
+  PlanDownloadGapResetOptions,
+  PlanDownloadedDataEncryptionStateOptions,
+  PlanSnapshotHydrationOptions,
+  SnapshotHydrationPlan,
+  SnapshotHydrationPlanReason,
+} from './download-planning';
+
+// Port contracts for app-side orchestration adapters.
+export type {
+  ActionDispatchPort,
+  ArchiveSideEffectPort,
+  ConflictUiDialogRequest,
+  ConflictUiNotification,
+  ConflictUiNotificationSeverity,
+  ConflictUiPort,
+  DeferredLocalActionsPort,
+  OperationApplyPort,
+  OperationStorePort,
+  RemoteApplyWindowPort,
+  SyncActionLike,
+  SyncConfigPort,
+  SyncConfigSnapshot,
+  SyncPortMeta,
+} from './ports';
 
 // Conflict-resolution helpers.
 export {

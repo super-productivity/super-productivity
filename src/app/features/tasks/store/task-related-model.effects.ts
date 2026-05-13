@@ -47,6 +47,8 @@ export class TaskRelatedModelEffects {
         map(([{ task }]) =>
           TaskSharedActions.planTasksForToday({
             taskIds: [task.id],
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
           }),
         ),
       ),
@@ -72,6 +74,8 @@ export class TaskRelatedModelEffects {
         map((task) =>
           TaskSharedActions.planTasksForToday({
             taskIds: [task.id],
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
           }),
         ),
       ),

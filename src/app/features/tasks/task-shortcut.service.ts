@@ -148,6 +148,11 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    if (checkKeyCombo(ev, keys.taskOpenNotesPanel)) {
+      this._handleTaskShortcut(focusedTaskId, 'openNotesPanel');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskOpenNotesFullscreen)) {
       this._handleTaskShortcut(focusedTaskId, 'openNotesFullscreen');
       ev.preventDefault();

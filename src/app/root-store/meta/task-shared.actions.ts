@@ -268,6 +268,10 @@ export const TaskSharedActions = createActionGroup({
     // Today Tag Management
     planTasksForToday: (taskProps: {
       taskIds: string[];
+      // The logical day "today" referred to when the action was created.
+      // Optional only for legacy operation replay and older tests.
+      today?: string;
+      startOfNextDayDiffMs?: number;
       parentTaskMap?: { [taskId: string]: string | undefined };
       isShowSnack?: boolean;
       isSkipRemoveReminder?: boolean;

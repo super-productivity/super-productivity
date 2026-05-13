@@ -7,6 +7,14 @@ Playwright-driven generation of the marketing gif/video for the landing page and
 ```bash
 npm run video         # tight default (~17s) → dist/video/reel*.{mp4,webm,gif}
 npm run video:full    # full variant (~21s) → dist/video/reel-full*.{...}
+npm run video:shorts  # 9:16 portrait (~12s) → dist/video/reel-shorts*.{...}
+                      # 1080×1920 for TikTok / YouTube Shorts / Instagram Reels.
+                      # Skips the side-panel drag beat (no horizontal room).
+npm run video:keyboard
+                      # keyboard-first reel demonstrating SP shortcuts.
+npm run video:mobile  # 19.5:9 phone aspect (1080×2340) → reel-mobile*.{...}
+                      # hasTouch context + isMobile UA; tap-ripple replaces
+                      # the cursor ring; tap-driven choreography.
 npx cross-env MS_STORE_AUDIO_SOURCE=path/to/audio.ext npm run video:ms-store
                       # 16:9 Store trailer → dist/video/reel-ms-store.mp4 + thumbnail
 
@@ -24,14 +32,16 @@ Variant recordings are isolated under `.tmp/video/recordings/<variant>/` (`defau
 
 ## Files
 
-| File                                 | Responsibility                                                                                                                                                                                                                                                   |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `playwright.store-video.config.ts`   | Single chromium project, `video: 'off'` at project level (the fixture handles `recordVideo` itself because `browser.newContext()` doesn't inherit `use.video`).                                                                                                  |
-| `store-video/fixture.ts`             | Custom context with `recordVideo` enabled at 1024×1024 / DPR 2, or 1920×1080 / DPR 1 for `REEL_VARIANT=ms-store`. Reuses the screenshot pipeline's seed builder. Init scripts handle: cursor highlight ring, dialog/snack/tooltip/mention suppression, app zoom. |
-| `store-video/overlays.ts`            | DOM-injected overlay primitives: `showOverlay`, `showCaption`, `showIntegrationsCard`, `showEndCard`, `cutToScene`, `fadeTransition`, `loopBoundary`, `attachDragGhost`, `smoothMouseMove`. Plus inline brand SVGs in the `LOGOS` constant.                      |
-| `store-video/scenarios/reel.spec.ts` | Six-beat choreography. `REEL_VARIANT=full` triggers the optional "No account. No tracking." beat and relaxes hold timings.                                                                                                                                       |
-| `store-video/build-video.ts`         | Picks the most recent `.webm` under `.tmp/video/recordings/`, applies the trim sidecar (cuts the seed-import lead-in), produces mp4/webm/gif via ffmpeg, optionally `gifsicle`-optimizes. For `ms-store`, produces a 1920×1080 H.264/AAC MP4 and PNG thumbnail.  |
-| `store-video/open-video.ts`          | Opens an autoplay browser preview after `npm run video`. Prefers mp4, respects `REEL_VARIANT`, seeks slightly past the black first frame for preview only, and skips auto-open in CI.                                                                            |
+| File                                     | Responsibility                                                                                                                                                                                                                                                              |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `playwright.store-video.config.ts`       | Single chromium project, `video: 'off'` at project level (the fixture handles `recordVideo` itself because `browser.newContext()` doesn't inherit `use.video`).                                                                                                             |
+| `store-video/fixture.ts`                 | Custom context with `recordVideo` enabled at 1024×1024 / DPR 2, or 1920×1080 / DPR 1 for `REEL_VARIANT=ms-store`. Reuses the screenshot pipeline's seed builder. Init scripts handle: cursor highlight ring, dialog/snack/tooltip/mention suppression, app zoom.            |
+| `store-video/overlays.ts`                | DOM-injected overlay primitives: `showOverlay`, `showCaption`, `showIntegrationsCard`, `showEndCard`, `cutToScene`, `fadeTransition`, `loopBoundary`, `attachDragGhost`, `smoothMouseMove`. Plus inline brand SVGs in the `LOGOS` constant.                                 |
+| `store-video/scenarios/reel.spec.ts`     | Six-beat choreography. `REEL_VARIANT=full` triggers the optional "No account. No tracking." beat and relaxes hold timings. `REEL_VARIANT=shorts` skips the side-panel drag beat and tightens holds for portrait 9:16 capture. Skipped entirely for `REEL_VARIANT=keyboard`. |
+| `store-video/scenarios/keyboard.spec.ts` | Keyboard-first reel (`REEL_VARIANT=keyboard` only). Five beats: tagline → `Shift+A` capture → `J`/`K` navigate → `F` focus mode → end card. Each chip is a real `page.keyboard.press()` so cause-and-effect is honest.                                                      |
+| `store-video/scenarios/mobile.spec.ts`   | Mobile-touch reel (`REEL_VARIANT=mobile` only). 1080×2340 phone aspect with `hasTouch`/`isMobile`. Four beats: tagline → tap-to-capture → tap-to-focus → end card. The fixture installs a tap-ripple on `touchstart`/`pointerdown` in lieu of the cursor highlight.         |
+| `store-video/build-video.ts`             | Picks the most recent `.webm` under `.tmp/video/recordings/`, applies the trim sidecar (cuts the seed-import lead-in), produces mp4/webm/gif via ffmpeg, optionally `gifsicle`-optimizes. For `ms-store`, produces a 1920×1080 H.264/AAC MP4 and PNG thumbnail.             |
+| `store-video/open-video.ts`              | Opens an autoplay browser preview after `npm run video`. Prefers mp4, respects `REEL_VARIANT`, seeks slightly past the black first frame for preview only, and skips auto-open in CI.                                                                                       |
 
 ## Beat structure (current)
 
@@ -130,7 +140,7 @@ Optional Store env vars:
 ## Open polish ideas (not yet shipped)
 
 - **Theme + locale matrix.** Fixture supports both via `test.use({ theme, locale })`. Add Playwright projects per variant; matrix run produces `reel-en-dark.gif`, `reel-en-light.gif`, etc. Mirrors the screenshot pipeline pattern.
-- **Aspect ratio variants.** 9:16 (1080×1920) for mobile social. Different `VIDEO_SIZE` per matrix entry.
+- ~~**Aspect ratio variants.** 9:16 (1080×1920) for mobile social.~~ Shipped as `npm run video:shorts`. Different `VIDEO_SIZE` per variant lives in `fixture.ts:getVideoProfile`.
 - **5-second social cut.** `npm run video:short` produces beats {1, 3, 5}. Trivial extension of the variant flag.
 - **Drop-slot highlight.** Brief CSS pulse on the schedule slot the dragged task lands in — gives beat 2 a closing punctuation.
 - **Brand-color flash on logo entrance.** Currently logos are flat brand colors. Could flash bright then settle.

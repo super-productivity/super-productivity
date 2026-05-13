@@ -89,6 +89,87 @@ export const getDb = () => {
 
 // Mock the db module
 vi.mock('../src/db', () => {
+  const applySelect = (op: any, select?: Record<string, boolean>) => {
+    if (!op || !select) {
+      return op;
+    }
+
+    return Object.fromEntries(
+      Object.entries(select)
+        .filter(([, shouldSelect]) => shouldSelect)
+        .map(([key]) => [key, op[key]]),
+    );
+  };
+
+  const matchesWhere = (op: any, where: any) => {
+    if (!where) {
+      return true;
+    }
+
+    if (where.userId !== undefined && op.userId !== where.userId) return false;
+    if (where.id !== undefined && op.id !== where.id) return false;
+    if (where.entityType !== undefined && op.entityType !== where.entityType) {
+      return false;
+    }
+    if (where.entityId !== undefined && op.entityId !== where.entityId) return false;
+    if (where.clientId !== undefined) {
+      if (typeof where.clientId === 'object' && where.clientId !== null) {
+        if (where.clientId.not !== undefined && op.clientId === where.clientId.not) {
+          return false;
+        }
+      } else if (op.clientId !== where.clientId) {
+        return false;
+      }
+    }
+
+    if (where.serverSeq?.gt !== undefined && op.serverSeq <= where.serverSeq.gt) {
+      return false;
+    }
+    if (where.serverSeq?.gte !== undefined && op.serverSeq < where.serverSeq.gte) {
+      return false;
+    }
+    if (where.serverSeq?.lt !== undefined && op.serverSeq >= where.serverSeq.lt) {
+      return false;
+    }
+    if (where.serverSeq?.lte !== undefined && op.serverSeq > where.serverSeq.lte) {
+      return false;
+    }
+
+    if (where.opType?.in && !where.opType.in.includes(op.opType)) {
+      return false;
+    }
+    if (typeof where.opType === 'string' && op.opType !== where.opType) {
+      return false;
+    }
+    if (
+      where.isPayloadEncrypted !== undefined &&
+      op.isPayloadEncrypted !== where.isPayloadEncrypted
+    ) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const sortOperations = (ops: any[], orderBy: any) => {
+    if (orderBy?.serverSeq === 'desc') {
+      return ops.sort((a, b) => b.serverSeq - a.serverSeq);
+    }
+    if (orderBy?.serverSeq === 'asc') {
+      return ops.sort((a, b) => a.serverSeq - b.serverSeq);
+    }
+    return ops;
+  };
+
+  const hasOperationUniqueConflict = (row: any) =>
+    Array.from(testData.operations.values()).some(
+      (op) =>
+        op.id === row.id ||
+        (op.userId === row.userId &&
+          row.serverSeq !== undefined &&
+          op.serverSeq === row.serverSeq),
+    );
+
   // Create Prisma mock with all needed operations
   const prismaMock = {
     $transaction: vi.fn().mockImplementation(async (callback: any) => {
@@ -105,29 +186,54 @@ vi.mock('../src/db', () => {
             testData.operations.set(args.data.id, op);
             return op;
           }),
+          createMany: vi.fn().mockImplementation(async (args: any) => {
+            const rows = Array.isArray(args.data) ? args.data : [args.data];
+            let count = 0;
+
+            for (const row of rows) {
+              if (hasOperationUniqueConflict(row)) {
+                if (args.skipDuplicates) {
+                  continue;
+                }
+                throw new Error('Unique constraint failed');
+              }
+
+              testData.operations.set(row.id, {
+                ...row,
+                receivedAt: row.receivedAt ?? BigInt(Date.now()),
+              });
+              count++;
+            }
+
+            return { count };
+          }),
           findUnique: vi.fn().mockImplementation(async (args: any) => {
             // Check if operation with given ID exists
-            return testData.operations.get(args.where?.id) || null;
+            return (
+              applySelect(testData.operations.get(args.where?.id), args.select) || null
+            );
           }),
           findFirst: vi.fn().mockImplementation(async (args: any) => {
-            // Find the first matching operation
-            for (const op of testData.operations.values()) {
-              if (args.where?.userId === op.userId) {
-                if (args.where?.id === op.id) return op;
-                if (!args.where?.id) return op;
-              }
-            }
-            return null;
+            const ops = sortOperations(
+              Array.from(testData.operations.values()).filter((op) =>
+                matchesWhere(op, args.where),
+              ),
+              args.orderBy,
+            );
+            return applySelect(ops[0], args.select) || null;
           }),
           findMany: vi.fn().mockImplementation(async (args: any) => {
-            const ops = Array.from(testData.operations.values());
-            return ops.filter((op) => {
-              if (args.where?.userId !== op.userId) return false;
-              if (args.where?.serverSeq?.gt !== undefined) {
-                return op.serverSeq > args.where.serverSeq.gt;
-              }
-              return true;
-            });
+            const ops = Array.from(testData.operations.values()).filter((op) =>
+              matchesWhere(op, args.where),
+            );
+            return sortOperations(ops, args.orderBy).map((op) =>
+              applySelect(op, args.select),
+            );
+          }),
+          count: vi.fn().mockImplementation(async (args: any) => {
+            return Array.from(testData.operations.values()).filter((op) =>
+              matchesWhere(op, args.where),
+            ).length;
           }),
           aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -151,6 +257,8 @@ vi.mock('../src/db', () => {
               // Handle Prisma's increment syntax: { lastSeq: { increment: 1 } }
               if (args.data?.lastSeq?.increment !== undefined) {
                 updated.lastSeq = (existing.lastSeq || 0) + args.data.lastSeq.increment;
+              } else if (args.data?.lastSeq?.decrement !== undefined) {
+                updated.lastSeq = (existing.lastSeq || 0) - args.data.lastSeq.decrement;
               } else {
                 Object.assign(updated, args.data);
               }
@@ -180,6 +288,11 @@ vi.mock('../src/db', () => {
           update: vi.fn().mockResolvedValue({}),
         },
         $queryRaw: vi.fn().mockResolvedValue([{ total: BigInt(0) }]),
+        // The upload transaction writes the storage counter atomically via
+        // $executeRaw to keep the data write and the counter delta in a single
+        // commit. Default mock is a no-op; specs that care about counter
+        // behaviour mock it explicitly.
+        $executeRaw: vi.fn().mockResolvedValue(0),
       };
       if (typeof callback === 'function') {
         return callback(tx);
@@ -189,8 +302,10 @@ vi.mock('../src/db', () => {
     }),
     operation: {
       create: vi.fn(),
+      createMany: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
       aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
@@ -210,6 +325,7 @@ vi.mock('../src/db', () => {
       update: vi.fn(),
     },
     $queryRaw: vi.fn().mockResolvedValue([{ total: BigInt(0) }]),
+    $executeRaw: vi.fn().mockResolvedValue(0),
   };
 
   return {
@@ -236,7 +352,9 @@ vi.mock('../src/db', () => {
 
 // Mock auth module
 vi.mock('../src/auth', () => ({
-  verifyToken: vi.fn().mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
+  verifyToken: vi
+    .fn()
+    .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
   VERIFICATION_TOKEN_EXPIRY_MS: 24 * 60 * 60 * 1000,
   MAX_VERIFICATION_RESEND_COUNT: 20,
 }));

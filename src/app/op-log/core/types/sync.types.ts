@@ -88,9 +88,8 @@ export interface LocalFileSyncPrivateCfg extends SyncProviderPrivateCfgBase {
 // Forward declarations for provider-specific types
 // These are imported from their respective modules where used
 import type { DropboxPrivateCfg } from '../../sync-providers/file-based/dropbox/dropbox';
-import type { WebdavPrivateCfg } from '../../sync-providers/file-based/webdav/webdav.model';
+import type { NextcloudPrivateCfg, WebdavPrivateCfg } from '@sp/sync-providers';
 import type { SuperSyncPrivateCfg } from '../../sync-providers/super-sync/super-sync.model';
-import type { NextcloudPrivateCfg } from '../../sync-providers/file-based/webdav/nextcloud.model';
 
 export type SyncProviderPrivateCfg =
   | DropboxPrivateCfg

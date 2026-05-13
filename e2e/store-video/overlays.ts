@@ -118,10 +118,12 @@ export type IntegrationsCardContent = {
 
 const STYLE_ID = '__sp-video-overlay-style';
 const OVERLAY_ID_PREFIX = '__sp-video-overlay-';
+const KEY_CHIP_ID_PREFIX = '__sp-video-keychip-';
 const END_CARD_ID = '__sp-video-end-card';
 const CAPTION_ID = '__sp-video-caption';
 
 let overlayCounter = 0;
+let keyChipCounter = 0;
 
 const ensureStyleInjected = async (page: Page): Promise<void> => {
   await page.evaluate((id) => {
@@ -315,6 +317,12 @@ const ensureStyleInjected = async (page: Page): Promise<void> => {
         gap: 64px 80px;
         justify-items: center;
       }
+      /* Portrait shorts (1080x1920) get a 2x3 grid so the logos read big
+         instead of cramped at the top of a tall frame. */
+      body[data-sp-video-variant="shorts"] .__sp-video-int-card-logos {
+        grid-template-columns: repeat(2, auto);
+        gap: 88px 120px;
+      }
       .__sp-video-int-card-logo {
         display: flex;
         flex-direction: column;
@@ -356,6 +364,45 @@ const ensureStyleInjected = async (page: Page): Promise<void> => {
         margin-top: 120px;
         font-size: clamp(30px, 2.6vw, 44px);
         color: #b6bbcd;
+        font-weight: 500;
+      }
+      /* Keycap chip — physically-modeled key. Used by the keyboard reel
+         to make each shortcut "land" visually before / during its action.
+         Anchored top-right by default so it doesn't fight the cursor or
+         the lower-third overlay text. */
+      .__sp-video-keychip {
+        position: fixed;
+        top: 56px;
+        right: 56px;
+        z-index: 2147483641;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 28px;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #2a2f44 0%, #161a2c 100%);
+        box-shadow:
+          inset 0 -4px 0 rgba(0, 0, 0, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.15),
+          0 10px 30px rgba(0, 0, 0, 0.45);
+        color: #f7f8fb;
+        font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+        font-weight: 700;
+        font-size: clamp(26px, 2.6vw, 44px);
+        letter-spacing: 0.04em;
+        opacity: 0;
+        transform: translateY(-12px) scale(0.92);
+        transition:
+          opacity var(--__sp-fade-ms, 220ms) ease-out,
+          transform var(--__sp-fade-ms, 220ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+        pointer-events: none;
+      }
+      .__sp-video-keychip.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      .__sp-video-keychip-plus {
+        color: #8a90ad;
         font-weight: 500;
       }
     `;
@@ -863,6 +910,70 @@ export const showIntegrationsCard = async (
           window.setTimeout(() => el.remove(), args.fadeMs + 50);
         },
         { id: INT_CARD_ID, fadeMs },
+      );
+      await page.waitForTimeout(fadeMs);
+    },
+  };
+};
+
+/**
+ * Render a keyboard keycap chip in the top-right corner. The label is
+ * split on `+` and rendered with a muted "+" separator, so "Shift+A"
+ * looks like two keys joined by a thin plus.
+ *
+ *   const chip = await showKeyChip(page, 'Shift+A');
+ *   await page.keyboard.press('Shift+A');
+ *   await chip.hide();
+ *
+ * The chip uses a brief pop-in (transform scale 0.92 → 1) so each key in
+ * a fast sequence reads as a discrete event, not a static badge.
+ */
+export const showKeyChip = async (
+  page: Page,
+  key: string,
+  options: { fadeMs?: number; noWait?: boolean } = {},
+): Promise<OverlayHandle> => {
+  const fadeMs = options.fadeMs ?? 220;
+  await ensureStyleInjected(page);
+  keyChipCounter += 1;
+  const id = `${KEY_CHIP_ID_PREFIX}${keyChipCounter}`;
+  await page.evaluate(
+    (args) => {
+      const el = document.createElement('div');
+      el.id = args.id;
+      el.className = '__sp-video-keychip';
+      el.style.setProperty('--__sp-fade-ms', `${args.fadeMs}ms`);
+      const parts = args.key.split('+').map((s) => s.trim());
+      parts.forEach((part, i) => {
+        if (i > 0) {
+          const plus = document.createElement('span');
+          plus.className = '__sp-video-keychip-plus';
+          plus.textContent = '+';
+          el.appendChild(plus);
+        }
+        const span = document.createElement('span');
+        span.textContent = part;
+        el.appendChild(span);
+      });
+      document.body.appendChild(el);
+      void el.offsetWidth;
+      el.classList.add('visible');
+    },
+    { id, key, fadeMs },
+  );
+  if (!options.noWait) {
+    await page.waitForTimeout(fadeMs);
+  }
+  return {
+    hide: async (): Promise<void> => {
+      await page.evaluate(
+        (args) => {
+          const el = document.getElementById(args.id);
+          if (!el) return;
+          el.classList.remove('visible');
+          window.setTimeout(() => el.remove(), args.fadeMs + 50);
+        },
+        { id, fadeMs },
       );
       await page.waitForTimeout(fadeMs);
     },

@@ -1,4 +1,5 @@
 import {
+  ActionType,
   extractActionPayload,
   FULL_STATE_OP_TYPES,
   Operation,
@@ -8,6 +9,7 @@ import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { isSingletonEntityId } from '../core/entity-registry';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { SyncLog } from '../../core/log';
+import { getDbDateStr } from '../../util/get-db-date-str';
 
 /**
  * Maps old/renamed action types to their current names.
@@ -42,6 +44,74 @@ const extractFullStatePayload = (payload: unknown): Record<string, unknown> => {
   return { appDataComplete: payload };
 };
 
+const addLegacyPlanForTodayDate = (
+  actionType: string,
+  actionPayload: Record<string, unknown>,
+  op: Operation,
+): Record<string, unknown> => {
+  if (
+    actionType === ActionType.TASK_SHARED_PLAN_FOR_TODAY &&
+    typeof actionPayload['today'] !== 'string'
+  ) {
+    // Legacy operations did not store the logical day, timezone, or start-of-next-day
+    // offset. The timestamp is the best available fallback, but it is interpreted in
+    // the replaying device's local timezone and can still be off near midnight or for
+    // dueWithTime values around a different original day-start offset.
+    return {
+      ...actionPayload,
+      today: getDbDateStr(op.timestamp),
+    };
+  }
+  return actionPayload;
+};
+
+const addReplaySafeDoneFields = (
+  actionType: string,
+  actionPayload: Record<string, unknown>,
+  op: Operation,
+): Record<string, unknown> => {
+  if (actionType !== ActionType.TASK_SHARED_UPDATE) {
+    return actionPayload;
+  }
+
+  const task = actionPayload['task'];
+  if (typeof task !== 'object' || task === null) {
+    return actionPayload;
+  }
+
+  const taskUpdate = task as Record<string, unknown>;
+  const changes = taskUpdate['changes'];
+  if (typeof changes !== 'object' || changes === null) {
+    return actionPayload;
+  }
+
+  const taskChanges = changes as Record<string, unknown>;
+  if (taskChanges['isDone'] !== true) {
+    return actionPayload;
+  }
+
+  const replaySafeChanges = {
+    ...taskChanges,
+    doneOn:
+      typeof taskChanges['doneOn'] === 'number' ? taskChanges['doneOn'] : op.timestamp,
+    // Older done ops did not store the logical day, timezone, or start-of-next-day
+    // offset. This timestamp fallback is replay-stable, but still uses the replaying
+    // device's local calendar and can be off near custom day-start boundaries.
+    dueDay:
+      typeof taskChanges['dueDay'] === 'string'
+        ? taskChanges['dueDay']
+        : getDbDateStr(op.timestamp),
+  };
+
+  return {
+    ...actionPayload,
+    task: {
+      ...taskUpdate,
+      changes: replaySafeChanges,
+    },
+  };
+};
+
 /**
  * Converts an Operation from the operation log back into a PersistentAction.
  * Used during sync replay and recovery to re-dispatch operations.
@@ -63,6 +133,9 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
   let actionPayload: Record<string, unknown> = isFullStateOp
     ? extractFullStatePayload(op.payload)
     : (extractActionPayload(op.payload) as Record<string, unknown>);
+
+  actionPayload = addLegacyPlanForTodayDate(actionType, actionPayload, op);
+  actionPayload = addReplaySafeDoneFields(actionType, actionPayload, op);
 
   // Force `payload.id = op.entityId` for non-singleton LWW Update ops. The
   // op's `entityId` is the canonical identifier — producers also enforce

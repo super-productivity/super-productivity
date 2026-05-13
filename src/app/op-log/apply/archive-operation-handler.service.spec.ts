@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import type { ArchiveSideEffectPort } from '@sp/sync-core';
 import {
   ArchiveOperationHandler,
   isArchiveAffectingAction,
@@ -195,6 +196,29 @@ describe('ArchiveOperationHandler', () => {
   });
 
   describe('handleOperation', () => {
+    it('should expose archive side effects through ArchiveSideEffectPort without mutating action meta', async () => {
+      const port: ArchiveSideEffectPort<PersistentAction> = service;
+      const tasks = [createMockTaskWithSubTasks('task-1')];
+      const meta: PersistentAction['meta'] = {
+        isPersistent: true,
+        isRemote: true,
+        entityType: 'TASK',
+        opType: OpType.Update,
+      };
+      const action = {
+        type: TaskSharedActions.moveToArchive.type,
+        tasks,
+        meta,
+      } as unknown as PersistentAction;
+
+      await port.handleOperation(action);
+
+      expect(action.meta).toBe(meta);
+      expect(
+        mockArchiveService.writeTasksToArchiveForRemoteSync,
+      ).toHaveBeenCalledOnceWith(tasks);
+    });
+
     describe('moveToArchive action', () => {
       it('should write tasks to archive for remote sync', async () => {
         const tasks = [

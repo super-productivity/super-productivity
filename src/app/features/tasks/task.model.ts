@@ -13,6 +13,7 @@ export enum HideSubTasksMode {
 export enum TaskDetailTargetPanel {
   Default = 'Default',
   Attachments = 'Attachments',
+  Notes = 'Notes',
   DONT_OPEN_PANEL = 'DONT_OPEN_PANEL',
 }
 

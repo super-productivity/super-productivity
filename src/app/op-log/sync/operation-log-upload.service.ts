@@ -1,4 +1,8 @@
 import { inject, Injectable } from '@angular/core';
+import {
+  planRegularOpsAfterFullStateUpload,
+  planUploadLastServerSeqUpdate,
+} from '@sp/sync-core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
 import {
@@ -181,18 +185,14 @@ export class OperationLogUploadService {
       }
 
       if (fullStateOpUploaded && lastUploadedFullStateOpId) {
-        // After a full-state upload, only regular ops created BEFORE the snapshot
-        // are reflected in it. Ops created AFTER the snapshot still need uploading.
-        // UUIDv7 IDs are time-ordered, so string comparison works for ordering.
-        const opsBeforeSnapshot = regularOps.filter(
-          (entry) => entry.op.id < lastUploadedFullStateOpId!,
-        );
-        const opsAfterSnapshot = regularOps.filter(
-          (entry) => entry.op.id >= lastUploadedFullStateOpId!,
-        );
+        const { opsIncludedInSnapshot, opsAfterSnapshot } =
+          planRegularOpsAfterFullStateUpload({
+            regularOps,
+            lastUploadedFullStateOpId,
+          });
 
-        if (opsBeforeSnapshot.length > 0) {
-          const seqs = opsBeforeSnapshot.map((entry) => entry.seq);
+        if (opsIncludedInSnapshot.length > 0) {
+          const seqs = opsIncludedInSnapshot.map((entry) => entry.seq);
           await this.opLogStore.markSynced(seqs);
           uploadedCount += seqs.length;
           OpLog.normal(
@@ -309,34 +309,25 @@ export class OperationLogUploadService {
         // Update last known server seq
         // When hasMorePiggyback is true, use the max piggybacked op's serverSeq
         // so subsequent download will fetch remaining ops
-        let seqToStore = response.latestSeq;
-        if (response.hasMorePiggyback) {
-          hasMorePiggyback = true;
-          if (response.newOps && response.newOps.length > 0) {
-            const maxPiggybackSeq = Math.max(
-              ...response.newOps.map((op) => op.serverSeq),
-            );
-            // Use Math.max to ensure we never regress across chunks
-            highestReceivedSeq = Math.max(highestReceivedSeq, maxPiggybackSeq);
-            seqToStore = highestReceivedSeq;
-            OpLog.normal(
-              `OperationLogUploadService: hasMorePiggyback=true, setting lastServerSeq to ${seqToStore} instead of ${response.latestSeq}`,
-            );
-          } else {
-            // Server indicates more ops but didn't send any - don't advance sequence
-            // Use highestReceivedSeq to ensure we don't regress from previous chunks
-            seqToStore = highestReceivedSeq;
-            OpLog.warn(
-              `OperationLogUploadService: hasMorePiggyback=true but no ops received, keeping lastServerSeq at ${highestReceivedSeq}`,
-            );
-          }
-        } else {
-          // No more piggyback, but still ensure we don't regress
-          highestReceivedSeq = Math.max(highestReceivedSeq, response.latestSeq);
-          seqToStore = highestReceivedSeq;
+        const serverSeqPlan = planUploadLastServerSeqUpdate({
+          currentHighestReceivedSeq: highestReceivedSeq,
+          responseLatestSeq: response.latestSeq,
+          hasMorePiggyback: response.hasMorePiggyback,
+          piggybackServerSeqs: response.newOps?.map((op) => op.serverSeq) ?? [],
+        });
+        highestReceivedSeq = serverSeqPlan.highestReceivedSeq;
+        hasMorePiggyback = hasMorePiggyback || serverSeqPlan.hasMorePiggyback;
+        if (serverSeqPlan.reason === 'has-more-with-piggyback') {
+          OpLog.normal(
+            `OperationLogUploadService: hasMorePiggyback=true, setting lastServerSeq to ${serverSeqPlan.seqToStore} instead of ${response.latestSeq}`,
+          );
+        } else if (serverSeqPlan.reason === 'has-more-empty') {
+          OpLog.warn(
+            `OperationLogUploadService: hasMorePiggyback=true but no ops received, keeping lastServerSeq at ${serverSeqPlan.seqToStore}`,
+          );
         }
-        await syncProvider.setLastServerSeq(seqToStore);
-        lastKnownServerSeq = seqToStore;
+        await syncProvider.setLastServerSeq(serverSeqPlan.seqToStore);
+        lastKnownServerSeq = serverSeqPlan.seqToStore;
 
         // Collect rejected operations - DO NOT mark as rejected here!
         // The sync service must process piggybacked ops FIRST to allow proper conflict detection.

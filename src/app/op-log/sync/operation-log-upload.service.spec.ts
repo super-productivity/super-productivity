@@ -752,6 +752,23 @@ describe('OperationLogUploadService', () => {
         expect(result.rejectedCount).toBe(0);
       });
 
+      it('should NOT mark full-state ops as rejected when snapshot fails with 429 rate limit error', async () => {
+        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.BackupImport);
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+        mockApiProvider.uploadSnapshot.and.returnValue(
+          Promise.resolve({
+            accepted: false,
+            error:
+              'HTTP 429 Too Many Requests \u2014 Too Many Requests \u2014 retry in 5 minutes',
+          }),
+        );
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        expect(result.rejectedCount).toBe(0);
+      });
+
       it('should mark regular ops as synced when full-state op is uploaded (ops before snapshot)', async () => {
         // Regular op id 'op-0' sorts BEFORE full-state op id 'op-1',
         // meaning the regular op was created before the snapshot and is included in it.

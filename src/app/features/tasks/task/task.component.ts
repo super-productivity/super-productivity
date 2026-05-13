@@ -876,6 +876,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this.focusSelf();
   }
 
+  openNotesPanel(): void {
+    this._taskService.setSelectedId(this.task().id, TaskDetailTargetPanel.Notes);
+    this.focusSelf();
+  }
+
   toggleSubTaskMode(): void {
     this._taskService.toggleSubTaskMode(this.task().id, true, true);
     this.focusSelf();
@@ -913,6 +918,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: [task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         parentTaskMap: { [task.id]: task.parentId },
       }),
     );

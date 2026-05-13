@@ -167,6 +167,58 @@ module.exports = tseslint.config(
       ],
     },
   },
+  {
+    files: ['packages/sync-providers/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@sp/shared-schema',
+              message: '@sp/sync-providers must not import SP-specific schema packages.',
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                '@angular/*',
+                '@ngrx/*',
+                '@sp/shared-schema/*',
+                '@sp/sync-core/*',
+                '../sync-core/*',
+                '../sync-core/**',
+                '../shared-schema/*',
+                '../shared-schema/**',
+                '../../shared-schema/*',
+                '../../shared-schema/**',
+                '../../sync-core/*',
+                '../../sync-core/**',
+                '**/shared-schema/*',
+                '**/shared-schema/**',
+                '**/sync-core/*',
+                '**/sync-core/**',
+                'src/app/*',
+                'src/app/**',
+                '**/src/app/*',
+                '**/src/app/**',
+              ],
+              message:
+                '@sp/sync-providers must use only public @sp/sync-core exports and must not import Angular, NgRx, app code, or SP-specific schema packages.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression',
+          message:
+            '@sp/sync-providers must not use dynamic imports; they bypass package-boundary checks.',
+        },
+      ],
+    },
+  },
   // NgRx effects files - require hydration guards on selector-based effects
   {
     files: ['**/*.effects.ts'],

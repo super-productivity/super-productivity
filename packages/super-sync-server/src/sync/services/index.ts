@@ -12,4 +12,9 @@ export { DeviceService } from './device.service';
 export { OperationDownloadService } from './operation-download.service';
 export { StorageQuotaService } from './storage-quota.service';
 export { SnapshotService } from './snapshot.service';
-export type { SnapshotResult, RestorePoint } from './snapshot.service';
+export type {
+  CacheSnapshotResult,
+  PreparedSnapshotCache,
+  SnapshotResult,
+  RestorePoint,
+} from './snapshot.service';

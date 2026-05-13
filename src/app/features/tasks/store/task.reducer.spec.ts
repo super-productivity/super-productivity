@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { Task, TaskState } from '../task.model';
+import { Task, TaskDetailTargetPanel, TaskState } from '../task.model';
 import { initialTaskState, taskReducer } from './task.reducer';
 import * as fromActions from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -89,6 +89,46 @@ describe('Task Reducer', () => {
       // and is no longer handled directly by the task reducer.
       // See task-shared.reducer.spec.ts for comprehensive deleteTask tests.
       expect(TaskSharedActions.deleteTask).toBeDefined();
+    });
+  });
+
+  describe('setSelectedTask', () => {
+    it('should keep the selected task open when an explicit target panel is requested', () => {
+      const state: TaskState = {
+        ...stateWithTasks,
+        selectedTaskId: 'task1',
+        taskDetailTargetPanel: null,
+      };
+
+      const result = taskReducer(
+        state,
+        fromActions.setSelectedTask({
+          id: 'task1',
+          taskDetailTargetPanel: TaskDetailTargetPanel.Notes,
+        }),
+      );
+
+      expect(result.selectedTaskId).toBe('task1');
+      expect(result.taskDetailTargetPanel).toBe(TaskDetailTargetPanel.Notes);
+    });
+
+    it('should still toggle the selected task closed for the default target', () => {
+      const state: TaskState = {
+        ...stateWithTasks,
+        selectedTaskId: 'task1',
+        taskDetailTargetPanel: TaskDetailTargetPanel.Notes,
+      };
+
+      const result = taskReducer(
+        state,
+        fromActions.setSelectedTask({
+          id: 'task1',
+          taskDetailTargetPanel: TaskDetailTargetPanel.Default,
+        }),
+      );
+
+      expect(result.selectedTaskId).toBeNull();
+      expect(result.taskDetailTargetPanel).toBeNull();
     });
   });
 

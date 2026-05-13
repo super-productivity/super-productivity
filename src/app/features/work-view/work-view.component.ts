@@ -84,6 +84,7 @@ import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
 import { recordSearchNavDebug } from '../../util/search-nav-debug';
 import { dragDelayForTouch } from '../../util/input-intent';
+import { DateService } from '../../core/date/date.service';
 
 @Component({
   selector: 'work-view',
@@ -137,6 +138,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
   private _destroyRef = inject(DestroyRef);
+  private _dateService = inject(DateService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
 
   isFinishDayEnabled = computed(
@@ -451,6 +453,8 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: overdueTasks.map((t) => t.id),
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
       }),
     );
   }

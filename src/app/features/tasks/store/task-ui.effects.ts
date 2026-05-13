@@ -41,6 +41,7 @@ import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigat
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
+import { DateService } from '../../../core/date/date.service';
 
 @Injectable()
 export class TaskUiEffects {
@@ -55,6 +56,7 @@ export class TaskUiEffects {
   private _workContextService = inject(WorkContextService);
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _layoutService = inject(LayoutService);
+  private _dateService = inject(DateService);
 
   taskCreatedSnack$ = createEffect(
     () =>
@@ -302,6 +304,9 @@ export class TaskUiEffects {
                         this._store$.dispatch(
                           TaskSharedActions.planTasksForToday({
                             taskIds: currentTasks.map((t) => t.id),
+                            today: this._dateService.todayStr(),
+                            startOfNextDayDiffMs:
+                              this._dateService.getStartOfNextDayDiffMs(),
                           }),
                         );
                       }

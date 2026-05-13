@@ -1,36 +1,30 @@
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
-import { createValidate } from 'typia';
+import type { IValidation } from 'typia';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
-import { DEFAULT_TASK, TaskState } from '../../features/tasks/task.model';
-import { OpLog } from '../../core/log';
+import { DEFAULT_TASK } from '../../features/tasks/task.model';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 
-interface TestInterface {
-  globalConfig: {
-    misc: {
-      startOfNextDay: number;
-    };
-  };
-  optionalObj?: {
-    optionalProp?: string;
-    bool: boolean;
-  };
-  task?: TaskState;
-}
+const createTypiaError = (
+  path: string,
+  expected: string,
+  value?: unknown,
+): IValidation.IError => ({ path, expected, value }) as IValidation.IError;
 
 describe('autoFixTypiaErrors', () => {
-  const validate = createValidate<TestInterface>();
-
   let errSpy: jasmine.Spy;
+  let warnSpy: jasmine.Spy;
 
   beforeEach(() => {
-    // Spy on OpLog.err to prevent test output cluttering
-    errSpy = spyOn(OpLog, 'err').and.stub();
+    // Spy on sync logger methods to prevent test output cluttering.
+    errSpy = spyOn(OP_LOG_SYNC_LOGGER, 'err').and.stub();
+    warnSpy = spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
   });
 
   afterEach(() => {
     // Reset spies
     errSpy.calls.reset();
+    warnSpy.calls.reset();
   });
 
   it('should return data unchanged when no errors', () => {
@@ -47,9 +41,9 @@ describe('autoFixTypiaErrors', () => {
         },
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.globalConfig.misc.startOfNextDay', 'number', '111'),
+    ]);
     expect(result).toEqual({
       globalConfig: {
         misc: {
@@ -57,6 +51,28 @@ describe('autoFixTypiaErrors', () => {
         },
       },
     } as any);
+  });
+
+  it('should log auto-fixes without raw validation values', () => {
+    const d = {
+      globalConfig: {
+        misc: {
+          startOfNextDay: '4321',
+        },
+      },
+    } as any;
+
+    autoFixTypiaErrors(d, [
+      createTypiaError('$input.globalConfig.misc.startOfNextDay', 'number', '4321'),
+    ]);
+
+    const serializedLogArgs = JSON.stringify([
+      ...errSpy.calls.allArgs(),
+      ...warnSpy.calls.allArgs(),
+    ]);
+    expect(serializedLogArgs).toContain('valueStringLength');
+    expect(serializedLogArgs).toContain('replacementType');
+    expect(serializedLogArgs).not.toContain('4321');
   });
 
   it('should use defaults for globalConfig if no other value could be added', () => {
@@ -67,9 +83,9 @@ describe('autoFixTypiaErrors', () => {
         },
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.globalConfig.misc.startOfNextDay', 'number'),
+    ]);
     expect(result.globalConfig.misc.startOfNextDay).not.toEqual(111);
     expect(result.globalConfig.misc.startOfNextDay).toEqual(0);
   });
@@ -85,9 +101,9 @@ describe('autoFixTypiaErrors', () => {
         optionalProp: null,
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.optionalObj.optionalProp', 'string | undefined', null),
+    ]);
     expect(result.globalConfig.misc.startOfNextDay).toEqual(111);
     expect((result as any).optionalObj.optionalProp).toEqual(undefined);
   });
@@ -103,9 +119,9 @@ describe('autoFixTypiaErrors', () => {
         bool: null,
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.optionalObj.bool', 'boolean', null),
+    ]);
     expect((result as any).optionalObj.bool).toEqual(false);
   });
 
@@ -130,10 +146,11 @@ describe('autoFixTypiaErrors', () => {
         ids: ['task-1'],
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
 
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.task.entities["task-1"].timeEstimate', 'number', '0'),
+      createTypiaError('$input.task.entities["task-1"].timeSpent', 'number', '0'),
+    ]);
 
     expect((result as any).task.entities['task-1'].timeEstimate).toEqual(0);
     expect((result as any).task.entities['task-1'].timeSpent).toEqual(0);
@@ -175,7 +192,16 @@ describe('autoFixTypiaErrors', () => {
       ],
     ).toBe(0);
     expect(errSpy).toHaveBeenCalledWith(
-      "Fixed: simpleCounter.entities['BpYFLFtlIGGgTNfZB-t2-'].countOnDay['2025-06-16'] from null to 0 for simpleCounter",
+      '[auto-fix-typia-errors] Applied validation auto-fix',
+      undefined,
+      jasmine.objectContaining({
+        path: "simpleCounter.entities['BpYFLFtlIGGgTNfZB-t2-'].countOnDay['2025-06-16']",
+        pathDepth: 5,
+        pathRoot: 'simpleCounter',
+        fix: 'simple-counter-countOnDay-null-to-zero',
+        valueType: 'null',
+        replacementType: 'number',
+      }),
     );
   });
 

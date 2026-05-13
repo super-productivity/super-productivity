@@ -1,6 +1,6 @@
 import { OpLog } from '../../core/log';
 import type { SyncLogger } from '@sp/sync-core';
-import { JsonParseError } from '../core/errors/sync-errors';
+import { extractErrorMessage, JsonParseError } from '../core/errors/sync-errors';
 import { EncryptAndCompressHandlerService } from './encrypt-and-compress-handler.service';
 import { getErrorTxt } from '../../util/get-error-text';
 
@@ -140,6 +140,34 @@ describe('EncryptAndCompressHandlerService', () => {
       expect(result.data).toEqual(complexData);
       expect(result.modelVersion).toBe(2);
     });
+
+    it('should round-trip compressed unencrypted sync data', async () => {
+      const testData = {
+        tasks: Array.from({ length: 20 }, (_, i) => ({
+          id: `task-${i}`,
+          title: `Task ${i}`,
+        })),
+      };
+
+      const compressed = await service.compressAndEncrypt({
+        data: testData,
+        modelVersion: 3,
+        isCompress: true,
+        isEncrypt: false,
+      });
+
+      expect(compressed.startsWith('pf_C3__')).toBeTrue();
+
+      const result = await service.decompressAndDecrypt<typeof testData>({
+        dataStr: compressed,
+        encryptKey: undefined,
+      });
+
+      expect(result).toEqual({
+        data: testData,
+        modelVersion: 3,
+      });
+    });
   });
 });
 
@@ -231,5 +259,16 @@ describe('JsonParseError', () => {
     expect(error.position).toBe(1000);
     // dataSample should still be set but truncated to actual data length
     expect(error.dataSample).toBeDefined();
+  });
+});
+
+describe('extractErrorMessage', () => {
+  it('preserves app-side compression error code wording', () => {
+    const error = new Error('');
+    Object.defineProperty(error, 'code', {
+      value: 'Z_BUF_ERROR',
+    });
+
+    expect(extractErrorMessage(error)).toBe('Compression error: buf error');
   });
 });

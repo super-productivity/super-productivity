@@ -23,7 +23,11 @@ import { Operation } from '../src/sync/sync.types';
 
 // Mock the database module with Prisma mocks
 vi.mock('../src/db', async () => {
-  const { testState: state } = await import('./sync.service.test-state');
+  const {
+    applyOperationSelect,
+    hasOperationUniqueConflict,
+    testState: state,
+  } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
 
   const createTxMock = () => ({
@@ -47,9 +51,35 @@ vi.mock('../src/db', async () => {
         state.operations.set(args.data.id, op);
         return op;
       }),
+      createMany: vi.fn().mockImplementation(async (args: any) => {
+        const rows = Array.isArray(args.data) ? args.data : [args.data];
+        let count = 0;
+
+        for (const row of rows) {
+          if (hasOperationUniqueConflict(state.operations, row)) {
+            if (args.skipDuplicates) {
+              continue;
+            }
+            throw new PrismaModule.PrismaClientKnownRequestError(
+              'Unique constraint failed',
+              { code: 'P2002', clientVersion: '5.0.0' },
+            );
+          }
+
+          state.operations.set(row.id, {
+            ...row,
+            receivedAt: row.receivedAt ?? BigInt(Date.now()),
+          });
+          count++;
+        }
+
+        return { count };
+      }),
       findFirst: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         if (args.where?.entityId && args.where?.entityType) {
           const ops = Array.from(state.operations.values())
@@ -57,12 +87,61 @@ vi.mock('../src/db', async () => {
               (op: any) =>
                 op.userId === args.where.userId &&
                 op.entityId === args.where.entityId &&
-                op.entityType === args.where.entityType,
+                op.entityType === args.where.entityType &&
+                (args.where.clientId?.not === undefined ||
+                  op.clientId !== args.where.clientId.not),
             )
             .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
-          return ops[0] || null;
+          return applyOperationSelect(ops[0], args.select) || null;
+        }
+        if (args.where?.opType?.in) {
+          const ops = Array.from(state.operations.values()).filter((op: any) => {
+            if (args.where.userId !== undefined && args.where.userId !== op.userId)
+              return false;
+            if (
+              args.where.serverSeq?.lte !== undefined &&
+              op.serverSeq > args.where.serverSeq.lte
+            )
+              return false;
+            if (!args.where.opType.in.includes(op.opType)) return false;
+            if (
+              args.where.isPayloadEncrypted !== undefined &&
+              op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+            )
+              return false;
+            return true;
+          });
+          if (ops.length === 0) return null;
+          ops.sort((a: any, b: any) =>
+            args.orderBy?.serverSeq === 'desc'
+              ? b.serverSeq - a.serverSeq
+              : a.serverSeq - b.serverSeq,
+          );
+          return applyOperationSelect(ops[0], args.select) || ops[0];
         }
         return null;
+      }),
+      count: vi.fn().mockImplementation(async (args: any) => {
+        return Array.from(state.operations.values()).filter((op: any) => {
+          if (args.where?.userId !== undefined && args.where.userId !== op.userId)
+            return false;
+          if (
+            args.where?.serverSeq?.gt !== undefined &&
+            op.serverSeq <= args.where.serverSeq.gt
+          )
+            return false;
+          if (
+            args.where?.serverSeq?.lte !== undefined &&
+            op.serverSeq > args.where.serverSeq.lte
+          )
+            return false;
+          if (
+            args.where?.isPayloadEncrypted !== undefined &&
+            op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+          )
+            return false;
+          return true;
+        }).length;
       }),
       findMany: vi.fn().mockImplementation(async (args: any) => {
         const ops = Array.from(state.operations.values());
@@ -82,6 +161,29 @@ vi.mock('../src/db', async () => {
           .sort((a: any, b: any) => a.serverSeq - b.serverSeq)
           .slice(0, args.take || 500);
       }),
+      count: vi.fn().mockImplementation(async (args: any) => {
+        const ops = Array.from(state.operations.values());
+        return ops.filter((op: any) => {
+          if (args.where?.userId !== undefined && args.where.userId !== op.userId)
+            return false;
+          if (
+            args.where?.serverSeq?.gt !== undefined &&
+            op.serverSeq <= args.where.serverSeq.gt
+          )
+            return false;
+          if (
+            args.where?.serverSeq?.lte !== undefined &&
+            op.serverSeq > args.where.serverSeq.lte
+          )
+            return false;
+          if (
+            args.where?.isPayloadEncrypted !== undefined &&
+            op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+          )
+            return false;
+          return true;
+        }).length;
+      }),
       aggregate: vi.fn().mockImplementation(async (args: any) => {
         const ops = Array.from(state.operations.values()).filter(
           (op: any) => args.where?.userId === op.userId,
@@ -97,7 +199,9 @@ vi.mock('../src/db', async () => {
       deleteMany: vi.fn().mockImplementation(async () => ({ count: 0 })),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         return null;
       }),
@@ -114,6 +218,33 @@ vi.mock('../src/db', async () => {
         state.userSyncStates.set(args.where.userId, result);
         return result;
       }),
+      // Race-safe writers used by SnapshotService._generateSnapshotImpl:
+      // updateMany honours the `OR: [lastSnapshotSeq null, lastSnapshotSeq < seq]`
+      // guard; create is the first-time-user fallback.
+      updateMany: vi.fn().mockImplementation(async (args: any) => {
+        const existing = state.userSyncStates.get(args.where.userId);
+        if (!existing) return { count: 0 };
+        const seqFilter = args.where?.OR?.find(
+          (clause: any) => clause.lastSnapshotSeq?.lt !== undefined,
+        )?.lastSnapshotSeq?.lt;
+        const cachedSeq = existing.lastSnapshotSeq;
+        const matches =
+          cachedSeq === null ||
+          cachedSeq === undefined ||
+          (seqFilter !== undefined && cachedSeq < seqFilter);
+        if (!matches) return { count: 0 };
+        const updated = { ...existing, ...args.data };
+        state.userSyncStates.set(args.where.userId, updated);
+        return { count: 1 };
+      }),
+      create: vi.fn().mockImplementation(async (args: any) => {
+        if (state.userSyncStates.has(args.data.userId)) {
+          throw Object.assign(new Error('Unique constraint'), { code: 'P2002' });
+        }
+        const result = { ...args.data };
+        state.userSyncStates.set(args.data.userId, result);
+        return result;
+      }),
       update: vi.fn().mockImplementation(async (args: any) => {
         const existing = state.userSyncStates.get(args.where.userId);
         if (existing) {
@@ -122,6 +253,13 @@ vi.mock('../src/db', async () => {
             if (typeof value === 'object' && value !== null && 'increment' in value) {
               updated[key] =
                 (existing[key] || 0) + (value as { increment: number }).increment;
+            } else if (
+              typeof value === 'object' &&
+              value !== null &&
+              'decrement' in value
+            ) {
+              updated[key] =
+                (existing[key] || 0) - (value as { decrement: number }).decrement;
             } else {
               updated[key] = value;
             }
@@ -155,6 +293,8 @@ vi.mock('../src/db', async () => {
         return state.users.get(args.where.id) || null;
       }),
     },
+    // Upload transaction writes the storage counter atomically via $executeRaw.
+    $executeRaw: vi.fn().mockResolvedValue(0),
   });
 
   return {
@@ -188,6 +328,29 @@ vi.mock('../src/db', async () => {
             })
             .sort((a: any, b: any) => a.serverSeq - b.serverSeq)
             .slice(0, args.take || 500);
+        }),
+        count: vi.fn().mockImplementation(async (args: any) => {
+          const ops = Array.from(state.operations.values());
+          return ops.filter((op: any) => {
+            if (args.where?.userId !== undefined && args.where.userId !== op.userId)
+              return false;
+            if (
+              args.where?.serverSeq?.gt !== undefined &&
+              op.serverSeq <= args.where.serverSeq.gt
+            )
+              return false;
+            if (
+              args.where?.serverSeq?.lte !== undefined &&
+              op.serverSeq > args.where.serverSeq.lte
+            )
+              return false;
+            if (
+              args.where?.isPayloadEncrypted !== undefined &&
+              op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+            )
+              return false;
+            return true;
+          }).length;
         }),
         aggregate: vi.fn().mockImplementation(async (args: any) => {
           const ops = Array.from(state.operations.values()).filter(

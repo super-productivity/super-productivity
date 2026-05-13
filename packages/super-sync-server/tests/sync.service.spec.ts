@@ -6,7 +6,11 @@ import { testState, resetTestState } from './sync.service.test-state';
 // Mock the database module with Prisma mocks
 vi.mock('../src/db', async () => {
   // Import testState from separate module to avoid circular import
-  const { testState: state } = await import('./sync.service.test-state');
+  const {
+    applyOperationSelect,
+    hasOperationUniqueConflict,
+    testState: state,
+  } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
 
   const createTxMock = () => ({
@@ -28,9 +32,35 @@ vi.mock('../src/db', async () => {
         state.operations.set(args.data.id, op);
         return op;
       }),
+      createMany: vi.fn().mockImplementation(async (args: any) => {
+        const rows = Array.isArray(args.data) ? args.data : [args.data];
+        let count = 0;
+
+        for (const row of rows) {
+          if (hasOperationUniqueConflict(state.operations, row)) {
+            if (args.skipDuplicates) {
+              continue;
+            }
+            throw new PrismaModule.PrismaClientKnownRequestError(
+              'Unique constraint failed',
+              { code: 'P2002', clientVersion: '5.0.0' },
+            );
+          }
+
+          state.operations.set(row.id, {
+            ...row,
+            receivedAt: row.receivedAt ?? BigInt(Date.now()),
+          });
+          count++;
+        }
+
+        return { count };
+      }),
       findFirst: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         if (args.where?.opType?.in) {
           const ops = Array.from(state.operations.values())
@@ -39,9 +69,11 @@ vi.mock('../src/db', async () => {
           for (const op of ops) {
             if (args.where.opType.in.includes(op.opType)) {
               if (args.where.serverSeq?.lte !== undefined) {
-                if (op.serverSeq <= args.where.serverSeq.lte) return op;
+                if (op.serverSeq <= args.where.serverSeq.lte) {
+                  return applyOperationSelect(op, args.select);
+                }
               } else {
-                return op;
+                return applyOperationSelect(op, args.select);
               }
             }
           }
@@ -52,10 +84,12 @@ vi.mock('../src/db', async () => {
               (op: any) =>
                 op.userId === args.where.userId &&
                 op.entityId === args.where.entityId &&
-                op.entityType === args.where.entityType,
+                op.entityType === args.where.entityType &&
+                (args.where.clientId?.not === undefined ||
+                  op.clientId !== args.where.clientId.not),
             )
             .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
-          return ops[0] || null;
+          return applyOperationSelect(ops[0], args.select) || null;
         }
         return null;
       }),
@@ -140,7 +174,9 @@ vi.mock('../src/db', async () => {
       }),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         return null;
       }),
@@ -166,6 +202,13 @@ vi.mock('../src/db', async () => {
             if (typeof value === 'object' && value !== null && 'increment' in value) {
               updated[key] =
                 (existing[key] || 0) + (value as { increment: number }).increment;
+            } else if (
+              typeof value === 'object' &&
+              value !== null &&
+              'decrement' in value
+            ) {
+              updated[key] =
+                (existing[key] || 0) - (value as { decrement: number }).decrement;
             } else {
               updated[key] = value;
             }
@@ -258,6 +301,11 @@ vi.mock('../src/db', async () => {
       }),
       update: vi.fn().mockResolvedValue({}),
     },
+    // The upload transaction now writes the storage counter atomically via
+    // $executeRaw to keep the data write and the counter delta in a single
+    // commit. Mock is a no-op here — the existing spec asserts behaviour at
+    // the op level and does not inspect storage_used_bytes inside this file.
+    $executeRaw: vi.fn().mockResolvedValue(0),
   });
 
   return {
@@ -452,6 +500,7 @@ vi.mock('../src/db', async () => {
         update: vi.fn().mockResolvedValue({}),
       },
       $queryRaw: vi.fn().mockResolvedValue([{ total: BigInt(0) }]),
+      $executeRaw: vi.fn().mockResolvedValue(0),
     },
   };
 });

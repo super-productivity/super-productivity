@@ -69,6 +69,8 @@ export class AddTasksForTomorrowService {
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   async addAllDueTomorrow(): Promise<'ADDED' | void> {
+    const todayStr = this._dateService.todayStr();
+    const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
     const dueRepeatCfgs = await this._repeatableForTomorrow$.pipe(first()).toPromise();
 
     const tomorrow = this._dateService.getLogicalTomorrowMs();
@@ -126,7 +128,7 @@ export class AddTasksForTomorrowService {
       });
     }
 
-    this._movePlannedTasksToToday(allDueSorted);
+    this._movePlannedTasksToToday(allDueSorted, todayStr, startOfNextDayDiffMs);
 
     if (allDueSorted.length) {
       return 'ADDED';
@@ -138,6 +140,7 @@ export class AddTasksForTomorrowService {
     const todayDate = this._dateService.getLogicalTodayDate();
     const todayTS = todayDate.getTime();
     const todayStr = this._dateService.todayStr();
+    const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
 
     TaskLog.log('[AddTasksForTomorrow] Starting addAllDueToday', { todayStr });
 
@@ -215,18 +218,24 @@ export class AddTasksForTomorrowService {
       });
     }
 
-    this._movePlannedTasksToToday(allDueSorted);
+    this._movePlannedTasksToToday(allDueSorted, todayStr, startOfNextDayDiffMs);
 
     if (allDueSorted.length) {
       return 'ADDED';
     }
   }
 
-  private _movePlannedTasksToToday(plannedTasks: TaskCopy[]): void {
+  private _movePlannedTasksToToday(
+    plannedTasks: TaskCopy[],
+    today: string,
+    startOfNextDayDiffMs: number,
+  ): void {
     if (plannedTasks.length) {
       this._store.dispatch(
         TaskSharedActions.planTasksForToday({
           taskIds: plannedTasks.map((t) => t.id),
+          today,
+          startOfNextDayDiffMs,
           isSkipRemoveReminder: true,
         }),
       );

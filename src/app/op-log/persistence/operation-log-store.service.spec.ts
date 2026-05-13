@@ -1,9 +1,11 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import type { OperationStorePort } from '@sp/sync-core';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
   ActionType,
   Operation,
+  OperationLogEntry,
   OpType,
   EntityType,
   VectorClock,
@@ -87,6 +89,35 @@ describe('OperationLogStoreService', () => {
 
       // All should resolve without error
       await expectAsync(Promise.all(initPromises)).toBeResolved();
+    });
+  });
+
+  describe('OperationStorePort contract', () => {
+    it('should expose unsynced, synced, and rejected transitions through the port methods', async () => {
+      const port: OperationStorePort<Operation, OperationLogEntry> = service;
+      const syncedOp = createTestOperation({ entityId: 'synced-task' });
+      const rejectedOp = createTestOperation({ entityId: 'rejected-task' });
+
+      await service.append(syncedOp);
+      await service.append(rejectedOp);
+
+      const initialUnsynced = await port.getUnsynced();
+      expect(initialUnsynced.map((entry) => entry.op.id)).toEqual([
+        syncedOp.id,
+        rejectedOp.id,
+      ]);
+
+      const syncedEntry = initialUnsynced.find((entry) => entry.op.id === syncedOp.id);
+      expect(syncedEntry).toBeDefined();
+      if (!syncedEntry) {
+        fail('Expected synced operation entry to exist');
+        return;
+      }
+
+      await port.markSynced([syncedEntry.seq]);
+      await port.markRejected([rejectedOp.id]);
+
+      expect(await port.getUnsynced()).toEqual([]);
     });
   });
 

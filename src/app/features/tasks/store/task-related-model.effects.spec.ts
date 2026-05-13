@@ -12,6 +12,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { DEFAULT_TASK, Task } from '../task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { DateService } from '../../../core/date/date.service';
 
 describe('TaskRelatedModelEffects', () => {
   let effects: TaskRelatedModelEffects;
@@ -19,6 +20,7 @@ describe('TaskRelatedModelEffects', () => {
   let store: MockStore;
   let taskService: jasmine.SpyObj<TaskService>;
   let hydrationStateService: jasmine.SpyObj<HydrationStateService>;
+  let dateService: jasmine.SpyObj<DateService>;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -37,6 +39,12 @@ describe('TaskRelatedModelEffects', () => {
       'isApplyingRemoteOps',
     ]);
     hydrationStateServiceSpy.isApplyingRemoteOps.and.returnValue(false);
+    const dateServiceSpy = jasmine.createSpyObj<DateService>('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+    ]);
+    dateServiceSpy.todayStr.and.returnValue(getDbDateStr());
+    dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(0);
 
     TestBed.configureTestingModule({
       providers: [
@@ -46,6 +54,7 @@ describe('TaskRelatedModelEffects', () => {
           selectors: [{ selector: selectTodayTaskIds, value: [] }],
         }),
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: DateService, useValue: dateServiceSpy },
         {
           provide: GlobalConfigService,
           useValue: {
@@ -63,6 +72,7 @@ describe('TaskRelatedModelEffects', () => {
     hydrationStateService = TestBed.inject(
       HydrationStateService,
     ) as jasmine.SpyObj<HydrationStateService>;
+    dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
   });
 
   afterEach(() => {
@@ -81,8 +91,10 @@ describe('TaskRelatedModelEffects', () => {
       effects.autoAddTodayTagOnMarkAsDone.subscribe({
         next: (action) => {
           expect(action).toEqual(
-            TaskSharedActions.planTasksForToday({
+            jasmine.objectContaining({
               taskIds: ['task-1'],
+              today: dateService.todayStr(),
+              startOfNextDayDiffMs: dateService.getStartOfNextDayDiffMs(),
             }),
           );
           done();

@@ -22,8 +22,8 @@ export interface LwwUpdateActionTypeHelpers<TEntityType extends string = string>
  * Build LWW helpers for the given list of entity types.
  *
  * @example
- *   const lww = createLwwUpdateActionTypeHelpers(['TASK', 'PROJECT'] as const);
- *   lww.toLwwUpdateActionType('TASK'); // '[TASK] LWW Update'
+ *   const lww = createLwwUpdateActionTypeHelpers(['ITEM', 'COLLECTION'] as const);
+ *   lww.toLwwUpdateActionType('ITEM'); // '[ITEM] LWW Update'
  */
 export const createLwwUpdateActionTypeHelpers = <TEntityType extends string>(
   entityTypes: readonly TEntityType[],

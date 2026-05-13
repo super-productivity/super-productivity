@@ -435,7 +435,13 @@ export class TaskService {
   }
 
   addToToday(task: TaskWithSubTasks): void {
-    this._store.dispatch(TaskSharedActions.planTasksForToday({ taskIds: [task.id] }));
+    this._store.dispatch(
+      TaskSharedActions.planTasksForToday({
+        taskIds: [task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+      }),
+    );
   }
 
   remove(task: TaskWithSubTasks): void {
@@ -940,7 +946,13 @@ export class TaskService {
   moveToCurrentWorkContext(task: TaskWithSubTasks | Task): void {
     if (this._workContextService.activeWorkContextType === WorkContextType.TAG) {
       if (this._workContextService.activeWorkContextId === TODAY_TAG.id) {
-        this._store.dispatch(TaskSharedActions.planTasksForToday({ taskIds: [task.id] }));
+        this._store.dispatch(
+          TaskSharedActions.planTasksForToday({
+            taskIds: [task.id],
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+          }),
+        );
       } else {
         this.updateTags(task, [this._workContextService.activeWorkContextId as string]);
       }

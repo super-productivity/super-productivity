@@ -250,6 +250,13 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
       },
     },
     {
+      key: 'taskOpenNotesPanel',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TASK_OPEN_NOTES_PANEL,
+      },
+    },
+    {
       key: 'taskOpenEstimationDialog',
       type: 'keyboard',
       templateOptions: {

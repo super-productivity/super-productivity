@@ -41,10 +41,12 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { isOnline } from '../../../util/is-online';
 import { SnackService } from '../../../core/snack/snack.service';
 import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-restore-point.component';
-import { WebdavApi } from '../../../op-log/sync-providers/file-based/webdav/webdav-api';
-import { WebdavPrivateCfg } from '../../../op-log/sync-providers/file-based/webdav/webdav.model';
-import { NextcloudPrivateCfg } from '../../../op-log/sync-providers/file-based/webdav/nextcloud.model';
-import { NextcloudProvider } from '../../../op-log/sync-providers/file-based/webdav/nextcloud';
+import {
+  NextcloudProvider,
+  type NextcloudPrivateCfg,
+  type WebdavPrivateCfg,
+} from '@sp/sync-providers';
+import { testWebdavConnection } from '../../../op-log/sync-providers/file-based/webdav/test-webdav-connection';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -245,8 +247,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     }
 
     try {
-      const api = new WebdavApi(async () => webDavCfg);
-      const result = await api.testConnection(webDavCfg);
+      const result = await testWebdavConnection(webDavCfg);
       if (result.success) {
         this._snackService.open({
           type: 'SUCCESS',

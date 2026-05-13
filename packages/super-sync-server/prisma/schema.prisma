@@ -80,11 +80,10 @@ model Operation {
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, serverSeq])
-  @@index([userId, serverSeq])
-  @@index([userId, entityType, entityId])
+  @@index([userId, entityType, entityId, serverSeq])
   @@index([userId, clientId])
   @@index([userId, receivedAt])
-  @@index([userId, opType]) // Speeds up restore point listing (queries for SYNC_IMPORT/BACKUP_IMPORT ops)
+  // Restore-point opType lookups use a raw partial index in the 20260512000000 migration.
   @@map("operations")
 }
 
@@ -115,4 +114,3 @@ model SyncDevice {
   @@id([userId, clientId])
   @@map("sync_devices")
 }
-

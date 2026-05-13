@@ -2,11 +2,11 @@
 #
 # Usage:
 #   1. Copy env.example to .env and configure your settings
-#   2. Run: docker-compose up -d
+#   2. Run: ./scripts/deploy.sh
 #   3. View logs: docker-compose logs -f
 #
 # For local builds (development):
-#   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#   ./scripts/deploy.sh --build
 
 x-logging: &default-logging
   driver: 'json-file'
@@ -22,7 +22,8 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=1900
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}}
+      - RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}
       - JWT_SECRET=${JWT_SECRET}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:1900}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://app.super-productivity.com}
@@ -78,10 +79,10 @@ services:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test:
-        [
-          'CMD-SHELL',
-          'pg_isready -U ${POSTGRES_USER:-supersync} -d ${POSTGRES_DB:-supersync}',
-        ]
+        - CMD-SHELL
+        - >
+          pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" &&
+          psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1" > /dev/null 2>&1
       interval: 10s
       timeout: 5s
       retries: 5
@@ -90,7 +91,10 @@ services:
       - no-new-privileges:true
     mem_limit: 1g
     networks:
-      - internal
+      internal:
+        aliases:
+          # Keep existing .env files with DATABASE_URL=...@db:5432/... working.
+          - db
     logging: *default-logging
 
   caddy:

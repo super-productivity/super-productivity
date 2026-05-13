@@ -254,7 +254,8 @@
               "src/**/*.html",
               "e2e/**/*.ts",
               "electron/**/*.ts",
-              "packages/sync-core/**/*.ts"
+              "packages/sync-core/**/*.ts",
+              "packages/sync-providers/**/*.ts"
             ]
           }
         }

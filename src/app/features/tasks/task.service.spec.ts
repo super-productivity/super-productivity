@@ -80,8 +80,12 @@ describe('TaskService', () => {
       },
     );
 
-    const dateServiceSpy = jasmine.createSpyObj('DateService', ['todayStr']);
+    const dateServiceSpy = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+    ]);
     dateServiceSpy.todayStr.and.returnValue('2026-01-05');
+    dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(0);
 
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
@@ -284,7 +288,11 @@ describe('TaskService', () => {
       service.addToToday(task);
 
       expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.planTasksForToday({ taskIds: ['task-1'] }),
+        TaskSharedActions.planTasksForToday({
+          taskIds: ['task-1'],
+          today: '2026-01-05',
+          startOfNextDayDiffMs: 0,
+        }),
       );
     });
   });

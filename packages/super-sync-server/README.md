@@ -37,14 +37,50 @@ The easiest way to run the server is using the provided Docker Compose configura
 
 ```bash
 # 1. Copy environment example
-cp .env.example .env
+cp env.example .env
 
 # 2. Configure .env (Set JWT_SECRET, DOMAIN, POSTGRES_PASSWORD)
 nano .env
 
-# 3. Start the stack (Server + Postgres + Caddy)
-docker-compose up -d
+# 3. Deploy the stack and run database migrations
+./scripts/deploy.sh
 ```
+
+`docker compose up` is not a deployment substitute: container startup migrations
+are disabled by default so app restarts cannot race the deploy migrator.
+`./scripts/deploy.sh` runs `prisma migrate deploy` once before replacing the app
+container, then brings the stack up and verifies the health endpoint.
+
+Leave `DATABASE_URL` unset when using the bundled Postgres service. The default
+connection uses `postgres:5432`; existing installs that already set
+`DATABASE_URL` with `db:5432` keep working because the Compose service exposes
+`db` as a network alias.
+
+> **Upgrade note:** because `RUN_MIGRATIONS_ON_STARTUP` defaults to `false`,
+> `docker compose pull && docker compose up -d` can leave the app running
+> against unapplied migrations. Use `./scripts/deploy.sh` for production
+> updates, or `./scripts/deploy.sh --build` for local image builds.
+
+Some migrations use `CREATE INDEX CONCURRENTLY`, which can block on long-running
+transactions on a busy database. Run deploys off-hours when applying schema
+changes, and raise `MIGRATION_TIMEOUT` (seconds, default `900`) if a large
+table requires more time. Exit code `124` from `deploy.sh` means the migration
+timed out — re-run after the blocking transaction clears.
+
+If a deploy was interrupted after Prisma recorded the
+`20260512000000_add_full_state_sequence_index_drop_redundant_indexes` migration
+as failed, later deploys can stop with `P3009`. Prisma can also stop this
+specific migration with `P3018` because it contains several `CREATE/DROP INDEX
+CONCURRENTLY` statements, which cannot run in one transaction block. `deploy.sh`
+handles both cases: it resolves the failed row when needed, applies the
+concurrent index statements one at a time outside Prisma migrate, marks the
+migration applied, and retries `migrate deploy`.
+
+If `DATABASE_URL` points to an external PostgreSQL server, set
+`POSTGRES_SERVICE=` to the empty value. `deploy.sh` then starts only the
+app/proxy services with compose dependencies disabled so the bundled Postgres
+container is not required. Prisma migrations still run against the configured
+`DATABASE_URL`.
 
 ### Manual Setup (Development)
 
@@ -56,7 +92,7 @@ npm install
 npx prisma generate
 
 # Set up .env
-cp .env.example .env
+cp env.example .env
 # Edit .env to point to your PostgreSQL instance (DATABASE_URL)
 
 # Push schema to DB

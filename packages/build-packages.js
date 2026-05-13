@@ -48,6 +48,15 @@ async function getPlugins() {
     skipCopy: true,
   });
 
+  // Provider contracts and implementations depend on public sync-core exports
+  // but must stay outside the core package boundary.
+  plugins.push({
+    name: 'sync-providers',
+    path: 'packages/sync-providers',
+    buildCommand: 'npm run build',
+    skipCopy: true,
+  });
+
   // Add shared-schema after sync-core as it's needed for app/server type resolution.
   plugins.push({
     name: 'shared-schema',

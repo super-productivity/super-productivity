@@ -38,6 +38,11 @@ import {
 
 const VARIANT = process.env.REEL_VARIANT ?? '';
 const isFull = VARIANT === 'full';
+// 9:16 portrait variant for TikTok / YouTube Shorts / Instagram Reels. Skips
+// beat 2 (the side-panel drag doesn't translate to portrait — the schedule
+// panel makes no sense without horizontal room) and tightens hold timings
+// so the reel lands in the ~12-14s sweet spot for short-form algorithms.
+const isShorts = VARIANT === 'shorts';
 
 const parkCursor = async (page: import('@playwright/test').Page): Promise<void> => {
   // Park the cursor offscreen so any matTooltip dismisses and the cursor
@@ -58,6 +63,11 @@ const CAPTURED_TASK_TITLE = 'A task 1h';
 const CAPTURED_TASK_DISPLAY_TITLE = 'A task';
 
 test.describe('@video reel', () => {
+  // The keyboard and mobile variants have their own choreography (see
+  // keyboard.spec.ts / mobile.spec.ts); skip this spec when either is
+  // active so a single capture run doesn't record two unrelated webms.
+  test.skip(VARIANT === 'keyboard', 'keyboard variant runs keyboard.spec.ts');
+  test.skip(VARIANT === 'mobile', 'mobile variant runs mobile.spec.ts');
   test.use({ locale: 'en', theme: 'dark' });
 
   test('marketing reel', async ({ seededPage, markBeatsStart }) => {
@@ -67,7 +77,7 @@ test.describe('@video reel', () => {
     await page.goto('/#/tag/TODAY/tasks');
     await page.locator('task').first().waitFor({ state: 'visible', timeout: 15_000 });
     const scheduleBtn = page.locator('.e2e-toggle-schedule-day-panel').first();
-    if (await scheduleBtn.isVisible().catch(() => false)) {
+    if (!isShorts && (await scheduleBtn.isVisible().catch(() => false))) {
       await scheduleBtn.click();
       await page.locator('schedule-day-panel').first().waitFor({
         state: 'visible',
@@ -164,6 +174,9 @@ test.describe('@video reel', () => {
           bExtra = await showOverlay(page, 'No account. No tracking.', {
             noWait: true,
           });
+        } else if (isShorts) {
+          // Shorts skip beat 2's drag entirely — go straight to Focus.
+          b2 = await showOverlay(page, 'Focus on what matters.', { noWait: true });
         } else {
           b2 = await showOverlay(page, 'Plan your day.', { noWait: true });
         }
@@ -191,14 +204,18 @@ test.describe('@video reel', () => {
     }
 
     // ── Beat 2 — Plan your day. (native app drag) ────────────────────────
+    // Shorts variant skips this entirely: the side schedule panel doesn't
+    // open on portrait, and there's nothing meaningful to drag onto.
     const schedulePanel = page.locator('schedule-day-panel').first();
     const dragSource = page
       .locator('task')
       .filter({ hasText: CAPTURED_TASK_DISPLAY_TITLE })
       .first();
-    await dragSource.waitFor({ state: 'visible', timeout: 5_000 });
-    const taskBox = await dragSource.boundingBox();
-    const panelBox = await schedulePanel.boundingBox();
+    if (!isShorts) {
+      await dragSource.waitFor({ state: 'visible', timeout: 5_000 });
+    }
+    const taskBox = !isShorts ? await dragSource.boundingBox() : null;
+    const panelBox = !isShorts ? await schedulePanel.boundingBox() : null;
     if (taskBox && panelBox) {
       const taskHalfW = taskBox.width * 0.5;
       const taskHalfH = taskBox.height * 0.5;
@@ -218,15 +235,17 @@ test.describe('@video reel', () => {
       await page.waitForTimeout(isFull ? 250 : 150);
       await parkCursor(page);
     }
-    await page.waitForTimeout(isFull ? 900 : 600);
+    await page.waitForTimeout(isFull ? 900 : isShorts ? 0 : 600);
 
     // ── Beat 2 → 3 transition: cut to black, dispatch focus mode ─────────
+    // Shorts: b2 already says "Focus on what matters." so reuse it rather
+    // than hide-and-respawn (which would re-fade the same words).
     let b3: OverlayHandle | undefined;
     await cutToScene(
       page,
       async () => {
-        void b2!.hide();
-        if (await scheduleBtn.isVisible().catch(() => false)) {
+        if (!isShorts) void b2!.hide();
+        if (!isShorts && (await scheduleBtn.isVisible().catch(() => false))) {
           await scheduleBtn.click();
         }
         if (capturedTaskId) {
@@ -258,14 +277,16 @@ test.describe('@video reel', () => {
           await page.clock.resume().catch(() => undefined);
         }
         await parkCursor(page);
-        b3 = await showOverlay(page, 'Focus on what matters.', { noWait: true });
+        b3 = isShorts
+          ? b2
+          : await showOverlay(page, 'Focus on what matters.', { noWait: true });
       },
       {
         fadeMs: 260,
         label: 'beat 2 to 3',
       },
     );
-    await page.waitForTimeout(isFull ? 1800 : 1200);
+    await page.waitForTimeout(isFull ? 1800 : isShorts ? 900 : 1200);
 
     // ── Beat 3 → 4 transition: cut to black, swap to integrations card ──
     let b4: OverlayHandle | undefined;
@@ -308,7 +329,7 @@ test.describe('@video reel', () => {
         label: 'beat 3 to 4',
       },
     );
-    await page.waitForTimeout(isFull ? 2500 : 2000);
+    await page.waitForTimeout(isFull ? 2500 : isShorts ? 1700 : 2000);
 
     // ── Beat 4 → 5 transition: crossfade between controlled cards ───────
     await showEndCard(
@@ -331,7 +352,7 @@ test.describe('@video reel', () => {
     );
     await page.waitForTimeout(260);
     if (b4) void b4.hide();
-    await page.waitForTimeout(isFull ? 2740 : 2240);
+    await page.waitForTimeout(isFull ? 2740 : isShorts ? 1940 : 2240);
 
     // ── Loop boundary ────────────────────────────────────────────────────
     // Don't hide the end card — let it stay live. The loop boundary

@@ -53,6 +53,27 @@ const getVideoProfile = (): VideoProfile => {
     };
   }
 
+  if (process.env.REEL_VARIANT === 'shorts') {
+    return {
+      // 9:16 portrait at 1080x1920 — the canonical short-form video size for
+      // TikTok / YouTube Shorts / Instagram Reels / Mastodon. DPR 1 keeps the
+      // backing surface at 1080x1920 (DPR 2 would render 2160x3840 per frame
+      // and the recorder starts dropping frames).
+      size: { width: 1080, height: 1920 },
+      deviceScaleFactor: 1,
+    };
+  }
+
+  if (process.env.REEL_VARIANT === 'mobile') {
+    return {
+      // 19.5:9 phone aspect (iPhone Pro Max / Pixel Pro). Renders as a
+      // recognizable "phone screen" frame for app-store mobile previews
+      // and Play Store "feature graphic" promo clips.
+      size: { width: 1080, height: 2340 },
+      deviceScaleFactor: 1,
+    };
+  }
+
   return {
     // Square 1024x1024 plays well on social embeds and matches the rhythm of
     // the GitHub README. DPR 2 renders the page at 2x physical pixels, then
@@ -127,6 +148,7 @@ export const test = base.extend<VideoFixtures>({
     // before recording really starts means we under-estimate by that amount,
     // i.e. trim slightly less — safer than over-trimming into beat 1's fade-in.
     recordingState.startMs = Date.now();
+    const isMobile = VARIANT === 'mobile';
     const context = await browser.newContext({
       baseURL: baseURL ?? 'http://localhost:4242',
       userAgent: `PLAYWRIGHT-VIDEO-${testInfo.workerIndex}`,
@@ -136,6 +158,11 @@ export const test = base.extend<VideoFixtures>({
       locale: 'en-US',
       viewport: VIDEO_SIZE,
       deviceScaleFactor: DEVICE_SCALE_FACTOR,
+      // Mobile variant: enable real touch dispatch so `page.touchscreen.tap`
+      // fires pointer/touch events the app's drag/click handlers recognize
+      // as a finger, and so any responsive `isMobile` branches activate.
+      hasTouch: isMobile,
+      isMobile,
       recordVideo: {
         dir: RECORDING_DIR,
         size: VIDEO_SIZE,
@@ -146,6 +173,15 @@ export const test = base.extend<VideoFixtures>({
     await page.clock.install({ time: SCREENSHOT_BASE_DATE });
 
     await page.addInitScript(ONBOARDING_INIT);
+    await page.addInitScript((variant) => {
+      // Stash variant on body so overlays.ts / scenarios can branch via
+      // attribute selectors without re-reading process.env in the page.
+      const apply = (): void => {
+        document.body.dataset.spVideoVariant = variant || 'default';
+      };
+      if (document.body) apply();
+      else document.addEventListener('DOMContentLoaded', apply, { once: true });
+    }, VARIANT);
     await page.addInitScript((darkMode) => {
       try {
         localStorage.setItem('DARK_MODE', darkMode);
@@ -157,6 +193,69 @@ export const test = base.extend<VideoFixtures>({
       (window as unknown as { __spCurrentLocale?: string }).__spCurrentLocale =
         initialLocale;
     }, locale);
+    // Mobile variant: tap-ripple instead of cursor ring. The recorder
+    // doesn't draw a touch indicator on its own, so taps would otherwise
+    // read as instant state changes with no on-frame cause. Each
+    // touchstart spawns a short-lived expanding ring at the touch point.
+    if (isMobile) {
+      await page.addInitScript(() => {
+        const attach = (): void => {
+          if (document.getElementById('__sp-video-tap-ripple-style')) return;
+          const style = document.createElement('style');
+          style.id = '__sp-video-tap-ripple-style';
+          style.textContent = `
+            .__sp-video-tap-ripple {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 0;
+              height: 0;
+              border-radius: 50%;
+              background: radial-gradient(rgba(255,255,255,0.85) 0%,rgba(255,255,255,0.4) 40%,rgba(255,255,255,0) 75%);
+              z-index: 2147483640;
+              pointer-events: none;
+              opacity: 0.9;
+              transform: translate3d(-9999px,-9999px,0);
+              transition: width 520ms ease-out, height 520ms ease-out, opacity 620ms ease-out, transform 520ms ease-out;
+            }
+          `;
+          document.head.appendChild(style);
+          const spawn = (clientX: number, clientY: number): void => {
+            const r = document.createElement('div');
+            r.className = '__sp-video-tap-ripple';
+            r.style.transform = `translate3d(${clientX}px,${clientY}px,0)`;
+            document.body.appendChild(r);
+            void r.offsetWidth;
+            const finalSize = 220;
+            const half = finalSize / 2;
+            r.style.width = `${finalSize}px`;
+            r.style.height = `${finalSize}px`;
+            r.style.marginLeft = `${-half}px`;
+            r.style.marginTop = `${-half}px`;
+            r.style.opacity = '0';
+            window.setTimeout(() => r.remove(), 700);
+          };
+          document.addEventListener(
+            'touchstart',
+            (e) => {
+              for (const t of Array.from(e.touches)) spawn(t.clientX, t.clientY);
+            },
+            { passive: true, capture: true },
+          );
+          // Synthetic taps from Playwright sometimes route through pointer
+          // events without touch events — listen to both for coverage.
+          document.addEventListener(
+            'pointerdown',
+            (e) => {
+              if (e.pointerType !== 'mouse') spawn(e.clientX, e.clientY);
+            },
+            { passive: true, capture: true },
+          );
+        };
+        if (document.body) attach();
+        else document.addEventListener('DOMContentLoaded', attach, { once: true });
+      });
+    }
     // Inject a soft ring that follows the cursor — at 1024×1024 the OS
     // pointer is small and easy to miss; this makes drag motions read on
     // the gif. The ring is at z-index 2147483640 (under the full-screen
@@ -164,44 +263,47 @@ export const test = base.extend<VideoFixtures>({
     // Spec code can also toggle visibility per-beat by adding/removing the
     // `__sp-hide-cursor-highlight` class on body — used during the capture
     // beat where the cursor sits in the middle of the focused input and
-    // would otherwise read as a stray white dot.
-    await page.addInitScript(() => {
-      const attach = (): void => {
-        const id = '__sp-video-cursor-highlight';
-        if (document.getElementById(id)) return;
-        const dot = document.createElement('div');
-        dot.id = id;
-        dot.style.cssText = [
-          'position:fixed',
-          'top:0',
-          'left:0',
-          'width:36px',
-          'height:36px',
-          'margin:-18px 0 0 -18px',
-          'border-radius:50%',
-          'background:radial-gradient(rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.18) 45%,rgba(255,255,255,0) 70%)',
-          'z-index:2147483640',
-          'pointer-events:none',
-          'transform:translate3d(-9999px,-9999px,0)',
-          'will-change:transform',
-          'transition:opacity 150ms ease-out',
-        ].join(';');
-        document.body.appendChild(dot);
-        const visibilityStyle = document.createElement('style');
-        visibilityStyle.textContent =
-          'body.__sp-hide-cursor-highlight #__sp-video-cursor-highlight{opacity:0!important}';
-        document.head.appendChild(visibilityStyle);
-        document.addEventListener(
-          'mousemove',
-          (e) => {
-            dot.style.transform = `translate3d(${e.clientX}px,${e.clientY}px,0)`;
-          },
-          { passive: true },
-        );
-      };
-      if (document.body) attach();
-      else document.addEventListener('DOMContentLoaded', attach, { once: true });
-    });
+    // would otherwise read as a stray white dot. Skipped for the mobile
+    // variant: no cursor on touch, the tap ripple handles it.
+    if (!isMobile) {
+      await page.addInitScript(() => {
+        const attach = (): void => {
+          const id = '__sp-video-cursor-highlight';
+          if (document.getElementById(id)) return;
+          const dot = document.createElement('div');
+          dot.id = id;
+          dot.style.cssText = [
+            'position:fixed',
+            'top:0',
+            'left:0',
+            'width:36px',
+            'height:36px',
+            'margin:-18px 0 0 -18px',
+            'border-radius:50%',
+            'background:radial-gradient(rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.18) 45%,rgba(255,255,255,0) 70%)',
+            'z-index:2147483640',
+            'pointer-events:none',
+            'transform:translate3d(-9999px,-9999px,0)',
+            'will-change:transform',
+            'transition:opacity 150ms ease-out',
+          ].join(';');
+          document.body.appendChild(dot);
+          const visibilityStyle = document.createElement('style');
+          visibilityStyle.textContent =
+            'body.__sp-hide-cursor-highlight #__sp-video-cursor-highlight{opacity:0!important}';
+          document.head.appendChild(visibilityStyle);
+          document.addEventListener(
+            'mousemove',
+            (e) => {
+              dot.style.transform = `translate3d(${e.clientX}px,${e.clientY}px,0)`;
+            },
+            { passive: true },
+          );
+        };
+        if (document.body) attach();
+        else document.addEventListener('DOMContentLoaded', attach, { once: true });
+      });
+    }
 
     // Suppress UI noise that fights with the choreographed reel:
     //  - Material/CDK tooltips (cursor lingering would otherwise pop one)
@@ -249,6 +351,21 @@ export const test = base.extend<VideoFixtures>({
         }
         app-root {
           zoom: 1.4;
+        }
+        /* Shorts (9:16, 1080x1920): zoom up further so the work-view fills
+           the portrait canvas. The inner viewport is 1080/1.6 = 675 wide,
+           1920/1.6 = 1200 tall — wide enough for the task list at the
+           sidenav-collapsed width, tall enough that the seeded task rows
+           dominate the frame instead of leaving a half-empty top half. */
+        body[data-sp-video-variant="shorts"] app-root {
+          zoom: 1.6;
+        }
+        /* Mobile (1080x2340 phone aspect): SP's responsive layout already
+           collapses the sidenav and switches to a touch-friendly toolbar
+           when isMobile=true, so a much smaller zoom is enough. 1.0 keeps
+           the layout in its native mobile breakpoint. */
+        body[data-sp-video-variant="mobile"] app-root {
+          zoom: 1;
         }
         /* The right-panel sizes itself to 250px (MIN_WIDTH) via
            SUP_RIGHT_PANEL_WIDTH localStorage seeded in ONBOARDING_INIT.

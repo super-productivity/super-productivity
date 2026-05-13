@@ -32,7 +32,9 @@ vi.mock('../../src/db', () => ({
 
 // Mock the auth module to bypass authentication
 vi.mock('../../src/auth', () => ({
-  verifyToken: vi.fn().mockResolvedValue({ userId: 1, email: 'test@test.com' }),
+  verifyToken: vi
+    .fn()
+    .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
 }));
 
 // Import after mocking
@@ -65,7 +67,9 @@ describe('Snapshot Skip Optimization Integration', () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
         const tx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue({ serverSeq: syncImportSeq }),
+            findFirst: vi
+              .fn()
+              .mockResolvedValue({ serverSeq: syncImportSeq, clientId: 'client-a' }),
             findMany: vi.fn().mockResolvedValue([
               {
                 id: uuidv7(),
@@ -105,6 +109,7 @@ describe('Snapshot Skip Optimization Integration', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 11 }),
           },
+          $queryRaw: vi.fn().mockResolvedValue([]),
         };
         return callback(tx);
       });
@@ -128,7 +133,9 @@ describe('Snapshot Skip Optimization Integration', () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
         const tx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue({ serverSeq: syncImportSeq }),
+            findFirst: vi
+              .fn()
+              .mockResolvedValue({ serverSeq: syncImportSeq, clientId: 'client-a' }),
             findMany: vi.fn().mockImplementation(async (args: any) => {
               // The query should start from seq 99 (syncImportSeq - 1), not 0
               const startSeq = args.where.serverSeq.gt;
@@ -174,6 +181,7 @@ describe('Snapshot Skip Optimization Integration', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 101 }),
           },
+          $queryRaw: vi.fn().mockResolvedValue([]),
         };
         return callback(tx);
       });
@@ -200,7 +208,9 @@ describe('Snapshot Skip Optimization Integration', () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
         const tx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue({ serverSeq: syncImportSeq }),
+            findFirst: vi
+              .fn()
+              .mockResolvedValue({ serverSeq: syncImportSeq, clientId: 'client-a' }),
             findMany: vi.fn().mockImplementation(async (args: any) => {
               // Client already has ops up to seq 50, sinceSeq should NOT be modified
               expect(args.where.serverSeq.gt).toBe(50);
@@ -303,7 +313,9 @@ describe('Snapshot Skip Optimization Integration', () => {
         const tx = {
           operation: {
             // findFirst with orderBy: { serverSeq: 'desc' } returns the LATEST
-            findFirst: vi.fn().mockResolvedValue({ serverSeq: latestFullStateSeq }),
+            findFirst: vi
+              .fn()
+              .mockResolvedValue({ serverSeq: latestFullStateSeq, clientId: 'client-a' }),
             findMany: vi.fn().mockImplementation(async (args: any) => {
               // Should skip to seq 49, not seq 9
               expect(args.where.serverSeq.gt).toBe(latestFullStateSeq - 1);
@@ -332,6 +344,7 @@ describe('Snapshot Skip Optimization Integration', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 50 }),
           },
+          $queryRaw: vi.fn().mockResolvedValue([]),
         };
         return callback(tx);
       });

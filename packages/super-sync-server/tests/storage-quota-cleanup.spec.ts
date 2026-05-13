@@ -5,7 +5,6 @@
  * when storage quota is exceeded.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import Fastify, { FastifyInstance } from 'fastify';
 import { uuidv7 } from 'uuidv7';
 
 // Store for test data
@@ -106,6 +105,8 @@ vi.mock('../src/db', () => {
             upsert: vi.fn().mockResolvedValue({}),
             count: vi.fn().mockResolvedValue(1),
           },
+          // Upload transaction writes the storage counter atomically via $executeRaw.
+          $executeRaw: vi.fn().mockResolvedValue(0),
         };
         return callback(tx);
       }),
@@ -192,17 +193,62 @@ vi.mock('../src/db', () => {
         }),
         update: vi.fn().mockResolvedValue({}),
       },
-      $queryRaw: vi.fn().mockImplementation(async () => {
-        // Compute total bytes from test operations (mirrors SQL aggregate).
-        // NOTE: This mock ignores WHERE clause params (e.g. server_seq filter),
-        // returning the total size of ALL operations — acceptable for unit tests.
-        let total = BigInt(0);
-        for (const op of testOperations.values()) {
-          const payloadSize = op.payload ? JSON.stringify(op.payload).length : 0;
-          const clockSize = op.vectorClock ? JSON.stringify(op.vectorClock).length : 0;
-          total += BigInt(payloadSize + clockSize);
-        }
-        return [{ total }];
+      $queryRaw: vi
+        .fn()
+        .mockImplementation(async (query, userIdArg, deleteUpToSeqArg) => {
+          // The same mock serves two SQL shapes:
+          //  1. calculateStorageUsage's full-table SUM(pg_column_size)
+          //     scan (slow path) — returns `[{ total }]`.
+          //  2. deleteOldestRestorePointAndOps's BOUNDED full-state scan
+          //     filtered by `op_type IN (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)`
+          //     — returns `[{ exact_bytes, full_state_count }]`.
+          // Detect by inspecting the SQL template fragments.
+          const queryParts = query as unknown as TemplateStringsArray;
+          const sql = Array.isArray(queryParts) ? queryParts.join('') : '';
+          const isFullStateScan = sql.includes('op_type IN');
+
+          let totalBytes = BigInt(0);
+          let fullStateCount = BigInt(0);
+          for (const op of testOperations.values()) {
+            if (typeof userIdArg === 'number' && op.userId !== userIdArg) {
+              continue;
+            }
+            if (typeof deleteUpToSeqArg === 'number' && op.serverSeq > deleteUpToSeqArg) {
+              continue;
+            }
+            const isRestorePoint =
+              op.opType === 'SYNC_IMPORT' ||
+              op.opType === 'BACKUP_IMPORT' ||
+              op.opType === 'REPAIR';
+            if (isFullStateScan && !isRestorePoint) {
+              continue;
+            }
+            const payloadSize = op.payload ? JSON.stringify(op.payload).length : 0;
+            const clockSize = op.vectorClock ? JSON.stringify(op.vectorClock).length : 0;
+            totalBytes += BigInt(payloadSize + clockSize);
+            if (isRestorePoint) fullStateCount++;
+          }
+
+          if (isFullStateScan) {
+            return [{ exact_bytes: totalBytes, full_state_count: fullStateCount }];
+          }
+          return [{ total: totalBytes }];
+        }),
+      // decrementStorageUsage uses $executeRaw with a clamped UPDATE.
+      // Simulate by mutating the matching user's storageUsedBytes in-place.
+      $executeRaw: vi.fn().mockImplementation(async (...args: unknown[]) => {
+        const interpolated = args.slice(1);
+        const delta = interpolated.find((v) => typeof v === 'bigint') as
+          | bigint
+          | undefined;
+        const uid = interpolated.find((v) => typeof v === 'number') as number | undefined;
+        if (delta === undefined || uid === undefined) return 0;
+        const user = testUsers.get(uid);
+        if (!user) return 0;
+        const current = BigInt(user.storageUsedBytes ?? 0);
+        const next = current > delta ? current - delta : BigInt(0);
+        testUsers.set(uid, { ...user, storageUsedBytes: next });
+        return 1;
       }),
     },
     initDb: vi.fn(),
@@ -212,13 +258,22 @@ vi.mock('../src/db', () => {
 
 // Mock auth module
 vi.mock('../src/auth', () => ({
-  verifyToken: vi.fn().mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
+  verifyToken: vi
+    .fn()
+    .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
 }));
 
-// Mock zlib for snapshot compression
+// Mock zlib for snapshot compression. Provides both sync (legacy) and async
+// callback-style functions so promisify(zlib.gzip)/promisify(zlib.gunzip)
+// work as expected in snapshot.service.ts.
 vi.mock('zlib', () => ({
   gzipSync: vi.fn().mockImplementation((data) => Buffer.from(data)),
   gunzipSync: vi.fn().mockImplementation((data) => data),
+  gzip: vi.fn().mockImplementation((data, cb) => cb(null, Buffer.from(data))),
+  gunzip: vi.fn().mockImplementation((data, optsOrCb, maybeCb) => {
+    const cb = typeof optsOrCb === 'function' ? optsOrCb : maybeCb;
+    cb(null, data);
+  }),
 }));
 
 // Helper to create operation
@@ -336,6 +391,62 @@ describe('Storage Quota Cleanup', () => {
       expect(result.success).toBe(true);
       expect(result.deletedCount).toBe(3); // ops 1, 2, 3 (oldest restore point)
       expect(testOperations.size).toBe(4); // ops 4, 5, 6, 7 remain
+    });
+
+    it('should not run pg_column_size over the full delta-op range during cleanup-delete', async () => {
+      // The cleanup path used to SUM(pg_column_size(payload)) over the FULL
+      // range being deleted, which forced PostgreSQL to detoast every payload
+      // and caused the production disk-I/O DoS. Counter is decremented via an
+      // approximate count*const decrement for delta ops; the only allowed
+      // pg_column_size scan is over the bounded restore-point rows
+      // (op_type IN (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)) so the 20MB-ish
+      // full-state payloads do not undercount.
+      const { initSyncService, getSyncService } =
+        await import('../src/sync/sync.service');
+      const { prisma } = await import('../src/db');
+      initSyncService();
+      const service = getSyncService();
+
+      createRestorePoint(clientId, userId);
+      createOp(clientId, userId);
+      createRestorePoint(clientId, userId);
+
+      vi.mocked(prisma.$queryRaw).mockClear();
+
+      await service.deleteOldestRestorePointAndOps(userId);
+
+      const offendingCalls = vi.mocked(prisma.$queryRaw).mock.calls.filter((call) => {
+        const queryParts = call[0] as unknown as TemplateStringsArray;
+        const sql = Array.from(queryParts).join('');
+        // Only block the unbounded variant; the bounded full-state scan is
+        // expected and gated by an `op_type IN (...)` filter.
+        return sql.includes('pg_column_size') && !sql.includes('op_type IN');
+      });
+      expect(offendingCalls).toHaveLength(0);
+    });
+
+    it('should only fetch enough restore points to decide cleanup behavior', async () => {
+      const { initSyncService, getSyncService } =
+        await import('../src/sync/sync.service');
+      const { prisma } = await import('../src/db');
+      initSyncService();
+      const service = getSyncService();
+
+      createRestorePoint(clientId, userId);
+      createOp(clientId, userId);
+      createRestorePoint(clientId, userId);
+
+      vi.mocked(prisma.operation.findMany).mockClear();
+
+      await service.deleteOldestRestorePointAndOps(userId);
+
+      expect(prisma.operation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { serverSeq: 'asc' },
+          select: { serverSeq: true, opType: true },
+          take: 2,
+        }),
+      );
     });
 
     it('should keep single restore point but delete ops before it', async () => {
@@ -507,6 +618,37 @@ describe('Storage Quota Cleanup', () => {
       expect(result.deletedOps).toBe(0);
     });
 
+    it('should only fetch enough restore points before each cleanup iteration', async () => {
+      const { initSyncService, getSyncService } =
+        await import('../src/sync/sync.service');
+      const { prisma } = await import('../src/db');
+      initSyncService();
+      const service = getSyncService();
+
+      testUsers.set(userId, {
+        id: userId,
+        email: 'test@test.com',
+        storageUsedBytes: BigInt(150 * 1024 * 1024),
+        storageQuotaBytes: BigInt(100 * 1024 * 1024),
+      });
+
+      createRestorePoint(clientId, userId);
+      createOp(clientId, userId);
+      createRestorePoint(clientId, userId);
+
+      vi.mocked(prisma.operation.findMany).mockClear();
+
+      await service.freeStorageForUpload(userId, 1000);
+
+      expect(prisma.operation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { serverSeq: 'asc' },
+          select: { serverSeq: true },
+          take: 2,
+        }),
+      );
+    });
+
     it('should return failure when only one restore point exists', async () => {
       const { initSyncService, getSyncService } =
         await import('../src/sync/sync.service');
@@ -534,34 +676,23 @@ describe('Storage Quota Cleanup', () => {
       expect(result.deletedRestorePoints).toBe(0);
     });
 
-    it('should delete multiple restore points iteratively until quota is satisfied', async () => {
+    it('should delete restore points iteratively until quota is satisfied', async () => {
+      // Counter is now decremented incrementally by deleteOldestRestorePointAndOps
+      // via $executeRaw (mocked above to mutate testUsers), so the loop can
+      // detect progress without per-row pg_column_size scans.
       const { initSyncService, getSyncService } =
         await import('../src/sync/sync.service');
       initSyncService();
       const service = getSyncService();
 
-      // Track storage updates to simulate freeing space after each deletion
-      let currentStorage = 150 * 1024 * 1024; // Start at 150MB
-      const storagePerRestorePoint = 30 * 1024 * 1024; // 30MB per restore point
-
-      // Mock user lookup to return decreasing storage after each update
-      const originalGet = testUsers.get.bind(testUsers);
-      testUsers.get = (key: number) => {
-        const user = originalGet(key);
-        if (user) {
-          return {
-            ...user,
-            storageUsedBytes: BigInt(currentStorage),
-          };
-        }
-        return user;
-      };
-
+      // Start a few KB above quota so cleanup's approximate decrement
+      // (count * 1024) can bring us under within a few iterations.
+      const quota = 100 * 1024 * 1024;
       testUsers.set(userId, {
         id: userId,
         email: 'test@test.com',
-        storageUsedBytes: BigInt(currentStorage),
-        storageQuotaBytes: BigInt(100 * 1024 * 1024), // 100MB quota
+        storageUsedBytes: BigInt(quota + 3000),
+        storageQuotaBytes: BigInt(quota),
       });
 
       // Create: RESTORE1, ops, RESTORE2, ops, RESTORE3, ops, RESTORE4 (current)
@@ -577,22 +708,60 @@ describe('Storage Quota Cleanup', () => {
 
       expect(testOperations.size).toBe(9);
 
-      // Mock updateStorageUsage to decrease storage
-      const originalUpdateStorageUsage = service.updateStorageUsage.bind(service);
-      service.updateStorageUsage = async (uid: number) => {
-        currentStorage -= storagePerRestorePoint;
-        if (currentStorage < 0) currentStorage = 0;
-        await originalUpdateStorageUsage(uid);
-      };
-
       const result = await service.freeStorageForUpload(userId, 1000);
 
-      // Should succeed after deleting enough restore points
-      // Need to delete 2 restore points to go from 150MB to 90MB (under 100MB quota)
       expect(result.success).toBe(true);
       expect(result.deletedRestorePoints).toBeGreaterThanOrEqual(1);
       expect(result.deletedOps).toBeGreaterThan(0);
       expect(result.freedBytes).toBeGreaterThan(0);
+    });
+
+    it('should keep cleaning if exact reconcile disproves approximate success', async () => {
+      const { initSyncService, getSyncService } =
+        await import('../src/sync/sync.service');
+      initSyncService();
+      const service = getSyncService();
+
+      const quota = 100 * 1024 * 1024;
+      testUsers.set(userId, {
+        id: userId,
+        email: 'test@test.com',
+        storageUsedBytes: BigInt(quota + 1000),
+        storageQuotaBytes: BigInt(quota),
+      });
+
+      // Use a larger payload so the exact-pg_column_size measurement for the
+      // restore point produces a freedBytes value comparable to the realistic
+      // 20MB-scale payloads this code path was tuned for. With tiny payloads
+      // (`{}`), the new exact accounting would mean each iteration barely
+      // dents the counter and the success-then-reconcile-disproves flow this
+      // test exercises never fires.
+      const restorePayload = { state: 'x'.repeat(2000) };
+      createOp(clientId, userId, { opType: 'SYNC_IMPORT', payload: restorePayload }); // seq 1 - first approximate delete
+      createOp(clientId, userId); // seq 2
+      createOp(clientId, userId, { opType: 'SYNC_IMPORT', payload: restorePayload }); // seq 3 - second delete needed
+      createOp(clientId, userId); // seq 4
+      createOp(clientId, userId, { opType: 'SYNC_IMPORT', payload: restorePayload }); // seq 5 - must keep
+
+      let reconcileCalls = 0;
+      service.updateStorageUsage = async () => {
+        reconcileCalls++;
+        const current = testUsers.get(userId);
+        testUsers.set(userId, {
+          ...current,
+          // First reconcile says the approximate 1KB decrement was too optimistic.
+          // Second reconcile says enough real storage has been freed.
+          storageUsedBytes:
+            reconcileCalls === 1 ? BigInt(quota + 500) : BigInt(quota - 500),
+        });
+      };
+
+      const result = await service.freeStorageForUpload(userId, 0);
+
+      expect(result.success).toBe(true);
+      expect(result.deletedRestorePoints).toBe(2);
+      expect(result.deletedOps).toBe(3);
+      expect(reconcileCalls).toBe(2);
     });
 
     it('should stop when only one restore point remains even if quota still exceeded', async () => {

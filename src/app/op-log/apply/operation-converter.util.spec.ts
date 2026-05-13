@@ -361,6 +361,105 @@ describe('operation-converter utility', () => {
       }
     });
 
+    describe('legacy planTasksForToday date backfill', () => {
+      it('injects today from the originating operation timestamp when missing', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: new Date(2024, 5, 14, 12, 0, 0, 0).getTime(),
+          payload: { taskIds: ['task-1'] },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).today).toBe('2024-06-14');
+      });
+
+      it('injects today for MultiEntityPayload operations created before the field existed', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: new Date(2024, 5, 14, 12, 0, 0, 0).getTime(),
+          payload: {
+            actionPayload: { taskIds: ['task-1'] },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).today).toBe('2024-06-14');
+      });
+
+      it('preserves today when the operation payload already contains it', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: new Date(2024, 5, 15, 12, 0, 0, 0).getTime(),
+          payload: { taskIds: ['task-1'], today: '2024-06-14' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).today).toBe('2024-06-14');
+      });
+    });
+
+    describe('updateTask done replay date backfill', () => {
+      it('injects doneOn and dueDay from the originating operation timestamp when missing', () => {
+        const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp,
+          payload: {
+            actionPayload: {
+              task: { id: 'task-1', changes: { isDone: true } },
+            },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op) as any;
+
+        expect(action.task.changes.doneOn).toBe(timestamp);
+        expect(action.task.changes.dueDay).toBe('2024-06-14');
+      });
+
+      it('preserves existing doneOn and dueDay when present', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp: new Date(2024, 5, 15, 12, 0, 0, 0).getTime(),
+          payload: {
+            actionPayload: {
+              task: {
+                id: 'task-1',
+                changes: {
+                  isDone: true,
+                  doneOn: 1718352000000,
+                  dueDay: '2024-06-14',
+                },
+              },
+            },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op) as any;
+
+        expect(action.task.changes.doneOn).toBe(1718352000000);
+        expect(action.task.changes.dueDay).toBe('2024-06-14');
+      });
+
+      it('does not inject done fields for undone updates', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp: new Date(2024, 5, 14, 12, 0, 0, 0).getTime(),
+          payload: {
+            actionPayload: {
+              task: { id: 'task-1', changes: { isDone: false } },
+            },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op) as any;
+
+        expect(action.task.changes.doneOn).toBeUndefined();
+        expect(action.task.changes.dueDay).toBeUndefined();
+      });
+    });
+
     describe('multi-entity payload handling', () => {
       it('should extract actionPayload from MultiEntityPayload', () => {
         const op = createMockOperation({

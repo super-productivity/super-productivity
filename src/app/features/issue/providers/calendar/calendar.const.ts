@@ -5,6 +5,21 @@ import { CalendarProviderCfg } from './calendar.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
 import { IS_ELECTRON } from '../../../../app.constants';
 import { IssueLog } from '../../../../core/log';
+import {
+  CALENDAR_REGEX_FILTER_MAX_LENGTH,
+  isSafeCalendarFilterRegex,
+} from '../../../calendar-integration/calendar-event-regex-filter';
+
+const isValidCalendarFilterRegex = (value: string | undefined | null): boolean => {
+  if (!value) return true;
+  if (value.length > CALENDAR_REGEX_FILTER_MAX_LENGTH) return false;
+  try {
+    new RegExp(value);
+    return isSafeCalendarFilterRegex(value);
+  } catch {
+    return false;
+  }
+};
 
 // 5 minutes for local file:// URLs (faster polling for local calendars)
 export const LOCAL_FILE_CHECK_INTERVAL = 5 * 60 * 1000;
@@ -121,15 +136,8 @@ export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
       },
       validators: {
         validRegex: {
-          expression: (c: { value: string | undefined | null }) => {
-            if (!c.value) return true;
-            try {
-              new RegExp(c.value);
-              return true;
-            } catch {
-              return false;
-            }
-          },
+          expression: (c: { value: string | undefined | null }) =>
+            isValidCalendarFilterRegex(c.value),
           message: T.GCF.CALENDARS.INVALID_REGEX,
         },
       },
@@ -143,15 +151,8 @@ export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
       },
       validators: {
         validRegex: {
-          expression: (c: { value: string | undefined | null }) => {
-            if (!c.value) return true;
-            try {
-              new RegExp(c.value);
-              return true;
-            } catch {
-              return false;
-            }
-          },
+          expression: (c: { value: string | undefined | null }) =>
+            isValidCalendarFilterRegex(c.value),
           message: T.GCF.CALENDARS.INVALID_REGEX,
         },
       },

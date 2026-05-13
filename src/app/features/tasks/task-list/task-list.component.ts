@@ -44,6 +44,7 @@ import { TaskLog } from '../../../core/log';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
 import { dragDelayForTouch } from '../../../util/input-intent';
+import { DateService } from '../../../core/date/date.service';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
@@ -101,6 +102,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _issueService = inject(IssueService);
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
+  private _dateService = inject(DateService);
   dropListService = inject(DropListService);
   private _layoutService = inject(LayoutService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
@@ -433,7 +435,13 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
       const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-      this._store.dispatch(TaskSharedActions.planTasksForToday({ taskIds: [taskId] }));
+      this._store.dispatch(
+        TaskSharedActions.planTasksForToday({
+          taskIds: [taskId],
+          today: this._dateService.todayStr(),
+          startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+        }),
+      );
       this._store.dispatch(
         moveTaskInTodayList({
           taskId,

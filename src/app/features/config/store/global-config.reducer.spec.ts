@@ -90,6 +90,95 @@ describe('GlobalConfigReducer', () => {
       expect(result.tasks.notesTemplate).toBe(DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate);
     });
 
+    describe('keyboard migration', () => {
+      const legacyKeyboardWithoutTaskNotesShortcut = (
+        overrides: Record<string, unknown>,
+      ): Record<string, unknown> => {
+        const keyboard = {
+          ...initialGlobalConfigState.keyboard,
+          ...overrides,
+        } as Record<string, unknown>;
+        delete keyboard.taskOpenNotesPanel;
+        return keyboard;
+      };
+
+      it('should migrate old default addNewNote=N to Alt+N and add taskOpenNotesPanel=N', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          keyboard: legacyKeyboardWithoutTaskNotesShortcut({ addNewNote: 'N' }),
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.keyboard.addNewNote).toBe('Alt+N');
+        expect(result.keyboard.taskOpenNotesPanel).toBe('N');
+      });
+
+      it('should migrate old default addNewNote=N when taskOpenNotesPanel is null', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          keyboard: {
+            ...initialGlobalConfigState.keyboard,
+            addNewNote: 'N',
+            taskOpenNotesPanel: null,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as AppDataComplete,
+          }),
+        );
+
+        expect(result.keyboard.addNewNote).toBe('Alt+N');
+        expect(result.keyboard.taskOpenNotesPanel).toBe('N');
+      });
+
+      it('should preserve a custom addNewNote shortcut while adding missing keyboard defaults', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          keyboard: legacyKeyboardWithoutTaskNotesShortcut({ addNewNote: 'Ctrl+N' }),
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.keyboard.addNewNote).toBe('Ctrl+N');
+        expect(result.keyboard.taskOpenNotesPanel).toBe('N');
+      });
+
+      it('should preserve custom note shortcuts when taskOpenNotesPanel already exists', () => {
+        const customConfig: GlobalConfigState = {
+          ...initialGlobalConfigState,
+          keyboard: {
+            ...initialGlobalConfigState.keyboard,
+            addNewNote: 'N',
+            taskOpenNotesPanel: 'Alt+Shift+N',
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: customConfig } as AppDataComplete,
+          }),
+        );
+
+        expect(result.keyboard.addNewNote).toBe('N');
+        expect(result.keyboard.taskOpenNotesPanel).toBe('Alt+Shift+N');
+      });
+    });
+
     it('should use syncProvider from snapshot when oldState has null (initial load)', () => {
       // This simulates app startup: oldState is initialGlobalConfigState with null syncProvider
       const oldState = initialGlobalConfigState; // syncProvider is null

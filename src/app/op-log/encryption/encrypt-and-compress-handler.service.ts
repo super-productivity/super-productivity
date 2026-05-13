@@ -4,13 +4,7 @@ import {
 } from '../util/sync-file-prefix';
 import type { SyncLogger } from '@sp/sync-core';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
-import {
-  deriveKeyFromPassword,
-  encryptWithDerivedKey,
-  decryptWithDerivedKey,
-  DerivedKeyInfo,
-  base642ab,
-} from './encryption';
+import { decryptBatch, encryptBatch } from './encryption';
 import {
   DecryptError,
   DecryptNoPasswordError,
@@ -24,7 +18,6 @@ import { EncryptAndCompressCfg } from '../core/types/sync.types';
 
 export class EncryptAndCompressHandlerService {
   private static readonly L = 'EncryptAndCompressHandlerService';
-  private static readonly SALT_LENGTH = 16;
 
   constructor(private readonly _logger: SyncLogger = OP_LOG_SYNC_LOGGER) {}
 
@@ -93,9 +86,7 @@ export class EncryptAndCompressHandlerService {
         throw new Error('No encryption password provided');
       }
 
-      // Use derived key encryption to benefit from session cache
-      const keyInfo: DerivedKeyInfo = await deriveKeyFromPassword(encryptKey);
-      dataStr = await encryptWithDerivedKey(dataStr, keyInfo);
+      [dataStr] = await encryptBatch([dataStr], encryptKey);
     }
 
     return prefix + dataStr;
@@ -129,23 +120,7 @@ export class EncryptAndCompressHandlerService {
         });
       }
       try {
-        // Extract salt from ciphertext and derive key to benefit from session cache
-        const dataBuffer = base642ab(outStr);
-
-        // Validate buffer size before extracting salt
-        if (dataBuffer.byteLength < EncryptAndCompressHandlerService.SALT_LENGTH) {
-          throw new DecryptError(
-            `Ciphertext too short to contain salt (${dataBuffer.byteLength} bytes)`,
-          );
-        }
-
-        const salt = new Uint8Array(
-          dataBuffer,
-          0,
-          EncryptAndCompressHandlerService.SALT_LENGTH,
-        );
-        const keyInfo: DerivedKeyInfo = await deriveKeyFromPassword(encryptKey, salt);
-        outStr = await decryptWithDerivedKey(outStr, keyInfo);
+        [outStr] = await decryptBatch([outStr], encryptKey);
       } catch (e) {
         throw new DecryptError(e);
       }

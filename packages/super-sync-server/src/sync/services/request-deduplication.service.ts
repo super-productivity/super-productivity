@@ -57,6 +57,20 @@ export class RequestDeduplicationService {
   }
 
   /**
+   * Remove every cached entry for the given user. Call when the user's data is
+   * wiped (account reset / encryption-password change) so cached results from
+   * the pre-wipe state cannot be returned for a post-wipe retry.
+   */
+  clearForUser(userId: number): void {
+    const prefix = `${userId}:`;
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  /**
    * Remove expired entries from memory.
    * Should be called periodically to prevent stale entries.
    * @returns Number of entries cleaned up

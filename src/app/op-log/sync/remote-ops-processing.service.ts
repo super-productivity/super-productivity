@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { applyRemoteOperations } from '@sp/sync-core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ConflictResult,
@@ -385,166 +386,15 @@ export class RemoteOpsProcessingService {
     ops: Operation[],
     callerHoldsLock: boolean = false,
   ): Promise<void> {
-    // Map op ID to seq for marking partial success
-    const opIdToSeq = new Map<string, number>();
+    await this._logFullStateApplyDiagnostics(ops);
 
-    // Atomically filter and append ops in a single transaction (issue #6343).
-    // This eliminates the TOCTOU race between filterNewOps() and appendBatch()
-    // that caused persistent "Duplicate operation detected" errors.
-    const opsToApply = await this._filterAndAppendOps(ops, opIdToSeq);
-
-    // Apply only NON-duplicate ops to NgRx store
-    if (opsToApply.length > 0) {
-      const result = await this.operationApplier.applyOperations(opsToApply);
-
-      // Mark successfully applied ops
-      const appliedSeqs = result.appliedOps
-        .map((op) => opIdToSeq.get(op.id))
-        .filter((seq): seq is number => seq !== undefined);
-
-      if (appliedSeqs.length > 0) {
-        await this.opLogStore.markApplied(appliedSeqs);
-
-        // CRITICAL: Merge remote ops' vector clocks into local clock.
-        // This ensures subsequent local operations have clocks that "dominate"
-        // the remote ops (GREATER_THAN instead of CONCURRENT).
-        // Without this, ops created after a SYNC_IMPORT would be incorrectly
-        // filtered by SyncImportFilterService as "invalidated by import".
-        await this.opLogStore.mergeRemoteOpClocks(result.appliedOps);
-
-        // Check if a full-state op was applied, and clear older full-state ops
-        const appliedFullStateOp = result.appliedOps.find(
-          (op) =>
-            op.opType === OpType.SyncImport ||
-            op.opType === OpType.BackupImport ||
-            op.opType === OpType.Repair,
-        );
-        if (appliedFullStateOp) {
-          // CRITICAL FIX: Clear older full-state ops AFTER successfully storing the new one.
-          // This prevents the scenario where:
-          // 1. Client A has old SYNC_IMPORT from client X with minimal clock {X:1}
-          // 2. Client B uploads new SYNC_IMPORT with its own minimal clock
-          // 3. Client A downloads and stores B's SYNC_IMPORT
-          // 4. Without clearing, getLatestFullStateOpEntry might return X's old import
-          //    (if it has a higher UUIDv7 timestamp)
-          // 5. New operations appear CONCURRENT with X's import and get filtered
-          //
-          // We clear AFTER storing (not before) to ensure crash safety.
-          // We exclude the newly stored full-state op IDs so we don't delete what we just added.
-          const newFullStateOpIds = result.appliedOps
-            .filter(
-              (op) =>
-                op.opType === OpType.SyncImport ||
-                op.opType === OpType.BackupImport ||
-                op.opType === OpType.Repair,
-            )
-            .map((op) => op.id);
-          const clearedCount =
-            await this.opLogStore.clearFullStateOpsExcept(newFullStateOpIds);
-          if (clearedCount > 0) {
-            OpLog.normal(
-              `RemoteOpsProcessingService: Cleared ${clearedCount} old full-state op(s) after applying new one.`,
-            );
-          }
-        }
-
-        OpLog.normal(
-          `RemoteOpsProcessingService: Applied and marked ${appliedSeqs.length} remote ops`,
-        );
-      }
-
-      // Handle partial failure
-      if (result.failedOp) {
-        // Find all ops that weren't applied (failed op + remaining ops)
-        const failedOpIndex = opsToApply.findIndex(
-          (op) => op.id === result.failedOp!.op.id,
-        );
-        const failedOps = opsToApply.slice(failedOpIndex);
-        const failedOpIds = failedOps.map((op) => op.id);
-
-        OpLog.err(
-          `RemoteOpsProcessingService: ${result.appliedOps.length} ops applied before failure. ` +
-            `Marking ${failedOpIds.length} ops as failed.`,
-          result.failedOp.error,
-        );
-        await this.opLogStore.markFailed(failedOpIds);
-
-        await this._validateAndFlagSession(
-          'partial-apply-failure',
-          callerHoldsLock,
-          'RemoteOpsProcessingService: State validation failed after partial apply failure',
-        );
-
-        this.snackService.open({
-          type: 'ERROR',
-          msg: T.F.SYNC.S.PARTIAL_APPLY_FAILURE,
-        });
-
-        // Re-throw if it's a SyncStateCorruptedError, otherwise wrap it
-        throw result.failedOp.error;
-      }
-    }
-  }
-
-  /**
-   * Atomically filters out already-applied ops and appends new ones to the store.
-   * Uses appendBatchSkipDuplicates() to check and insert within a single IndexedDB
-   * transaction, eliminating the TOCTOU race condition (issue #6343).
-   *
-   * @param ops - Operations to filter and potentially append
-   * @param opIdToSeq - Map to populate with op ID -> sequence number mappings
-   * @returns The operations that were actually appended (after filtering)
-   */
-  private async _filterAndAppendOps(
-    ops: Operation[],
-    opIdToSeq: Map<string, number>,
-  ): Promise<Operation[]> {
-    // DIAGNOSTIC: Check if any full-state ops will be applied
-    const fullStateOps = ops.filter(
-      (op) =>
-        op.opType === OpType.SyncImport ||
-        op.opType === OpType.BackupImport ||
-        op.opType === OpType.Repair,
-    );
-    if (fullStateOps.length > 0) {
-      // Snapshot the receiver's prior clock and unsynced-op tally before the
-      // batch lands. After append, the receiver's state advances and we can no
-      // longer reconstruct what was about to be wiped. Captures both the prior
-      // vector clock (whose entries the SYNC_IMPORT will collapse) and the
-      // count of local unsynced user work that the SyncImportFilter will then
-      // discard — that count answers the "post-import edits failed to upload
-      // vs. dropped by the filter" question on the next incident.
-      const priorClock = await this.opLogStore.getVectorClock();
-      const priorUnsynced = await this.opLogStore.getUnsynced();
-      const priorUnsyncedByOpType = priorUnsynced.reduce<Record<string, number>>(
-        (acc, entry) => {
-          const key = entry.op.opType;
-          acc[key] = (acc[key] ?? 0) + 1;
-          return acc;
-        },
-        {},
-      );
-      OpLog.log(
-        `RemoteOpsProcessingService: APPLYING FULL-STATE OP(s): ${fullStateOps.map((op) => `${op.opType} from ${op.clientId}`).join(', ')}`,
-        {
-          incoming: fullStateOps.map((op) => ({
-            opType: op.opType,
-            clientId: op.clientId,
-            syncImportReason: op.syncImportReason ?? null,
-            vectorClock: op.vectorClock,
-          })),
-          priorClock: priorClock ?? null,
-          priorClockSize: priorClock ? Object.keys(priorClock).length : 0,
-          priorUnsyncedCount: priorUnsynced.length,
-          priorUnsyncedByOpType,
-        },
-      );
-    }
-
-    // Atomically check-and-insert within a single transaction (issue #6343).
-    // Duplicates are silently skipped rather than causing ConstraintError.
-    const result = await this.opLogStore.appendBatchSkipDuplicates(ops, 'remote', {
-      pendingApply: true,
+    // Core owns the generic crash-safety ordering. Angular diagnostics,
+    // validation, and user notifications stay in this service.
+    const result = await applyRemoteOperations({
+      ops,
+      store: this.opLogStore,
+      applier: this.operationApplier,
+      isFullStateOperation: this._isFullStateOperation,
     });
 
     if (result.skippedCount > 0) {
@@ -553,8 +403,92 @@ export class RemoteOpsProcessingService {
       );
     }
 
-    result.writtenOps.forEach((op, i) => opIdToSeq.set(op.id, result.seqs[i]));
-    return result.writtenOps;
+    if (result.clearedFullStateOpCount > 0) {
+      OpLog.normal(
+        `RemoteOpsProcessingService: Cleared ${result.clearedFullStateOpCount} old full-state op(s) after applying new one.`,
+      );
+    }
+
+    if (result.appliedSeqs.length > 0) {
+      OpLog.normal(
+        `RemoteOpsProcessingService: Applied and marked ${result.appliedSeqs.length} remote ops`,
+      );
+    }
+
+    // Handle partial failure
+    if (result.failedOp) {
+      OpLog.err(
+        `RemoteOpsProcessingService: ${result.appliedOps.length} ops applied before failure. ` +
+          `Marking ${result.failedOpIds.length} ops as failed.`,
+        result.failedOp.error,
+      );
+
+      await this._validateAndFlagSession(
+        'partial-apply-failure',
+        callerHoldsLock,
+        'RemoteOpsProcessingService: State validation failed after partial apply failure',
+      );
+
+      this.snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.PARTIAL_APPLY_FAILURE,
+      });
+
+      // Re-throw if it's a SyncStateCorruptedError, otherwise wrap it
+      throw result.failedOp.error;
+    }
+  }
+
+  private _isFullStateOperation(op: Operation): boolean {
+    return (
+      op.opType === OpType.SyncImport ||
+      op.opType === OpType.BackupImport ||
+      op.opType === OpType.Repair
+    );
+  }
+
+  /**
+   * Logs receiver state before full-state remote ops land. This diagnostic is
+   * app-side because it reads SP's operation store and uses exportable app logs.
+   */
+  private async _logFullStateApplyDiagnostics(ops: Operation[]): Promise<void> {
+    const fullStateOps = ops.filter(this._isFullStateOperation);
+    if (fullStateOps.length === 0) {
+      return;
+    }
+
+    // Snapshot the receiver's prior clock and unsynced-op tally before the
+    // batch lands. After append, the receiver's state advances and we can no
+    // longer reconstruct what was about to be wiped. Captures both the prior
+    // vector clock (whose entries the SYNC_IMPORT will collapse) and the
+    // count of local unsynced user work that the SyncImportFilter will then
+    // discard — that count answers the "post-import edits failed to upload
+    // vs. dropped by the filter" question on the next incident.
+    const priorClock = await this.opLogStore.getVectorClock();
+    const priorUnsynced = await this.opLogStore.getUnsynced();
+    const priorUnsyncedByOpType = priorUnsynced.reduce<Record<string, number>>(
+      (acc, entry) => {
+        const key = entry.op.opType;
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
+    OpLog.log(
+      `RemoteOpsProcessingService: APPLYING FULL-STATE OP(s): ${fullStateOps.map((op) => `${op.opType} from ${op.clientId}`).join(', ')}`,
+      {
+        incoming: fullStateOps.map((op) => ({
+          opType: op.opType,
+          clientId: op.clientId,
+          syncImportReason: op.syncImportReason ?? null,
+          vectorClock: op.vectorClock,
+        })),
+        priorClock: priorClock ?? null,
+        priorClockSize: priorClock ? Object.keys(priorClock).length : 0,
+        priorUnsyncedCount: priorUnsynced.length,
+        priorUnsyncedByOpType,
+      },
+    );
   }
 
   /**

@@ -2,7 +2,7 @@
  * Creates a unique key for an entity by combining its type and ID.
  * Used for indexing and looking up entities across the operation log system.
  *
- * @param entityType The type of the entity (e.g., 'TASK', 'PROJECT')
+ * @param entityType The host-defined type of the entity
  * @param entityId The unique ID of the entity
  * @returns A composite key in the format "ENTITY_TYPE:entityId"
  */

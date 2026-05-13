@@ -24,6 +24,7 @@ describe('TaskShortcutService', () => {
     togglePlay: 'Y',
     taskEditTitle: 'Enter',
     taskToggleDetailPanelOpen: 'I',
+    taskOpenNotesPanel: 'N',
     taskOpenNotesFullscreen: 'Shift+N',
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
@@ -253,6 +254,25 @@ describe('TaskShortcutService', () => {
   });
 
   describe('other shortcuts require focused task', () => {
+    it('should delegate taskOpenNotesPanel shortcut to focused task component', () => {
+      const mockTaskComponent = {
+        task: () => ({ id: 'focused-task-1' }),
+        openNotesPanel: jasmine.createSpy('openNotesPanel'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('N');
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(mockTaskComponent.openNotesPanel).toHaveBeenCalled();
+    });
+
     it('should return false for non-togglePlay shortcuts when no focused task', () => {
       // Arrange
       mockTaskFocusService.focusedTaskId.set(null);

@@ -32,6 +32,15 @@ import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { environment } from '../../../../environments/environment';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
+import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
+
+export const getOverdueIdsInTodayOrder = (
+  overdue: ReadonlyArray<{ id: string }>,
+  todayTagTaskIds: readonly string[],
+): string[] => {
+  const overdueIds = new Set(overdue.map((task) => task.id));
+  return todayTagTaskIds.filter((id) => overdueIds.has(id));
+};
 
 @Injectable()
 export class TaskDueEffects {
@@ -117,12 +126,12 @@ export class TaskDueEffects {
           switchMap(() => this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$),
           switchMap(() => this._store$.select(selectOverdueTasksOnToday).pipe(first())),
           filter((overdue) => !!overdue.length),
-          withLatestFrom(this._store$.select(selectTodayTaskIds)),
+          // Intentional raw TODAY_TAG order read. The computed selectTodayTaskIds
+          // excludes overdue tasks by design, so it cannot remove stale raw IDs.
+          withLatestFrom(this._store$.select(selectTodayTagTaskIds)),
           // we do this to maintain the order of tasks
-          switchMap(([overdue, todayTaskIds]) => {
-            const overdueIds = todayTaskIds.filter(
-              (id) => !!overdue.find((oT) => oT.id === id),
-            );
+          switchMap(([overdue, todayTagTaskIds]) => {
+            const overdueIds = getOverdueIdsInTodayOrder(overdue, todayTagTaskIds);
             if (overdueIds.length === 0) {
               return EMPTY;
             }
@@ -226,6 +235,8 @@ export class TaskDueEffects {
                 return missingTaskIds.length > 0
                   ? TaskSharedActions.planTasksForToday({
                       taskIds: missingTaskIds,
+                      today: todayStr,
+                      startOfNextDayDiffMs,
                       isSkipRemoveReminder: true,
                     })
                   : null;

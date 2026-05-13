@@ -1,17 +1,19 @@
 import {
   Operation,
   EntityType,
+  ENTITY_TYPES,
   OpType,
   isMultiEntityPayload,
   EntityChange,
 } from '../core/operation.types';
-import { OpLog } from '../../core/log';
 import {
   getPayloadKey,
   getAllPayloadKeys,
   isSingletonEntityId,
 } from '../core/entity-registry';
 import { isValidEntityId } from './is-valid-entity-id';
+import type { SyncLogMeta } from '@sp/sync-core';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 
 /**
  * Result of validating an operation payload.
@@ -21,6 +23,64 @@ export interface PayloadValidationResult {
   error?: string;
   warnings?: string[];
 }
+
+const getPayloadType = (payload: unknown): string => {
+  if (payload === null) return 'null';
+  if (Array.isArray(payload)) return 'array';
+  return typeof payload;
+};
+
+const SAFE_UNKNOWN_OPERATION_VALUE = 'UNKNOWN';
+const ENTITY_TYPE_VALUES = new Set<string>(ENTITY_TYPES);
+const OP_TYPE_VALUES = new Set<string>(Object.values(OpType));
+
+const sanitizeEntityTypeForLog = (entityType: string | undefined): string | undefined =>
+  entityType === undefined
+    ? undefined
+    : ENTITY_TYPE_VALUES.has(entityType)
+      ? entityType
+      : SAFE_UNKNOWN_OPERATION_VALUE;
+
+const sanitizeOpTypeForLog = (opType: string): string =>
+  OP_TYPE_VALUES.has(opType) ? opType : SAFE_UNKNOWN_OPERATION_VALUE;
+
+const CREATE_MISSING_ENTITY_WARNING = 'CREATE payload missing expected entity';
+const UPDATE_UNUSUAL_STRUCTURE_WARNING = 'UPDATE payload has unusual structure';
+const DELETE_MISSING_ENTITY_ID_WARNING = 'DELETE missing entityId/entityIds';
+const UNKNOWN_OP_TYPE_WARNING = 'Unknown opType, allowing through';
+
+const getPayloadValidationLogMeta = ({
+  entityType,
+  opType,
+  payload,
+  entityId,
+  entityIds,
+}: {
+  entityType?: EntityType;
+  opType: string;
+  payload?: unknown;
+  entityId?: string;
+  entityIds?: string[];
+}): SyncLogMeta => ({
+  entityType: sanitizeEntityTypeForLog(entityType),
+  opType: sanitizeOpTypeForLog(opType),
+  entityId,
+  entityIdsCount: entityIds?.length,
+  payloadType: payload === undefined ? undefined : getPayloadType(payload),
+  payloadKeyCount:
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? Object.keys(payload).length
+      : undefined,
+});
+
+const warnPayloadValidation = (
+  message: string,
+  meta: Parameters<typeof getPayloadValidationLogMeta>[0],
+): void => {
+  OP_LOG_SYNC_LOGGER.warn(`[ValidateOperationPayload] ${message}`, {
+    ...getPayloadValidationLogMeta(meta),
+  });
+};
 
 /**
  * Maps EntityType to the expected payload key.
@@ -116,8 +176,12 @@ const validateCreatePayload = (
 
   if (!entity) {
     // Warning rather than error - some creates might have different shapes
-    warnings.push(`CREATE payload missing expected entity (${entityType})`);
-    OpLog.warn(`[ValidateOperationPayload] ${warnings[0]}`, payload);
+    warnings.push(CREATE_MISSING_ENTITY_WARNING);
+    warnPayloadValidation(warnings[0], {
+      entityType,
+      opType: OpType.Create,
+      payload,
+    });
   } else if (typeof entity === 'object' && entity !== null) {
     // Basic ID check for the entity
     const entityObj = entity as Record<string, unknown>;
@@ -221,8 +285,12 @@ const validateUpdatePayload = (
   }
 
   // Allow through with warning - updates have many shapes
-  warnings.push(`UPDATE payload has unusual structure for ${entityType}`);
-  OpLog.warn(`[ValidateOperationPayload] ${warnings[0]}`, payload);
+  warnings.push(UPDATE_UNUSUAL_STRUCTURE_WARNING);
+  warnPayloadValidation(warnings[0], {
+    entityType,
+    opType: OpType.Update,
+    payload,
+  });
 
   return { success: true, warnings };
 };
@@ -260,11 +328,14 @@ const validateDeletePayload = (
   }
 
   // Allow through with warning
-  OpLog.warn(
-    `[ValidateOperationPayload] DELETE missing entityId/entityIds for ${entityType}`,
+  warnPayloadValidation(DELETE_MISSING_ENTITY_ID_WARNING, {
+    entityType,
+    opType: OpType.Delete,
     payload,
-  );
-  return { success: true, warnings: ['DELETE missing entityId/entityIds'] };
+    entityId,
+    entityIds,
+  });
+  return { success: true, warnings: [DELETE_MISSING_ENTITY_ID_WARNING] };
 };
 
 /**
@@ -289,7 +360,11 @@ const validateMovePayload = (
     return { success: true };
   }
 
-  OpLog.warn('[ValidateOperationPayload] MOVE missing ids array', payload);
+  warnPayloadValidation('MOVE missing ids array', {
+    opType: OpType.Move,
+    payload,
+    entityIds,
+  });
   return { success: true, warnings: ['MOVE missing ids array'] };
 };
 
@@ -554,9 +629,12 @@ export const validateOperationPayload = (op: Operation): PayloadValidationResult
       break;
 
     default:
-      OpLog.warn(
-        `[ValidateOperationPayload] Unknown opType: ${op.opType}, allowing through`,
-      );
+      warnPayloadValidation(UNKNOWN_OP_TYPE_WARNING, {
+        entityType: op.entityType,
+        opType: op.opType,
+        entityId: op.entityId,
+        entityIds: op.entityIds,
+      });
       result = { success: true };
   }
 

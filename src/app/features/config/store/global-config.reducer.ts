@@ -20,6 +20,7 @@ import {
   TakeABreakConfig,
   TasksConfig,
 } from '../global-config.model';
+import type { KeyboardConfig } from '../keyboard-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
@@ -176,6 +177,26 @@ const normalizeStartOfNextDayConfig = (
   return normalized;
 };
 
+const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig => {
+  const keyboard: KeyboardConfig = {
+    ...DEFAULT_GLOBAL_CONFIG.keyboard,
+    ...cfg,
+  };
+
+  if (
+    cfg?.addNewNote === 'N' &&
+    (cfg.taskOpenNotesPanel === undefined || cfg.taskOpenNotesPanel === null)
+  ) {
+    return {
+      ...keyboard,
+      addNewNote: DEFAULT_GLOBAL_CONFIG.keyboard.addNewNote,
+      taskOpenNotesPanel: DEFAULT_GLOBAL_CONFIG.keyboard.taskOpenNotesPanel,
+    };
+  }
+
+  return keyboard;
+};
+
 export const globalConfigReducer = createReducer<GlobalConfigState>(
   initialGlobalConfigState,
 
@@ -239,6 +260,7 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.focusMode,
         ...migrateFocusModeConfig(appDataComplete.globalConfig.focusMode),
       },
+      keyboard: migrateKeyboardConfig(appDataComplete.globalConfig.keyboard),
       sync: {
         ...incomingSyncConfig,
         syncProvider,

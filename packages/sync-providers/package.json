@@ -1,0 +1,37 @@
+{
+  "name": "@sp/sync-providers",
+  "version": "1.0.0",
+  "description": "Framework-agnostic sync provider contracts for Super Productivity sync",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "dependencies": {
+    "@sp/sync-core": "*",
+    "hash-wasm": "^4.12.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:tsc": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@xmldom/xmldom": "^0.8.12",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
+  }
+}

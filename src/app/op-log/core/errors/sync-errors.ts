@@ -1,110 +1,76 @@
 import { IValidation } from 'typia';
-import { OpLog } from '../../../core/log';
+import type { SyncFilePrefixInvalidPrefixDetails } from '@sp/sync-core';
+import { toSyncLogError } from '@sp/sync-core';
+import {
+  AdditionalLogErrorBase as PackageAdditionalLogErrorBase,
+  extractErrorMessage as packageExtractErrorMessage,
+} from '@sp/sync-providers';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
+import { OP_LOG_SYNC_LOGGER } from '../sync-logger.adapter';
 
-/**
- * Extracts a meaningful error message from various error shapes.
- * Handles Error objects with nested cause, zlib error codes, and plain strings.
- * This is important because some browser APIs (like DecompressionStream) throw
- * errors with empty messages but contain the real error in the 'cause' property.
- */
-export const extractErrorMessage = (err: unknown): string | null => {
-  if (typeof err === 'string' && err.length > 0) {
-    return err;
-  }
+// Re-export provider-shared error classes from @sp/sync-providers.
+// Single class definition per error is critical for `instanceof` checks
+// across the codebase. See docs/plans/2026-05-12-pr5-dropbox-slice.md
+// action item A5 and sync-errors.identity.spec.ts.
+export {
+  AuthFailSPError,
+  EmptyRemoteBodySPError,
+  HttpNotOkAPIError,
+  InvalidDataSPError,
+  MissingCredentialsSPError,
+  MissingRefreshTokenAPIError,
+  NoRevAPIError,
+  PotentialCorsError,
+  RemoteFileChangedUnexpectedly,
+  RemoteFileNotFoundAPIError,
+  TooManyRequestsAPIError,
+  UploadRevToMatchMismatchAPIError,
+} from '@sp/sync-providers';
 
-  if (err instanceof Error) {
-    // Check for nested cause first (e.g., DecompressionStream errors)
-    const cause = (err as Error & { cause?: unknown }).cause;
-    if (cause instanceof Error && cause.message) {
-      return cause.message;
-    }
+export const extractErrorMessage = packageExtractErrorMessage;
 
-    // Check for error code (e.g., zlib errors like Z_DATA_ERROR)
-    const code = (err as Error & { code?: string }).code;
-    if (typeof code === 'string' && code.length > 0) {
-      // Make zlib error codes more readable
-      if (code.startsWith('Z_')) {
-        return `Compression error: ${code.replace('Z_', '').replace(/_/g, ' ').toLowerCase()}`;
-      }
-      return code;
-    }
-
-    // Use the error's own message if available
-    if (err.message && err.message.length > 0) {
-      return err.message;
-    }
-  }
-
-  // For objects with message property
+const getValidationErrors = (
+  validationResult?: IValidation<unknown>,
+): IValidation.IError[] | undefined => {
   if (
-    err !== null &&
-    typeof err === 'object' &&
-    'message' in err &&
-    typeof (err as { message: unknown }).message === 'string'
+    validationResult &&
+    typeof validationResult === 'object' &&
+    'errors' in validationResult &&
+    Array.isArray(validationResult.errors)
   ) {
-    const msg = (err as { message: string }).message;
-    if (msg.length > 0) {
-      return msg;
-    }
+    return validationResult.errors as IValidation.IError[];
   }
-
-  return null;
+  return undefined;
 };
 
-/**
- * Sanitizes data for logging by redacting sensitive information.
- * Removes tokens, passwords, secrets, and authorization headers.
- */
-const sanitizeForLogging = (data: unknown): unknown => {
-  if (typeof data !== 'string') return data;
-  return data
-    .replace(
-      /("(access_?token|refresh_?token|password|secret|authorization)":\s*")[^"]+"/gi,
-      '$1[REDACTED]"',
-    )
-    .replace(/(Bearer\s+)[^\s"]+/gi, '$1[REDACTED]')
-    .substring(0, 1000);
+const getValidationErrorPathSummary = (
+  validationResult?: IValidation<unknown>,
+): string | undefined => {
+  const errors = getValidationErrors(validationResult);
+  if (!errors) return undefined;
+
+  const pathSummary = errors
+    .slice(0, 3)
+    .map((error) => error.path)
+    .filter(Boolean)
+    .join(', ');
+  return pathSummary || undefined;
 };
 
-class AdditionalLogErrorBase<T = unknown[]> extends Error {
-  additionalLog: T;
-
-  constructor(...additional: unknown[]) {
-    // Extract meaningful message from first argument, fall back to class name
-    const extractedMessage = extractErrorMessage(additional[0]);
-    // Use hardcoded class name pattern to avoid minification issues
-    super(extractedMessage ?? 'Unknown error');
-
-    if (additional.length > 0) {
-      try {
-        // Sanitize before logging to avoid exposing tokens and user content in logs
-        const sanitized = additional.map(sanitizeForLogging);
-        OpLog.log(this.name + ' additional error log: ' + JSON.stringify(sanitized));
-      } catch (e) {
-        OpLog.log(
-          this.name +
-            ' additional error log not stringifiable: ' +
-            (e instanceof Error ? e.message : 'unknown'),
-        );
-      }
-    }
-    this.additionalLog = additional as T;
-  }
-}
+// AdditionalLogErrorBase is provided by @sp/sync-providers (without the
+// previous constructor-time logging side effect). The remaining app-only
+// errors below extend it; they MUST log at the catch site via
+// OP_LOG_SYNC_LOGGER rather than relying on the constructor.
+type AdditionalLogErrorBase<T = unknown[]> = PackageAdditionalLogErrorBase<T>;
+// Local alias so existing `extends AdditionalLogErrorBase` syntax keeps
+// working unchanged below.
+const AdditionalLogErrorBase = PackageAdditionalLogErrorBase;
 
 export class ImpossibleError extends Error {
   override name = ' ImpossibleError';
 }
 
-// --------------API ERRORS--------------
-export class NoRevAPIError extends AdditionalLogErrorBase {
-  override name = ' NoRevAPIError';
-}
-
-export class TooManyRequestsAPIError extends AdditionalLogErrorBase {
-  override name = ' TooManyRequestsAPIError';
-}
+// --------------APP-SIDE-ONLY API ERRORS--------------
 
 export class NoEtagAPIError extends AdditionalLogErrorBase {
   override name = ' NoEtagAPIError';
@@ -114,159 +80,8 @@ export class FileExistsAPIError extends Error {
   override name = ' FileExistsAPIError';
 }
 
-export class RemoteFileNotFoundAPIError extends AdditionalLogErrorBase {
-  override name = ' RemoteFileNotFoundAPIError';
-}
-
-export class MissingRefreshTokenAPIError extends Error {
-  override name = ' MissingRefreshTokenAPIError';
-}
-
 export class FileHashCreationAPIError extends AdditionalLogErrorBase {
   override name = ' FileHashCreationAPIError';
-}
-
-export class UploadRevToMatchMismatchAPIError extends AdditionalLogErrorBase {
-  override name = ' UploadRevToMatchMismatchAP';
-}
-
-// export class CannotCreateFolderAPIError extends AdditionalLogErrorBase {
-//   override name = 'CannotCreateFolderAPIError';
-// }
-
-export class HttpNotOkAPIError extends AdditionalLogErrorBase {
-  override name = ' HttpNotOkAPIError';
-  response: Response;
-  body?: string;
-
-  constructor(response: Response, body?: string) {
-    super(response, body);
-    this.response = response;
-    this.body = body;
-    const statusText = response.statusText || 'Unknown Status';
-
-    // Parse body to extract meaningful error information
-    let errorDetail = '';
-    if (body) {
-      const safeBody =
-        typeof body === 'string'
-          ? body
-          : body !== undefined
-            ? (() => {
-                try {
-                  return JSON.stringify(body);
-                } catch (e) {
-                  return String(body);
-                }
-              })()
-            : '';
-
-      // Try to extract meaningful error from XML/HTML responses
-      errorDetail = this._extractErrorFromBody(safeBody);
-    }
-
-    const bodyText = errorDetail ? ` - ${errorDetail}` : '';
-    this.message = `HTTP ${response.status} ${statusText}${bodyText}`;
-  }
-
-  private _extractErrorFromBody(body: string): string {
-    if (!body) return '';
-
-    // Limit body length for error messages
-    const maxBodyLength = 300;
-
-    // Try to extract error from Nextcloud/WebDAV XML responses
-    // Look for <s:message> or <d:error> tags
-    const nextcloudMessageMatch = body.match(/<s:message[^>]*>(.*?)<\/s:message>/i);
-    if (nextcloudMessageMatch && nextcloudMessageMatch[1]) {
-      return nextcloudMessageMatch[1].trim().substring(0, maxBodyLength);
-    }
-
-    const webdavErrorMatch = body.match(/<d:error[^>]*>(.*?)<\/d:error>/i);
-    if (webdavErrorMatch && webdavErrorMatch[1]) {
-      return webdavErrorMatch[1].trim().substring(0, maxBodyLength);
-    }
-
-    // Look for HTML title tags (often contain error descriptions)
-    const titleMatch = body.match(/<title[^>]*>(.*?)<\/title>/i);
-    if (titleMatch && titleMatch[1]) {
-      const title = titleMatch[1].trim();
-      // Avoid generic titles
-      if (title && !title.match(/^(error|404|403|500)$/i)) {
-        return title.substring(0, maxBodyLength);
-      }
-    }
-
-    // Try to extract JSON error
-    try {
-      const jsonMatch = body.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.error) {
-          return String(parsed.error).substring(0, maxBodyLength);
-        }
-        if (parsed.message) {
-          return String(parsed.message).substring(0, maxBodyLength);
-        }
-      }
-    } catch (e) {
-      // Not JSON, continue
-    }
-
-    // Strip script and style tags with their content
-    // Apply repeatedly to handle nested/crafted inputs like <scri<script>pt>
-    let cleanBody = body;
-    let previousBody: string;
-    do {
-      previousBody = cleanBody;
-      cleanBody = cleanBody
-        .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gim, '')
-        .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gim, '')
-        .replace(/<script\b/gim, '')
-        .replace(/<style\b/gim, '');
-    } while (cleanBody !== previousBody);
-
-    // Strip HTML tags for plain text
-    const withoutTags = cleanBody
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // Return the first meaningful chunk of text
-    return withoutTags.substring(0, maxBodyLength);
-  }
-}
-
-// NOTE: we can't know for sure without complicating things
-export class PotentialCorsError extends AdditionalLogErrorBase {
-  override name = 'PotentialCorsError';
-  url: string;
-
-  constructor(url: string, ...args: unknown[]) {
-    super(
-      `Cross-Origin Request Blocked: The request to ${url} was blocked by CORS policy`,
-      ...args,
-    );
-    this.url = url;
-  }
-}
-
-// --------------SYNC PROVIDER ERRORS--------------
-
-export class MissingCredentialsSPError extends Error {
-  override name = 'MissingCredentialsSPError';
-}
-
-export class AuthFailSPError extends AdditionalLogErrorBase {
-  override name = 'AuthFailSPError';
-}
-
-export class InvalidDataSPError extends AdditionalLogErrorBase {
-  override name = 'InvalidDataSPError';
-}
-
-export class EmptyRemoteBodySPError extends InvalidDataSPError {
-  override name = 'EmptyRemoteBodySPError';
 }
 
 // --------------OTHER SYNC ERRORS--------------
@@ -339,10 +154,6 @@ export class NoRemoteModelFile extends AdditionalLogErrorBase<string> {
 
 export class NoRemoteMetaFile extends Error {
   override name = 'NoRemoteMetaFile';
-}
-
-export class RemoteFileChangedUnexpectedly extends AdditionalLogErrorBase {
-  override name = 'RemoteFileChangedUnexpectedly';
 }
 
 // --------------LOCKFILE ERRORS--------------
@@ -429,11 +240,10 @@ export class JsonParseError extends Error {
       this.dataSample = `...${dataStr.substring(start, end)}...`;
     }
 
-    OpLog.err('JsonParseError:', {
-      message: this.message,
+    OP_LOG_SYNC_LOGGER.err('JsonParseError', toSyncLogError(originalError), {
       position: this.position,
-      dataSample: this.dataSample,
-      originalError,
+      dataLength: dataStr?.length,
+      hasDataSample: this.dataSample !== undefined,
     });
   }
 }
@@ -494,24 +304,30 @@ export class ModelValidationError extends Error {
     e?: unknown;
   }) {
     super('ModelValidationError');
-    OpLog.log(`ModelValidationError for model ${params.id}:`, params);
+    OP_LOG_SYNC_LOGGER.log('ModelValidationError', {
+      id: params.id,
+      hasValidationResult: params.validationResult !== undefined,
+      validationErrorCount: getValidationErrors(params.validationResult)?.length,
+      validationPathSummary: getValidationErrorPathSummary(params.validationResult),
+      hasAdditionalError: params.e !== undefined,
+      additionalErrorName:
+        params.e !== undefined ? toSyncLogError(params.e).name : undefined,
+    });
 
     if (params.validationResult) {
-      OpLog.log('validation result: ', params.validationResult);
-
       try {
-        if ('errors' in params.validationResult) {
-          const str = JSON.stringify(params.validationResult.errors);
-          OpLog.log('validation errors: ' + str);
+        const errors = getValidationErrors(params.validationResult);
+        if (errors) {
+          const str = JSON.stringify(errors);
           this.additionalLog = `Model: ${params.id}, Errors: ${str.substring(0, 400)}`;
         }
       } catch (e) {
-        OpLog.err('Error stringifying validation errors:', e);
+        OP_LOG_SYNC_LOGGER.err(
+          'Error stringifying validation errors',
+          toSyncLogError(e),
+          { id: params.id },
+        );
       }
-    }
-
-    if (params.e) {
-      OpLog.log('Additional error:', params.e);
     }
   }
 }
@@ -523,24 +339,26 @@ export class DataValidationFailedError extends Error {
   constructor(validationResult: IValidation<unknown>) {
     const errorSummary = DataValidationFailedError._buildErrorSummary(validationResult);
     super(errorSummary);
-    OpLog.log('validation result: ', validationResult);
+    OP_LOG_SYNC_LOGGER.log('DataValidationFailedError', {
+      validationErrorCount: getValidationErrors(validationResult)?.length,
+      validationPathSummary: getValidationErrorPathSummary(validationResult),
+    });
 
     try {
-      if ('errors' in validationResult) {
-        const str = JSON.stringify(validationResult.errors);
-        OpLog.log('validation errors_: ' + str);
+      const errors = getValidationErrors(validationResult);
+      if (errors) {
+        const str = JSON.stringify(errors);
         this.additionalLog = str.substring(0, 400);
       }
-      OpLog.log('validation result_: ' + JSON.stringify(validationResult));
     } catch (e) {
-      OpLog.err('Failed to stringify validation errors:', e);
+      OP_LOG_SYNC_LOGGER.err('Failed to stringify validation errors', toSyncLogError(e));
     }
   }
 
   private static _buildErrorSummary(validationResult: IValidation<unknown>): string {
     try {
-      if ('errors' in validationResult && Array.isArray(validationResult.errors)) {
-        const errors = validationResult.errors as IValidation.IError[];
+      const errors = getValidationErrors(validationResult);
+      if (errors) {
         const paths = errors
           .slice(0, 3)
           .map((e) => e.path)
@@ -563,6 +381,15 @@ export class ModelVersionToImportNewerThanLocalError extends AdditionalLogErrorB
 
 export class InvalidFilePrefixError extends AdditionalLogErrorBase {
   override name = 'InvalidFilePrefixError';
+
+  constructor(details: SyncFilePrefixInvalidPrefixDetails) {
+    super({
+      message: `Invalid sync file prefix. Expected prefix "${details.expectedPrefix}".`,
+      expectedPrefix: details.expectedPrefix,
+      endSeparator: details.endSeparator,
+      inputLength: details.inputLength,
+    });
+  }
 }
 
 export class DataRepairNotPossibleError extends AdditionalLogErrorBase {

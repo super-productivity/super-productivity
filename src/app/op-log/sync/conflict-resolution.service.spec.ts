@@ -10,6 +10,7 @@ import { ActionType, EntityConflict, OpType, Operation } from '../core/operation
 import { VectorClock, VectorClockComparison } from '../../core/util/vector-clock';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
+import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
 
 describe('ConflictResolutionService', () => {
   let service: ConflictResolutionService;
@@ -19,6 +20,7 @@ describe('ConflictResolutionService', () => {
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
   let mockClientIdProvider: { loadClientId: jasmine.Spy };
+  let mockEntityRegistry: ReturnType<typeof buildEntityRegistry>;
 
   const TEST_CLIENT_ID = 'test-client-123';
 
@@ -65,6 +67,7 @@ describe('ConflictResolutionService', () => {
         .createSpy('loadClientId')
         .and.returnValue(Promise.resolve(TEST_CLIENT_ID)),
     };
+    mockEntityRegistry = buildEntityRegistry();
 
     TestBed.configureTestingModule({
       providers: [
@@ -75,6 +78,7 @@ describe('ConflictResolutionService', () => {
         { provide: SnackService, useValue: mockSnackService },
         { provide: ValidateStateService, useValue: mockValidateStateService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        { provide: ENTITY_REGISTRY, useValue: mockEntityRegistry },
       ],
     });
     service = TestBed.inject(ConflictResolutionService);
@@ -91,6 +95,35 @@ describe('ConflictResolutionService', () => {
         skippedCount: 0,
       }),
     );
+  });
+
+  describe('getCurrentEntityState', () => {
+    it('should use injected registry selector factory for ISSUE_PROVIDER', async () => {
+      const expectedEntity = { id: 'issue-provider-1' };
+      const selector = (_state: object): unknown => expectedEntity;
+      const selectorFactoryCalls: Array<[string, null]> = [];
+      const selectorFactory = (id: string, key: null): ((state: object) => unknown) => {
+        selectorFactoryCalls.push([id, key]);
+        return selector;
+      };
+
+      const issueProviderConfig = mockEntityRegistry.ISSUE_PROVIDER;
+      expect(issueProviderConfig).toBeDefined();
+      if (!issueProviderConfig) {
+        return;
+      }
+      issueProviderConfig.selectById = selectorFactory;
+      mockStore.select.and.returnValue(of(expectedEntity));
+
+      const result = await service.getCurrentEntityState(
+        'ISSUE_PROVIDER',
+        'issue-provider-1',
+      );
+
+      expect(result).toBe(expectedEntity);
+      expect(selectorFactoryCalls).toEqual([['issue-provider-1', null]]);
+      expect(mockStore.select.calls.mostRecent().args[0]).toBe(selector);
+    });
   });
 
   describe('isIdenticalConflict', () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
 import {
@@ -28,6 +28,48 @@ describe('decompressBody helper', () => {
       const decompressed = await decompressBody(compressed, undefined);
 
       expect(JSON.parse(decompressed.toString('utf-8'))).toEqual(testPayload);
+    });
+
+    it('should reject gzip output beyond maxOutputLength', async () => {
+      const jsonPayload = JSON.stringify(testPayload);
+      const compressed = await gzipAsync(Buffer.from(jsonPayload, 'utf-8'));
+
+      await expect(decompressBody(compressed, undefined, 1)).rejects.toThrow();
+    });
+
+    it('should pass maxOutputLength to zlib.gunzip', async () => {
+      const gunzipMock = vi.fn(
+        (
+          _body: Buffer,
+          _options: zlib.ZlibOptions | ((err: Error | null, result: Buffer) => void),
+          callback?: (err: Error | null, result: Buffer) => void,
+        ) => {
+          if (callback) {
+            callback(null, Buffer.from(JSON.stringify(testPayload), 'utf-8'));
+          }
+        },
+      );
+
+      try {
+        vi.resetModules();
+        vi.doMock('zlib', () => ({ gunzip: gunzipMock }));
+
+        const { decompressBody: decompressBodyWithMockedZlib } =
+          await import('../src/sync/compressed-body-parser');
+        await decompressBodyWithMockedZlib(
+          Buffer.from('mock-gzip-body'),
+          undefined,
+          1024,
+        );
+
+        expect(gunzipMock).toHaveBeenCalled();
+        expect(gunzipMock.mock.calls[0][1]).toMatchObject({
+          maxOutputLength: 1024,
+        });
+      } finally {
+        vi.doUnmock('zlib');
+        vi.resetModules();
+      }
     });
   });
 
@@ -61,6 +103,14 @@ describe('decompressBody helper', () => {
       const decompressed = await decompressBody(rawBody, 'base64');
 
       expect(JSON.parse(decompressed.toString('utf-8'))).toEqual(largePayload);
+    });
+
+    it('should reject base64 gzip when decompressed output exceeds maxOutputLength', async () => {
+      const jsonPayload = JSON.stringify(testPayload);
+      const compressed = await gzipAsync(Buffer.from(jsonPayload, 'utf-8'));
+      const rawBody = Buffer.from(compressed.toString('base64'), 'utf-8');
+
+      await expect(decompressBody(rawBody, 'base64', 1)).rejects.toThrow();
     });
 
     it('should throw error for invalid base64 data', async () => {
@@ -150,6 +200,45 @@ describe('parseCompressedJsonBody helper', () => {
     }
   });
 
+  it('should pass maxDecompressedSize to zlib.gunzip as maxOutputLength', async () => {
+    const gunzipMock = vi.fn(
+      (
+        _body: Buffer,
+        _options: zlib.ZlibOptions | ((err: Error | null, result: Buffer) => void),
+        callback?: (err: Error | null, result: Buffer) => void,
+      ) => {
+        if (callback) {
+          callback(null, Buffer.from(JSON.stringify(testPayload), 'utf-8'));
+        }
+      },
+    );
+
+    try {
+      vi.resetModules();
+      vi.doMock('zlib', () => ({ gunzip: gunzipMock }));
+
+      const { parseCompressedJsonBody: parseCompressedJsonBodyWithMockedZlib } =
+        await import('../src/sync/compressed-body-parser');
+      const result = await parseCompressedJsonBodyWithMockedZlib(
+        Buffer.from('mock-gzip-body'),
+        undefined,
+        {
+          maxCompressedSize: 1024,
+          maxDecompressedSize: 456,
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      expect(gunzipMock).toHaveBeenCalled();
+      expect(gunzipMock.mock.calls[0][1]).toMatchObject({
+        maxOutputLength: 456,
+      });
+    } finally {
+      vi.doUnmock('zlib');
+      vi.resetModules();
+    }
+  });
+
   it('should return 400 for non-buffer gzip bodies', async () => {
     const result = await parseCompressedJsonBody('not-a-buffer', undefined, {
       maxCompressedSize: 1024,
@@ -229,6 +318,44 @@ describe('parseCompressedJsonBody helper', () => {
       expect(result.statusCode).toBe(400);
       expect(result.error).toBe('Failed to decompress gzip body');
       expect(result.reason).toBe('decompress-failed');
+    }
+  });
+
+  it('should return 400 with invalid-json reason when decompressed body is not JSON', async () => {
+    const compressed = await gzipAsync(Buffer.from('this is not JSON {', 'utf-8'));
+
+    const result = await parseCompressedJsonBody(compressed, undefined, {
+      maxCompressedSize: compressed.length,
+      maxDecompressedSize: 1024,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.statusCode).toBe(400);
+      expect(result.error).toBe('Invalid JSON in decompressed body');
+      expect(result.reason).toBe('invalid-json');
+    }
+  });
+
+  it('should enforce maxCompressedSize against the binary gzip size for base64 transport', async () => {
+    // A 30-byte gzip payload encodes to 40 base64 chars (rawBody.length=40).
+    // With the old base64-unaware check, a maxCompressedSize=30 would reject
+    // it (40 > 30). The fix checks the binary length instead, so a 30-byte
+    // gzip payload must be ACCEPTED at maxCompressedSize=30.
+    const compressed = await gzipAsync(Buffer.from(JSON.stringify(testPayload), 'utf-8'));
+    const rawBody = Buffer.from(compressed.toString('base64'), 'utf-8');
+
+    expect(rawBody.length).toBeGreaterThan(compressed.length);
+
+    const result = await parseCompressedJsonBody(rawBody, 'base64', {
+      maxCompressedSize: compressed.length,
+      maxDecompressedSize: 1024,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.body).toEqual(testPayload);
+      expect(result.compressedSize).toBeLessThanOrEqual(compressed.length + 1);
     }
   });
 });

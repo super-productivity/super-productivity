@@ -2240,6 +2240,7 @@
       "TASK_SHORTCUTS": "Tasks",
       "TASK_SHORTCUTS_INFO": "The following shortcuts apply to the currently selected task (selected via tab or mouse).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Show/hide task panel",
+      "TASK_OPEN_NOTES_PANEL": "Open note/checklist in task panel",
       "TASK_OPEN_NOTES_FULLSCREEN": "Open note/checklist in fullscreen",
       "TASK_TOGGLE_DONE": "Toggle task completed status",
       "TASK_UNSCHEDULE": "Unschedule task",

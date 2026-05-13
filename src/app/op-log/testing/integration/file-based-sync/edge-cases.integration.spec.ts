@@ -12,6 +12,10 @@ import {
 } from '../../../core/operation.types';
 import { OperationLogStoreService } from '../../../persistence/operation-log-store.service';
 import { SyncImportFilterService } from '../../../sync/sync-import-filter.service';
+import {
+  clearSessionKeyCache,
+  setArgon2ParamsForTesting,
+} from '../../../encryption/encryption';
 
 describe('File-Based Sync Integration - Edge Cases', () => {
   let harness: FileBasedSyncTestHarness;
@@ -489,7 +493,18 @@ describe('File-Based Sync Integration - Edge Cases', () => {
 describe('File-Based Sync Integration - Encryption Round-Trip', () => {
   let harness: FileBasedSyncTestHarness;
 
+  beforeAll(() => {
+    setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
+    clearSessionKeyCache();
+  });
+
+  afterAll(() => {
+    setArgon2ParamsForTesting();
+    clearSessionKeyCache();
+  });
+
   beforeEach(() => {
+    clearSessionKeyCache();
     harness = FileBasedSyncTestHarness.create({
       encryptAndCompressCfg: { isEncrypt: true, isCompress: false },
       encryptKey: 'test-encryption-key-12345',
@@ -500,7 +515,7 @@ describe('File-Based Sync Integration - Encryption Round-Trip', () => {
     harness.reset();
   });
 
-  // Encryption tests need longer timeout due to Web Crypto key derivation
+  // Keep this generous for slower CI/browser crypto even with test Argon2 params.
   const ENCRYPT_TIMEOUT = 10000;
 
   it(

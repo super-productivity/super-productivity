@@ -132,6 +132,11 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       // ============ PHASE 3: Client B syncs and chooses "Keep Local" ============
       console.log('[KeepLocal] Phase 3: Client B syncs and chooses Keep Local');
 
+      // The imported fixture may be auto-repaired during import because it intentionally
+      // exercises backup compatibility. This test is about validation errors caused by
+      // the keep-local conflict path, so only collect errors from that point onward.
+      consoleErrors.length = 0;
+
       await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
 
       const dialog = clientB.page.locator('dialog-sync-import-conflict');

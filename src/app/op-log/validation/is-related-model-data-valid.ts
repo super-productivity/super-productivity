@@ -1,7 +1,8 @@
 import { devError } from '../../util/dev-error';
-import { environment } from '../../../environments/environment';
 import { AppDataComplete } from '../model/model-config';
 import { OpLog } from '../../core/log';
+import type { SyncLogMeta } from '@sp/sync-core';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import {
   MenuTreeKind,
   MenuTreeTreeNode,
@@ -19,12 +20,80 @@ import { TaskArchive } from '../../features/tasks/task.model';
 let errorCount = 0;
 let lastValidityError: string | undefined;
 
+const SAFE_VALIDITY_INFO_KEYS = new Set([
+  'archiveLabel',
+  'defaultProjectId',
+  'id',
+  'ipId',
+  'nid',
+  'nodeKind',
+  'parentId',
+  'pid',
+  'projectId',
+  'repeatCfgId',
+  'subId',
+  'tagId',
+  'taskId',
+  'tid',
+  'treeType',
+]);
+
+const KNOWN_MENU_TREE_KINDS = new Set<string>(Object.values(MenuTreeKind));
+
+const getMenuTreeKindForLog = (kind: unknown): string =>
+  typeof kind === 'string' && KNOWN_MENU_TREE_KINDS.has(kind) ? kind : 'unknown';
+
+const getValueType = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+};
+
+const getValidityInfoMeta = (additionalInfo: unknown): SyncLogMeta => {
+  if (
+    additionalInfo === null ||
+    typeof additionalInfo !== 'object' ||
+    Array.isArray(additionalInfo)
+  ) {
+    return {
+      additionalInfoType: getValueType(additionalInfo),
+      additionalInfoArrayLength: Array.isArray(additionalInfo)
+        ? additionalInfo.length
+        : undefined,
+    };
+  }
+
+  const info = additionalInfo as Record<string, unknown>;
+  const meta: SyncLogMeta = {
+    additionalInfoType: 'object',
+    additionalInfoKeyCount: Object.keys(info).length,
+  };
+
+  for (const key of SAFE_VALIDITY_INFO_KEYS) {
+    const value = info[key];
+    if (key === 'nodeKind') {
+      meta[key] = getMenuTreeKindForLog(value);
+      continue;
+    }
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      value === null
+    ) {
+      meta[key] = value;
+    }
+  }
+
+  return meta;
+};
+
 export const isRelatedModelDataValid = (d: AppDataComplete): boolean => {
   errorCount = 0;
   lastValidityError = undefined; // Reset at start of each validation
 
   if (!d) {
-    _validityError('Data is null or undefined', { d });
+    _validityError('Data is null or undefined');
     return false;
   }
 
@@ -40,7 +109,9 @@ export const isRelatedModelDataValid = (d: AppDataComplete): boolean => {
     !d.issueProvider ||
     !d.reminders
   ) {
-    _validityError('Missing required model data in AppDataComplete', { d });
+    _validityError('Missing required model data in AppDataComplete', {
+      additionalInfoType: getValueType(d),
+    });
     return false;
   }
 
@@ -95,14 +166,10 @@ export const getLastValidityError = (): string | undefined => lastValidityError;
 
 const _validityError = (errTxt: string, additionalInfo?: unknown): void => {
   if (additionalInfo) {
-    OpLog.log('Validity Error Info: ', additionalInfo);
-    if (environment.production) {
-      try {
-        OpLog.log('Validity Error Info string: ', JSON.stringify(additionalInfo));
-      } catch (e) {
-        OpLog.warn('Failed to stringify validity error info:', e);
-      }
-    }
+    OP_LOG_SYNC_LOGGER.log('[is-related-model-data-valid] Validity error info', {
+      error: errTxt,
+      ...getValidityInfoMeta(additionalInfo),
+    });
   }
   if (errorCount <= 3) {
     devError(errTxt);
@@ -199,7 +266,7 @@ const validateTasksToProjectsAndTags = (
   for (const pid of d.project.ids) {
     const project = d.project.entities[pid];
     if (!project) {
-      _validityError('No project', { pid, d });
+      _validityError('No project', { pid });
       return false;
     }
 
@@ -214,15 +281,18 @@ const validateTasksToProjectsAndTags = (
     for (const tid of projectTaskSet) {
       const task = d.task.entities[tid];
       if (!task) {
-        _validityError(`Missing task data (tid: ${tid}) for Project ${project.title}`, {
-          project,
-          d,
+        _validityError('Missing task data for project', {
+          tid,
+          projectId: project.id,
         });
         return false;
       }
 
       if (task.projectId !== project.id) {
-        _validityError('Inconsistent task projectId', { task, project, d });
+        _validityError('Inconsistent task projectId', {
+          taskId: task.id,
+          projectId: project.id,
+        });
         return false;
       }
     }
@@ -232,20 +302,26 @@ const validateTasksToProjectsAndTags = (
   for (const tid of d.task.ids) {
     const task = d.task.entities[tid];
     if (!task) {
-      _validityError('Orphaned task ID in task.ids (no matching entity)', { tid, d });
+      _validityError('Orphaned task ID in task.ids (no matching entity)', { tid });
       return false;
     }
 
     // Check project reference
     if (task.projectId && !projectIds.has(task.projectId)) {
-      _validityError(`projectId ${task.projectId} from task not existing`, { task, d });
+      _validityError('projectId from task not existing', {
+        taskId: task.id,
+        projectId: task.projectId,
+      });
       return false;
     }
 
     // Check tag references
     for (const tagId of task.tagIds) {
       if (!tagIds.has(tagId)) {
-        _validityError(`tagId "${tagId}" from task not existing`, { task, d });
+        _validityError('tagId from task not existing', {
+          taskId: task.id,
+          tagId,
+        });
         return false;
       }
     }
@@ -255,8 +331,8 @@ const validateTasksToProjectsAndTags = (
       _validityError(
         `repeatCfgId "${task.repeatCfgId}" from task "${task.id}" not existing`,
         {
-          task,
-          d,
+          taskId: task.id,
+          repeatCfgId: task.repeatCfgId,
         },
       );
       return false;
@@ -264,7 +340,7 @@ const validateTasksToProjectsAndTags = (
 
     // Check if task has project or tag
     if (!task.parentId && !task.projectId && task.tagIds.length === 0) {
-      _validityError(`Task without project or tag`, { task, d });
+      _validityError(`Task without project or tag`, { taskId: task.id });
       return false;
     }
   }
@@ -299,10 +375,10 @@ const validateTasksToProjectsAndTags = (
 
     for (const tid of tag.taskIds) {
       if (!taskIds.has(tid)) {
-        _validityError(
-          `Inconsistent Task State: Missing task id ${tid} for Tag ${tag.title}`,
-          { tag, d },
-        );
+        _validityError(`Inconsistent Task State: Missing task id for tag`, {
+          tagId: tag.id,
+          tid,
+        });
         return false;
       }
     }
@@ -324,15 +400,18 @@ const validateNotes = (
     for (const nid of project.noteIds) {
       const note = d.note.entities[nid];
       if (!note) {
-        _validityError(`Missing note data (tid: ${nid}) for Project ${project.title}`, {
-          project,
-          d,
+        _validityError('Missing note data for project', {
+          nid,
+          projectId: project.id,
         });
         return false;
       }
 
       if (note.projectId !== project.id) {
-        _validityError('Inconsistent note projectId', { note, project, d });
+        _validityError('Inconsistent note projectId', {
+          nid: note.id,
+          projectId: project.id,
+        });
         return false;
       }
     }
@@ -343,7 +422,7 @@ const validateNotes = (
     if (!noteIds.has(nid)) {
       _validityError(
         `Inconsistent Note State: Missing note id ${nid} for note.todayOrder`,
-        { d },
+        { nid },
       );
       return false;
     }
@@ -366,8 +445,8 @@ const validateSubTasks = (
     // Check if parent exists
     if (task.parentId && !d.task.entities[task.parentId]) {
       _validityError(`Inconsistent Task State: Lonely Sub Task in Today ${task.id}`, {
-        task,
-        d,
+        taskId: task.id,
+        parentId: task.parentId,
       });
       return false;
     }
@@ -377,7 +456,7 @@ const validateSubTasks = (
       if (!d.task.entities[subId]) {
         _validityError(
           `Inconsistent Task State: Missing sub task data in today ${subId}`,
-          { task, d },
+          { taskId: task.id, subId },
         );
         return false;
       }
@@ -396,8 +475,8 @@ const validateSubTasks = (
           _validityError(
             `Inconsistent Task State: Lonely Sub Task in Archive ${task.id}`,
             {
-              task,
-              d,
+              taskId: task.id,
+              parentId: task.parentId,
             },
           );
           return false;
@@ -410,7 +489,7 @@ const validateSubTasks = (
           if (!d.archiveOld.task?.entities?.[subId]) {
             _validityError(
               `Inconsistent Task State: Missing sub task data in archive ${subId}`,
-              { task, d },
+              { taskId: task.id, subId },
             );
             return false;
           }
@@ -431,8 +510,8 @@ const validateSubTasks = (
           _validityError(
             `Inconsistent Task State: Lonely Sub Task in Old Archive ${task.id}`,
             {
-              task,
-              d,
+              taskId: task.id,
+              parentId: task.parentId,
             },
           );
           return false;
@@ -445,7 +524,7 @@ const validateSubTasks = (
           if (!d.archiveYoung.task?.entities?.[subId]) {
             _validityError(
               `Inconsistent Task State: Missing sub task data in old archive ${subId}`,
-              { task, d },
+              { taskId: task.id, subId },
             );
             return false;
           }
@@ -463,7 +542,7 @@ const validateIssueProviders = (d: AppDataComplete, projectIds: Set<string>): bo
     if (ip && ip.defaultProjectId && !projectIds.has(ip.defaultProjectId)) {
       _validityError(
         `defaultProjectId ${ip.defaultProjectId} from issueProvider not existing`,
-        { ip, d },
+        { ipId: ip.id, defaultProjectId: ip.defaultProjectId },
       );
       return false;
     }
@@ -489,7 +568,7 @@ const validateMenuTree = (
   ): boolean => {
     for (const node of nodes) {
       if (!node || typeof node !== 'object') {
-        _validityError(`Invalid menuTree node in ${treeType}`, { node, d });
+        _validityError(`Invalid menuTree node in ${treeType}`, { treeType });
         return false;
       }
 
@@ -497,16 +576,18 @@ const validateMenuTree = (
         // Validate folder structure
         if (!node.id || !node.name) {
           _validityError(`Invalid folder node in ${treeType} - missing id or name`, {
-            node,
-            d,
+            treeType,
+            id: node.id,
+            nodeKind: node.k,
           });
           return false;
         }
 
         if (!Array.isArray(node.children)) {
           _validityError(`Invalid folder node in ${treeType} - children not array`, {
-            node,
-            d,
+            treeType,
+            id: node.id,
+            nodeKind: node.k,
           });
           return false;
         }
@@ -518,33 +599,43 @@ const validateMenuTree = (
       } else if (treeType === 'projectTree' && node.k === MenuTreeKind.PROJECT) {
         // Validate project reference
         if (!node.id) {
-          _validityError(`Project node in menuTree missing id`, { node, d });
+          _validityError(`Project node in menuTree missing id`, {
+            treeType,
+            nodeKind: node.k,
+          });
           return false;
         }
 
         if (!projectIds.has(node.id)) {
           _validityError(
             `Orphaned project reference in menuTree - project ${node.id} doesn't exist`,
-            { node, treeType, d },
+            { id: node.id, treeType, nodeKind: node.k },
           );
           return false;
         }
       } else if (treeType === 'tagTree' && node.k === MenuTreeKind.TAG) {
         // Validate tag reference
         if (!node.id) {
-          _validityError(`Tag node in menuTree missing id`, { node, d });
+          _validityError(`Tag node in menuTree missing id`, {
+            treeType,
+            nodeKind: node.k,
+          });
           return false;
         }
 
         if (!tagIds.has(node.id)) {
           _validityError(
             `Orphaned tag reference in menuTree - tag ${node.id} doesn't exist`,
-            { node, treeType, d },
+            { id: node.id, treeType, nodeKind: node.k },
           );
           return false;
         }
       } else {
-        _validityError(`Invalid node kind in ${treeType}: ${node.k}`, { node, d });
+        _validityError(`Invalid node kind in ${treeType}`, {
+          treeType,
+          id: node.id,
+          nodeKind: node.k,
+        });
         return false;
       }
     }
@@ -554,7 +645,7 @@ const validateMenuTree = (
   // Validate projectTree
   if (d.menuTree?.projectTree) {
     if (!Array.isArray(d.menuTree.projectTree)) {
-      _validityError('menuTree.projectTree is not an array', { d });
+      _validityError('menuTree.projectTree is not an array');
       return false;
     }
     if (!validateTreeNodes(d.menuTree.projectTree, 'projectTree')) {
@@ -565,7 +656,7 @@ const validateMenuTree = (
   // Validate tagTree
   if (d.menuTree?.tagTree) {
     if (!Array.isArray(d.menuTree.tagTree)) {
-      _validityError('menuTree.tagTree is not an array', { d });
+      _validityError('menuTree.tagTree is not an array');
       return false;
     }
     if (!validateTreeNodes(d.menuTree.tagTree, 'tagTree')) {

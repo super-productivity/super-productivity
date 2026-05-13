@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
+import type { DeferredLocalActionsPort } from '@sp/sync-core';
 import { ALL_ACTIONS } from '../../util/local-actions.token';
 import { concatMap, filter } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
@@ -29,6 +30,7 @@ import { ImmediateUploadService } from '../sync/immediate-upload.service';
 import { getDeferredActions, isDeferredAction } from './operation-capture.meta-reducer';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { SuperSyncStatusService } from '../sync/super-sync-status.service';
+import { DateService } from '../../core/date/date.service';
 
 /**
  * NgRx Effects for persisting application state changes as operations to the
@@ -39,7 +41,7 @@ import { SuperSyncStatusService } from '../sync/super-sync-status.service';
  * are not re-logged.
  */
 @Injectable()
-export class OperationLogEffects {
+export class OperationLogEffects implements DeferredLocalActionsPort {
   private compactionFailures = 0;
   /** Circuit breaker: prevents recursive quota exceeded handling */
   private isHandlingQuotaExceeded = false;
@@ -62,6 +64,7 @@ export class OperationLogEffects {
   private operationCaptureService = inject(OperationCaptureService);
   private immediateUploadService = inject(ImmediateUploadService);
   private superSyncStatusService = inject(SuperSyncStatusService);
+  private dateService = inject(DateService);
 
   /**
    * Effect that persists local user actions to the operation log.
@@ -134,7 +137,7 @@ export class OperationLogEffects {
 
     // Extract payload (everything except type and meta)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { type, meta, ...actionPayload } = action;
+    const { type, meta, ...rawActionPayload } = action;
 
     // Use the action's declared opType from meta. We don't derive from entity changes because
     // some operations have different semantic meaning than their state changes suggest.
@@ -173,6 +176,13 @@ export class OperationLogEffects {
         // enqueueing — there's no matching queue entry to dequeue.
         const entityChanges = skipDequeue ? [] : this.operationCaptureService.dequeue();
 
+        const operationTimestamp = Date.now();
+        const actionPayload = this.addReplayDateFieldsToActionPayload(
+          action,
+          rawActionPayload,
+          operationTimestamp,
+        );
+
         // Create multi-entity payload with action payload and computed changes
         const multiEntityPayload: MultiEntityPayload = {
           actionPayload: actionPayload as Record<string, unknown>,
@@ -204,7 +214,7 @@ export class OperationLogEffects {
           payload: multiEntityPayload,
           clientId: clientId,
           vectorClock: newClock,
-          timestamp: Date.now(),
+          timestamp: operationTimestamp,
           schemaVersion: CURRENT_SCHEMA_VERSION,
         };
 
@@ -356,6 +366,50 @@ export class OperationLogEffects {
       );
     }
     return false;
+  }
+
+  private addReplayDateFieldsToActionPayload(
+    action: PersistentAction,
+    actionPayload: Record<string, unknown>,
+    operationTimestamp: number,
+  ): Record<string, unknown> {
+    if (action.type !== ActionType.TASK_SHARED_UPDATE) {
+      return actionPayload;
+    }
+
+    const task = actionPayload['task'];
+    if (typeof task !== 'object' || task === null) {
+      return actionPayload;
+    }
+
+    const taskUpdate = task as Record<string, unknown>;
+    const changes = taskUpdate['changes'];
+    if (typeof changes !== 'object' || changes === null) {
+      return actionPayload;
+    }
+
+    const taskChanges = changes as Record<string, unknown>;
+    if (taskChanges['isDone'] !== true) {
+      return actionPayload;
+    }
+
+    return {
+      ...actionPayload,
+      task: {
+        ...taskUpdate,
+        changes: {
+          ...taskChanges,
+          doneOn:
+            typeof taskChanges['doneOn'] === 'number'
+              ? taskChanges['doneOn']
+              : operationTimestamp,
+          dueDay:
+            typeof taskChanges['dueDay'] === 'string'
+              ? taskChanges['dueDay']
+              : this.dateService.todayStr(),
+        },
+      },
+    };
   }
 
   /**

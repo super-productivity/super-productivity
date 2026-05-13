@@ -257,6 +257,19 @@ export const taskReducer = createReducer<TaskState>(
         selectedTaskId: id,
       };
     }
+
+    const isExplicitTargetPanel =
+      !!taskDetailTargetPanel &&
+      taskDetailTargetPanel !== TaskDetailTargetPanel.Default &&
+      taskDetailTargetPanel !== TaskDetailTargetPanel.DONT_OPEN_PANEL;
+
+    if (id && id === state.selectedTaskId && isExplicitTargetPanel) {
+      return {
+        ...state,
+        taskDetailTargetPanel,
+      };
+    }
+
     return {
       ...state,
       taskDetailTargetPanel:

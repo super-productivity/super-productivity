@@ -6,11 +6,18 @@ import {
   deepEqual,
   extractEntityFromPayload as extractEntityFromPayloadCore,
   extractUpdateChanges as extractUpdateChangesCore,
+  getEntityConfig as getEntityConfigFromRegistry,
+  getPayloadKey as getPayloadKeyFromRegistry,
+  isAdapterEntity,
   isIdenticalConflict as isIdenticalConflictCore,
+  isArrayEntity,
+  isMapEntity,
+  isSingletonEntity,
   partitionLwwResolutions,
   planLwwConflictResolutions,
   suggestConflictResolution,
   type LwwResolvedConflict,
+  type SelectByIdFactory,
 } from '@sp/sync-core';
 import { Store } from '@ngrx/store';
 import {
@@ -41,16 +48,7 @@ import {
 } from '../../core/util/vector-clock';
 import { devError } from '../../util/dev-error';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
-import {
-  getEntityConfig,
-  getPayloadKey,
-  isAdapterEntity,
-  isSingletonEntity,
-  isSingletonEntityId,
-  isMapEntity,
-  isArrayEntity,
-} from '../core/entity-registry';
-import { selectIssueProviderById } from '../../features/issue/store/issue-provider.selectors';
+import { ENTITY_REGISTRY, isSingletonEntityId } from '../core/entity-registry';
 import { uuidv7 } from '../../util/uuid-v7';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { SYNC_LOGGER } from '../core/sync-logger.adapter';
@@ -96,6 +94,7 @@ export class ConflictResolutionService {
   private sessionValidation = inject(SyncSessionValidationService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
   private syncLogger = inject(SYNC_LOGGER);
+  private entityRegistry = inject(ENTITY_REGISTRY);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // LWW OPERATION FACTORY METHODS
@@ -739,7 +738,10 @@ export class ConflictResolutionService {
   }
 
   private _resolvePayloadKey(entityType: EntityType): string {
-    return getPayloadKey(entityType) || entityType.toLowerCase();
+    return (
+      getPayloadKeyFromRegistry(this.entityRegistry, entityType) ||
+      entityType.toLowerCase()
+    );
   }
 
   /**
@@ -777,7 +779,7 @@ export class ConflictResolutionService {
     entityType: EntityType,
     entityId: string,
   ): Promise<unknown> {
-    const config = getEntityConfig(entityType);
+    const config = getEntityConfigFromRegistry(this.entityRegistry, entityType);
     if (!config) {
       OpLog.warn(
         `ConflictResolutionService: No config for entity type ${entityType}, falling back to remote`,
@@ -788,11 +790,10 @@ export class ConflictResolutionService {
     try {
       // Adapter entities - use selectById
       if (isAdapterEntity(config) && config.selectById) {
-        // Special case: ISSUE_PROVIDER has a factory selector (id, key) => selector
+        // ISSUE_PROVIDER uses the registry's factory selector shape: (id, key) => selector.
         if (entityType === 'ISSUE_PROVIDER') {
-          return await firstValueFrom(
-            this.store.select(selectIssueProviderById(entityId, null)),
-          );
+          const selectById = config.selectById as SelectByIdFactory<null>;
+          return await firstValueFrom(this.store.select(selectById(entityId, null)));
         }
         // Standard props-based selector
         // TYPE ASSERTION: NgRx's MemoizedSelectorWithProps requires exact generic

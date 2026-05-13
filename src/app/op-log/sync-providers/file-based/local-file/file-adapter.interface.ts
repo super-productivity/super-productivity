@@ -1,7 +1,1 @@
-export interface FileAdapter {
-  readFile(filePath: string): Promise<string>;
-  writeFile(filePath: string, dataStr: string): Promise<void>;
-  deleteFile(filePath: string): Promise<void>;
-  checkDirExists?(dirPath: string): Promise<boolean>;
-  listFiles?(dirPath: string): Promise<string[]>;
-}
+export type { FileAdapter } from '@sp/sync-providers';

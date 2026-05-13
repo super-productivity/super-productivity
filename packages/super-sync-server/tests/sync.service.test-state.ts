@@ -19,3 +19,28 @@ export function resetTestState(): void {
   testState.users = new Map();
   testState.serverSeqCounter = 0;
 }
+
+export function applyOperationSelect(op: any, select?: Record<string, boolean>): any {
+  if (!op || !select) {
+    return op;
+  }
+
+  return Object.fromEntries(
+    Object.entries(select)
+      .filter(([, shouldSelect]) => shouldSelect)
+      .map(([key]) => [key, op[key]]),
+  );
+}
+
+export function hasOperationUniqueConflict(
+  operations: Map<string, any>,
+  row: any,
+): boolean {
+  return Array.from(operations.values()).some(
+    (op) =>
+      op.id === row.id ||
+      (op.userId === row.userId &&
+        row.serverSeq !== undefined &&
+        op.serverSeq === row.serverSeq),
+  );
+}

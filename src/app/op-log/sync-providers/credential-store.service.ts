@@ -1,4 +1,8 @@
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
+import type {
+  CredentialChangeHandler,
+  SyncCredentialStorePort,
+} from '@sp/sync-providers';
 import { SyncProviderId, PRIVATE_CFG_PREFIX } from './provider.const';
 import { PrivateCfgByProviderId } from '../core/types/sync.types';
 import { SyncLog } from '../../core/log';
@@ -30,10 +34,8 @@ interface SyncCredentialsDb extends DBSchema {
 /**
  * Callback type for configuration change notifications.
  */
-export type CredentialChangeCallback<PID extends SyncProviderId> = (data: {
-  providerId: PID;
-  privateCfg: PrivateCfgByProviderId<PID>;
-}) => void;
+export type CredentialChangeCallback<PID extends SyncProviderId> =
+  CredentialChangeHandler<PID, PrivateCfgByProviderId<PID>>;
 
 /**
  * Store for managing sync provider credentials.
@@ -52,7 +54,9 @@ export type CredentialChangeCallback<PID extends SyncProviderId> = (data: {
  * Credentials are stored with keys: `PRIVATE_CFG_PREFIX + providerId`
  * (e.g., `__sp_cred_Dropbox`)
  */
-export class SyncCredentialStore<PID extends SyncProviderId> {
+export class SyncCredentialStore<
+  PID extends SyncProviderId,
+> implements SyncCredentialStorePort<PID, PrivateCfgByProviderId<PID>> {
   private static readonly L = 'SyncCredentialStore';
 
   private readonly _dbKey: string;

@@ -1,9 +1,85 @@
 import { AppDataComplete } from '../model/model-config';
 import { IValidation } from 'typia';
+import type { SyncLogMeta } from '@sp/sync-core';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
-import { OpLog } from '../../core/log';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
+
+const LOG_PREFIX = '[auto-fix-typia-errors]';
+
+const getValueType = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+};
+
+const getValueLogMeta = (prefix: string, value: unknown): SyncLogMeta => ({
+  [`${prefix}Type`]: getValueType(value),
+  [`${prefix}StringLength`]: typeof value === 'string' ? value.length : undefined,
+  [`${prefix}ArrayLength`]: Array.isArray(value) ? value.length : undefined,
+  [`${prefix}KeyCount`]:
+    value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? Object.keys(value).length
+      : undefined,
+});
+
+const getPathRoot = (keys: (string | number)[]): string | undefined =>
+  typeof keys[0] === 'string' ? keys[0] : undefined;
+
+const getRepairLogMeta = (
+  path: string,
+  keys: (string | number)[],
+  fix: string,
+): SyncLogMeta => ({
+  path,
+  pathDepth: keys.length,
+  pathRoot: getPathRoot(keys),
+  fix,
+});
+
+const logAutoFixAttempt = (
+  error: IValidation.IError,
+  path: string,
+  keys: (string | number)[],
+  value: unknown,
+): void => {
+  OP_LOG_SYNC_LOGGER.err(`${LOG_PREFIX} Attempting validation auto-fix`, undefined, {
+    path,
+    pathDepth: keys.length,
+    pathRoot: getPathRoot(keys),
+    expected: error.expected,
+    ...getValueLogMeta('value', value),
+  });
+};
+
+const logAutoFixApplied = (
+  path: string,
+  keys: (string | number)[],
+  fix: string,
+  value: unknown,
+  replacement: unknown,
+): void => {
+  OP_LOG_SYNC_LOGGER.err(`${LOG_PREFIX} Applied validation auto-fix`, undefined, {
+    ...getRepairLogMeta(path, keys, fix),
+    ...getValueLogMeta('value', value),
+    ...getValueLogMeta('replacement', replacement),
+  });
+};
+
+const logAutoFixWarning = (
+  path: string,
+  keys: (string | number)[],
+  fix: string,
+  value: unknown,
+  replacement: unknown,
+): void => {
+  OP_LOG_SYNC_LOGGER.warn(`${LOG_PREFIX} Applied validation auto-fix`, {
+    ...getRepairLogMeta(path, keys, fix),
+    ...getValueLogMeta('value', value),
+    ...getValueLogMeta('replacement', replacement),
+  });
+};
 
 export const autoFixTypiaErrors = (
   data: AppDataComplete,
@@ -18,7 +94,7 @@ export const autoFixTypiaErrors = (
       const path = error.path.replace('$input.', '');
       const keys = parsePath(path);
       const value = getValueByPath(data, keys);
-      OpLog.err('Auto-fixing error:', error, keys, value);
+      logAutoFixAttempt(error, path, keys, value);
 
       if (
         error.expected.includes('number') &&
@@ -27,38 +103,35 @@ export const autoFixTypiaErrors = (
       ) {
         const parsedValue = parseFloat(value);
         setValueByPath(data, keys, parsedValue);
-        OpLog.err(`Fixed: ${path} from string "${value}" to number ${parsedValue}`);
+        logAutoFixApplied(path, keys, 'string-to-number', value, parsedValue);
       } else if (keys[0] === 'globalConfig') {
         const defaultValue = getValueByPath(DEFAULT_GLOBAL_CONFIG, keys.slice(1));
         setValueByPath(data, keys, defaultValue);
-        OpLog.warn(
-          `Warning: ${path} had an invalid value and was set to default: ${defaultValue}`,
-        );
+        logAutoFixWarning(path, keys, 'global-config-default', value, defaultValue);
       } else if (error.expected.includes('undefined') && value === null) {
         setValueByPath(data, keys, undefined);
-        OpLog.err(`Fixed: ${path} from null to undefined`);
+        logAutoFixApplied(path, keys, 'null-to-undefined', value, undefined);
       } else if (error.expected.includes('null') && value === 'null') {
         setValueByPath(data, keys, null);
-        OpLog.err(`Fixed: ${path} from string null to null`);
+        logAutoFixApplied(path, keys, 'string-null-to-null', value, null);
       } else if (error.expected.includes('undefined') && value === 'null') {
         setValueByPath(data, keys, undefined);
-        OpLog.err(`Fixed: ${path} from string null to null`);
+        logAutoFixApplied(path, keys, 'string-null-to-undefined', value, undefined);
       } else if (error.expected.includes('null') && value === undefined) {
         setValueByPath(data, keys, null);
-        OpLog.err(`Fixed: ${path} from undefined to null`);
+        logAutoFixApplied(path, keys, 'undefined-to-null', value, null);
       } else if (error.expected.includes('boolean') && !value) {
         setValueByPath(data, keys, false);
-        OpLog.err(`Fixed: ${path} to false (was ${value})`);
+        logAutoFixApplied(path, keys, 'falsey-to-false', value, false);
       } else if (keys[0] === 'task' && error.expected.includes('number')) {
         // If the value is a string that can be parsed to a number, parse it
         if (typeof value === 'string' && !isNaN(parseFloat(value))) {
-          setValueByPath(data, keys, parseFloat(value));
-          OpLog.err(
-            `Fixed: ${path} from string "${value}" to number ${parseFloat(value)}`,
-          );
+          const parsedValue = parseFloat(value);
+          setValueByPath(data, keys, parsedValue);
+          logAutoFixApplied(path, keys, 'task-string-to-number', value, parsedValue);
         } else {
           setValueByPath(data, keys, 0);
-          OpLog.err(`Fixed: ${path} to 0 (was ${value})`);
+          logAutoFixApplied(path, keys, 'task-number-default-zero', value, 0);
         }
       } else if (
         // Issue #7330: a TASK entity recreated from a partial LWW Update can
@@ -83,13 +156,16 @@ export const autoFixTypiaErrors = (
             ? INBOX_PROJECT.id
             : (Object.keys(projectEntities)[0] ?? INBOX_PROJECT.id);
           setValueByPath(data, keys, fallback);
-          OpLog.err(`Fixed: ${path} from undefined to "${fallback}" for task.projectId`);
+          logAutoFixApplied(path, keys, 'task-project-id-fallback', value, fallback);
         } else {
           const defaultValue = RECREATE_FALLBACK.TASK.defaults[field];
           setValueByPath(data, keys, defaultValue);
-          OpLog.err(
-            `Fixed: ${path} from undefined to ${JSON.stringify(defaultValue)} ` +
-              `for task.${field}`,
+          logAutoFixApplied(
+            path,
+            keys,
+            'task-required-field-default',
+            value,
+            defaultValue,
           );
         }
       } else if (
@@ -102,7 +178,7 @@ export const autoFixTypiaErrors = (
       ) {
         // Fix for issue #4593: simpleCounter countOnDay null value
         setValueByPath(data, keys, 0);
-        OpLog.err(`Fixed: ${path} from null to 0 for simpleCounter`);
+        logAutoFixApplied(path, keys, 'simple-counter-countOnDay-null-to-zero', value, 0);
       } else if (
         keys[0] === 'taskRepeatCfg' &&
         keys[1] === 'entities' &&
@@ -118,7 +194,13 @@ export const autoFixTypiaErrors = (
         const orderIndex = ids.indexOf(entityId);
         const orderValue = orderIndex >= 0 ? orderIndex : 0;
         setValueByPath(data, keys, orderValue);
-        OpLog.err(`Fixed: ${path} from null to ${orderValue} for taskRepeatCfg order`);
+        logAutoFixApplied(
+          path,
+          keys,
+          'task-repeat-cfg-order-null-to-index',
+          value,
+          orderValue,
+        );
       } else if (
         keys[0] === 'metric' &&
         keys[1] === 'entities' &&
@@ -131,7 +213,7 @@ export const autoFixTypiaErrors = (
         // Fix deprecated metric array fields (obstructions, improvements, improvementsTomorrow)
         // These fields are marked "TODO remove" and will be removed in future
         setValueByPath(data, keys, []);
-        OpLog.err(`Fixed: ${path} to empty array for deprecated metric field`);
+        logAutoFixApplied(path, keys, 'metric-deprecated-array-default', value, []);
       } else if (
         keys[0] === 'improvement' &&
         keys[1] === 'hiddenImprovementBannerItems' &&
@@ -139,7 +221,7 @@ export const autoFixTypiaErrors = (
       ) {
         // Fix improvement.hiddenImprovementBannerItems (deprecated)
         setValueByPath(data, keys, []);
-        OpLog.err(`Fixed: ${path} to empty array for deprecated improvement field`);
+        logAutoFixApplied(path, keys, 'improvement-deprecated-array-default', value, []);
       }
     }
   });
@@ -193,7 +275,6 @@ const setValueByPath = (
   value: unknown,
 ): void => {
   if (!Array.isArray(path) || path.length === 0) return;
-  OpLog.err('Auto-fixing error =>', path, value);
 
   let current: Record<string | number, unknown> = obj;
   for (let i = 0; i < path.length - 1; i++) {

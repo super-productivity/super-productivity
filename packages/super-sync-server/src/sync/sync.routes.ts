@@ -1,4 +1,11 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  type RequestPayload,
+  type preParsingHookHandler,
+} from 'fastify';
+import { Transform, type TransformCallback } from 'node:stream';
 import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
 import {
@@ -12,8 +19,11 @@ import { getWsConnectionService } from './services/websocket-connection.service'
 import { Logger } from '../logger';
 import { prisma } from '../db';
 import {
+  Operation,
+  ServerOperation,
   UploadOpsRequest,
   UploadOpsResponse,
+  UploadResult,
   DownloadOpsResponse,
   SnapshotResponse,
   SyncStatusResponse,
@@ -21,16 +31,31 @@ import {
 } from './sync.types';
 import {
   parseCompressedJsonBody,
+  isSingleTokenGzipEncoding,
+  normalizeContentEncoding,
   type CompressedJsonBodyParseResult,
 } from './compressed-body-parser';
+import { computeOpStorageBytes } from './sync.const';
+import { EncryptedOpsNotSupportedError } from './services/snapshot.service';
+
+type ZodIssue = z.ZodError['issues'][number];
+
+/**
+ * Static client-facing message for encrypted-op snapshot rejection.
+ * The thrown error's `message` contains the encrypted-op count and must
+ * NOT be echoed to the client (data-volume side-channel).
+ */
+const ENCRYPTED_OPS_CLIENT_MESSAGE =
+  'Server-side snapshot is unavailable because operations are end-to-end encrypted. ' +
+  'Use the client app\'s "Sync Now" button to decrypt and restore locally.';
 
 /**
  * Helper to create validation error response.
  * In production, hides detailed Zod error info to prevent schema leakage.
  */
 const createValidationErrorResponse = (
-  zodIssues: z.ZodIssue[],
-): { error: string; details?: z.ZodIssue[] } => {
+  zodIssues: ZodIssue[],
+): { error: string; details?: ZodIssue[] } => {
   if (process.env.NODE_ENV === 'production') {
     return { error: 'Validation failed' };
   }
@@ -46,11 +71,228 @@ const createValidationErrorResponse = (
 // - Snapshots can be larger for backup/repair imports
 const MAX_COMPRESSED_SIZE_OPS = 10 * 1024 * 1024; // 10MB for /ops
 const MAX_COMPRESSED_SIZE_SNAPSHOT = 30 * 1024 * 1024; // 30MB for /snapshot (matches bodyLimit)
-const MAX_DECOMPRESSED_SIZE = 100 * 1024 * 1024; // 100MB - catches malicious high-ratio compression
+// B9: per-endpoint decompressed caps. A blanket 100MB lets a 10MB gzip body
+// expand to 100MB of JSON.parse work, which stalls the event loop. Ops are
+// incremental so 30MB raw is plenty (matches the largest expected SYNC_IMPORT
+// op fanout); snapshots get 60MB to fit the 50MB cacheable cap plus headroom
+// for the JSON-vs-compressed ratio.
+const MAX_DECOMPRESSED_SIZE_OPS = 30 * 1024 * 1024; // 30MB for /ops
+const MAX_DECOMPRESSED_SIZE_SNAPSHOT = 60 * 1024 * 1024; // 60MB for /snapshot
+
+// Fastify's route bodyLimit runs before our parser can decode Android's
+// Content-Transfer-Encoding: base64 wrapper. Use the raw base64 envelope limit
+// at the HTTP layer, then enforce the true binary gzip limit in
+// parseCompressedJsonBody().
+const getMaxRawBodySizeForCompressedPayload = (maxCompressedSize: number): number =>
+  Math.ceil(maxCompressedSize / 3) * 4 + 4;
+const MAX_RAW_BODY_SIZE_OPS = getMaxRawBodySizeForCompressedPayload(
+  MAX_COMPRESSED_SIZE_OPS,
+);
+const MAX_RAW_BODY_SIZE_SNAPSHOT = getMaxRawBodySizeForCompressedPayload(
+  MAX_COMPRESSED_SIZE_SNAPSHOT,
+);
+
+type PayloadTooLargeError = Error & {
+  code: string;
+  statusCode: number;
+};
+
+const createPayloadTooLargeError = (limitBytes: number): PayloadTooLargeError =>
+  Object.assign(new Error(`Request body exceeded ${limitBytes} byte limit`), {
+    code: 'FST_ERR_CTP_BODY_TOO_LARGE',
+    statusCode: 413,
+  });
+
+const getHeaderString = (
+  value: string | string[] | number | undefined,
+): string | undefined => {
+  if (Array.isArray(value)) return value[0];
+  if (typeof value === 'number') return String(value);
+  return value;
+};
+
+const hasHeaderToken = (
+  value: string | string[] | number | undefined,
+  expectedToken: string,
+): boolean =>
+  getHeaderString(value)
+    ?.split(',')
+    .some((token) => token.trim().toLowerCase() === expectedToken) ?? false;
+
+const getParsedContentLength = (
+  value: string | string[] | number | undefined,
+): number | null => {
+  const contentLength = getHeaderString(value);
+  if (contentLength === undefined) return null;
+
+  const parsed = Number.parseInt(contentLength, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
+class RawBodyLimitTransform extends Transform {
+  receivedEncodedLength = 0;
+
+  constructor(private readonly limitBytes: number) {
+    super();
+  }
+
+  _transform(
+    chunk: Buffer | string,
+    encoding: BufferEncoding,
+    callback: TransformCallback,
+  ): void {
+    const chunkBytes = Buffer.isBuffer(chunk)
+      ? chunk.length
+      : Buffer.byteLength(chunk, encoding);
+    this.receivedEncodedLength += chunkBytes;
+
+    if (this.receivedEncodedLength > this.limitBytes) {
+      callback(createPayloadTooLargeError(this.limitBytes));
+      return;
+    }
+
+    callback(null, chunk);
+  }
+}
+
+const createRawBodyLimitPreParsingHook =
+  (maxCompressedSize: number, maxBase64RawSize: number): preParsingHookHandler =>
+  (
+    request: FastifyRequest,
+    _reply: FastifyReply,
+    payload: RequestPayload,
+    done,
+  ): void => {
+    const isBase64GzipRequest =
+      hasHeaderToken(request.headers['content-encoding'], 'gzip') &&
+      hasHeaderToken(request.headers['content-transfer-encoding'], 'base64');
+    const rawBodyLimit = isBase64GzipRequest ? maxBase64RawSize : maxCompressedSize;
+    const contentLength = getParsedContentLength(request.headers['content-length']);
+
+    if (contentLength !== null && contentLength > rawBodyLimit) {
+      done(createPayloadTooLargeError(rawBodyLimit));
+      return;
+    }
+
+    done(null, payload.pipe(new RawBodyLimitTransform(rawBodyLimit)));
+  };
 
 // Error helper
 const errorMessage = (err: unknown): string =>
   err instanceof Error ? err.message : 'Unknown error';
+
+/**
+ * Approximate on-disk byte cost of a set of operations, computed locally so
+ * the hot path never scans the operations table. Approximation ignores TOAST
+ * compression overhead and is used to size the pre-write quota gate.
+ *
+ * Delegates to the shared `computeOpStorageBytes` helper so the gate here and
+ * the in-transaction counter increment inside `uploadOps` cannot disagree on
+ * what "size" means. The `fallback` counter is the number of ops in this
+ * batch whose payload could not be JSON-serialized — kept so route callers
+ * can log how often unserializable ops are charged at APPROX_BYTES_PER_OP
+ * without ever logging op content.
+ */
+const computeOpsStorageBytes = (
+  ops: Array<{ id?: string; payload: unknown; vectorClock: unknown }>,
+): { bytes: number; fallback: number } => {
+  let bytes = 0;
+  let fallback = 0;
+  for (const op of ops) {
+    const sized = computeOpStorageBytes(op);
+    bytes += sized.bytes;
+    if (sized.fallback) fallback += 1;
+  }
+  return { bytes, fallback };
+};
+
+const computeJsonStorageBytes = (value: unknown, fallback: unknown): number => {
+  try {
+    return Buffer.byteLength(JSON.stringify(value ?? fallback), 'utf8');
+  } catch {
+    return 0;
+  }
+};
+
+const applyStorageUsageDelta = async (
+  userId: number,
+  deltaBytes: number,
+  context: string,
+): Promise<void> => {
+  if (!Number.isFinite(deltaBytes) || deltaBytes === 0) return;
+  const syncService = getSyncService();
+  try {
+    if (deltaBytes > 0) {
+      await syncService.incrementStorageUsage(userId, deltaBytes);
+    } else {
+      await syncService.decrementStorageUsage(userId, Math.abs(deltaBytes));
+    }
+  } catch (err) {
+    // Counter write failed AFTER the data write committed. The cached
+    // storage_used_bytes is now stale (low for increments, high for
+    // decrements). Mark the user for forced reconcile so the next quota
+    // check self-heals rather than waiting for daily cleanup.
+    syncService.markStorageNeedsReconcile(userId);
+    Logger.warn(
+      `[user:${userId}] Failed to update storage usage cache ${context}: ${errorMessage(err)}; marked for forced reconcile`,
+    );
+  }
+};
+
+const sendQuotaExceededReply = (
+  reply: FastifyReply,
+  body: {
+    storageUsedBytes: number;
+    storageQuotaBytes: number;
+    autoCleanupAttempted: boolean;
+    cleanupStats?: {
+      freedBytes: number;
+      deletedRestorePoints: number;
+      deletedOps: number;
+    };
+  },
+): FastifyReply =>
+  reply.status(413).send({
+    error: 'Storage quota exceeded',
+    errorCode: SYNC_ERROR_CODES.STORAGE_QUOTA_EXCEEDED,
+    ...body,
+  });
+
+type ExistingSyncImport = {
+  id: string;
+  clientId: string;
+};
+
+const findExistingSyncImport = async (
+  userId: number,
+): Promise<ExistingSyncImport | null> =>
+  prisma.operation.findFirst({
+    where: {
+      userId,
+      opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+    },
+    select: { id: true, clientId: true },
+  });
+
+const sendSyncImportExistsReply = (
+  reply: FastifyReply,
+  userId: number,
+  clientId: string,
+  existingImport: ExistingSyncImport,
+): FastifyReply => {
+  Logger.warn(
+    `[user:${userId}] Rejecting duplicate SYNC_IMPORT from client ${clientId}. ` +
+      `Existing import from client ${existingImport.clientId} (id: ${existingImport.id}). ` +
+      `Client should download and merge instead.`,
+  );
+  return reply.status(409).send({
+    error: 'SYNC_IMPORT_EXISTS',
+    errorCode: 'SYNC_IMPORT_EXISTS',
+    message:
+      'A SYNC_IMPORT already exists. Download existing data and upload your changes as regular operations.',
+    existingImportId: existingImport.id,
+  });
+};
 
 type CompressedJsonBodyParseFailure = Extract<
   CompressedJsonBodyParseResult,
@@ -61,6 +303,7 @@ interface CompressedBodyFailureLogOptions {
   payloadLabel: 'upload' | 'snapshot';
   decompressFailureLabel: 'ops upload' | 'snapshot';
   maxCompressedSize: number;
+  maxDecompressedSize: number;
 }
 
 const sendCompressedBodyParseFailure = (
@@ -75,11 +318,15 @@ const sendCompressedBodyParseFailure = (
     );
   } else if (failure.reason === 'decompressed-payload-too-large') {
     Logger.warn(
-      `[user:${userId}] Decompressed ${options.payloadLabel} too large: ${failure.decompressedSize} bytes (max ${MAX_DECOMPRESSED_SIZE})`,
+      `[user:${userId}] Decompressed ${options.payloadLabel} too large: ${failure.decompressedSize} bytes (max ${options.maxDecompressedSize})`,
     );
   } else if (failure.reason === 'decompress-failed') {
     Logger.warn(
       `[user:${userId}] Failed to decompress ${options.decompressFailureLabel}: ${errorMessage(failure.cause)}`,
+    );
+  } else if (failure.reason === 'invalid-json') {
+    Logger.warn(
+      `[user:${userId}] Decompressed ${options.decompressFailureLabel} is not valid JSON: ${errorMessage(failure.cause)}`,
     );
   }
 
@@ -92,25 +339,34 @@ const sendCompressedBodyParseFailure = (
  */
 async function enforceStorageQuota(
   userId: number,
-  payloadSize: number,
+  storageDeltaBytes: number,
   reply: FastifyReply,
 ): Promise<boolean> {
   const syncService = getSyncService();
-  let quotaCheck = await syncService.checkStorageQuota(userId, payloadSize);
+  let quotaCheck = await syncService.checkStorageQuota(userId, storageDeltaBytes);
   if (quotaCheck.allowed) return true;
 
-  // Cache might be stale - recalculate actual storage before taking action
+  // Cache miss path only — reconcile once before resorting to destructive
+  // cleanup. Safe to run the slow scan here because this branch only fires for
+  // users actually near quota (rare). The DoS came from running this on every
+  // upload success, not on quota misses. Also guards against pre-deploy stale
+  // counters where the old code's pg_column_size SUM left an inflated value.
   Logger.info(
-    `[user:${userId}] Quota check failed (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). Recalculating actual storage...`,
+    `[user:${userId}] Quota cache miss (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). Reconciling before cleanup...`,
   );
-  await syncService.updateStorageUsage(userId);
-  quotaCheck = await syncService.checkStorageQuota(userId, payloadSize);
-
-  if (quotaCheck.allowed) {
-    Logger.info(
-      `[user:${userId}] Quota OK after recalculation: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes`,
+  try {
+    await syncService.updateStorageUsage(userId);
+    quotaCheck = await syncService.checkStorageQuota(userId, storageDeltaBytes);
+    if (quotaCheck.allowed) {
+      Logger.info(
+        `[user:${userId}] Quota OK after reconcile: ${quotaCheck.currentUsage}/${quotaCheck.quota}`,
+      );
+      return true;
+    }
+  } catch (err) {
+    Logger.warn(
+      `[user:${userId}] Reconcile failed, proceeding with cleanup: ${errorMessage(err)}`,
     );
-    return true;
   }
 
   Logger.warn(
@@ -118,7 +374,7 @@ async function enforceStorageQuota(
   );
 
   // Iteratively delete old data until we have enough space
-  const cleanupResult = await syncService.freeStorageForUpload(userId, payloadSize);
+  const cleanupResult = await syncService.freeStorageForUpload(userId, storageDeltaBytes);
 
   if (cleanupResult.success) {
     Logger.info(
@@ -129,13 +385,11 @@ async function enforceStorageQuota(
   }
 
   // Truly out of space - return error
-  const finalQuota = await syncService.checkStorageQuota(userId, payloadSize);
+  const finalQuota = await syncService.checkStorageQuota(userId, storageDeltaBytes);
   Logger.warn(
     `[user:${userId}] Storage quota still exceeded after cleanup: ${finalQuota.currentUsage}/${finalQuota.quota} bytes`,
   );
-  reply.status(413).send({
-    error: 'Storage quota exceeded',
-    errorCode: SYNC_ERROR_CODES.STORAGE_QUOTA_EXCEEDED,
+  sendQuotaExceededReply(reply, {
     storageUsedBytes: finalQuota.currentUsage,
     storageQuotaBytes: finalQuota.quota,
     autoCleanupAttempted: true,
@@ -148,6 +402,27 @@ async function enforceStorageQuota(
   return false;
 }
 
+async function enforceCleanSlateStorageQuota(
+  userId: number,
+  finalStorageBytes: number,
+  reply: FastifyReply,
+): Promise<boolean> {
+  const syncService = getSyncService();
+  const storageInfo = await syncService.getStorageInfo(userId);
+  if (finalStorageBytes <= storageInfo.storageQuotaBytes) return true;
+
+  Logger.warn(
+    `[user:${userId}] Clean-slate snapshot exceeds quota: ` +
+      `${finalStorageBytes}/${storageInfo.storageQuotaBytes} bytes`,
+  );
+  sendQuotaExceededReply(reply, {
+    storageUsedBytes: 0,
+    storageQuotaBytes: storageInfo.storageQuotaBytes,
+    autoCleanupAttempted: false,
+  });
+  return false;
+}
+
 export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
   // Add content type parser for gzip-encoded JSON
   // This allows clients to send compressed request bodies with Content-Encoding: gzip
@@ -155,8 +430,22 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
     'application/json',
     { parseAs: 'buffer' },
     (req, body: Buffer, done) => {
-      const contentEncoding = req.headers['content-encoding'];
-      if (contentEncoding === 'gzip') {
+      // B10: normalize Content-Encoding so RFC-valid values like ' Gzip ' or
+      // arrays still hit the gzip branch.
+      const encoding = normalizeContentEncoding(req.headers['content-encoding']);
+      // W9: reject layered or non-gzip encodings with 415 Unsupported Media
+      // Type so clients (and operators) get a clear error rather than a
+      // misleading 400 invalid-json when we try to JSON.parse gzip bytes.
+      if (encoding.layered || (encoding.value !== '' && encoding.value !== 'gzip')) {
+        const err = new Error(
+          `Unsupported Content-Encoding: ${encoding.value || 'identity (with separators)'}. ` +
+            `Only single-token 'gzip' or identity is accepted.`,
+        ) as Error & { statusCode?: number };
+        err.statusCode = 415;
+        done(err, undefined);
+        return;
+      }
+      if (encoding.value === 'gzip') {
         // Return raw buffer for gzip - will be decompressed in route handler
         done(null, body);
       } else {
@@ -183,6 +472,14 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.post<{ Body: UploadOpsRequest }>(
     '/ops',
     {
+      // Cap raw request body at the base64 envelope of the binary gzip limit.
+      // `parseCompressedJsonBody` still enforces MAX_COMPRESSED_SIZE_OPS
+      // against decoded gzip bytes.
+      bodyLimit: MAX_RAW_BODY_SIZE_OPS,
+      preParsing: createRawBodyLimitPreParsingHook(
+        MAX_COMPRESSED_SIZE_OPS,
+        MAX_RAW_BODY_SIZE_OPS,
+      ),
       config: {
         rateLimit: {
           max: 100,
@@ -194,11 +491,12 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
       try {
         const userId = getAuthUser(req).userId;
 
-        // Support gzip-encoded uploads to save bandwidth
+        // Support gzip-encoded uploads to save bandwidth.
+        // B10: use the normalizing helper so RFC-valid mixed-case / padded
+        // values match. Layered encodings are rejected by the parser.
         let body: unknown = req.body;
-        const contentEncoding = req.headers['content-encoding'];
 
-        if (contentEncoding === 'gzip') {
+        if (isSingleTokenGzipEncoding(req.headers['content-encoding'])) {
           const contentTransferEncoding = req.headers['content-transfer-encoding'] as
             | string
             | undefined;
@@ -207,7 +505,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
             contentTransferEncoding,
             {
               maxCompressedSize: MAX_COMPRESSED_SIZE_OPS,
-              maxDecompressedSize: MAX_DECOMPRESSED_SIZE,
+              maxDecompressedSize: MAX_DECOMPRESSED_SIZE_OPS,
             },
           );
 
@@ -216,6 +514,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
               payloadLabel: 'upload',
               decompressFailureLabel: 'ops upload',
               maxCompressedSize: MAX_COMPRESSED_SIZE_OPS,
+              maxDecompressedSize: MAX_DECOMPRESSED_SIZE_OPS,
             });
           }
 
@@ -275,7 +574,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
             // The original response may have contained newOps that the client missed if the
             // network dropped the response. By using the CURRENT request's lastKnownServerSeq,
             // we ensure the client gets all ops it hasn't seen yet.
-            let newOps: import('./sync.types').ServerOperation[] | undefined;
+            let newOps: ServerOperation[] | undefined;
             let latestSeq: number;
             let hasMorePiggyback = false;
             const PIGGYBACK_LIMIT = 500;
@@ -286,6 +585,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
                 lastKnownServerSeq,
                 clientId,
                 PIGGYBACK_LIMIT,
+                false,
               );
               newOps = opsResult.ops;
               latestSeq = opsResult.latestSeq;
@@ -316,18 +616,41 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           }
         }
 
-        // Check storage quota before processing (after dedup to allow retries)
-        const payloadSize = JSON.stringify(body).length;
-        const quotaOk = await enforceStorageQuota(userId, payloadSize, reply);
-        if (!quotaOk) return;
-
-        // Process operations - cast to Operation[] since Zod validates the structure
-        const results = await syncService.uploadOps(
+        const results = await syncService.runWithStorageUsageLock<UploadResult[] | null>(
           userId,
-          clientId,
-          ops as unknown as import('./sync.types').Operation[],
-          isCleanSlate,
+          async () => {
+            // Check storage quota before processing (after dedup to allow retries).
+            // Account using the same per-op payload+vectorClock measure that the
+            // post-accept counter increment uses, so the gate and the increment
+            // cannot disagree on what "size" means.
+            const typedOpsForGate = ops as unknown as Operation[];
+            const { bytes: estimatedDelta, fallback: gateFallback } =
+              computeOpsStorageBytes(typedOpsForGate);
+            if (gateFallback > 0) {
+              Logger.warn(
+                `computeOpsStorageBytes: ${gateFallback}/${typedOpsForGate.length} unserializable op(s) ` +
+                  `charged at APPROX_BYTES_PER_OP for user=${userId} (gate)`,
+              );
+            }
+            const quotaOk = await enforceStorageQuota(userId, estimatedDelta, reply);
+            if (!quotaOk) return null;
+
+            // Process operations - cast to Operation[] since Zod validates the structure.
+            // `uploadOps` now writes `users.storage_used_bytes` atomically inside
+            // its own `$transaction` (see B3 / wave-1 commit 9af17e460e), so the
+            // route MUST NOT also apply a post-commit delta — that would
+            // double-count the same accepted ops.
+            const uploadResults = await syncService.uploadOps(
+              userId,
+              clientId,
+              ops as unknown as Operation[],
+              isCleanSlate,
+            );
+
+            return uploadResults;
+          },
         );
+        if (!results) return;
 
         // Cache results for deduplication if requestId was provided
         if (requestId) {
@@ -347,13 +670,8 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           );
         }
 
-        // Update storage usage after successful operations
-        if (accepted > 0) {
-          await syncService.updateStorageUsage(userId);
-        }
-
         // Optionally include new ops from other clients (with atomic latestSeq read)
-        let newOps: import('./sync.types').ServerOperation[] | undefined;
+        let newOps: ServerOperation[] | undefined;
         let latestSeq: number;
         let hasMorePiggyback = false;
         const PIGGYBACK_LIMIT = 500;
@@ -365,6 +683,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
             lastKnownServerSeq,
             clientId,
             PIGGYBACK_LIMIT,
+            false,
           );
           newOps = opsResult.ops;
           latestSeq = opsResult.latestSeq;
@@ -517,10 +836,39 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const syncService = getSyncService();
 
         Logger.info(`[user:${userId}] Snapshot requested`);
-        const snapshot = await syncService.generateSnapshot(userId);
+        // B5: Cap cache growth at the user's remaining quota so a client
+        // already at/near quota cannot use GET /snapshot to keep growing
+        // `snapshotData`. Uses the cheap cached counter — if it's stale-high
+        // we may skip a cache write that would have fit; the snapshot itself
+        // is still returned to the client either way. The post-write hook
+        // keeps the counter consistent with what actually landed on disk.
+        const storageInfo = await syncService.getStorageInfo(userId);
+        const remainingQuota = Math.max(
+          0,
+          storageInfo.storageQuotaBytes - storageInfo.storageUsedBytes,
+        );
+        // Keep the storage counter in sync with snapshotData rewrites; without
+        // this hook GET /snapshot can grow up to MAX_SNAPSHOT_SIZE_BYTES of
+        // cached data with no quota accounting.
+        const snapshot = await syncService.generateSnapshot(
+          userId,
+          (deltaBytes) =>
+            applyStorageUsageDelta(userId, deltaBytes, 'after generateSnapshot'),
+          remainingQuota,
+        );
         Logger.info(`[user:${userId}] Snapshot ready (seq=${snapshot.serverSeq})`);
         return reply.send(snapshot as SnapshotResponse);
       } catch (err) {
+        if (err instanceof EncryptedOpsNotSupportedError) {
+          Logger.info(
+            `[user:${getAuthUser(req).userId}] Snapshot blocked due to encrypted ops (count=${err.encryptedOpCount})`,
+          );
+          return reply.status(400).send({
+            error: ENCRYPTED_OPS_CLIENT_MESSAGE,
+            errorCode: SYNC_ERROR_CODES.ENCRYPTED_OPS_NOT_SUPPORTED,
+          });
+        }
+
         Logger.error(`Get snapshot error: ${errorMessage(err)}`);
         return reply.status(500).send({ error: 'Internal server error' });
       }
@@ -529,20 +877,37 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
   // POST /api/sync/snapshot - Upload full state
   // Supports gzip-compressed request bodies via Content-Encoding: gzip header
+  // B8: per-user rate limit — uploads are expensive (up to 30MB body,
+  // `prepareSnapshotCache` zlib + JSON.stringify, full-state op replay).
+  // 10/15 min matches the other write-heavy operations (DELETE /data,
+  // /restore/:seq) so burst-uploads can't pin a worker.
   fastify.post<{ Body: unknown }>(
     '/snapshot',
     {
-      bodyLimit: 30 * 1024 * 1024, // 30MB - needed for backup/repair imports
+      bodyLimit: MAX_RAW_BODY_SIZE_SNAPSHOT,
+      preParsing: createRawBodyLimitPreParsingHook(
+        MAX_COMPRESSED_SIZE_SNAPSHOT,
+        MAX_RAW_BODY_SIZE_SNAPSHOT,
+      ),
+      config: {
+        // B8: snapshot uploads are heavy (full state replay + cache write).
+        // Match the backup/repair-import budget.
+        rateLimit: {
+          max: 10,
+          timeWindow: '15 minutes',
+        },
+      },
     },
     async (req: FastifyRequest<{ Body: unknown }>, reply: FastifyReply) => {
       try {
         const userId = getAuthUser(req).userId;
 
-        // Handle gzip-compressed request body
+        // Handle gzip-compressed request body.
+        // B10: use the normalizing helper so RFC-valid mixed-case / padded
+        // values match. Layered encodings are rejected by the parser.
         let body: unknown = req.body;
-        const contentEncoding = req.headers['content-encoding'];
 
-        if (contentEncoding === 'gzip') {
+        if (isSingleTokenGzipEncoding(req.headers['content-encoding'])) {
           const contentTransferEncoding = req.headers['content-transfer-encoding'] as
             | string
             | undefined;
@@ -551,7 +916,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
             contentTransferEncoding,
             {
               maxCompressedSize: MAX_COMPRESSED_SIZE_SNAPSHOT,
-              maxDecompressedSize: MAX_DECOMPRESSED_SIZE,
+              maxDecompressedSize: MAX_DECOMPRESSED_SIZE_SNAPSHOT,
             },
           );
 
@@ -560,6 +925,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
               payloadLabel: 'snapshot',
               decompressFailureLabel: 'snapshot',
               maxCompressedSize: MAX_COMPRESSED_SIZE_SNAPSHOT,
+              maxDecompressedSize: MAX_DECOMPRESSED_SIZE_SNAPSHOT,
             });
           }
 
@@ -595,41 +961,46 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         } = parseResult.data;
         const syncService = getSyncService();
 
-        // Check storage quota before processing
-        const payloadSize = JSON.stringify(body).length;
-        const quotaOk = await enforceStorageQuota(userId, payloadSize, reply);
-        if (!quotaOk) return;
+        // Cheap pre-quota gate BEFORE prepareSnapshotCache so quota-exhausted
+        // clients can't burn CPU on JSON.stringify + zlib.gzipSync. Uses only
+        // the cached counter; if it says we're already at quota, reconcile
+        // once before rejecting — a stale-high counter would otherwise lock
+        // out a user whose new snapshot would actually shrink storage. Skip
+        // for clean-slate which wipes existing usage.
+        if (!isCleanSlate) {
+          let cachedInfo = await syncService.getStorageInfo(userId);
+          if (cachedInfo.storageUsedBytes >= cachedInfo.storageQuotaBytes) {
+            try {
+              await syncService.updateStorageUsage(userId);
+              cachedInfo = await syncService.getStorageInfo(userId);
+            } catch (err) {
+              Logger.warn(
+                `[user:${userId}] Snapshot pre-gate reconcile failed: ${errorMessage(err)}`,
+              );
+            }
+            if (cachedInfo.storageUsedBytes >= cachedInfo.storageQuotaBytes) {
+              return sendQuotaExceededReply(reply, {
+                storageUsedBytes: cachedInfo.storageUsedBytes,
+                storageQuotaBytes: cachedInfo.storageQuotaBytes,
+                autoCleanupAttempted: false,
+              });
+            }
+          }
+        }
 
-        // FIX: Reject duplicate SYNC_IMPORT to prevent data loss
-        // Only the FIRST client to sync with an empty server should create SYNC_IMPORT.
-        // Subsequent clients should download existing data and upload their ops as regular ops.
+        // Reject duplicate SYNC_IMPORT before we acquire the per-user lock — a
+        // duplicate rejection is cheap (one indexed lookup) and skipping the
+        // lock lets concurrent legitimate clients keep moving.
         // Exceptions that bypass this check:
         // - 'recovery': Explicit backup restore or repair (user action)
         // - 'migration': Legacy data migration (should be allowed to override)
         // - 'isCleanSlate': Password change or explicit clean slate request
         // Only 'initial' (first-time server migration) should be rejected if one exists.
         if (reason === 'initial' && !isCleanSlate) {
-          const existingImport = await prisma.operation.findFirst({
-            where: {
-              userId,
-              opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
-            },
-            select: { id: true, clientId: true },
-          });
+          const existingImport = await findExistingSyncImport(userId);
 
           if (existingImport) {
-            Logger.warn(
-              `[user:${userId}] Rejecting duplicate SYNC_IMPORT from client ${clientId}. ` +
-                `Existing import from client ${existingImport.clientId} (id: ${existingImport.id}). ` +
-                `Client should download and merge instead.`,
-            );
-            return reply.status(409).send({
-              error: 'SYNC_IMPORT_EXISTS',
-              errorCode: 'SYNC_IMPORT_EXISTS',
-              message:
-                'A SYNC_IMPORT already exists. Download existing data and upload your changes as regular operations.',
-              existingImportId: existingImport.id,
-            });
+            return sendSyncImportExistsReply(reply, userId, clientId, existingImport);
           }
         }
 
@@ -654,15 +1025,99 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           syncImportReason,
         };
 
-        const results = await syncService.uploadOps(userId, clientId, [op], isCleanSlate);
-        const result = results[0];
+        const preparedSnapshot = await syncService.prepareSnapshotCache(state);
+        const estimatedOpStorageBytes =
+          preparedSnapshot.stateBytes + computeJsonStorageBytes(op.vectorClock, {});
 
-        if (result.accepted && result.serverSeq !== undefined) {
-          // Cache the snapshot
-          await syncService.cacheSnapshot(userId, state, result.serverSeq);
-          // Update storage usage
-          await syncService.updateStorageUsage(userId);
-        }
+        const result = await syncService.runWithStorageUsageLock<UploadResult | null>(
+          userId,
+          async () => {
+            if (reason === 'initial' && !isCleanSlate) {
+              const existingImport = await findExistingSyncImport(userId);
+
+              if (existingImport) {
+                sendSyncImportExistsReply(reply, userId, clientId, existingImport);
+                return null;
+              }
+            }
+
+            // Check storage quota before processing. For clean-slate uploads, use a
+            // zero-current-usage baseline because uploadOps will wipe existing data
+            // and reset storageUsedBytes inside its transaction. For regular
+            // snapshots, include the operation payload plus the cached snapshot
+            // replacement delta; checking only the request body can under-count by
+            // nearly 2x because the server stores both the op and snapshot cache.
+            if (isCleanSlate) {
+              const finalStorageBytes =
+                estimatedOpStorageBytes +
+                (preparedSnapshot.cacheable ? preparedSnapshot.bytes : 0);
+              const quotaOk = await enforceCleanSlateStorageQuota(
+                userId,
+                finalStorageBytes,
+                reply,
+              );
+              if (!quotaOk) return null;
+            } else {
+              // Encrypted ops never use the server snapshot cache (server can't
+              // decrypt), so the cache delta is exactly zero for them. For
+              // unencrypted ops, the eventual cacheSnapshot call either writes
+              // the new blob (delta = newBytes - previousBytes) or clears the
+              // stale cache when the snapshot is too large to cache
+              // (delta = -previousBytes). Both deltas accurately reflect the
+              // on-disk change because the op-row is always counted via
+              // estimatedOpStorageBytes.
+              let estimatedSnapshotCacheDelta = 0;
+              if (!op.isPayloadEncrypted) {
+                const previousSnapshotBytes =
+                  await syncService.getCachedSnapshotBytes(userId);
+                estimatedSnapshotCacheDelta = preparedSnapshot.cacheable
+                  ? preparedSnapshot.bytes - previousSnapshotBytes
+                  : -previousSnapshotBytes;
+              }
+              const additionalBytes =
+                estimatedOpStorageBytes + estimatedSnapshotCacheDelta;
+              const quotaOk = await enforceStorageQuota(userId, additionalBytes, reply);
+              if (!quotaOk) return null;
+            }
+
+            const results = await syncService.uploadOps(
+              userId,
+              clientId,
+              [op],
+              isCleanSlate,
+            );
+            const uploadResult = results[0];
+
+            if (uploadResult.accepted && uploadResult.serverSeq !== undefined) {
+              // Cache the snapshot — but only if the payload is server-replayable.
+              // Encrypted snapshots remain available as ops but can't back
+              // server-side restore, so we skip caching their blob.
+              const cacheResult = await syncService.cacheSnapshotIfReplayable(
+                userId,
+                state,
+                uploadResult.serverSeq,
+                op.isPayloadEncrypted,
+                preparedSnapshot,
+              );
+              // The op-row portion (payload + vectorClock) is now accounted
+              // inside `uploadOps`'s `$transaction` (B3 / wave-1 commit
+              // 9af17e460e). Apply only the snapshot-cache delta here —
+              // `cacheResult` is null for encrypted snapshots (no cache) and
+              // has `deltaBytes = 0` when the race was lost.
+              const cacheDeltaBytes = cacheResult?.deltaBytes ?? 0;
+              if (cacheDeltaBytes !== 0) {
+                await applyStorageUsageDelta(
+                  userId,
+                  cacheDeltaBytes,
+                  'after snapshot cache write',
+                );
+              }
+            }
+
+            return uploadResult;
+          },
+        );
+        if (!result) return;
 
         Logger.info(`Snapshot uploaded for user ${userId}, reason: ${reason}`);
 
@@ -834,6 +1289,16 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         return reply.send(snapshot);
       } catch (err) {
+        // Handle encrypted ops error - this is a known limitation, not a server error
+        if (err instanceof EncryptedOpsNotSupportedError) {
+          Logger.info(
+            `[user:${getAuthUser(req).userId}] Restore blocked due to encrypted ops (count=${err.encryptedOpCount})`,
+          );
+          return reply.status(400).send({
+            error: ENCRYPTED_OPS_CLIENT_MESSAGE,
+            errorCode: SYNC_ERROR_CODES.ENCRYPTED_OPS_NOT_SUPPORTED,
+          });
+        }
         const message = errorMessage(err);
         if (
           message.includes('exceeds latest sequence') ||
@@ -843,16 +1308,6 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
             `[user:${getAuthUser(req).userId}] Invalid restore request: ${message}`,
           );
           return reply.status(400).send({ error: message });
-        }
-        // Handle encrypted ops error - this is a known limitation, not a server error
-        if (message.includes('ENCRYPTED_OPS_NOT_SUPPORTED')) {
-          Logger.info(
-            `[user:${getAuthUser(req).userId}] Restore blocked due to encrypted ops`,
-          );
-          return reply.status(400).send({
-            error: message,
-            errorCode: SYNC_ERROR_CODES.ENCRYPTED_OPS_NOT_SUPPORTED,
-          });
         }
         Logger.error(`Get restore snapshot error: ${message}`);
         return reply.status(500).send({ error: 'Internal server error' });

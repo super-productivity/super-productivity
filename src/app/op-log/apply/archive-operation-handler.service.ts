@@ -1,5 +1,6 @@
 import { inject, Injectable, Injector } from '@angular/core';
 import { Action } from '@ngrx/store';
+import type { ArchiveSideEffectPort } from '@sp/sync-core';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
@@ -101,7 +102,7 @@ export const isArchiveAffectingAction = (action: Action): action is PersistentAc
 @Injectable({
   providedIn: 'root',
 })
-export class ArchiveOperationHandler {
+export class ArchiveOperationHandler implements ArchiveSideEffectPort<PersistentAction> {
   // ═══════════════════════════════════════════════════════════════════════════
   // DEPENDENCY INJECTION NOTES
   // ═══════════════════════════════════════════════════════════════════════════
