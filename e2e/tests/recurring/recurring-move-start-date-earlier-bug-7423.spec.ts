@@ -26,7 +26,7 @@ const FIXED_TODAY = new Date('2026-05-01T10:00:00');
 const openRecurDialog = async (page: Page): Promise<Locator> => {
   const recurItem = page
     .locator('task-detail-item')
-    .filter({ has: page.locator('mat-icon[svgIcon="repeat"]') });
+    .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
   await expect(recurItem).toBeVisible({ timeout: 5000 });
   await recurItem.click();
   const dialog = page.locator('mat-dialog-container');
