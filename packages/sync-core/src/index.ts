@@ -21,23 +21,10 @@ export type { VectorClockComparison } from './vector-clock';
 
 // Full-state import clean-slate vector-clock decisions.
 export { classifyOpAgainstSyncImport } from './sync-import-filter';
-export type {
-  SyncImportFilterClockSource,
-  SyncImportFilterDecision,
-  SyncImportFilterDecisionReason,
-  SyncImportFilterInvalidateReason,
-  SyncImportFilterKeepReason,
-} from './sync-import-filter';
 
 // Host-configured sync file prefix helpers.
-export {
-  createSyncFilePrefixHelpers,
-  SyncFilePrefixError,
-  SyncFilePrefixVersionError,
-} from './sync-file-prefix';
+export { createSyncFilePrefixHelpers } from './sync-file-prefix';
 export type {
-  SyncFilePrefixConfig,
-  SyncFilePrefixHelpers,
   SyncFilePrefixInvalidPrefixDetails,
   SyncFilePrefixParams,
   SyncFilePrefixParamsOutput,
@@ -48,12 +35,7 @@ export {
   compressWithGzip,
   compressWithGzipToString,
   decompressGzipFromString,
-  sanitizeBase64,
-  CompressionApiUnavailableError,
-  GzipCompressError,
-  GzipDecompressError,
 } from './compression';
-export type { GzipCompressionLogMessages, GzipCompressionOptions } from './compression';
 
 // Encryption primitives — Argon2id KDF + AES-GCM, Web Crypto with @noble fallback.
 // See packages/sync-core/src/encryption.ts for the wire-format contract and
@@ -97,18 +79,12 @@ export type { LwwUpdateActionTypeHelpers } from './lww-update-action-types';
 export type { ApplyOperationsResult, ApplyOperationsOptions } from './apply.types';
 
 // Generic operation replay coordinator.
-export { replayOperationBatch, yieldToEventLoop } from './replay-coordinator';
-export type {
-  OperationReplayArchiveFailureContext,
-  OperationReplayCoordinatorOptions,
-} from './replay-coordinator';
+export { replayOperationBatch } from './replay-coordinator';
 
 // Remote operation application coordinator.
 export { applyRemoteOperations } from './remote-apply';
 export type {
   ApplyRemoteOperationsOptions,
-  RemoteApplyOperationsResult,
-  RemoteOperationAppendResult,
   RemoteOperationApplyStorePort,
 } from './remote-apply';
 
@@ -116,13 +92,6 @@ export type {
 export {
   planRegularOpsAfterFullStateUpload,
   planUploadLastServerSeqUpdate,
-} from './upload-planning';
-export type {
-  PlanRegularOpsAfterFullStateUploadOptions,
-  PlanUploadLastServerSeqUpdateOptions,
-  RegularOpsAfterFullStateUploadPlan,
-  UploadLastServerSeqUpdatePlan,
-  UploadLastServerSeqUpdateReason,
 } from './upload-planning';
 
 // Download planning helpers.
@@ -132,25 +101,12 @@ export {
   planDownloadedDataEncryptionState,
   planSnapshotHydration,
 } from './download-planning';
-export type {
-  DownloadFullStateUploadPlan,
-  DownloadFullStateUploadReason,
-  DownloadGapResetPlan,
-  PlanDownloadFullStateUploadOptions,
-  PlanDownloadGapResetOptions,
-  PlanDownloadedDataEncryptionStateOptions,
-  PlanSnapshotHydrationOptions,
-  SnapshotHydrationPlan,
-  SnapshotHydrationPlanReason,
-} from './download-planning';
 
 // Port contracts for app-side orchestration adapters.
 export type {
   ActionDispatchPort,
   ArchiveSideEffectPort,
   ConflictUiDialogRequest,
-  ConflictUiNotification,
-  ConflictUiNotificationSeverity,
   ConflictUiPort,
   DeferredLocalActionsPort,
   OperationApplyPort,
@@ -159,7 +115,6 @@ export type {
   SyncActionLike,
   SyncConfigPort,
   SyncConfigSnapshot,
-  SyncPortMeta,
 } from './ports';
 
 // Conflict-resolution helpers.
@@ -176,19 +131,9 @@ export {
   suggestConflictResolution,
 } from './conflict-resolution';
 export type {
-  ClockCorruptionAdjustmentOptions,
   ConflictResolutionSuggestion,
-  DeepEqualOptions,
   EntityConflictLike,
-  EntityFrontierContext,
-  LocalDeleteRemoteUpdateConversionOptions,
   LwwConflictResolutionPlan,
-  LwwConflictResolutionPlanningOptions,
-  LwwConflictResolutionReason,
-  LwwConflictResolutionWinner,
-  LwwLocalWinOperationKind,
-  LwwResolutionPartitionOptions,
-  LwwResolutionPartitions,
   LwwResolvedConflict,
 } from './conflict-resolution';
 
