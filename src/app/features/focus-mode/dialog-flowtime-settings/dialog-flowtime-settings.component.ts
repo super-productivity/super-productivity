@@ -106,6 +106,7 @@ export class DialogFlowtimeSettingsComponent {
       key: 'breakMode',
       type: 'select',
       expressions: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         'props.disabled': this._disabledWhenBreaksOff,
       },
       props: {
@@ -126,6 +127,7 @@ export class DialogFlowtimeSettingsComponent {
       key: 'breakPercentage',
       type: 'input',
       expressions: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         'props.disabled': this._disabledWhenBreaksOff,
         hide: (field: FormlyFieldConfig) => field.parent?.model?.breakMode !== 'ratio',
       },
@@ -175,6 +177,7 @@ export class DialogFlowtimeSettingsComponent {
             key: 'minDuration',
             type: 'input',
             expressions: {
+              // eslint-disable-next-line @typescript-eslint/naming-convention
               'props.disabled': this._disabledWhenBreaksOff,
             },
             props: {
@@ -189,6 +192,7 @@ export class DialogFlowtimeSettingsComponent {
             key: 'maxDuration',
             type: 'input',
             expressions: {
+              // eslint-disable-next-line @typescript-eslint/naming-convention
               'props.disabled': this._disabledWhenBreaksOff,
             },
             props: {
@@ -202,6 +206,7 @@ export class DialogFlowtimeSettingsComponent {
             key: 'breakDuration',
             type: 'input',
             expressions: {
+              // eslint-disable-next-line @typescript-eslint/naming-convention
               'props.disabled': this._disabledWhenBreaksOff,
             },
             props: {
