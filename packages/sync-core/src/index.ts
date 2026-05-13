@@ -1,5 +1,11 @@
 // Operation log primitives — the generic, app-agnostic core of the sync engine.
-export { OpType, isMultiEntityPayload, extractActionPayload } from './operation.types';
+export {
+  OpType,
+  isMultiEntityPayload,
+  extractActionPayload,
+  extractEntityFromPayload,
+  extractUpdateChanges,
+} from './operation.types';
 export type {
   VectorClock,
   Operation,
@@ -116,12 +122,8 @@ export type {
 
 // Conflict-resolution helpers.
 export {
-  adjustForClockCorruption,
-  buildEntityFrontier,
   convertLocalDeleteRemoteUpdatesToLww,
   deepEqual,
-  extractEntityFromPayload,
-  extractUpdateChanges,
   isIdenticalConflict,
   partitionLwwResolutions,
   planLwwConflictResolutions,
@@ -133,6 +135,9 @@ export type {
   LwwConflictResolutionPlan,
   LwwResolvedConflict,
 } from './conflict-resolution';
+
+// Entity-frontier and clock-corruption helpers (per-entity vector-clock domain).
+export { adjustForClockCorruption, buildEntityFrontier } from './entity-frontier';
 
 // Entity-registry contracts.
 export {

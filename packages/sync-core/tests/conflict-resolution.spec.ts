@@ -1,17 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  adjustForClockCorruption,
-  buildEntityFrontier,
   convertLocalDeleteRemoteUpdatesToLww,
   deepEqual,
-  extractEntityFromPayload,
-  extractUpdateChanges,
   isIdenticalConflict,
   partitionLwwResolutions,
   planLwwConflictResolutions,
   suggestConflictResolution,
 } from '../src/conflict-resolution';
-import { OpType } from '../src/operation.types';
+import { adjustForClockCorruption, buildEntityFrontier } from '../src/entity-frontier';
+import {
+  extractEntityFromPayload,
+  extractUpdateChanges,
+  OpType,
+} from '../src/operation.types';
 import type { EntityConflict, Operation } from '../src/operation.types';
 import type { SyncLogger } from '../src/sync-logger';
 
