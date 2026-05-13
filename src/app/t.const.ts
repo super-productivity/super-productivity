@@ -2351,6 +2351,7 @@ const T = {
       TITLE: 'GCF.LANG.TITLE',
       TR: 'GCF.LANG.TR',
       UK: 'GCF.LANG.UK',
+      VI: 'GCF.LANG.VI',
       ZH: 'GCF.LANG.ZH',
       ZH_TW: 'GCF.LANG.ZH_TW',
     },
