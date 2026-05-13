@@ -178,8 +178,6 @@ describe('PluginRunner', () => {
 
   describe('triggerReady()', () => {
     it('should call _triggerReady on the loaded plugin API', async () => {
-      const readySpy = jasmine.createSpy('readyFn').and.resolveTo();
-      const pluginCode = `plugin.onReady(${readySpy.toString()})`;
       // Use a simple no-op that registers onReady
       const code = `plugin.onReady(async () => {});`;
       await service.loadPlugin(mockManifest, code, mockBaseCfg);

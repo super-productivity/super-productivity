@@ -2,7 +2,7 @@
  * Focused tests for plugin consent persistence and startup permission check.
  * These test the private methods indirectly via spies on PluginMetaPersistenceService.
  */
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { fakeAsync, tick } from '@angular/core/testing';
 import { PluginMetaPersistenceService } from './plugin-meta-persistence.service';
 
 // Minimal stub — we only need to verify setNodeExecutionConsent is called immediately
@@ -25,10 +25,8 @@ describe('Plugin consent persistence (issue #7326)', () => {
 
   it('consent write should not be deferred via setTimeout', fakeAsync(() => {
     // Simulate the fixed code path: direct await, no setTimeout
-    let written = false;
     const writeConsent = async (): Promise<void> => {
       await mockMetaPersistence.setNodeExecutionConsent('test-plugin', true);
-      written = true;
     };
 
     writeConsent();
