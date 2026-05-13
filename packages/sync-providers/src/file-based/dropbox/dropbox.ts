@@ -129,21 +129,13 @@ export class Dropbox implements FileSyncProvider<
     localRev: string | null,
   ): Promise<{ rev: string }> {
     try {
-      const r = await this._api.getMetaData(
-        this._getPath(targetPath),
-        localRev,
-        targetPath,
+      const r = await this._withTokenRefresh(() =>
+        this._api.getMetaData(this._getPath(targetPath), localRev, targetPath),
       );
       return {
         rev: r.rev,
       };
     } catch (e) {
-      if (this._isTokenError(e)) {
-        this._deps.logger.critical('EXPIRED or INVALID TOKEN, trying to refresh');
-        await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
-        return this.getFileRev(targetPath, localRev);
-      }
-
       if (this._isPathNotFoundError(e)) {
         throw new RemoteFileNotFoundAPIError(targetPath);
       }
@@ -165,40 +157,33 @@ export class Dropbox implements FileSyncProvider<
    * @throws InvalidDataSPError if the data is invalid
    */
   async downloadFile(targetPath: string): Promise<{ rev: string; dataStr: string }> {
-    try {
-      const r = await this._api.download({
+    const r = await this._withTokenRefresh(() =>
+      this._api.download({
         path: this._getPath(targetPath),
         targetPath,
-      });
+      }),
+    );
 
-      if (!r.meta.rev) {
-        throw new NoRevAPIError();
-      }
-
-      if (!r.data) {
-        throw new RemoteFileNotFoundAPIError(targetPath);
-      }
-
-      if (typeof r.data !== 'string') {
-        // A1: never log the raw user blob — only its shape.
-        this._deps.logger.critical(`${Dropbox.L}.downloadFile got non-string data`, {
-          dataType: typeof r.data,
-        });
-        throw new InvalidDataSPError('Dropbox download returned non-string data');
-      }
-
-      return {
-        rev: r.meta.rev,
-        dataStr: r.data,
-      };
-    } catch (e) {
-      if (this._isTokenError(e)) {
-        this._deps.logger.critical('EXPIRED or INVALID TOKEN, trying to refresh');
-        await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
-        return this.downloadFile(targetPath);
-      }
-      throw e;
+    if (!r.meta.rev) {
+      throw new NoRevAPIError();
     }
+
+    if (!r.data) {
+      throw new RemoteFileNotFoundAPIError(targetPath);
+    }
+
+    if (typeof r.data !== 'string') {
+      // A1: never log the raw user blob — only its shape.
+      this._deps.logger.critical(`${Dropbox.L}.downloadFile got non-string data`, {
+        dataType: typeof r.data,
+      });
+      throw new InvalidDataSPError('Dropbox download returned non-string data');
+    }
+
+    return {
+      rev: r.meta.rev,
+      dataStr: r.data,
+    };
   }
 
   /**
@@ -238,30 +223,23 @@ export class Dropbox implements FileSyncProvider<
       }
     }
 
-    try {
-      const r = await this._api.upload({
+    const r = await this._withTokenRefresh(() =>
+      this._api.upload({
         path: this._getPath(targetPath),
         data: dataStr,
         revToMatch: effectiveRev,
         isForceOverwrite,
         targetPath,
-      });
+      }),
+    );
 
-      if (!r.rev) {
-        throw new NoRevAPIError();
-      }
-
-      return {
-        rev: r.rev,
-      };
-    } catch (e) {
-      if (this._isTokenError(e)) {
-        this._deps.logger.critical('EXPIRED or INVALID TOKEN, trying to refresh');
-        await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
-        return this.uploadFile(targetPath, dataStr, revToMatch, isForceOverwrite);
-      }
-      throw e;
+    if (!r.rev) {
+      throw new NoRevAPIError();
     }
+
+    return {
+      rev: r.rev,
+    };
   }
 
   /**
@@ -272,14 +250,10 @@ export class Dropbox implements FileSyncProvider<
    */
   async removeFile(targetPath: string): Promise<void> {
     try {
-      await this._api.remove(this._getPath(targetPath), targetPath);
+      await this._withTokenRefresh(() =>
+        this._api.remove(this._getPath(targetPath), targetPath),
+      );
     } catch (e) {
-      if (this._isTokenError(e)) {
-        this._deps.logger.critical('EXPIRED or INVALID TOKEN, trying to refresh');
-        await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
-        return this.removeFile(targetPath);
-      }
-
       if (this._isPathNotFoundError(e)) {
         throw new RemoteFileNotFoundAPIError(targetPath);
       }
@@ -296,14 +270,10 @@ export class Dropbox implements FileSyncProvider<
     this._deps.logger.normal(`${Dropbox.L}.listFiles()`, { dirPath });
     try {
       // DropboxApi.listFiles now returns full paths, so no need to prepend _getPath
-      return await this._api.listFiles(this._getPath(dirPath), dirPath);
+      return await this._withTokenRefresh(() =>
+        this._api.listFiles(this._getPath(dirPath), dirPath),
+      );
     } catch (e) {
-      if (this._isTokenError(e)) {
-        this._deps.logger.critical('EXPIRED or INVALID TOKEN, trying to refresh');
-        await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
-        return this.listFiles(dirPath);
-      }
-
       if (this._isPathNotFoundError(e)) {
         // If the directory doesn't exist, return empty array
         return [];
@@ -419,5 +389,28 @@ export class Dropbox implements FileSyncProvider<
       (apiError.response.data?.error_summary?.includes(EXPIRED_TOKEN_ERROR) ||
         apiError.response.data?.error_summary?.includes(INVALID_TOKEN_ERROR))
     );
+  }
+
+  /**
+   * Runs `fn` and, if it throws an expired/invalid-token error, refreshes the
+   * access token once and retries. Any other error (or a second token error
+   * on retry) is rethrown unchanged so the caller's existing classifier can
+   * map it to `RemoteFileNotFoundAPIError` / `AuthFailSPError` / etc.
+   *
+   * Single retry only — matches the previous hand-rolled recursion which
+   * would have re-entered the same site on a still-expired token and looped
+   * forever; bounding to one retry is the documented behavior here.
+   */
+  private async _withTokenRefresh<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (e) {
+      if (this._isTokenError(e)) {
+        this._deps.logger.critical('EXPIRED or INVALID TOKEN, trying to refresh');
+        await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
+        return await fn();
+      }
+      throw e;
+    }
   }
 }

@@ -1,5 +1,4 @@
 import type { SyncLogger } from '@sp/sync-core';
-import { md5 as md5HashWasm } from 'hash-wasm';
 import {
   EmptyRemoteBodySPError,
   HttpNotOkAPIError,
@@ -9,6 +8,7 @@ import {
   RemoteFileNotFoundAPIError,
 } from '../../errors';
 import { errorMeta } from '../../log/error-meta';
+import { computeContentRev } from '../content-rev';
 import { WebDavHttpHeader, WebDavHttpMethod, WebDavHttpStatus } from './webdav.const';
 import type { WebDavHttpAdapter, WebDavHttpResponse } from './webdav-http-adapter';
 import { FileMeta, WebdavXmlParser } from './webdav-xml-parser';
@@ -35,7 +35,7 @@ export class WebdavApi {
   }
 
   private async _computeContentHash(data: string): Promise<string> {
-    return md5HashWasm(data);
+    return computeContentRev(data);
   }
 
   // ==============================
