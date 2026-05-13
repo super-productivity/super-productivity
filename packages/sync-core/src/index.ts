@@ -113,7 +113,6 @@ export type {
   ConflictUiPort,
   DeferredLocalActionsPort,
   OperationApplyPort,
-  OperationStorePort,
   RemoteApplyWindowPort,
   SyncActionLike,
   SyncConfigPort,

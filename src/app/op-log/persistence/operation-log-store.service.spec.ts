@@ -1,11 +1,9 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
-import type { OperationStorePort } from '@sp/sync-core';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
   ActionType,
   Operation,
-  OperationLogEntry,
   OpType,
   EntityType,
   VectorClock,
@@ -92,9 +90,12 @@ describe('OperationLogStoreService', () => {
     });
   });
 
-  describe('OperationStorePort contract', () => {
-    it('should expose unsynced, synced, and rejected transitions through the port methods', async () => {
-      const port: OperationStorePort<Operation, OperationLogEntry> = service;
+  describe('unsynced/synced/rejected transitions', () => {
+    it('should expose unsynced, synced, and rejected transitions through service methods', async () => {
+      const port: Pick<
+        OperationLogStoreService,
+        'getUnsynced' | 'markSynced' | 'markRejected'
+      > = service;
       const syncedOp = createTestOperation({ entityId: 'synced-task' });
       const rejectedOp = createTestOperation({ entityId: 'rejected-task' });
 
