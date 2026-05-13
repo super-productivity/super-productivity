@@ -800,8 +800,13 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       isSkipPreparation: false,
     });
 
-    const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+    const storeSpy = jasmine.createSpyObj('Store', [
+      'dispatch',
+      'select',
+      'selectSignal',
+    ]);
     storeSpy.select.and.returnValue(of([]));
+    storeSpy.selectSignal.and.returnValue(signal(null));
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       tasks: jasmine.createSpy().and.returnValue({
