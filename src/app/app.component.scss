@@ -12,6 +12,20 @@
   min-height: 100vh;
   // mobile viewport bug fix
   min-height: -webkit-fill-available;
+
+  // EXPERIMENT: reserve a column on the right for the vertical action strip
+  // rendered by main-header (desktop only). The strip is position: fixed,
+  // so this padding keeps the main content + right-panel to the left of it.
+  @include mq(xs) {
+    padding-right: var(--vertical-action-bar-width);
+  }
+}
+
+:host-context([dir='rtl']) .app-container {
+  @include mq(xs) {
+    padding-right: 0;
+    padding-left: var(--vertical-action-bar-width);
+  }
 }
 
 // Native mobile: body has safe area padding that pushes content down,

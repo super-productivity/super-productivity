@@ -1,7 +1,9 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   OnDestroy,
   signal,
@@ -69,7 +71,10 @@ import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
     FocusButtonComponent,
   ],
 })
-export class MainHeaderComponent implements OnDestroy {
+export class MainHeaderComponent implements AfterViewInit, OnDestroy {
+  private readonly _elRef = inject(ElementRef<HTMLElement>);
+  private _teleportedNav: HTMLElement | null = null;
+  private _teleportObserver: MutationObserver | null = null;
   readonly projectService = inject(ProjectService);
   readonly matDialog = inject(MatDialog);
   readonly workContextService = inject(WorkContextService);
@@ -197,8 +202,33 @@ export class MainHeaderComponent implements OnDestroy {
 
   private _subs: Subscription = new Subscription();
 
+  ngAfterViewInit(): void {
+    // EXPERIMENT: teleport the right-side action nav to document.body so it
+    // escapes any ancestor containing-block (transform/filter/contain) and
+    // position: fixed reliably anchors to the viewport. Desktop only.
+    if (this.layoutService.isXs()) return;
+    const root = this._elRef.nativeElement as HTMLElement;
+    const tryTeleport = (): boolean => {
+      const nav = root.querySelector('nav.action-nav-right') as HTMLElement | null;
+      if (!nav || this._teleportedNav) return !!nav;
+      nav.classList.add('action-nav-right--teleported');
+      document.body.appendChild(nav);
+      this._teleportedNav = nav;
+      return true;
+    };
+    if (!tryTeleport()) {
+      this._teleportObserver = new MutationObserver(() => {
+        if (tryTeleport()) this._teleportObserver?.disconnect();
+      });
+      this._teleportObserver.observe(root, { childList: true, subtree: true });
+    }
+  }
+
   ngOnDestroy(): void {
     this._subs.unsubscribe();
+    this._teleportObserver?.disconnect();
+    this._teleportedNav?.remove();
+    this._teleportedNav = null;
   }
 
   trackById(i: number, item: SimpleCounter): string {
