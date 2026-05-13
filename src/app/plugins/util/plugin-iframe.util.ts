@@ -347,10 +347,18 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           deleteCounter: (id) => callApi('deleteCounter', [id]),
           getAllCounters: () => callApi('getAllCounters'),
 
-          // Readiness signal — for iframe plugins, the API bridge is fully set
-          // up by the time plugin.js runs, so onReady fires on the next microtask
-          // (after plugin.js finishes registering hooks). Mirrors the host-side
-          // PluginAPI.onReady contract.
+          // Readiness signal for iframe plugins.
+          //
+          // NOTE — semantic difference from host-side onReady:
+          // The host implementation pings the Electron IPC bridge with retry before
+          // firing the callback (handles cold-boot races for nodeExecution plugins).
+          // Here, we just fire on the next microtask. This is acceptable because:
+          //   1. Iframe plugins are rendered on user navigation, long after host
+          //      startup — the cold-boot window has already passed.
+          //   2. executeNodeScript calls in iframe plugins proxy through the host
+          //      via callApi(); the host applies its own ping logic per call site.
+          // If iframe plugins ever auto-render at startup, route this through a
+          // host-side RPC that calls PluginService._fireOnReady.
           onReady: (fn) => {
             queueMicrotask(() => {
               try {

@@ -548,6 +548,13 @@ not fire.
 You can also use `onReady` for any other startup work that should run after the plugin
 script has finished setting up its hooks and registrations — not just for `nodeExecution`.
 
+**Iframe plugins:** `plugin.onReady()` is also available inside iframe plugins, but it
+fires on the next microtask after `plugin.js` finishes evaluating — without an IPC bridge
+ping. This is fine in practice because iframe plugins are rendered on user navigation
+(well after host startup, when the bridge is already up). If your iframe plugin needs the
+bridge from `onReady`, it will be available; cold-boot races affect host-side plugin code
+only.
+
 ### 4. Don't spam the logs
 
 `console.logs` should be kept to a minimum.

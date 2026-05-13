@@ -39,6 +39,7 @@ import { selectIsDominaModeConfig } from '../features/config/store/global-config
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { SnackService } from '../core/snack/snack.service';
+import { pingWithRetry } from './util/ping-with-retry.util';
 
 const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/yesterday-tasks-plugin',
@@ -585,6 +586,54 @@ export class PluginService implements OnDestroy {
     await this._pluginRunner.triggerReady(instance.manifest.id);
   }
 
+  /**
+   * Same as _fireOnReady but tears down the plugin runtime if onReady fails,
+   * so we never leave a "running" plugin while the UI shows error state.
+   * Used by load paths whose outer catch only logs and rethrows.
+   */
+  private async _fireOnReadyWithCleanup(instance: PluginInstance): Promise<void> {
+    try {
+      await this._fireOnReady(instance);
+    } catch (error) {
+      this._handleReadyFailure(instance.manifest.id, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Tear down a plugin's runtime (hooks, buttons, side effects), remove it from
+   * the loaded list, and update its state to 'error'. Idempotent.
+   */
+  private _handleReadyFailure(pluginId: string, error: unknown): void {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    PluginLog.err(`onReady failed for plugin ${pluginId}:`, error);
+
+    try {
+      this._pluginRunner.unloadPlugin(pluginId);
+    } catch (unloadError) {
+      PluginLog.err(
+        `Failed to clean up plugin ${pluginId} after onReady error:`,
+        unloadError,
+      );
+    }
+
+    const idx = this._loadedPlugins.findIndex((p) => p.manifest.id === pluginId);
+    if (idx !== -1) {
+      this._loadedPlugins.splice(idx, 1);
+    }
+
+    const currentState = this._pluginStates().get(pluginId);
+    if (currentState) {
+      this._setPluginState(pluginId, {
+        ...currentState,
+        status: 'error',
+        error: errorMsg,
+      });
+    }
+
+    this._snackService.open({ msg: errorMsg, type: 'ERROR' });
+  }
+
   private async _loadUploadedPlugins(): Promise<void> {
     try {
       const cachedPlugins = await this._pluginCacheService.getAllPlugins();
@@ -749,7 +798,7 @@ export class PluginService implements OnDestroy {
         // The enabled state will be persisted later when user explicitly enables/disables plugins
         this._ensurePluginEnabledInMemory(manifest.id);
 
-        await this._fireOnReady(pluginInstance);
+        await this._fireOnReadyWithCleanup(pluginInstance);
 
         PluginLog.log(`Plugin ${manifest.id} loaded successfully`);
       } else {
@@ -1278,7 +1327,7 @@ export class PluginService implements OnDestroy {
         };
         this._setPluginState(manifest.id, state);
 
-        await this._fireOnReady(pluginInstance);
+        await this._fireOnReadyWithCleanup(pluginInstance);
 
         PluginLog.log(`Uploaded plugin ${manifest.id} loaded successfully`);
       } else {
@@ -1557,7 +1606,7 @@ export class PluginService implements OnDestroy {
           // Replace existing instance
           this._loadedPlugins[existingIndex] = pluginInstance;
         }
-        await this._fireOnReady(pluginInstance);
+        await this._fireOnReadyWithCleanup(pluginInstance);
         PluginLog.log(`Uploaded plugin ${manifest.id} reloaded successfully`);
       } else {
         PluginLog.err(
@@ -1599,24 +1648,14 @@ export class PluginService implements OnDestroy {
    * Throws if the bridge is unavailable after all retries.
    */
   private async _pingNodeBridge(manifest: PluginManifest): Promise<void> {
-    const RETRY_DELAYS = [1000, 2000];
-    const MAX_ATTEMPTS = RETRY_DELAYS.length + 1;
-
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const ok = await this._pluginRunner.pingNodeBridge(manifest.id);
-      if (ok) {
-        return;
-      }
-      if (attempt < MAX_ATTEMPTS) {
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[attempt - 1]));
-      }
+    const ok = await pingWithRetry(() => this._pluginRunner.pingNodeBridge(manifest.id));
+    if (!ok) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BRIDGE_UNAVAILABLE, {
+          pluginName: manifest.name,
+        }),
+      );
     }
-
-    throw new Error(
-      this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BRIDGE_UNAVAILABLE, {
-        pluginName: manifest.name,
-      }),
-    );
   }
 
   /**
