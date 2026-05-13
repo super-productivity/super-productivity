@@ -38,6 +38,7 @@ import { issueProvidersFeature } from '../features/issue/store/issue-provider.re
 import { selectIsDominaModeConfig } from '../features/config/store/global-config.reducer';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+import { SnackService } from '../core/snack/snack.service';
 
 const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/yesterday-tasks-plugin',
@@ -75,6 +76,7 @@ export class PluginService implements OnDestroy {
     PluginIssueProviderRegistryService,
   );
   private readonly _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
+  private readonly _snackService = inject(SnackService);
 
   private _isInitialized = false;
   private _loadedPlugins: PluginInstance[] = [];
@@ -511,11 +513,13 @@ export class PluginService implements OnDestroy {
       return instance;
     } catch (error) {
       PluginLog.err(`Failed to activate plugin ${pluginId}:`, error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
       this._setPluginState(pluginId, {
         ...currentState,
         status: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMsg,
       });
+      this._snackService.open({ msg: errorMsg, type: 'ERROR' });
       return null;
     }
   }
@@ -548,6 +552,13 @@ export class PluginService implements OnDestroy {
       baseCfg,
       state.isEnabled,
     );
+
+    // For nodeExecution plugins on Electron, ping the IPC bridge before firing onReady.
+    // For all other plugins, fire onReady immediately.
+    if (IS_ELECTRON && state.manifest.permissions?.includes('nodeExecution')) {
+      await this._pingNodeBridge(state.manifest);
+    }
+    await this._pluginRunner.triggerReady(state.manifest.id);
 
     return instance;
   }
@@ -1556,6 +1567,32 @@ export class PluginService implements OnDestroy {
   }
 
   /**
+   * Ping the Node.js IPC bridge with a trivial no-op script.
+   * Retries up to 3 times (delays: 1s, 2s) before throwing.
+   * Throws if the bridge is unavailable after all retries.
+   */
+  private async _pingNodeBridge(manifest: PluginManifest): Promise<void> {
+    const RETRY_DELAYS = [1000, 2000];
+    const MAX_ATTEMPTS = RETRY_DELAYS.length + 1;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const ok = await this._pluginRunner.pingNodeBridge(manifest.id);
+      if (ok) {
+        return;
+      }
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[attempt - 1]));
+      }
+    }
+
+    throw new Error(
+      this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BRIDGE_UNAVAILABLE, {
+        pluginName: manifest.name,
+      }),
+    );
+  }
+
+  /**
    * Check node execution permission on startup (uses stored consent)
    */
   private async _checkNodeExecutionPermissionForStartup(
@@ -1607,23 +1644,22 @@ export class PluginService implements OnDestroy {
     if (result && result.granted) {
       // Store consent if user chose to remember
       if (result.remember) {
-        // Delay write to avoid sync conflicts during startup
-        setTimeout(() => {
-          this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, true);
-        }, 5000);
+        await this._pluginMetaPersistenceService.setNodeExecutionConsent(
+          manifest.id,
+          true,
+        );
       } else {
         // User unchecked remember - remove stored consent
-        setTimeout(() => {
-          this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, false);
-        }, 5000);
+        await this._pluginMetaPersistenceService.setNodeExecutionConsent(
+          manifest.id,
+          false,
+        );
       }
       return true;
     }
 
     // User denied permission - remove any stored consent
-    setTimeout(() => {
-      this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, false);
-    }, 5000);
+    await this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, false);
 
     return false;
   }

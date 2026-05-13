@@ -2724,7 +2724,8 @@
     "UNABLE_TO_PERSIST_DATA": "Unable to persist data to plugin storage",
     "UNKNOWN_ERROR": "An unknown error occurred",
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload a plugin ZIP file to install it:",
-    "VALIDATION_FAILED": "Validation failed"
+    "VALIDATION_FAILED": "Validation failed",
+    "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Plugin \"{{pluginName}}\" could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin."
   },
   "PM": {
     "ALL_TASKS_TITLE": "Metrics (all tasks)",

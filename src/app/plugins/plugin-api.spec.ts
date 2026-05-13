@@ -58,4 +58,27 @@ describe('PluginAPI', () => {
       expect(reInitDataSpy).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('onReady() / _triggerReady()', () => {
+    it('should call the registered callback when _triggerReady is called', async () => {
+      const readySpy = jasmine.createSpy('readyFn').and.resolveTo();
+      pluginAPI.onReady(readySpy);
+      await pluginAPI._triggerReady();
+      expect(readySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not throw when _triggerReady is called with no callback registered', async () => {
+      await expectAsync(pluginAPI._triggerReady()).toBeResolved();
+    });
+
+    it('should only call the most recently registered callback', async () => {
+      const first = jasmine.createSpy('first');
+      const second = jasmine.createSpy('second');
+      pluginAPI.onReady(first);
+      pluginAPI.onReady(second);
+      await pluginAPI._triggerReady();
+      expect(first).not.toHaveBeenCalled();
+      expect(second).toHaveBeenCalledTimes(1);
+    });
+  });
 });

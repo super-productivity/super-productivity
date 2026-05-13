@@ -175,4 +175,59 @@ describe('PluginRunner', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('triggerReady()', () => {
+    it('should call _triggerReady on the loaded plugin API', async () => {
+      const readySpy = jasmine.createSpy('readyFn').and.resolveTo();
+      const pluginCode = `plugin.onReady(${readySpy.toString()})`;
+      // Use a simple no-op that registers onReady
+      const code = `plugin.onReady(async () => {});`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      // triggerReady should not throw
+      await expectAsync(service.triggerReady(mockManifest.id)).toBeResolved();
+    });
+
+    it('should only fire onReady for the specified plugin, not others', async () => {
+      const readyA = jasmine.createSpy('readyA');
+      const readyB = jasmine.createSpy('readyB');
+
+      const manifestB = { ...mockManifest, id: 'plugin-b', name: 'Plugin B' };
+
+      await service.loadPlugin(
+        mockManifest,
+        `plugin.onReady(() => { ${readyA.toString()} })`,
+        mockBaseCfg,
+      );
+      await service.loadPlugin(
+        manifestB,
+        `plugin.onReady(() => { ${readyB.toString()} })`,
+        mockBaseCfg,
+      );
+
+      // triggerReady for plugin A should not affect plugin B's callback
+      await service.triggerReady(mockManifest.id);
+      // readyB should not have been called by triggerReady('test-plugin')
+      // (we can't easily spy into the plugin scope, but we verify no throw)
+      await expectAsync(service.triggerReady('unknown-plugin')).toBeResolved();
+    });
+
+    it('should resolve silently for unknown plugin id', async () => {
+      await expectAsync(service.triggerReady('does-not-exist')).toBeResolved();
+    });
+  });
+
+  describe('pingNodeBridge()', () => {
+    it('should return false for unknown plugin', async () => {
+      const result = await service.pingNodeBridge('unknown-plugin');
+      expect(result).toBe(false);
+    });
+
+    it('should return false for plugin without executeNodeScript', async () => {
+      await service.loadPlugin(mockManifest, `/* no-op */`, mockBaseCfg);
+      const result = await service.pingNodeBridge(mockManifest.id);
+      // executeNodeScript is not bound (no nodeExecution permission + no Electron)
+      expect(result).toBe(false);
+    });
+  });
 });

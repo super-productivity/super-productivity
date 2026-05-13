@@ -505,9 +505,50 @@ console.log(data); // '{ count: 42 }'
 
 - **Request minimal permissions**: Only what you need
 
-### 4. Don't spam the logs
+### Node.js Script Execution
 
-`console.logs` should be kept to a minimum.
+Plugins with `"permissions": ["nodeExecution"]` can run Node.js scripts in the Electron
+desktop app.
+
+```javascript
+const result = await plugin.executeNodeScript({
+  script: `
+    const os = require('os');
+    return os.hostname();
+  `,
+  timeout: 5000,
+});
+
+if (result.success) {
+  console.log('Hostname:', result.result);
+}
+```
+
+**Important — use `plugin.onReady()` for startup calls:**
+
+`executeNodeScript` requires the Electron IPC bridge to be available. On cold boot this
+bridge may not be ready when `plugin.js` first runs. Always put `executeNodeScript` calls
+(and any other startup init code) inside `plugin.onReady()`:
+
+```javascript
+// ❌ May fail on cold boot
+const result = await plugin.executeNodeScript({ script: 'return true' });
+
+// ✅ Correct — fires after the bridge is confirmed available
+plugin.onReady(async () => {
+  const result = await plugin.executeNodeScript({ script: 'return true' });
+});
+```
+
+`plugin.onReady(fn)` fires after `plugin.js` has fully evaluated **and** the app has
+confirmed the Node.js IPC bridge is responding (with automatic retry). If the bridge is
+unavailable after retries, an error is shown in the plugin management UI and `onReady` does
+not fire.
+
+You can also use `onReady` for any other startup work that should run after the plugin
+script has finished setting up its hooks and registrations — not just for `nodeExecution`.
+
+
 
 1. **Inline everything**: CSS and JavaScript must be in the HTML file
 
@@ -600,6 +641,9 @@ async function testAPI() {
 
 - Check if method is available in current context
 - Verify permissions in manifest
+- If `executeNodeScript` fails on startup or cold boot, wrap your init code in
+  `plugin.onReady(async () => { ... })` — this ensures the Node.js bridge is ready before
+  your code runs
 
 **Iframe not displaying:**
 

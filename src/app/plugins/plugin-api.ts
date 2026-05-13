@@ -49,6 +49,7 @@ export class PluginAPI implements PluginAPIInterface {
   private _shortcuts: Array<PluginShortcutCfg> = [];
   private _sidePanelButtons: Array<PluginSidePanelBtnCfg> = [];
   private _messageHandler?: (message: unknown) => Promise<unknown>;
+  private _readyFn?: () => void | Promise<void>;
   private _boundMethods: ReturnType<
     typeof PluginBridgeService.prototype.createBoundMethods
   >;
@@ -292,6 +293,26 @@ export class PluginAPI implements PluginAPIInterface {
   async triggerSync(): Promise<void> {
     PluginLog.log(`Plugin ${this._pluginId} requested to trigger sync`);
     return this._boundMethods.triggerSync();
+  }
+
+  /**
+   * Register a callback to run after the app confirms all declared APIs are ready.
+   * Put startup init code here (e.g. executeNodeScript calls) instead of at the
+   * top level of plugin.js. For nodeExecution plugins, fires only after a successful
+   * IPC ping — guaranteeing the bridge is available.
+   */
+  onReady(fn: () => void | Promise<void>): void {
+    this._readyFn = fn;
+  }
+
+  /**
+   * Called by PluginRunner after the IPC bridge is confirmed ready.
+   * Internal — not part of the public plugin API.
+   */
+  async _triggerReady(): Promise<void> {
+    if (this._readyFn) {
+      await this._readyFn();
+    }
   }
 
   /**

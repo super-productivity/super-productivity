@@ -191,6 +191,37 @@ export class PluginRunner {
   }
 
   /**
+   * Fire the onReady callback for a plugin.
+   * Called by plugin.service.ts after the IPC bridge is confirmed available.
+   */
+  async triggerReady(pluginId: string): Promise<void> {
+    const api = this._pluginApis.get(pluginId);
+    if (api) {
+      await api._triggerReady();
+    }
+  }
+
+  /**
+   * Ping the Node.js IPC bridge for a plugin by running a trivial no-op script.
+   * Returns true if the bridge responds, false otherwise.
+   */
+  async pingNodeBridge(pluginId: string): Promise<boolean> {
+    const api = this._pluginApis.get(pluginId);
+    if (!api || !api.executeNodeScript) {
+      return false;
+    }
+    try {
+      const result = await api.executeNodeScript({
+        script: 'return true',
+        timeout: 5000,
+      });
+      return result.success;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Send a message to a plugin's message handler
    */
   async sendMessageToPlugin(pluginId: string, message: unknown): Promise<unknown> {
