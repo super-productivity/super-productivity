@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRetryableUploadError } from '../src/http/retryable-upload-error';
+import { isRetryableUploadError } from '../src/http';
 
 describe('isRetryableUploadError', () => {
   describe('returns true for retryable errors', () => {

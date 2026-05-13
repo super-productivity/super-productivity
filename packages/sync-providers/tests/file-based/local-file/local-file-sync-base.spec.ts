@@ -15,6 +15,7 @@ import {
 } from '../../../src/local-file';
 import type { FileAdapter } from '../../../src/file-based';
 import type { SyncCredentialStorePort } from '../../../src/credential-store';
+import { createStatefulCredentialStore } from '../../helpers/credential-store';
 
 vi.mock('hash-wasm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('hash-wasm')>();
@@ -107,24 +108,11 @@ class MockFileAdapter implements FileAdapter {
 
 const fakeStore = (
   initial: LocalFileSyncPrivateCfg | null,
-): SyncCredentialStorePort<typeof PROVIDER_ID_LOCAL_FILE, LocalFileSyncPrivateCfg> => {
-  let state = initial;
-  return {
-    load: async () => state,
-    setComplete: async (cfg) => {
-      state = cfg;
-    },
-    updatePartial: async (updates) => {
-      state = { ...(state ?? {}), ...updates };
-    },
-    upsertPartial: async (updates) => {
-      state = { ...(state ?? {}), ...updates };
-    },
-    clear: async () => {
-      state = null;
-    },
-  };
-};
+): SyncCredentialStorePort<typeof PROVIDER_ID_LOCAL_FILE, LocalFileSyncPrivateCfg> =>
+  createStatefulCredentialStore<typeof PROVIDER_ID_LOCAL_FILE, LocalFileSyncPrivateCfg>(
+    initial,
+    { spy: false },
+  );
 
 describe('LocalFileSyncBase', () => {
   afterEach(() => {

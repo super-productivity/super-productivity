@@ -6,7 +6,7 @@ import type {
   WebDavHttpAdapter,
   WebDavHttpResponse,
 } from '../../../src/file-based/webdav/webdav-http-adapter';
-import type { WebdavPrivateCfg } from '../../../src/file-based/webdav/webdav.model';
+import type { WebdavPrivateCfg } from '../../../src/webdav';
 import {
   EmptyRemoteBodySPError,
   HttpNotOkAPIError,

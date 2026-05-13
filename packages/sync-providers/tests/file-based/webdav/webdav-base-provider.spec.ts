@@ -1,41 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import { md5 as md5HashWasm } from 'hash-wasm';
 import { NOOP_SYNC_LOGGER } from '@sp/sync-core';
-import { Webdav } from '../../../src/file-based/webdav/webdav';
 import {
+  NextcloudProvider,
   PROVIDER_ID_NEXTCLOUD,
   PROVIDER_ID_WEBDAV,
-} from '../../../src/file-based/webdav/webdav-base-provider';
-import { NextcloudProvider } from '../../../src/file-based/webdav/nextcloud';
-import type { WebdavPrivateCfg } from '../../../src/file-based/webdav/webdav.model';
-import type { NextcloudPrivateCfg } from '../../../src/file-based/webdav/nextcloud.model';
-import type { SyncCredentialStorePort } from '../../../src/credential-store-port';
-import type { NativeHttpExecutor } from '../../../src/http/native-http-retry';
+  Webdav,
+  type NextcloudPrivateCfg,
+  type WebdavPrivateCfg,
+} from '../../../src/webdav';
+import type { SyncCredentialStorePort } from '../../../src/credential-store';
+import type { NativeHttpExecutor } from '../../../src/http';
 import {
   MissingCredentialsSPError,
   UploadRevToMatchMismatchAPIError,
 } from '../../../src/errors';
+import { createStatefulCredentialStore } from '../../helpers/credential-store';
 
 const fakeStore = <PID extends string, T>(
   initial: T | null,
-): SyncCredentialStorePort<PID, T> => {
-  let state: T | null = initial;
-  return {
-    load: async () => state,
-    setComplete: async (cfg) => {
-      state = cfg;
-    },
-    updatePartial: async (updates) => {
-      state = { ...(state ?? {}), ...updates } as T;
-    },
-    upsertPartial: async (updates) => {
-      state = { ...(state ?? {}), ...updates } as T;
-    },
-    clear: async () => {
-      state = null;
-    },
-  };
-};
+): SyncCredentialStorePort<PID, T> =>
+  createStatefulCredentialStore<PID, T>(initial, { spy: false });
 
 const nativeNoop: NativeHttpExecutor = async () => ({
   status: 200,

@@ -10,32 +10,24 @@ import { generateCodeChallenge } from '../../../src/pkce';
 import type { NativeHttpExecutor } from '../../../src/http';
 import type { SyncCredentialStorePort } from '../../../src/credential-store';
 import { DropboxApi } from '../../../src/file-based/dropbox/dropbox-api';
-import type { SyncLogger } from '@sp/sync-core';
+import { createMockSyncLogger } from '../../helpers/sync-logger';
+import { createMockCredentialStore } from '../../helpers/credential-store';
 
 type DropboxCredentialStore = SyncCredentialStorePort<
   typeof PROVIDER_ID_DROPBOX,
   DropboxPrivateCfg
 >;
 
-const noopLogger = (): SyncLogger => ({
-  log: vi.fn(),
-  error: vi.fn(),
-  err: vi.fn(),
-  normal: vi.fn(),
-  verbose: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  critical: vi.fn(),
-  debug: vi.fn(),
-});
+const noopLogger = createMockSyncLogger;
 
-const createCredentialStore = (): DropboxCredentialStore => ({
-  load: vi.fn().mockResolvedValue(null),
-  setComplete: vi.fn(),
-  updatePartial: vi.fn(),
-  upsertPartial: vi.fn(),
-  clear: vi.fn(),
-});
+const createCredentialStore = (): DropboxCredentialStore => {
+  const store = createMockCredentialStore<
+    typeof PROVIDER_ID_DROPBOX,
+    DropboxPrivateCfg
+  >();
+  (store.load as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+  return store;
+};
 
 const makeDropbox = (overrides: Partial<DropboxDeps> = {}): Dropbox => {
   const cfg: DropboxCfg = { appKey: 'test-key', basePath: '/' };

@@ -8,9 +8,8 @@ import {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
 } from '../../../src/errors';
-import type { NativeHttpExecutor } from '../../../src/http/native-http-retry';
-import type { ProviderPlatformInfo } from '../../../src/platform/provider-platform-info';
-import type { WebFetchFactory } from '../../../src/platform/web-fetch-factory';
+import type { NativeHttpExecutor } from '../../../src/http';
+import type { ProviderPlatformInfo, WebFetchFactory } from '../../../src/platform';
 
 const makeDeps = (overrides: {
   isNativePlatform?: boolean;

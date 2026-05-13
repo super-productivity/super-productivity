@@ -6,7 +6,7 @@ import {
   type NativeHttpRequestConfig,
   type NativeHttpResponse,
 } from '../src/http';
-import type { SyncLogger } from '@sp/sync-core';
+import { createMockSyncLogger } from './helpers/sync-logger';
 
 const successResponse: NativeHttpResponse = {
   status: 200,
@@ -22,17 +22,7 @@ const baseConfig: NativeHttpRequestConfig = {
   data: 'test-data',
 };
 
-const noopLogger = (): SyncLogger => ({
-  log: vi.fn(),
-  error: vi.fn(),
-  err: vi.fn(),
-  normal: vi.fn(),
-  verbose: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  critical: vi.fn(),
-  debug: vi.fn(),
-});
+const noopLogger = createMockSyncLogger;
 
 describe('isTransientNetworkError', () => {
   describe('iOS error.code detection (NSURLErrorDomain)', () => {

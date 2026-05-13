@@ -8,27 +8,14 @@ import {
 } from '../../../src/local-file';
 import type { FileAdapter } from '../../../src/file-based';
 import type { SyncCredentialStorePort } from '../../../src/credential-store';
+import { createStatefulCredentialStore } from '../../helpers/credential-store';
 
 const fakeStore = (
   initial: LocalFileSyncPrivateCfg | null,
-): SyncCredentialStorePort<typeof PROVIDER_ID_LOCAL_FILE, LocalFileSyncPrivateCfg> => {
-  let state = initial;
-  return {
-    load: vi.fn(async () => state),
-    setComplete: vi.fn(async (cfg) => {
-      state = cfg;
-    }),
-    updatePartial: vi.fn(async (updates) => {
-      state = { ...(state ?? {}), ...updates };
-    }),
-    upsertPartial: vi.fn(async (updates) => {
-      state = { ...(state ?? {}), ...updates };
-    }),
-    clear: vi.fn(async () => {
-      state = null;
-    }),
-  };
-};
+): SyncCredentialStorePort<typeof PROVIDER_ID_LOCAL_FILE, LocalFileSyncPrivateCfg> =>
+  createStatefulCredentialStore<typeof PROVIDER_ID_LOCAL_FILE, LocalFileSyncPrivateCfg>(
+    initial,
+  );
 
 const noopFileAdapter: FileAdapter = {
   readFile: async () => '',

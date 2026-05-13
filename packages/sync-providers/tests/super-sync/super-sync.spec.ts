@@ -13,13 +13,13 @@ import {
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
 } from '../../src/errors';
-import type {
-  NativeHttpExecutor,
-  NativeHttpRequestConfig,
-  NativeHttpResponse,
-} from '../../src/http/native-http-retry';
-import { isRetryableUploadError } from '../../src/http/retryable-upload-error';
-import type { ProviderPlatformInfo } from '../../src/platform/provider-platform-info';
+import {
+  isRetryableUploadError,
+  type NativeHttpExecutor,
+  type NativeHttpRequestConfig,
+  type NativeHttpResponse,
+} from '../../src/http';
+import type { ProviderPlatformInfo } from '../../src/platform';
 import type {
   OpUploadResponse,
   RestorePointsResponse,
@@ -28,15 +28,16 @@ import type {
   SuperSyncOpDownloadResponse,
   SyncOperation,
 } from '../../src/provider-types';
-import type { SuperSyncResponseValidators } from '../../src/super-sync/response-validators';
-import type { SuperSyncStorage } from '../../src/super-sync/storage';
 import {
   PROVIDER_ID_SUPER_SYNC,
   SUPER_SYNC_DEFAULT_BASE_URL,
+  SuperSyncProvider,
+  type SuperSyncDeps,
   type SuperSyncPrivateCfg,
-} from '../../src/super-sync/super-sync.model';
-import { SuperSyncProvider, type SuperSyncDeps } from '../../src/super-sync/super-sync';
-import type { SyncCredentialStorePort } from '../../src/credential-store-port';
+  type SuperSyncResponseValidators,
+  type SuperSyncStorage,
+} from '../../src/super-sync';
+import type { SyncCredentialStorePort } from '../../src/credential-store';
 
 // Helpers reused across native-platform decompression assertions.
 const blobToUint8Array = async (blob: Blob): Promise<Uint8Array> => {
