@@ -37,7 +37,7 @@
     align-items: center;
     justify-content: flex-start;
     gap: var(--header-nav-button-gap);
-    background: var(--c-bg);
+    background: var(--bg-lightest);
     border-left: 1px solid var(--separator-color);
     z-index: var(--z-vertical-action-bar);
     overflow-y: auto;
