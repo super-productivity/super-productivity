@@ -7,6 +7,13 @@ export interface PushDecision {
   reason?: string;
 }
 
+const valuesEqual = (a: unknown, b: unknown): boolean => {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => v === b[i]);
+  }
+  return a === b;
+};
+
 export const computePushDecisions = (
   changedTaskFields: Record<string, unknown>,
   fieldMappings: FieldMapping[],
@@ -49,7 +56,12 @@ export const computePushDecisions = (
       continue;
     }
 
-    if (freshIssueValues[mapping.issueField] !== lastSyncedValues[mapping.issueField]) {
+    if (
+      !valuesEqual(
+        freshIssueValues[mapping.issueField],
+        lastSyncedValues[mapping.issueField],
+      )
+    ) {
       decisions.push({
         field: mapping.issueField,
         action: 'skip',

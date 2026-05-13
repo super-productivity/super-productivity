@@ -405,4 +405,55 @@ describe('computePushDecisions', () => {
       reason: 'provider changed (provider wins)',
     });
   });
+
+  it('should push tagIds when fresh and last synced arrays have same contents (different references)', () => {
+    const tagIdsMapping: FieldMapping = {
+      taskField: 'tagIds',
+      issueField: 'labels',
+      defaultDirection: 'both',
+      toIssueValue: (v: unknown) => (v as string[])?.slice().sort(),
+      toTaskValue: (v: unknown) => v,
+    };
+    const syncConfig: FieldSyncConfig = { tagIds: 'both' };
+    const freshLabels = ['bug', 'feature'];
+    const lastLabels = ['bug', 'feature'];
+    const decisions = computePushDecisions(
+      { tagIds: ['feature', 'bug'] },
+      [tagIdsMapping],
+      syncConfig,
+      { labels: freshLabels },
+      { labels: lastLabels },
+      ctx,
+    );
+
+    const labelDecision = decisions.find((d) => d.field === 'labels');
+    expect(labelDecision?.action).toBe('push');
+    expect(labelDecision?.issueValue).toEqual(['bug', 'feature']);
+  });
+
+  it('should skip tagIds when fresh and last synced arrays have different contents', () => {
+    const tagIdsMapping: FieldMapping = {
+      taskField: 'tagIds',
+      issueField: 'labels',
+      defaultDirection: 'both',
+      toIssueValue: (v: unknown) => (v as string[])?.slice().sort(),
+      toTaskValue: (v: unknown) => v,
+    };
+    const syncConfig: FieldSyncConfig = { tagIds: 'both' };
+    const decisions = computePushDecisions(
+      { tagIds: ['tag-1'] },
+      [tagIdsMapping],
+      syncConfig,
+      { labels: ['bug', 'feature'] },
+      { labels: ['bug'] },
+      ctx,
+    );
+
+    const labelDecision = decisions.find((d) => d.field === 'labels');
+    expect(labelDecision).toEqual({
+      field: 'labels',
+      action: 'skip',
+      reason: 'provider changed (provider wins)',
+    });
+  });
 });
