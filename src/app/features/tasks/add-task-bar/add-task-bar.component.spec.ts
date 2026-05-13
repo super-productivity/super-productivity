@@ -600,33 +600,43 @@ describe('AddTaskBarComponent', () => {
   });
 
   describe('IME handling (Integration)', () => {
-    it('should not add a task when Enter is pressed during IME composition', () => {
+    let inputEl: HTMLInputElement;
+
+    beforeEach(() => {
       component.stateService.updateInputTxt('New Task');
       fixture.detectChanges();
+      inputEl = fixture.debugElement.nativeElement.querySelector('input');
+    });
 
-      const inputEl = fixture.debugElement.nativeElement.querySelector('input');
+    const dispatchEnterKeydown = (options: {
+      isComposing: boolean;
+      keyCode?: number;
+    }): void => {
       const event = new KeyboardEvent('keydown', {
         key: 'Enter',
-        isComposing: true,
+        isComposing: options.isComposing,
       });
+
+      if (options.keyCode) {
+        Object.defineProperty(event, 'keyCode', { value: options.keyCode });
+      }
+
       inputEl.dispatchEvent(event);
       fixture.detectChanges();
+    };
 
+    it('should not add a task when Enter is pressed during IME composition', () => {
+      dispatchEnterKeydown({ isComposing: true });
+      expect(mockTaskService.add).not.toHaveBeenCalled();
+    });
+
+    it('should not add a task when Enter is pressed with keyCode 229 even if isComposing is false', () => {
+      dispatchEnterKeydown({ isComposing: false, keyCode: 229 });
       expect(mockTaskService.add).not.toHaveBeenCalled();
     });
 
     it('should add a task when Enter is pressed and NOT in IME composition', () => {
-      component.stateService.updateInputTxt('New Task');
-      fixture.detectChanges();
-
-      const inputEl = fixture.debugElement.nativeElement.querySelector('input');
-      const event = new KeyboardEvent('keydown', {
-        key: 'Enter',
-        isComposing: false,
-      });
-      inputEl.dispatchEvent(event);
-      fixture.detectChanges();
-
+      dispatchEnterKeydown({ isComposing: false });
       expect(mockTaskService.add).toHaveBeenCalled();
     });
   });
