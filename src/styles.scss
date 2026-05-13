@@ -37,7 +37,7 @@
     align-items: center;
     justify-content: flex-start;
     gap: var(--header-nav-button-gap);
-    background: var(--sidenav-bg);
+    background: var(--bg-lighter);
     border-left: 1px solid var(--separator-color);
     z-index: var(--z-vertical-action-bar);
     overflow-y: auto;
@@ -51,17 +51,6 @@
       margin-bottom: var(--s-half);
       gap: var(--header-nav-button-gap);
     }
-  }
-
-  // Milkglass when a background image is present — matches magic-side-nav.
-  body.hasBgImage > nav.action-nav-right.action-nav-right--teleported {
-    background: var(--c-light-50);
-    backdrop-filter: blur(20px);
-  }
-
-  body.isDarkTheme.hasBgImage > nav.action-nav-right.action-nav-right--teleported {
-    background: var(--c-dark-50);
-    backdrop-filter: blur(20px) saturate(180%);
   }
 
   body.isMac.isElectron > nav.action-nav-right.action-nav-right--teleported {
