@@ -8,6 +8,16 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "skipLibCheck": true,
+    "paths": {
+      "@sp/sync-providers/dropbox": ["node_modules/@sp/sync-providers/dist/dropbox.d.ts"],
+      "@sp/sync-providers/local-file": [
+        "node_modules/@sp/sync-providers/dist/local-file.d.ts"
+      ],
+      "@sp/sync-providers/webdav": ["node_modules/@sp/sync-providers/dist/webdav.d.ts"],
+      "@sp/sync-providers/super-sync": [
+        "node_modules/@sp/sync-providers/dist/super-sync.d.ts"
+      ]
+    },
     "typeRoots": ["node_modules/@types"],
     "downlevelIteration": true,
     "lib": ["dom", "es2022"],
