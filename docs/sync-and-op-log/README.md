@@ -11,6 +11,7 @@ This directory contains the architectural documentation for Super Productivity's
 | Understand the overall architecture | [operation-log-architecture.md](./operation-log-architecture.md)               |
 | See visual diagrams                 | [diagrams/](./diagrams/) (split by topic)                                      |
 | Learn the design rules              | [operation-rules.md](./operation-rules.md)                                     |
+| Understand package boundaries       | [package-boundaries.md](./package-boundaries.md)                               |
 | Understand file-based sync          | [diagrams/04-file-based-sync.md](./diagrams/04-file-based-sync.md)             |
 | Understand SuperSync encryption     | [supersync-encryption-architecture.md](./supersync-encryption-architecture.md) |
 
@@ -23,6 +24,7 @@ This directory contains the architectural documentation for Super Productivity's
 | [operation-log-architecture.md](./operation-log-architecture.md) | Comprehensive architecture reference covering Parts A-F: Local Persistence, File-Based Sync, Server Sync, Validation & Repair, Smart Archive Handling, and Atomic State Consistency | Active |
 | [diagrams/](./diagrams/)                                         | Mermaid diagrams split by topic (local persistence, server sync, file-based sync, etc.)                                                                                             | Active |
 | [operation-rules.md](./operation-rules.md)                       | Design rules and guidelines for the operation log store and operations                                                                                                              | Active |
+| [package-boundaries.md](./package-boundaries.md)                 | Dependency direction and ownership boundaries for `@sp/sync-core`, `@sp/sync-providers`, and app sync wiring                                                                        | Active |
 
 ### Sync Architecture
 
@@ -117,20 +119,33 @@ This prevents duplicate side effects when syncing operations from other clients.
 
 ## Key Files
 
-### Sync Providers
+### Sync Packages
+
+```
+packages/sync-core/src/
+├── operation.types.ts          # Generic operation primitives
+├── vector-clock.ts             # Compare/merge/prune algorithms
+├── conflict-resolution.ts      # Pure conflict helpers
+├── replay-coordinator.ts       # Generic remote replay ordering
+└── ports.ts                    # App-side orchestration contracts
+
+packages/sync-providers/src/
+├── super-sync/                 # SuperSync provider implementation
+├── file-based/dropbox/         # Dropbox provider implementation
+├── file-based/webdav/          # WebDAV + Nextcloud providers
+├── file-based/local-file/      # LocalFile provider classes
+└── provider.types.ts           # Provider-neutral contracts
+```
+
+### App Sync Wiring
 
 ```
 src/app/op-log/sync-providers/
-├── super-sync/                     # SuperSync server provider
-├── file-based/                     # File-based providers
-│   ├── file-based-sync-adapter.service.ts  # Unified adapter for file providers
-│   ├── file-based-sync.types.ts    # FileBasedSyncData types
-│   ├── webdav/                     # WebDAV provider
-│   ├── dropbox/                    # Dropbox provider
-│   └── local-file/                 # Local file sync provider
-├── provider-manager.service.ts     # Provider activation/management
+├── sync-providers.factory.ts       # Composes app deps into package providers
+├── credential-store.service.ts     # OAuth/credential storage implementation
 ├── wrapped-provider.service.ts     # Provider wrapper with encryption
-└── credential-store.service.ts     # OAuth/credential storage
+├── file-based/                     # File-based adapter + app shims
+└── super-sync/                     # SuperSync app shims + validators
 ```
 
 ### Core Operation Log

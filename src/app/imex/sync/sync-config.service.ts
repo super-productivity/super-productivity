@@ -12,7 +12,7 @@ import {
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncLog } from '../../core/log';
 import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncWrapperService } from './sync-wrapper.service';
 
 // Maps sync providers to their corresponding form field in SyncConfig

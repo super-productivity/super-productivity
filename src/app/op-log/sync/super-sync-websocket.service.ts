@@ -21,6 +21,8 @@ const JITTER_FACTOR = 0.1;
 const HEARTBEAT_TIMEOUT_MS = 45_000;
 /** Close code indicating auth failure - do not reconnect */
 const AUTH_FAILURE_CLOSE_CODE = 4003;
+/** Close code indicating the server-side per-user connection limit is reached */
+const TOO_MANY_CONNECTIONS_CLOSE_CODE = 4008;
 
 @Injectable({
   providedIn: 'root',
@@ -40,20 +42,43 @@ export class SuperSyncWebSocketService implements OnDestroy {
   private _heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private _isIntentionalClose = false;
   private _currentParams: { baseUrl: string; accessToken: string } | null = null;
+  private _connectingPromise: Promise<void> | null = null;
+  /** Bumped on every disconnect/_startConnect so an in-flight _connect can detect supersession. */
+  private _connectGeneration = 0;
 
   async connect(baseUrl: string, accessToken: string): Promise<void> {
+    if (
+      this._currentParams?.baseUrl === baseUrl &&
+      this._currentParams.accessToken === accessToken
+    ) {
+      // An in-flight connect with the same params: share its promise so we don't
+      // open a duplicate socket while it is still awaiting clientId/handshake.
+      if (this._connectingPromise) {
+        return this._connectingPromise;
+      }
+      if (
+        this._ws &&
+        (this._ws.readyState === WebSocket.CONNECTING ||
+          this._ws.readyState === WebSocket.OPEN)
+      ) {
+        return;
+      }
+    }
+
     // Disconnect existing connection first
     this.disconnect();
     this._isIntentionalClose = false;
     this._reconnectAttempts = 0;
     this._currentParams = { baseUrl, accessToken };
 
-    await this._connect(baseUrl, accessToken);
+    await this._startConnect(baseUrl, accessToken);
   }
 
   disconnect(): void {
     this._isIntentionalClose = true;
     this._currentParams = null;
+    this._connectingPromise = null;
+    this._connectGeneration++;
     this._clearReconnectTimer();
     this._clearHeartbeatTimer();
 
@@ -73,10 +98,32 @@ export class SuperSyncWebSocketService implements OnDestroy {
     this._newOpsNotification$.complete();
   }
 
-  private async _connect(baseUrl: string, accessToken: string): Promise<void> {
+  private _startConnect(baseUrl: string, accessToken: string): Promise<void> {
+    const generation = ++this._connectGeneration;
+    const connecting = this._connect(baseUrl, accessToken, generation).finally(() => {
+      if (this._connectingPromise === connecting) {
+        this._connectingPromise = null;
+      }
+    });
+    this._connectingPromise = connecting;
+    return connecting;
+  }
+
+  private async _connect(
+    baseUrl: string,
+    accessToken: string,
+    generation: number,
+  ): Promise<void> {
     const clientId = await this._clientIdProvider.loadClientId();
     if (!clientId) {
       SyncLog.warn('SuperSyncWebSocketService: No clientId available, cannot connect');
+      return;
+    }
+
+    // A later disconnect()/_startConnect() bumped the generation while we awaited
+    // the clientId — bail before creating an orphan socket.
+    if (this._connectGeneration !== generation) {
+      SyncLog.log('SuperSyncWebSocketService: Connect superseded before socket creation');
       return;
     }
 
@@ -84,22 +131,30 @@ export class SuperSyncWebSocketService implements OnDestroy {
     const wsUrl = baseUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
     const url = `${wsUrl}/api/sync/ws?token=${encodeURIComponent(accessToken)}&clientId=${encodeURIComponent(clientId)}`;
 
+    let ws: WebSocket;
     try {
-      this._ws = new WebSocket(url);
+      ws = new WebSocket(url);
+      this._ws = ws;
     } catch (err) {
       SyncLog.warn('SuperSyncWebSocketService: Failed to create WebSocket', err);
       this._scheduleReconnect();
       return;
     }
 
-    this._ws.onopen = (): void => {
+    ws.onopen = (): void => {
+      if (this._ws !== ws) {
+        return;
+      }
       SyncLog.log('SuperSyncWebSocketService: Connected');
       this._reconnectAttempts = 0;
       this.isConnected.set(true);
       this._startHeartbeatTimer();
     };
 
-    this._ws.onmessage = (event: MessageEvent): void => {
+    ws.onmessage = (event: MessageEvent): void => {
+      if (this._ws !== ws) {
+        return;
+      }
       this._resetHeartbeatTimer();
       let msg: WsMessage;
       try {
@@ -115,7 +170,10 @@ export class SuperSyncWebSocketService implements OnDestroy {
       }
     };
 
-    this._ws.onclose = (event: CloseEvent): void => {
+    ws.onclose = (event: CloseEvent): void => {
+      if (this._ws !== ws) {
+        return;
+      }
       SyncLog.log(
         `SuperSyncWebSocketService: Closed (code=${event.code}, reason=${event.reason})`,
       );
@@ -133,10 +191,19 @@ export class SuperSyncWebSocketService implements OnDestroy {
         );
         return;
       }
+      if (event.code === TOO_MANY_CONNECTIONS_CLOSE_CODE) {
+        SyncLog.warn(
+          'SuperSyncWebSocketService: Server connection limit reached, waiting for periodic sync retry.',
+        );
+        return;
+      }
       this._scheduleReconnect();
     };
 
-    this._ws.onerror = (): void => {
+    ws.onerror = (): void => {
+      if (this._ws !== ws) {
+        return;
+      }
       // Error is followed by close event, so reconnection is handled there
       SyncLog.warn('SuperSyncWebSocketService: WebSocket error');
     };
@@ -198,12 +265,13 @@ export class SuperSyncWebSocketService implements OnDestroy {
     this._reconnectTimer = setTimeout(() => {
       this._reconnectTimer = null;
       if (this._currentParams && !this._isIntentionalClose) {
-        this._connect(this._currentParams.baseUrl, this._currentParams.accessToken).catch(
-          (err) => {
-            SyncLog.warn('SuperSyncWebSocketService: Reconnect attempt failed', err);
-            this._scheduleReconnect();
-          },
-        );
+        this._startConnect(
+          this._currentParams.baseUrl,
+          this._currentParams.accessToken,
+        ).catch((err) => {
+          SyncLog.warn('SuperSyncWebSocketService: Reconnect attempt failed', err);
+          this._scheduleReconnect();
+        });
       }
     }, delay);
   }

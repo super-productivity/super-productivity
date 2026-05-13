@@ -38,6 +38,7 @@ import {
   DecryptNoPasswordError,
   LockPresentError,
   MissingCredentialsSPError,
+  NetworkUnavailableSPError,
   NoRemoteModelFile,
   PotentialCorsError,
   RevMismatchForModelError,
@@ -75,7 +76,7 @@ import { OperationLogStoreService } from '../../op-log/persistence/operation-log
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { SyncSessionValidationService } from '../../op-log/sync/sync-session-validation.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
-import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import { SuperSyncProvider } from '@sp/sync-providers/super-sync';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 
 /**
@@ -769,6 +770,13 @@ export class SyncWrapperService {
             suggestion:
               'Large sync operations may take up to 90 seconds. Please try again.',
           },
+        });
+        return 'HANDLED_ERROR';
+      } else if (error instanceof NetworkUnavailableSPError) {
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        this._snackService.open({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+          type: 'WARNING',
         });
         return 'HANDLED_ERROR';
       } else if (this._isPermissionError(error)) {

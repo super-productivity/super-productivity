@@ -8,7 +8,11 @@ import {
   vi,
   type MockInstance,
 } from 'vitest';
-import { AuthFailSPError, MissingCredentialsSPError } from '../../src/errors';
+import {
+  AuthFailSPError,
+  MissingCredentialsSPError,
+  NetworkUnavailableSPError,
+} from '../../src/errors';
 import type {
   NativeHttpExecutor,
   NativeHttpRequestConfig,
@@ -149,6 +153,7 @@ interface BuildProviderResult {
   validators: SuperSyncResponseValidators;
   platformInfo: { -readonly [K in keyof ProviderPlatformInfo]: ProviderPlatformInfo[K] };
   nativeHttpExecutor: ReturnType<typeof vi.fn>;
+  webRequestRetryDelay: ReturnType<typeof vi.fn>;
 }
 
 const buildProvider = (
@@ -164,6 +169,7 @@ const buildProvider = (
   const validators = overrides?.validators ?? createValidatorsPassthrough();
   const fetchMock = vi.fn();
   const nativeHttpExecutor = vi.fn();
+  const webRequestRetryDelay = vi.fn().mockResolvedValue(undefined);
   const platformInfo: BuildProviderResult['platformInfo'] = {
     isNativePlatform: overrides?.isNativePlatform ?? false,
     isAndroidWebView: overrides?.isAndroidWebView ?? false,
@@ -177,6 +183,7 @@ const buildProvider = (
     credentialStore: cfgStore.__asPort(),
     storage: storage.port,
     responseValidators: validators,
+    webRequestRetryDelay: webRequestRetryDelay as (ms: number) => Promise<void>,
   };
   const provider = new SuperSyncProvider(deps);
   return {
@@ -188,6 +195,7 @@ const buildProvider = (
     validators,
     platformInfo,
     nativeHttpExecutor,
+    webRequestRetryDelay,
   };
 };
 
@@ -647,6 +655,101 @@ describe('SuperSyncProvider', () => {
   });
 
   describe('error handling', () => {
+    it('retries transient web fetch failures before succeeding', async () => {
+      const { provider, cfgStore, fetchMock, webRequestRetryDelay } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(okResponse({ ops: [], hasMore: false, latestSeq: 7 }));
+
+      const result = await provider.downloadOps(0, 'client-1');
+
+      expect(result.latestSeq).toBe(7);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(webRequestRetryDelay).toHaveBeenCalledWith(1000);
+    });
+
+    it('uses linear 1s/2s backoff across two web retries', async () => {
+      const { provider, cfgStore, fetchMock, webRequestRetryDelay } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(okResponse({ ops: [], hasMore: false, latestSeq: 9 }));
+
+      const result = await provider.downloadOps(0, 'client-1');
+
+      expect(result.latestSeq).toBe(9);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(webRequestRetryDelay.mock.calls).toEqual([[1000], [2000]]);
+    });
+
+    it('throws NetworkUnavailableSPError after web retries are exhausted', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      let caught: unknown;
+      try {
+        await provider.downloadOps(0, 'client-1');
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(caught).toBeInstanceOf(NetworkUnavailableSPError);
+      expect((caught as Error).message).toBe(
+        'Unable to connect to SuperSync server. Check your internet connection.',
+      );
+      // Provider's existing retry contract (regex used by op-log uploader)
+      // must keep matching this error string after the type refactor.
+      expect(isRetryableUploadError(caught as Error)).toBe(true);
+      // Privacy invariant: surface must not leak path/clientId.
+      expect((caught as Error).message).not.toContain('/api/sync/ops');
+      expect((caught as Error).message).not.toContain('client-1');
+    });
+
+    it('does NOT retry AbortError (fetch timeout) — surfaces timeout error', async () => {
+      const { provider, cfgStore, fetchMock, webRequestRetryDelay } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      const abortErr = new Error('aborted');
+      abortErr.name = 'AbortError';
+      fetchMock.mockRejectedValue(abortErr);
+
+      let caught: Error | undefined;
+      try {
+        await provider.downloadOps(0, 'client-1');
+      } catch (e) {
+        caught = e as Error;
+      }
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(webRequestRetryDelay).not.toHaveBeenCalled();
+      expect(caught?.message).toMatch(/^SuperSync request timeout/);
+    });
+
+    it('does NOT retry HTTP-status responses (e.g. 5xx) at the web layer', async () => {
+      const { provider, cfgStore, fetchMock, webRequestRetryDelay } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(errorResponse(500, 'Internal Server Error', ''));
+
+      await expect(provider.downloadOps(0, 'client-1')).rejects.toThrow(/^HTTP 500/);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(webRequestRetryDelay).not.toHaveBeenCalled();
+    });
+
+    it('does NOT retry auth failures', async () => {
+      const { provider, cfgStore, fetchMock, webRequestRetryDelay } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(errorResponse(401, 'Unauthorized', ''));
+
+      await expect(provider.downloadOps(0, 'client-1')).rejects.toBeInstanceOf(
+        AuthFailSPError,
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(webRequestRetryDelay).not.toHaveBeenCalled();
+    });
+
     it('threads extracted reason into thrown HTTP error for non-auth 5xx', async () => {
       const { provider, cfgStore, fetchMock } = buildProvider();
       cfgStore.load.mockResolvedValue(testConfig);

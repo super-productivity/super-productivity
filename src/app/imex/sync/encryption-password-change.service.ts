@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { isOperationSyncCapable } from '../../op-log/sync/operation-sync.util';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncLog } from '../../core/log';
 import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
 import { CleanSlateService } from '../../op-log/clean-slate/clean-slate.service';

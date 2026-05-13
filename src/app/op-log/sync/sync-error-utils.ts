@@ -1,7 +1,6 @@
 /**
  * Utility functions for handling common sync errors.
  */
-import { isRetryableUploadError } from '@sp/sync-providers';
 import { alertDialog } from '../../util/native-dialogs';
 
 const STORAGE_QUOTA_ALERT =
@@ -31,5 +30,3 @@ export const isStorageQuotaError = (message: string | undefined): boolean => {
     message.includes('Storage quota exceeded')
   );
 };
-
-export const isTransientNetworkError = isRetryableUploadError;

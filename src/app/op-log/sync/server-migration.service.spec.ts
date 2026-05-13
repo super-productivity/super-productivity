@@ -11,7 +11,7 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { UserInputWaitStateService } from '../../imex/sync/user-input-wait-state.service';
 import {
-  SyncProviderServiceInterface,
+  SyncProviderBase,
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
@@ -34,8 +34,7 @@ describe('ServerMigrationService', () => {
   let defaultProvider: OperationSyncProvider;
 
   // Type for operation-sync-capable provider
-  type OperationSyncProvider = SyncProviderServiceInterface<SyncProviderId> &
-    OperationSyncCapable;
+  type OperationSyncProvider = SyncProviderBase<SyncProviderId> & OperationSyncCapable;
 
   // Mock sync provider that supports operations
   const createMockSyncProvider = (): OperationSyncProvider => {

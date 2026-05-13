@@ -45,7 +45,7 @@ import {
   NextcloudProvider,
   type NextcloudPrivateCfg,
   type WebdavPrivateCfg,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/webdav';
 import { testWebdavConnection } from '../../../op-log/sync-providers/file-based/webdav/test-webdav-connection';
 
 @Component({

@@ -97,4 +97,42 @@ test.describe('App Features', () => {
       await expect(featureElement).toBeAttached();
     });
   });
+
+  test('Issues panel app feature hides the mobile bottom-nav panel option', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const appFeaturesSection = page
+      .locator('collapsible', { hasText: 'App Features' })
+      .first();
+    const featureSwitch = page.getByRole('switch', {
+      name: 'Issues panel',
+      exact: true,
+    });
+    const issuePanelButton = page.locator('.e2e-toggle-issue-provider-panel');
+    const notesButton = page.locator('.e2e-toggle-notes-btn');
+    const sidePanelMenuButton = page.getByRole('button', {
+      name: 'Side Panel Menu',
+    });
+
+    await goToMainView(page);
+    await expect(page.locator('mobile-bottom-nav')).toBeVisible();
+    await sidePanelMenuButton.click();
+    await expect(issuePanelButton).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await goToConfig(page);
+    await appFeaturesSection.click();
+    await expect(featureSwitch).toBeVisible();
+    await expect(featureSwitch).toBeChecked();
+    await featureSwitch.click();
+    await expect(featureSwitch).not.toBeChecked();
+
+    await goToMainView(page);
+    await expect(page.locator('mobile-bottom-nav')).toBeVisible();
+    await sidePanelMenuButton.click();
+    await expect(notesButton).toBeVisible();
+    await expect(issuePanelButton).not.toBeAttached();
+  });
 });

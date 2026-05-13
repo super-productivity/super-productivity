@@ -2,9 +2,9 @@ import { CapacitorHttp } from '@capacitor/core';
 import {
   PROVIDER_ID_SUPER_SYNC,
   SuperSyncProvider as PackageSuperSyncProvider,
-  type NativeHttpResponse,
   type SuperSyncDeps,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/super-sync';
+import type { NativeHttpResponse } from '@sp/sync-providers/http';
 import { OP_LOG_SYNC_LOGGER } from '../../core/sync-logger.adapter';
 import { SyncCredentialStore } from '../credential-store.service';
 import { APP_PROVIDER_PLATFORM_INFO } from '../platform/app-provider-platform-info';
@@ -27,9 +27,7 @@ type AssertSuperSyncId = SyncProviderId.SuperSync extends typeof PROVIDER_ID_SUP
 const _idCheck: AssertSuperSyncId = true;
 void _idCheck;
 
-export type { SuperSyncPrivateCfg } from '@sp/sync-providers';
-export { SUPER_SYNC_DEFAULT_BASE_URL, SuperSyncProvider } from '@sp/sync-providers';
-
+export type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 /**
  * App-side factory wiring concrete adapters into the package's SuperSync
  * provider. Returns the package class directly — no shim subclass.

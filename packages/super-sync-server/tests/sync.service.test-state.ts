@@ -10,6 +10,8 @@ export const testState = {
   userSyncStates: new Map<number, any>(),
   users: new Map<number, any>(),
   serverSeqCounter: 0,
+  batchConflictQueryCount: 0,
+  entityConflictFindFirstCount: 0,
 };
 
 export function resetTestState(): void {
@@ -18,6 +20,8 @@ export function resetTestState(): void {
   testState.userSyncStates = new Map();
   testState.users = new Map();
   testState.serverSeqCounter = 0;
+  testState.batchConflictQueryCount = 0;
+  testState.entityConflictFindFirstCount = 0;
 }
 
 export function applyOperationSelect(op: any, select?: Record<string, boolean>): any {

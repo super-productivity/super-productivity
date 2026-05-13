@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import { SuperSyncProvider } from '@sp/sync-providers/super-sync';
 import {
   RestoreCapable,
   RestorePoint,

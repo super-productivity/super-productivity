@@ -1,4 +1,4 @@
-@if (globalThemeService.backgroundImg(); as bgImage) {
+@if (resolvedBgImage(); as bgImage) {
   <div
     [style.background]="'url(' + bgImage + ')'"
     [style.filter]="bgImageBlurFilter()"

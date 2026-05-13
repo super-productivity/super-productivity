@@ -5,7 +5,11 @@ import {
 } from '@sp/sync-core';
 import type { SyncLogger } from '@sp/sync-core';
 import type { SyncCredentialStorePort } from '../credential-store-port';
-import { AuthFailSPError, MissingCredentialsSPError } from '../errors';
+import {
+  AuthFailSPError,
+  MissingCredentialsSPError,
+  NetworkUnavailableSPError,
+} from '../errors';
 import {
   executeNativeRequestWithRetry,
   type NativeHttpExecutor,
@@ -40,6 +44,9 @@ const OPS_UPLOAD_REQUEST_ID_PREFIX = 'ops-v1';
 /** 75s allows the server's 60s database timeout plus network/parse buffer. */
 const SUPERSYNC_REQUEST_TIMEOUT_MS = 75000;
 
+/** Browser/Electron transient fetch failures get the same retry budget as native. */
+const SUPERSYNC_WEB_MAX_RETRIES = 2;
+
 /** Max chars of server `error` field threaded into thrown `Error.message`. */
 const SERVER_ERROR_REASON_MAX_CHARS = 80;
 
@@ -61,8 +68,8 @@ class SuperSyncHttpStatusError extends Error {
   }
 }
 
-const RETRYABLE_NATIVE_REQUEST_MESSAGE =
-  'Unable to connect to SuperSync server. Check your internet connection.';
+const defaultDelay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface SuperSyncDeps {
   logger: SyncLogger;
@@ -75,6 +82,10 @@ export interface SuperSyncDeps {
   >;
   storage: SuperSyncStorage;
   responseValidators: SuperSyncResponseValidators;
+  /**
+   * Optional override for tests to avoid real web-request retry waits.
+   */
+  webRequestRetryDelay?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -676,7 +687,7 @@ export class SuperSyncProvider
     );
 
     if (networkError) {
-      throw new Error(RETRYABLE_NATIVE_REQUEST_MESSAGE);
+      throw new NetworkUnavailableSPError();
     }
     // Our own thrown errors (`AuthFailSPError`, `MissingCredentialsSPError`,
     // `SuperSyncHttpStatusError` from the non-2xx branch) carry only
@@ -696,6 +707,26 @@ export class SuperSyncProvider
       throw new Error(`SuperSync native request failed: ${error.name}`);
     }
     throw new Error(`SuperSync native request failed: ${toSyncLogError(error).name}`);
+  }
+
+  private _isRetryableWebRequestError(error: unknown): boolean {
+    if (
+      error instanceof AuthFailSPError ||
+      error instanceof MissingCredentialsSPError ||
+      error instanceof SuperSyncHttpStatusError
+    ) {
+      return false;
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      return false;
+    }
+    return isRetryableUploadError(
+      error instanceof Error ? error : this._getErrorMessage(error),
+    );
+  }
+
+  private _delayWebRequestRetry(ms: number): Promise<void> {
+    return (this._deps.webRequestRetryDelay ?? defaultDelay)(ms);
   }
 
   private async _fetchApi<T>(
@@ -786,74 +817,109 @@ export class SuperSyncProvider
     headers: Headers,
     options: { method: string; body?: BodyInit },
   ): Promise<T> {
-    const startTime = Date.now();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), SUPERSYNC_REQUEST_TIMEOUT_MS);
+    for (let attempt = 0; attempt <= SUPERSYNC_WEB_MAX_RETRIES; attempt++) {
+      const startTime = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        SUPERSYNC_REQUEST_TIMEOUT_MS,
+      );
 
-    try {
-      const fetchFn = this._deps.webFetch();
-      const response = await fetchFn(url, {
-        ...options,
-        headers,
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        clearTimeout(timeoutId);
-        const errorText = await response.text().catch(() => '');
-        // Check for auth failure FIRST before throwing generic error
-        this._checkHttpStatus(response.status, errorText);
-        const reason = this._extractServerErrorReason(errorText, response.status);
-        const suffix = reason ? ` — ${reason}` : '';
-        throw new SuperSyncHttpStatusError(
-          `HTTP ${response.status} ${response.statusText}${suffix}`,
-          response.status,
-        );
-      }
-
-      // CRITICAL: Read response body BEFORE clearing timeout
-      // The timeout must cover the entire response cycle including JSON parsing
-      const data = (await response.json()) as T;
-      clearTimeout(timeoutId);
-
-      const duration = Date.now() - startTime;
-      if (duration > 30000) {
-        this._deps.logger.warn(`${this._logLabel}: Slow SuperSync request detected`, {
-          path,
-          durationMs: duration,
-          durationSec: (duration / 1000).toFixed(1),
+      try {
+        const fetchFn = this._deps.webFetch();
+        const response = await fetchFn(url, {
+          ...options,
+          headers,
+          signal: controller.signal,
         });
-      }
 
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      const duration = Date.now() - startTime;
+        if (!response.ok) {
+          clearTimeout(timeoutId);
+          const errorText = await response.text().catch(() => '');
+          // Check for auth failure FIRST before throwing generic error
+          this._checkHttpStatus(response.status, errorText);
+          const reason = this._extractServerErrorReason(errorText, response.status);
+          const suffix = reason ? ` — ${reason}` : '';
+          throw new SuperSyncHttpStatusError(
+            `HTTP ${response.status} ${response.statusText}${suffix}`,
+            response.status,
+          );
+        }
 
-      if (error instanceof Error && error.name === 'AbortError') {
+        // CRITICAL: Read response body BEFORE clearing timeout
+        // The timeout must cover the entire response cycle including JSON parsing
+        const data = (await response.json()) as T;
+        clearTimeout(timeoutId);
+
+        const duration = Date.now() - startTime;
+        if (duration > 30000) {
+          this._deps.logger.warn(`${this._logLabel}: Slow SuperSync request detected`, {
+            path,
+            durationMs: duration,
+            durationSec: (duration / 1000).toFixed(1),
+          });
+        }
+
+        return data;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+
+        if (error instanceof Error && error.name === 'AbortError') {
+          this._deps.logger.error(
+            `${this._logLabel}: SuperSync request timeout`,
+            undefined,
+            {
+              path,
+              durationMs: duration,
+              timeoutMs: SUPERSYNC_REQUEST_TIMEOUT_MS,
+            },
+          );
+          // Path is NOT interpolated — relative path includes
+          // `excludeClient` (clientId) on download queries.
+          throw new Error(
+            `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s`,
+          );
+        }
+
+        const isNetworkError = this._isRetryableWebRequestError(error);
+        if (isNetworkError && attempt < SUPERSYNC_WEB_MAX_RETRIES) {
+          const delayMs = 1000 * (attempt + 1);
+          this._deps.logger.warn(
+            `${this._logLabel}: transient SuperSync request failure, retrying in ${delayMs}ms`,
+            {
+              path,
+              attempt: attempt + 1,
+              maxRetries: SUPERSYNC_WEB_MAX_RETRIES,
+              delayMs,
+              durationMs: duration,
+              ...this._getSafeErrorLogMeta(error),
+            },
+          );
+          await this._delayWebRequestRetry(delayMs);
+          continue;
+        }
+
         this._deps.logger.error(
-          `${this._logLabel}: SuperSync request timeout`,
+          `${this._logLabel}: SuperSync request failed`,
           undefined,
           {
             path,
             durationMs: duration,
-            timeoutMs: SUPERSYNC_REQUEST_TIMEOUT_MS,
+            ...this._getSafeErrorLogMeta(error),
+            ...(isNetworkError ? { isNetworkError: true } : {}),
           },
         );
-        // Path is NOT interpolated — relative path includes
-        // `excludeClient` (clientId) on download queries.
-        throw new Error(
-          `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s`,
-        );
-      }
 
-      this._deps.logger.error(`${this._logLabel}: SuperSync request failed`, undefined, {
-        path,
-        durationMs: duration,
-        ...this._getSafeErrorLogMeta(error),
-      });
-      throw error;
+        if (isNetworkError) {
+          throw new NetworkUnavailableSPError();
+        }
+        throw error;
+      }
     }
+
+    // Unreachable: the loop returns or throws.
+    throw new Error('SuperSync request failed');
   }
 
   /**

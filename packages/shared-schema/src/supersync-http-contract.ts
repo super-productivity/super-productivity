@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const SUPER_SYNC_CLIENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 export const SUPER_SYNC_MAX_CLIENT_ID_LENGTH = 255;
 export const SUPER_SYNC_MAX_OPS_PER_UPLOAD = 100;
+export const SUPER_SYNC_MAX_ENTITY_IDS_PER_OP = 1000;
 
 export const SUPER_SYNC_OP_TYPES = [
   'CRT',
@@ -50,7 +51,10 @@ export const SuperSyncOperationSchema = z.object({
   opType: z.enum(SUPER_SYNC_OP_TYPES),
   entityType: z.string().min(1).max(255),
   entityId: z.string().max(255).optional(),
-  entityIds: z.array(z.string().max(255)).optional(),
+  entityIds: z
+    .array(z.string().max(255))
+    .max(SUPER_SYNC_MAX_ENTITY_IDS_PER_OP)
+    .optional(),
   payload: z.unknown(),
   vectorClock: SuperSyncVectorClockSchema,
   timestamp: z.number(),

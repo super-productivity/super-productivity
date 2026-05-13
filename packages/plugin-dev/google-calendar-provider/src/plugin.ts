@@ -19,7 +19,8 @@ const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-const CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const CALENDAR_LIST_READONLY_SCOPE =
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly';
 const CLIENT_ID =
   '637968426975-p6bu3f76b9cbk927k6281lb30bris19o.apps.googleusercontent.com';
 // NOT A SECRET — this is a "Desktop" OAuth client type (RFC 8252).
@@ -274,7 +275,7 @@ PluginAPI.registerIssueProvider({
         iosClientId: IOS_CLIENT_ID,
         // Intentionally no webClientId: durable Google Calendar web OAuth
         // requires a confidential client secret, which browser JS cannot keep.
-        scopes: [CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE],
+        scopes: [CALENDAR_EVENTS_SCOPE, CALENDAR_LIST_READONLY_SCOPE],
         extraAuthParams: { access_type: 'offline', prompt: 'consent' },
       },
     },
@@ -388,9 +389,7 @@ PluginAPI.registerIssueProvider({
     const cfg = migrateConfig(config);
     const calendarId = getWriteCalendarId(cfg);
     try {
-      await http.get(
-        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}`,
-      );
+      await http.get(eventUrl(calendarId), { params: { maxResults: '1' } });
       return true;
     } catch {
       return false;

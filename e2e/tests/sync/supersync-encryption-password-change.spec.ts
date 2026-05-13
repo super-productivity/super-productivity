@@ -7,7 +7,92 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
-import { expectTaskVisible } from '../../utils/supersync-assertions';
+import {
+  expectTaskNotVisible,
+  expectTaskVisible,
+} from '../../utils/supersync-assertions';
+
+interface SyncStatusResponse {
+  storageUsedBytes: number;
+  storageQuotaBytes: number;
+}
+
+const isSyncStatusResponse = (value: unknown): value is SyncStatusResponse => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as SyncStatusResponse).storageUsedBytes === 'number' &&
+    typeof (value as SyncStatusResponse).storageQuotaBytes === 'number'
+  );
+};
+
+const getSyncStatus = async (
+  baseUrl: string,
+  accessToken: string,
+): Promise<SyncStatusResponse> => {
+  const response = await fetch(`${baseUrl}/api/sync/status`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get sync status: ${response.status}`);
+  }
+
+  const body: unknown = await response.json();
+  if (!isSyncStatusResponse(body)) {
+    throw new Error(`Unexpected sync status response: ${JSON.stringify(body)}`);
+  }
+
+  return body;
+};
+
+const useServerDataIfPrompted = async (client: SimulatedE2EClient): Promise<void> => {
+  const appeared = await client.sync.syncImportConflictDialog
+    .waitFor({ state: 'visible', timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!appeared) return;
+
+  await client.sync.syncImportUseRemoteBtn.click();
+  await client.sync.syncImportConflictDialog.waitFor({
+    state: 'hidden',
+    timeout: 5000,
+  });
+};
+
+const recoverWithNewPasswordAndServerData = async (
+  client: SimulatedE2EClient,
+  newPassword: string,
+): Promise<void> => {
+  const decryptErrorDialog = client.page.locator('dialog-handle-decrypt-error');
+
+  const dialogAlreadyVisible = await decryptErrorDialog.isVisible().catch(() => false);
+  if (!dialogAlreadyVisible) {
+    await client.sync.syncBtn.click();
+  }
+
+  const decryptAppeared = await decryptErrorDialog
+    .waitFor({ state: 'visible', timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (decryptAppeared) {
+    const passwordInput = decryptErrorDialog.locator('input[type="password"]');
+    await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
+    await passwordInput.fill(newPassword);
+
+    await decryptErrorDialog.locator('button:has-text("Retry Decrypt")').first().click();
+    await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
+  }
+
+  await useServerDataIfPrompted(client);
+  await client.sync.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
+  await client.sync.syncAndWait();
+  await useServerDataIfPrompted(client);
+};
 
 /**
  * SuperSync Encryption Password Change E2E Tests
@@ -209,6 +294,88 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientC) await closeClient(clientC);
+    }
+  });
+
+  test('Incompatible stale client adopts Client A clean slate and drops pending data', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }, testInfo) => {
+    testInfo.setTimeout(180000);
+    const appUrl = baseURL || 'http://localhost:4242';
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const baseConfig = getSuperSyncConfig(user);
+      const oldPassword = `oldpass-${testRunId}`;
+      const newPassword = `newpass-${testRunId}`;
+
+      clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+      await clientA.sync.setupSuperSync({
+        ...baseConfig,
+        isEncryptionEnabled: true,
+        password: oldPassword,
+      });
+
+      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+      await clientB.sync.setupSuperSync({
+        ...baseConfig,
+        isEncryptionEnabled: true,
+        password: oldPassword,
+      });
+
+      const taskFromA = `A-Compatible-${testRunId}`;
+      await clientA.workView.addTask(taskFromA);
+      await clientA.sync.syncAndWait();
+
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, taskFromA);
+
+      const staleTaskFromB = `B-Stale-${testRunId}`;
+      await clientB.workView.addTask(staleTaskFromB);
+      await waitForTask(clientB.page, staleTaskFromB);
+
+      const passwordChange = clientA.sync.changeEncryptionPassword(newPassword);
+      await clientB.sync.syncBtn.click();
+      await clientB.sync.syncSpinner
+        .waitFor({ state: 'hidden', timeout: 30000 })
+        .catch(() => undefined);
+      await passwordChange;
+
+      const taskFromAAfterChange = `A-AfterChange-${testRunId}`;
+      await clientA.workView.addTask(taskFromAAfterChange);
+      await clientA.sync.syncAndWait();
+
+      await recoverWithNewPasswordAndServerData(clientB, newPassword);
+
+      await waitForTask(clientB.page, taskFromA);
+      await waitForTask(clientB.page, taskFromAAfterChange);
+      await expectTaskVisible(clientA, taskFromA);
+      await expectTaskVisible(clientA, taskFromAAfterChange);
+      await expectTaskVisible(clientB, taskFromA);
+      await expectTaskVisible(clientB, taskFromAAfterChange);
+      await expectTaskNotVisible(clientA, staleTaskFromB, 5000);
+      await expectTaskNotVisible(clientB, staleTaskFromB, 5000);
+
+      await expect(clientB.page.locator('dialog-handle-decrypt-error')).not.toBeVisible();
+      await expect(clientB.sync.syncImportConflictDialog).not.toBeVisible();
+
+      const status = await getSyncStatus(baseConfig.baseUrl, baseConfig.accessToken);
+      expect(status.storageUsedBytes).toBeLessThanOrEqual(status.storageQuotaBytes);
+
+      const taskFromBAfterRecovery = `B-Recovered-${testRunId}`;
+      await clientB.workView.addTask(taskFromBAfterRecovery);
+      await clientB.sync.syncAndWait();
+
+      await clientA.sync.syncAndWait();
+      await waitForTask(clientA.page, taskFromBAfterRecovery);
+      await expectTaskVisible(clientA, taskFromBAfterRecovery);
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
     }
   });
 

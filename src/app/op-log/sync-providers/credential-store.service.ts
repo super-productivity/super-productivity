@@ -2,7 +2,7 @@ import { DBSchema, IDBPDatabase, openDB } from 'idb';
 import type {
   CredentialChangeHandler,
   SyncCredentialStorePort,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/credential-store';
 import { SyncProviderId, PRIVATE_CFG_PREFIX } from './provider.const';
 import { PrivateCfgByProviderId } from '../core/types/sync.types';
 import { SyncLog } from '../../core/log';

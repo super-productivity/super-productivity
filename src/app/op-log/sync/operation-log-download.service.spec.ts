@@ -4,7 +4,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { LockService } from './lock.service';
 import { SnackService } from '../../core/snack/snack.service';
 import {
-  SyncProviderServiceInterface,
+  SyncProviderBase,
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
@@ -82,7 +82,7 @@ describe('OperationLogDownloadService', () => {
 
     describe('API-based sync', () => {
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       beforeEach(() => {

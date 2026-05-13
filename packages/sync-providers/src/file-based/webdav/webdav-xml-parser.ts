@@ -24,12 +24,13 @@ export interface FileMeta {
 
 // Minimal structural typing of the parser node API we use. Browser
 // DOMParser, Capacitor WebViews, and `@xmldom/xmldom` (test polyfill)
-// all expose this surface. Uses NS-aware lookups so namespace prefixes
-// (e.g. `<D:response>` vs `<response>`) do not affect matching — required
-// because `@xmldom/xmldom`'s `getElementsByTagName` is prefix-strict.
+// all expose this surface. Matching by `localName` keeps namespace prefixes
+// (e.g. `<D:response>` vs `<response>`) from affecting parsing.
 interface XmlNodeLike {
   readonly textContent: string | null;
-  getElementsByTagNameNS(namespaceURI: string, localName: string): XmlNodeCollection;
+  readonly childNodes?: XmlNodeCollection;
+  readonly localName?: string | null;
+  readonly nodeName?: string | null;
 }
 
 interface XmlNodeCollection {
@@ -38,15 +39,79 @@ interface XmlNodeCollection {
   [index: number]: XmlNodeLike | null;
 }
 
+interface DocumentScanResult {
+  hasParserError: boolean;
+  responses: XmlNodeLike[];
+}
+
+const getCollectionItem = (
+  collection: XmlNodeCollection,
+  index: number,
+): XmlNodeLike | null => collection.item(index) ?? collection[index] ?? null;
+
+const getLocalName = (node: XmlNodeLike): string => {
+  if (node.localName) {
+    return node.localName;
+  }
+
+  const nodeName = node.nodeName ?? '';
+  const prefixIndex = nodeName.indexOf(':');
+  return prefixIndex >= 0 ? nodeName.slice(prefixIndex + 1) : nodeName;
+};
+
+const hasLocalName = (node: XmlNodeLike, localName: string): boolean =>
+  getLocalName(node) === localName;
+
 const firstChild = (node: XmlNodeLike | null, localName: string): XmlNodeLike | null => {
   if (!node) return null;
-  const list = node.getElementsByTagNameNS('*', localName);
-  return list.length > 0 ? (list[0] ?? null) : null;
+  const children = node.childNodes;
+  if (!children) return null;
+
+  for (let i = 0; i < children.length; i++) {
+    const child = getCollectionItem(children, i);
+    if (child && hasLocalName(child, localName)) {
+      return child;
+    }
+  }
+
+  return null;
 };
 
 const firstChildText = (node: XmlNodeLike | null, localName: string): string => {
   const el = firstChild(node, localName);
   return el?.textContent ?? '';
+};
+
+const scanDocument = (node: XmlNodeLike): DocumentScanResult => {
+  const result: DocumentScanResult = {
+    hasParserError: false,
+    responses: [],
+  };
+
+  const visit = (current: XmlNodeLike): void => {
+    if (hasLocalName(current, 'parsererror')) {
+      result.hasParserError = true;
+      return;
+    }
+
+    if (hasLocalName(current, 'response')) {
+      result.responses.push(current);
+    }
+
+    const children = current.childNodes;
+    if (!children) return;
+
+    for (let i = 0; i < children.length; i++) {
+      const child = getCollectionItem(children, i);
+      if (child) {
+        visit(child);
+      }
+    }
+  };
+
+  visit(node);
+
+  return result;
 };
 
 export class WebdavXmlParser {
@@ -146,8 +211,8 @@ export class WebdavXmlParser {
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
 
-      const parserErr = firstChild(xmlDoc, 'parsererror');
-      if (parserErr) {
+      const scanResult = scanDocument(xmlDoc);
+      if (scanResult.hasParserError) {
         this._logger.critical(
           `${WebdavXmlParser.L}.parseMultiplePropsFromXml() XML parsing error`,
           { errorName: 'XmlParserError' },
@@ -156,7 +221,7 @@ export class WebdavXmlParser {
       }
 
       const results: FileMeta[] = [];
-      const responses = xmlDoc.getElementsByTagNameNS('*', 'response');
+      const responses = scanResult.responses;
 
       for (let i = 0; i < responses.length; i++) {
         const response = responses[i];

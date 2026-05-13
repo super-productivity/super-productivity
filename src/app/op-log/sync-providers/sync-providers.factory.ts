@@ -57,15 +57,15 @@ const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> =
   ];
 
   if (IS_ELECTRON) {
-    const { LocalFileSyncElectron } =
+    const { createLocalFileSyncElectron } =
       await import('./file-based/local-file/local-file-sync-electron');
-    providers.push(new LocalFileSyncElectron() as SyncProviderBase<SyncProviderId>);
+    providers.push(createLocalFileSyncElectron() as SyncProviderBase<SyncProviderId>);
   }
 
   if (IS_ANDROID_WEB_VIEW) {
-    const { LocalFileSyncAndroid } =
+    const { createLocalFileSyncAndroid } =
       await import('./file-based/local-file/local-file-sync-android');
-    providers.push(new LocalFileSyncAndroid() as SyncProviderBase<SyncProviderId>);
+    providers.push(createLocalFileSyncAndroid() as SyncProviderBase<SyncProviderId>);
   }
 
   return providers;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  SUPER_SYNC_MAX_ENTITY_IDS_PER_OP,
   SUPER_SYNC_MAX_OPS_PER_UPLOAD,
   SuperSyncDownloadOpsQuerySchema,
   SuperSyncDownloadOpsResponseSchema,
@@ -43,6 +44,23 @@ describe('SuperSync HTTP contract schemas', () => {
 
     expect('extraRequestField' in parsed).toBe(false);
     expect('extraOpField' in parsed.ops[0]).toBe(false);
+  });
+
+  it('caps entityIds per operation', () => {
+    expect(() =>
+      SuperSyncUploadOpsRequestSchema.parse({
+        ops: [
+          {
+            ...createValidOperation(),
+            entityIds: Array.from(
+              { length: SUPER_SYNC_MAX_ENTITY_IDS_PER_OP + 1 },
+              (_, i) => `task-${i}`,
+            ),
+          },
+        ],
+        clientId: 'client_1',
+      }),
+    ).toThrow();
   });
 
   it('rejects invalid client IDs in upload requests', () => {

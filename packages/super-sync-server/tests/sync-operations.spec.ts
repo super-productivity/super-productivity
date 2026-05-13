@@ -328,6 +328,7 @@ vi.mock('../src/db', async () => {
           const ops = Array.from(state.operations.values());
           return ops
             .filter((op: any) => {
+              if (args.where?.id?.in && !args.where.id.in.includes(op.id)) return false;
               if (args.where?.userId !== undefined && args.where.userId !== op.userId)
                 return false;
               if (
@@ -335,12 +336,23 @@ vi.mock('../src/db', async () => {
                 op.serverSeq <= args.where.serverSeq.gt
               )
                 return false;
+              if (
+                args.where?.serverSeq?.lte !== undefined &&
+                op.serverSeq > args.where.serverSeq.lte
+              )
+                return false;
+              if (
+                args.where?.receivedAt?.lt !== undefined &&
+                op.receivedAt >= args.where.receivedAt.lt
+              )
+                return false;
               if (args.where?.clientId?.not && op.clientId === args.where.clientId.not)
                 return false;
               return true;
             })
             .sort((a: any, b: any) => a.serverSeq - b.serverSeq)
-            .slice(0, args.take || 500);
+            .slice(0, args.take || 500)
+            .map((op: any) => applyOperationSelect(op, args.select));
         }),
         count: vi.fn().mockImplementation(async (args: any) => {
           const ops = Array.from(state.operations.values());
@@ -380,6 +392,7 @@ vi.mock('../src/db', async () => {
         deleteMany: vi.fn().mockImplementation(async (args: any) => {
           let count = 0;
           for (const [id, op] of state.operations.entries()) {
+            if (args.where?.id?.in && !args.where.id.in.includes(id)) continue;
             if (
               args.where?.userId !== undefined &&
               args.where.userId !== (op as any).userId

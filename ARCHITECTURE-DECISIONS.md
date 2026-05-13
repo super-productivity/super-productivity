@@ -69,6 +69,55 @@ This document tracks significant architectural decisions and patterns in the Sup
 
 ---
 
+### 3. Sync Package Boundary Direction
+
+**Status**: ✅ Active (since May 2026)
+
+**Decision**: Operation-log sync code is split by dependency direction:
+`src/app` composes host-specific wiring, `@sp/sync-providers` owns bundled
+provider implementations, and `@sp/sync-core` owns framework-agnostic reusable
+sync primitives.
+
+**Rationale**:
+
+- Keeps reusable sync algorithms independent of Angular, NgRx, app models, and
+  provider implementations
+- Prevents provider IDs, app action/entity enums, validation schemas, UI, OAuth,
+  and platform bridges from leaking into the core engine package
+- Gives boundary lint a clear rule: packages never import app code, and
+  providers consume only public sync-core exports
+
+**Implementation**:
+
+- ESLint rejects Angular, NgRx, app, shared-schema, sync-core deep imports, and
+  dynamic imports inside package sources
+- `@sp/sync-core` has no runtime dependencies and owns vector-clock algorithms
+  used by client/server compatibility paths
+- `packages/shared-schema` compatibility-re-exports generic vector-clock
+  algorithms from `@sp/sync-core`; `@sp/sync-core` must not import
+  `@sp/shared-schema`
+- `@sp/sync-providers` depends on public `@sp/sync-core` plus provider runtime
+  helpers, while app factories inject credentials, platform bridges, validators,
+  OAuth routing, and config
+
+**Documentation**: [`docs/sync-and-op-log/package-boundaries.md`](docs/sync-and-op-log/package-boundaries.md)
+
+**Key Files**:
+
+- [`packages/sync-core/src/index.ts`](packages/sync-core/src/index.ts) - Core public API
+- [`packages/sync-providers/src/index.ts`](packages/sync-providers/src/index.ts) - Provider public API
+- [`eslint.config.js`](eslint.config.js) - Package boundary enforcement
+- [`src/app/op-log/sync-providers/sync-providers.factory.ts`](src/app/op-log/sync-providers/sync-providers.factory.ts) - App-side provider composition
+
+**When to Update This Pattern**:
+
+- Moving sync code between app and packages
+- Adding a package export or dependency
+- Adding a provider implementation or plugin-facing provider contract
+- Changing vector-clock ownership or shared-schema compatibility
+
+---
+
 ## How to Use This Document
 
 ### When Making Architectural Changes

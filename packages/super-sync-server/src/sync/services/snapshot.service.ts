@@ -192,6 +192,20 @@ export class SnapshotService {
   }
 
   /**
+   * Return cached snapshot timestamp without loading the snapshot blob.
+   * Status polling only needs snapshot age; reading, gunzipping, and parsing
+   * snapshotData there can turn a cheap endpoint into a large CPU/memory hit.
+   */
+  async getCachedSnapshotGeneratedAt(userId: number): Promise<number | null> {
+    const row = await prisma.userSyncState.findUnique({
+      where: { userId },
+      select: { snapshotAt: true },
+    });
+
+    return row?.snapshotAt != null ? Number(row.snapshotAt) : null;
+  }
+
+  /**
    * Get cached snapshot for a user.
    */
   async getCachedSnapshot(userId: number): Promise<SnapshotResult | null> {

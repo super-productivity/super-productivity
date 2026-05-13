@@ -13,6 +13,7 @@ vi.mock('../src/db', () => ({
     userSyncState: {
       findUnique: vi.fn(),
     },
+    $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   },
 }));
@@ -86,6 +87,7 @@ describe('OperationDownloadService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
     service = new OperationDownloadService();
   });
 
@@ -395,7 +397,7 @@ describe('OperationDownloadService', () => {
       expect(result.ops).toHaveLength(1);
       expect(result.ops[0].serverSeq).toBe(50);
       expect(result.ops[0].op.opType).toBe('SYNC_IMPORT');
-      expect(capturedTx.$queryRaw).not.toHaveBeenCalled();
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
       expect(capturedTx.operation.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -496,6 +498,9 @@ describe('OperationDownloadService', () => {
         };
         return fn(mockTx);
       });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { client_id: 'snapshot-author', max_counter: 1n },
+      ]);
 
       const result = await service.getOpsSinceWithSeq(1, 10);
 
@@ -542,7 +547,6 @@ describe('OperationDownloadService', () => {
         };
         return fn(capturedTx);
       });
-
       await service.getOpsSinceWithSeq(1, 10);
 
       expect(
@@ -662,8 +666,9 @@ describe('OperationDownloadService', () => {
 
       await service.getOpsSinceWithSeq(1, 10);
 
-      // $queryRaw should be called exactly once for clock aggregation
-      expect(capturedTx.$queryRaw).toHaveBeenCalledTimes(1);
+      // $queryRaw should be called exactly once for clock aggregation, outside
+      // the interactive transaction.
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       // findMany should be called exactly once (for ops after snapshot), NOT twice
       expect(capturedTx.operation.findMany).toHaveBeenCalledTimes(1);
     });
@@ -690,6 +695,11 @@ describe('OperationDownloadService', () => {
         };
         return fn(mockTx);
       });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { client_id: 'client-1', max_counter: 15n },
+        { client_id: 'client-2', max_counter: 5n },
+        { client_id: 'client-3', max_counter: 8n },
+      ]);
 
       const result = await service.getOpsSinceWithSeq(1, 10);
 
@@ -720,6 +730,11 @@ describe('OperationDownloadService', () => {
         };
         return fn(mockTx);
       });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { client_id: 'a', max_counter: 3n },
+        { client_id: 'b', max_counter: 5n },
+        { client_id: 'c', max_counter: 2n },
+      ]);
 
       const result = await service.getOpsSinceWithSeq(1, 0);
 
@@ -745,7 +760,6 @@ describe('OperationDownloadService', () => {
         };
         return fn(mockTx);
       });
-
       const result = await service.getOpsSinceWithSeq(1, 0);
 
       expect(result.snapshotVectorClock).toEqual({});
@@ -770,6 +784,11 @@ describe('OperationDownloadService', () => {
         };
         return fn(mockTx);
       });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { client_id: 'x', max_counter: 0n },
+        { client_id: 'y', max_counter: 1n },
+        { client_id: 'z', max_counter: 99999999n },
+      ]);
 
       const result = await service.getOpsSinceWithSeq(1, 0);
 
@@ -796,6 +815,9 @@ describe('OperationDownloadService', () => {
         };
         return fn(mockTx);
       });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { client_id: 'solo-client', max_counter: 42n },
+      ]);
 
       const result = await service.getOpsSinceWithSeq(1, 0);
 
@@ -823,6 +845,7 @@ describe('OperationDownloadService', () => {
         };
         return fn(mockTx);
       });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue(clockRows);
 
       const result = await service.getOpsSinceWithSeq(1, 10);
 
@@ -859,6 +882,7 @@ describe('OperationDownloadService', () => {
         };
         return fn(mockTx);
       });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue(clockRows);
 
       const result = await service.getOpsSinceWithSeq(1, 10, 'requesting-client');
 
@@ -889,7 +913,7 @@ describe('OperationDownloadService', () => {
       const result = await service.getOpsSinceWithSeq(1, 60);
 
       // $queryRaw should NOT be called — client is past the snapshot
-      expect(capturedTx.$queryRaw).not.toHaveBeenCalled();
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
       expect(result.snapshotVectorClock).toBeUndefined();
     });
 
@@ -913,7 +937,7 @@ describe('OperationDownloadService', () => {
 
       const result = await service.getOpsSinceWithSeq(1, 0);
 
-      expect(capturedTx.$queryRaw).not.toHaveBeenCalled();
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
       expect(result.snapshotVectorClock).toBeUndefined();
     });
 

@@ -4,7 +4,7 @@ import { toSyncLogError } from '@sp/sync-core';
 import {
   AdditionalLogErrorBase as PackageAdditionalLogErrorBase,
   extractErrorMessage as packageExtractErrorMessage,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/errors';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
 import { OP_LOG_SYNC_LOGGER } from '../sync-logger.adapter';
 
@@ -15,17 +15,19 @@ import { OP_LOG_SYNC_LOGGER } from '../sync-logger.adapter';
 export {
   AuthFailSPError,
   EmptyRemoteBodySPError,
+  FileHashCreationAPIError,
   HttpNotOkAPIError,
   InvalidDataSPError,
   MissingCredentialsSPError,
   MissingRefreshTokenAPIError,
+  NetworkUnavailableSPError,
   NoRevAPIError,
   PotentialCorsError,
   RemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/errors';
 
 export const extractErrorMessage = packageExtractErrorMessage;
 
@@ -78,10 +80,6 @@ export class NoEtagAPIError extends AdditionalLogErrorBase {
 
 export class FileExistsAPIError extends Error {
   override name = ' FileExistsAPIError';
-}
-
-export class FileHashCreationAPIError extends AdditionalLogErrorBase {
-  override name = ' FileHashCreationAPIError';
 }
 
 // --------------OTHER SYNC ERRORS--------------

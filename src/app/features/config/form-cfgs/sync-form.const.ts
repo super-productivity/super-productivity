@@ -19,7 +19,7 @@ export interface SyncCollapsibleProps extends FormlyFieldProps {
   syncRole?: 'advanced';
 }
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
-import { SUPER_SYNC_DEFAULT_BASE_URL } from '../../../op-log/sync-providers/super-sync/super-sync.model';
+import { SUPER_SYNC_DEFAULT_BASE_URL } from '@sp/sync-providers/super-sync';
 import {
   closeAllDialogs,
   openDisableEncryptionDialogForFileBased,

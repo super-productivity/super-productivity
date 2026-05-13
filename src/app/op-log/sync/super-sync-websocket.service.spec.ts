@@ -127,6 +127,71 @@ describe('SuperSyncWebSocketService', () => {
     expect(MockWebSocket.instances).toHaveSize(1);
   });
 
+  it('should not reconnect after server connection limit rejection', async () => {
+    await service.connect('http://localhost:1901', 'token');
+    MockWebSocket.instances[0].emitClose(4008, 'Too many connections');
+
+    jasmine.clock().tick(60000);
+    await Promise.resolve();
+
+    expect(MockWebSocket.instances).toHaveSize(1);
+  });
+
+  it('should not create a duplicate socket while the same connection is pending', async () => {
+    await service.connect('http://localhost:1901', 'token');
+    await service.connect('http://localhost:1901', 'token');
+
+    expect(MockWebSocket.instances).toHaveSize(1);
+  });
+
+  it('should not open duplicate sockets when connect() is called concurrently', async () => {
+    // Both calls suspend on the loadClientId await before either assigns _ws.
+    // Without the in-flight guard, both would create a WebSocket and the first
+    // would leak as an orphan visible to the server's per-user connection limit.
+    const p1 = service.connect('http://localhost:1901', 'token');
+    const p2 = service.connect('http://localhost:1901', 'token');
+    await Promise.all([p1, p2]);
+
+    expect(MockWebSocket.instances).toHaveSize(1);
+  });
+
+  it('should not leak an orphan socket when connect() params change mid-flight', async () => {
+    const p1 = service.connect('http://localhost:1901', 'token-a');
+    const p2 = service.connect('http://localhost:1901', 'token-b');
+    await Promise.all([p1, p2]);
+
+    expect(MockWebSocket.instances).toHaveSize(1);
+    expect(MockWebSocket.instances[0].url).toContain('token=token-b');
+  });
+
+  it('should not leak an orphan socket when concurrent connects bounce through other params', async () => {
+    // A → B → A all in flight at once. The first A would otherwise resume after
+    // loadClientId, see params still match (because the third call restored them),
+    // and create a duplicate socket alongside the final one.
+    const p1 = service.connect('http://localhost:1901', 'token-a');
+    const p2 = service.connect('http://localhost:1901', 'token-b');
+    const p3 = service.connect('http://localhost:1901', 'token-a');
+    await Promise.all([p1, p2, p3]);
+
+    expect(MockWebSocket.instances).toHaveSize(1);
+    expect(MockWebSocket.instances[0].url).toContain('token=token-a');
+  });
+
+  it('should ignore stale close events from a replaced socket', async () => {
+    spyOn(Math, 'random').and.returnValue(0.5);
+
+    await service.connect('http://localhost:1901', 'token-a');
+    const staleWs = MockWebSocket.instances[0];
+    await service.connect('http://localhost:1901', 'token-b');
+
+    staleWs.emitClose(1006, 'stale close');
+    jasmine.clock().tick(1000);
+    await Promise.resolve();
+
+    expect(MockWebSocket.instances).toHaveSize(2);
+    expect(MockWebSocket.instances[1].url).toContain('token=token-b');
+  });
+
   it('should close the connection after heartbeat timeout', async () => {
     await service.connect('http://localhost:1901', 'token');
     const ws = MockWebSocket.instances[0];

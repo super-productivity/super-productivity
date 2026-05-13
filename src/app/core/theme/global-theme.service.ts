@@ -194,18 +194,12 @@ export class GlobalThemeService {
       ['caldav', 'assets/icons/caldav.svg'],
       ['calendar', 'assets/icons/calendar.svg'],
       ['open_project', 'assets/icons/open-project.svg'],
-      ['remove_today', 'assets/icons/remove-today-48px.svg'],
-      ['working_today', 'assets/icons/working-today.svg'],
-      ['repeat', 'assets/icons/repeat.svg'],
       ['gitea', 'assets/icons/gitea.svg'],
       ['redmine', 'assets/icons/redmine.svg'],
       ['linear', 'assets/icons/linear.svg'],
       ['clickup', 'assets/icons/clickup.svg'],
       // trello icon
       ['trello', 'assets/icons/trello.svg'],
-      ['tomorrow', 'assets/icons/tomorrow.svg'],
-      ['next_week', 'assets/icons/next-week.svg'],
-      ['habit', 'assets/icons/habit.svg'],
       ['azure_devops', 'assets/icons/azure_devops.svg'],
       ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
     ];

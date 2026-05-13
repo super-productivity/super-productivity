@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { SyncProviderId } from '../provider.const';
 import {
-  SyncProviderServiceInterface,
+  FileSyncProvider,
   OperationSyncCapable,
   SyncOperation,
   OpUploadResponse,
@@ -230,7 +230,7 @@ export class FileBasedSyncAdapterService {
    * @returns Object implementing OperationSyncCapable interface
    */
   createAdapter(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
     encryptAndCompressCfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): OperationSyncCapable<'fileSnapshotOps'> {
@@ -321,7 +321,7 @@ export class FileBasedSyncAdapterService {
    * Gets the current sync state from cache or by downloading.
    */
   private async _getCurrentSyncState(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     providerKey: string,
@@ -437,7 +437,7 @@ export class FileBasedSyncAdapterService {
    * can download the concurrent ops and retry with a consistent snapshot).
    */
   private async _uploadWithMismatchFallback(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     newData: FileBasedSyncData,
@@ -505,7 +505,7 @@ export class FileBasedSyncAdapterService {
   }
 
   private async _uploadOps(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     ops: SyncOperation[],
@@ -588,7 +588,7 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async _downloadOps(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     sinceSeq: number,
@@ -761,7 +761,7 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async _uploadSnapshot(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     _state: unknown,
@@ -837,7 +837,7 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async _deleteAllData(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
   ): Promise<{ success: boolean }> {
     const providerKey = this._getProviderKey(provider);
 
@@ -908,7 +908,7 @@ export class FileBasedSyncAdapterService {
    * @returns The sync data and its revision (ETag) for conditional upload
    */
   private async _downloadSyncFile(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedSyncData; rev: string }> {
@@ -962,9 +962,7 @@ export class FileBasedSyncAdapterService {
   /**
    * Gets a unique key for a provider (for storing per-provider state).
    */
-  private _getProviderKey(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
-  ): string {
+  private _getProviderKey(provider: FileSyncProvider<SyncProviderId>): string {
     return `${provider.id}`;
   }
 

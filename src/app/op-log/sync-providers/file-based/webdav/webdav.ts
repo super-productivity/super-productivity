@@ -2,7 +2,7 @@ import {
   PROVIDER_ID_WEBDAV,
   Webdav as PackageWebdav,
   type WebdavDeps,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/webdav';
 import { SyncProviderId } from '../../provider.const';
 import { SyncCredentialStore } from '../../credential-store.service';
 import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
@@ -18,7 +18,7 @@ type AssertWebdavId = SyncProviderId.WebDAV extends typeof PROVIDER_ID_WEBDAV
 const _idCheck: AssertWebdavId = true;
 void _idCheck;
 
-export type { WebdavPrivateCfg } from '@sp/sync-providers';
+export type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 
 /**
  * App-side factory wiring concrete adapters into the package's WebDAV

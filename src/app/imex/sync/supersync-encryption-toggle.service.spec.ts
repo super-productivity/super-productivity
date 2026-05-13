@@ -5,16 +5,16 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import {
   OperationSyncCapable,
-  SyncProviderServiceInterface,
+  SyncProviderBase,
 } from '../../op-log/sync-providers/provider.interface';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 
 describe('SuperSyncEncryptionToggleService', () => {
   let service: SuperSyncEncryptionToggleService;
   let mockSnapshotUploadService: jasmine.SpyObj<SnapshotUploadService>;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockSyncProvider: jasmine.SpyObj<
-    SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+    SyncProviderBase<SyncProviderId> & OperationSyncCapable
   >;
 
   const mockExistingCfg: SuperSyncPrivateCfg = {

@@ -38,6 +38,11 @@ supersync:
   cors:
     # -- Comma-separated list of allowed CORS origins
     origins: "https://app.super-productivity.com"
+  cleanup:
+    # -- Max old operation ids selected/deleted for one user in a cleanup pass.
+    oldOpsDeleteBatchSize: 5000
+    # -- Max old operations deleted across all users in one cleanup pass.
+    oldOpsMaxDeletedPerRun: 25000
   webauthn:
     # -- WebAuthn relying party display name
     rpName: "Super Productivity Sync"

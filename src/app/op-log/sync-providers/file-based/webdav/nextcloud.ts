@@ -2,7 +2,7 @@ import {
   NextcloudProvider as PackageNextcloudProvider,
   PROVIDER_ID_NEXTCLOUD,
   type NextcloudDeps,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/webdav';
 import { SyncProviderId } from '../../provider.const';
 import { SyncCredentialStore } from '../../credential-store.service';
 import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
@@ -18,8 +18,8 @@ type AssertNextcloudId = SyncProviderId.Nextcloud extends typeof PROVIDER_ID_NEX
 const _idCheck: AssertNextcloudId = true;
 void _idCheck;
 
-export type { NextcloudPrivateCfg } from '@sp/sync-providers';
-export { NextcloudProvider } from '@sp/sync-providers';
+export type { NextcloudPrivateCfg } from '@sp/sync-providers/webdav';
+export { NextcloudProvider } from '@sp/sync-providers/webdav';
 
 /**
  * App-side factory wiring concrete adapters into the package's Nextcloud

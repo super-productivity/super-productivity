@@ -1,24 +1,28 @@
 import {
   AuthFailSPError as PackageAuthFailSPError,
   EmptyRemoteBodySPError as PackageEmptyRemoteBodySPError,
+  FileHashCreationAPIError as PackageFileHashCreationAPIError,
   HttpNotOkAPIError as PackageHttpNotOkAPIError,
   InvalidDataSPError as PackageInvalidDataSPError,
   MissingCredentialsSPError as PackageMissingCredentialsSPError,
   MissingRefreshTokenAPIError as PackageMissingRefreshTokenAPIError,
+  NetworkUnavailableSPError as PackageNetworkUnavailableSPError,
   NoRevAPIError as PackageNoRevAPIError,
   PotentialCorsError as PackagePotentialCorsError,
   RemoteFileChangedUnexpectedly as PackageRemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError as PackageRemoteFileNotFoundAPIError,
   TooManyRequestsAPIError as PackageTooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError as PackageUploadRevToMatchMismatchAPIError,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/errors';
 import {
   AuthFailSPError,
   EmptyRemoteBodySPError,
+  FileHashCreationAPIError,
   HttpNotOkAPIError,
   InvalidDataSPError,
   MissingCredentialsSPError,
   MissingRefreshTokenAPIError,
+  NetworkUnavailableSPError,
   NoRevAPIError,
   PotentialCorsError,
   RemoteFileChangedUnexpectedly,
@@ -45,6 +49,11 @@ describe('sync-errors identity (single class definition across import paths)', (
       PackageRemoteFileNotFoundAPIError,
     ],
     ['NoRevAPIError', NoRevAPIError, PackageNoRevAPIError],
+    [
+      'FileHashCreationAPIError',
+      FileHashCreationAPIError,
+      PackageFileHashCreationAPIError,
+    ],
     ['HttpNotOkAPIError', HttpNotOkAPIError, PackageHttpNotOkAPIError],
     [
       'MissingCredentialsSPError',
@@ -55,6 +64,11 @@ describe('sync-errors identity (single class definition across import paths)', (
       'MissingRefreshTokenAPIError',
       MissingRefreshTokenAPIError,
       PackageMissingRefreshTokenAPIError,
+    ],
+    [
+      'NetworkUnavailableSPError',
+      NetworkUnavailableSPError,
+      PackageNetworkUnavailableSPError,
     ],
     ['TooManyRequestsAPIError', TooManyRequestsAPIError, PackageTooManyRequestsAPIError],
     [

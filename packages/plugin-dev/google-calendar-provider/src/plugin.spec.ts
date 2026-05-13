@@ -19,10 +19,22 @@ describe('Google Calendar Plugin', () => {
   describe('OAuth config', () => {
     it('does not expose a browser web OAuth client', () => {
       const oauthField = definition.configFields.find((field) => field.key === 'oauth');
-      const oauthConfig = oauthField?.oauthConfig as Record<string, unknown>;
+      const oauthConfig = oauthField?.oauthConfig;
 
-      expect(oauthConfig.webClientId).toBeUndefined();
-      expect(oauthConfig.webClientSecret).toBeUndefined();
+      expect(oauthConfig?.webClientId).toBeUndefined();
+    });
+
+    it('requests only verified Google Calendar scopes', () => {
+      const oauthField = definition.configFields.find((field) => field.key === 'oauth');
+      const oauthConfig = oauthField?.oauthConfig;
+
+      expect(oauthConfig?.scopes).toEqual([
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+      ]);
+      expect(oauthConfig?.scopes).not.toContain(
+        'https://www.googleapis.com/auth/calendar.readonly',
+      );
     });
   });
 

@@ -1154,13 +1154,15 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const userId = getAuthUser(req).userId;
         const syncService = getSyncService();
 
-        const latestSeq = await syncService.getLatestSeq(userId);
-        const devicesOnline = await syncService.getOnlineDeviceCount(userId);
-
-        const cached = await syncService.getCachedSnapshot(userId);
-        const snapshotAge = cached ? Date.now() - cached.generatedAt : undefined;
-
-        const storageInfo = await syncService.getStorageInfo(userId);
+        const [latestSeq, devicesOnline, snapshotGeneratedAt, storageInfo] =
+          await Promise.all([
+            syncService.getLatestSeq(userId),
+            syncService.getOnlineDeviceCount(userId),
+            syncService.getCachedSnapshotGeneratedAt(userId),
+            syncService.getStorageInfo(userId),
+          ]);
+        const snapshotAge =
+          snapshotGeneratedAt !== null ? Date.now() - snapshotGeneratedAt : undefined;
 
         Logger.debug(
           `[user:${userId}] Status: seq=${latestSeq}, devices=${devicesOnline}`,

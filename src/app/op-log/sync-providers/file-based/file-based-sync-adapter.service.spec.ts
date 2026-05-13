@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { FileBasedSyncAdapterService } from './file-based-sync-adapter.service';
 import { SyncProviderId } from '../provider.const';
 import {
-  SyncProviderServiceInterface,
+  FileSyncProvider,
   OperationSyncCapable,
   SyncOperation,
 } from '../provider.interface';
@@ -21,7 +21,7 @@ import { StateSnapshotService } from '../../backup/state-snapshot.service';
 
 describe('FileBasedSyncAdapterService', () => {
   let service: FileBasedSyncAdapterService;
-  let mockProvider: jasmine.SpyObj<SyncProviderServiceInterface<SyncProviderId>>;
+  let mockProvider: jasmine.SpyObj<FileSyncProvider<SyncProviderId>>;
   let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let adapter: OperationSyncCapable;
