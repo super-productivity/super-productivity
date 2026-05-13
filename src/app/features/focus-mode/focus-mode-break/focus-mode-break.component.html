@@ -37,6 +37,7 @@
           <button
             mat-icon-button
             class="pause-resume-btn"
+            [attr.aria-label]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
             [matTooltip]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
             (click)="resumeBreak()"
           >
@@ -46,6 +47,7 @@
           <button
             mat-icon-button
             class="pause-resume-btn"
+            [attr.aria-label]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
             [matTooltip]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
             (click)="pauseBreak()"
           >
@@ -55,6 +57,7 @@
 
         <button
           mat-icon-button
+          [attr.aria-label]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
           [matTooltip]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
           (click)="skipBreak()"
         >
@@ -65,6 +68,7 @@
       @if (isPomodoro()) {
         <button
           mat-icon-button
+          [attr.aria-label]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
           [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
           (click)="resetCycles()"
         >
