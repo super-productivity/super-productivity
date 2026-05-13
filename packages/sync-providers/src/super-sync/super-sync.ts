@@ -33,8 +33,8 @@ import type { SuperSyncResponseValidators } from './response-validators';
 import type { SuperSyncStorage } from './storage';
 import {
   PROVIDER_ID_SUPER_SYNC,
-  SUPER_SYNC_DEFAULT_BASE_URL,
   type SuperSyncPrivateCfg,
+  type SuperSyncWebSocketAccess,
 } from './super-sync.model';
 
 const LAST_SERVER_SEQ_KEY_PREFIX = 'super_sync_last_server_seq_';
@@ -81,6 +81,14 @@ export interface SuperSyncDeps {
   storage: SuperSyncStorage;
   responseValidators: SuperSyncResponseValidators;
   /**
+   * Host-supplied fallback used whenever `SuperSyncPrivateCfg.baseUrl`
+   * is empty/undefined. The package deliberately has no implicit
+   * default — keeping the SP-specific URL out of the package keeps it
+   * framework-agnostic. Hosts pointing at the SP-hosted server can pass
+   * `SUPER_SYNC_DEFAULT_BASE_URL`; others pass their own URL.
+   */
+  defaultBaseUrl: string;
+  /**
    * Optional override for tests to avoid real web-request retry waits.
    */
   webRequestRetryDelay?: (ms: number) => Promise<void>;
@@ -107,7 +115,8 @@ export class SuperSyncProvider
   implements
     SyncProviderBase<typeof PROVIDER_ID_SUPER_SYNC, SuperSyncPrivateCfg>,
     OperationSyncCapable<'superSyncOps'>,
-    RestoreCapable
+    RestoreCapable,
+    SuperSyncWebSocketAccess
 {
   readonly id = PROVIDER_ID_SUPER_SYNC;
   readonly isUploadForcePossible = false;
@@ -458,7 +467,7 @@ export class SuperSyncProvider
   }
 
   private _resolveBaseUrl(cfg: SuperSyncPrivateCfg): string {
-    return (cfg.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL).replace(/\/$/, '');
+    return (cfg.baseUrl || this._deps.defaultBaseUrl).replace(/\/$/, '');
   }
 
   /**
@@ -472,7 +481,7 @@ export class SuperSyncProvider
       return this._cachedServerSeqKey;
     }
     const cfg = await this.privateCfg.load();
-    const baseUrl = cfg?.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
+    const baseUrl = cfg?.baseUrl || this._deps.defaultBaseUrl;
     const accessToken = cfg?.accessToken ?? '';
     const identifier = `${baseUrl}|${accessToken}`;
     const hash = identifier

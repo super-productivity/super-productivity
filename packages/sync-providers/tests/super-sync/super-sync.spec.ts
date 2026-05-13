@@ -183,6 +183,7 @@ const buildProvider = (
     credentialStore: cfgStore.__asPort(),
     storage: storage.port,
     responseValidators: validators,
+    defaultBaseUrl: SUPER_SYNC_DEFAULT_BASE_URL,
     webRequestRetryDelay: webRequestRetryDelay as (ms: number) => Promise<void>,
   };
   const provider = new SuperSyncProvider(deps);

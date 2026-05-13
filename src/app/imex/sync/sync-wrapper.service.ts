@@ -76,7 +76,7 @@ import { OperationLogStoreService } from '../../op-log/persistence/operation-log
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { SyncSessionValidationService } from '../../op-log/sync/sync-session-validation.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
-import { SuperSyncProvider } from '@sp/sync-providers/super-sync';
+import { isSuperSyncWebSocketAccess } from '@sp/sync-providers/super-sync';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 
 /**
@@ -364,8 +364,13 @@ export class SyncWrapperService {
       return;
     }
 
-    const superSyncProvider = provider as unknown as SuperSyncProvider;
-    const wsParams = await superSyncProvider.getWebSocketParams();
+    if (!isSuperSyncWebSocketAccess(provider)) {
+      SyncLog.warn(
+        'SyncWrapperService: SuperSync provider does not expose WebSocket access',
+      );
+      return;
+    }
+    const wsParams = await provider.getWebSocketParams();
     if (!wsParams) {
       SyncLog.warn(
         'SyncWrapperService: No WebSocket params available from SuperSync provider',
