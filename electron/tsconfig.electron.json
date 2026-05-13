@@ -24,7 +24,14 @@
     "target": "es2022",
     "module": "commonjs",
     "esModuleInterop": true,
-    "baseUrl": ".."
+    "baseUrl": "..",
+    "paths": {
+      "@super-productivity/plugin-api": ["packages/plugin-api/src/index.ts"],
+      "@sp/shared-schema": ["packages/shared-schema/src/index.ts"],
+      "@sp/sync-core": ["packages/sync-core/src/index.ts"],
+      "@sp/sync-providers": ["packages/sync-providers/src/index.ts"],
+      "@sp/sync-providers/*": ["packages/sync-providers/src/*"]
+    }
   },
   "include": ["main.ts", "**/*.ts", "../src/app/core/window-ea.d.ts"],
   "exclude": ["../node_modules", "**/*.spec.ts"]

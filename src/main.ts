@@ -76,7 +76,8 @@ import { ShortTimePipe } from './app/ui/pipes/short-time.pipe';
 import { BackgroundTask } from '@capawesome/capacitor-background-task';
 import { PLUGIN_INITIALIZER_PROVIDER } from './app/plugins/plugin-initializer';
 import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-menu/mat-menu-touch-monkey-patch';
-import { Log } from './app/core/log';
+import { Log, SyncLog } from './app/core/log';
+import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
@@ -99,6 +100,18 @@ let appInjector: Injector | null = null;
 // Register one-time user gesture listener to unlock AudioContext.
 // Required on iOS/Android where AudioContext starts suspended.
 unlockAudioContext();
+
+// Surface a deprecation warning the first time legacy PBKDF2 ciphertext is
+// decrypted in this session. The encryption layer invokes this handler on
+// every legacy decrypt; we throttle to one log per session.
+let _hasWarnedLegacyKdf = false;
+setLegacyKdfWarningHandler(() => {
+  if (_hasWarnedLegacyKdf) return;
+  _hasWarnedLegacyKdf = true;
+  SyncLog.log(
+    '[DEPRECATION] Legacy PBKDF2 encryption detected. Consider re-syncing to migrate to Argon2id.',
+  );
+});
 
 bootstrapApplication(AppComponent, {
   providers: [

@@ -21,7 +21,7 @@ import {
 } from '../../op-log/sync-providers/provider.interface';
 import { VectorClock } from '../../core/util/vector-clock';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
-import { isCryptoSubtleAvailable } from '../../op-log/encryption/encryption';
+import { isCryptoSubtleAvailable } from '@sp/sync-core';
 import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
 
 /**

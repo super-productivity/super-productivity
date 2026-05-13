@@ -41,6 +41,9 @@ const LAST_SERVER_SEQ_KEY_PREFIX = 'super_sync_last_server_seq_';
 /** Versioned prefix for the deterministic ops-upload `requestId`. */
 const OPS_UPLOAD_REQUEST_ID_PREFIX = 'ops-v1';
 
+/** Versioned prefix for deterministic snapshot-upload `requestId`s. */
+const SNAPSHOT_UPLOAD_REQUEST_ID_PREFIX = 'snapshot-v1';
+
 /** 75s allows the server's 60s database timeout plus network/parse buffer. */
 const SUPERSYNC_REQUEST_TIMEOUT_MS = 75000;
 
@@ -186,6 +189,20 @@ export class SuperSyncProvider
     const lastOpId = this._compactRequestIdPart(lastOp?.id ?? 'empty');
     const hash = this._hashRequestIdInput(`${clientId}|${opsFingerprint}`);
     return `${OPS_UPLOAD_REQUEST_ID_PREFIX}-${ops.length}-${firstOpId}-${lastOpId}-${hash}`;
+  }
+
+  /**
+   * Deterministic dedup key for snapshot uploads. The server-side opId is a
+   * UUID-v7 minted per snapshot upload, so retries reuse it and `(clientId, opId)`
+   * uniquely identifies an attempt — no content hash needed. Stripping the
+   * payload hash avoids two expensive passes (`_stableJsonStringify` + char
+   * scan) over a multi-MB state on mobile.
+   */
+  private _createSnapshotUploadRequestId(clientId: string, opId: string): string {
+    const compactClientId = this._compactRequestIdPart(clientId);
+    const compactOpId = this._compactRequestIdPart(opId || 'snapshot');
+    const hash = this._hashRequestIdInput(`${clientId}|${opId}`);
+    return `${SNAPSHOT_UPLOAD_REQUEST_ID_PREFIX}-${compactClientId}-${compactOpId}-${hash}`;
   }
 
   private _compactRequestIdPart(id: string): string {
@@ -351,6 +368,7 @@ export class SuperSyncProvider
     });
     const cfg = await this._cfgOrError();
 
+    const requestId = this._createSnapshotUploadRequestId(clientId, opId);
     const jsonPayload = JSON.stringify({
       state,
       clientId,
@@ -362,6 +380,7 @@ export class SuperSyncProvider
       isCleanSlate,
       snapshotOpType,
       ...(syncImportReason ? { syncImportReason } : {}),
+      requestId,
     });
 
     if (this.isNativePlatform) {
@@ -834,8 +853,10 @@ export class SuperSyncProvider
         });
 
         if (!response.ok) {
-          clearTimeout(timeoutId);
+          // Keep the abort timer running across response.text() — a server/proxy
+          // that sends an error status and stalls the body must still be aborted.
           const errorText = await response.text().catch(() => '');
+          clearTimeout(timeoutId);
           // Check for auth failure FIRST before throwing generic error
           this._checkHttpStatus(response.status, errorText);
           const reason = this._extractServerErrorReason(errorText, response.status);

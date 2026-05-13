@@ -43,6 +43,7 @@ type OperationDownloadResult = {
 type OperationDownloadTransactionResult = OperationDownloadResult & {
   shouldComputeSnapshotVectorClock: boolean;
   snapshotAuthorClientId?: string;
+  persistedSnapshotVectorClock?: VectorClock;
 };
 
 type OperationDownloadRow = {
@@ -80,6 +81,29 @@ const mapOperationRow = (row: OperationDownloadRow): ServerOperation => ({
   },
   receivedAt: Number(row.receivedAt),
 });
+
+/**
+ * Strict-or-undefined parser for the JSONB column. The data is written by
+ * this server, so on any shape violation we return `undefined` to fall back
+ * to the legacy `_computeSnapshotVectorClock` aggregate path rather than
+ * silently dropping invalid entries and serving a partial clock.
+ */
+const parsePersistedVectorClock = (value: unknown): VectorClock | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const clock: VectorClock = {};
+  for (const [clientId, counter] of Object.entries(value as Record<string, unknown>)) {
+    if (clientId.length === 0) return undefined;
+    if (typeof counter !== 'number' || !Number.isInteger(counter) || counter < 0) {
+      return undefined;
+    }
+    clock[clientId] = counter;
+  }
+
+  return clock;
+};
 
 export class OperationDownloadService {
   /**
@@ -131,7 +155,11 @@ export class OperationDownloadService {
       async (tx) => {
         const seqRow = await tx.userSyncState.findUnique({
           where: { userId },
-          select: { lastSeq: true },
+          select: {
+            lastSeq: true,
+            latestFullStateSeq: true,
+            latestFullStateVectorClock: true,
+          },
         });
         const latestSeq = seqRow?.lastSeq ?? 0;
 
@@ -248,6 +276,10 @@ export class OperationDownloadService {
         }
 
         const mappedOps = ops.map(mapOperationRow);
+        const persistedSnapshotVectorClock =
+          latestFullStateOp && seqRow?.latestFullStateSeq === latestFullStateOp.serverSeq
+            ? parsePersistedVectorClock(seqRow.latestFullStateVectorClock)
+            : undefined;
 
         return {
           ops: mappedOps,
@@ -257,6 +289,7 @@ export class OperationDownloadService {
           snapshotVectorClock: undefined,
           shouldComputeSnapshotVectorClock,
           snapshotAuthorClientId: latestFullStateOp?.clientId ?? undefined,
+          persistedSnapshotVectorClock,
         } satisfies OperationDownloadTransactionResult;
       },
       { timeout: DOWNLOAD_TRANSACTION_TIMEOUT_MS },
@@ -274,11 +307,13 @@ export class OperationDownloadService {
       if (result.snapshotAuthorClientId) {
         preserveClientIds.push(result.snapshotAuthorClientId);
       }
-      snapshotVectorClock = await this._computeSnapshotVectorClock(
-        userId,
-        result.latestSnapshotSeq,
-        preserveClientIds,
-      );
+      snapshotVectorClock = result.persistedSnapshotVectorClock
+        ? limitVectorClockSize(result.persistedSnapshotVectorClock, preserveClientIds)
+        : await this._computeSnapshotVectorClock(
+            userId,
+            result.latestSnapshotSeq,
+            preserveClientIds,
+          );
     }
 
     return {
@@ -296,20 +331,18 @@ export class OperationDownloadService {
     preserveClientIds: ReadonlyArray<string>,
   ): Promise<VectorClock> {
     const startedAt = Date.now();
-    // Compute aggregated vector clock from all ops up to and including the snapshot.
-    // This ensures clients know about all clock entries from skipped ops.
+    // Legacy fallback: aggregate the vector clock from all ops up to and
+    // including the snapshot. Triggered when `user_sync_state.latest_full_state_*`
+    // is null (snapshot uploaded before this column existed) or when the JSONB
+    // shape fails strict validation in `parsePersistedVectorClock`.
     //
-    // Why this runs outside the interactive transaction: on large histories the
-    // aggregate is slow enough that holding the transaction open trips Prisma's
-    // timeout and breaks follow-up reads with "Transaction already closed". The
-    // query is bounded by `latestSnapshotSeq` (captured inside the transaction)
-    // so newly-appended ops can't perturb the result. Background cleanup may
-    // delete rows in this range between commit and this query; in the common
-    // case the snapshot op's own vector_clock subsumes the contribution of the
-    // deltas it replaces, so the per-client max is preserved. If cleanup races
-    // and removes the snapshot row itself the result is transiently incomplete
-    // and the client reconciles on the next sync cycle. The permanent fix is to
-    // persist `snapshotVectorClock` at snapshot-write time (separate follow-up).
+    // Runs outside the interactive transaction: on large histories the aggregate
+    // is slow enough to trip Prisma's transaction timeout. Bounded by
+    // `latestSnapshotSeq` (captured inside the transaction) so newly-appended
+    // ops can't perturb the result. Background cleanup may delete rows in this
+    // range between commit and this query; in the common case the snapshot op's
+    // own vector_clock subsumes the deltas it replaces, so the per-client max
+    // is preserved.
     const clockRows = await prisma.$queryRaw<
       Array<{ client_id: string; max_counter: bigint }>
     >`

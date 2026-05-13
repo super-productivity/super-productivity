@@ -12,10 +12,7 @@ import {
 } from '../../../core/operation.types';
 import { OperationLogStoreService } from '../../../persistence/operation-log-store.service';
 import { SyncImportFilterService } from '../../../sync/sync-import-filter.service';
-import {
-  clearSessionKeyCache,
-  setArgon2ParamsForTesting,
-} from '../../../encryption/encryption';
+import { clearSessionKeyCache, setArgon2ParamsForTesting } from '@sp/sync-core';
 
 describe('File-Based Sync Integration - Edge Cases', () => {
   let harness: FileBasedSyncTestHarness;

@@ -1,5 +1,5 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { waitForAppReady } from './waits';
+import { skipOnboardingForE2E, waitForAppReady } from './waits';
 import { MIGRATION_BACKUP_PREFIX } from '../../electron/shared-with-frontend/get-backup-timestamp';
 
 /**
@@ -89,6 +89,7 @@ export const createLegacyMigratedClient = async (
   });
 
   const page = await context.newPage();
+  await page.addInitScript(skipOnboardingForE2E);
 
   // pageerror is safe to attach early — it only fires on uncaught JS exceptions,
   // and no JS runs during the seeding phase (we abort all *.js loads below).

@@ -10,6 +10,7 @@ import {
   VectorClock,
   SYNC_ERROR_CODES,
   ConflictResult,
+  isFullStateOpType,
 } from './sync.types';
 import { APPROX_BYTES_PER_OP, computeOpStorageBytes } from './sync.const';
 import { Logger } from '../logger';
@@ -25,6 +26,7 @@ import {
   SnapshotService,
   type PreparedSnapshotCache,
   type CacheSnapshotResult,
+  type SnapshotDedupResponse,
 } from './services';
 
 interface DuplicateOperationCandidate {
@@ -52,6 +54,11 @@ interface LatestEntityOperationRow {
 // Conservative enough to avoid planner-heavy BitmapOr + Sort plans on large
 // histories while still replacing up to 100 per-entity round trips with one query.
 const CONFLICT_DETECTION_ENTITY_BATCH_SIZE = 100;
+// Observability threshold: log a warning when the full-state op aggregate scan
+// exceeds this duration. Mirrors the threshold used by the legacy snapshot
+// vector-clock aggregate in OperationDownloadService so production logs use a
+// consistent slow-aggregate signal.
+const SLOW_FULL_STATE_AGGREGATE_MS = 5_000;
 const OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = 5_000;
 const OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = 25_000;
 // Operator-DoS guardrail: a 1M `take:` materializes 1M ids in Node memory and
@@ -417,6 +424,8 @@ export class SyncService {
                 lastSnapshotSeq: null,
                 snapshotData: null,
                 snapshotAt: null,
+                latestFullStateSeq: null,
+                latestFullStateVectorClock: Prisma.DbNull,
               },
             });
 
@@ -578,6 +587,47 @@ export class SyncService {
   }
 
   /**
+   * Aggregate the per-client max vector_clock counter over all operations for
+   * `userId` with `server_seq < beforeServerSeq`. Used at full-state op upload
+   * time so the persisted `latest_full_state_vector_clock` reflects every
+   * client whose ops may still live in conflict detection — not just the
+   * clients named on the snapshot op itself.
+   *
+   * Logs a warning when the scan exceeds `SLOW_FULL_STATE_AGGREGATE_MS` so
+   * pathological histories (millions of ops, cleanup retention too long) are
+   * observable in production before they approach the 60s upload-tx timeout.
+   */
+  private async _aggregatePriorVectorClock(
+    tx: Prisma.TransactionClient,
+    userId: number,
+    beforeServerSeq: number,
+  ): Promise<VectorClock> {
+    const startedAt = Date.now();
+    const rows = await tx.$queryRaw<Array<{ client_id: string; max_counter: bigint }>>`
+      SELECT kv.key AS client_id, MAX(kv.value::bigint) AS max_counter
+      FROM operations, LATERAL jsonb_each_text(vector_clock) AS kv(key, value)
+      WHERE user_id = ${userId}
+        AND server_seq < ${beforeServerSeq}
+        AND jsonb_typeof(vector_clock) = 'object'
+        AND kv.value ~ '^[0-9]+$'
+      GROUP BY kv.key
+    `;
+    const out: VectorClock = {};
+    for (const row of rows) {
+      out[row.client_id] = Number(row.max_counter);
+    }
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs > SLOW_FULL_STATE_AGGREGATE_MS) {
+      Logger.warn(
+        `[user:${userId}] Full-state op aggregate scan took ${elapsedMs}ms ` +
+          `(${rows.length} clients, beforeSeq=${beforeServerSeq}); approaching ` +
+          `upload-tx timeout. Investigate history size and cleanup retention.`,
+      );
+    }
+    return out;
+  }
+
+  /**
    * Process a single operation within a transaction.
    * Handles validation, conflict detection, and persistence.
    */
@@ -626,6 +676,14 @@ export class SyncService {
         errorCode: validation.errorCode,
       };
     }
+    // Capture the *unpruned* vector clock for full-state ops. The op row stores
+    // the pruned clock (see `limitVectorClockSize` call below); persisting the
+    // unpruned copy on `user_sync_state` lets the download path re-prune at
+    // read time with knowledge of `preserveClientIds` (excludeClient, snapshot
+    // author), keeping more relevant entries than a pre-pruned snapshot would.
+    const fullStateVectorClock = isFullStateOpType(op.opType)
+      ? { ...op.vectorClock }
+      : undefined;
 
     // Check for duplicate operation before conflict checks and sequence allocation.
     // This avoids expensive conflict work on retries and prevents rejected duplicates
@@ -874,6 +932,31 @@ export class SyncService {
       };
     }
 
+    if (fullStateVectorClock) {
+      // Persist the aggregate of (prior history ∪ this op's clock), not just the
+      // op's own clock. BACKUP_IMPORT uses a fresh `{ clientId: 1 }` by design
+      // (backup.service.ts) and a compaction-built SYNC_IMPORT clock can be
+      // pruned. Either case leaves out client_ids that still have pre-snapshot
+      // ops alive in the conflict-detection set, so a downloader that reset to
+      // the bare op clock would have its first edit go CONCURRENT against those
+      // surviving rows. Doing the aggregate here moves the cost from per-download
+      // to per-snapshot — full-state ops are rare so the upload-time scan is
+      // strictly cheaper overall. Stored unpruned; the download path applies
+      // `limitVectorClockSize` with `preserveClientIds` known to that read.
+      const priorAggregate = await this._aggregatePriorVectorClock(tx, userId, serverSeq);
+      const mergedClock: VectorClock = { ...priorAggregate };
+      for (const [clientId, counter] of Object.entries(fullStateVectorClock)) {
+        mergedClock[clientId] = Math.max(mergedClock[clientId] ?? 0, counter);
+      }
+      await tx.userSyncState.update({
+        where: { userId },
+        data: {
+          latestFullStateSeq: serverSeq,
+          latestFullStateVectorClock: mergedClock as Prisma.InputJsonValue,
+        },
+      });
+    }
+
     return {
       opId: op.id,
       accepted: true,
@@ -1023,12 +1106,40 @@ export class SyncService {
     return this.rateLimitService.cleanupExpiredCounters();
   }
 
-  checkRequestDeduplication(userId: number, requestId: string): UploadResult[] | null {
-    return this.requestDeduplicationService.checkDeduplication(userId, requestId);
+  checkOpsRequestDedup(userId: number, requestId: string): UploadResult[] | null {
+    return this.requestDeduplicationService.checkDeduplication(userId, 'ops', requestId);
   }
 
-  cacheRequestResults(userId: number, requestId: string, results: UploadResult[]): void {
-    this.requestDeduplicationService.cacheResults(userId, requestId, results);
+  cacheOpsRequestResults(
+    userId: number,
+    requestId: string,
+    results: UploadResult[],
+  ): void {
+    this.requestDeduplicationService.cacheResults(userId, 'ops', requestId, results);
+  }
+
+  checkSnapshotRequestDedup(
+    userId: number,
+    requestId: string,
+  ): SnapshotDedupResponse | null {
+    return this.requestDeduplicationService.checkDeduplication(
+      userId,
+      'snapshot',
+      requestId,
+    );
+  }
+
+  cacheSnapshotRequestResult(
+    userId: number,
+    requestId: string,
+    response: SnapshotDedupResponse,
+  ): void {
+    this.requestDeduplicationService.cacheResults(
+      userId,
+      'snapshot',
+      requestId,
+      response,
+    );
   }
 
   cleanupExpiredRequestDedupEntries(): number {

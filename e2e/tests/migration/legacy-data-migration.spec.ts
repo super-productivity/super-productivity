@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import legacyData from '../../fixtures/legacy-full-migration-backup.json';
 import { MIGRATION_BACKUP_PREFIX } from '../../../electron/shared-with-frontend/get-backup-timestamp';
+import { skipOnboardingForE2E } from '../../utils/waits';
 
 /**
  * Legacy Data Migration E2E Tests
@@ -143,6 +144,7 @@ test.describe('@migration Legacy Data Migration', () => {
     });
 
     const page = await context.newPage();
+    await page.addInitScript(skipOnboardingForE2E);
 
     try {
       // ========================================================================
@@ -371,6 +373,7 @@ test.describe('@migration Legacy Data Migration', () => {
     });
 
     const page = await context.newPage();
+    await page.addInitScript(skipOnboardingForE2E);
 
     try {
       // Seed minimal but valid data - app should still migrate successfully

@@ -14,6 +14,7 @@ import {
   TooManyRequestsAPIError as PackageTooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError as PackageUploadRevToMatchMismatchAPIError,
 } from '@sp/sync-providers/errors';
+import { WebCryptoNotAvailableError as PackageWebCryptoNotAvailableError } from '@sp/sync-core';
 import {
   AuthFailSPError,
   EmptyRemoteBodySPError,
@@ -29,6 +30,7 @@ import {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
+  WebCryptoNotAvailableError,
 } from './sync-errors';
 
 // Regression guard against ESM/CJS dual-realm and barrel/dist mis-resolution.
@@ -81,6 +83,15 @@ describe('sync-errors identity (single class definition across import paths)', (
       'RemoteFileChangedUnexpectedly',
       RemoteFileChangedUnexpectedly,
       PackageRemoteFileChangedUnexpectedly,
+    ],
+    // Re-exported from @sp/sync-core (not @sp/sync-providers/errors), but the
+    // identity rule is the same: a single class definition must back every
+    // import path so `instanceof` works in catch blocks. See sync-errors.ts
+    // around the WebCryptoNotAvailableError re-export.
+    [
+      'WebCryptoNotAvailableError',
+      WebCryptoNotAvailableError,
+      PackageWebCryptoNotAvailableError,
     ],
   ];
 

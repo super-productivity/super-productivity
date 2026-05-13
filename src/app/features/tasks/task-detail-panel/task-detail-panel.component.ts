@@ -610,6 +610,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   focusItem(cmpInstance: TaskDetailItemComponent, timeoutDuration: number = 150): void {
     window.clearTimeout(this._focusTimeout);
     this._focusTimeout = window.setTimeout(() => {
+      if (this._isTaskHostFocused()) {
+        return;
+      }
+
       const itemEls = this.itemEls();
       if (!itemEls) {
         throw new Error();
@@ -633,6 +637,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   private _focusFirst(): void {
     this._focusTimeout = window.setTimeout(() => {
+      if (this._isTaskHostFocused()) {
+        return;
+      }
+
       const itemEls = this.itemEls();
       if (!itemEls) {
         throw new Error('No items found');
@@ -641,5 +649,9 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         this.focusItem(itemEls[0], 0);
       }
     }, 150);
+  }
+
+  private _isTaskHostFocused(): boolean {
+    return document.activeElement?.tagName.toLowerCase() === 'task';
   }
 }

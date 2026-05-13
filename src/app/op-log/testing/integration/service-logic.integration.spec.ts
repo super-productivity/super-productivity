@@ -41,11 +41,11 @@ import { resetTestUuidCounter } from './helpers/test-client.helper';
 import { LockService } from '../../sync/lock.service';
 import { SchemaMigrationService } from '../../persistence/schema-migration.service';
 import {
-  mockDecrypt,
-  mockEncrypt,
-  mockEncryptBatch,
-  mockDecryptBatch,
-} from '../helpers/mock-encryption.helper';
+  clearSessionKeyCache,
+  decrypt,
+  encrypt,
+  setArgon2ParamsForTesting,
+} from '@sp/sync-core';
 import { TranslateService } from '@ngx-translate/core';
 import { SuperSyncStatusService } from '../../sync/super-sync-status.service';
 import { ServerMigrationService } from '../../sync/server-migration.service';
@@ -197,6 +197,16 @@ class MockOperationSyncProvider
 }
 
 describe('Service Logic Integration', () => {
+  // Use real encryption with weakened Argon2 params; the session cache means
+  // derivation happens once per password across the whole spec.
+  beforeAll(() => {
+    setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
+  });
+
+  afterAll(() => {
+    setArgon2ParamsForTesting();
+  });
+
   let syncService: OperationLogSyncService;
   let opLogStore: OperationLogStoreService;
   let mockProvider: MockOperationSyncProvider;
@@ -417,13 +427,7 @@ describe('Service Logic Integration', () => {
 
     syncService = TestBed.inject(OperationLogSyncService);
     opLogStore = TestBed.inject(OperationLogStoreService);
-
-    // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
-    const encryptionService = TestBed.inject(OperationEncryptionService);
-    spyOn(encryptionService as any, '_encrypt').and.callFake(mockEncrypt);
-    spyOn(encryptionService as any, '_decrypt').and.callFake(mockDecrypt);
-    spyOn(encryptionService as any, '_encryptBatch').and.callFake(mockEncryptBatch);
-    spyOn(encryptionService as any, '_decryptBatch').and.callFake(mockDecryptBatch);
+    clearSessionKeyCache();
 
     mockProvider = new MockOperationSyncProvider();
 
@@ -466,10 +470,7 @@ describe('Service Logic Integration', () => {
       expect(typeof uploadedOp.payload).toBe('string');
 
       // Attempt to decrypt to verify correctness
-      const decryptedPayloadStr = await mockDecrypt(
-        uploadedOp.payload as string,
-        TEST_KEY,
-      );
+      const decryptedPayloadStr = await decrypt(uploadedOp.payload as string, TEST_KEY);
       const decryptedPayload = JSON.parse(decryptedPayloadStr);
       expect(decryptedPayload).toEqual(op.payload);
     });
@@ -480,7 +481,7 @@ describe('Service Logic Integration', () => {
 
       // 2. Prepare encrypted remote operation
       const payload = { title: 'Remote Secret' };
-      const encryptedPayload = await mockEncrypt(JSON.stringify(payload), TEST_KEY);
+      const encryptedPayload = await encrypt(JSON.stringify(payload), TEST_KEY);
 
       const remoteOp: SyncOperation = {
         id: 'op-remote-1',

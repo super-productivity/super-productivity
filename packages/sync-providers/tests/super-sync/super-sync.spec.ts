@@ -1243,8 +1243,54 @@ describe('SuperSyncProvider', () => {
       expect(payload.state).toEqual(state);
       expect(payload.clientId).toBe('client-1');
       expect(payload.reason).toBe('migration');
+      expect(payload.requestId).toMatch(/^snapshot-v1-/);
+      expect(payload.requestId).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
       expect(payload.vectorClock).toEqual({ clientA: 5 });
       expect(payload.schemaVersion).toBe(2);
+    });
+
+    it('produces a stable snapshot requestId for the same clientId+opId, regardless of state', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      const bodies: Array<{ requestId: string }> = [];
+      fetchMock.mockImplementation(async (_url: unknown, options: unknown) => {
+        const decoded = JSON.parse(
+          await decompressGzip((options as RequestInit).body as Blob),
+        );
+        bodies.push(decoded);
+        return okResponse({ accepted: true });
+      });
+
+      await provider.uploadSnapshot(
+        { tasks: [{ id: 'a' }] },
+        'client-stable',
+        'recovery',
+        { c: 1 },
+        2,
+        undefined,
+        'op-stable-1',
+      );
+      await provider.uploadSnapshot(
+        { tasks: [{ id: 'a' }, { id: 'b' }] }, // different state
+        'client-stable',
+        'recovery',
+        { c: 1 },
+        2,
+        undefined,
+        'op-stable-1', // same opId
+      );
+      await provider.uploadSnapshot(
+        { tasks: [{ id: 'a' }] },
+        'client-stable',
+        'recovery',
+        { c: 1 },
+        2,
+        undefined,
+        'op-stable-2', // different opId
+      );
+
+      expect(bodies[1].requestId).toBe(bodies[0].requestId);
+      expect(bodies[2].requestId).not.toBe(bodies[0].requestId);
     });
 
     it('throws MissingCredentialsSPError when config is missing', async () => {

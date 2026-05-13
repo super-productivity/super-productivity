@@ -81,7 +81,7 @@ export interface SuperSyncPrivateCfg extends SyncProviderPrivateCfgBase {
 
 ### Phase 2: Encryption Function (0.5 day)
 
-**File:** `src/app/op-log/encryption/encryption.ts`
+**File:** `packages/sync-core/src/encryption.ts`
 
 **Add:**
 
@@ -196,7 +196,7 @@ async getEncryptKey(): Promise<string | undefined> {
 | File                                                         | Changes                                            |
 | ------------------------------------------------------------ | -------------------------------------------------- |
 | `packages/sync-providers/src/super-sync/super-sync.model.ts` | Add `isAutoEncryptionEnabled`, `autoEncryptionKey` |
-| `src/app/op-log/encryption/encryption.ts`                    | Add `deriveKeyFromHighEntropy()`                   |
+| `packages/sync-core/src/encryption.ts`                       | Add `deriveKeyFromHighEntropy()`                   |
 | `src/app/op-log/sync-providers/super-sync/super-sync.ts`     | Modify `getEncryptKey()`                           |
 | `src/app/op-log/sync/operation-encryption.service.ts`        | Support pre-derived keys                           |
 | `src/app/features/config/form-cfgs/sync-form.const.ts`       | Add UI toggle                                      |

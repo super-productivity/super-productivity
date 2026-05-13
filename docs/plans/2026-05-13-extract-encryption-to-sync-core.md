@@ -1,5 +1,17 @@
 # Extract Encryption Primitives to `@sp/sync-core` (v2)
 
+> **Status: ✅ Complete.** Extraction merged via `049dbb5e53` (initial), then
+> follow-up multi-review rounds that:
+>
+> - collapsed the WebCrypto/`@noble` strategy pattern into flat `aesEncrypt`/`aesDecrypt` helpers
+> - split the original 741-line module into five focused files under `packages/sync-core/src/encryption/`
+> - moved test coverage to `packages/sync-core/tests/encryption.spec.ts` (vitest, 48 tests) plus a Karma smoke spec at `src/app/op-log/encryption/encryption.browser.spec.ts`
+> - added `setLegacyKdfWarningHandler` as a side-channel diagnostic complementing `decryptWithMigration`'s structural `wasLegacyKdf`
+> - hardened the public barrel to match the originally-planned surface and added an `instanceof` regression guard for `WebCryptoNotAvailableError` in `sync-errors.identity.spec.ts`
+> - simplified `OperationEncryptionService` (dropped the `_encrypt`/`_decrypt` private aliasing) and replaced `mock-encryption.helper.ts` with real encryption under weakened Argon2 params (`setArgon2ParamsForTesting({ memorySize: 8, iterations: 1 })`)
+>
+> The historical plan below is preserved for context.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Move only the pure-function encryption primitives (`encryption.ts`, 704 lines) out of `src/app/op-log/encryption/` and into `@sp/sync-core`. Keep `EncryptAndCompressHandler` and `compression-handler.ts` (the app-specific error/prefix translation wrappers) in `src/`. Keep `OperationEncryptionService` in `src/` as the Angular DI wrapper.

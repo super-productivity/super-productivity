@@ -11,7 +11,7 @@ import {
 } from '../../op-log/sync-exports';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncLog } from '../../core/log';
-import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
+import { clearSessionKeyCache } from '@sp/sync-core';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncWrapperService } from './sync-wrapper.service';
 

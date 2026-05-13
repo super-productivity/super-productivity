@@ -28,7 +28,7 @@ test.describe('Recurring Task - preserve past dueDay (#7344)', () => {
 
     // 1. Boot on April 1, 2026 and create a task — it gets dueDay = 2026-04-01.
     await page.clock.setFixedTime(new Date('2026-04-01T10:00:00'));
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await workViewPage.waitForTaskList();
 
     await workViewPage.addTask(taskTitle);
@@ -38,7 +38,7 @@ test.describe('Recurring Task - preserve past dueDay (#7344)', () => {
     // 2. Advance the clock ~3 weeks so the task's dueDay is now in the past,
     //    reload so the app picks up the new "today".
     await page.clock.setFixedTime(new Date('2026-04-23T10:00:00'));
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await workViewPage.waitForTaskList();
 
     // Baseline: an overdue (past-dueDay) task is still rendered in Today view
@@ -85,7 +85,7 @@ test.describe('Recurring Task - preserve past dueDay (#7344)', () => {
     //    Before the fix: task.dueDay was auto-shifted to 2027-04-01 and the
     //    task disappeared from Today. After the fix: task.dueDay is preserved
     //    at 2026-04-01 (past, still overdue) and the task stays visible.
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await workViewPage.waitForTaskList();
     await expect(taskPage.getTaskByText(taskTitle).first()).toBeVisible({
       timeout: 10000,

@@ -711,6 +711,114 @@ describe('OperationDownloadService', () => {
       });
     });
 
+    it('should use persisted full-state vector clock when it matches the snapshot op', async () => {
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        const mockTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue({
+              serverSeq: 50,
+              clientId: 'snapshot-author',
+            }),
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({
+              lastSeq: 60,
+              latestFullStateSeq: 50,
+              latestFullStateVectorClock: {
+                'snapshot-author': 7,
+                'requesting-client': 3,
+              },
+            }),
+          },
+        };
+        return fn(mockTx);
+      });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { client_id: 'stale-aggregate', max_counter: 999n },
+      ]);
+
+      const result = await service.getOpsSinceWithSeq(1, 10, 'requesting-client');
+
+      expect(result.snapshotVectorClock).toEqual({
+        'snapshot-author': 7,
+        'requesting-client': 3,
+      });
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to aggregate when persisted clock is malformed', async () => {
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        const mockTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue({
+              serverSeq: 50,
+              clientId: 'snapshot-author',
+            }),
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({
+              lastSeq: 60,
+              latestFullStateSeq: 50,
+              // Negative counter is not a valid vector-clock entry.
+              latestFullStateVectorClock: {
+                'snapshot-author': -1,
+              },
+            }),
+          },
+        };
+        return fn(mockTx);
+      });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { client_id: 'snapshot-author', max_counter: 7n },
+        { client_id: 'requesting-client', max_counter: 3n },
+      ]);
+
+      const result = await service.getOpsSinceWithSeq(1, 10, 'requesting-client');
+
+      expect(prisma.$queryRaw).toHaveBeenCalled();
+      expect(result.snapshotVectorClock).toEqual({
+        'snapshot-author': 7,
+        'requesting-client': 3,
+      });
+    });
+
+    it('should fall back to aggregate when latestFullStateSeq does not match the snapshot op', async () => {
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        const mockTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue({
+              serverSeq: 50,
+              clientId: 'snapshot-author',
+            }),
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({
+              lastSeq: 60,
+              // Persisted seq points at an older snapshot than the one we'll
+              // actually serve, so the persisted clock is stale.
+              latestFullStateSeq: 30,
+              latestFullStateVectorClock: { 'snapshot-author': 1 },
+            }),
+          },
+        };
+        return fn(mockTx);
+      });
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { client_id: 'snapshot-author', max_counter: 7n },
+      ]);
+
+      const result = await service.getOpsSinceWithSeq(1, 10);
+
+      expect(prisma.$queryRaw).toHaveBeenCalled();
+      expect(result.snapshotVectorClock).toEqual({ 'snapshot-author': 7 });
+    });
+
     it('should aggregate vector clocks correctly from skipped ops', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {

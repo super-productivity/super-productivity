@@ -4,7 +4,7 @@ import { isOperationSyncCapable } from '../../op-log/sync/operation-sync.util';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncLog } from '../../core/log';
-import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
+import { clearSessionKeyCache } from '@sp/sync-core';
 import { CleanSlateService } from '../../op-log/clean-slate/clean-slate.service';
 import { OperationLogUploadService } from '../../op-log/sync/operation-log-upload.service';
 import { SyncWrapperService } from './sync-wrapper.service';

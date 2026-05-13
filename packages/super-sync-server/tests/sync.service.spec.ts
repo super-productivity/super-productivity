@@ -306,6 +306,34 @@ vi.mock('../src/db', async () => {
     // commit. Mock is a no-op here — the existing spec asserts behaviour at
     // the op level and does not inspect storage_used_bytes inside this file.
     $executeRaw: vi.fn().mockResolvedValue(0),
+    // Full-state op uploads aggregate prior vector clocks inside the same
+    // transaction. Dispatch on SQL text so unrelated $queryRaw callers keep
+    // returning their existing default shape.
+    $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
+      const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      if (sql.includes('jsonb_each_text(vector_clock)')) {
+        const [txUserId, beforeServerSeq] = params;
+        const aggregate = new Map<string, number>();
+        for (const op of state.operations.values()) {
+          if (op.userId !== txUserId) continue;
+          if (op.serverSeq >= beforeServerSeq) continue;
+          const vc = op.vectorClock;
+          if (!vc || typeof vc !== 'object') continue;
+          for (const [clientKey, rawVal] of Object.entries(
+            vc as Record<string, unknown>,
+          )) {
+            if (typeof rawVal !== 'number' || !Number.isFinite(rawVal)) continue;
+            const cur = aggregate.get(clientKey) ?? 0;
+            if (rawVal > cur) aggregate.set(clientKey, rawVal);
+          }
+        }
+        return Array.from(aggregate, ([client_id, max_counter]) => ({
+          client_id,
+          max_counter: BigInt(max_counter),
+        }));
+      }
+      return [{ total: BigInt(0) }];
+    }),
   });
 
   return {

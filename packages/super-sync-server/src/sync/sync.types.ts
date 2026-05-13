@@ -2,6 +2,7 @@ import { Logger } from '../logger';
 import {
   SUPER_SYNC_MAX_OPS_PER_UPLOAD,
   SUPER_SYNC_OP_TYPES,
+  SUPER_SYNC_SNAPSHOT_OP_TYPES,
   type SuperSyncOpType,
   VectorClock,
   VectorClockComparison,
@@ -9,6 +10,15 @@ import {
   limitVectorClockSize,
   MAX_VECTOR_CLOCK_SIZE,
 } from '@sp/shared-schema';
+
+const FULL_STATE_OP_TYPES: ReadonlySet<string> = new Set(SUPER_SYNC_SNAPSHOT_OP_TYPES);
+
+/**
+ * True when `opType` carries the user's full state (SYNC_IMPORT, BACKUP_IMPORT,
+ * REPAIR) and therefore supersedes prior ops up to its serverSeq.
+ */
+export const isFullStateOpType = (opType: string): boolean =>
+  FULL_STATE_OP_TYPES.has(opType);
 
 // Re-export for consumers of this module
 export {
@@ -315,7 +325,7 @@ export const validatePayload = (
   payload: unknown,
 ): PayloadValidationResult => {
   // Skip validation for full-state operations (too complex to validate server-side)
-  if (opType === 'SYNC_IMPORT' || opType === 'BACKUP_IMPORT' || opType === 'REPAIR') {
+  if (isFullStateOpType(opType)) {
     return { valid: true };
   }
 

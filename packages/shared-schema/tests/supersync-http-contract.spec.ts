@@ -98,9 +98,40 @@ describe('SuperSync HTTP contract schemas', () => {
       opId: '018f2f0b-1c2d-7a1b-8c3d-123456789abc',
       isCleanSlate: true,
       snapshotOpType: 'BACKUP_IMPORT',
+      requestId: 'snapshot-v1-request',
     });
 
     expect(parsed.snapshotOpType).toBe('BACKUP_IMPORT');
+    expect(parsed.requestId).toBe('snapshot-v1-request');
+  });
+
+  it('rejects requestIds containing characters outside the safe-log charset', () => {
+    // Control character — would be unsafe to embed in server log lines.
+    expect(() =>
+      SuperSyncUploadOpsRequestSchema.parse({
+        ops: [createValidOperation()],
+        clientId: 'client_1',
+        requestId: 'has\nnewline-injected',
+      }),
+    ).toThrow();
+
+    // Space is not part of the allowed charset.
+    expect(() =>
+      SuperSyncUploadOpsRequestSchema.parse({
+        ops: [createValidOperation()],
+        clientId: 'client_1',
+        requestId: 'has space',
+      }),
+    ).toThrow();
+
+    // Longer than 64 chars — exceeds the documented bound.
+    expect(() =>
+      SuperSyncUploadOpsRequestSchema.parse({
+        ops: [createValidOperation()],
+        clientId: 'client_1',
+        requestId: 'x'.repeat(65),
+      }),
+    ).toThrow();
   });
 
   it('validates download responses with latestSnapshotSeq and preserves future fields', () => {
