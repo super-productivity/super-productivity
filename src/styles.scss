@@ -37,13 +37,24 @@
     align-items: center;
     justify-content: flex-start;
     gap: var(--header-nav-button-gap);
-    background: var(--bg-lightest);
+    background: var(--sidenav-bg);
     border-left: 1px solid var(--separator-color);
     z-index: var(--z-vertical-action-bar);
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-app-region: no-drag;
     box-sizing: border-box;
+  }
+
+  // Milkglass when a background image is present — matches magic-side-nav.
+  body.hasBgImage > nav.action-nav-right.action-nav-right--teleported {
+    background: var(--c-light-50);
+    backdrop-filter: blur(20px);
+  }
+
+  body.isDarkTheme.hasBgImage > nav.action-nav-right.action-nav-right--teleported {
+    background: var(--c-dark-50);
+    backdrop-filter: blur(20px) saturate(180%);
 
     > .counters-action-group {
       flex-direction: column;
