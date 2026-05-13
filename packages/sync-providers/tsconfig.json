@@ -4,6 +4,7 @@
     "module": "preserve",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM"],
+    "composite": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,

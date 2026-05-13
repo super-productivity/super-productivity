@@ -5,7 +5,7 @@ import {
   type NativeHttpExecutor,
   type NativeHttpRequestConfig,
   type NativeHttpResponse,
-} from '../src';
+} from '../src/http';
 import type { SyncLogger } from '@sp/sync-core';
 
 const successResponse: NativeHttpResponse = {

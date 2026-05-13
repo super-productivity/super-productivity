@@ -108,14 +108,13 @@ Do not import from package internals such as `@sp/sync-core/src/*`,
 `@sp/sync-providers/src/*`, or `dist/*`. If a host needs a symbol, promote it to
 the package barrel deliberately and check that it is not app-owned.
 
-The root `@sp/sync-providers` barrel remains available for compatibility, but
-new host code should prefer focused subpath barrels such as
-`@sp/sync-providers/dropbox`, `/webdav`, `/super-sync`, `/local-file`, `/http`,
-`/errors`, `/file-based`, `/pkce`, `/platform`, `/provider-types`, and
-`/credential-store`. Provider classes and provider-owned string constants are
-exported there, but app enums such as `SyncProviderId` are not. Internal helpers
-such as WebDAV API/adapter classes stay unexported unless a second host needs
-them.
+The root `@sp/sync-providers` barrel has been removed; consumers MUST import
+from focused subpath barrels: `@sp/sync-providers/dropbox`, `/webdav`,
+`/super-sync`, `/local-file`, `/http`, `/errors`, `/file-based`, `/pkce`,
+`/platform`, `/provider-types`, and `/credential-store`. Provider classes and
+provider-owned string constants are exported there, but app enums such as
+`SyncProviderId` are not. Internal helpers such as WebDAV API/adapter classes
+stay unexported unless a second host needs them.
 
 `@sp/sync-core` still exports deprecated full-state op compatibility defaults
 and host-defined `OpType.SyncImport` / `BackupImport` / `Repair` strings for

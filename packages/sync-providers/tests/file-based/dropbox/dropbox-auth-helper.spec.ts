@@ -4,11 +4,11 @@ import {
   type DropboxCfg,
   type DropboxDeps,
   type DropboxPrivateCfg,
-  generateCodeChallenge,
-  type NativeHttpExecutor,
   PROVIDER_ID_DROPBOX,
-  type SyncCredentialStorePort,
-} from '../../../src';
+} from '../../../src/dropbox';
+import { generateCodeChallenge } from '../../../src/pkce';
+import type { NativeHttpExecutor } from '../../../src/http';
+import type { SyncCredentialStorePort } from '../../../src/credential-store';
 import { DropboxApi } from '../../../src/file-based/dropbox/dropbox-api';
 import type { SyncLogger } from '@sp/sync-core';
 

@@ -1,16 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AuthFailSPError,
+  RemoteFileNotFoundAPIError,
+  TooManyRequestsAPIError,
+  UploadRevToMatchMismatchAPIError,
+} from '../../../src/errors';
+import {
   type DropboxCfg,
   type DropboxDeps,
   type DropboxPrivateCfg,
-  type NativeHttpExecutor,
   PROVIDER_ID_DROPBOX,
-  RemoteFileNotFoundAPIError,
-  type SyncCredentialStorePort,
-  TooManyRequestsAPIError,
-  UploadRevToMatchMismatchAPIError,
-} from '../../../src';
+} from '../../../src/dropbox';
+import type { NativeHttpExecutor } from '../../../src/http';
+import type { SyncCredentialStorePort } from '../../../src/credential-store';
 import { DropboxApi } from '../../../src/file-based/dropbox/dropbox-api';
 import type { SyncLogger } from '@sp/sync-core';
 

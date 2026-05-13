@@ -27,8 +27,21 @@
       "@super-productivity/plugin-api": ["packages/plugin-api/src/index.ts"],
       "@sp/shared-schema": ["packages/shared-schema/src/index.ts"],
       "@sp/sync-core": ["packages/sync-core/src/index.ts"],
-      "@sp/sync-providers": ["packages/sync-providers/src/index.ts"],
-      "@sp/sync-providers/*": ["packages/sync-providers/src/*"]
+      "@sp/sync-providers/dropbox": ["packages/sync-providers/src/dropbox.ts"],
+      "@sp/sync-providers/webdav": ["packages/sync-providers/src/webdav.ts"],
+      "@sp/sync-providers/local-file": ["packages/sync-providers/src/local-file.ts"],
+      "@sp/sync-providers/super-sync": ["packages/sync-providers/src/super-sync.ts"],
+      "@sp/sync-providers/http": ["packages/sync-providers/src/http.ts"],
+      "@sp/sync-providers/errors": ["packages/sync-providers/src/errors.ts"],
+      "@sp/sync-providers/credential-store": [
+        "packages/sync-providers/src/credential-store.ts"
+      ],
+      "@sp/sync-providers/file-based": ["packages/sync-providers/src/file-based.ts"],
+      "@sp/sync-providers/pkce": ["packages/sync-providers/src/pkce.ts"],
+      "@sp/sync-providers/platform": ["packages/sync-providers/src/platform.ts"],
+      "@sp/sync-providers/provider-types": [
+        "packages/sync-providers/src/provider-types.ts"
+      ]
     },
     "plugins": [
       {

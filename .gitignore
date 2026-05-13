@@ -58,6 +58,9 @@ chromedriver.log
 /docs/tmp
 .eslintcache
 
+# tsconfig composite build info
+**/*.tsbuildinfo
+
 
 # System Files
 .DS_Store

@@ -9,18 +9,27 @@ export enum OpType {
   Move = 'MOV', // For list reordering
   Batch = 'BATCH', // For bulk operations (import, mass update)
   /**
-   * Host-defined full-state compatibility string used by Super Productivity.
-   * Reusable core logic must receive full-state classification from the host.
+   * @deprecated Super Productivity host-specific full-state op string baked
+   * into sync-core for backward compatibility. New host integrations should
+   * declare their full-state op strings as plain string literals and
+   * register them via {@link createFullStateOpTypeHelpers}. This member
+   * will be removed from `OpType` once the SP migration completes.
    */
   SyncImport = 'SYNC_IMPORT',
   /**
-   * Host-defined full-state compatibility string used by Super Productivity.
-   * Reusable core logic must receive full-state classification from the host.
+   * @deprecated Super Productivity host-specific full-state op string baked
+   * into sync-core for backward compatibility. New host integrations should
+   * declare their full-state op strings as plain string literals and
+   * register them via {@link createFullStateOpTypeHelpers}. This member
+   * will be removed from `OpType` once the SP migration completes.
    */
   BackupImport = 'BACKUP_IMPORT',
   /**
-   * Host-defined full-state compatibility string used by Super Productivity.
-   * Reusable core logic must receive full-state classification from the host.
+   * @deprecated Super Productivity host-specific full-state op string baked
+   * into sync-core for backward compatibility. New host integrations should
+   * declare their full-state op strings as plain string literals and
+   * register them via {@link createFullStateOpTypeHelpers}. This member
+   * will be removed from `OpType` once the SP migration completes.
    */
   Repair = 'REPAIR',
 }

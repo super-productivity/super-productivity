@@ -21,22 +21,30 @@ import {
   isSingletonEntity as isSingletonEntityFromCore,
   isVirtualEntity as isVirtualEntityFromCore,
 } from '@sp/sync-core';
-import type { EntityConfig, EntityRegistry } from '@sp/sync-core';
+import type { EntityRegistry as CoreEntityRegistry } from '@sp/sync-core';
+import type {
+  HostEntityConfig,
+  HostEntityExtensions,
+} from './entity-registry-host.types';
 import { EntityType } from './operation.types';
 
+// The app-wide EntityConfig type carries the NgRx-shaped host extensions.
+// Sync-core only sees the engine-essential subset.
+export type EntityConfig = HostEntityConfig;
+export type EntityRegistry<TEntityType extends string = string> = CoreEntityRegistry<
+  TEntityType,
+  HostEntityExtensions
+>;
+
+export type { BaseEntity, EntityDictionary, EntityStoragePattern } from '@sp/sync-core';
 export type {
-  BaseEntity,
   EntityAdapterLike,
-  EntityConfig,
-  EntityDictionary,
-  EntityRegistry,
-  EntityStoragePattern,
   EntityUpdateLike,
   PropsStateSelector,
   SelectById,
   SelectByIdFactory,
   StateSelector,
-} from '@sp/sync-core';
+} from './entity-registry-host.types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTS - Adapters & Feature Names

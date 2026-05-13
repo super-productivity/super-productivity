@@ -27,7 +27,7 @@ import type {
   SnapshotUploadResponse,
   SuperSyncOpDownloadResponse,
   SyncOperation,
-} from '../../src/provider.types';
+} from '../../src/provider-types';
 import type { SuperSyncResponseValidators } from '../../src/super-sync/response-validators';
 import type { SuperSyncStorage } from '../../src/super-sync/storage';
 import {

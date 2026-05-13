@@ -3,7 +3,7 @@ import type { SyncLogger } from '@sp/sync-core';
 import type { SyncCredentialStorePort } from '../../credential-store-port';
 import type { FileAdapter } from '../../file-adapter';
 import { errorMeta } from '../../log/error-meta';
-import type { FileSyncProvider } from '../../provider.types';
+import type { FileSyncProvider } from '../../provider-types';
 import {
   FileHashCreationAPIError,
   InvalidDataSPError,

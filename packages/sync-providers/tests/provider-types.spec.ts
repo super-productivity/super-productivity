@@ -2,13 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   FILE_BASED_SYNC_CONSTANTS,
   type FileBasedSyncData,
+  type SyncFileCompactOp,
+} from '../src/file-based';
+import {
   isFileSyncProvider,
   type FileSyncProvider,
   type OperationSyncCapable,
-  type SyncFileCompactOp,
-  type SyncCredentialStorePort,
   type SyncProviderBase,
-} from '../src';
+} from '../src/provider-types';
+import type { SyncCredentialStorePort } from '../src/credential-store';
 
 type ProviderId = 'file' | 'ops';
 interface ProviderPrivateCfg {

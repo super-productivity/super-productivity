@@ -19,8 +19,21 @@
       "@super-productivity/plugin-api": ["packages/plugin-api/src/index.ts"],
       "@sp/shared-schema": ["packages/shared-schema/dist/index.d.ts"],
       "@sp/sync-core": ["packages/sync-core/dist/index.d.ts"],
-      "@sp/sync-providers": ["packages/sync-providers/dist/index.d.ts"],
-      "@sp/sync-providers/*": ["packages/sync-providers/dist/*"]
+      "@sp/sync-providers/dropbox": ["packages/sync-providers/dist/dropbox.d.ts"],
+      "@sp/sync-providers/webdav": ["packages/sync-providers/dist/webdav.d.ts"],
+      "@sp/sync-providers/local-file": ["packages/sync-providers/dist/local-file.d.ts"],
+      "@sp/sync-providers/super-sync": ["packages/sync-providers/dist/super-sync.d.ts"],
+      "@sp/sync-providers/http": ["packages/sync-providers/dist/http.d.ts"],
+      "@sp/sync-providers/errors": ["packages/sync-providers/dist/errors.d.ts"],
+      "@sp/sync-providers/credential-store": [
+        "packages/sync-providers/dist/credential-store.d.ts"
+      ],
+      "@sp/sync-providers/file-based": ["packages/sync-providers/dist/file-based.d.ts"],
+      "@sp/sync-providers/pkce": ["packages/sync-providers/dist/pkce.d.ts"],
+      "@sp/sync-providers/platform": ["packages/sync-providers/dist/platform.d.ts"],
+      "@sp/sync-providers/provider-types": [
+        "packages/sync-providers/dist/provider-types.d.ts"
+      ]
     }
   },
   "include": ["main.ts", "**/*.ts", "../src/app/core/window-ea.d.ts"],

@@ -3,7 +3,7 @@ import type { ProviderPlatformInfo } from '../../platform/provider-platform-info
 import type { WebFetchFactory } from '../../platform/web-fetch-factory';
 import type { NativeHttpExecutor } from '../../http/native-http-retry';
 import type { SyncCredentialStorePort } from '../../credential-store-port';
-import type { FileSyncProvider } from '../../provider.types';
+import type { FileSyncProvider } from '../../provider-types';
 import {
   InvalidDataSPError,
   MissingCredentialsSPError,

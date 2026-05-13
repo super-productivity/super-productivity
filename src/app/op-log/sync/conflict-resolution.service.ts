@@ -17,8 +17,8 @@ import {
   planLwwConflictResolutions,
   suggestConflictResolution,
   type LwwResolvedConflict,
-  type SelectByIdFactory,
 } from '@sp/sync-core';
+import type { SelectByIdFactory } from '../core/entity-registry-host.types';
 import { Store } from '@ngrx/store';
 import {
   ActionType,

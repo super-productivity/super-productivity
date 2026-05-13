@@ -3,16 +3,18 @@ import { md5 } from 'hash-wasm';
 import { NOOP_SYNC_LOGGER } from '@sp/sync-core';
 import {
   InvalidDataSPError,
+  NoRevAPIError,
+  RemoteFileNotFoundAPIError,
+  UploadRevToMatchMismatchAPIError,
+} from '../../../src/errors';
+import {
   LocalFileSyncBase,
-  type FileAdapter,
   type LocalFileSyncBaseDeps,
   type LocalFileSyncPrivateCfg,
-  NoRevAPIError,
   PROVIDER_ID_LOCAL_FILE,
-  RemoteFileNotFoundAPIError,
-  type SyncCredentialStorePort,
-  UploadRevToMatchMismatchAPIError,
-} from '../../../src';
+} from '../../../src/local-file';
+import type { FileAdapter } from '../../../src/file-based';
+import type { SyncCredentialStorePort } from '../../../src/credential-store';
 
 vi.mock('hash-wasm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('hash-wasm')>();

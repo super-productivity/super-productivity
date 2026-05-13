@@ -4,7 +4,7 @@ import {
   generateCodeVerifier,
   generatePKCECodes,
   type PkceCrypto,
-} from '../src';
+} from '../src/pkce';
 
 const createDeterministicCrypto = (): PkceCrypto => ({
   getRandomValues: <T extends Uint8Array>(array: T): T => {

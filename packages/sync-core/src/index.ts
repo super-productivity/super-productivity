@@ -207,12 +207,6 @@ export type {
   EntityStoragePattern,
   BaseEntity,
   EntityDictionary,
-  StateSelector,
-  PropsStateSelector,
-  SelectByIdFactory,
-  EntityUpdateLike,
-  EntityAdapterLike,
-  SelectById,
   EntityConfig,
   EntityRegistry,
 } from './entity-registry.types';
