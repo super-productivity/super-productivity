@@ -514,6 +514,18 @@ export class PluginService implements OnDestroy {
     } catch (error) {
       PluginLog.err(`Failed to activate plugin ${pluginId}:`, error);
       const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Tear down any partially-registered runtime (hooks, buttons, side effects)
+      // to avoid a "running" plugin while UI shows error state.
+      try {
+        this._pluginRunner.unloadPlugin(pluginId);
+      } catch (unloadError) {
+        PluginLog.err(
+          `Failed to clean up plugin ${pluginId} after activation error:`,
+          unloadError,
+        );
+      }
+
       this._setPluginState(pluginId, {
         ...currentState,
         status: 'error',
@@ -553,17 +565,24 @@ export class PluginService implements OnDestroy {
       state.isEnabled,
     );
 
-    // For nodeExecution plugins on Electron, ping the IPC bridge before firing onReady.
-    // For all other plugins, fire onReady immediately.
-    // Only fire if plugin loaded successfully — errors in plugin.js set loaded=false.
-    if (instance.loaded) {
-      if (IS_ELECTRON && state.manifest.permissions?.includes('nodeExecution')) {
-        await this._pingNodeBridge(state.manifest);
-      }
-      await this._pluginRunner.triggerReady(state.manifest.id);
-    }
+    await this._fireOnReady(instance);
 
     return instance;
+  }
+
+  /**
+   * Fire onReady for a successfully loaded plugin. For nodeExecution plugins on
+   * Electron, pings the IPC bridge first (with retry); throws if the bridge stays
+   * unavailable. Called after every plugin load path.
+   */
+  private async _fireOnReady(instance: PluginInstance): Promise<void> {
+    if (!instance.loaded) {
+      return;
+    }
+    if (IS_ELECTRON && instance.manifest.permissions?.includes('nodeExecution')) {
+      await this._pingNodeBridge(instance.manifest);
+    }
+    await this._pluginRunner.triggerReady(instance.manifest.id);
   }
 
   private async _loadUploadedPlugins(): Promise<void> {
@@ -729,6 +748,8 @@ export class PluginService implements OnDestroy {
         // Mark plugin as enabled in memory only during startup to avoid sync conflicts
         // The enabled state will be persisted later when user explicitly enables/disables plugins
         this._ensurePluginEnabledInMemory(manifest.id);
+
+        await this._fireOnReady(pluginInstance);
 
         PluginLog.log(`Plugin ${manifest.id} loaded successfully`);
       } else {
@@ -1257,6 +1278,8 @@ export class PluginService implements OnDestroy {
         };
         this._setPluginState(manifest.id, state);
 
+        await this._fireOnReady(pluginInstance);
+
         PluginLog.log(`Uploaded plugin ${manifest.id} loaded successfully`);
       } else {
         PluginLog.err(
@@ -1534,6 +1557,7 @@ export class PluginService implements OnDestroy {
           // Replace existing instance
           this._loadedPlugins[existingIndex] = pluginInstance;
         }
+        await this._fireOnReady(pluginInstance);
         PluginLog.log(`Uploaded plugin ${manifest.id} reloaded successfully`);
       } else {
         PluginLog.err(

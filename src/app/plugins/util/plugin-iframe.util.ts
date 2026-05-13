@@ -347,6 +347,22 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           deleteCounter: (id) => callApi('deleteCounter', [id]),
           getAllCounters: () => callApi('getAllCounters'),
 
+          // Readiness signal — for iframe plugins, the API bridge is fully set
+          // up by the time plugin.js runs, so onReady fires on the next microtask
+          // (after plugin.js finishes registering hooks). Mirrors the host-side
+          // PluginAPI.onReady contract.
+          onReady: (fn) => {
+            queueMicrotask(() => {
+              try {
+                Promise.resolve(fn()).catch((err) => {
+                  console.error('[Plugin] onReady callback error:', err);
+                });
+              } catch (err) {
+                console.error('[Plugin] onReady callback error:', err);
+              }
+            });
+          },
+
           // Message handling
           onMessage: (handler) => {
             // Store the handler and set up message listener
