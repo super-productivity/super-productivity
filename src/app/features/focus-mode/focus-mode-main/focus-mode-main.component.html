@@ -82,7 +82,7 @@
         mat-fab
         extended
         color="primary"
-        class="select-task-cta"
+        class="select-task-cta task-title-placeholder"
         (click)="openTaskSelector(); $event.stopPropagation()"
       >
         <mat-icon>add_task</mat-icon>
@@ -192,6 +192,7 @@
           @if (focusModeService.isSessionPaused()) {
             <button
               mat-icon-button
+              class="pause-resume-btn"
               [matTooltip]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
               (click)="resumeSession()"
             >
@@ -200,6 +201,7 @@
           } @else {
             <button
               mat-icon-button
+              class="pause-resume-btn"
               [matTooltip]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
               (click)="pauseSession()"
             >
@@ -211,6 +213,7 @@
         @if (isShowCompleteSessionButton()) {
           <button
             mat-icon-button
+            class="complete-session-btn"
             [matTooltip]="T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate"
             (click)="completeFocusSession()"
           >

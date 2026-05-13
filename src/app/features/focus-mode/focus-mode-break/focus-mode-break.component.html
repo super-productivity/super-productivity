@@ -36,6 +36,7 @@
         @if (isBreakPaused()) {
           <button
             mat-icon-button
+            class="pause-resume-btn"
             [matTooltip]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
             (click)="resumeBreak()"
           >
@@ -44,6 +45,7 @@
         } @else {
           <button
             mat-icon-button
+            class="pause-resume-btn"
             [matTooltip]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
             (click)="pauseBreak()"
           >
