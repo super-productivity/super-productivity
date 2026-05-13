@@ -685,7 +685,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
 
     // Handle Enter key
-    if (event.key === 'Enter' && !event.isComposing) {
+    if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       if (!this.isSearchMode() && !event.repeat) {
         void this.addTask();
