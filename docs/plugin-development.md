@@ -548,7 +548,11 @@ not fire.
 You can also use `onReady` for any other startup work that should run after the plugin
 script has finished setting up its hooks and registrations — not just for `nodeExecution`.
 
+### 4. Don't spam the logs
 
+`console.logs` should be kept to a minimum.
+
+### 5. Iframe plugins: inline everything
 
 1. **Inline everything**: CSS and JavaScript must be in the HTML file
 

@@ -555,10 +555,13 @@ export class PluginService implements OnDestroy {
 
     // For nodeExecution plugins on Electron, ping the IPC bridge before firing onReady.
     // For all other plugins, fire onReady immediately.
-    if (IS_ELECTRON && state.manifest.permissions?.includes('nodeExecution')) {
-      await this._pingNodeBridge(state.manifest);
+    // Only fire if plugin loaded successfully — errors in plugin.js set loaded=false.
+    if (instance.loaded) {
+      if (IS_ELECTRON && state.manifest.permissions?.includes('nodeExecution')) {
+        await this._pingNodeBridge(state.manifest);
+      }
+      await this._pluginRunner.triggerReady(state.manifest.id);
     }
-    await this._pluginRunner.triggerReady(state.manifest.id);
 
     return instance;
   }
