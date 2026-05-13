@@ -40,6 +40,11 @@ import {
   updateTagOrder,
 } from './tag.actions';
 import { Log } from '../../../core/log';
+import {
+  updateDocumentBlocksDelta,
+  updateDocumentBlocksLocal,
+} from '../../document-mode/store/document-mode.actions';
+import { applyDocumentBlocksDelta } from '../../document-mode/document-block.model';
 
 export const TAG_FEATURE_NAME = 'tag';
 const WORK_CONTEXT_TYPE: WorkContextType = WorkContextType.TAG;
@@ -346,6 +351,22 @@ export const tagReducer = createReducer<TagState>(
   on(addTag, (state: TagState, { tag }) => tagAdapter.addOne(tag, state)),
 
   on(updateTag, (state: TagState, { tag }) => tagAdapter.updateOne(tag, state)),
+
+  on(
+    updateDocumentBlocksLocal,
+    (state: TagState, { contextId, contextType, documentBlocks }) => {
+      if (contextType !== 'TAG') return state;
+      return tagAdapter.updateOne({ id: contextId, changes: { documentBlocks } }, state);
+    },
+  ),
+
+  on(updateDocumentBlocksDelta, (state: TagState, { contextId, contextType, delta }) => {
+    if (contextType !== 'TAG') return state;
+    const entity = state.entities[contextId];
+    if (!entity) return state;
+    const documentBlocks = applyDocumentBlocksDelta(entity.documentBlocks || [], delta);
+    return tagAdapter.updateOne({ id: contextId, changes: { documentBlocks } }, state);
+  }),
 
   on(deleteTag, (state: TagState, { id }) => tagAdapter.removeOne(id, state)),
 

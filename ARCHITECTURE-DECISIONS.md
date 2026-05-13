@@ -118,6 +118,47 @@ sync primitives.
 
 ---
 
+### 4. Document Mode Delta-Based Sync for documentBlocks
+
+**Status**: ✅ Active
+
+**Decision**: Document mode uses a **delta-based sync pattern** for `documentBlocks`. Instead of sending the entire array on every sync, only changed/added blocks, removed block IDs, and the new block order are persisted via the `updateDocumentBlocksDelta` action. The service tracks the last-persisted state per context and computes a minimal diff on flush.
+
+**How it works**:
+
+1. Local edits dispatch `updateDocumentBlocksLocal` (non-persistent) for instant UI feedback
+2. After a 30-second debounce, `_flushSync()` computes a delta from the last-persisted snapshot
+3. If nothing changed, the flush is skipped entirely (no operation created)
+4. If blocks changed, `updateDocumentBlocksDelta` is dispatched with only the diff
+5. Reducers apply the delta by merging changed blocks, removing deleted ones, and reordering
+
+**Conflict behavior**:
+
+- Content edits to **different blocks** from two devices are both preserved (block-level merge)
+- Content edits to the **same block** from two devices: last-write-wins on that block
+- Block **ordering**: last-write-wins (the `blockOrder` field replaces the full order)
+- Blocks added by a concurrent remote client but missing from `blockOrder` are appended at the end
+
+**Rationale**:
+
+- Dramatically reduces sync payload size (only changed blocks, not the entire array)
+- Skips no-op flushes when nothing changed since last persist
+- Preserves non-conflicting edits from concurrent devices (better than full-array LWW)
+- No new entity type needed — still uses PROJECT/TAG entity types in the op-log
+
+**Key Files**:
+
+- [`document-mode.service.ts`](src/app/features/document-mode/document-mode.service.ts) - Dual-dispatch pattern with delta computation and dirty tracking
+- [`document-block.model.ts`](src/app/features/document-mode/document-block.model.ts) - `computeBlocksDelta()` and `applyDocumentBlocksDelta()` utilities
+- [`document-mode.actions.ts`](src/app/features/document-mode/store/document-mode.actions.ts) - `updateDocumentBlocksDelta` persistent action
+
+**When to Revisit**:
+
+- If real-time collaborative editing becomes a requirement (would need CRDT/OT)
+- If block ordering conflicts become a user-facing problem
+
+---
+
 ## How to Use This Document
 
 ### When Making Architectural Changes

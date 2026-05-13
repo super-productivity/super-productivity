@@ -14,6 +14,11 @@ import {
 } from '../../work-context/store/work-context-meta.actions';
 import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 import {
+  updateDocumentBlocksDelta,
+  updateDocumentBlocksLocal,
+} from '../../document-mode/store/document-mode.actions';
+import { applyDocumentBlocksDelta } from '../../document-mode/document-block.model';
+import {
   arrayMoveLeftUntil,
   arrayMoveRightUntil,
   arrayMoveToEnd,
@@ -147,6 +152,25 @@ export const projectReducer = createReducer<ProjectState>(
   on(addProjects, (state, { projects }) => projectAdapter.addMany(projects, state)),
 
   on(updateProject, (state, { project }) => projectAdapter.updateOne(project, state)),
+
+  on(updateDocumentBlocksLocal, (state, { contextId, contextType, documentBlocks }) => {
+    if (contextType !== 'PROJECT') return state;
+    return projectAdapter.updateOne(
+      { id: contextId, changes: { documentBlocks } },
+      state,
+    );
+  }),
+
+  on(updateDocumentBlocksDelta, (state, { contextId, contextType, delta }) => {
+    if (contextType !== 'PROJECT') return state;
+    const entity = state.entities[contextId];
+    if (!entity) return state;
+    const documentBlocks = applyDocumentBlocksDelta(entity.documentBlocks || [], delta);
+    return projectAdapter.updateOne(
+      { id: contextId, changes: { documentBlocks } },
+      state,
+    );
+  }),
 
   // on(deleteProjects, (state, { ids }) => projectAdapter.removeMany(ids, state)),
   on(loadProjects, (state, { projects }) => projectAdapter.setAll(projects, state)),

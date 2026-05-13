@@ -28,6 +28,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isEnableUserProfiles: false,
     isHabitsEnabled: true,
     isFinishDayEnabled: true,
+    isDocumentModeEnabled: true,
   },
   localization: {
     lng: undefined,

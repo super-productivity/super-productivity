@@ -50,6 +50,9 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   // GlobalConfig actions (C)
   [ActionType.GLOBAL_CONFIG_UPDATE_SECTION]: 'CU',
 
+  // DocumentMode actions (D)
+  [ActionType.DOCUMENT_MODE_UPDATE_BLOCKS_DELTA]: 'DU',
+
   // Metric actions (E)
   [ActionType.METRIC_ADD]: 'EA',
   [ActionType.METRIC_DELETE]: 'ED',

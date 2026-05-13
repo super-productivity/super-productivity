@@ -1,4 +1,5 @@
 import { WorklogExportSettings } from '../worklog/worklog.model';
+import { DocumentBlock } from '../document-mode/document-block.model';
 
 // normally imported from here, but this includes non type files as well..
 // import {HueValue} from 'angular-material-css-vars';
@@ -69,6 +70,8 @@ export interface WorkContextCommon {
   taskIds: string[];
   id: string;
   title: string;
+  documentBlocks?: DocumentBlock[];
+  isDocumentMode?: boolean;
 }
 
 export type WorkContextAdvancedCfgKey = keyof WorkContextAdvancedCfg;
