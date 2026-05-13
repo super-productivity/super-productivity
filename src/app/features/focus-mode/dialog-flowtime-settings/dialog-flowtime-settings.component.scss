@@ -7,3 +7,13 @@
 .spacer {
   flex: 1;
 }
+
+// Force break-rule rows to stack vertically. RepeatSectionTypeComponent
+// switches to a 2-column grid at the "component" breakpoint, which would
+// place pairs of rules side by side — too cramped here since each rule
+// already has three side-by-side inputs. !important wins the spec tie with
+// the component's own scoped .list-wrapper rule.
+::ng-deep .flowtime-break-rules .list-wrapper {
+  display: block !important;
+  grid-template-columns: none !important;
+}

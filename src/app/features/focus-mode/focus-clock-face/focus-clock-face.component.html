@@ -1,0 +1,42 @@
+<div class="clock-face">
+  @if (isRing()) {
+    <svg
+      class="clock-face__layer focus-progress-circle"
+      viewBox="0 0 36 36"
+    >
+      <path
+        class="focus-progress-circle__bg"
+        d="M18 2.0845
+            a 15.9155 15.9155 0 0 1 0 31.831
+            a 15.9155 15.9155 0 0 1 0 -31.831"
+      />
+      <path
+        class="focus-progress-circle__progress"
+        [attr.stroke-dasharray]="progress() + ', 100'"
+        d="M18 2.0845
+            a 15.9155 15.9155 0 0 1 0 31.831
+            a 15.9155 15.9155 0 0 1 0 -31.831"
+      />
+    </svg>
+  }
+  @if (isBreathing()) {
+    <breathing-dot
+      class="clock-face__layer"
+      [isPaused]="isPaused()"
+    ></breathing-dot>
+    <svg
+      class="clock-face__layer focus-progress-circle focus-progress-circle--idle"
+      viewBox="0 0 36 36"
+    >
+      <path
+        class="focus-progress-circle__bg"
+        d="M18 2.0845
+            a 15.9155 15.9155 0 0 1 0 31.831
+            a 15.9155 15.9155 0 0 1 0 -31.831"
+      />
+    </svg>
+  }
+  <div class="clock-face__content">
+    <ng-content></ng-content>
+  </div>
+</div>

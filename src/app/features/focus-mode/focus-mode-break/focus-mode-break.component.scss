@@ -7,46 +7,86 @@
   justify-content: center;
   height: 100%;
   text-align: center;
-  gap: 2rem;
+  gap: var(--s2);
 }
 
-.timer-container {
-  position: relative;
+// Mirrors focus-mode-main's .task-section so the circle's vertical baseline
+// is identical across focus ↔ break transitions.
+.task-section {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  min-height: var(--s9);
+  margin: var(--s);
+}
 
-  .timer-text {
-    position: absolute;
-    font-size: 1.8rem;
-    font-weight: 500;
+.task-title {
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.5;
+
+  @include mq(xs, max) {
+    font-size: 24px;
   }
 
-  // Pause/Resume button inside the circle (top center)
-  .pause-resume-btn {
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
+  @include mq(xxxs, max) {
+    font-size: 18px;
   }
 }
 
-.break-message {
-  font-size: 1.1rem;
-  opacity: 0.8;
-  margin: 0;
+// "Short break" / "Long break" / "Take a break" label inside the circle,
+// positioned above the digits. Two steps up the spacing scale from the
+// cycle counter so it reads as the dominant secondary text.
+.break-label {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--text-color-muted);
+  font-size: var(--s3);
+  font-weight: bold;
+  line-height: 1;
 }
 
-.button-row {
+// Pomodoro cycle counter inside the circle, below the digits.
+.cycle-counter {
+  position: absolute;
+  top: 65%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  color: var(--text-color-muted);
+  font-size: var(--s3);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+
+  mat-icon {
+    font-size: var(--s3);
+    width: var(--s3);
+    height: var(--s3);
+  }
+}
+
+// Secondary control row directly under the clock face (matches the layout
+// used by focus-mode-main).
+.circle-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--s);
+  min-height: var(--s5); // mat-icon-button is 40px = --s5
+}
+
+// Primary action row with generous padding above so it visually anchors to
+// the bottom of the panel.
+.bottom-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--s2);
   align-items: center;
-}
-
-.reset-cycles-btn {
-  @include mq(xs, max) {
-    display: none;
-  }
+  gap: var(--s2);
+  margin-top: var(--s4);
 }
