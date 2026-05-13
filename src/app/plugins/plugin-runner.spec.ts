@@ -179,23 +179,60 @@ describe('PluginRunner', () => {
   });
 
   describe('triggerReady()', () => {
+    // Plugin code runs via `new Function` so it sees globalThis. Tests install
+    // observable spies there and the registered onReady fn calls them.
+    const READY_GLOBAL = '__pluginRunnerSpec_onReady__';
+    const getGlobal = (): Record<string, jasmine.Spy> =>
+      (globalThis as unknown as Record<string, Record<string, jasmine.Spy>>)[
+        READY_GLOBAL
+      ];
+
+    beforeEach(() => {
+      (globalThis as unknown as Record<string, Record<string, jasmine.Spy>>)[
+        READY_GLOBAL
+      ] = {};
+    });
+
+    afterEach(() => {
+      delete (globalThis as unknown as Record<string, unknown>)[READY_GLOBAL];
+    });
+
     it('should call the registered onReady callback', async () => {
-      const code = `plugin.onReady(async () => { /* callback registered */ });`;
+      const readySpy = jasmine.createSpy('ready');
+      getGlobal()[mockManifest.id] = readySpy;
+
+      const code = `plugin.onReady(() => globalThis['${READY_GLOBAL}']['${mockManifest.id}']());`;
       await service.loadPlugin(mockManifest, code, mockBaseCfg);
 
-      // Verify the callback was registered by checking triggerReady resolves
-      await expectAsync(service.triggerReady(mockManifest.id)).toBeResolved();
+      await service.triggerReady(mockManifest.id);
+      expect(readySpy).toHaveBeenCalledTimes(1);
     });
 
     it('should only fire the callback for the specified plugin', async () => {
       const manifestB = { ...mockManifest, id: 'plugin-b', name: 'Plugin B' };
+      const aSpy = jasmine.createSpy('aReady');
+      const bSpy = jasmine.createSpy('bReady');
+      getGlobal()[mockManifest.id] = aSpy;
+      getGlobal()[manifestB.id] = bSpy;
 
-      await service.loadPlugin(mockManifest, `plugin.onReady(() => {});`, mockBaseCfg);
-      await service.loadPlugin(manifestB, `plugin.onReady(() => {});`, mockBaseCfg);
+      await service.loadPlugin(
+        mockManifest,
+        `plugin.onReady(() => globalThis['${READY_GLOBAL}']['${mockManifest.id}']());`,
+        mockBaseCfg,
+      );
+      await service.loadPlugin(
+        manifestB,
+        `plugin.onReady(() => globalThis['${READY_GLOBAL}']['${manifestB.id}']());`,
+        mockBaseCfg,
+      );
 
-      await expectAsync(service.triggerReady(mockManifest.id)).toBeResolved();
-      // B's callback should still be registered (not fired or cleared)
-      await expectAsync(service.triggerReady(manifestB.id)).toBeResolved();
+      await service.triggerReady(mockManifest.id);
+      expect(aSpy).toHaveBeenCalledTimes(1);
+      expect(bSpy).not.toHaveBeenCalled();
+
+      await service.triggerReady(manifestB.id);
+      expect(aSpy).toHaveBeenCalledTimes(1);
+      expect(bSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should resolve silently for unknown plugin id', async () => {
