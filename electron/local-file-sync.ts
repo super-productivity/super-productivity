@@ -20,18 +20,6 @@ export const initLocalFileSyncAdapter = (): void => {
         const normalized = filePathOrUrl.startsWith('file://')
           ? fileURLToPath(filePathOrUrl)
           : filePathOrUrl;
-        const fs = await import('fs');
-
-        const stat = await fs.promises.stat(normalized);
-
-        // 200 KB limit
-        const MAX_FILE_SIZE = 200 * 1024;
-
-        if (stat.size > MAX_FILE_SIZE) {
-          throw new Error('Background image exceeds 200 KB limit');
-        }
-
-        const buffer = await fs.promises.readFile(normalized);
 
         const ext = normalized.toLowerCase().split('.').pop() || '';
 
@@ -46,7 +34,25 @@ export const initLocalFileSyncAdapter = (): void => {
           avif: 'image/avif',
         };
 
-        const mimeType = mimeTypeByExt[ext] || 'application/octet-stream';
+        const mimeType = mimeTypeByExt[ext];
+
+        // Reject unsupported file types before reading
+        if (!mimeType) {
+          return null;
+        }
+
+        const fs = await import('fs');
+
+        const stat = await fs.promises.stat(normalized);
+
+        // 200 KB limit
+        const MAX_FILE_SIZE = 200 * 1024;
+
+        if (stat.size > MAX_FILE_SIZE) {
+          throw new Error('Background image exceeds 200 KB limit');
+        }
+
+        const buffer = await fs.promises.readFile(normalized);
 
         return `data:${mimeType};base64,${buffer.toString('base64')}`;
       } catch (e) {
