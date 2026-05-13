@@ -13,6 +13,7 @@ import { Action, ActionReducer } from '@ngrx/store';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import {
   createBaseState,
+  createMockProject,
   createMockTag,
   createMockTask,
   createStateWithExistingTasks,
@@ -492,6 +493,155 @@ describe('taskSharedCrudMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+  });
+
+  describe('convertToSubTask action', () => {
+    const createConvertToSubTaskState = (): RootState => {
+      const taskToConvert = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        dueDay: '2030-01-01',
+      });
+      const targetTask = createMockTask({
+        id: 'target-task',
+        projectId: 'project2',
+        tagIds: [],
+        subTaskIds: ['existing-sub'],
+      });
+      const existingSubTask = createMockTask({
+        id: 'existing-sub',
+        parentId: 'target-task',
+        projectId: 'project2',
+        tagIds: [],
+      });
+
+      return {
+        ...baseState,
+        [TASK_FEATURE_NAME]: {
+          ...baseState[TASK_FEATURE_NAME],
+          ids: ['task1', 'target-task', 'existing-sub'],
+          entities: {
+            task1: taskToConvert,
+            'target-task': targetTask,
+            'existing-sub': existingSubTask,
+          },
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ...baseState[PROJECT_FEATURE_NAME],
+          ids: ['project1', 'project2'],
+          entities: {
+            project1: createMockProject({
+              id: 'project1',
+              taskIds: ['task1'],
+              backlogTaskIds: ['task1'],
+            }),
+            project2: createMockProject({
+              id: 'project2',
+              taskIds: ['target-task'],
+              backlogTaskIds: [],
+            }),
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseState[TAG_FEATURE_NAME],
+          entities: {
+            ...baseState[TAG_FEATURE_NAME].entities,
+            tag1: createMockTag({ id: 'tag1', taskIds: ['task1'] }),
+            TODAY: createMockTag({ id: 'TODAY', taskIds: ['task1'] }),
+          },
+        },
+        planner: {
+          ...baseState.planner,
+          days: {
+            '2030-01-01': ['task1', 'other-task'],
+          },
+        },
+      };
+    };
+
+    it('should convert a top-level task into a positioned subtask', () => {
+      const testState = createConvertToSubTaskState();
+      const action = TaskSharedActions.convertToSubTask({
+        taskId: 'task1',
+        targetTaskId: 'target-task',
+        afterTaskId: 'existing-sub',
+      });
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', {
+            parentId: 'target-task',
+            projectId: 'project2',
+            tagIds: [],
+          }),
+          ...expectTaskUpdate('target-task', {
+            subTaskIds: ['existing-sub', 'task1'],
+          }),
+          ...expectProjectUpdate('project1', {
+            taskIds: [],
+            backlogTaskIds: [],
+          }),
+          ...expectTagUpdates({
+            tag1: { taskIds: [] },
+            TODAY: { taskIds: [] },
+          }),
+          planner: jasmine.objectContaining({
+            days: {
+              '2030-01-01': ['other-task'],
+            },
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should ignore repeating or issue-linked tasks', () => {
+      const testState = createConvertToSubTaskState();
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        repeatCfgId: 'repeat1',
+      });
+      const action = TaskSharedActions.convertToSubTask({
+        taskId: 'task1',
+        targetTaskId: 'target-task',
+        afterTaskId: null,
+      });
+
+      const result = metaReducer(testState, action);
+
+      expect(result).toBe(testState);
+      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+    });
+
+    it('should ignore circular conversions', () => {
+      const testState = createConvertToSubTaskState();
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        subTaskIds: ['target-task'],
+      });
+      testState[TASK_FEATURE_NAME].entities['target-task'] = createMockTask({
+        id: 'target-task',
+        parentId: 'task1',
+        projectId: 'project1',
+      });
+      const action = TaskSharedActions.convertToSubTask({
+        taskId: 'task1',
+        targetTaskId: 'target-task',
+        afterTaskId: null,
+      });
+
+      const result = metaReducer(testState, action);
+
+      expect(result).toBe(testState);
+      expect(mockReducer).toHaveBeenCalledWith(testState, action);
     });
   });
 
