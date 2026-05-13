@@ -1,7 +1,7 @@
 import {
   testWebdavConnection as packageTestWebdavConnection,
   type WebdavPrivateCfg,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/webdav';
 import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
 import { APP_PROVIDER_PLATFORM_INFO } from '../../platform/app-provider-platform-info';
 import { APP_WEB_FETCH } from '../../platform/app-web-fetch';

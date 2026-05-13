@@ -4,8 +4,8 @@ import {
   PROVIDER_ID_DROPBOX,
   type DropboxCfg,
   type DropboxDeps,
-  type NativeHttpResponse,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/dropbox';
+import { type NativeHttpResponse } from '@sp/sync-providers/http';
 import { SyncProviderId } from '../../provider.const';
 import { SyncCredentialStore } from '../../credential-store.service';
 import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
@@ -22,7 +22,7 @@ type AssertDropboxId = SyncProviderId.Dropbox extends typeof PROVIDER_ID_DROPBOX
 const _idCheck: AssertDropboxId = true;
 void _idCheck;
 
-export type { DropboxCfg, DropboxPrivateCfg } from '@sp/sync-providers';
+export type { DropboxCfg, DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
 
 /**
  * App-side factory wiring concrete adapters into the package's Dropbox

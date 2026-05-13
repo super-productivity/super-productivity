@@ -175,11 +175,10 @@ describe('WebdavXmlParser', () => {
   });
 
   // ==========================================================================
-  // Namespace quirks — the NS-aware `getElementsByTagNameNS('*', name)` lookup
-  // is the only reason these all parse uniformly. Originally protected by the
-  // pre-package Karma specs; restored here so a future "let's use
-  // getElementsByTagName" cleanup that breaks Apache mod_dav / ownCloud /
-  // mixed-namespace responses fails loudly.
+  // Namespace quirks — localName-based matching is the reason these all parse
+  // uniformly. Originally protected by the pre-package Karma specs; restored
+  // here so a future prefix-sensitive cleanup that breaks Apache mod_dav /
+  // ownCloud / mixed-namespace responses fails loudly.
   // ==========================================================================
   describe('namespace quirks', () => {
     const parser = new WebdavXmlParser(NOOP_SYNC_LOGGER);
@@ -247,6 +246,30 @@ describe('WebdavXmlParser', () => {
   </D:response>
 </D:multistatus>`;
       expect(parser.parseMultiplePropsFromXml(xml, '/mixed/file')).toHaveLength(1);
+    });
+
+    it('prefers direct WebDAV children over nested extension fields', () => {
+      const xml = `<?xml version="1.0"?>
+<D:multistatus xmlns:D="DAV:" xmlns:x="urn:example">
+  <D:response>
+    <x:metadata>
+      <D:href>/wrong/nested-file</D:href>
+      <D:propstat>
+        <D:prop><D:displayname>wrong</D:displayname><D:getcontentlength>99</D:getcontentlength></D:prop>
+        <D:status>HTTP/1.1 200 OK</D:status>
+      </D:propstat>
+    </x:metadata>
+    <D:href>/direct/file</D:href>
+    <D:propstat>
+      <D:prop><D:displayname>file</D:displayname><D:getcontentlength>7</D:getcontentlength><D:resourcetype/></D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>`;
+      const r = parser.parseMultiplePropsFromXml(xml, '/direct/file');
+      expect(r).toHaveLength(1);
+      expect(r[0].path).toBe('/direct/file');
+      expect(r[0].size).toBe(7);
     });
   });
 

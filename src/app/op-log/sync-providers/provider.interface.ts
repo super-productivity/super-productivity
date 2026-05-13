@@ -21,7 +21,7 @@ import {
   type SyncOperation as GenericSyncOperation,
   type SyncProviderAuthHelper as GenericSyncProviderAuthHelper,
   type SyncProviderBase as GenericSyncProviderBase,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/provider-types';
 import type { SyncProviderId } from './provider.const';
 import type { PrivateCfgByProviderId } from '../core/types/sync.types';
 
@@ -36,13 +36,6 @@ export type FileSyncProvider<PID extends SyncProviderId> = GenericFileSyncProvid
   PID,
   PrivateCfgByProviderId<PID>
 >;
-
-/**
- * @deprecated Use `SyncProviderBase` for generic provider references
- * or `FileSyncProvider` for file-based providers. Kept as alias for backward compatibility.
- */
-export type SyncProviderServiceInterface<PID extends SyncProviderId> =
-  FileSyncProvider<PID>;
 
 export const isFileSyncProvider = (
   provider: SyncProviderBase<SyncProviderId>,

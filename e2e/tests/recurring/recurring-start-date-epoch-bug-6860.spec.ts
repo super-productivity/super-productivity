@@ -35,7 +35,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
 
     const recurItem = page
       .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon[svgIcon="repeat"]') });
+      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
     await expect(recurItem).toBeVisible({ timeout: 5000 });
     await recurItem.click();
 
@@ -99,7 +99,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
 
     const recurItem = page
       .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon[svgIcon="repeat"]') });
+      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
     await expect(recurItem).toBeVisible({ timeout: 5000 });
     await recurItem.click();
 

@@ -328,7 +328,7 @@ export class Dropbox implements FileSyncProvider<
     // auth button) share one PKCE generation instead of racing.
     if (!this._pkcePromise) {
       const inFlight = (async () => {
-        const { codeVerifier, codeChallenge } = await generatePKCECodes(128);
+        const { codeVerifier, codeChallenge } = await generatePKCECodes();
         let authCodeUrl =
           `${DROPBOX_AUTH_URL}` +
           `?response_type=code&client_id=${this._appKey}` +

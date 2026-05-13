@@ -22,6 +22,7 @@ import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-downl
 import {
   AuthFailSPError,
   MissingCredentialsSPError,
+  NetworkUnavailableSPError,
   PotentialCorsError,
   SyncProviderId,
   SyncStatus,
@@ -926,6 +927,45 @@ describe('SyncWrapperService', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'ERROR',
+        }),
+      );
+    });
+
+    it('should handle NetworkUnavailableSPError as transient with WARNING snackbar', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new NetworkUnavailableSPError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+          type: 'WARNING',
+        }),
+      );
+    });
+
+    it('should NOT treat a raw HTTP-status Error as a network error', async () => {
+      // Regression guard for the dropped string-shape classifier: an error
+      // whose message contains "500"/"Internal Server Error" used to slip
+      // through the broad regex. Now only `NetworkUnavailableSPError`
+      // qualifies, so this falls through to the catch-all ERROR branch.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('HTTP 500 Internal Server Error — db down')),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
         }),
       );
     });

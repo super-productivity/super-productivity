@@ -3,12 +3,7 @@ import { OperationEncryptionService } from './operation-encryption.service';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { DecryptError } from '../core/errors/sync-errors';
 import { ActionType } from '../core/operation.types';
-import {
-  mockEncrypt,
-  mockDecrypt,
-  mockEncryptBatch,
-  mockDecryptBatch,
-} from '../testing/helpers/mock-encryption.helper';
+import { clearSessionKeyCache, setArgon2ParamsForTesting } from '@sp/sync-core';
 
 describe('OperationEncryptionService', () => {
   let service: OperationEncryptionService;
@@ -28,18 +23,27 @@ describe('OperationEncryptionService', () => {
     schemaVersion: 1,
   });
 
+  // Use real encryption with weakened Argon2 params (8KiB memory, 1 iteration).
+  // The session cache derives the key once per password across the whole spec,
+  // so encrypt/decrypt is ~microseconds after the first call.
+  beforeAll(() => {
+    setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
+  });
+
+  afterAll(() => {
+    setArgon2ParamsForTesting();
+  });
+
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [OperationEncryptionService],
     });
     service = TestBed.inject(OperationEncryptionService);
+    clearSessionKeyCache();
+  });
 
-    // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
-    // Spy on private properties via type cast to avoid slow real encryption
-    spyOn(service as any, '_encrypt').and.callFake(mockEncrypt);
-    spyOn(service as any, '_decrypt').and.callFake(mockDecrypt);
-    spyOn(service as any, '_encryptBatch').and.callFake(mockEncryptBatch);
-    spyOn(service as any, '_decryptBatch').and.callFake(mockDecryptBatch);
+  afterEach(() => {
+    clearSessionKeyCache();
   });
 
   describe('encryptOperation', () => {

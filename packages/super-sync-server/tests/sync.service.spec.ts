@@ -306,6 +306,34 @@ vi.mock('../src/db', async () => {
     // commit. Mock is a no-op here — the existing spec asserts behaviour at
     // the op level and does not inspect storage_used_bytes inside this file.
     $executeRaw: vi.fn().mockResolvedValue(0),
+    // Full-state op uploads aggregate prior vector clocks inside the same
+    // transaction. Dispatch on SQL text so unrelated $queryRaw callers keep
+    // returning their existing default shape.
+    $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
+      const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      if (sql.includes('jsonb_each_text(vector_clock)')) {
+        const [txUserId, beforeServerSeq] = params;
+        const aggregate = new Map<string, number>();
+        for (const op of state.operations.values()) {
+          if (op.userId !== txUserId) continue;
+          if (op.serverSeq >= beforeServerSeq) continue;
+          const vc = op.vectorClock;
+          if (!vc || typeof vc !== 'object') continue;
+          for (const [clientKey, rawVal] of Object.entries(
+            vc as Record<string, unknown>,
+          )) {
+            if (typeof rawVal !== 'number' || !Number.isFinite(rawVal)) continue;
+            const cur = aggregate.get(clientKey) ?? 0;
+            if (rawVal > cur) aggregate.set(clientKey, rawVal);
+          }
+        }
+        return Array.from(aggregate, ([client_id, max_counter]) => ({
+          client_id,
+          max_counter: BigInt(max_counter),
+        }));
+      }
+      return [{ total: BigInt(0) }];
+    }),
   });
 
   return {
@@ -335,6 +363,7 @@ vi.mock('../src/db', async () => {
           const ops = Array.from(state.operations.values());
           return ops
             .filter((op: any) => {
+              if (args.where?.id?.in && !args.where.id.in.includes(op.id)) return false;
               if (args.where?.userId !== undefined && args.where.userId !== op.userId)
                 return false;
               if (
@@ -347,6 +376,11 @@ vi.mock('../src/db', async () => {
                 op.serverSeq > args.where.serverSeq.lte
               )
                 return false;
+              if (
+                args.where?.receivedAt?.lt !== undefined &&
+                op.receivedAt >= args.where.receivedAt.lt
+              )
+                return false;
               if (args.where?.clientId?.not && op.clientId === args.where.clientId.not)
                 return false;
               if (args.where?.opType?.in && !args.where.opType.in.includes(op.opType))
@@ -357,7 +391,8 @@ vi.mock('../src/db', async () => {
               if (args.orderBy?.serverSeq === 'desc') return b.serverSeq - a.serverSeq;
               return a.serverSeq - b.serverSeq;
             })
-            .slice(0, args.take || 500);
+            .slice(0, args.take || 500)
+            .map((op: any) => applyOperationSelect(op, args.select));
         }),
         aggregate: vi.fn().mockImplementation(async (args: any) => {
           const ops = Array.from(state.operations.values()).filter(
@@ -396,6 +431,8 @@ vi.mock('../src/db', async () => {
           let deleted = 0;
           for (const [id, op] of state.operations) {
             let shouldDelete = true;
+            if (args.where?.id?.in && !args.where.id.in.includes(id))
+              shouldDelete = false;
             if (args.where?.userId !== undefined && op.userId !== args.where.userId)
               shouldDelete = false;
             if (
@@ -1597,6 +1634,168 @@ describe('SyncService', () => {
 
       const remaining = await service.getOpsSince(userId, 0);
       expect(remaining).toHaveLength(3);
+    });
+
+    it('drains a single user up to the per-run budget', async () => {
+      const service = getSyncService();
+      const totalOps = 25_005;
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+
+      for (let i = 1; i <= totalOps; i++) {
+        testState.operations.set(`old-op-${i}`, {
+          id: `old-op-${i}`,
+          userId,
+          clientId,
+          serverSeq: i,
+          actionType: 'ADD',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: `t${i}`,
+          payload: {},
+          vectorClock: {},
+          schemaVersion: 1,
+          clientTimestamp: BigInt(Date.now()),
+          receivedAt: BigInt(cutoffTime - 1),
+          isPayloadEncrypted: false,
+          syncImportReason: null,
+        });
+      }
+
+      testState.userSyncStates.set(userId, {
+        userId,
+        lastSeq: totalOps,
+        lastSnapshotSeq: totalOps,
+        snapshotAt: BigInt(Date.now()),
+      });
+
+      const { totalDeleted, affectedUserIds } =
+        await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+
+      // 25k per-run budget, 5k per-batch. The inner drain loop keeps
+      // deleting until the budget hits zero, not just one batch.
+      expect(totalDeleted).toBe(25_000);
+      expect(affectedUserIds).toEqual([userId]);
+      expect(testState.operations.size).toBe(5);
+    });
+
+    it('marks user for reconcile when a later batch throws mid-loop', async () => {
+      const service = getSyncService();
+      const totalOps = 12_000;
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+
+      for (let i = 1; i <= totalOps; i++) {
+        testState.operations.set(`old-op-${i}`, {
+          id: `old-op-${i}`,
+          userId,
+          clientId,
+          serverSeq: i,
+          actionType: 'ADD',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: `t${i}`,
+          payload: {},
+          vectorClock: {},
+          schemaVersion: 1,
+          clientTimestamp: BigInt(Date.now()),
+          receivedAt: BigInt(cutoffTime - 1),
+          isPayloadEncrypted: false,
+          syncImportReason: null,
+        });
+      }
+
+      testState.userSyncStates.set(userId, {
+        userId,
+        lastSeq: totalOps,
+        lastSnapshotSeq: totalOps,
+        snapshotAt: BigInt(Date.now()),
+      });
+
+      // Let the first batch run normally, then simulate a transient DB error
+      // on the second batch. Pre-fix this would leave the storage counter
+      // stale-high with no reconcile signal until the next daily pass.
+      const serviceWithPrivates = service as unknown as {
+        deleteOldSyncedOpsBatch: (...args: unknown[]) => Promise<number>;
+        storageQuotaService: { needsReconcile: (userId: number) => boolean };
+      };
+      const originalBatch =
+        serviceWithPrivates.deleteOldSyncedOpsBatch.bind(serviceWithPrivates);
+      let callCount = 0;
+      vi.spyOn(serviceWithPrivates, 'deleteOldSyncedOpsBatch').mockImplementation(
+        async (...args: unknown[]) => {
+          callCount += 1;
+          if (callCount === 1) return originalBatch(...args);
+          throw new Error('simulated transient DB failure');
+        },
+      );
+
+      await expect(service.deleteOldSyncedOpsForAllUsers(cutoffTime)).rejects.toThrow(
+        'simulated transient DB failure',
+      );
+
+      // First batch committed 5k deletes; the user must still be marked so
+      // the next request reconciles the now-stale-high counter.
+      expect(serviceWithPrivates.storageQuotaService.needsReconcile(userId)).toBe(true);
+      expect(testState.operations.size).toBe(totalOps - 5_000);
+    });
+
+    it('shares the per-run budget across users; tail users wait for next pass', async () => {
+      const service = getSyncService();
+      const user2Id = 2;
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+
+      testState.users.set(user2Id, {
+        id: user2Id,
+        email: 'test2@test.com',
+        storageQuotaBytes: BigInt(100 * 1024 * 1024),
+        storageUsedBytes: BigInt(0),
+      });
+
+      // Each user has 20k stale ops — more than the 25k per-run budget combined.
+      const opsPerUser = 20_000;
+      for (const uid of [userId, user2Id]) {
+        for (let i = 1; i <= opsPerUser; i++) {
+          testState.operations.set(`u${uid}-op-${i}`, {
+            id: `u${uid}-op-${i}`,
+            userId: uid,
+            clientId,
+            serverSeq: i,
+            actionType: 'ADD',
+            opType: 'CRT',
+            entityType: 'TASK',
+            entityId: `t${i}`,
+            payload: {},
+            vectorClock: {},
+            schemaVersion: 1,
+            clientTimestamp: BigInt(Date.now()),
+            receivedAt: BigInt(cutoffTime - 1),
+            isPayloadEncrypted: false,
+            syncImportReason: null,
+          });
+        }
+      }
+
+      // userSyncStates are processed by `orderBy: snapshotAt asc`, so the
+      // stalest snapshot wins the budget first. user1 here is staler.
+      testState.userSyncStates.set(userId, {
+        userId,
+        lastSeq: opsPerUser,
+        lastSnapshotSeq: opsPerUser,
+        snapshotAt: BigInt(Date.now() - 1000),
+      });
+      testState.userSyncStates.set(user2Id, {
+        userId: user2Id,
+        lastSeq: opsPerUser,
+        lastSnapshotSeq: opsPerUser,
+        snapshotAt: BigInt(Date.now()),
+      });
+
+      const { totalDeleted, affectedUserIds } =
+        await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+
+      // user1 drains fully (20k), user2 only gets the remaining 5k of budget.
+      expect(totalDeleted).toBe(25_000);
+      expect(affectedUserIds).toEqual([userId, user2Id]);
+      expect(testState.operations.size).toBe(15_000);
     });
 
     it('should delete old operations from all users', async () => {

@@ -28,7 +28,8 @@ import {
   UploadResult,
   UploadOptions,
 } from '../core/types/sync-results.types';
-import { handleStorageQuotaError, isTransientNetworkError } from './sync-error-utils';
+import { isRetryableUploadError } from '@sp/sync-providers/http';
+import { handleStorageQuotaError } from './sync-error-utils';
 import { DecryptNoPasswordError } from '../core/errors/sync-errors';
 
 // Re-export for consumers that import from this service
@@ -163,7 +164,7 @@ export class OperationLogUploadService {
 
           // Only permanently reject if the server explicitly rejected the operation
           // (e.g., validation error, conflict). Network errors should be retried.
-          if (isTransientNetworkError(result.error)) {
+          if (isRetryableUploadError(result.error)) {
             OpLog.normal(
               `OperationLogUploadService: Full-state op ${entry.op.id} failed due to network error, will retry: ${result.error}`,
             );

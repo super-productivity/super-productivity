@@ -75,6 +75,35 @@ describe('performance migrations', () => {
     expect(deployScript).toContain('prisma db execute');
     expect(deployScript).toContain(migrationCommand);
     expect(deployScript).toContain('Migrator container started');
+    expect(deployScript).toContain(
+      'FULL_STATE_INDEX_MIGRATION="20260512000000_add_full_state_sequence_index_drop_redundant_indexes"',
+    );
+    expect(deployScript).toContain('is_recoverable_full_state_index_migration_failure');
+    expect(deployScript).toContain("grep -q 'P3009'");
+    expect(deployScript).toContain('is_full_state_index_transaction_block_failure');
+    expect(deployScript).toContain("grep -q 'P3018'");
+    expect(deployScript).toContain("grep -q 'cannot run inside a transaction block'");
+    expect(deployScript).toContain('run_concurrent_index_sql');
+    expect(deployScript).toContain(
+      'Use the same supersync container and DATABASE_URL as `migrate deploy`',
+    );
+    expect(deployScript).not.toContain('psql -v ON_ERROR_STOP=1');
+    expect(deployScript).toContain('prisma db execute --schema prisma/schema.prisma');
+    expect(deployScript).toContain(
+      'CREATE INDEX CONCURRENTLY \\"operations_user_id_full_state_server_seq_idx\\"',
+    );
+    expect(deployScript).toContain(
+      'migrate resolve --rolled-back "$FULL_STATE_INDEX_MIGRATION"',
+    );
+    expect(deployScript).toContain(
+      'migrate resolve --applied "$FULL_STATE_INDEX_MIGRATION"',
+    );
+    expect(deployScript).toContain(
+      'Retrying database migrations after resolving $FULL_STATE_INDEX_MIGRATION',
+    );
+    expect(deployScript).toContain(
+      'Retrying database migrations after applying $FULL_STATE_INDEX_MIGRATION',
+    );
     expect(deployScript).toContain(externalDbStartCommand);
     expect(deployScript).toContain('RUN_MIGRATIONS_ON_STARTUP');
     expect(deployScript.indexOf(migrationCommand)).toBeLessThan(

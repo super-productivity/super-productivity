@@ -1,7 +1,7 @@
 import { BehaviorSubject } from 'rxjs';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { CurrentProviderPrivateCfg } from '../../../op-log/core/types/sync.types';
-import { SuperSyncPrivateCfg } from '../../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 
 /**
  * Tests for AndroidSyncBridgeEffects credential mirroring logic.

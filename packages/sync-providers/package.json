@@ -16,6 +16,116 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       }
+    },
+    "./dropbox": {
+      "import": {
+        "types": "./dist/dropbox.d.mts",
+        "default": "./dist/dropbox.mjs"
+      },
+      "require": {
+        "types": "./dist/dropbox.d.ts",
+        "default": "./dist/dropbox.js"
+      }
+    },
+    "./webdav": {
+      "import": {
+        "types": "./dist/webdav.d.mts",
+        "default": "./dist/webdav.mjs"
+      },
+      "require": {
+        "types": "./dist/webdav.d.ts",
+        "default": "./dist/webdav.js"
+      }
+    },
+    "./local-file": {
+      "import": {
+        "types": "./dist/local-file.d.mts",
+        "default": "./dist/local-file.mjs"
+      },
+      "require": {
+        "types": "./dist/local-file.d.ts",
+        "default": "./dist/local-file.js"
+      }
+    },
+    "./super-sync": {
+      "import": {
+        "types": "./dist/super-sync.d.mts",
+        "default": "./dist/super-sync.mjs"
+      },
+      "require": {
+        "types": "./dist/super-sync.d.ts",
+        "default": "./dist/super-sync.js"
+      }
+    },
+    "./http": {
+      "import": {
+        "types": "./dist/http.d.mts",
+        "default": "./dist/http.mjs"
+      },
+      "require": {
+        "types": "./dist/http.d.ts",
+        "default": "./dist/http.js"
+      }
+    },
+    "./errors": {
+      "import": {
+        "types": "./dist/errors.d.mts",
+        "default": "./dist/errors.mjs"
+      },
+      "require": {
+        "types": "./dist/errors.d.ts",
+        "default": "./dist/errors.js"
+      }
+    },
+    "./credential-store": {
+      "import": {
+        "types": "./dist/credential-store.d.mts",
+        "default": "./dist/credential-store.mjs"
+      },
+      "require": {
+        "types": "./dist/credential-store.d.ts",
+        "default": "./dist/credential-store.js"
+      }
+    },
+    "./file-based": {
+      "import": {
+        "types": "./dist/file-based.d.mts",
+        "default": "./dist/file-based.mjs"
+      },
+      "require": {
+        "types": "./dist/file-based.d.ts",
+        "default": "./dist/file-based.js"
+      }
+    },
+    "./pkce": {
+      "import": {
+        "types": "./dist/pkce.d.mts",
+        "default": "./dist/pkce.mjs"
+      },
+      "require": {
+        "types": "./dist/pkce.d.ts",
+        "default": "./dist/pkce.js"
+      }
+    },
+    "./platform": {
+      "import": {
+        "types": "./dist/platform.d.mts",
+        "default": "./dist/platform.mjs"
+      },
+      "require": {
+        "types": "./dist/platform.d.ts",
+        "default": "./dist/platform.js"
+      }
+    },
+    "./provider-types": {
+      "import": {
+        "types": "./dist/provider-types.d.mts",
+        "default": "./dist/provider-types.mjs"
+      },
+      "require": {
+        "types": "./dist/provider-types.d.ts",
+        "default": "./dist/provider-types.js"
+      }
     }
   },
   "dependencies": {

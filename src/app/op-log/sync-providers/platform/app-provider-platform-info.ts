@@ -1,4 +1,4 @@
-import type { ProviderPlatformInfo } from '@sp/sync-providers';
+import type { ProviderPlatformInfo } from '@sp/sync-providers/platform';
 import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 

@@ -4,6 +4,9 @@ import { getWsConnectionService } from './services/websocket-connection.service'
 import { Logger } from '../logger';
 import { CLIENT_ID_REGEX, MAX_CLIENT_ID_LENGTH } from './sync.const';
 
+export const WS_CONNECTION_RATE_LIMIT_MAX = 120;
+export const WS_CONNECTION_RATE_LIMIT_WINDOW = '1 minute';
+
 export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.get(
     '/ws',
@@ -11,8 +14,8 @@ export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
       websocket: true,
       config: {
         rateLimit: {
-          max: 10,
-          timeWindow: '1 minute',
+          max: WS_CONNECTION_RATE_LIMIT_MAX,
+          timeWindow: WS_CONNECTION_RATE_LIMIT_WINDOW,
         },
       },
     },

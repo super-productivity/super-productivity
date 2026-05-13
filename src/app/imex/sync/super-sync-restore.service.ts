@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import { SuperSyncProvider } from '@sp/sync-providers/super-sync';
 import {
   RestoreCapable,
   RestorePoint,
@@ -39,7 +39,7 @@ export class SuperSyncRestoreService {
    */
   async getRestorePoints(limit: number = 30): Promise<RestorePoint[]> {
     const provider = this._getRestoreCapableProvider();
-    return provider.getRestorePoints(limit);
+    return (await provider.getRestorePoints(limit)) as RestorePoint[];
   }
 
   /**
@@ -120,6 +120,10 @@ export class SuperSyncRestoreService {
     if (!provider) {
       throw new Error('Super Sync is not the active sync provider');
     }
-    return provider;
+    // Package class implements `RestoreCapable<string>`; the app narrows
+    // to `RestoreCapable<RestorePointType>` via the consensus
+    // "narrow at the app shim" decision. Server payloads are validated
+    // against the SP-side schemas before reaching here.
+    return provider as SuperSyncProvider & RestoreCapable;
   }
 }

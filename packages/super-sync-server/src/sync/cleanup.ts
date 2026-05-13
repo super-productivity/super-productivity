@@ -3,6 +3,7 @@ import { Logger } from '../logger';
 import { DEFAULT_SYNC_CONFIG, MS_PER_DAY } from './sync.types';
 
 let cleanupTimer: NodeJS.Timeout | null = null;
+let initialCleanupTimer: NodeJS.Timeout | null = null;
 const reconcileTimers: Set<NodeJS.Timeout> = new Set();
 
 // Spread post-cleanup reconciles so we never run more than one
@@ -10,6 +11,7 @@ const reconcileTimers: Set<NodeJS.Timeout> = new Set();
 // Bounded by 1h total budget — beyond that, drift is left for the next day.
 const RECONCILE_INTERVAL_MS = 5_000;
 const RECONCILE_BUDGET_MS = 60 * 60 * 1000;
+const INITIAL_CLEANUP_DELAY_MS = 10_000;
 
 /**
  * Runs all cleanup tasks in a single daily job.
@@ -73,20 +75,29 @@ const runDailyCleanup = async (): Promise<void> => {
 export const startCleanupJobs = (): void => {
   Logger.info('Starting daily cleanup job...');
 
-  // Run initial cleanup after a short delay
-  setTimeout(() => {
+  // Brief warmup before the first pass; the per-batch/per-run throttles in
+  // deleteOldSyncedOpsForAllUsers keep the work bounded so this delay only
+  // needs to cover startup tasks, not the cleanup itself.
+  initialCleanupTimer = setTimeout(() => {
+    initialCleanupTimer = null;
     void runDailyCleanup();
-  }, 10_000);
+  }, INITIAL_CLEANUP_DELAY_MS);
+  initialCleanupTimer.unref();
 
   // Schedule recurring daily cleanup
   cleanupTimer = setInterval(() => {
     void runDailyCleanup();
   }, MS_PER_DAY);
+  cleanupTimer.unref();
 
   Logger.info('Daily cleanup job scheduled');
 };
 
 export const stopCleanupJobs = (): void => {
+  if (initialCleanupTimer) {
+    clearTimeout(initialCleanupTimer);
+    initialCleanupTimer = null;
+  }
   if (cleanupTimer) {
     clearInterval(cleanupTimer);
     cleanupTimer = null;
@@ -126,7 +137,7 @@ const scheduleDeferredReconciles = (userIds: number[]): void => {
         );
       });
     }, i * RECONCILE_INTERVAL_MS);
-    if (typeof timer.unref === 'function') timer.unref();
+    timer.unref();
     reconcileTimers.add(timer);
   }
 };

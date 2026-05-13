@@ -37,6 +37,7 @@ import {
 } from './compressed-body-parser';
 import { computeOpStorageBytes } from './sync.const';
 import { EncryptedOpsNotSupportedError } from './services/snapshot.service';
+import type { SnapshotDedupResponse } from './services';
 
 type ZodIssue = z.ZodError['issues'][number];
 
@@ -257,6 +258,90 @@ const sendQuotaExceededReply = (
     errorCode: SYNC_ERROR_CODES.STORAGE_QUOTA_EXCEEDED,
     ...body,
   });
+
+type ExistingSyncImport = {
+  id: string;
+  clientId: string;
+  serverSeq: number;
+};
+
+/**
+ * Look up an existing full-state op for the user.
+ *
+ * When `incomingOpId` is provided, try an exact id match first so an
+ * idempotent retry (`existing.id === incomingOpId`) is detected deterministically
+ * even when multiple full-state ops exist for the user (e.g. an old SYNC_IMPORT
+ * plus a later BACKUP_IMPORT). The fallback orders by `serverSeq DESC` so the
+ * 409 path consistently reports the most recent restore point instead of
+ * whatever Postgres happens to return.
+ */
+const findExistingSyncImport = async (
+  userId: number,
+  incomingOpId?: string,
+): Promise<ExistingSyncImport | null> => {
+  if (incomingOpId) {
+    const exact = await prisma.operation.findUnique({
+      where: { id: incomingOpId },
+      select: {
+        id: true,
+        userId: true,
+        clientId: true,
+        serverSeq: true,
+        opType: true,
+      },
+    });
+    if (
+      exact &&
+      exact.userId === userId &&
+      (exact.opType === 'SYNC_IMPORT' ||
+        exact.opType === 'BACKUP_IMPORT' ||
+        exact.opType === 'REPAIR')
+    ) {
+      return { id: exact.id, clientId: exact.clientId, serverSeq: exact.serverSeq };
+    }
+  }
+  return prisma.operation.findFirst({
+    where: {
+      userId,
+      opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+    },
+    orderBy: { serverSeq: 'desc' },
+    select: { id: true, clientId: true, serverSeq: true },
+  });
+};
+
+/**
+ * True when an incoming snapshot upload is a retry of the existing import —
+ * the client has reused the same `opId`, so the previous attempt was already
+ * persisted server-side and we should respond with idempotent success
+ * instead of a 409 SYNC_IMPORT_EXISTS. Returning failure here would force a
+ * client whose response was dropped by the network into the "download and
+ * merge" path that the 409 normally triggers.
+ */
+const isIdempotentSyncImportRetry = (
+  existingImport: ExistingSyncImport,
+  incomingOpId: string | undefined,
+): boolean => Boolean(incomingOpId) && existingImport.id === incomingOpId;
+
+const sendSyncImportExistsReply = (
+  reply: FastifyReply,
+  userId: number,
+  clientId: string,
+  existingImport: ExistingSyncImport,
+): FastifyReply => {
+  Logger.warn(
+    `[user:${userId}] Rejecting duplicate SYNC_IMPORT from client ${clientId}. ` +
+      `Existing import from client ${existingImport.clientId} (id: ${existingImport.id}). ` +
+      `Client should download and merge instead.`,
+  );
+  return reply.status(409).send({
+    error: 'SYNC_IMPORT_EXISTS',
+    errorCode: 'SYNC_IMPORT_EXISTS',
+    message:
+      'A SYNC_IMPORT already exists. Download existing data and upload your changes as regular operations.',
+    existingImportId: existingImport.id,
+  });
+};
 
 type CompressedJsonBodyParseFailure = Extract<
   CompressedJsonBodyParseResult,
@@ -528,7 +613,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         // This ensures retries after successful uploads don't fail with 413
         // if the original upload pushed the user over quota
         if (requestId) {
-          const cachedResults = syncService.checkRequestDeduplication(userId, requestId);
+          const cachedResults = syncService.checkOpsRequestDedup(userId, requestId);
           if (cachedResults) {
             Logger.info(
               `[user:${userId}] Returning cached results for request ${requestId}`,
@@ -618,7 +703,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         // Cache results for deduplication if requestId was provided
         if (requestId) {
-          syncService.cacheRequestResults(userId, requestId, results);
+          syncService.cacheOpsRequestResults(userId, requestId, results);
         }
 
         const accepted = results.filter((r) => r.accepted).length;
@@ -922,8 +1007,19 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           isCleanSlate,
           snapshotOpType,
           syncImportReason,
+          requestId,
         } = parseResult.data;
         const syncService = getSyncService();
+
+        if (requestId) {
+          const cachedResponse = syncService.checkSnapshotRequestDedup(userId, requestId);
+          if (cachedResponse) {
+            Logger.info(
+              `[user:${userId}] Returning cached snapshot result for request ${requestId}`,
+            );
+            return reply.send(cachedResponse);
+          }
+        }
 
         // Cheap pre-quota gate BEFORE prepareSnapshotCache so quota-exhausted
         // clients can't burn CPU on JSON.stringify + zlib.gzipSync. Uses only
@@ -961,27 +1057,20 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         // - 'isCleanSlate': Password change or explicit clean slate request
         // Only 'initial' (first-time server migration) should be rejected if one exists.
         if (reason === 'initial' && !isCleanSlate) {
-          const existingImport = await prisma.operation.findFirst({
-            where: {
-              userId,
-              opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
-            },
-            select: { id: true, clientId: true },
-          });
+          const existingImport = await findExistingSyncImport(userId, opId);
 
           if (existingImport) {
-            Logger.warn(
-              `[user:${userId}] Rejecting duplicate SYNC_IMPORT from client ${clientId}. ` +
-                `Existing import from client ${existingImport.clientId} (id: ${existingImport.id}). ` +
-                `Client should download and merge instead.`,
-            );
-            return reply.status(409).send({
-              error: 'SYNC_IMPORT_EXISTS',
-              errorCode: 'SYNC_IMPORT_EXISTS',
-              message:
-                'A SYNC_IMPORT already exists. Download existing data and upload your changes as regular operations.',
-              existingImportId: existingImport.id,
-            });
+            if (isIdempotentSyncImportRetry(existingImport, opId)) {
+              Logger.info(
+                `[user:${userId}] Idempotent SYNC_IMPORT retry from client ${clientId} ` +
+                  `for existing import seq=${existingImport.serverSeq}`,
+              );
+              return reply.send({
+                accepted: true,
+                serverSeq: existingImport.serverSeq,
+              } satisfies SnapshotDedupResponse);
+            }
+            return sendSyncImportExistsReply(reply, userId, clientId, existingImport);
           }
         }
 
@@ -1013,6 +1102,26 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const result = await syncService.runWithStorageUsageLock<UploadResult | null>(
           userId,
           async () => {
+            if (reason === 'initial' && !isCleanSlate) {
+              const existingImport = await findExistingSyncImport(userId, opId);
+
+              if (existingImport) {
+                if (isIdempotentSyncImportRetry(existingImport, opId)) {
+                  Logger.info(
+                    `[user:${userId}] Idempotent SYNC_IMPORT retry from client ${clientId} ` +
+                      `(in-lock) for existing import seq=${existingImport.serverSeq}`,
+                  );
+                  reply.send({
+                    accepted: true,
+                    serverSeq: existingImport.serverSeq,
+                  } satisfies SnapshotDedupResponse);
+                  return null;
+                }
+                sendSyncImportExistsReply(reply, userId, clientId, existingImport);
+                return null;
+              }
+            }
+
             // Check storage quota before processing. For clean-slate uploads, use a
             // zero-current-usage baseline because uploadOps will wipe existing data
             // and reset storageUsedBytes inside its transaction. For regular
@@ -1051,8 +1160,6 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
               const quotaOk = await enforceStorageQuota(userId, additionalBytes, reply);
               if (!quotaOk) return null;
             }
-
-            // Duplicate SYNC_IMPORT rejection already handled before the lock.
 
             const results = await syncService.uploadOps(
               userId,
@@ -1093,18 +1200,60 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         );
         if (!result) return;
 
+        // Idempotent retry: if uploadOps saw the same opId already on disk,
+        // the previous attempt actually succeeded; the client just lost the
+        // response. Surface the original serverSeq as success instead of a
+        // confusing DUPLICATE_OPERATION rejection. (The SYNC_IMPORT_EXISTS
+        // pre-check handles `reason='initial'`; this branch covers BACKUP_IMPORT
+        // and REPAIR uploads, which bypass that pre-check.)
+        let finalResult: UploadResult = result;
+        if (
+          !result.accepted &&
+          result.errorCode === SYNC_ERROR_CODES.DUPLICATE_OPERATION &&
+          opId
+        ) {
+          // Defensive userId filter: `isSameDuplicateOperation` already enforces
+          // ownership before processOperation returns DUPLICATE_OPERATION, so a
+          // cross-tenant id collision can't reach this branch today. The guard
+          // keeps the route's idempotency conversion correct even if that
+          // upstream invariant ever changes.
+          const existingOp = await prisma.operation.findFirst({
+            where: { id: opId, userId },
+            select: { serverSeq: true },
+          });
+          if (existingOp) {
+            Logger.info(
+              `[user:${userId}] Idempotent snapshot retry from client ${clientId} ` +
+                `for existing opId=${opId} (serverSeq=${existingOp.serverSeq})`,
+            );
+            finalResult = {
+              opId,
+              accepted: true,
+              serverSeq: existingOp.serverSeq,
+            };
+          }
+        }
+
         Logger.info(`Snapshot uploaded for user ${userId}, reason: ${reason}`);
 
         // Notify other connected clients about snapshot upload (fire-and-forget)
-        if (result.accepted && result.serverSeq !== undefined) {
-          getWsConnectionService().notifyNewOps(userId, clientId, result.serverSeq);
+        if (finalResult.accepted && finalResult.serverSeq !== undefined) {
+          getWsConnectionService().notifyNewOps(userId, clientId, finalResult.serverSeq);
         }
 
-        return reply.send({
-          accepted: result.accepted,
-          serverSeq: result.serverSeq,
-          error: result.error,
-        });
+        const responseBody: SnapshotDedupResponse = {
+          accepted: finalResult.accepted,
+          serverSeq: finalResult.serverSeq,
+          error: finalResult.error,
+        };
+        // Skip caching when the result is a residual DUPLICATE_OPERATION (the
+        // existing-op lookup just above failed) so a concurrent retry that
+        // lost the insert race cannot overwrite the winner's success entry.
+        if (requestId && finalResult.errorCode !== SYNC_ERROR_CODES.DUPLICATE_OPERATION) {
+          syncService.cacheSnapshotRequestResult(userId, requestId, responseBody);
+        }
+
+        return reply.send(responseBody);
       } catch (err) {
         Logger.error(`Upload snapshot error: ${errorMessage(err)}`);
         return reply.status(500).send({ error: 'Internal server error' });
@@ -1128,13 +1277,15 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const userId = getAuthUser(req).userId;
         const syncService = getSyncService();
 
-        const latestSeq = await syncService.getLatestSeq(userId);
-        const devicesOnline = await syncService.getOnlineDeviceCount(userId);
-
-        const cached = await syncService.getCachedSnapshot(userId);
-        const snapshotAge = cached ? Date.now() - cached.generatedAt : undefined;
-
-        const storageInfo = await syncService.getStorageInfo(userId);
+        const [latestSeq, devicesOnline, snapshotGeneratedAt, storageInfo] =
+          await Promise.all([
+            syncService.getLatestSeq(userId),
+            syncService.getOnlineDeviceCount(userId),
+            syncService.getCachedSnapshotGeneratedAt(userId),
+            syncService.getStorageInfo(userId),
+          ]);
+        const snapshotAge =
+          snapshotGeneratedAt !== null ? Date.now() - snapshotGeneratedAt : undefined;
 
         Logger.debug(
           `[user:${userId}] Status: seq=${latestSeq}, devices=${devicesOnline}`,

@@ -5,7 +5,7 @@ import {
   type NativeHttpExecutor,
   type NativeHttpRequestConfig,
   type NativeHttpResponse,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/http';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 
 export type NativeRequestConfig = NativeHttpRequestConfig;

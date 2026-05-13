@@ -108,7 +108,6 @@ export const generateCodeChallenge = async (
 };
 
 export const generatePKCECodes = async (
-  _length: number,
   options: GeneratePkceCodesOptions = {},
 ): Promise<{ codeVerifier: string; codeChallenge: string }> => {
   const codeVerifier = generateCodeVerifier(options);

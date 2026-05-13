@@ -4,7 +4,7 @@ import { toSyncLogError } from '@sp/sync-core';
 import {
   AdditionalLogErrorBase as PackageAdditionalLogErrorBase,
   extractErrorMessage as packageExtractErrorMessage,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/errors';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
 import { OP_LOG_SYNC_LOGGER } from '../sync-logger.adapter';
 
@@ -15,17 +15,19 @@ import { OP_LOG_SYNC_LOGGER } from '../sync-logger.adapter';
 export {
   AuthFailSPError,
   EmptyRemoteBodySPError,
+  FileHashCreationAPIError,
   HttpNotOkAPIError,
   InvalidDataSPError,
   MissingCredentialsSPError,
   MissingRefreshTokenAPIError,
+  NetworkUnavailableSPError,
   NoRevAPIError,
   PotentialCorsError,
   RemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/errors';
 
 export const extractErrorMessage = packageExtractErrorMessage;
 
@@ -78,10 +80,6 @@ export class NoEtagAPIError extends AdditionalLogErrorBase {
 
 export class FileExistsAPIError extends Error {
   override name = ' FileExistsAPIError';
-}
-
-export class FileHashCreationAPIError extends AdditionalLogErrorBase {
-  override name = ' FileHashCreationAPIError';
 }
 
 // --------------OTHER SYNC ERRORS--------------
@@ -408,9 +406,10 @@ export class BackupImportFailedError extends AdditionalLogErrorBase {
   override name = 'BackupImportFailedError';
 }
 
-export class WebCryptoNotAvailableError extends Error {
-  override name = 'WebCryptoNotAvailableError';
-}
+// Re-export from @sp/sync-core (the canonical definition). Must remain a
+// re-export — never redefine locally — so `instanceof WebCryptoNotAvailableError`
+// works across all import paths. See the comment at the top of this file.
+export { WebCryptoNotAvailableError } from '@sp/sync-core';
 
 /**
  * Thrown when IndexedDB storage quota is exceeded during operation log write.

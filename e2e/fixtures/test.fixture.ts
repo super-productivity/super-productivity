@@ -9,7 +9,7 @@ import { SyncPage } from '../pages/sync.page';
 import { TagPage } from '../pages/tag.page';
 import { NotePage } from '../pages/note.page';
 import { SideNavPage } from '../pages/side-nav.page';
-import { waitForAppReady } from '../utils/waits';
+import { skipOnboardingForE2E, waitForAppReady } from '../utils/waits';
 
 type TestFixtures = {
   workViewPage: WorkViewPage;
@@ -52,12 +52,7 @@ export const test = base.extend<TestFixtures>({
 
     // Skip onboarding, hints, and example tasks before the app boots.
     // This runs before any page JavaScript, so Angular sees the flags immediately.
-    await page.addInitScript(() => {
-      localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
-      localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
-      localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-    });
+    await page.addInitScript(skipOnboardingForE2E);
 
     try {
       // Always log uncaught page errors — they are almost always test-relevant

@@ -1,4 +1,4 @@
-import { FileAdapter } from '../file-adapter.interface';
+import type { FileAdapter } from '@sp/sync-providers/file-based';
 import { SafService } from './saf.service';
 import { SyncLog } from '../../../../../core/log';
 

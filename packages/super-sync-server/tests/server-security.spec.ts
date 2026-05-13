@@ -1,8 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
+import { sanitizeRequestUrlForLog } from '../src/server';
 
 describe('Server Security Configuration', () => {
+  describe('request URL log sanitization', () => {
+    it('should redact sensitive query params without removing non-sensitive context', () => {
+      expect(
+        sanitizeRequestUrlForLog(
+          '/api/sync/ws?token=secret-jwt&clientId=B_AEh6&limit=10',
+        ),
+      ).toBe('/api/sync/ws?token=redacted&clientId=B_AEh6&limit=10');
+    });
+
+    it('should redact sensitive query params case-insensitively', () => {
+      expect(sanitizeRequestUrlForLog('/reset-password?resetPasswordToken=secret')).toBe(
+        '/reset-password?resetPasswordToken=redacted',
+      );
+    });
+  });
+
   describe('Content Security Policy', () => {
     let app: FastifyInstance;
 

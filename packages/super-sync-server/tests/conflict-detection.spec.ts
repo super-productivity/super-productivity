@@ -64,6 +64,7 @@ vi.mock('../src/db', async () => {
           );
         }
         if (args.where?.entityId && args.where?.entityType) {
+          state.entityConflictFindFirstCount++;
           const ops = Array.from(state.operations.values())
             .filter(
               (op: any) =>
@@ -162,6 +163,64 @@ vi.mock('../src/db', async () => {
     },
     // Upload transaction writes the storage counter atomically via $executeRaw.
     $executeRaw: vi.fn().mockResolvedValue(0),
+    $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
+      const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      // Full-state op uploads aggregate prior vector clocks via $queryRaw.
+      if (sql.includes('jsonb_each_text(vector_clock)')) {
+        const [txUserId, beforeServerSeq] = params as [number, number];
+        const aggregate = new Map<string, number>();
+        for (const op of state.operations.values()) {
+          if ((op as any).userId !== txUserId) continue;
+          if ((op as any).serverSeq >= beforeServerSeq) continue;
+          const vc = (op as any).vectorClock;
+          if (!vc || typeof vc !== 'object') continue;
+          for (const [clientKey, rawVal] of Object.entries(
+            vc as Record<string, unknown>,
+          )) {
+            if (typeof rawVal !== 'number' || !Number.isFinite(rawVal)) continue;
+            const cur = aggregate.get(clientKey) ?? 0;
+            if (rawVal > cur) aggregate.set(clientKey, rawVal);
+          }
+        }
+        return Array.from(aggregate, ([client_id, max_counter]) => ({
+          client_id,
+          max_counter: BigInt(max_counter),
+        }));
+      }
+
+      const [userId, entityType, entityIdsSql] = params as [number, string, Prisma.Sql];
+      state.batchConflictQueryCount++;
+      if (!Array.isArray(entityIdsSql.values)) {
+        throw new Error(
+          'Expected batched conflict query entity IDs to be passed via Prisma.join(...)',
+        );
+      }
+      const batchEntityIds = new Set(
+        entityIdsSql.values.filter(
+          (entityId): entityId is string => typeof entityId === 'string',
+        ),
+      );
+      const latestByEntityId = new Map<string, any>();
+      const ops = Array.from(state.operations.values())
+        .filter(
+          (op: any) =>
+            op.userId === userId &&
+            op.entityType === entityType &&
+            batchEntityIds.has(op.entityId),
+        )
+        .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
+
+      for (const op of ops) {
+        if (!op.entityId || latestByEntityId.has(op.entityId)) continue;
+        latestByEntityId.set(op.entityId, op);
+      }
+
+      return Array.from(latestByEntityId.values()).map((op: any) => ({
+        entityId: op.entityId,
+        clientId: op.clientId,
+        vectorClock: op.vectorClock,
+      }));
+    }),
   });
 
   return {
@@ -876,6 +935,39 @@ describe('Conflict Detection', () => {
       });
       const result = await service.uploadOps(userId, clientA, [op]);
       expect(result[0].accepted).toBe(true);
+    });
+
+    it('should batch latest-op lookups for multi-entity conflict detection', async () => {
+      const service = getSyncService();
+
+      const existingOp = createOp({
+        entityId: 'task-2',
+        clientId: clientB,
+        vectorClock: { [clientB]: 1 },
+      });
+      const existingResult = await service.uploadOps(userId, clientB, [existingOp]);
+      expect(existingResult[0].accepted).toBe(true);
+      const beforeMultiEntityFindFirstCount = testState.entityConflictFindFirstCount;
+
+      const multiEntityOp = createOp({
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2', 'task-3'],
+        clientId: clientA,
+        vectorClock: { [clientA]: 1 },
+      });
+
+      const result = await service.uploadOps(userId, clientA, [multiEntityOp]);
+
+      expect(testState.batchConflictQueryCount).toBeGreaterThan(0);
+      expect(testState.entityConflictFindFirstCount).toBe(
+        beforeMultiEntityFindFirstCount,
+      );
+      expect(result[0]).toMatchObject({
+        accepted: false,
+        errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
+        existingClock: { [clientB]: 1 },
+      });
+      expect(result[0].error).toContain('TASK:task-2');
     });
   });
 });

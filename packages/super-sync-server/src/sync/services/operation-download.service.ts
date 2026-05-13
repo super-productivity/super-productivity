@@ -30,6 +30,22 @@ const OPERATION_DOWNLOAD_SELECT = {
   syncImportReason: true,
 } as const;
 
+const DOWNLOAD_TRANSACTION_TIMEOUT_MS = 60000;
+
+type OperationDownloadResult = {
+  ops: ServerOperation[];
+  latestSeq: number;
+  gapDetected: boolean;
+  latestSnapshotSeq?: number;
+  snapshotVectorClock?: VectorClock;
+};
+
+type OperationDownloadTransactionResult = OperationDownloadResult & {
+  shouldComputeSnapshotVectorClock: boolean;
+  snapshotAuthorClientId?: string;
+  persistedSnapshotVectorClock?: VectorClock;
+};
+
 type OperationDownloadRow = {
   id: string;
   serverSeq: number;
@@ -65,6 +81,29 @@ const mapOperationRow = (row: OperationDownloadRow): ServerOperation => ({
   },
   receivedAt: Number(row.receivedAt),
 });
+
+/**
+ * Strict-or-undefined parser for the JSONB column. The data is written by
+ * this server, so on any shape violation we return `undefined` to fall back
+ * to the legacy `_computeSnapshotVectorClock` aggregate path rather than
+ * silently dropping invalid entries and serving a partial clock.
+ */
+const parsePersistedVectorClock = (value: unknown): VectorClock | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const clock: VectorClock = {};
+  for (const [clientId, counter] of Object.entries(value as Record<string, unknown>)) {
+    if (clientId.length === 0) return undefined;
+    if (typeof counter !== 'number' || !Number.isInteger(counter) || counter < 0) {
+      return undefined;
+    }
+    clock[clientId] = counter;
+  }
+
+  return clock;
+};
 
 export class OperationDownloadService {
   /**
@@ -111,18 +150,16 @@ export class OperationDownloadService {
     excludeClient?: string,
     limit: number = 500,
     includeSnapshotMetadata: boolean = true,
-  ): Promise<{
-    ops: ServerOperation[];
-    latestSeq: number;
-    gapDetected: boolean;
-    latestSnapshotSeq?: number;
-    snapshotVectorClock?: VectorClock;
-  }> {
-    return prisma.$transaction(
+  ): Promise<OperationDownloadResult> {
+    const result = await prisma.$transaction(
       async (tx) => {
         const seqRow = await tx.userSyncState.findUnique({
           where: { userId },
-          select: { lastSeq: true },
+          select: {
+            lastSeq: true,
+            latestFullStateSeq: true,
+            latestFullStateVectorClock: true,
+          },
         });
         const latestSeq = seqRow?.lastSeq ?? 0;
 
@@ -140,6 +177,8 @@ export class OperationDownloadService {
             gapDetected,
             latestSnapshotSeq: undefined,
             snapshotVectorClock: undefined,
+            shouldComputeSnapshotVectorClock: false,
+            snapshotAuthorClientId: undefined,
           };
         }
 
@@ -161,7 +200,7 @@ export class OperationDownloadService {
         // start from the full-state op instead. Pre-import ops are superseded and will
         // be filtered out by the client anyway.
         let effectiveSinceSeq = sinceSeq;
-        let snapshotVectorClock: VectorClock | undefined;
+        let shouldComputeSnapshotVectorClock = false;
 
         if (latestSnapshotSeq !== undefined && sinceSeq < latestSnapshotSeq) {
           // Start from one before the snapshot so it's included in results
@@ -171,42 +210,7 @@ export class OperationDownloadService {
               `(latest snapshot at seq ${latestSnapshotSeq})`,
           );
 
-          if (includeSnapshotMetadata) {
-            // Compute aggregated vector clock from all ops up to and including the snapshot.
-            // This ensures clients know about all clock entries from skipped ops.
-            // Uses a SQL aggregate to avoid loading all individual ops' clocks into memory —
-            // the aggregation happens in PostgreSQL, returning only the final per-client max.
-            const clockRows = await tx.$queryRaw<
-              Array<{ client_id: string; max_counter: bigint }>
-            >`
-              SELECT kv.key AS client_id, MAX(kv.value::bigint) AS max_counter
-              FROM operations, LATERAL jsonb_each_text(vector_clock) AS kv(key, value)
-              WHERE user_id = ${userId}
-                AND server_seq <= ${latestSnapshotSeq}
-                AND jsonb_typeof(vector_clock) = 'object'
-                AND kv.value ~ '^[0-9]+$'
-              GROUP BY kv.key
-            `;
-
-            snapshotVectorClock = {};
-            for (const row of clockRows) {
-              snapshotVectorClock[row.client_id] = Number(row.max_counter);
-            }
-
-            // Limit snapshot clock to MAX_VECTOR_CLOCK_SIZE to prevent oversized
-            // clocks from being sent to clients. Preserve the requesting client's ID
-            // and the snapshot author's ID to avoid false EQUAL in comparison.
-            const preserveIds: string[] = [];
-            if (excludeClient) preserveIds.push(excludeClient);
-            if (latestFullStateOp?.clientId) {
-              preserveIds.push(latestFullStateOp.clientId);
-            }
-            snapshotVectorClock = limitVectorClockSize(snapshotVectorClock, preserveIds);
-
-            Logger.info(
-              `[user:${userId}] Computed snapshotVectorClock with ${Object.keys(snapshotVectorClock).length} entries: ${JSON.stringify(snapshotVectorClock)}`,
-            );
-          }
+          shouldComputeSnapshotVectorClock = includeSnapshotMetadata;
         }
 
         const ops = await tx.operation.findMany({
@@ -272,17 +276,106 @@ export class OperationDownloadService {
         }
 
         const mappedOps = ops.map(mapOperationRow);
+        const persistedSnapshotVectorClock =
+          latestFullStateOp && seqRow?.latestFullStateSeq === latestFullStateOp.serverSeq
+            ? parsePersistedVectorClock(seqRow.latestFullStateVectorClock)
+            : undefined;
 
         return {
           ops: mappedOps,
           latestSeq,
           gapDetected,
           latestSnapshotSeq,
-          snapshotVectorClock,
-        };
+          snapshotVectorClock: undefined,
+          shouldComputeSnapshotVectorClock,
+          snapshotAuthorClientId: latestFullStateOp?.clientId ?? undefined,
+          persistedSnapshotVectorClock,
+        } satisfies OperationDownloadTransactionResult;
       },
-      { timeout: 30000 },
-    ); // 30s - consistent with other sync transactions
+      { timeout: DOWNLOAD_TRANSACTION_TIMEOUT_MS },
+    ); // Matches other sync transactions; stays below Fastify's 80s request timeout.
+
+    let snapshotVectorClock: VectorClock | undefined;
+    if (
+      result.shouldComputeSnapshotVectorClock &&
+      result.latestSnapshotSeq !== undefined
+    ) {
+      // Preserve the requesting client's ID and the snapshot author's ID from
+      // pruning to avoid false EQUAL in vector-clock comparison.
+      const preserveClientIds: string[] = [];
+      if (excludeClient) preserveClientIds.push(excludeClient);
+      if (result.snapshotAuthorClientId) {
+        preserveClientIds.push(result.snapshotAuthorClientId);
+      }
+      snapshotVectorClock = result.persistedSnapshotVectorClock
+        ? limitVectorClockSize(result.persistedSnapshotVectorClock, preserveClientIds)
+        : await this._computeSnapshotVectorClock(
+            userId,
+            result.latestSnapshotSeq,
+            preserveClientIds,
+          );
+    }
+
+    return {
+      ops: result.ops,
+      latestSeq: result.latestSeq,
+      gapDetected: result.gapDetected,
+      latestSnapshotSeq: result.latestSnapshotSeq,
+      snapshotVectorClock,
+    };
+  }
+
+  private async _computeSnapshotVectorClock(
+    userId: number,
+    latestSnapshotSeq: number,
+    preserveClientIds: ReadonlyArray<string>,
+  ): Promise<VectorClock> {
+    const startedAt = Date.now();
+    // Legacy fallback: aggregate the vector clock from all ops up to and
+    // including the snapshot. Triggered when `user_sync_state.latest_full_state_*`
+    // is null (snapshot uploaded before this column existed) or when the JSONB
+    // shape fails strict validation in `parsePersistedVectorClock`.
+    //
+    // Runs outside the interactive transaction: on large histories the aggregate
+    // is slow enough to trip Prisma's transaction timeout. Bounded by
+    // `latestSnapshotSeq` (captured inside the transaction) so newly-appended
+    // ops can't perturb the result. Background cleanup may delete rows in this
+    // range between commit and this query; in the common case the snapshot op's
+    // own vector_clock subsumes the deltas it replaces, so the per-client max
+    // is preserved.
+    const clockRows = await prisma.$queryRaw<
+      Array<{ client_id: string; max_counter: bigint }>
+    >`
+      SELECT kv.key AS client_id, MAX(kv.value::bigint) AS max_counter
+      FROM operations, LATERAL jsonb_each_text(vector_clock) AS kv(key, value)
+      WHERE user_id = ${userId}
+        AND server_seq <= ${latestSnapshotSeq}
+        AND jsonb_typeof(vector_clock) = 'object'
+        AND kv.value ~ '^[0-9]+$'
+      GROUP BY kv.key
+    `;
+
+    let snapshotVectorClock: VectorClock = {};
+    for (const row of clockRows) {
+      snapshotVectorClock[row.client_id] = Number(row.max_counter);
+    }
+
+    snapshotVectorClock = limitVectorClockSize(snapshotVectorClock, [
+      ...preserveClientIds,
+    ]);
+
+    const elapsedMs = Date.now() - startedAt;
+    const logMessage =
+      `[user:${userId}] Computed snapshotVectorClock with ` +
+      `${Object.keys(snapshotVectorClock).length} entries in ${elapsedMs}ms: ` +
+      `${JSON.stringify(snapshotVectorClock)}`;
+    if (elapsedMs > 5000) {
+      Logger.warn(logMessage);
+    } else {
+      Logger.info(logMessage);
+    }
+
+    return snapshotVectorClock;
   }
 
   /**

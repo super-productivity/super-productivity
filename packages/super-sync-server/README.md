@@ -67,6 +67,15 @@ changes, and raise `MIGRATION_TIMEOUT` (seconds, default `900`) if a large
 table requires more time. Exit code `124` from `deploy.sh` means the migration
 timed out — re-run after the blocking transaction clears.
 
+If a deploy was interrupted after Prisma recorded the
+`20260512000000_add_full_state_sequence_index_drop_redundant_indexes` migration
+as failed, later deploys can stop with `P3009`. Prisma can also stop this
+specific migration with `P3018` because it contains several `CREATE/DROP INDEX
+CONCURRENTLY` statements, which cannot run in one transaction block. `deploy.sh`
+handles both cases: it resolves the failed row when needed, applies the
+concurrent index statements one at a time outside Prisma migrate, marks the
+migration applied, and retries `migrate deploy`.
+
 If `DATABASE_URL` points to an external PostgreSQL server, set
 `POSTGRES_SERVICE=` to the empty value. `deploy.sh` then starts only the
 app/proxy services with compose dependencies disabled so the bundled Postgres

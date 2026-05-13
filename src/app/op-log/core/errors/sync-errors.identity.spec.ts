@@ -1,30 +1,36 @@
 import {
   AuthFailSPError as PackageAuthFailSPError,
   EmptyRemoteBodySPError as PackageEmptyRemoteBodySPError,
+  FileHashCreationAPIError as PackageFileHashCreationAPIError,
   HttpNotOkAPIError as PackageHttpNotOkAPIError,
   InvalidDataSPError as PackageInvalidDataSPError,
   MissingCredentialsSPError as PackageMissingCredentialsSPError,
   MissingRefreshTokenAPIError as PackageMissingRefreshTokenAPIError,
+  NetworkUnavailableSPError as PackageNetworkUnavailableSPError,
   NoRevAPIError as PackageNoRevAPIError,
   PotentialCorsError as PackagePotentialCorsError,
   RemoteFileChangedUnexpectedly as PackageRemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError as PackageRemoteFileNotFoundAPIError,
   TooManyRequestsAPIError as PackageTooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError as PackageUploadRevToMatchMismatchAPIError,
-} from '@sp/sync-providers';
+} from '@sp/sync-providers/errors';
+import { WebCryptoNotAvailableError as PackageWebCryptoNotAvailableError } from '@sp/sync-core';
 import {
   AuthFailSPError,
   EmptyRemoteBodySPError,
+  FileHashCreationAPIError,
   HttpNotOkAPIError,
   InvalidDataSPError,
   MissingCredentialsSPError,
   MissingRefreshTokenAPIError,
+  NetworkUnavailableSPError,
   NoRevAPIError,
   PotentialCorsError,
   RemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
+  WebCryptoNotAvailableError,
 } from './sync-errors';
 
 // Regression guard against ESM/CJS dual-realm and barrel/dist mis-resolution.
@@ -45,6 +51,11 @@ describe('sync-errors identity (single class definition across import paths)', (
       PackageRemoteFileNotFoundAPIError,
     ],
     ['NoRevAPIError', NoRevAPIError, PackageNoRevAPIError],
+    [
+      'FileHashCreationAPIError',
+      FileHashCreationAPIError,
+      PackageFileHashCreationAPIError,
+    ],
     ['HttpNotOkAPIError', HttpNotOkAPIError, PackageHttpNotOkAPIError],
     [
       'MissingCredentialsSPError',
@@ -55,6 +66,11 @@ describe('sync-errors identity (single class definition across import paths)', (
       'MissingRefreshTokenAPIError',
       MissingRefreshTokenAPIError,
       PackageMissingRefreshTokenAPIError,
+    ],
+    [
+      'NetworkUnavailableSPError',
+      NetworkUnavailableSPError,
+      PackageNetworkUnavailableSPError,
     ],
     ['TooManyRequestsAPIError', TooManyRequestsAPIError, PackageTooManyRequestsAPIError],
     [
@@ -67,6 +83,15 @@ describe('sync-errors identity (single class definition across import paths)', (
       'RemoteFileChangedUnexpectedly',
       RemoteFileChangedUnexpectedly,
       PackageRemoteFileChangedUnexpectedly,
+    ],
+    // Re-exported from @sp/sync-core (not @sp/sync-providers/errors), but the
+    // identity rule is the same: a single class definition must back every
+    // import path so `instanceof` works in catch blocks. See sync-errors.ts
+    // around the WebCryptoNotAvailableError re-export.
+    [
+      'WebCryptoNotAvailableError',
+      WebCryptoNotAvailableError,
+      PackageWebCryptoNotAvailableError,
     ],
   ];
 

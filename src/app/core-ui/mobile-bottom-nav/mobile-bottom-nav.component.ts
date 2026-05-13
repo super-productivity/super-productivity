@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  computed,
   effect,
   inject,
   input,
@@ -30,6 +31,7 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { T } from '../../t.const';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { IS_ANDROID_NATIVE } from '../../util/is-native-platform';
+import { GlobalConfigService } from '../../features/config/global-config.service';
 
 // Latches true after the first cold-start entrance fires in this JS session,
 // so resume/back/remount paths never re-hide the FAB.
@@ -57,6 +59,7 @@ export class MobileBottomNavComponent {
   private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _store = inject(Store);
   private readonly _workContextService = inject(WorkContextService);
+  private readonly _globalConfigService = inject(GlobalConfigService);
 
   isEntrance = input(false);
   readonly isAndroid = IS_ANDROID_NATIVE;
@@ -124,6 +127,18 @@ export class MobileBottomNavComponent {
   // Panel state signals from layout service
   readonly isShowNotes = this._layoutService.isShowNotes;
   readonly isShowIssuePanel = this._layoutService.isShowIssuePanel;
+  readonly isIssuesPanelEnabled = computed(
+    () => this._globalConfigService.appFeatures().isIssuesPanelEnabled,
+  );
+  readonly isProjectNotesEnabled = computed(
+    () => this._globalConfigService.appFeatures().isProjectNotesEnabled,
+  );
+  readonly hasSidePanelMenuItems = computed(
+    () =>
+      this.sidePanelButtons().length > 0 ||
+      this.isIssuesPanelEnabled() ||
+      this.isProjectNotesEnabled(),
+  );
 
   // Navigation methods
   showAddTaskBar(): void {

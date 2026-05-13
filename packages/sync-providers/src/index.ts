@@ -7,10 +7,12 @@ export {
   AuthFailSPError,
   EmptyRemoteBodySPError,
   extractErrorMessage,
+  FileHashCreationAPIError,
   HttpNotOkAPIError,
   InvalidDataSPError,
   MissingCredentialsSPError,
   MissingRefreshTokenAPIError,
+  NetworkUnavailableSPError,
   NoRevAPIError,
   PotentialCorsError,
   RemoteFileChangedUnexpectedly,
@@ -39,6 +41,7 @@ export type {
   NativeHttpRequestConfig,
   NativeHttpResponse,
 } from './http/native-http-retry';
+export { isRetryableUploadError } from './http/retryable-upload-error';
 export { errorMeta, urlPathOnly } from './log/error-meta';
 export type { ProviderPlatformInfo } from './platform/provider-platform-info';
 export type { WebFetchFactory } from './platform/web-fetch-factory';
@@ -65,6 +68,30 @@ export {
   testWebdavConnection,
   type TestWebdavConnectionDeps,
 } from './file-based/webdav/test-connection';
+export {
+  LocalFileSyncBase,
+  type LocalFileSyncBaseDeps,
+} from './file-based/local-file/local-file-sync-base';
+export {
+  LocalFileSyncElectron,
+  type LocalFileSyncElectronDeps,
+} from './file-based/local-file/local-file-sync-electron';
+export {
+  LocalFileSyncAndroid,
+  type LocalFileSyncAndroidDeps,
+} from './file-based/local-file/local-file-sync-android';
+export {
+  PROVIDER_ID_LOCAL_FILE,
+  type LocalFileSyncPrivateCfg,
+} from './file-based/local-file/local-file.model';
+export {
+  PROVIDER_ID_SUPER_SYNC,
+  SUPER_SYNC_DEFAULT_BASE_URL,
+  type SuperSyncPrivateCfg,
+} from './super-sync/super-sync.model';
+export { SuperSyncProvider, type SuperSyncDeps } from './super-sync/super-sync';
+export type { SuperSyncResponseValidators } from './super-sync/response-validators';
+export type { SuperSyncStorage } from './super-sync/storage';
 // `WebDavHttpAdapter` and `WebdavApi` are deliberately NOT exported.
 // Their single host-app consumer goes through `testWebdavConnection`
 // above. Keeping them internal preserves freedom to refactor the

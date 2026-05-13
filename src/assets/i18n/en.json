@@ -926,6 +926,9 @@
         "L_HUE_WARN": "Threshold for dark text on warn color background",
         "L_IS_AUTO_CONTRAST": "Auto-set text colors for best readability",
         "L_IS_DISABLE_BACKGROUND_TINT": "Disable colored background tint",
+        "BTN_SELECT_IMAGE": "Select",
+        "S_BACKGROUND_IMAGE_READ_ERROR": "Could not read selected image file.",
+        "S_BACKGROUND_IMAGE_TOO_LARGE": "Selected image is too large. Please choose a file smaller than {{maxSizeKb}} KB.",
         "L_THEME_COLOR": "Theme Color",
         "TITLE": "Theme"
       },
@@ -1444,6 +1447,7 @@
         "LOCK_TIMEOUT_ERROR": "Sync timed out waiting for a previous operation to finish. Please try again.",
         "LWW_CONFLICTS_AUTO_RESOLVED": "Sync conflicts auto-resolved: {{localWins}} local win(s), {{remoteWins}} remote win(s)",
         "MIGRATION_FAILED": "Some sync data could not be migrated and was skipped. This may indicate data corruption or a bug.",
+        "NETWORK_ERROR": "Sync request failed because of a temporary network problem. Your changes remain local and sync will retry.",
         "NEWER_VERSION_AVAILABLE": "Some changes are from a newer app version. Consider updating for full compatibility.",
         "OPERATION_PERMANENTLY_FAILED": "Some sync operations failed and could not be applied. Data may be incomplete.",
         "OVERWRITE_SERVER_FAILED": "Failed to overwrite server data: {{message}}",
@@ -2304,6 +2308,7 @@
       "TITLE": "Localization",
       "TR": "Türkçe",
       "UK": "Українська",
+      "VI": "Tiếng Việt",
       "ZH": "中文(简体)",
       "ZH_TW": "中文(繁體)"
     },

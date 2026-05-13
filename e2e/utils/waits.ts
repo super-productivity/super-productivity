@@ -17,6 +17,13 @@ type WaitForAppReadyOptions = {
   routeRegex?: RegExp;
 };
 
+export const skipOnboardingForE2E = (): void => {
+  localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+  localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+  localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+  localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+};
+
 /**
  * Dismiss up to `maxAttempts` blocking confirmation dialogs.
  * Some app flows show chained dialogs (e.g., pre-migration + data-repair)
@@ -66,12 +73,7 @@ const dismissOnboardingPresets = async (page: Page): Promise<void> => {
       .then(() => true)
       .catch(() => false);
     if (isVisible) {
-      await page.evaluate(() => {
-        localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
-        localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
-        localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-        localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-      });
+      await page.evaluate(skipOnboardingForE2E);
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(500);
     }

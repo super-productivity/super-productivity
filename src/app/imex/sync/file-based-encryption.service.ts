@@ -14,7 +14,7 @@ import { FileBasedSyncAdapterService } from '../../op-log/sync-providers/file-ba
 import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migration.service';
 import { uuidv7 } from '../../util/uuid-v7';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
+import { clearSessionKeyCache } from '@sp/sync-core';
 
 const LOG_PREFIX = 'FileBasedEncryptionService';
 

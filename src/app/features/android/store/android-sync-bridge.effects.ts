@@ -8,7 +8,7 @@ import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import {
   SUPER_SYNC_DEFAULT_BASE_URL,
   SuperSyncPrivateCfg,
-} from '../../../op-log/sync-providers/super-sync/super-sync.model';
+} from '@sp/sync-providers/super-sync';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DroidLog } from '../../../core/log';
 import { CurrentProviderPrivateCfg } from '../../../op-log/core/types/sync.types';

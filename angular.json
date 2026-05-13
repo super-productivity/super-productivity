@@ -50,7 +50,6 @@
               "stack-generator",
               "stacktrace-gps",
               "error-stack-parser",
-              "spark-md5",
               "chrono-node",
               "dayjs",
               "query-string"

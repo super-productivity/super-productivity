@@ -10,6 +10,7 @@ vi.mock('../src/db', () => ({
   prisma: {
     userSyncState: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
       create: vi.fn(),
@@ -115,6 +116,31 @@ describe('SnapshotService', () => {
           snapshotAt: null,
           snapshotSchemaVersion: null,
         },
+      });
+    });
+  });
+
+  describe('getCachedSnapshotGeneratedAt', () => {
+    it('should return null when no cached snapshot metadata exists', async () => {
+      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue(null);
+
+      const result = await service.getCachedSnapshotGeneratedAt(1);
+
+      expect(result).toBeNull();
+    });
+
+    it('should read only snapshot metadata', async () => {
+      const snapshotAt = BigInt(1700000000000);
+      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
+        snapshotAt,
+      } as any);
+
+      const result = await service.getCachedSnapshotGeneratedAt(1);
+
+      expect(result).toBe(Number(snapshotAt));
+      expect(prisma.userSyncState.findUnique).toHaveBeenCalledWith({
+        where: { userId: 1 },
+        select: { snapshotAt: true },
       });
     });
   });

@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "import": {
@@ -22,6 +23,10 @@
     "build:tsc": "tsc",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.2.0",
+    "hash-wasm": "^4.12.0"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

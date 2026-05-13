@@ -194,6 +194,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.workContextService.activeWorkContext$,
     { initialValue: null },
   );
+  readonly resolvedBgImage = signal<string | null>(null);
 
   isShowOnboardingPresets = signal(
     !localStorage.getItem(LS.ONBOARDING_PRESET_DONE) &&
@@ -249,6 +250,39 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
     // init theme and body class handlers
     this._globalThemeService.init();
+
+    let bgResolveRequestId = 0;
+    effect(() => {
+      const bgImage = this._globalThemeService.backgroundImg();
+      const currentRequestId = ++bgResolveRequestId;
+      if (!bgImage) {
+        this.resolvedBgImage.set(null);
+        return;
+      }
+
+      if (!IS_ELECTRON || !bgImage.startsWith('file://')) {
+        this.resolvedBgImage.set(bgImage);
+        return;
+      }
+
+      const readLocalImageAsDataUrl = window.ea?.readLocalImageAsDataUrl;
+      if (!readLocalImageAsDataUrl) {
+        this.resolvedBgImage.set(null);
+        return;
+      }
+
+      readLocalImageAsDataUrl(bgImage)
+        .then((dataUrl) => {
+          if (currentRequestId === bgResolveRequestId) {
+            this.resolvedBgImage.set(dataUrl || null);
+          }
+        })
+        .catch(() => {
+          if (currentRequestId === bgResolveRequestId) {
+            this.resolvedBgImage.set(null);
+          }
+        });
+    });
 
     this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
       .pipe(take(1))
@@ -362,7 +396,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   getActiveWorkContextId(): string | null {
-    return this._activeWorkContextId();
+    return this._activeWorkContextId() ?? null;
   }
 
   onTaskAdded({ taskId }: { taskId: string; isAddToBottom: boolean }): void {

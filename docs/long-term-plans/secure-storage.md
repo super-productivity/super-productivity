@@ -261,7 +261,7 @@ Relevant files:
 
 - [`src/app/op-log/sync-providers/credential-store.service.ts`](../../src/app/op-log/sync-providers/credential-store.service.ts)
 - [`src/app/op-log/core/types/sync.types.ts`](../../src/app/op-log/core/types/sync.types.ts)
-- [`src/app/op-log/sync-providers/super-sync/super-sync.model.ts`](../../src/app/op-log/sync-providers/super-sync/super-sync.model.ts)
+- [`packages/sync-providers/src/super-sync/super-sync.model.ts`](../../packages/sync-providers/src/super-sync/super-sync.model.ts)
 - [`src/app/op-log/sync-providers/file-based/webdav/webdav.model.ts`](../../src/app/op-log/sync-providers/file-based/webdav/webdav.model.ts)
 - [`src/app/op-log/sync-providers/file-based/dropbox/dropbox.ts`](../../src/app/op-log/sync-providers/file-based/dropbox/dropbox.ts)
 

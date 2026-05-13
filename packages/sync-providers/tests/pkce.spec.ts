@@ -20,8 +20,7 @@ describe('PKCE utilities', () => {
     const verifier = generateCodeVerifier({ crypto: createDeterministicCrypto() });
 
     expect(verifier).toMatch(/^[A-Za-z0-9\-_]+$/);
-    expect(verifier.length).toBeGreaterThanOrEqual(43);
-    expect(verifier.length).toBeLessThanOrEqual(128);
+    expect(verifier.length).toBe(43);
   });
 
   it('generates the RFC 7636 S256 challenge for a known verifier', async () => {
@@ -66,7 +65,7 @@ describe('PKCE utilities', () => {
   });
 
   it('generates a verifier and matching challenge pair', async () => {
-    const result = await generatePKCECodes(128, {
+    const result = await generatePKCECodes({
       crypto: createDeterministicCrypto(),
     });
 

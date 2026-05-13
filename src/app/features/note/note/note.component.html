@@ -46,7 +46,7 @@
             <mat-icon>wb_sunny</mat-icon>
           }
           @if (note.isPinnedToToday) {
-            <mat-icon svgIcon="remove_today"></mat-icon>
+            <mat-icon>timer_off</mat-icon>
           }
         </button>
       }
@@ -54,7 +54,7 @@
         <tag [tag]="projectTag"></tag>
       }
       <!--    <button mat-icon-button>-->
-      <!--      <mat-icon class="drag-handle-ico" svgIcon="drag_handle"></mat-icon>-->
+      <!--      <mat-icon class="drag-handle-ico">drag_handle</mat-icon>-->
       <!--    </button>-->
       <button
         [matMenuTriggerFor]="menu"

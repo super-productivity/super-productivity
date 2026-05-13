@@ -1,5 +1,12 @@
 <div class="image-input-container">
   <input
+    #fileInput
+    type="file"
+    accept="image/png,image/jpeg,image/gif,image/webp"
+    hidden
+    (change)="onFileSelected($event)"
+  />
+  <input
     [name]="props.name"
     [required]="!!props.required"
     [readonly]="props.readonly"
@@ -8,6 +15,18 @@
     matInput
     placeholder="https://... or file://..."
   />
+  @if (IS_ELECTRON) {
+    <button
+      mat-stroked-button
+      type="button"
+      (click)="openFileExplorer()"
+      [disabled]="props.readonly"
+      class="select-button"
+    >
+      <mat-icon>folder_open</mat-icon>
+      {{ T.F.PROJECT.FORM_THEME.BTN_SELECT_IMAGE | translate }}
+    </button>
+  }
   @if (isUnsplashAvailable) {
     <button
       mat-stroked-button

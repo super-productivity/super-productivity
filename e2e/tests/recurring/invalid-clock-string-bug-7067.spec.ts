@@ -33,7 +33,7 @@ test('should not crash when a repeat config has an invalid startTime in the stor
   await taskPage.openTaskDetail(task);
   await page
     .locator('task-detail-item')
-    .filter({ has: page.locator('mat-icon[svgIcon="repeat"]') })
+    .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) })
     .click();
 
   const repeatDialog = page.locator('mat-dialog-container');

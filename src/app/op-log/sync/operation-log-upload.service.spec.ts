@@ -3,7 +3,7 @@ import { OperationLogUploadService } from './operation-log-upload.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
 import {
-  SyncProviderServiceInterface,
+  SyncProviderBase,
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
@@ -88,7 +88,7 @@ describe('OperationLogUploadService', () => {
 
     describe('API-based sync', () => {
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       beforeEach(() => {
@@ -509,7 +509,7 @@ describe('OperationLogUploadService', () => {
 
     describe('full-state operation routing', () => {
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       const createFullStateEntry = (
@@ -744,6 +744,23 @@ describe('OperationLogUploadService', () => {
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
         mockApiProvider.uploadSnapshot.and.returnValue(
           Promise.resolve({ accepted: false, error: '503 Service Unavailable' }),
+        );
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        expect(result.rejectedCount).toBe(0);
+      });
+
+      it('should NOT mark full-state ops as rejected when snapshot fails with 429 rate limit error', async () => {
+        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.BackupImport);
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+        mockApiProvider.uploadSnapshot.and.returnValue(
+          Promise.resolve({
+            accepted: false,
+            error:
+              'HTTP 429 Too Many Requests \u2014 Too Many Requests \u2014 retry in 5 minutes',
+          }),
         );
 
         const result = await service.uploadPendingOps(mockApiProvider);
@@ -1126,7 +1143,7 @@ describe('OperationLogUploadService', () => {
 
     describe('error handling and recovery', () => {
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       beforeEach(() => {
@@ -1307,7 +1324,7 @@ describe('OperationLogUploadService', () => {
        * server migration and create duplicate SYNC_IMPORT operations.
        */
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       beforeEach(() => {
@@ -1426,8 +1443,8 @@ describe('OperationLogUploadService', () => {
     });
   });
 
-  // NOTE: _isNetworkError tests have been moved to sync-error-utils.spec.ts
-  // The shared isTransientNetworkError utility is now in sync-error-utils.ts
+  // NOTE: transient-error classification is delegated to `isRetryableUploadError`
+  // in `@sp/sync-providers`, which has its own unit test suite.
 
   describe('_opTypeToSnapshotReason', () => {
     // Access private method for testing

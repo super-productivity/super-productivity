@@ -1,4 +1,4 @@
-import type { WebFetchFactory } from '@sp/sync-providers';
+import type { WebFetchFactory } from '@sp/sync-providers/platform';
 
 /**
  * Factory shape (rather than a stored reference) so the lookup happens

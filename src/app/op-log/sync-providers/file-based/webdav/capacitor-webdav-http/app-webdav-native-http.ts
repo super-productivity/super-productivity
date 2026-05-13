@@ -1,4 +1,4 @@
-import type { NativeHttpExecutor } from '@sp/sync-providers';
+import type { NativeHttpExecutor } from '@sp/sync-providers/http';
 import { WebDavHttp } from './index';
 
 /**

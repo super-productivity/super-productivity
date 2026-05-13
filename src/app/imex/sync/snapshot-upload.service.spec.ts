@@ -7,10 +7,10 @@ import { CLIENT_ID_PROVIDER } from '../../op-log/util/client-id.provider';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import {
   OperationSyncCapable,
-  SyncProviderServiceInterface,
+  SyncProviderBase,
 } from '../../op-log/sync-providers/provider.interface';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 
 describe('SnapshotUploadService', () => {
   let service: SnapshotUploadService;
@@ -23,7 +23,7 @@ describe('SnapshotUploadService', () => {
   };
   let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
   let mockSyncProvider: jasmine.SpyObj<
-    SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+    SyncProviderBase<SyncProviderId> & OperationSyncCapable
   >;
 
   const mockExistingCfg: SuperSyncPrivateCfg = {

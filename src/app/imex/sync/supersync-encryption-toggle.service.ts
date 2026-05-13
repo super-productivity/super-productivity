@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncLog } from '../../core/log';
 import { SnapshotUploadService } from './snapshot-upload.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';

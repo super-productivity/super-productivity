@@ -69,14 +69,6 @@ export interface SyncProviderPrivateCfgBase {
   encryptKey?: string;
 }
 
-// Local file sync config that works for both platforms
-export interface LocalFileSyncPrivateCfg extends SyncProviderPrivateCfgBase {
-  // Electron specific
-  syncFolderPath?: string;
-  // Android SAF specific
-  safFolderUri?: string;
-}
-
 // Note: DropboxPrivateCfg, WebdavPrivateCfg, SuperSyncPrivateCfg are defined
 // in their respective provider files and extend SyncProviderPrivateCfgBase.
 // They are imported lazily via type imports where needed.
@@ -85,11 +77,12 @@ export interface LocalFileSyncPrivateCfg extends SyncProviderPrivateCfgBase {
 // Provider-Specific Config Type Mapping
 // ============================================================================
 
-// Forward declarations for provider-specific types
-// These are imported from their respective modules where used
-import type { DropboxPrivateCfg } from '../../sync-providers/file-based/dropbox/dropbox';
-import type { NextcloudPrivateCfg, WebdavPrivateCfg } from '@sp/sync-providers';
-import type { SuperSyncPrivateCfg } from '../../sync-providers/super-sync/super-sync.model';
+import type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
+import type { LocalFileSyncPrivateCfg as PackageLocalFileSyncPrivateCfg } from '@sp/sync-providers/local-file';
+import type { NextcloudPrivateCfg, WebdavPrivateCfg } from '@sp/sync-providers/webdav';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
+
+export type LocalFileSyncPrivateCfg = PackageLocalFileSyncPrivateCfg;
 
 export type SyncProviderPrivateCfg =
   | DropboxPrivateCfg

@@ -29,6 +29,37 @@ const escapeHtml = (unsafe: string): string => {
     .replace(/'/g, '&#039;');
 };
 
+const SENSITIVE_QUERY_PARAMS = [
+  'authorization',
+  'jwt',
+  'logintoken',
+  'password',
+  'passkeyrecoverytoken',
+  'resetpasswordtoken',
+  'token',
+] as const;
+
+const SENSITIVE_QUERY_PARAM_SET = new Set<string>(SENSITIVE_QUERY_PARAMS);
+
+const SENSITIVE_QUERY_PARAM_PATTERN = new RegExp(
+  `([?&](?:${SENSITIVE_QUERY_PARAMS.join('|')})=)[^&\\s]*`,
+  'gi',
+);
+
+export const sanitizeRequestUrlForLog = (rawUrl: string): string => {
+  try {
+    const url = new URL(rawUrl, 'http://localhost');
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (SENSITIVE_QUERY_PARAM_SET.has(key.toLowerCase())) {
+        url.searchParams.set(key, 'redacted');
+      }
+    }
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return rawUrl.replace(SENSITIVE_QUERY_PARAM_PATTERN, '$1redacted');
+  }
+};
+
 const generatePrivacyHtml = (privacy?: PrivacyConfig): void => {
   const publicDir = path.join(__dirname, '../../public');
   const templatePath = path.join(publicDir, 'privacy.template.html');
@@ -113,10 +144,13 @@ export const createServer = (
       // validation messages or auth failures that are safe and actionable.
       fastifyServer.setErrorHandler((error: FastifyError, req, reply) => {
         const statusCode = error.statusCode ?? 500;
-        Logger.error(
-          `Request failed ${statusCode} ${req.method} ${req.url}: ${error.name}: ${error.message}`,
-          error.stack,
-        );
+        const sanitizedUrl = sanitizeRequestUrlForLog(req.url);
+        const logMessage = `Request failed ${statusCode} ${req.method} ${sanitizedUrl}: ${error.name}: ${error.message}`;
+        if (statusCode >= 500) {
+          Logger.error(logMessage, error.stack);
+        } else {
+          Logger.warn(logMessage);
+        }
         if (statusCode >= 500) {
           return reply.status(500).send({
             statusCode: 500,

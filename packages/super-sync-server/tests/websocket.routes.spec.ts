@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CLIENT_ID_REGEX, MAX_CLIENT_ID_LENGTH } from '../src/sync/sync.const';
+import {
+  WS_CONNECTION_RATE_LIMIT_MAX,
+  WS_CONNECTION_RATE_LIMIT_WINDOW,
+} from '../src/sync/websocket.routes';
 
 /**
  * Tests the WebSocket route validation logic from websocket.routes.ts.
@@ -44,9 +48,8 @@ async function simulateWsHandler(
   socket: { close: ReturnType<typeof vi.fn> },
 ): Promise<'accepted' | 'rejected'> {
   // Dynamic import to pick up the vi.mock above
-  const { getWsConnectionService } = await import(
-    '../src/sync/services/websocket-connection.service'
-  );
+  const { getWsConnectionService } =
+    await import('../src/sync/services/websocket-connection.service');
 
   try {
     const { token, clientId } = query;
@@ -97,6 +100,13 @@ describe('WebSocket Route Validation', () => {
     });
   });
 
+  describe('route rate limit', () => {
+    it('should tolerate reconnect bursts after deploys and restarts', () => {
+      expect(WS_CONNECTION_RATE_LIMIT_MAX).toBe(120);
+      expect(WS_CONNECTION_RATE_LIMIT_WINDOW).toBe('1 minute');
+    });
+  });
+
   describe('CLIENT_ID_REGEX', () => {
     it('should accept alphanumeric characters', () => {
       expect(CLIENT_ID_REGEX.test('abc123')).toBe(true);
@@ -131,10 +141,7 @@ describe('WebSocket Route Validation', () => {
 
   describe('handler validation flow', () => {
     it('should reject when token is missing', async () => {
-      const result = await simulateWsHandler(
-        { clientId: 'valid_client' },
-        mockSocket,
-      );
+      const result = await simulateWsHandler({ clientId: 'valid_client' }, mockSocket);
 
       expect(result).toBe('rejected');
       expect(mockSocket.close).toHaveBeenCalledWith(4001, 'Missing token');

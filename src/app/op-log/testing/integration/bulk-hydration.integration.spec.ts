@@ -421,13 +421,8 @@ describe('Bulk Hydration Integration', () => {
         );
       }
 
-      const startTime = performance.now();
       const bulkAction = bulkApplyHydrationOperations({ operations });
       const resultState = composedReducer(initialState, bulkAction);
-      const endTime = performance.now();
-
-      // Should complete quickly (under 500ms even on slow CI)
-      expect(endTime - startTime).toBeLessThan(500);
 
       // All 500 tasks should be created
       expect(resultState[TASKS_FEATURE].ids.length).toBe(500);

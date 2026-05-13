@@ -434,6 +434,9 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **Expected:** Snackbar warning. Ops remain pending. Retry on next sync.
 
+Browser/Electron SuperSync requests retry transient fetch failures (for example
+network changes while switching Wi-Fi) before surfacing the warning.
+
 ### G.2: CORS Error
 
 **Expected:** Snackbar with detailed error message (12s duration). Status `HANDLED_ERROR`.

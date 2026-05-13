@@ -4,7 +4,11 @@ import { WrappedProviderService } from './wrapped-provider.service';
 import { SyncProviderManager } from './provider-manager.service';
 import { FileBasedSyncAdapterService } from './file-based/file-based-sync-adapter.service';
 import { SyncProviderId } from './provider.const';
-import { SyncProviderServiceInterface, OperationSyncCapable } from './provider.interface';
+import {
+  FileSyncProvider,
+  OperationSyncCapable,
+  SyncProviderBase,
+} from './provider.interface';
 
 describe('WrappedProviderService', () => {
   let service: WrappedProviderService;
@@ -12,10 +16,22 @@ describe('WrappedProviderService', () => {
   let mockFileBasedAdapter: jasmine.SpyObj<FileBasedSyncAdapterService>;
   let providerConfigChanged$: Subject<void>;
 
-  const createMockProvider = (
+  const createMockBaseProvider = (
     id: SyncProviderId,
-    supportsOperationSync = false,
-  ): jasmine.SpyObj<SyncProviderServiceInterface<SyncProviderId>> => {
+  ): jasmine.SpyObj<SyncProviderBase<SyncProviderId>> => {
+    return jasmine.createSpyObj('SyncProvider', ['isReady'], {
+      id,
+      privateCfg: {
+        load: jasmine
+          .createSpy('load')
+          .and.returnValue(Promise.resolve({ encryptKey: 'test-key' })),
+      },
+    });
+  };
+
+  const createMockFileProvider = (
+    id: SyncProviderId,
+  ): jasmine.SpyObj<FileSyncProvider<SyncProviderId>> => {
     const provider = jasmine.createSpyObj('SyncProvider', ['isReady'], {
       id,
       privateCfg: {
@@ -24,14 +40,17 @@ describe('WrappedProviderService', () => {
           .and.returnValue(Promise.resolve({ encryptKey: 'test-key' })),
       },
     });
-    if (supportsOperationSync) {
-      const operationProvider = provider as unknown as {
-        supportsOperationSync: true;
-        providerMode: 'superSyncOps';
-      };
-      operationProvider.supportsOperationSync = true;
-      operationProvider.providerMode = 'superSyncOps';
-    }
+    return provider;
+  };
+
+  const createMockOperationSyncProvider = (): jasmine.SpyObj<
+    SyncProviderBase<SyncProviderId> & OperationSyncCapable<'superSyncOps'>
+  > => {
+    const provider = createMockBaseProvider(SyncProviderId.SuperSync) as jasmine.SpyObj<
+      SyncProviderBase<SyncProviderId> & OperationSyncCapable<'superSyncOps'>
+    >;
+    provider.supportsOperationSync = true;
+    provider.providerMode = 'superSyncOps';
     return provider;
   };
 
@@ -81,7 +100,7 @@ describe('WrappedProviderService', () => {
     });
 
     it('should return SuperSync provider as-is (already implements OperationSyncCapable)', async () => {
-      const superSyncProvider = createMockProvider(SyncProviderId.SuperSync, true);
+      const superSyncProvider = createMockOperationSyncProvider();
 
       const result = await service.getOperationSyncCapable(superSyncProvider);
 
@@ -90,7 +109,7 @@ describe('WrappedProviderService', () => {
     });
 
     it('should wrap Dropbox provider with FileBasedSyncAdapterService', async () => {
-      const dropboxProvider = createMockProvider(SyncProviderId.Dropbox, false);
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
       const mockAdapter = createMockSyncCapableAdapter();
       mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
 
@@ -105,7 +124,7 @@ describe('WrappedProviderService', () => {
     });
 
     it('should wrap WebDAV provider with FileBasedSyncAdapterService', async () => {
-      const webdavProvider = createMockProvider(SyncProviderId.WebDAV, false);
+      const webdavProvider = createMockFileProvider(SyncProviderId.WebDAV);
       const mockAdapter = createMockSyncCapableAdapter();
       mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
 
@@ -116,7 +135,7 @@ describe('WrappedProviderService', () => {
     });
 
     it('should wrap LocalFile provider with FileBasedSyncAdapterService', async () => {
-      const localFileProvider = createMockProvider(SyncProviderId.LocalFile, false);
+      const localFileProvider = createMockFileProvider(SyncProviderId.LocalFile);
       const mockAdapter = createMockSyncCapableAdapter();
       mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
 
@@ -127,7 +146,7 @@ describe('WrappedProviderService', () => {
     });
 
     it('should cache wrapped adapters per provider ID', async () => {
-      const dropboxProvider = createMockProvider(SyncProviderId.Dropbox, false);
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
       const mockAdapter = createMockSyncCapableAdapter();
       mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
 
@@ -142,7 +161,7 @@ describe('WrappedProviderService', () => {
     });
 
     it('should handle provider without encryptKey', async () => {
-      const dropboxProvider = createMockProvider(SyncProviderId.Dropbox, false);
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
       (dropboxProvider.privateCfg.load as jasmine.Spy).and.returnValue(
         Promise.resolve(null),
       );
@@ -161,7 +180,7 @@ describe('WrappedProviderService', () => {
 
   describe('clearCache', () => {
     it('should clear cached adapters', async () => {
-      const dropboxProvider = createMockProvider(SyncProviderId.Dropbox, false);
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
       const mockAdapter1 = createMockSyncCapableAdapter();
       const mockAdapter2 = createMockSyncCapableAdapter();
       mockFileBasedAdapter.createAdapter.and.returnValues(mockAdapter1, mockAdapter2);
@@ -182,7 +201,7 @@ describe('WrappedProviderService', () => {
 
   describe('auto-invalidation on config change', () => {
     it('should auto-clear cache when providerConfigChanged$ emits', async () => {
-      const dropboxProvider = createMockProvider(SyncProviderId.Dropbox, false);
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
       const mockAdapter1 = createMockSyncCapableAdapter();
       const mockAdapter2 = createMockSyncCapableAdapter();
       mockFileBasedAdapter.createAdapter.and.returnValues(mockAdapter1, mockAdapter2);

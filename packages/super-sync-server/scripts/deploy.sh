@@ -148,6 +148,7 @@ echo ""
 # loudly instead of hanging this script forever. Exit code 124 = timed out.
 MIGRATION_TIMEOUT="${MIGRATION_TIMEOUT:-900}"
 MIGRATOR_RUN="docker compose $COMPOSE_FILES run --rm --no-deps --interactive=false -T supersync"
+FULL_STATE_INDEX_MIGRATION="20260512000000_add_full_state_sequence_index_drop_redundant_indexes"
 echo "==> Verifying database connectivity from the supersync image..."
 set +e
 timeout "$POSTGRES_WAIT_TIMEOUT" \
@@ -169,11 +170,134 @@ fi
 echo "    Database reachable"
 echo ""
 echo "==> Applying database migrations before app restart (timeout: ${MIGRATION_TIMEOUT}s)..."
-set +e
-timeout "$MIGRATION_TIMEOUT" \
-    $MIGRATOR_RUN sh -ec 'echo "    Migrator container started"; npx prisma migrate deploy'
-MIGRATE_STATUS=$?
-set -e
+
+MIGRATE_LOG=""
+MIGRATE_STATUS=0
+
+run_migrate_deploy() {
+    MIGRATE_LOG="$(mktemp "${TMPDIR:-/tmp}/supersync-migrate.XXXXXX")"
+    set +e
+    timeout "$MIGRATION_TIMEOUT" \
+        $MIGRATOR_RUN sh -ec 'echo "    Migrator container started"; npx prisma migrate deploy' 2>&1 | tee "$MIGRATE_LOG"
+    MIGRATE_STATUS=${PIPESTATUS[0]}
+    set -e
+}
+
+is_recoverable_full_state_index_migration_failure() {
+    [ -n "$MIGRATE_LOG" ] &&
+        grep -q 'P3009' "$MIGRATE_LOG" &&
+        grep -q "$FULL_STATE_INDEX_MIGRATION" "$MIGRATE_LOG"
+}
+
+is_full_state_index_transaction_block_failure() {
+    [ -n "$MIGRATE_LOG" ] &&
+        grep -q 'P3018' "$MIGRATE_LOG" &&
+        grep -q "$FULL_STATE_INDEX_MIGRATION" "$MIGRATE_LOG" &&
+        grep -q 'cannot run inside a transaction block' "$MIGRATE_LOG"
+}
+
+run_concurrent_index_sql() {
+    local sql="$1"
+    local execute_status
+
+    set +e
+    # Use the same supersync container and DATABASE_URL as `migrate deploy`.
+    # This avoids marking the Prisma migration applied in one database after
+    # running the out-of-band index SQL against another.
+    printf '%s\n' "$sql" | timeout "$MIGRATION_TIMEOUT" \
+        $MIGRATOR_RUN sh -ec 'npx prisma db execute --schema prisma/schema.prisma --stdin'
+    execute_status=${PIPESTATUS[1]}
+    set -e
+
+    if [ "$execute_status" -eq 124 ]; then
+        echo ""
+        echo "ERROR: concurrent index SQL timed out after ${MIGRATION_TIMEOUT}s."
+        echo "       A long-running transaction may be blocking CREATE/DROP INDEX CONCURRENTLY."
+        exit 1
+    fi
+    if [ "$execute_status" -ne 0 ]; then
+        echo ""
+        echo "ERROR: concurrent index SQL failed (exit $execute_status)."
+        exit "$execute_status"
+    fi
+}
+
+apply_full_state_index_migration_outside_prisma() {
+    echo ""
+    echo "==> Applying $FULL_STATE_INDEX_MIGRATION outside Prisma migrate..."
+    echo "    Prisma cannot run this multi-statement CONCURRENTLY migration in one transaction block."
+
+    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_full_state_server_seq_idx";'
+    run_concurrent_index_sql "CREATE INDEX CONCURRENTLY \"operations_user_id_full_state_server_seq_idx\" ON \"operations\"(\"user_id\", \"server_seq\") WHERE \"op_type\" IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR');"
+    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_op_type_idx";'
+    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_entity_type_entity_id_idx";'
+    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_server_seq_idx";'
+}
+
+resolve_failed_full_state_index_migration() {
+    local resolve_status
+
+    echo ""
+    echo "==> Resolving failed index-only migration $FULL_STATE_INDEX_MIGRATION..."
+    echo "    Marking it rolled back so Prisma can retry the idempotent migration SQL."
+    set +e
+    timeout "$POSTGRES_WAIT_TIMEOUT" \
+        $MIGRATOR_RUN npx prisma migrate resolve --rolled-back "$FULL_STATE_INDEX_MIGRATION"
+    resolve_status=$?
+    set -e
+
+    if [ "$resolve_status" -eq 124 ]; then
+        echo ""
+        echo "ERROR: prisma migrate resolve timed out after ${POSTGRES_WAIT_TIMEOUT}s."
+        exit 1
+    fi
+    if [ "$resolve_status" -ne 0 ]; then
+        echo ""
+        echo "ERROR: prisma migrate resolve failed (exit $resolve_status)."
+        exit "$resolve_status"
+    fi
+}
+
+resolve_applied_full_state_index_migration() {
+    local resolve_status
+
+    echo ""
+    echo "==> Marking $FULL_STATE_INDEX_MIGRATION as applied after out-of-band SQL..."
+    set +e
+    timeout "$POSTGRES_WAIT_TIMEOUT" \
+        $MIGRATOR_RUN npx prisma migrate resolve --applied "$FULL_STATE_INDEX_MIGRATION"
+    resolve_status=$?
+    set -e
+
+    if [ "$resolve_status" -eq 124 ]; then
+        echo ""
+        echo "ERROR: prisma migrate resolve --applied timed out after ${POSTGRES_WAIT_TIMEOUT}s."
+        exit 1
+    fi
+    if [ "$resolve_status" -ne 0 ]; then
+        echo ""
+        echo "ERROR: prisma migrate resolve --applied failed (exit $resolve_status)."
+        exit "$resolve_status"
+    fi
+}
+
+run_migrate_deploy
+if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
+    is_recoverable_full_state_index_migration_failure; then
+    resolve_failed_full_state_index_migration
+    echo ""
+    echo "==> Retrying database migrations after resolving $FULL_STATE_INDEX_MIGRATION..."
+    run_migrate_deploy
+fi
+if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
+    is_full_state_index_transaction_block_failure; then
+    apply_full_state_index_migration_outside_prisma
+    resolve_applied_full_state_index_migration
+    echo ""
+    echo "==> Retrying database migrations after applying $FULL_STATE_INDEX_MIGRATION..."
+    run_migrate_deploy
+fi
+
 if [ "$MIGRATE_STATUS" -eq 124 ]; then
     echo ""
     echo "ERROR: prisma migrate deploy timed out after ${MIGRATION_TIMEOUT}s."

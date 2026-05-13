@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const SUPER_SYNC_CLIENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 export const SUPER_SYNC_MAX_CLIENT_ID_LENGTH = 255;
 export const SUPER_SYNC_MAX_OPS_PER_UPLOAD = 100;
+export const SUPER_SYNC_MAX_ENTITY_IDS_PER_OP = 1000;
 
 export const SUPER_SYNC_OP_TYPES = [
   'CRT',
@@ -32,6 +33,17 @@ export const SUPER_SYNC_SNAPSHOT_OP_TYPES = [
   'REPAIR',
 ] as const;
 
+/**
+ * Constrains client-generated dedup keys to URL-safe chars so they can be
+ * embedded in log lines without escape risk and trivially compared on the
+ * server. Length is intentionally permissive (1..64) so existing clients
+ * keep working; the charset restriction alone closes the log-injection
+ * vector that motivated this regex.
+ */
+const SUPER_SYNC_REQUEST_ID_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
+
+const SuperSyncRequestIdSchema = z.string().regex(SUPER_SYNC_REQUEST_ID_REGEX);
+
 export const SuperSyncVectorClockSchema = z.record(z.string(), z.number());
 
 export const SuperSyncClientIdSchema = z
@@ -50,7 +62,10 @@ export const SuperSyncOperationSchema = z.object({
   opType: z.enum(SUPER_SYNC_OP_TYPES),
   entityType: z.string().min(1).max(255),
   entityId: z.string().max(255).optional(),
-  entityIds: z.array(z.string().max(255)).optional(),
+  entityIds: z
+    .array(z.string().max(255))
+    .max(SUPER_SYNC_MAX_ENTITY_IDS_PER_OP)
+    .optional(),
   payload: z.unknown(),
   vectorClock: SuperSyncVectorClockSchema,
   timestamp: z.number(),
@@ -63,7 +78,7 @@ export const SuperSyncUploadOpsRequestSchema = z.object({
   ops: z.array(SuperSyncOperationSchema).min(1).max(SUPER_SYNC_MAX_OPS_PER_UPLOAD),
   clientId: SuperSyncClientIdSchema,
   lastKnownServerSeq: z.number().optional(),
-  requestId: z.string().min(1).max(64).optional(),
+  requestId: SuperSyncRequestIdSchema.optional(),
   isCleanSlate: z.boolean().optional(),
 });
 
@@ -84,6 +99,7 @@ export const SuperSyncUploadSnapshotRequestSchema = z.object({
   opId: z.string().uuid().optional(),
   isCleanSlate: z.boolean().optional(),
   snapshotOpType: z.enum(SUPER_SYNC_SNAPSHOT_OP_TYPES).optional(),
+  requestId: SuperSyncRequestIdSchema.optional(),
 });
 
 export const SuperSyncOperationResponseSchema = SuperSyncOperationSchema.passthrough();

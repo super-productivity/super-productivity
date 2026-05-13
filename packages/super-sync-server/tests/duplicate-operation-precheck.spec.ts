@@ -253,6 +253,38 @@ describe('Duplicate Operation Pre-check', () => {
       }
     });
 
+    it('should preserve clamped duplicate retries when the retry timestamp is no longer clamped', async () => {
+      const baseTimestamp = 1_700_000_000_000;
+      const retryTimestamp = baseTimestamp + 10_000;
+      const farFuture = baseTimestamp + DEFAULT_SYNC_CONFIG.maxClockDriftMs + 10_000;
+
+      vi.useFakeTimers();
+      vi.setSystemTime(baseTimestamp);
+      try {
+        const originalOp = createTestOp({
+          id: 'clamp-boundary-duplicate-op',
+          timestamp: farFuture,
+        });
+        const firstResult = await syncService.uploadOps(1, 'client-1', [originalOp]);
+        expect(firstResult[0]).toMatchObject({ accepted: true });
+
+        vi.setSystemTime(retryTimestamp);
+        const duplicateResult = await syncService.uploadOps(1, 'client-1', [
+          createTestOp({
+            id: 'clamp-boundary-duplicate-op',
+            timestamp: farFuture,
+          }),
+        ]);
+
+        expect(duplicateResult[0]).toMatchObject({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should not advance server sequence for duplicate retries', async () => {
       const originalOp = createTestOp({
         id: 'seq-original',
