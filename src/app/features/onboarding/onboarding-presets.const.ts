@@ -23,7 +23,7 @@ const BASE_FEATURES: AppFeaturesConfig = {
   isEnableUserProfiles: false,
   isHabitsEnabled: false,
   isFinishDayEnabled: false,
-  isDocumentModeEnabled: false,
+  isDocumentModeEnabled: true,
 };
 
 export const ONBOARDING_PRESETS: OnboardingPreset[] = [
