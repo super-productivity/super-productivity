@@ -39,15 +39,12 @@ export {
 
 // Encryption primitives — Argon2id KDF + AES-GCM, Web Crypto with @noble fallback.
 // See packages/sync-core/src/encryption.ts for the wire-format contract and
-// the structural-vs-side-channel legacy-diagnostics discussion.
+// the legacy-KDF warning side-channel.
 export {
   encrypt,
   decrypt,
   encryptBatch,
   decryptBatch,
-  encryptWithDerivedKey,
-  decryptWithDerivedKey,
-  decryptWithMigration,
   deriveKeyFromPassword,
   clearSessionKeyCache,
   getSessionKeyCacheStats,
@@ -56,7 +53,7 @@ export {
   setArgon2ParamsForTesting,
   setLegacyKdfWarningHandler,
 } from './encryption';
-export type { DerivedKey, DecryptResult } from './encryption';
+export type { DerivedKey } from './encryption';
 
 // Generic error helpers.
 export { extractErrorMessage } from './error.util';

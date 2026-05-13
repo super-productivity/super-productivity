@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  GzipCompressError,
-  GzipDecompressError,
   compressWithGzip,
   compressWithGzipToString,
   decompressGzipFromString,
-  sanitizeBase64,
 } from '../src';
+import {
+  GzipCompressError,
+  GzipDecompressError,
+  sanitizeBase64,
+} from '../src/compression';
 import { NOOP_SYNC_LOGGER } from '../src/sync-logger';
 
 interface MutableCompressionGlobals {

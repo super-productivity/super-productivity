@@ -34,17 +34,10 @@
  *
  * ## Legacy-decrypt diagnostics
  *
- * Two complementary mechanisms surface legacy ciphertext to callers; both are
- * supported intentionally because they serve different consumers:
- *
- *  1. **Structural** — `decryptWithMigration()` returns `{ wasLegacyKdf,
- *     migratedCiphertext }`. Callers that want to persist the re-encrypted
- *     Argon2id ciphertext (the long-term migration goal) use this entry point.
- *  2. **Side-channel** — `setLegacyKdfWarningHandler(h)` registers a host
- *     callback fired on every successful legacy decrypt, regardless of which
- *     entry point was used. Callers that just want to surface a deprecation
- *     UI / log line (e.g. existing code paths that go through `decrypt()`
- *     without threading a result type) use this.
+ * `setLegacyKdfWarningHandler(h)` registers a host callback fired on every
+ * successful legacy decrypt. Callers use it to surface a deprecation UI / log
+ * line on code paths that go through `decrypt()` without threading a result
+ * type.
  */
 
 import {
@@ -93,10 +86,7 @@ export { setLegacyKdfWarningHandler } from './encryption/legacy';
  * @returns Base64-encoded ciphertext with embedded salt and IV
  *          (format: `[SALT (16)][IV (12)][AES-GCM ciphertext + auth tag]`)
  */
-export const encryptWithDerivedKey = async (
-  data: string,
-  key: DerivedKey,
-): Promise<string> => {
+const encryptWithDerivedKey = async (data: string, key: DerivedKey): Promise<string> => {
   const dataBuffer = TEXT_ENCODER.encode(data);
   const iv = getRandomBytes(IV_LENGTH);
   const encryptedContent = await aesEncrypt(key.keyBytes, iv, dataBuffer);
@@ -116,7 +106,7 @@ export const encryptWithDerivedKey = async (
  *   re-decoding)
  * @param key Pre-derived key whose salt matches the ciphertext
  */
-export const decryptWithDerivedKey = async (
+const decryptWithDerivedKey = async (
   data: string | ArrayBuffer,
   key: DerivedKey,
 ): Promise<string> => {
@@ -171,68 +161,6 @@ export const decrypt = async (data: string, password: string): Promise<string> =
     // ciphertext that happens to be >= 44 bytes (the length heuristic can't
     // disambiguate). Mobile clients without WebCrypto get a clear error.
     return decryptLegacy(data, password);
-  }
-};
-
-// ============================================================================
-// MIGRATION-AWARE DECRYPT
-// ============================================================================
-
-/**
- * Result of {@link decryptWithMigration}.
- *
- * When `wasLegacy` is true, `migratedCiphertext` contains the plaintext
- * re-encrypted with Argon2id — callers should persist it to complete the
- * migration off the weaker PBKDF2 KDF.
- */
-export interface DecryptResult {
-  /** Decrypted plaintext. */
-  plaintext: string;
-  /** Re-encrypted ciphertext using Argon2id. Only set when `wasLegacy` is true. */
-  migratedCiphertext?: string;
-  /** True if the ciphertext used the legacy on-disk format. */
-  wasLegacy: boolean;
-  /** True if the ciphertext used the legacy PBKDF2 KDF (currently equivalent to wasLegacy). */
-  wasLegacyKdf?: boolean;
-}
-
-/**
- * Decrypts data and provides migration information for legacy PBKDF2 data.
- *
- * When legacy data is detected:
- *  1. Decrypts using PBKDF2 (insecure: password used as salt).
- *  2. Re-encrypts using Argon2id (random salt, ~strong KDF).
- *  3. Returns the new ciphertext for the caller to persist.
- *
- * The {@link setLegacyKdfWarningHandler} side-channel still fires for every
- * successful legacy decrypt — including the one inside this function — so a
- * host can drive both a structural migration AND a deprecation UI from the
- * same code path.
- */
-export const decryptWithMigration = async (
-  data: string,
-  password: string,
-): Promise<DecryptResult> => {
-  const buffer = decodeBase64(data);
-  const format = detectFormat(buffer);
-
-  if (format === 'invalid') {
-    throw new Error('Encrypted data is too short to be valid');
-  }
-  if (format === 'legacy') {
-    const plaintext = await decryptLegacy(data, password);
-    const migratedCiphertext = await encrypt(plaintext, password);
-    return { plaintext, migratedCiphertext, wasLegacy: true, wasLegacyKdf: true };
-  }
-
-  try {
-    const plaintext = await decryptArgonFromBuffer(buffer, password);
-    return { plaintext, wasLegacy: false };
-  } catch {
-    // Long legacy ciphertext misclassified as Argon2 — migrate it.
-    const plaintext = await decryptLegacy(data, password);
-    const migratedCiphertext = await encrypt(plaintext, password);
-    return { plaintext, migratedCiphertext, wasLegacy: true, wasLegacyKdf: true };
   }
 };
 
