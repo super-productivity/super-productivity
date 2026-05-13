@@ -81,6 +81,8 @@ const ea: ElectronAPI = {
     defaultPath?: string;
     filters?: { name: string; extensions: string[] }[];
   }) => _invoke('SHOW_OPEN_DIALOG', options) as Promise<string[] | undefined>,
+
+  toFileUrl: (filePath: string) => ipcRenderer.invoke(IPC.TO_FILE_URL, filePath),
   readLocalImageAsDataUrl: (filePathOrUrl: string) =>
     _invoke('READ_LOCAL_IMAGE_AS_DATA_URL', filePathOrUrl) as Promise<string | null>,
   // STANDARD

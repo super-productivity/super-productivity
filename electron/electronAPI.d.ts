@@ -62,6 +62,8 @@ export interface ElectronAPI {
     filters?: { name: string; extensions: string[] }[];
   }): Promise<string[] | undefined>;
 
+  toFileUrl(filePath: string): Promise<string>;
+
   readLocalImageAsDataUrl(filePathOrUrl: string): Promise<string | null>;
 
   // checkDirExists(dirPath: string): Promise<true | Error>;

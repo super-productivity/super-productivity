@@ -50,7 +50,7 @@ export class FormlyImageInputComponent extends FieldType<FormlyFieldConfig> {
   }
 
   async openFileExplorer(): Promise<void> {
-    if (!IS_ELECTRON) {
+    if (!this.IS_ELECTRON) {
       return;
     }
 
@@ -61,9 +61,13 @@ export class FormlyImageInputComponent extends FieldType<FormlyFieldConfig> {
     });
     const selectedPath = selectedPaths?.[0];
     if (selectedPath) {
-      const normalizedPath = selectedPath.replace(/\\/g, '/');
-      this.formControl.setValue(`file://${normalizedPath}`);
+      const fileUrl = await window.ea.toFileUrl(selectedPath);
+      this.formControl.setValue(fileUrl);
     }
+    // if (selectedPath) {
+    //   const normalizedPath = selectedPath.replace(/\\/g, '/');
+    //   this.formControl.setValue(`file://${normalizedPath}`);
+    // }
   }
 
   onFileSelected(event: Event): void {

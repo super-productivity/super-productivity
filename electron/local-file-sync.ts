@@ -10,18 +10,31 @@ import {
 import { error, log } from 'electron-log/main';
 import { dialog, ipcMain } from 'electron';
 import { getWin } from './main-window';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 export const initLocalFileSyncAdapter = (): void => {
   ipcMain.handle(
     IPC.READ_LOCAL_IMAGE_AS_DATA_URL,
-    (_, filePathOrUrl: string): string | null => {
+    async (_, filePathOrUrl: string): Promise<string | null> => {
       try {
         const normalized = filePathOrUrl.startsWith('file://')
-          ? decodeURIComponent(filePathOrUrl.replace(/^file:\/\//, ''))
+          ? fileURLToPath(filePathOrUrl)
           : filePathOrUrl;
+        const fs = await import('fs');
 
-        const buffer = readFileSync(normalized);
+        const stat = await fs.promises.stat(normalized);
+
+        // 200 KB limit
+        const MAX_FILE_SIZE = 200 * 1024;
+
+        if (stat.size > MAX_FILE_SIZE) {
+          throw new Error('Background image exceeds 200 KB limit');
+        }
+
+        const buffer = await fs.promises.readFile(normalized);
+
         const ext = normalized.toLowerCase().split('.').pop() || '';
+
         const mimeTypeByExt: Record<string, string> = {
           png: 'image/png',
           jpg: 'image/jpeg',
@@ -32,7 +45,9 @@ export const initLocalFileSyncAdapter = (): void => {
           bmp: 'image/bmp',
           avif: 'image/avif',
         };
+
         const mimeType = mimeTypeByExt[ext] || 'application/octet-stream';
+
         return `data:${mimeType};base64,${buffer.toString('base64')}`;
       } catch (e) {
         error(e);
@@ -41,6 +56,9 @@ export const initLocalFileSyncAdapter = (): void => {
     },
   );
 
+  ipcMain.handle(IPC.TO_FILE_URL, (_, filePath: string): string => {
+    return pathToFileURL(filePath).href;
+  });
   ipcMain.handle(
     IPC.FILE_SYNC_SAVE,
     (

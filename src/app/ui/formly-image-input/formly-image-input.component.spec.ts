@@ -124,4 +124,23 @@ describe('FormlyImageInputComponent', () => {
       type: 'ERROR',
     });
   });
+
+  it('sets file url from electron dialog selection', async () => {
+    (component as any).IS_ELECTRON = true;
+
+    (window as any).ea = {
+      showOpenDialog: jasmine
+        .createSpy('showOpenDialog')
+        .and.resolveTo(['/home/test/image.png']),
+      toFileUrl: jasmine
+        .createSpy('toFileUrl')
+        .and.resolveTo('file:///home/test/image.png'),
+    };
+
+    const setValueSpy = spyOn(formControl, 'setValue').and.callThrough();
+
+    await component.openFileExplorer();
+
+    expect(setValueSpy).toHaveBeenCalledWith('file:///home/test/image.png');
+  });
 });
