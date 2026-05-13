@@ -49,7 +49,6 @@ export class PluginAPI implements PluginAPIInterface {
   private _shortcuts: Array<PluginShortcutCfg> = [];
   private _sidePanelButtons: Array<PluginSidePanelBtnCfg> = [];
   private _messageHandler?: (message: unknown) => Promise<unknown>;
-  private _readyFn?: () => void | Promise<void>;
   private _boundMethods: ReturnType<
     typeof PluginBridgeService.prototype.createBoundMethods
   >;
@@ -70,6 +69,7 @@ export class PluginAPI implements PluginAPIInterface {
     private _pluginBridge: PluginBridgeService,
     private _pluginI18nService: PluginI18nService,
     private _manifest?: PluginManifest,
+    private _onReadyRegister?: (fn: () => void | Promise<void>) => void,
   ) {
     // Get bound methods for this plugin
     this._boundMethods = this._pluginBridge.createBoundMethods(
@@ -302,17 +302,7 @@ export class PluginAPI implements PluginAPIInterface {
    * IPC ping — guaranteeing the bridge is available.
    */
   onReady(fn: () => void | Promise<void>): void {
-    this._readyFn = fn;
-  }
-
-  /**
-   * Called by PluginRunner after the IPC bridge is confirmed ready.
-   * Internal — not part of the public plugin API.
-   */
-  async _triggerReady(): Promise<void> {
-    if (this._readyFn) {
-      await this._readyFn();
-    }
+    this._onReadyRegister?.(fn);
   }
 
   /**

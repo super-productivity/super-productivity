@@ -24,6 +24,7 @@ export class PluginRunner {
 
   private _loadedPlugins = new Map<string, PluginInstance>();
   private _pluginApis = new Map<string, PluginAPI>();
+  private _readyCallbacks = new Map<string, () => void | Promise<void>>();
 
   /**
    * Load and execute a plugin
@@ -42,6 +43,7 @@ export class PluginRunner {
         this._pluginBridge,
         this._pluginI18nService,
         manifest,
+        (fn) => this._readyCallbacks.set(manifest.id, fn),
       );
 
       // executeNodeScript is now automatically bound if permitted via createBoundMethods
@@ -167,6 +169,7 @@ export class PluginRunner {
     if (plugin) {
       // Clean up API reference
       this._pluginApis.delete(pluginId);
+      this._readyCallbacks.delete(pluginId);
 
       // Clean up all resources
       this._cleanupService.cleanupPlugin(pluginId);
@@ -195,27 +198,24 @@ export class PluginRunner {
    * Called by plugin.service.ts after the IPC bridge is confirmed available.
    */
   async triggerReady(pluginId: string): Promise<void> {
-    const api = this._pluginApis.get(pluginId);
-    if (api) {
-      await api._triggerReady();
+    const fn = this._readyCallbacks.get(pluginId);
+    if (fn) {
+      await fn();
     }
   }
 
   /**
-   * Ping the Node.js IPC bridge for a plugin by running a trivial no-op script.
+   * Ping the Node.js IPC bridge by running a trivial script via the vm (executeDirectly)
+   * path in the Electron executor. Uses the bridge directly — no plugin permission check.
    * Returns true if the bridge responds, false otherwise.
    */
   async pingNodeBridge(pluginId: string): Promise<boolean> {
-    const api = this._pluginApis.get(pluginId);
-    if (!api || !api.executeNodeScript) {
+    const instance = this._loadedPlugins.get(pluginId);
+    if (!instance) {
       return false;
     }
     try {
-      const result = await api.executeNodeScript({
-        script: 'return true',
-        timeout: 5000,
-      });
-      return result.success;
+      return await this._pluginBridge.pingNodeBridge(pluginId, instance.manifest);
     } catch {
       return false;
     }

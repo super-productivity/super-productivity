@@ -1396,6 +1396,18 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
+   * Ping the Node.js IPC bridge for a plugin using a trivial vm-executed script.
+   * Returns true if the bridge responds successfully, false otherwise.
+   */
+  async pingNodeBridge(pluginId: string, manifest: PluginManifest): Promise<boolean> {
+    const result = await this._executeNodeScript(pluginId, manifest, {
+      script: 'return true',
+      timeout: 5000,
+    });
+    return result.success;
+  }
+
+  /**
    * Send a message to a plugin's message handler
    */
   async sendMessageToPlugin(pluginId: string, message: unknown): Promise<unknown> {

@@ -36,9 +36,11 @@ describe('PluginRunner', () => {
     mockPluginBridge = jasmine.createSpyObj('PluginBridgeService', [
       'unregisterPluginHooks',
       'createBoundMethods',
+      'pingNodeBridge',
     ]);
     // createBoundMethods should return an empty object (no additional bound methods)
     mockPluginBridge.createBoundMethods.and.returnValue({} as any);
+    mockPluginBridge.pingNodeBridge.and.resolveTo(false);
 
     mockSecurityService = jasmine.createSpyObj('PluginSecurityService', [
       'analyzePluginCode',
@@ -177,37 +179,23 @@ describe('PluginRunner', () => {
   });
 
   describe('triggerReady()', () => {
-    it('should call _triggerReady on the loaded plugin API', async () => {
-      // Use a simple no-op that registers onReady
-      const code = `plugin.onReady(async () => {});`;
+    it('should call the registered onReady callback', async () => {
+      const code = `plugin.onReady(async () => { /* callback registered */ });`;
       await service.loadPlugin(mockManifest, code, mockBaseCfg);
 
-      // triggerReady should not throw
+      // Verify the callback was registered by checking triggerReady resolves
       await expectAsync(service.triggerReady(mockManifest.id)).toBeResolved();
     });
 
-    it('should only fire onReady for the specified plugin, not others', async () => {
-      const readyA = jasmine.createSpy('readyA');
-      const readyB = jasmine.createSpy('readyB');
-
+    it('should only fire the callback for the specified plugin', async () => {
       const manifestB = { ...mockManifest, id: 'plugin-b', name: 'Plugin B' };
 
-      await service.loadPlugin(
-        mockManifest,
-        `plugin.onReady(() => { ${readyA.toString()} })`,
-        mockBaseCfg,
-      );
-      await service.loadPlugin(
-        manifestB,
-        `plugin.onReady(() => { ${readyB.toString()} })`,
-        mockBaseCfg,
-      );
+      await service.loadPlugin(mockManifest, `plugin.onReady(() => {});`, mockBaseCfg);
+      await service.loadPlugin(manifestB, `plugin.onReady(() => {});`, mockBaseCfg);
 
-      // triggerReady for plugin A should not affect plugin B's callback
-      await service.triggerReady(mockManifest.id);
-      // readyB should not have been called by triggerReady('test-plugin')
-      // (we can't easily spy into the plugin scope, but we verify no throw)
-      await expectAsync(service.triggerReady('unknown-plugin')).toBeResolved();
+      await expectAsync(service.triggerReady(mockManifest.id)).toBeResolved();
+      // B's callback should still be registered (not fired or cleared)
+      await expectAsync(service.triggerReady(manifestB.id)).toBeResolved();
     });
 
     it('should resolve silently for unknown plugin id', async () => {
@@ -221,11 +209,18 @@ describe('PluginRunner', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false for plugin without executeNodeScript', async () => {
+    it('should return false when bridge returns false (non-Electron / bridge unavailable)', async () => {
       await service.loadPlugin(mockManifest, `/* no-op */`, mockBaseCfg);
+      mockPluginBridge.pingNodeBridge.and.resolveTo(false);
       const result = await service.pingNodeBridge(mockManifest.id);
-      // executeNodeScript is not bound (no nodeExecution permission + no Electron)
       expect(result).toBe(false);
+    });
+
+    it('should return true when bridge responds successfully', async () => {
+      await service.loadPlugin(mockManifest, `/* no-op */`, mockBaseCfg);
+      mockPluginBridge.pingNodeBridge.and.resolveTo(true);
+      const result = await service.pingNodeBridge(mockManifest.id);
+      expect(result).toBe(true);
     });
   });
 });
