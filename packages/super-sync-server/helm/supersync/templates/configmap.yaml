@@ -13,6 +13,8 @@ data:
   CORS_ORIGINS: {{ .Values.supersync.cors.origins | quote }}
   OLD_OPS_CLEANUP_DELETE_BATCH_SIZE: {{ .Values.supersync.cleanup.oldOpsDeleteBatchSize | int | quote }}
   OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN: {{ .Values.supersync.cleanup.oldOpsMaxDeletedPerRun | int | quote }}
+  SUPERSYNC_BATCH_UPLOAD: {{ .Values.supersync.batchUpload.enabled | quote }}
+  SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE: {{ .Values.supersync.batchUpload.payloadBytesBackfillComplete | quote }}
   {{- if .Values.supersync.webauthn.rpName }}
   WEBAUTHN_RP_NAME: {{ .Values.supersync.webauthn.rpName | quote }}
   {{- end }}

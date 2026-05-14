@@ -599,6 +599,7 @@ vi.mock('../src/auth', () => ({
 // Import AFTER mocking
 import { initSyncService, getSyncService, SyncService } from '../src/sync/sync.service';
 import { Operation, DEFAULT_SYNC_CONFIG, SYNC_ERROR_CODES } from '../src/sync/sync.types';
+import { prisma } from '../src/db';
 
 describe('SyncService', () => {
   const userId = 1;
@@ -869,6 +870,37 @@ describe('SyncService', () => {
       expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
     });
 
+    it('should update device last seen for all-rejected batch uploads', async () => {
+      const service = new SyncService({ batchUpload: true });
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'ADD_TASK',
+          opType: 'INVALID' as Operation['opType'],
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Task 1' },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results[0]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.INVALID_OP_TYPE,
+        }),
+      );
+      expect(testState.operations.size).toBe(0);
+      expect(testState.userSyncStates.get(userId)).toBeUndefined();
+      expect(testState.syncDevices.get(`${userId}:${clientId}`)).toEqual(
+        expect.objectContaining({ userId, clientId }),
+      );
+    });
+
     it('should persist full-state batch aggregate metadata once', async () => {
       const service = new SyncService({ batchUpload: true });
 
@@ -906,6 +938,64 @@ describe('SyncService', () => {
           latestFullStateVectorClock: { [clientId]: 7 },
         }),
       );
+    });
+
+    it('should classify batch createMany P2002 stale-prefetch races as retryable', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the constraint: operations_pkey',
+        {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+          meta: { target: 'operations_pkey' },
+        },
+      );
+      const tx = {
+        operation: {
+          deleteMany: vi.fn(),
+          findMany: vi.fn().mockResolvedValue([]),
+          createMany: vi.fn().mockRejectedValue(p2002),
+        },
+        userSyncState: {
+          updateMany: vi.fn(),
+        },
+        syncDevice: {
+          deleteMany: vi.fn(),
+          upsert: vi.fn(),
+        },
+        user: {
+          update: vi.fn(),
+        },
+        $queryRaw: vi.fn().mockResolvedValue([{ lastSeq: 1 }]),
+        $executeRaw: vi.fn(),
+      };
+
+      vi.mocked(prisma.$transaction).mockImplementationOnce(async (callback) =>
+        callback(tx as unknown as Prisma.TransactionClient),
+      );
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          payload: { TASK: {} },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results).toEqual([
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.INTERNAL_ERROR,
+          error: 'Concurrent transaction conflict - please retry',
+        }),
+      ]);
+      expect(tx.syncDevice.upsert).not.toHaveBeenCalled();
     });
 
     it('should reject duplicate operation IDs (idempotency)', async () => {

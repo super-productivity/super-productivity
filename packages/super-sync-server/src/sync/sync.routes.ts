@@ -9,6 +9,7 @@ import { Transform, type TransformCallback } from 'node:stream';
 import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
 import {
+  SUPER_SYNC_MAX_OPS_PER_UPLOAD,
   SuperSyncDownloadOpsQuerySchema,
   SuperSyncUploadOpsRequestSchema,
   SuperSyncUploadSnapshotRequestSchema,
@@ -79,6 +80,9 @@ const MAX_COMPRESSED_SIZE_SNAPSHOT = 30 * 1024 * 1024; // 30MB for /snapshot (ma
 // for the JSON-vs-compressed ratio.
 const MAX_DECOMPRESSED_SIZE_OPS = 30 * 1024 * 1024; // 30MB for /ops
 const MAX_DECOMPRESSED_SIZE_SNAPSHOT = 60 * 1024 * 1024; // 60MB for /snapshot
+// Route-level guard that mirrors the shared contract but runs before Zod's
+// per-op validation and before SyncService can build large prefetch queries.
+const MAX_OPS_PER_BATCH = SUPER_SYNC_MAX_OPS_PER_UPLOAD;
 
 // Fastify's route bodyLimit runs before our parser can decode Android's
 // Content-Transfer-Encoding: base64 wrapper. Use the raw base64 envelope limit
@@ -213,6 +217,27 @@ const computeJsonStorageBytes = (value: unknown, fallback: unknown): number => {
   } catch {
     return 0;
   }
+};
+
+const getRawOpsCount = (body: unknown): number | null => {
+  if (typeof body !== 'object' || body === null) return null;
+  const ops = (body as { ops?: unknown }).ops;
+  return Array.isArray(ops) ? ops.length : null;
+};
+
+const sendOpsBatchTooLargeReply = (
+  reply: FastifyReply,
+  userId: number,
+  opsCount: number,
+): FastifyReply => {
+  Logger.warn(
+    `[user:${userId}] Upload rejected: ${opsCount} ops exceeds max batch size ${MAX_OPS_PER_BATCH}`,
+  );
+  return reply.status(413).send({
+    error: `Too many operations in upload batch. Maximum is ${MAX_OPS_PER_BATCH}.`,
+    errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    maxOpsPerBatch: MAX_OPS_PER_BATCH,
+  });
 };
 
 const applyStorageUsageDelta = async (
@@ -571,6 +596,11 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           Logger.debug(
             `[user:${userId}] Ops upload decompressed: ${compressedBodyResult.compressedSize} -> ${compressedBodyResult.decompressedSize} bytes (base64: ${compressedBodyResult.isBase64})`,
           );
+        }
+
+        const rawOpsCount = getRawOpsCount(body);
+        if (rawOpsCount !== null && rawOpsCount > MAX_OPS_PER_BATCH) {
+          return sendOpsBatchTooLargeReply(reply, userId, rawOpsCount);
         }
 
         // Validate request body

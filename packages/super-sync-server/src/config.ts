@@ -169,8 +169,16 @@ export const loadConfigFromEnv = (
     config.dataDir = path.resolve(config.dataDir);
   }
 
-  if (process.env.SUPERSYNC_BATCH_UPLOAD !== undefined) {
-    config.batchUpload = process.env.SUPERSYNC_BATCH_UPLOAD === 'true';
+  if (process.env.SUPERSYNC_BATCH_UPLOAD === 'true') {
+    if (process.env.SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE !== 'true') {
+      throw new Error(
+        'SUPERSYNC_BATCH_UPLOAD=true requires SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true. ' +
+          'Run `npm run migrate-payload-bytes` to backfill operation payload_bytes first.',
+      );
+    }
+    config.batchUpload = true;
+  } else if (process.env.SUPERSYNC_BATCH_UPLOAD !== undefined) {
+    config.batchUpload = false;
   }
 
   // Public URL (for email links)

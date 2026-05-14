@@ -139,13 +139,30 @@ describe('performance migrations', () => {
       deployScript.indexOf(startCommand),
     );
     expect(dockerfile).toContain('RUN_MIGRATIONS_ON_STARTUP');
+    expect(dockerfile).toContain('NODE_OPTIONS=--max-old-space-size=896');
     expect(composeFile).toContain(
       'RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}',
+    );
+    expect(composeFile).toContain(
+      'SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=${SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE:-false}',
     );
     expect(composeFile).toContain(
       'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1"',
     );
     expect(composeFile).toContain('aliases:');
     expect(composeFile).toContain('- db');
+  });
+
+  it('backfills operation payload bytes with per-user batched updates', () => {
+    const script = readFileSync(
+      join(currentDir, '../scripts/migrate-payload-bytes.ts'),
+      'utf8',
+    );
+
+    expect(script).toContain('SELECT DISTINCT user_id');
+    expect(script).toContain('userId,');
+    expect(script).toContain('FROM (VALUES ${values}) AS v(id, bytes)');
+    expect(script).toContain('SET payload_bytes = v.bytes');
+    expect(script).not.toContain('prisma.operation.update({');
   });
 });

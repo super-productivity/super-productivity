@@ -76,11 +76,37 @@ handles both cases: it resolves the failed row when needed, applies the
 concurrent index statements one at a time outside Prisma migrate, marks the
 migration applied, and retries `migrate deploy`.
 
+For local `prisma migrate dev` shadow databases, apply migrations containing
+`CREATE INDEX CONCURRENTLY` through `prisma db execute` outside the transaction
+and then mark the migration applied, mirroring the production deploy workaround.
+
 If `DATABASE_URL` points to an external PostgreSQL server, set
 `POSTGRES_SERVICE=` to the empty value. `deploy.sh` then starts only the
 app/proxy services with compose dependencies disabled so the bundled Postgres
 container is not required. Prisma migrations still run against the configured
 `DATABASE_URL`.
+
+### Payload byte backfill and batch uploads
+
+The `payload_bytes` column must be fully backfilled before enabling batched
+uploads in production. During a partial backfill, quota reconciles under-count
+old operation rows with `payload_bytes = 0`.
+
+Run the backfill to completion:
+
+```bash
+npm run migrate-payload-bytes
+```
+
+Only then set both rollout flags:
+
+```bash
+SUPERSYNC_BATCH_UPLOAD=true
+SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true
+```
+
+The server refuses to start with `SUPERSYNC_BATCH_UPLOAD=true` unless the
+completion flag is also set.
 
 ### Manual Setup (Development)
 

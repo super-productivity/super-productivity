@@ -84,6 +84,61 @@ const OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = 25_000;
 const OLD_OPS_CLEANUP_DELETE_BATCH_SIZE_MAX = 50_000;
 const OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN_MAX = 1_000_000;
 
+const toSafeServerSeq = (value: number | bigint | undefined, userId: number): number => {
+  if (typeof value === 'bigint') {
+    if (value < BigInt(0) || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error(`Unsafe last_seq value returned for user ${userId}`);
+    }
+    const asNumber = Number(value);
+    if (BigInt(asNumber) !== value) {
+      throw new Error(`Precision-losing last_seq value returned for user ${userId}`);
+    }
+    return asNumber;
+  }
+
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+    return value;
+  }
+
+  throw new Error(`Invalid last_seq value returned for user ${userId}`);
+};
+
+const getPrismaP2002TargetTokens = (
+  err: Prisma.PrismaClientKnownRequestError,
+): string[] => {
+  const target = err.meta?.target;
+  if (Array.isArray(target)) return target.map(String);
+  if (typeof target === 'string') return [target];
+  return [];
+};
+
+const isRetryableOperationUniqueViolation = (err: unknown): boolean => {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') {
+    return false;
+  }
+
+  const targetTokens = getPrismaP2002TargetTokens(err);
+  if (targetTokens.length === 0) return true;
+
+  const normalizedTargets = targetTokens.map((target) =>
+    target.toLowerCase().replace(/"/g, ''),
+  );
+  const targetSet = new Set(normalizedTargets);
+
+  return (
+    normalizedTargets.some(
+      (target) =>
+        target.includes('operations_pkey') ||
+        target.includes('operation_pkey') ||
+        target.includes('operations_id') ||
+        target.includes('operation_id'),
+    ) ||
+    targetSet.has('id') ||
+    (targetSet.has('user_id') && targetSet.has('server_seq')) ||
+    (targetSet.has('userid') && targetSet.has('serverseq'))
+  );
+};
+
 const getOldOpsCleanupDeleteBatchSize = (): number =>
   parsePositiveIntegerEnv(
     'OLD_OPS_CLEANUP_DELETE_BATCH_SIZE',
@@ -632,8 +687,6 @@ export class SyncService {
             );
           }
 
-          if (this.config.batchUpload && acceptedDeltaBytes === 0) return;
-
           // Update device last seen
           await tx.syncDevice.upsert({
             where: {
@@ -656,6 +709,8 @@ export class SyncService {
             },
           });
           uploadDbRoundtrips++;
+
+          if (this.config.batchUpload && acceptedDeltaBytes === 0) return;
 
           // W1: write the storage counter as the LAST statement before COMMIT
           // so the row-level write lock on `users` is held for only the
@@ -723,6 +778,7 @@ export class SyncService {
       // PostgreSQL uses 40001 (serialization_failure) and 40P01 (deadlock_detected)
       const isSerializationFailure =
         (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') ||
+        (this.config.batchUpload && isRetryableOperationUniqueViolation(err)) ||
         errorMessage.includes('40001') ||
         errorMessage.includes('40P01') ||
         errorMessage.toLowerCase().includes('serialization') ||
@@ -1026,8 +1082,8 @@ export class SyncService {
         SET last_seq = user_sync_state.last_seq + EXCLUDED.last_seq
       RETURNING last_seq AS "lastSeq"
     `;
-    const lastSeq = Number(syncStateRows[0]?.lastSeq);
-    if (!Number.isInteger(lastSeq) || lastSeq < accepted.length) {
+    const lastSeq = toSafeServerSeq(syncStateRows[0]?.lastSeq, userId);
+    if (lastSeq < accepted.length) {
       throw new Error(`Failed to reserve server sequence range for user ${userId}`);
     }
     const firstSeq = lastSeq - accepted.length + 1;

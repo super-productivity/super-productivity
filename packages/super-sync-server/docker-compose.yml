@@ -38,6 +38,8 @@ services:
       - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:1900}
       - OLD_OPS_CLEANUP_DELETE_BATCH_SIZE=${OLD_OPS_CLEANUP_DELETE_BATCH_SIZE:-5000}
       - OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN=${OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN:-25000}
+      - SUPERSYNC_BATCH_UPLOAD=${SUPERSYNC_BATCH_UPLOAD:-false}
+      - SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=${SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE:-false}
     ports:
       - '127.0.0.1:1900:1900'
     volumes:
@@ -63,7 +65,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    mem_limit: 512m
+    mem_limit: 1g
     cpus: '1.0'
     networks:
       - internal

@@ -244,13 +244,24 @@ describe('loadConfigFromEnv - SuperSync rollout flags', () => {
     expect(config.batchUpload).toBe(false);
   });
 
-  it('should enable batch uploads only when SUPERSYNC_BATCH_UPLOAD is true', async () => {
+  it('should enable batch uploads only after the payload byte backfill completed', async () => {
     process.env.SUPERSYNC_BATCH_UPLOAD = 'true';
+    process.env.SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE = 'true';
 
     const { loadConfigFromEnv } = await importConfig();
     const config = loadConfigFromEnv();
 
     expect(config.batchUpload).toBe(true);
+  });
+
+  it('should reject batch uploads before the payload byte backfill completed', async () => {
+    process.env.SUPERSYNC_BATCH_UPLOAD = 'true';
+
+    const { loadConfigFromEnv } = await importConfig();
+
+    expect(() => loadConfigFromEnv()).toThrow(
+      'SUPERSYNC_BATCH_UPLOAD=true requires SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true',
+    );
   });
 });
 
