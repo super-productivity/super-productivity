@@ -11,6 +11,7 @@ import {
 } from './plugin-issue-provider.model';
 import { Task } from '../../features/tasks/task.model';
 import { TagService } from '../../features/tag/tag.service';
+import { sortTagLabels } from './plugin-tag-utils';
 
 const convertMapping = (pm: PluginFieldMapping, tagService: TagService): FieldMapping => {
   if (pm.taskField === 'tagIds') {
@@ -58,6 +59,10 @@ export const createPluginSyncAdapter = (
 ): IssueSyncAdapter<IssueProviderPluginType> => {
   const fieldMappings: FieldMapping[] = (definition.fieldMappings ?? []).map((pm) =>
     convertMapping(pm, tagService),
+  );
+
+  const tagIssueFields = new Set(
+    fieldMappings.filter((m) => m.taskField === 'tagIds').map((m) => m.issueField),
   );
 
   const createHttp = (cfg: IssueProviderPluginType): PluginHttp =>
@@ -117,8 +122,8 @@ export const createPluginSyncAdapter = (
       const result: Record<string, unknown> = {};
       for (const m of fieldMappings) {
         const value = data[m.issueField];
-        if (m.taskField === 'tagIds' && Array.isArray(value)) {
-          result[m.issueField] = (value as string[]).slice().sort();
+        if (tagIssueFields.has(m.issueField)) {
+          result[m.issueField] = sortTagLabels(value);
         } else {
           result[m.issueField] = value;
         }

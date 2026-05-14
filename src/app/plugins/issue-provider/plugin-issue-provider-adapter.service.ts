@@ -19,6 +19,7 @@ import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { TaskService } from '../../features/tasks/task.service';
 import { TagService } from '../../features/tag/tag.service';
+import { sortTagLabels } from './plugin-tag-utils';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { T } from '../../t.const';
 
@@ -186,18 +187,29 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         issue.lastUpdated != null && issue.lastUpdated > (task.issueLastUpdated || 0);
       if (isUpdated) {
         // Compute sync values once and pass through to avoid redundant calls
-        const issueLastSyncedValues =
-          resolved.provider.definition.extractSyncValues?.(issue);
+        const rawSyncValues =
+          resolved.provider.definition.extractSyncValues?.(issue) ?? {};
+        // Normalize tag arrays to match adapter.extractSyncValues sorting
+        const tagIssueFields = (resolved.provider.definition.fieldMappings ?? [])
+          .filter((m) => m.taskField === 'tagIds')
+          .map((m) => m.issueField);
+        for (const field of tagIssueFields) {
+          const value = rawSyncValues[field];
+          if (Array.isArray(value)) {
+            rawSyncValues[field] = sortTagLabels(value);
+          }
+        }
+        const issueLastSyncedValues: Record<string, unknown> = rawSyncValues;
         const addTaskData = this._getAddTaskDataForProvider(
           issue,
           resolved.provider,
-          issueLastSyncedValues ?? {},
+          issueLastSyncedValues,
         );
 
         // Apply field mappings to pull changes from issue to task
         const fieldChanges = this._applyFieldMappingPull(
           resolved.provider,
-          issueLastSyncedValues ?? {},
+          issueLastSyncedValues,
           task,
           cfg,
           issue,
@@ -208,7 +220,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
             ...addTaskData,
             ...fieldChanges,
             issueWasUpdated: true,
-            ...(issueLastSyncedValues ? { issueLastSyncedValues } : {}),
+            issueLastSyncedValues,
           },
           issue,
           issueTitle: issue.title,
@@ -473,7 +485,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       if (mapping.taskField === 'tagIds') {
         const toLabels = (v: unknown): string[] => {
           const taskValue = v != null ? mapping.toTaskValue(v, ctx) : [];
-          return Array.isArray(taskValue) ? (taskValue as string[]).slice().sort() : [];
+          return sortTagLabels(taskValue);
         };
         const labels = toLabels(freshValue);
         const lastLabels = toLabels(lastValue);
