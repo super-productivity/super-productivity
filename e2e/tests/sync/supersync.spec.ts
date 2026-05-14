@@ -704,19 +704,25 @@ test.describe('@supersync SuperSync E2E', () => {
 
       // Expand the current day's worklog to see tasks
       // Click on the week row to expand it
+      const clientARef = clientA;
+      const clientBRef = clientB;
+      if (!clientARef || !clientBRef) {
+        throw new Error('Clients must be initialized before expanding worklog');
+      }
+
       const expandWorklogA = async (): Promise<void> => {
-        const weekRow = clientA.page.locator('.week-row').first();
+        const weekRow = clientARef.page.locator('.week-row').first();
         if (await weekRow.isVisible()) {
           await weekRow.click();
-          await clientA.page.waitForTimeout(500);
+          await clientARef.page.waitForTimeout(500);
         }
       };
 
       const expandWorklogB = async (): Promise<void> => {
-        const weekRow = clientB.page.locator('.week-row').first();
+        const weekRow = clientBRef.page.locator('.week-row').first();
         if (await weekRow.isVisible()) {
           await weekRow.click();
-          await clientB.page.waitForTimeout(500);
+          await clientBRef.page.waitForTimeout(500);
         }
       };
 

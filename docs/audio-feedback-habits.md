@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Super-Productivity habit tracking system now includes audio feedback for habit session completion. When a habit's timer or countdown completes, users receive an auditory notification without requiring constant screen monitoring.
+The Super-Productivity habit tracking system now includes audio feedback for habit session start and stop events. When a habit timer or countdown is toggled, users receive an auditory notification without requiring constant screen monitoring.
 
 ## Feature Implementation
 
@@ -10,11 +10,9 @@ The Super-Productivity habit tracking system now includes audio feedback for hab
 
 The audio feedback feature is implemented as an NgRx effect (`SimpleCounterAudioEffects`) that:
 
-1. **Listens** to `updateSimpleCounter` state changes
-2. **Detects** completion events:
-   - Countdown-based timers (RepeatedCountdownReminder) transitioning from active to inactive
-   - Stopwatches being manually stopped
-3. **Plays** the configured completion sound with proper queuing to prevent audio clipping
+1. **Listens** to `toggleSimpleCounterCounter` and `setSimpleCounterCounterOff` actions
+2. **Filters** to supported counter types (RepeatedCountdownReminder, StopWatch)
+3. **Plays** the configured done sound with proper queuing to prevent audio clipping
 4. **Respects** both global and per-counter audio configuration preferences
 
 ### Key Components
@@ -22,7 +20,7 @@ The audio feedback feature is implemented as an NgRx effect (`SimpleCounterAudio
 #### 1. **SimpleCounterAudioEffects** (`simple-counter-audio.effects.ts`)
 
 - Reactive NgRx effect that handles audio playback
-- Monitors `updateSimpleCounter` actions
+- Monitors `toggleSimpleCounterCounter` and `setSimpleCounterCounterOff` actions
 - Uses store selectors to check global sound config and counter state
 - Executes audio playback asynchronously to avoid blocking the main UI thread
 
@@ -50,7 +48,7 @@ interface SimpleCounterCfgFields {
 
 Uses the existing global sound configuration:
 
-- **doneSound**: The sound file to play on completion (e.g., "positive.mp3")
+- **doneSound**: The sound file to play on toggle (e.g., "positive.mp3")
 - **volume**: Playback volume level (0-100)
 
 #### Per-Counter Config
@@ -84,23 +82,18 @@ Available sound files (from `assets/snd/`):
 
 ## Technical Details
 
-### Completion Detection Logic
+### Toggle Detection Logic
 
 ```typescript
-// Detects when a countdown or stopwatch completes:
-const wasOn = previousCounter.isOn; // Was active
-const isNowOff = updatedCounter.isOn === false; // Now inactive
-
-if (wasOn && isNowOff) {
-  // Completion detected → play audio
-}
+// Audio is triggered on toggle actions for supported counter types
+// when global sound config is enabled and the counter allows audio.
 ```
 
 ### Threading & Performance
 
 - **Asynchronous Execution**: Audio playback runs outside the main rendering pipeline
 - **No Main-Thread Blocking**: Uses Web Audio API native threading for playback
-- **Queue Processing**: Sequential playback prevents browser resource exhaustion
+- **Queue Processing**: Sequential playback prevents audio clipping for concurrent sounds
 - **Zero UI Impact**: Verified that audio playback does not introduce UI stuttering during concurrent habit tracking
 
 ### Error Handling
@@ -120,7 +113,7 @@ Comprehensive unit tests included in `simple-counter-audio.effects.spec.ts`:
 - ✅ Click counters do NOT trigger audio
 - ✅ Audio respects global volume setting
 - ✅ Audio respects per-counter isAudioEnabled flag
-- ✅ No audio when counter turns on
+- ✅ Audio can play when counter turns on
 - ✅ No audio when sound config missing
 - ✅ No audio when doneSound not configured
 - ✅ Correct volume from config is used
@@ -181,5 +174,5 @@ Potential improvements for future iterations:
 
 - [NgRx Effects Documentation](https://ngrx.io/guide/store/effects)
 - [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
-- [SimpleCounter Model](./simple-counter.model.ts)
-- [GlobalConfig Model](../config/global-config.model.ts)
+- [SimpleCounter Model](../src/app/features/simple-counter/simple-counter.model.ts)
+- [GlobalConfig Model](../src/app/features/config/global-config.model.ts)
