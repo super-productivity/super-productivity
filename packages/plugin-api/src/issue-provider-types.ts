@@ -8,6 +8,8 @@ export interface PluginSearchResult {
   url?: string;
   status?: string;
   assignee?: string;
+  /** Labels/tags used by tagIds field mappings during initial import */
+  labels?: string[];
   /** Event start timestamp (ms) - required for agenda view */
   start?: number;
   /** Precise due-with-time timestamp (ms) for timed events. When set, the task is
@@ -19,6 +21,8 @@ export interface PluginSearchResult {
   isAllDay?: boolean;
   /** Event description / body text */
   description?: string;
+  /** Provider-specific fields used by issue display and field mappings */
+  [key: string]: unknown;
 }
 
 export interface PluginIssue {

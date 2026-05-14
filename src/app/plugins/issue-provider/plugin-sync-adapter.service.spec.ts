@@ -123,6 +123,33 @@ describe('createPluginSyncAdapter', () => {
     );
   });
 
+  it('should downgrade push directions when updateIssue is absent', () => {
+    const adapter = createPluginSyncAdapter(
+      createMockDefinition({
+        updateIssue: undefined,
+        fieldMappings: [
+          {
+            taskField: 'isDone',
+            issueField: 'state',
+            defaultDirection: 'both',
+            toIssueValue: (v: unknown) => (v ? 'closed' : 'open'),
+            toTaskValue: (v: unknown) => v === 'closed',
+          },
+        ],
+      }),
+      () => mockHttpHelper,
+      mockTagService,
+    );
+
+    expect(adapter.getFieldMappings()[0].defaultDirection).toBe('pullOnly');
+    expect(
+      adapter.getSyncConfig({
+        ...MOCK_CFG,
+        pluginConfig: { twoWaySync: { isDone: 'pushOnly' } },
+      }).isDone,
+    ).toBe('pullOnly');
+  });
+
   it('should return empty sync config when twoWaySync is absent', () => {
     const adapter = createPluginSyncAdapter(
       createMockDefinition(),

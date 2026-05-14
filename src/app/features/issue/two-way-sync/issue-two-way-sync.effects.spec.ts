@@ -189,6 +189,157 @@ describe('IssueTwoWaySyncEffects', () => {
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
 
+    it('should not advance baseline when provider changed and nothing was pushed', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine
+          .createSpy('fetchIssue')
+          .and.resolveTo({ status: 'COMPLETED' }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: 'COMPLETED' }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+        isDone: true,
+      });
+
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+
+      tick();
+
+      expect(adapter.pushChanges).not.toHaveBeenCalled();
+      expect(taskServiceSpy.update).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should not create undefined baselines for missing fresh values', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping, dueDayFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine
+          .createSpy('fetchIssue')
+          .and.resolveTo({ status: 'NEEDS-ACTION' }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: 'NEEDS-ACTION' }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+        isDone: true,
+      });
+
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+
+      tick();
+
+      const updateChanges = taskServiceSpy.update.calls.mostRecent()
+        .args[1] as Partial<Task>;
+      expect(updateChanges.issueLastSyncedValues).toEqual({ status: 'COMPLETED' });
+      expect('dtstart' in updateChanges.issueLastSyncedValues!).toBeFalse();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should leave issueLastUpdated untouched when another changed field must be pulled', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping, dueDayFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.resolveTo({
+          status: 'NEEDS-ACTION',
+          dtstart: '2026-03-22',
+        }),
+        extractSyncValues: jasmine.createSpy('extractSyncValues').and.returnValue({
+          status: 'NEEDS-ACTION',
+          dtstart: '2026-03-22',
+        }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: {
+          status: 'NEEDS-ACTION',
+          dtstart: '2026-03-19',
+        },
+        isDone: true,
+        dueDay: '2026-03-21',
+        issueLastUpdated: 123,
+      });
+
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: {
+            id: 'task-1',
+            changes: { isDone: true, dueDay: '2026-03-21' },
+          },
+        }),
+      );
+
+      tick();
+
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { status: 'COMPLETED' },
+        jasmine.any(Object),
+      );
+      const updateChanges = taskServiceSpy.update.calls.mostRecent()
+        .args[1] as Partial<Task>;
+      expect(updateChanges.issueLastSyncedValues).toEqual({
+        status: 'COMPLETED',
+        dtstart: '2026-03-19',
+      });
+      expect('issueLastUpdated' in updateChanges).toBeFalse();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
     it('should skip push when no issueType on task', fakeAsync(() => {
       const adapter = createMockAdapter({
         getFieldMappings: jasmine

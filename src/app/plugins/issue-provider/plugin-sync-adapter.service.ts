@@ -2,6 +2,7 @@ import { IssueSyncAdapter } from '../../features/issue/two-way-sync/issue-sync-a
 import {
   FieldMapping,
   FieldSyncConfig,
+  SyncDirection,
 } from '../../features/issue/two-way-sync/issue-sync.model';
 import { IssueProviderPluginType } from '../../features/issue/issue.model';
 import {
@@ -13,12 +14,27 @@ import { Task } from '../../features/tasks/task.model';
 import { TagService } from '../../features/tag/tag.service';
 import { sortTagLabels } from './plugin-tag-utils';
 
-const convertMapping = (pm: PluginFieldMapping, tagService: TagService): FieldMapping => {
+const normalizeSyncDirectionForCapabilities = (
+  direction: SyncDirection,
+  isPushSupported: boolean,
+): SyncDirection =>
+  !isPushSupported && (direction === 'pushOnly' || direction === 'both')
+    ? 'pullOnly'
+    : direction;
+
+const convertMapping = (
+  pm: PluginFieldMapping,
+  tagService: TagService,
+  isPushSupported: boolean,
+): FieldMapping => {
   if (pm.taskField === 'tagIds') {
     return {
       taskField: pm.taskField,
       issueField: pm.issueField,
-      defaultDirection: pm.defaultDirection,
+      defaultDirection: normalizeSyncDirectionForCapabilities(
+        pm.defaultDirection,
+        isPushSupported,
+      ),
       toIssueValue: (taskValue: unknown, ctx): unknown => {
         const tagIds = (taskValue as string[]) || [];
         const allTags = tagService.tags();
@@ -37,7 +53,10 @@ const convertMapping = (pm: PluginFieldMapping, tagService: TagService): FieldMa
   return {
     taskField: pm.taskField,
     issueField: pm.issueField,
-    defaultDirection: pm.defaultDirection,
+    defaultDirection: normalizeSyncDirectionForCapabilities(
+      pm.defaultDirection,
+      isPushSupported,
+    ),
     toIssueValue: pm.toIssueValue,
     toTaskValue: pm.toTaskValue,
     ...(pm.mutuallyExclusive
@@ -48,7 +67,7 @@ const convertMapping = (pm: PluginFieldMapping, tagService: TagService): FieldMa
 
 /**
  * Creates an IssueSyncAdapter for a specific plugin issue provider.
- * One instance is created per plugin that declares fieldMappings + updateIssue.
+ * One instance is created per plugin that declares issue side effects.
  */
 export const createPluginSyncAdapter = (
   definition: IssueProviderPluginDefinition,
@@ -57,8 +76,9 @@ export const createPluginSyncAdapter = (
   ) => PluginHttp,
   tagService: TagService,
 ): IssueSyncAdapter<IssueProviderPluginType> => {
+  const isPushSupported = !!definition.updateIssue;
   const fieldMappings: FieldMapping[] = (definition.fieldMappings ?? []).map((pm) =>
-    convertMapping(pm, tagService),
+    convertMapping(pm, tagService, isPushSupported),
   );
 
   const tagIssueFields = new Set(
@@ -83,7 +103,10 @@ export const createPluginSyncAdapter = (
       for (const m of fieldMappings) {
         const direction = twoWay[m.taskField];
         if (direction && VALID_DIRECTIONS.has(direction)) {
-          result[m.taskField] = direction as FieldSyncConfig[keyof FieldSyncConfig];
+          result[m.taskField] = normalizeSyncDirectionForCapabilities(
+            direction as SyncDirection,
+            isPushSupported,
+          ) as FieldSyncConfig[keyof FieldSyncConfig];
         }
       }
       return result;

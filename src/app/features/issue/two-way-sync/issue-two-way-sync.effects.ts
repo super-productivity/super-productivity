@@ -442,12 +442,19 @@ export class IssueTwoWaySyncEffects {
     if (existing) return existing;
 
     const provider = this._pluginRegistry.getProvider(issueType);
-    if (!provider?.definition.fieldMappings?.length || !provider.definition.updateIssue) {
+    const definition = provider?.definition;
+    if (
+      !provider ||
+      !definition ||
+      (!definition.createIssue &&
+        !definition.deleteIssue &&
+        !(definition.fieldMappings?.length && definition.updateIssue))
+    ) {
       return undefined;
     }
 
     const adapter = createPluginSyncAdapter(
-      provider.definition,
+      definition,
       (getHeadersFn) =>
         this._pluginHttp.createHttpHelper(getHeadersFn, {
           allowPrivateNetwork: provider.allowPrivateNetwork,
@@ -563,36 +570,43 @@ export class IssueTwoWaySyncEffects {
         const didPush = Object.keys(toPush).length > 0;
         if (didPush) {
           await adapter.pushChanges(issueId, toPush, cfg);
+        } else {
+          return;
         }
 
-        // Update lastSyncedValues for ALL tracked fields from the fresh issue,
-        // overriding with pushed values for fields we just pushed.
-        const updatedSyncValues: Record<string, unknown> = {};
-        for (const mapping of fieldMappings) {
-          const pushDecision = decisions.find(
-            (d) => d.field === mapping.issueField && d.action === 'push',
-          );
-          updatedSyncValues[mapping.issueField] = pushDecision
-            ? pushDecision.issueValue
-            : freshValues[mapping.issueField];
+        const pushedDecisions = decisions.filter((d) => d.action === 'push');
+        const hasProviderOwnedSkip = decisions.some(
+          (d) =>
+            d.action === 'skip' &&
+            (d.reason === 'provider changed (provider wins)' ||
+              d.reason === 'no baseline (first sync)'),
+        );
+
+        // Only advance baselines for fields we actually wrote. Fresh provider
+        // values for skipped or unrelated fields still need the polling path to
+        // pull them into the task before they become the new baseline.
+        const updatedSyncValues: Record<string, unknown> = { ...lastSyncedValues };
+        for (const pushDecision of pushedDecisions) {
+          updatedSyncValues[pushDecision.field] = pushDecision.issueValue;
         }
 
         // After push, re-fetch the issue to get the provider's updated marker
         // (e.g. CalDAV etag changes on write). Fall back to Date.now() for
         // providers that don't implement getIssueLastUpdated.
         let issueLastUpdated = Date.now();
-        if (didPush && adapter.getIssueLastUpdated) {
+        if (didPush && !hasProviderOwnedSkip && adapter.getIssueLastUpdated) {
           const postPushIssue = await adapter.fetchIssue(issueId, cfg);
           issueLastUpdated = adapter.getIssueLastUpdated(postPushIssue);
         }
 
         // Update sync values and issueLastUpdated to prevent poll from
-        // treating our own push as an external update
+        // treating our own push as an external update. If any changed field was
+        // provider-owned, keep the old issueLastUpdated so polling can pull it.
         this._trackSyncOriginatedTask(task.id);
         try {
           this._taskService.update(task.id, {
             issueLastSyncedValues: updatedSyncValues,
-            issueLastUpdated,
+            ...(hasProviderOwnedSkip ? {} : { issueLastUpdated }),
           });
         } catch (e) {
           this._syncOriginatedTaskIds.delete(task.id);

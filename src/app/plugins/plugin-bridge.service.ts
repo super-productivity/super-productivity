@@ -343,8 +343,13 @@ export class PluginBridgeService implements OnDestroy {
       return;
     }
 
-    // Register sync adapter if plugin supports two-way sync
-    if (definition.fieldMappings?.length && definition.updateIssue) {
+    // Register adapter when plugin supports any issue side effects. Push support
+    // still requires updateIssue; create/delete can work without it.
+    if (
+      definition.createIssue ||
+      definition.deleteIssue ||
+      (definition.fieldMappings?.length && definition.updateIssue)
+    ) {
       const registered = this._pluginIssueProviderRegistry.getProvider(registeredKey);
       const httpOpts = { allowPrivateNetwork: registered?.allowPrivateNetwork };
       const adapter = createPluginSyncAdapter(
