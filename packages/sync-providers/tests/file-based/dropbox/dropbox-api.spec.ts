@@ -11,7 +11,7 @@ import {
   type DropboxPrivateCfg,
   PROVIDER_ID_DROPBOX,
 } from '../../../src/dropbox';
-import type { NativeHttpExecutor } from '../../../src/http';
+import type { NativeHttpExecutor, NativeHttpResponse } from '../../../src/http';
 import type { SyncCredentialStorePort } from '../../../src/credential-store';
 import { DropboxApi } from '../../../src/file-based/dropbox/dropbox-api';
 import { createMockSyncLogger } from '../../helpers/sync-logger';
@@ -758,7 +758,7 @@ describe('DropboxApi Native Platform Routing', () => {
   describe('error handling on native platform', () => {
     it('should handle 401 errors and retry on native platform', async () => {
       let callCount = 0;
-      nativeExecutor.mockImplementation(async (options) => {
+      nativeExecutor.mockImplementation(async (options): Promise<NativeHttpResponse> => {
         callCount++;
 
         if (callCount === 1) {

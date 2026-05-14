@@ -134,7 +134,7 @@ packages/sync-providers/src/
 ├── file-based/dropbox/         # Dropbox provider implementation
 ├── file-based/webdav/          # WebDAV + Nextcloud providers
 ├── file-based/local-file/      # LocalFile provider classes
-└── provider.types.ts           # Provider-neutral contracts
+└── provider-types.ts           # Provider-neutral contracts
 ```
 
 ### App Sync Wiring

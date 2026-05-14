@@ -33,7 +33,8 @@
       "@sp/sync-providers/platform": ["packages/sync-providers/dist/platform.d.ts"],
       "@sp/sync-providers/provider-types": [
         "packages/sync-providers/dist/provider-types.d.ts"
-      ]
+      ],
+      "@sp/sync-providers/log": ["packages/sync-providers/dist/log.d.ts"]
     }
   },
   "include": ["main.ts", "**/*.ts", "../src/app/core/window-ea.d.ts"],

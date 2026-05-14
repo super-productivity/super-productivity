@@ -545,17 +545,20 @@ describe('partitionLwwResolutions', () => {
       [createOp({ id: 'local' })],
       [createOp({ id: 'remote', actionType: '[Test] Remote' })],
     );
-    const processedRemoteOp = {
+    const processedRemoteOp: Operation = {
       ...conflict.remoteOps[0],
       id: 'processed-remote',
       entityId: 'processed-task',
       actionType: '[Test] Processed Remote',
     };
-    const processRemoteWinnerOps = vi.fn(() => [processedRemoteOp]);
+    const processRemoteWinnerOps = vi.fn((_conflict: EntityConflict): Operation[] => [
+      processedRemoteOp,
+    ]);
 
-    const result = partitionLwwResolutions([{ conflict, winner: 'remote' }], {
-      processRemoteWinnerOps,
-    });
+    const result = partitionLwwResolutions<Operation, EntityConflict>(
+      [{ conflict, winner: 'remote' }],
+      { processRemoteWinnerOps },
+    );
 
     expect(processRemoteWinnerOps).toHaveBeenCalledWith(conflict);
     expect(result.remoteWinsOps).toEqual([processedRemoteOp]);

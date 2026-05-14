@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { errorMeta, urlPathOnly } from '../../src/log/error-meta';
+import { errorMeta, urlPathOnly } from '@sp/sync-providers/log';
 
 describe('urlPathOnly', () => {
   it('strips query string', () => {

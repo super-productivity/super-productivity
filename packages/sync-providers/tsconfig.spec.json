@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "paths": {
+      "@sp/sync-core": ["../sync-core/src/index.ts"],
+      "@sp/sync-providers/log": ["src/log.ts"]
+    },
+    "rootDir": "..",
+    "types": ["vitest"]
+  },
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

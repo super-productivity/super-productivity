@@ -41,7 +41,8 @@
       "@sp/sync-providers/platform": ["packages/sync-providers/src/platform.ts"],
       "@sp/sync-providers/provider-types": [
         "packages/sync-providers/src/provider-types.ts"
-      ]
+      ],
+      "@sp/sync-providers/log": ["packages/sync-providers/src/log.ts"]
     },
     "plugins": [
       {

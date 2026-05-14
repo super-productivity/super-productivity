@@ -111,10 +111,11 @@ the package barrel deliberately and check that it is not app-owned.
 The root `@sp/sync-providers` barrel has been removed; consumers MUST import
 from focused subpath barrels: `@sp/sync-providers/dropbox`, `/webdav`,
 `/super-sync`, `/local-file`, `/http`, `/errors`, `/file-based`, `/pkce`,
-`/platform`, `/provider-types`, and `/credential-store`. Provider classes and
-provider-owned string constants are exported there, but app enums such as
-`SyncProviderId` are not. Internal helpers such as WebDAV API/adapter classes
-stay unexported unless a second host needs them.
+`/platform`, `/provider-types`, `/credential-store`, and `/log`. Provider
+classes, provider-owned string constants, and shared privacy-boundary logging
+helpers are exported there, but app enums such as `SyncProviderId` are not.
+Internal helpers such as WebDAV API/adapter classes stay unexported unless a
+second host needs them.
 
 `@sp/sync-core` still exports deprecated full-state op compatibility defaults
 and host-defined `OpType.SyncImport` / `BackupImport` / `Repair` strings for

@@ -21,7 +21,8 @@
   "scripts": {
     "build": "tsup",
     "build:tsc": "tsc",
-    "test": "vitest run",
+    "test": "npm run test:typecheck && vitest run",
+    "test:typecheck": "tsc --noEmit -p tsconfig.spec.json",
     "test:watch": "vitest"
   },
   "dependencies": {

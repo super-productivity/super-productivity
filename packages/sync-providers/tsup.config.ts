@@ -13,6 +13,7 @@ export default defineConfig({
     'src/pkce.ts',
     'src/platform.ts',
     'src/provider-types.ts',
+    'src/log.ts',
   ],
   format: ['esm', 'cjs'],
   tsconfig: 'tsconfig.build.json',

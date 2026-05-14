@@ -113,6 +113,16 @@
         "types": "./dist/provider-types.d.ts",
         "default": "./dist/provider-types.js"
       }
+    },
+    "./log": {
+      "import": {
+        "types": "./dist/log.d.mts",
+        "default": "./dist/log.mjs"
+      },
+      "require": {
+        "types": "./dist/log.d.ts",
+        "default": "./dist/log.js"
+      }
     }
   },
   "dependencies": {
@@ -124,7 +134,8 @@
   "scripts": {
     "build": "tsup",
     "build:tsc": "tsc",
-    "test": "vitest run",
+    "test": "npm run test:typecheck && vitest run",
+    "test:typecheck": "tsc --noEmit -p tsconfig.spec.json",
     "test:watch": "vitest"
   },
   "devDependencies": {
