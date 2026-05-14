@@ -370,8 +370,10 @@ fi
 if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
     is_recoverable_encrypted_ops_index_migration_failure; then
     resolve_failed_encrypted_ops_index_migration
+    apply_encrypted_ops_index_migration_outside_prisma
+    resolve_applied_encrypted_ops_index_migration
     echo ""
-    echo "==> Retrying database migrations after resolving $ENCRYPTED_OPS_INDEX_MIGRATION..."
+    echo "==> Retrying database migrations after applying $ENCRYPTED_OPS_INDEX_MIGRATION..."
     run_migrate_deploy
 fi
 if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&

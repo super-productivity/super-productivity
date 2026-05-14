@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
 import { testState, resetTestState } from './sync.service.test-state';
@@ -623,6 +623,11 @@ describe('SyncService', () => {
     initSyncService();
   });
 
+  afterEach(() => {
+    delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
+    delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
+  });
+
   describe('uploadOps', () => {
     it('should correctly upload operations', async () => {
       const service = getSyncService();
@@ -843,6 +848,29 @@ describe('SyncService', () => {
         }),
       );
       expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+    });
+
+    it('should chunk large batch entity prefetch queries', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const entityPairs = Array.from({ length: 250 }, (_, index) => ({
+        entityType: 'TASK',
+        entityId: `task-${index}`,
+      }));
+      const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
+      };
+
+      await (
+        service as unknown as {
+          prefetchLatestEntityOpsForBatch: (
+            userId: number,
+            entityPairs: { entityType: string; entityId: string }[],
+            tx: { $queryRaw: (...args: unknown[]) => Promise<unknown[]> },
+          ) => Promise<Map<string, unknown>>;
+        }
+      ).prefetchLatestEntityOpsForBatch(userId, entityPairs, tx);
+
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(3);
     });
 
     it('should create user sync state for first-time batch uploads', async () => {
@@ -1999,7 +2027,9 @@ describe('SyncService', () => {
 
     it('drains a single user up to the per-run budget', async () => {
       const service = getSyncService();
-      const totalOps = 25_005;
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      const totalOps = 255;
       const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
 
       for (let i = 1; i <= totalOps; i++) {
@@ -2031,17 +2061,21 @@ describe('SyncService', () => {
 
       const { totalDeleted, affectedUserIds } =
         await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+      delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
+      delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
 
-      // 25k per-run budget, 5k per-batch. The inner drain loop keeps
+      // Per-run budget is larger than one delete batch. The inner drain loop keeps
       // deleting until the budget hits zero, not just one batch.
-      expect(totalDeleted).toBe(25_000);
+      expect(totalDeleted).toBe(250);
       expect(affectedUserIds).toEqual([userId]);
       expect(testState.operations.size).toBe(5);
     });
 
     it('marks user for reconcile when a later batch throws mid-loop', async () => {
       const service = getSyncService();
-      const totalOps = 12_000;
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      const totalOps = 120;
       const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
 
       for (let i = 1; i <= totalOps; i++) {
@@ -2092,15 +2126,19 @@ describe('SyncService', () => {
       await expect(service.deleteOldSyncedOpsForAllUsers(cutoffTime)).rejects.toThrow(
         'simulated transient DB failure',
       );
+      delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
+      delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
 
-      // First batch committed 5k deletes; the user must still be marked so
+      // First batch committed deletes; the user must still be marked so
       // the next request reconciles the now-stale-high counter.
       expect(serviceWithPrivates.storageQuotaService.needsReconcile(userId)).toBe(true);
-      expect(testState.operations.size).toBe(totalOps - 5_000);
+      expect(testState.operations.size).toBe(totalOps - 50);
     });
 
     it('shares the per-run budget across users; tail users wait for next pass', async () => {
       const service = getSyncService();
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
       const user2Id = 2;
       const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
 
@@ -2111,8 +2149,8 @@ describe('SyncService', () => {
         storageUsedBytes: BigInt(0),
       });
 
-      // Each user has 20k stale ops — more than the 25k per-run budget combined.
-      const opsPerUser = 20_000;
+      // Each user has 200 stale ops — more than the 250 per-run budget combined.
+      const opsPerUser = 200;
       for (const uid of [userId, user2Id]) {
         for (let i = 1; i <= opsPerUser; i++) {
           testState.operations.set(`u${uid}-op-${i}`, {
@@ -2152,11 +2190,13 @@ describe('SyncService', () => {
 
       const { totalDeleted, affectedUserIds } =
         await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+      delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
+      delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
 
-      // user1 drains fully (20k), user2 only gets the remaining 5k of budget.
-      expect(totalDeleted).toBe(25_000);
+      // user1 drains fully, user2 only gets the remaining budget.
+      expect(totalDeleted).toBe(250);
       expect(affectedUserIds).toEqual([userId, user2Id]);
-      expect(testState.operations.size).toBe(15_000);
+      expect(testState.operations.size).toBe(150);
     });
 
     it('should delete old operations from all users', async () => {

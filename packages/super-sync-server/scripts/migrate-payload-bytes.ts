@@ -1,8 +1,8 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { computeOpStorageBytes } from '../src/sync/sync.const';
 
-const DEFAULT_BATCH_SIZE = 1000;
-const MAX_BATCH_SIZE = 10000;
+const DEFAULT_BATCH_SIZE = 5;
+const MAX_BATCH_SIZE = 25;
 const USER_PAGE_SIZE = 1000;
 
 const prisma = new PrismaClient();
@@ -96,6 +96,28 @@ const backfillUser = async (userId: number, batchSize: number): Promise<number> 
   return updated;
 };
 
+const reconcileUserStorageUsage = async (userId: number): Promise<void> => {
+  await prisma.$executeRaw`
+    UPDATE users
+    SET storage_used_bytes = usage.total_bytes
+    FROM (
+      SELECT
+        ${userId}::integer AS user_id,
+        (
+          SELECT COALESCE(SUM(payload_bytes), 0)
+          FROM operations
+          WHERE user_id = ${userId}
+        ) +
+        COALESCE((
+          SELECT octet_length(snapshot_data)::bigint
+          FROM user_sync_state
+          WHERE user_id = ${userId}
+        ), 0) AS total_bytes
+    ) AS usage
+    WHERE users.id = usage.user_id
+  `;
+};
+
 const run = async (): Promise<void> => {
   const batchSize = parseBatchSize();
   let updated = 0;
@@ -107,6 +129,7 @@ const run = async (): Promise<void> => {
 
     for (const userId of userIds) {
       updated += await backfillUser(userId, batchSize);
+      await reconcileUserStorageUsage(userId);
       lastUserId = userId;
     }
     console.log(`Updated ${updated} operation payload byte counters total...`);

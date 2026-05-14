@@ -15,6 +15,7 @@ Scope drawn from an audit of `packages/super-sync-server/` covering: upload proc
 
 - **New migration:** `prisma/migrations/<ts>_add_encrypted_ops_partial_index/migration.sql`
   ```sql
+  DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_server_seq_encrypted_idx";
   CREATE INDEX CONCURRENTLY "operations_user_id_server_seq_encrypted_idx"
     ON "operations"("user_id", "server_seq")
     WHERE "is_payload_encrypted" = true;
@@ -161,7 +162,7 @@ The original draft proposed `UPDATE ... SET payload_bytes = pg_column_size(paylo
 
 These are different numbers by design. The file's own comment at `storage-quota.service.ts:88-103` already calls out this mismatch as the historical bug. Backfilling with `pg_column_size` seeds drift instead of fixing it: the SUM-query and the increment-counter will disagree on every reconcile after deployment.
 
-**Correct backfill:** stream `operations` rows per user in batches (e.g. 1000 at a time) from a one-time Node script, compute `computeOpStorageBytes(row)` per row, and batch the writes:
+**Correct backfill:** stream `operations` rows per user in small batches from a one-time Node script, compute `computeOpStorageBytes(row)` per row, and batch the writes:
 
 ```sql
 UPDATE operations
@@ -182,7 +183,7 @@ There is no clean SQL equivalent of `Buffer.byteLength(JSON.stringify(payload))`
 
 - Replace `storage-quota.service.ts:109-112`:
   ```sql
-  SELECT COALESCE(SUM(payload_bytes), 0) AS total
+  SELECT COALESCE(SUM(CASE WHEN payload_bytes > 0 THEN payload_bytes ELSE ... END), 0) AS total
   FROM operations
   WHERE user_id = $1
   ```
@@ -193,7 +194,7 @@ There is no clean SQL equivalent of `Buffer.byteLength(JSON.stringify(payload))`
 
 - Unit: after a 100-op upload, `calculateStorageUsage` and the cached `storage_used_bytes` counter agree to the byte.
 - Test: reconcile-after-upload is idempotent (drift = 0).
-- Test: a synthetic row with `payload_bytes = 0` (pre-backfill) still produces a sensible SUM, but it under-counts by the unbackfilled portion. Hard-cut rollout on backfill completion: `SUPERSYNC_BATCH_UPLOAD=true` must require an operator-set completion flag after `npm run migrate-payload-bytes` finishes.
+- Test: a synthetic row with `payload_bytes = 0` (pre-backfill) still produces a conservative fallback SUM. Hard-cut rollout on backfill completion: `SUPERSYNC_BATCH_UPLOAD=true` must require an operator-set completion flag after `npm run migrate-payload-bytes` finishes.
 
 ---
 

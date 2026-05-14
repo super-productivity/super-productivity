@@ -266,10 +266,10 @@ graph TB
     %% CONNECTIONS: Processing -> Database
     %% ═══════════════════════════════════════════════════════════════
 
-    P1 -.->|"UPDATE"| SyncState
-    P3 -.->|"INSERT"| OpsTable
-    P5 -.->|"UPSERT"| Tombstones
-    P7 -.->|"UPSERT"| Devices
+    P1 -.->|"INSERT/UPDATE lastSeq"| SyncState
+    P2 -.->|"INSERT"| OpsTable
+    P3 -.->|"UPDATE latest full-state VC"| SyncState
+    P4 -.->|"UPSERT"| Devices
 
     %% ═══════════════════════════════════════════════════════════════
     %% CONNECTIONS: Read endpoints -> Database
@@ -295,29 +295,28 @@ graph TB
 
 **API Endpoints:**
 
-| Endpoint                   | Method | Purpose                         | DB Operations                                                        |
-| -------------------------- | ------ | ------------------------------- | -------------------------------------------------------------------- |
+| Endpoint                   | Method | Purpose                         | DB Operations                                                                           |
+| -------------------------- | ------ | ------------------------------- | --------------------------------------------------------------------------------------- |
 | `/api/sync/ops`            | POST   | Upload operations               | Prefetch duplicate/conflict rows, reserve lastSeq range, bulk INSERT ops, UPSERT device |
-| `/api/sync/ops?sinceSeq=N` | GET    | Download operations             | SELECT ops, SELECT lastSeq, find latest snapshot (skip optimization) |
-| `/api/sync/snapshot`       | POST   | Upload full state (SYNC_IMPORT) | Same as POST /ops + UPDATE snapshot cache                            |
-| `/api/sync/snapshot`       | GET    | Get full state                  | SELECT snapshot (or replay ops if stale)                             |
-| `/api/sync/status`         | GET    | Check sync status               | SELECT lastSeq, COUNT devices                                        |
-| `/api/sync/restore-points` | GET    | List restore points             | SELECT ops (filter SYNC_IMPORT, BACKUP_IMPORT, REPAIR)               |
-| `/api/sync/restore/:seq`   | GET    | Restore to specific point       | SELECT ops, replay to targetSeq                                      |
+| `/api/sync/ops?sinceSeq=N` | GET    | Download operations             | SELECT ops, SELECT lastSeq, find latest snapshot (skip optimization)                    |
+| `/api/sync/snapshot`       | POST   | Upload full state (SYNC_IMPORT) | Same as POST /ops + UPDATE snapshot cache                                               |
+| `/api/sync/snapshot`       | GET    | Get full state                  | SELECT snapshot (or replay ops if stale)                                                |
+| `/api/sync/status`         | GET    | Check sync status               | SELECT lastSeq, COUNT devices                                                           |
+| `/api/sync/restore-points` | GET    | List restore points             | SELECT ops (filter SYNC_IMPORT, BACKUP_IMPORT, REPAIR)                                  |
+| `/api/sync/restore/:seq`   | GET    | Restore to specific point       | SELECT ops, replay to targetSeq                                                         |
 
 **PostgreSQL Tables:**
 
-| Table             | Purpose                                    | Key Columns                                             |
-| ----------------- | ------------------------------------------ | ------------------------------------------------------- |
-| `operations`      | Event log (append-only)                    | id, serverSeq, opType, entityType, payload, payloadBytes, vectorClock |
-| `user_sync_state` | Per-user metadata + cached snapshot        | lastSeq, snapshotData, lastSnapshotSeq, latestFullStateVectorClock |
-| `sync_devices`    | Device tracking                            | clientId, lastSeenAt, lastAckedSeq                      |
-| `tombstones`      | Deleted entity tracking (30-day retention) | entityType, entityId, deletedAt, expiresAt              |
+| Table             | Purpose                             | Key Columns                                                           |
+| ----------------- | ----------------------------------- | --------------------------------------------------------------------- |
+| `operations`      | Event log (append-only)             | id, serverSeq, opType, entityType, payload, payloadBytes, vectorClock |
+| `user_sync_state` | Per-user metadata + cached snapshot | lastSeq, snapshotData, lastSnapshotSeq, latestFullStateVectorClock    |
+| `sync_devices`    | Device tracking                     | clientId, lastSeenAt, lastAckedSeq                                    |
 
 **Key Implementation Details:**
 
-- **Transaction Isolation**: `REPEATABLE_READ` prevents phantom reads during conflict detection
-- **Double Conflict Check**: Before AND after sequence allocation (race condition guard)
+- **Batch Upload Serialization**: accepted writers reserve sequence numbers through the shared `user_sync_state.lastSeq` row; that row lock is the per-user serialization primitive for the batch path
+- **Conflict Check**: batch uploads prefetch touched entity clocks, compare in request order, and update the in-memory latest-entity map for each accepted op
 - **Idempotency**: Duplicate op IDs rejected with `DUPLICATE_OPERATION` error
 - **Gzip Support**: Both upload/download support `Content-Encoding: gzip` for bandwidth savings
 - **Rate Limiting**: Per-user limits (100 uploads/min, 200 downloads/min)

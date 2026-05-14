@@ -74,21 +74,21 @@ describe('StorageQuotaService', () => {
       });
     });
 
-    it('should hard-cut to payload_bytes even when rows are still unbackfilled', async () => {
+    it('should include fallback bytes for rows that are still unbackfilled', async () => {
       vi.mocked(prisma.$queryRaw).mockResolvedValue([
-        { operations_bytes: BigInt(0), snapshot_bytes: BigInt(100) },
+        { operations_bytes: BigInt(750), snapshot_bytes: BigInt(100) },
       ]);
 
       const result = await service.calculateStorageUsage(1);
 
       expect(result).toEqual({
-        operationsBytes: 0,
+        operationsBytes: 750,
         snapshotBytes: 100,
-        totalBytes: 100,
+        totalBytes: 850,
       });
     });
 
-    it('should use persisted byte counters and avoid loading snapshot blobs', async () => {
+    it('should use persisted byte counters with a safe unbackfilled fallback', async () => {
       vi.mocked(prisma.$queryRaw).mockResolvedValue([
         { operations_bytes: BigInt(1000), snapshot_bytes: BigInt(0) },
       ]);
@@ -101,12 +101,12 @@ describe('StorageQuotaService', () => {
       ];
       const query = Array.from(queryParts).join('');
 
-      expect(query).toContain('SUM(payload_bytes)');
+      expect(query).toContain('SUM(');
+      expect(query).toContain('payload_bytes');
+      expect(query).toContain('WHEN payload_bytes > 0');
       expect(query).toContain('octet_length(snapshot_data)');
       expect(query).not.toContain('snapshot_data: true');
       expect(query).not.toContain('pg_column_size');
-      expect(query).not.toContain('payload::text');
-      expect(query).not.toContain('vector_clock::text');
     });
   });
 

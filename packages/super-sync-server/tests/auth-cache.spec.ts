@@ -92,4 +92,42 @@ describe('auth verification cache', () => {
 
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
   });
+
+  it('should not re-cache a token when invalidation happens during verification', async () => {
+    const token = createToken(0);
+    let resolveFindUnique!: (value: {
+      id: number;
+      tokenVersion: number;
+      isVerified: number;
+    }) => void;
+
+    vi.mocked(prisma.user.findUnique)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFindUnique = resolve;
+        }) as ReturnType<typeof prisma.user.findUnique>,
+      )
+      .mockResolvedValueOnce({
+        id: 1,
+        tokenVersion: 1,
+        isVerified: 1,
+      } as any);
+    vi.mocked(prisma.user.update).mockResolvedValue({} as any);
+
+    const inFlightVerification = verifyToken(token);
+    await Promise.resolve();
+
+    await revokeAllTokens(1);
+    resolveFindUnique({ id: 1, tokenVersion: 0, isVerified: 1 });
+
+    await expect(inFlightVerification).resolves.toEqual(
+      expect.objectContaining({ valid: true }),
+    );
+
+    await expect(verifyToken(token)).resolves.toEqual({
+      valid: false,
+      reason: 'Token was revoked. Please log in again to get a new token.',
+    });
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+  });
 });

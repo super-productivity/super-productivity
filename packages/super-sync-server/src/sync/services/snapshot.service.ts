@@ -65,6 +65,14 @@ const getReplayPayloadDeltaBytes = (opType: string, payload: unknown): number =>
   return Buffer.byteLength(JSON.stringify(payload ?? ''), 'utf8');
 };
 
+const getReplayEntityKeyDeltaBytes = (
+  entityType: string,
+  entityId: string | null,
+): number =>
+  Buffer.byteLength(entityType, 'utf8') +
+  (entityId ? Buffer.byteLength(entityId, 'utf8') : 0) +
+  32;
+
 const assertReplayStateSize = (state: Record<string, unknown>): number => {
   const stateBytes = Buffer.byteLength(JSON.stringify(state), 'utf8');
   if (stateBytes > MAX_REPLAY_STATE_SIZE_BYTES) {
@@ -908,7 +916,9 @@ export class SnapshotService {
       let entityType = row.entityType;
       let entityId = row.entityId;
       let payload = row.payload;
-      accumulatedDeltaBytes += getReplayPayloadDeltaBytes(opType, payload);
+      accumulatedDeltaBytes +=
+        getReplayPayloadDeltaBytes(opType, payload) +
+        getReplayEntityKeyDeltaBytes(entityType, entityId);
       let forceStateSizeMeasurement = false;
 
       const opSchemaVersion = row.schemaVersion ?? 1;
@@ -1081,6 +1091,7 @@ export class SnapshotService {
         accumulatedDeltaBytes = 0;
       }
     }
+    assertReplayStateSize(state);
     return state;
   }
 

@@ -28,7 +28,8 @@
     "monitor:all:dev": "tsx scripts/run-all-monitoring.ts",
     "monitor:all:quick": "node dist/scripts/run-all-monitoring.js --quick",
     "monitor:all:save": "node dist/scripts/run-all-monitoring.js --save",
-    "migrate-payload-bytes": "ts-node scripts/migrate-payload-bytes.ts"
+    "migrate-payload-bytes": "node dist/scripts/migrate-payload-bytes.js",
+    "migrate-payload-bytes:dev": "ts-node scripts/migrate-payload-bytes.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",

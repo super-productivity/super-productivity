@@ -84,10 +84,10 @@ export class StorageQuotaService {
    * Hot-path tracking uses incrementStorageUsage / decrementStorageUsage with
    * deltas computed locally on the Node side.
    *
-   * Rows with payload_bytes=0 are treated as unbackfilled and therefore
-   * under-counted by design until `npm run migrate-payload-bytes` completes.
-   * Falling back to payload JSONB reads here would reintroduce the reconcile
-   * I/O spike this column avoids.
+   * Rows with payload_bytes=0 are pre-backfill rows. They must not be counted
+   * as zero bytes: that would let a reconcile lower the cached counter below
+   * actual usage. The fallback only touches unbackfilled rows, so once the
+   * one-time backfill completes this remains a cheap SUM(payload_bytes).
    */
   async calculateStorageUsage(userId: number): Promise<{
     operationsBytes: number;
@@ -99,7 +99,16 @@ export class StorageQuotaService {
     >`
       SELECT
         (
-          SELECT COALESCE(SUM(payload_bytes), 0)
+          SELECT COALESCE(
+            SUM(
+              CASE
+                WHEN payload_bytes > 0 THEN payload_bytes
+                ELSE octet_length(payload::text)::bigint +
+                     octet_length(vector_clock::text)::bigint
+              END
+            ),
+            0
+          )
           FROM operations
           WHERE user_id = ${userId}
         ) as operations_bytes,

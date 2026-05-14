@@ -89,13 +89,19 @@ container is not required. Prisma migrations still run against the configured
 ### Payload byte backfill and batch uploads
 
 The `payload_bytes` column must be fully backfilled before enabling batched
-uploads in production. During a partial backfill, quota reconciles under-count
-old operation rows with `payload_bytes = 0`.
+uploads in production. During a partial backfill, quota reconciles use a slower
+fallback for old operation rows with `payload_bytes = 0`.
 
 Run the backfill to completion:
 
 ```bash
 npm run migrate-payload-bytes
+```
+
+In a source checkout before `npm run build`, use:
+
+```bash
+npm run migrate-payload-bytes:dev
 ```
 
 Only then set both rollout flags:

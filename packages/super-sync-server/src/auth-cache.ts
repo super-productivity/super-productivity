@@ -9,6 +9,7 @@ const AUTH_CACHE_MAX_ENTRIES = 10_000;
 
 class AuthCache {
   private entries = new Map<number, AuthCacheEntry>();
+  private invalidationVersions = new Map<number, number>();
 
   get(userId: number): AuthCacheEntry | null {
     const entry = this.entries.get(userId);
@@ -24,7 +25,20 @@ class AuthCache {
     return entry;
   }
 
-  set(userId: number, tokenVersion: number, isVerified: boolean): void {
+  getInvalidationVersion(userId: number): number {
+    return this.invalidationVersions.get(userId) ?? 0;
+  }
+
+  setIfCurrent(
+    userId: number,
+    tokenVersion: number,
+    isVerified: boolean,
+    expectedInvalidationVersion: number,
+  ): boolean {
+    if (this.getInvalidationVersion(userId) !== expectedInvalidationVersion) {
+      return false;
+    }
+
     this.entries.delete(userId);
     this.entries.set(userId, {
       tokenVersion,
@@ -37,14 +51,26 @@ class AuthCache {
       if (oldestKey === undefined) break;
       this.entries.delete(oldestKey);
     }
+    return true;
+  }
+
+  set(userId: number, tokenVersion: number, isVerified: boolean): void {
+    this.setIfCurrent(
+      userId,
+      tokenVersion,
+      isVerified,
+      this.getInvalidationVersion(userId),
+    );
   }
 
   invalidate(userId: number): void {
+    this.invalidationVersions.set(userId, this.getInvalidationVersion(userId) + 1);
     this.entries.delete(userId);
   }
 
   clear(): void {
     this.entries.clear();
+    this.invalidationVersions.clear();
   }
 }
 

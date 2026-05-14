@@ -138,6 +138,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
     if (cachedUser && cachedUser.isVerified && cachedUser.tokenVersion === tokenVersion) {
       return { valid: true, userId: payload.userId, email: payload.email };
     }
+    const cacheVersionBeforeRead = authCache.getInvalidationVersion(payload.userId);
 
     // Verify user exists, is verified, and token version matches
     const user = await prisma.user.findUnique({
@@ -152,7 +153,12 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
 
     if (!user.isVerified) {
       Logger.warn(`Token verification failed: User ${payload.userId} is not verified`);
-      authCache.set(payload.userId, user.tokenVersion ?? 0, false);
+      authCache.setIfCurrent(
+        payload.userId,
+        user.tokenVersion ?? 0,
+        false,
+        cacheVersionBeforeRead,
+      );
       return { valid: false, reason: 'Account unavailable' };
     }
 
@@ -170,7 +176,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
       };
     }
 
-    authCache.set(payload.userId, currentVersion, true);
+    authCache.setIfCurrent(payload.userId, currentVersion, true, cacheVersionBeforeRead);
     return { valid: true, userId: payload.userId, email: payload.email };
   } catch (err) {
     if (err instanceof TokenExpiredError) {

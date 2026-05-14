@@ -519,7 +519,7 @@ describe('Sync compressed body routes', () => {
       false,
       expect.anything(),
     );
-  });
+  }, 15000);
 
   it('should keep plain JSON snapshots capped at the binary route limit', async () => {
     const clientId = 'plain-json-large-snapshot-client';

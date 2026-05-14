@@ -525,11 +525,9 @@ export class SyncService {
     return `${entityType}\u0000${entityId}`;
   }
 
-  private async prefetchLatestEntityOpsForBatch(
-    userId: number,
+  private getBatchConflictEntityPairs(
     candidates: BatchUploadCandidate[],
-    tx: Prisma.TransactionClient,
-  ): Promise<Map<string, LatestBatchEntityOperationRow>> {
+  ): { entityType: string; entityId: string }[] {
     const entityPairs = new Map<string, { entityType: string; entityId: string }>();
 
     for (const candidate of candidates) {
@@ -543,33 +541,48 @@ export class SyncService {
       }
     }
 
-    if (entityPairs.size === 0) return new Map();
+    return Array.from(entityPairs.values());
+  }
 
-    const touchedRows = Array.from(entityPairs.values()).map(
-      ({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`,
-    );
-
-    const latestOps = await tx.$queryRaw<LatestBatchEntityOperationRow[]>`
-      SELECT DISTINCT ON (o.entity_type, o.entity_id)
-        o.entity_type AS "entityType",
-        o.entity_id AS "entityId",
-        o.client_id AS "clientId",
-        o.vector_clock AS "vectorClock"
-      FROM operations o
-      JOIN (VALUES ${Prisma.join(touchedRows)}) AS touched(entity_type, entity_id)
-        ON touched.entity_type = o.entity_type
-       AND touched.entity_id = o.entity_id
-      WHERE o.user_id = ${userId}
-      ORDER BY o.entity_type, o.entity_id, o.server_seq DESC
-    `;
-
+  private async prefetchLatestEntityOpsForBatch(
+    userId: number,
+    entityPairs: { entityType: string; entityId: string }[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, LatestBatchEntityOperationRow>> {
     const latestByEntity = new Map<string, LatestBatchEntityOperationRow>();
-    for (const latestOp of latestOps) {
-      latestByEntity.set(
-        this.getEntityConflictKey(latestOp.entityType, latestOp.entityId),
-        latestOp,
-      );
+    if (entityPairs.length === 0) return latestByEntity;
+
+    for (
+      let start = 0;
+      start < entityPairs.length;
+      start += CONFLICT_DETECTION_ENTITY_BATCH_SIZE
+    ) {
+      const touchedRows = entityPairs
+        .slice(start, start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE)
+        .map(({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`);
+
+      const latestOps = await tx.$queryRaw<LatestBatchEntityOperationRow[]>`
+        SELECT DISTINCT ON (o.entity_type, o.entity_id)
+          o.entity_type AS "entityType",
+          o.entity_id AS "entityId",
+          o.client_id AS "clientId",
+          o.vector_clock AS "vectorClock"
+        FROM operations o
+        JOIN (VALUES ${Prisma.join(touchedRows)}) AS touched(entity_type, entity_id)
+          ON touched.entity_type = o.entity_type
+         AND touched.entity_id = o.entity_id
+        WHERE o.user_id = ${userId}
+        ORDER BY o.entity_type, o.entity_id, o.server_seq DESC
+      `;
+
+      for (const latestOp of latestOps) {
+        latestByEntity.set(
+          this.getEntityConflictKey(latestOp.entityType, latestOp.entityId),
+          latestOp,
+        );
+      }
     }
+
     return latestByEntity;
   }
 
@@ -986,15 +999,11 @@ export class SyncService {
       );
     }
 
-    const needsEntityPrefetch = duplicateFreeCandidates.some(
-      (candidate) =>
-        !isFullStateOpType(candidate.op.opType) &&
-        this.getConflictEntityIds(candidate.op).length > 0,
-    );
-    if (needsEntityPrefetch) dbRoundtrips++;
+    const entityPairs = this.getBatchConflictEntityPairs(duplicateFreeCandidates);
+    dbRoundtrips += Math.ceil(entityPairs.length / CONFLICT_DETECTION_ENTITY_BATCH_SIZE);
     const latestOpByEntity = await this.prefetchLatestEntityOpsForBatch(
       userId,
-      duplicateFreeCandidates,
+      entityPairs,
       tx,
     );
 

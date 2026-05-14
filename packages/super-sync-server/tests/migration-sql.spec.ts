@@ -67,6 +67,9 @@ describe('performance migrations', () => {
     );
 
     expect(migrationSql).toContain('CREATE INDEX CONCURRENTLY');
+    expect(migrationSql).toContain(
+      'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_server_seq_encrypted_idx"',
+    );
     expect(migrationSql).toContain('"operations_user_id_server_seq_encrypted_idx"');
     expect(migrationSql).toContain('ON "operations"("user_id", "server_seq")');
     expect(migrationSql).toContain('WHERE "is_payload_encrypted" = true');
@@ -76,8 +79,16 @@ describe('performance migrations', () => {
 
   it('runs migrations before replacing the app during compose deploys', () => {
     const deployScript = readFileSync(join(currentDir, '../scripts/deploy.sh'), 'utf8');
+    const runtimeMigrateScript = readFileSync(
+      join(currentDir, '../scripts/migrate-deploy.sh'),
+      'utf8',
+    );
     const dockerfile = readFileSync(join(currentDir, '../Dockerfile'), 'utf8');
     const composeFile = readFileSync(join(currentDir, '../docker-compose.yml'), 'utf8');
+    const helmDeployment = readFileSync(
+      join(currentDir, '../helm/supersync/templates/deployment.yaml'),
+      'utf8',
+    );
     const migrationCommand = 'npx prisma migrate deploy';
     const startCommand = 'up -d --wait --wait-timeout "$WAIT_TIMEOUT"';
     const externalDbStartCommand =
@@ -139,7 +150,17 @@ describe('performance migrations', () => {
       deployScript.indexOf(startCommand),
     );
     expect(dockerfile).toContain('RUN_MIGRATIONS_ON_STARTUP');
+    expect(dockerfile).toContain('sh scripts/migrate-deploy.sh');
     expect(dockerfile).toContain('NODE_OPTIONS=--max-old-space-size=896');
+    expect(helmDeployment).toContain('sh scripts/migrate-deploy.sh');
+    expect(runtimeMigrateScript).toContain('npx prisma migrate deploy');
+    expect(runtimeMigrateScript).toContain('npx prisma db execute');
+    expect(runtimeMigrateScript).toContain(
+      'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_server_seq_encrypted_idx"',
+    );
+    expect(runtimeMigrateScript).toContain(
+      'CREATE INDEX CONCURRENTLY "operations_user_id_server_seq_encrypted_idx"',
+    );
     expect(composeFile).toContain(
       'RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}',
     );
@@ -158,11 +179,20 @@ describe('performance migrations', () => {
       join(currentDir, '../scripts/migrate-payload-bytes.ts'),
       'utf8',
     );
+    const packageJson = readFileSync(join(currentDir, '../package.json'), 'utf8');
 
     expect(script).toContain('SELECT DISTINCT user_id');
+    expect(script).toContain('const DEFAULT_BATCH_SIZE = 5');
     expect(script).toContain('userId,');
     expect(script).toContain('FROM (VALUES ${values}) AS v(id, bytes)');
     expect(script).toContain('SET payload_bytes = v.bytes');
+    expect(script).toContain('storage_used_bytes = usage.total_bytes');
+    expect(packageJson).toContain(
+      '"migrate-payload-bytes": "node dist/scripts/migrate-payload-bytes.js"',
+    );
+    expect(packageJson).toContain(
+      '"migrate-payload-bytes:dev": "ts-node scripts/migrate-payload-bytes.ts"',
+    );
     expect(script).not.toContain('prisma.operation.update({');
   });
 });
