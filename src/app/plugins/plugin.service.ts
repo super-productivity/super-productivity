@@ -40,6 +40,10 @@ import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issu
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { SnackService } from '../core/snack/snack.service';
 import { pingWithRetry } from './util/ping-with-retry.util';
+import {
+  decideNodeExecutionConsent,
+  NodeExecutionConsentDialogResult,
+} from './util/plugin-consent.util';
 
 const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/yesterday-tasks-plugin',
@@ -532,7 +536,18 @@ export class PluginService implements OnDestroy {
         status: 'error',
         error: errorMsg,
       });
-      this._snackService.open({ msg: errorMsg, type: 'ERROR' });
+      // Only surface a snack on user-initiated activation. Startup auto-activation
+      // failures stay silent; the plugin tile already renders the error state, so
+      // a pile-up of snacks on cold boot would be noise.
+      if (isManualActivation) {
+        this._snackService.open({
+          msg: this._translateService.instant(T.PLUGINS.PLUGIN_LOAD_FAILED, {
+            pluginName: currentState.manifest.name,
+            error: errorMsg,
+          }),
+          type: 'ERROR',
+        });
+      }
       return null;
     }
   }
@@ -595,7 +610,7 @@ export class PluginService implements OnDestroy {
     try {
       await this._fireOnReady(instance);
     } catch (error) {
-      this._handleReadyFailure(instance.manifest.id, error);
+      this._handleReadyFailure(instance, error);
       throw error;
     }
   }
@@ -604,7 +619,8 @@ export class PluginService implements OnDestroy {
    * Tear down a plugin's runtime (hooks, buttons, side effects), remove it from
    * the loaded list, and update its state to 'error'. Idempotent.
    */
-  private _handleReadyFailure(pluginId: string, error: unknown): void {
+  private _handleReadyFailure(instance: PluginInstance, error: unknown): void {
+    const pluginId = instance.manifest.id;
     const errorMsg = error instanceof Error ? error.message : String(error);
     PluginLog.err(`onReady failed for plugin ${pluginId}:`, error);
 
@@ -631,7 +647,13 @@ export class PluginService implements OnDestroy {
       });
     }
 
-    this._snackService.open({ msg: errorMsg, type: 'ERROR' });
+    this._snackService.open({
+      msg: this._translateService.instant(T.PLUGINS.PLUGIN_LOAD_FAILED, {
+        pluginName: instance.manifest.name,
+        error: errorMsg,
+      }),
+      type: 'ERROR',
+    });
   }
 
   private async _loadUploadedPlugins(): Promise<void> {
@@ -1651,9 +1673,7 @@ export class PluginService implements OnDestroy {
     const ok = await pingWithRetry(() => this._pluginRunner.pingNodeBridge(manifest.id));
     if (!ok) {
       throw new Error(
-        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BRIDGE_UNAVAILABLE, {
-          pluginName: manifest.name,
-        }),
+        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BRIDGE_UNAVAILABLE),
       );
     }
   }
@@ -1694,7 +1714,7 @@ export class PluginService implements OnDestroy {
       await this._pluginMetaPersistenceService.getNodeExecutionConsent(manifest.id);
 
     // Always show dialog for nodeExecution permission
-    const result = await this._dialog
+    const result = (await this._dialog
       .open(PluginNodeConsentDialogComponent, {
         data: {
           manifest,
@@ -1705,29 +1725,14 @@ export class PluginService implements OnDestroy {
       })
       .afterClosed()
       .pipe(first())
-      .toPromise();
+      .toPromise()) as NodeExecutionConsentDialogResult | undefined;
 
-    if (result && result.granted) {
-      // Store consent if user chose to remember
-      if (result.remember) {
-        await this._pluginMetaPersistenceService.setNodeExecutionConsent(
-          manifest.id,
-          true,
-        );
-      } else {
-        // User unchecked remember - remove stored consent
-        await this._pluginMetaPersistenceService.setNodeExecutionConsent(
-          manifest.id,
-          false,
-        );
-      }
-      return true;
-    }
-
-    // User denied permission - remove any stored consent
-    await this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, false);
-
-    return false;
+    const decision = decideNodeExecutionConsent(result);
+    await this._pluginMetaPersistenceService.setNodeExecutionConsent(
+      manifest.id,
+      decision.consentToStore,
+    );
+    return decision.granted;
   }
 
   /**

@@ -2731,7 +2731,8 @@
     "UNKNOWN_ERROR": "An unknown error occurred",
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload a plugin ZIP file to install it:",
     "VALIDATION_FAILED": "Validation failed",
-    "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Plugin \"{{pluginName}}\" could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin."
+    "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
+    "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}"
   },
   "PM": {
     "ALL_TASKS_TITLE": "Metrics (all tasks)",

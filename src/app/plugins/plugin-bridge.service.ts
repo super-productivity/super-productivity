@@ -1400,9 +1400,13 @@ export class PluginBridgeService implements OnDestroy {
    * Returns true if the bridge responds successfully, false otherwise.
    */
   async pingNodeBridge(pluginId: string, manifest: PluginManifest): Promise<boolean> {
+    // 1.5s is plenty for an in-process vm script that returns true — the ping
+    // is a bridge health check, not a long-running operation. Combined with
+    // pingWithRetry's defaults (3 attempts, 1s+2s delays) this caps cold-boot
+    // failure detection at ~7.5s instead of ~17s.
     const result = await this._executeNodeScript(pluginId, manifest, {
       script: 'return true',
-      timeout: 5000,
+      timeout: 1500,
     });
     return result.success;
   }
