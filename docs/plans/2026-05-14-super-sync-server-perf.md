@@ -22,7 +22,7 @@ Scope drawn from an audit of `packages/super-sync-server/` covering: upload proc
   ```
 - **Why:** `snapshot.service.ts:1083` and `:1114` `count(*) WHERE is_payload_encrypted=true` over a seq range. Today this scans the range and filters. With the partial index, the common case (no encrypted ops for the user) becomes an empty-index probe.
 - **Leave alone:** existing `operations_user_id_full_state_server_seq_idx` already covers the `op_type IN (...)` filter for the `findFirst` at `snapshot.service.ts:1103`. (That `findFirst` also filters `isPayloadEncrypted: false`, which isn't in the partial-index predicate — currently a cheap index scan + flag recheck rather than a single probe. Not worth a second partial index.)
-- **Verify:** `EXPLAIN ANALYZE` against a production-like distribution: 1M ops for a user with 0-100 encrypted rows, then `ANALYZE operations` after the migration and record the expected plan. Also re-check the latest full-state `findFirst` path that filters `isPayloadEncrypted: false`; the existing full-state partial index does not include that predicate, so many encrypted full-state rows can still force scan-time rechecks.
+- **Verify (post-deploy on staging, NOT a CI merge gate):** `EXPLAIN ANALYZE` against a production-like distribution requires populated DB state. Run on staging after the migration applies, with 1M ops for a user holding 0-100 encrypted rows; run `ANALYZE operations` after the migration and record the expected plan. Also re-check the latest full-state `findFirst` path that filters `isPayloadEncrypted: false`; the existing full-state partial index does not include that predicate, so many encrypted full-state rows can still force scan-time rechecks.
 
 ### 0b. Snapshot replay size-check cadence (Finding #2)
 
@@ -121,7 +121,7 @@ The plan-as-originally-drafted underspecified four real cases. The revised desig
 
 Drop the per-op re-check at `sync.service.ts:786-794`. The safety it covered is delivered by the **shared `user_sync_state.lastSeq` row-write**, which forces concurrent batches to serialize: the second writer blocks on the row lock, then fails with `40001` (serialization failure) on commit. RR isolation alone does NOT provide this — PostgreSQL RR does not run full serializable snapshot isolation. The row-lock pattern is what makes the new design safe.
 
-**This rationale belongs in `ARCHITECTURE-DECISIONS.md`** so that anyone proposing to remove the `lastSeq` increment from the hot path (e.g. sharded sequence assignment, distributed counters) re-introduces the race they were avoiding. Title the entry "Batch uploads under RepeatableRead — safety derives from `user_sync_state.lastSeq` row-lock, not from RR snapshot isolation."
+**Already recorded as `ARCHITECTURE-DECISIONS.md` Decision #4** ("Batch Uploads Under RepeatableRead", line 121). Anyone proposing to remove the `lastSeq` increment from the hot path (e.g. sharded sequence assignment, distributed counters) must re-read that decision before doing so.
 
 ### 1c. Tests
 
@@ -134,14 +134,17 @@ Drop the per-op re-check at `sync.service.ts:786-794`. The safety it covered is 
   - **Full-state op in batch:** `_aggregatePriorVectorClock` runs exactly once at the end and sees only rows with `server_seq < fullState.serverSeq`.
   - **Partial-acceptance batch:** 5 dups + 15 accepted → counters correct, audit log has 20 entries.
   - **Concurrency:** two parallel batches on same user — outer retry on `P2034` / `40001` handles the loser. (This is unchanged in spirit but the failure mode shifts from "per-op re-check" to "shared row lock" — verify it still works.)
+  - **Sequence-gap invariant:** mixed-batch `[accept, reject, accept, reject, accept]` → persisted rows have contiguous `serverSeq = N, N+1, N+2`, `lastSeq` advances by exactly 3, no gaps anywhere.
+  - **No-double-terminal invariant:** every accepted op produces exactly zero rejection audits; every rejected op produces exactly zero persisted rows. Run across the full audit-event taxonomy (`OP_REJECTED`, `DUPLICATE_OPERATION`, `INVALID_OP_ID`, `CONFLICT_*`).
+  - **TIMESTAMP_CLAMPED additive case:** an op with `timestamp > now + maxClockDriftMs` produces one persisted row with the clamped timestamp **plus** one additional `TIMESTAMP_CLAMPED` audit event. The clamp is not a rejection — both outcomes coexist for the same op.
 - **E2E:** `e2e/tests/sync/` (not `e2e/sync/`) — add one batch-of-50 upload test and assert latency drop vs. baseline.
 - **Bench:** docker-compose Postgres, time 25-op and 100-op upload before/after. **Also measure concurrent-batch latency:** the shared row-lock means two simultaneous batches serialize hard — the per-batch latency under contention may be similar to today's per-op design. Total throughput should still win because each batch holds the lock for far less wall time.
 
 ### 1d. Risk and rollout
 
 - Highest-blast-radius change in the plan. Land behind config flag `SUPERSYNC_BATCH_UPLOAD`, default `false` for one release, `true` the next.
-- **Wire the flag:** `src/config.ts` exposes a `ServerConfig` parsed from env in `loadConfigFromEnv`. Add `batchUpload: boolean` parsed from `process.env.SUPERSYNC_BATCH_UPLOAD === 'true'`, gated by `SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true`, and thread through `SyncService` constructor.
-- **Route cap:** enforce an explicit max ops per batch before schema validation/service calls so a decompressed body with hundreds of thousands of tiny ops cannot drive huge `IN (...)` prefetches.
+- **Wire the flag** (shipped in `src/config.ts:172-179`): `batchUpload = (SUPERSYNC_BATCH_UPLOAD === 'true') && (SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE === 'true')`. The first condition without the second throws at startup with a message pointing operators at `npm run migrate-payload-bytes`. The DB-side complement is the startup self-check (see Cross-cutting): if `batchUpload === true` but `operations` still contains rows with `payload_bytes = 0`, the server refuses to boot. This closes the trust hole if an operator flips the env flag too early.
+- **Route cap** (shipped in `sync.routes.ts:85, 601-604`): `MAX_OPS_PER_BATCH = SUPER_SYNC_MAX_OPS_PER_UPLOAD = 100` (from `packages/shared-schema/src/supersync-http-contract.ts:5`). Enforced before Zod parsing, returns HTTP 413 with `errorCode: 'PAYLOAD_TOO_LARGE'`. Same value also enforced inside the Zod schema as `.max(SUPER_SYNC_MAX_OPS_PER_UPLOAD)` so the OpenAPI contract stays in sync.
 - **Invariant:** every op in the batch produces exactly one terminal-status audit (rejection) OR exactly one persisted row, plus optionally one additive `TIMESTAMP_CLAMPED` audit — never both terminal outcomes, never neither, never gapped sequence numbers.
 
 ---
@@ -177,17 +180,27 @@ There is no clean SQL equivalent of `Buffer.byteLength(JSON.stringify(payload))`
 
 ### 2c. Write path
 
-- In the new bulk-`createMany` path (Phase 1), compute `payload_bytes` per op using `computeOpStorageBytes` so the on-row value matches the increment-counter value the hot path is already adding. This is the consistency `calculateStorageUsage` needs.
+- **All insert sites** populate `payload_bytes` per op using `computeOpStorageBytes` so the on-row value matches the increment-counter value the hot path is already adding. Both code paths are wired today: batch path at `sync.service.ts:1115`, legacy per-op path at `:1393`. This is the consistency `calculateStorageUsage` needs and the reason an old per-op insert deployed under `SUPERSYNC_BATCH_UPLOAD=false` does not seed drift while batch is rolled out.
 
 ### 2d. Read path
 
-- Replace `storage-quota.service.ts:109-112`:
+- Replace `storage-quota.service.ts:109-112` with the `CASE WHEN` form already shipped at `:97-120`:
   ```sql
-  SELECT COALESCE(SUM(CASE WHEN payload_bytes > 0 THEN payload_bytes ELSE ... END), 0) AS total
+  SELECT COALESCE(
+    SUM(
+      CASE
+        WHEN payload_bytes > 0 THEN payload_bytes
+        ELSE octet_length(payload::text)::bigint +
+             octet_length(vector_clock::text)::bigint
+      END
+    ),
+    0
+  ) AS total
   FROM operations
   WHERE user_id = $1
   ```
-- Drop `pg_column_size` entirely. No detoasting, no I/O DoS.
+- The `ELSE` branch (option (b) in the design analysis) is the only candidate on the same UTF-8 scale as `computeOpStorageBytes`. Detoasting cost is bounded — only un-backfilled rows hit it, and the set drains monotonically to zero.
+- Drop `pg_column_size` entirely. No detoasting on backfilled rows, no I/O DoS.
 - Snapshot side is handled in 0c.
 
 ### 2e. Tests
@@ -202,10 +215,11 @@ There is no clean SQL equivalent of `Buffer.byteLength(JSON.stringify(payload))`
 
 Pick after profiling Phase 0d in production:
 
-### 3a. Streaming serialize + gzip (preferred if memory still hot)
+### 3a. Streaming serialize + gzip (conditional, NOT a default win)
 
 - Replace `prepareSnapshotCache` (`snapshot.service.ts:175-184`) with a streaming pipeline: a streaming JSON stringifier feeding `zlib.createGzip()`, collecting chunks into a final `Buffer.concat(...)`.
-- Net peak memory: saves the intermediate serialized string buffer (~100MB on large states), but the parsed JS object remains because it already exists. Expect roughly 30-40% peak reduction, not 50%+; also expect slower wall-clock than native `JSON.stringify` because JS streaming stringifiers are typically 3-5x slower on large JSON.
+- **Pursue only if Phase 0d profiling shows OOM near `MAX_SNAPSHOT_DECOMPRESSED_BYTES` AND event-loop blocking — not memory pressure alone.** The 3-5× wall-clock regression vs native `JSON.stringify` makes this a memory-vs-latency trade.
+- Net peak memory: saves the intermediate serialized string buffer (~100MB on large states), but the parsed JS object remains because it already exists. Expect roughly 30-40% peak reduction, not 50%+.
 - **Verification gate:** `snapshotData` is only used for byte-count accounting and gunzip-then-parse round-tripping (verified — no hash or content comparison anywhere in `src/`). So byte-for-byte stability is NOT required; round-trip correctness is. Add a property-based test: random state → stream-stringify-gzip → gunzip-parse → deep-equal original.
 
 ### 3b. Worker-thread offload (only if replay moves too)
@@ -229,16 +243,16 @@ If 0d alone is sufficient in prod (no OOMs, no event-loop-blocking signals), def
 
 ### 4b. Invalidation — full surface
 
-All `tokenVersion: { increment: 1 }` write sites plus account deletion must invalidate:
+All `tokenVersion: { increment: 1 }` write sites plus account deletion must invalidate. Already wired in code with `// AUTH_CACHE_INVALIDATION:` comments adjacent to each write — kept here for future-PR awareness:
 
-- `auth.ts:77` (`revokeAllTokens`)
-- `auth.ts:95` (`replaceToken`)
-- `passkey.ts:611` (passkey recovery)
-- `api.ts:209` (`prisma.user.delete`) — without this, a deleted user's stale cache entry serves "valid" until TTL expires (ghost token window).
+- `auth.ts:77`/`:80` (`revokeAllTokens`)
+- `auth.ts:96`/`:102` (`replaceToken`)
+- `auth.ts:108` (post-write second invalidate after the new token version is read back)
+- `passkey.ts:592`/`:616` (passkey recovery — pre- and post-write)
+- `passkey.ts:278` (unverified-user delete in registration flow)
+- `api.ts:210`/`:213`/`:215` (`prisma.user.delete` in account deletion — both pre- and post-delete invalidate)
 
-Each call site needs an `authCache.invalidate(userId)` adjacent to the write. Add a code-search-friendly comment near each so future `tokenVersion` writes don't miss it.
-
-`isVerified` currently has no flip-to-zero path (`passkey.ts:276` deletes unverified users rather than flipping the flag). Add a comment in `auth-cache.ts` noting this assumption — if a future code path adds verification revocation, the cache will serve stale "valid" for up to TTL.
+`isVerified` currently has no flip-to-zero path (`passkey.ts:277` deletes unverified users rather than flipping the flag). The assumption is already documented at `auth-cache.ts:80` — if a future code path adds verification revocation, the cache will serve stale "valid" for up to TTL.
 
 ### 4c. Multi-instance concerns
 
@@ -255,7 +269,9 @@ Each call site needs an `authCache.invalidate(userId)` adjacent to the write. Ad
 
 - **Merge order:** 0a, 0b, 0c, 0d can land in any order, in parallel with Phase 1 design. Phase 2 depends on Phase 1 (same code paths). Phase 3 is conditional. Phase 4 is independent.
 - **Telemetry first:** before Phase 1 lands, add structured logging of `(opsInBatch, txDurationMs, dbRoundtrips)` to `uploadOps` so we can quantify the win. Existing audit log handles per-op decisions; add a single batch-summary line.
-- **ADR:** add a `ARCHITECTURE-DECISIONS.md` entry per §1b ("Batch uploads under RepeatableRead — safety derives from `user_sync_state.lastSeq` row-lock, not from RR snapshot isolation").
+- **Backfill-flag DB self-check:** the env-only `SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true` flag is operator-trusted. To prevent a too-early flip, the server runs a cheap `EXISTS (SELECT 1 FROM operations WHERE payload_bytes = 0 LIMIT 1)` probe at startup whenever `batchUpload === true` and refuses to boot if any unbackfilled rows remain.
+- **Reconcile guard during backfill window:** `calculateStorageUsage` returns a `hasUnbackfilledRows` flag (computed from a `BOOL_OR(payload_bytes = 0)` over the same single scan). `updateStorageUsage` skips the `users.storage_used_bytes` write when the flag is true, so an approximate SUM-with-`octet_length`-fallback never replaces the exact incrementally-maintained counter mid-backfill. The forced-reconcile marker is preserved across the skip so the next call (after backfill completes) reconciles correctly.
+- **ADR:** see `ARCHITECTURE-DECISIONS.md` Decision #4 ("Batch Uploads Under RepeatableRead"); already merged.
 - **Docs:** update `docs/sync-and-op-log/operation-log-architecture-diagrams.md` §upload-path if it diagrams the per-op loop.
 - **Prisma migrate dev:** document the shadow-DB workaround for migrations containing `CREATE INDEX CONCURRENTLY`; `migrate deploy` can run the production workaround, but `migrate dev` wraps migration SQL in a transaction where `CONCURRENTLY` is forbidden.
 - **Server seq precision:** any raw `last_seq` read that crosses the JavaScript boundary must hard-fail if it is not a safe integer instead of blindly calling `Number(...)`.
@@ -268,7 +284,7 @@ Each call site needs an `authCache.invalidate(userId)` adjacent to the write. Ad
 
 | Phase | Hot path affected             | Expected win                                                                                                           | Risk                       |
 | ----- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| 0a    | Snapshot fast-path validation | Eliminates seq-range scan on count                                                                                     | very low                   |
+| 0a    | Snapshot fast-path validation | Eliminates seq-range scan on **encrypted-op count**; full-state `findFirst` rechecks unchanged                         | very low                   |
 | 0b    | Snapshot replay               | ~100× fewer full stringifications (modulo full-state ops)                                                              | low                        |
 | 0c    | Quota reconcile               | Skips blob load (tens of MB)                                                                                           | very low                   |
 | 0d    | All routes (memory headroom)  | Stops OOMs near snapshot cap                                                                                           | low (ops change)           |

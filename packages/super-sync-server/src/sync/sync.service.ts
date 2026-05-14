@@ -1697,8 +1697,13 @@ export class SyncService {
     operationsBytes: number;
     snapshotBytes: number;
     totalBytes: number;
+    hasUnbackfilledRows: boolean;
   }> {
     return this.storageQuotaService.calculateStorageUsage(userId);
+  }
+
+  async assertPayloadBytesBackfillComplete(): Promise<void> {
+    return this.storageQuotaService.assertPayloadBytesBackfillComplete();
   }
 
   async checkStorageQuota(

@@ -198,7 +198,7 @@ vi.mock('../src/db', () => {
         .mockImplementation(async (query, userIdArg, deleteUpToSeqArg) => {
           // The same mock serves two SQL shapes:
           //  1. calculateStorageUsage's SUM(payload_bytes) reconcile
-          //     — returns `[{ operations_bytes, snapshot_bytes }]`.
+          //     — returns `[{ operations_bytes, snapshot_bytes, has_unbackfilled }]`.
           //  2. deleteOldestRestorePointAndOps's bounded full-state sum
           //     filtered by `op_type IN (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)`
           //     — returns `[{ exact_bytes, full_state_count }]`.
@@ -232,7 +232,13 @@ vi.mock('../src/db', () => {
           if (isFullStateScan) {
             return [{ exact_bytes: totalBytes, full_state_count: fullStateCount }];
           }
-          return [{ operations_bytes: totalBytes, snapshot_bytes: BigInt(0) }];
+          return [
+            {
+              operations_bytes: totalBytes,
+              snapshot_bytes: BigInt(0),
+              has_unbackfilled: false,
+            },
+          ];
         }),
       // decrementStorageUsage uses $executeRaw with a clamped UPDATE.
       // Simulate by mutating the matching user's storageUsedBytes in-place.
