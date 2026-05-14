@@ -140,7 +140,7 @@
         "CREATE_NEW_TAG_BTN": "Create Tag",
         "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags needs to be created for this board to work",
+        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this board to work",
         "EDIT_BOARD": "Edit board",
         "NO_PANELS_BTN": "Configure Board",
         "NO_PANELS_MSG": "This board has no panels configured. Add some panels to it."
@@ -164,7 +164,7 @@
         "TWO_WAY_SYNC_TITLE": "Title sync direction"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list uncompleted CalDAV tasks for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the task as well as more information about it.</p><p>In addition, you can automatically add and sync all uncompleted tasks to your task backlog.</p><p>To make it work for Nextcloud in the webapp, you may need to allow \"https://app.super-productivity.com\" in the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Here you can configure Super Productivity to list uncompleted CalDAV tasks for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the task as well as more information about it.</p><p>In addition, you can automatically add and sync all uncompleted tasks to your task backlog.</p><p>To make it work for Nextcloud in the webapp, you may need to allow \"https://app.super-productivity.com\" in the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Description",
@@ -245,7 +245,7 @@
       "S": {
         "OFFLINE": "Dropbox: Unable to sync because offline",
         "SYNC_ERROR": "Dropbox: Error while syncing",
-        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable version."
+        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable release."
       }
     },
     "FINISH_DAY_BEFORE_EXIT": {
@@ -354,7 +354,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and to access, you can provide an access token."
+        "HELP": "<p>Here you can configure Super Productivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and gain access, you can provide an access token."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -424,7 +424,7 @@
       "DEFAULT_PROJECT_LABEL": "Default Super Productivity Project",
       "DEFAULT_TAGS_LABEL": "Default tags for imported tasks",
       "FORM": {
-        "AUTO_ADD_TO_BACKLOG": "Auto import to default project (requires default project)",
+        "AUTO_ADD_TO_BACKLOG": "Auto import to default project (requires a default project)",
         "AUTO_POLL": "Poll imported for changes and notify",
         "POLLING_MODE": "Polling trigger",
         "POLLING_MODE_DESCRIPTION": "When to poll: only while the relevant project or tag is open, or always in the background",
@@ -595,7 +595,7 @@
           "H1": "Basic configuration",
           "H2": "Worklog settings",
           "H3": "Default transitions",
-          "P1_1": "Please provide a login name (can be found on your profile page) and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> or password if you can't generate one for some reason. Please not that newer versions of Jira sometimes only work with the token. ",
+          "P1_1": "Please provide a login name (can be found on your profile page) and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> or password if you can't generate one for some reason. Please note that newer versions of Jira sometimes only work with the token. ",
           "P1_2": "You also need to specify a JQL query which is used for the suggestions to add tasks from Jira. If you need help check out this link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
           "P1_3": "You can also configure if you want to automatically (e.g. every time you visit the planning view), to import all new issues specified by a custom JQL query.",
           "P1_4": "Another option is \"Check if current ticket is assigned to current user\". If enabled and you're starting, a check will be made to ensure you're currently assigned to that ticket on Jira. If not, a dialog appears in which you can chose to assign the ticket to yourself.",
