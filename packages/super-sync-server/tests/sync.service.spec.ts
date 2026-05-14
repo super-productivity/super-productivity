@@ -325,9 +325,19 @@ vi.mock('../src/db', async () => {
       }
       if (sql.includes('JOIN (VALUES')) {
         const txUserId = params[params.length - 1] as number;
+        const touchedParams = params.slice(0, -1).flatMap((param: unknown): unknown[] => {
+          if (
+            param &&
+            typeof param === 'object' &&
+            Array.isArray((param as { values?: unknown[] }).values)
+          ) {
+            return (param as { values: unknown[] }).values;
+          }
+          return [param];
+        });
         const touchedPairs = new Set<string>();
-        for (let i = 0; i < params.length - 1; i += 2) {
-          touchedPairs.add(`${params[i]}\u0000${params[i + 1]}`);
+        for (let i = 0; i < touchedParams.length; i += 2) {
+          touchedPairs.add(`${touchedParams[i]}\u0000${touchedParams[i + 1]}`);
         }
 
         const latestByEntity = new Map<string, any>();

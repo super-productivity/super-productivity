@@ -891,7 +891,8 @@ export class SnapshotService {
     initialState: Record<string, unknown> = {},
   ): Record<string, unknown> {
     const state = { ...(initialState as Record<string, Record<string, unknown>>) };
-    let estimatedBytes = assertReplayStateSize(state);
+    let estimatedBytes =
+      Object.keys(state).length === 0 ? 2 : assertReplayStateSize(state);
     let accumulatedDeltaBytes = 0;
 
     for (let i = 0; i < ops.length; i++) {
