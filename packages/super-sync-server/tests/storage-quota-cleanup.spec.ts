@@ -197,9 +197,9 @@ vi.mock('../src/db', () => {
         .fn()
         .mockImplementation(async (query, userIdArg, deleteUpToSeqArg) => {
           // The same mock serves two SQL shapes:
-          //  1. calculateStorageUsage's full-table SUM(pg_column_size)
-          //     scan (slow path) — returns `[{ total }]`.
-          //  2. deleteOldestRestorePointAndOps's BOUNDED full-state scan
+          //  1. calculateStorageUsage's SUM(payload_bytes) reconcile
+          //     — returns `[{ operations_bytes, snapshot_bytes }]`.
+          //  2. deleteOldestRestorePointAndOps's bounded full-state sum
           //     filtered by `op_type IN (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)`
           //     — returns `[{ exact_bytes, full_state_count }]`.
           // Detect by inspecting the SQL template fragments.
@@ -232,7 +232,7 @@ vi.mock('../src/db', () => {
           if (isFullStateScan) {
             return [{ exact_bytes: totalBytes, full_state_count: fullStateCount }];
           }
-          return [{ total: totalBytes }];
+          return [{ operations_bytes: totalBytes, snapshot_bytes: BigInt(0) }];
         }),
       // decrementStorageUsage uses $executeRaw with a clamped UPDATE.
       // Simulate by mutating the matching user's storageUsedBytes in-place.
@@ -393,14 +393,11 @@ describe('Storage Quota Cleanup', () => {
       expect(testOperations.size).toBe(4); // ops 4, 5, 6, 7 remain
     });
 
-    it('should not run pg_column_size over the full delta-op range during cleanup-delete', async () => {
-      // The cleanup path used to SUM(pg_column_size(payload)) over the FULL
-      // range being deleted, which forced PostgreSQL to detoast every payload
-      // and caused the production disk-I/O DoS. Counter is decremented via an
-      // approximate count*const decrement for delta ops; the only allowed
-      // pg_column_size scan is over the bounded restore-point rows
-      // (op_type IN (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)) so the 20MB-ish
-      // full-state payloads do not undercount.
+    it('should not run pg_column_size during cleanup-delete', async () => {
+      // The cleanup path used to SUM(pg_column_size(payload)) over deleted
+      // ranges, which forced PostgreSQL to detoast payloads and caused the
+      // production disk-I/O DoS. Exact cleanup accounting now uses the
+      // write-time payload_bytes column.
       const { initSyncService, getSyncService } =
         await import('../src/sync/sync.service');
       const { prisma } = await import('../src/db');
@@ -418,9 +415,7 @@ describe('Storage Quota Cleanup', () => {
       const offendingCalls = vi.mocked(prisma.$queryRaw).mock.calls.filter((call) => {
         const queryParts = call[0] as unknown as TemplateStringsArray;
         const sql = Array.from(queryParts).join('');
-        // Only block the unbounded variant; the bounded full-state scan is
-        // expected and gated by an `op_type IN (...)` filter.
-        return sql.includes('pg_column_size') && !sql.includes('op_type IN');
+        return sql.includes('pg_column_size');
       });
       expect(offendingCalls).toHaveLength(0);
     });
@@ -730,12 +725,12 @@ describe('Storage Quota Cleanup', () => {
         storageQuotaBytes: BigInt(quota),
       });
 
-      // Use a larger payload so the exact-pg_column_size measurement for the
+      // Use a larger payload so the exact payload_bytes measurement for the
       // restore point produces a freedBytes value comparable to the realistic
       // 20MB-scale payloads this code path was tuned for. With tiny payloads
-      // (`{}`), the new exact accounting would mean each iteration barely
-      // dents the counter and the success-then-reconcile-disproves flow this
-      // test exercises never fires.
+      // (`{}`), exact accounting would mean each iteration barely dents the
+      // counter and the success-then-reconcile-disproves flow this test
+      // exercises never fires.
       const restorePayload = { state: 'x'.repeat(2000) };
       createOp(clientId, userId, { opType: 'SYNC_IMPORT', payload: restorePayload }); // seq 1 - first approximate delete
       createOp(clientId, userId); // seq 2

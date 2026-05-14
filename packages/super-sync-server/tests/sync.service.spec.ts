@@ -99,6 +99,7 @@ vi.mock('../src/db', async () => {
           .filter((op: any) => {
             if (args.where?.userId !== undefined && args.where.userId !== op.userId)
               return false;
+            if (args.where?.id?.in && !args.where.id.in.includes(op.id)) return false;
             if (
               args.where?.serverSeq?.gt !== undefined &&
               op.serverSeq <= args.where.serverSeq.gt
@@ -311,6 +312,42 @@ vi.mock('../src/db', async () => {
     // returning their existing default shape.
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      if (sql.includes('INSERT INTO user_sync_state')) {
+        const [txUserId, delta] = params as [number, number];
+        const existing = state.userSyncStates.get(txUserId);
+        const lastSeq = (existing?.lastSeq ?? 0) + delta;
+        state.userSyncStates.set(txUserId, {
+          ...(existing ?? { userId: txUserId }),
+          lastSeq,
+        });
+        state.serverSeqCounter = Math.max(state.serverSeqCounter, lastSeq);
+        return [{ lastSeq }];
+      }
+      if (sql.includes('JOIN (VALUES')) {
+        const txUserId = params[params.length - 1] as number;
+        const touchedPairs = new Set<string>();
+        for (let i = 0; i < params.length - 1; i += 2) {
+          touchedPairs.add(`${params[i]}\u0000${params[i + 1]}`);
+        }
+
+        const latestByEntity = new Map<string, any>();
+        for (const op of state.operations.values()) {
+          if (op.userId !== txUserId || !op.entityId) continue;
+          const key = `${op.entityType}\u0000${op.entityId}`;
+          if (!touchedPairs.has(key)) continue;
+          const existing = latestByEntity.get(key);
+          if (!existing || op.serverSeq > existing.serverSeq) {
+            latestByEntity.set(key, op);
+          }
+        }
+
+        return Array.from(latestByEntity.values()).map((op: any) => ({
+          entityType: op.entityType,
+          entityId: op.entityId,
+          clientId: op.clientId,
+          vectorClock: op.vectorClock,
+        }));
+      }
       if (sql.includes('jsonb_each_text(vector_clock)')) {
         const [txUserId, beforeServerSeq] = params;
         const aggregate = new Map<string, number>();
@@ -551,7 +588,7 @@ vi.mock('../src/auth', () => ({
 
 // Import AFTER mocking
 import { initSyncService, getSyncService, SyncService } from '../src/sync/sync.service';
-import { Operation, DEFAULT_SYNC_CONFIG } from '../src/sync/sync.types';
+import { Operation, DEFAULT_SYNC_CONFIG, SYNC_ERROR_CODES } from '../src/sync/sync.types';
 
 describe('SyncService', () => {
   const userId = 1;
@@ -635,6 +672,230 @@ describe('SyncService', () => {
       expect(results).toHaveLength(2);
       expect(results[0].serverSeq).toBe(1);
       expect(results[1].serverSeq).toBe(2);
+    });
+
+    it('should batch upload operations behind the rollout flag', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const ops: Operation[] = Array.from({ length: 25 }, (_, index) => ({
+        id: uuidv7(),
+        clientId,
+        actionType: 'ADD_TASK',
+        opType: 'CRT',
+        entityType: 'TASK',
+        entityId: `task-${index}`,
+        payload: { title: `Task ${index}` },
+        vectorClock: { [clientId]: index + 1 },
+        timestamp: Date.now() + index,
+        schemaVersion: 1,
+      }));
+
+      const results = await service.uploadOps(userId, clientId, ops);
+
+      expect(results).toHaveLength(25);
+      expect(results.every((result) => result.accepted)).toBe(true);
+      expect(results.map((result) => result.serverSeq)).toEqual(
+        Array.from({ length: 25 }, (_, index) => index + 1),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(25);
+      expect(testState.operations.size).toBe(25);
+    });
+
+    it('should reject intra-batch duplicate operation IDs without sequence gaps', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const opId = uuidv7();
+      const ops: Operation[] = [
+        {
+          id: opId,
+          clientId,
+          actionType: 'ADD_TASK',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Task 1' },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+        {
+          id: opId,
+          clientId,
+          actionType: 'ADD_TASK',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: 'task-2',
+          payload: { title: 'Task 2' },
+          vectorClock: { [clientId]: 2 },
+          timestamp: Date.now() + 1,
+          schemaVersion: 1,
+        },
+      ];
+
+      const results = await service.uploadOps(userId, clientId, ops);
+
+      expect(results[0]).toEqual(
+        expect.objectContaining({ accepted: true, serverSeq: 1 }),
+      );
+      expect(results[1]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+        }),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+      expect(testState.operations.size).toBe(1);
+    });
+
+    it('should reject intra-batch entity conflicts in order', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const ops: Operation[] = [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'UPDATE_TASK',
+          opType: 'UPD',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'First' },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'UPDATE_TASK',
+          opType: 'UPD',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Concurrent' },
+          vectorClock: { 'other-client': 1 },
+          timestamp: Date.now() + 1,
+          schemaVersion: 1,
+        },
+      ];
+
+      const results = await service.uploadOps(userId, clientId, ops);
+
+      expect(results[0].accepted).toBe(true);
+      expect(results[1]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
+        }),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+      expect(testState.operations.size).toBe(1);
+    });
+
+    it('should use entityIds when prefetching batch conflicts', async () => {
+      const service = new SyncService({ batchUpload: true });
+      testState.userSyncStates.set(userId, { userId, lastSeq: 1 });
+      testState.operations.set('existing-op', {
+        id: 'existing-op',
+        userId,
+        clientId: 'other-client',
+        serverSeq: 1,
+        actionType: 'UPDATE_TASK',
+        opType: 'UPD',
+        entityType: 'TASK',
+        entityId: 'task-b',
+        payload: { title: 'Existing' },
+        payloadBytes: BigInt(10),
+        vectorClock: { 'other-client': 1 },
+        schemaVersion: 1,
+        clientTimestamp: BigInt(Date.now() - 1000),
+        receivedAt: BigInt(Date.now() - 1000),
+        isPayloadEncrypted: false,
+        syncImportReason: null,
+      });
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'BATCH_UPDATE_TASKS',
+          opType: 'BATCH',
+          entityType: 'TASK',
+          entityId: 'task-a',
+          entityIds: ['task-a', 'task-b', 'task-c'],
+          payload: { entities: { 'task-a': { title: 'A' } } },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results[0]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
+        }),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+    });
+
+    it('should create user sync state for first-time batch uploads', async () => {
+      const service = new SyncService({ batchUpload: true });
+      expect(testState.userSyncStates.get(userId)).toBeUndefined();
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'ADD_TASK',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Task 1' },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results[0]).toEqual(
+        expect.objectContaining({ accepted: true, serverSeq: 1 }),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+    });
+
+    it('should persist full-state batch aggregate metadata once', async () => {
+      const service = new SyncService({ batchUpload: true });
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          payload: { TASK: {} },
+          vectorClock: { [clientId]: 7 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'ADD_TASK',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: 'task-after',
+          payload: { title: 'After' },
+          vectorClock: { [clientId]: 8 },
+          timestamp: Date.now() + 1,
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results.map((result) => result.accepted)).toEqual([true, true]);
+      expect(testState.userSyncStates.get(userId)).toEqual(
+        expect.objectContaining({
+          lastSeq: 2,
+          latestFullStateSeq: 1,
+          latestFullStateVectorClock: { [clientId]: 7 },
+        }),
+      );
     });
 
     it('should reject duplicate operation IDs (idempotency)', async () => {

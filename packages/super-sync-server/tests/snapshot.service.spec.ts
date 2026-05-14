@@ -1574,6 +1574,72 @@ describe('SnapshotService', () => {
       expect(result.PROJECT).toEqual({ 'proj-1': { id: 'proj-1' } });
     });
 
+    it('should not stringify the full replay state for small delta ops', () => {
+      const stringifySpy = vi.spyOn(JSON, 'stringify');
+      const ops = Array.from({ length: 1500 }, (_, index) => ({
+        id: `op-${index}`,
+        opType: 'CRT',
+        entityType: 'TASK',
+        entityId: `task-${index}`,
+        payload: { id: `task-${index}`, title: `Task ${index}` },
+        isPayloadEncrypted: false,
+        serverSeq: index + 1,
+        schemaVersion: 1,
+      }));
+
+      try {
+        service.replayOpsToState(ops as any);
+
+        const fullStateStringifications = stringifySpy.mock.calls.filter(([value]) => {
+          return (
+            value !== null &&
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            Object.prototype.hasOwnProperty.call(value, 'TASK')
+          );
+        });
+        expect(fullStateStringifications).toHaveLength(0);
+      } finally {
+        stringifySpy.mockRestore();
+      }
+    });
+
+    it('should measure replay state immediately after a full-state op', () => {
+      const stringifySpy = vi.spyOn(JSON, 'stringify');
+      const ops = [
+        {
+          id: 'op-1',
+          opType: 'SYNC_IMPORT',
+          entityType: 'FULL_STATE',
+          entityId: null,
+          payload: {
+            appDataComplete: {
+              TASK: { 'task-1': { id: 'task-1' } },
+            },
+          },
+          isPayloadEncrypted: false,
+          serverSeq: 1,
+          schemaVersion: 1,
+        },
+      ];
+
+      try {
+        service.replayOpsToState(ops as any);
+
+        const fullStateStringifications = stringifySpy.mock.calls.filter(([value]) => {
+          return (
+            value !== null &&
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            Object.prototype.hasOwnProperty.call(value, 'TASK')
+          );
+        });
+        expect(fullStateStringifications).toHaveLength(1);
+      } finally {
+        stringifySpy.mockRestore();
+      }
+    });
+
     it('SYNC_IMPORT replaces the entire state (does NOT merge into stale cache)', () => {
       // Regression test: previously the full-state ops used Object.assign which
       // merged into existing state, so stale entity types from a cached base

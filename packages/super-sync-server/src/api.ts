@@ -23,6 +23,7 @@ import {
 import { authenticate, getAuthUser } from './middleware';
 import { Logger } from './logger';
 import { prisma } from './db';
+import { authCache } from './auth-cache';
 
 // Zod Schemas
 const VerifyEmailSchema = z.object({
@@ -207,6 +208,8 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         // Cascade delete handles: operations, syncState, devices (via Prisma schema)
         await prisma.user.delete({ where: { id: userId } });
+        // AUTH_CACHE_INVALIDATION: account deletion must not leave a ghost-token window.
+        authCache.invalidate(userId);
 
         Logger.audit({ event: 'USER_ACCOUNT_DELETED', userId });
 

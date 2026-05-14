@@ -149,6 +149,7 @@ echo ""
 MIGRATION_TIMEOUT="${MIGRATION_TIMEOUT:-900}"
 MIGRATOR_RUN="docker compose $COMPOSE_FILES run --rm --no-deps --interactive=false -T supersync"
 FULL_STATE_INDEX_MIGRATION="20260512000000_add_full_state_sequence_index_drop_redundant_indexes"
+ENCRYPTED_OPS_INDEX_MIGRATION="20260514000000_add_encrypted_ops_partial_index"
 echo "==> Verifying database connectivity from the supersync image..."
 set +e
 timeout "$POSTGRES_WAIT_TIMEOUT" \
@@ -196,6 +197,19 @@ is_full_state_index_transaction_block_failure() {
         grep -q 'cannot run inside a transaction block' "$MIGRATE_LOG"
 }
 
+is_recoverable_encrypted_ops_index_migration_failure() {
+    [ -n "$MIGRATE_LOG" ] &&
+        grep -q 'P3009' "$MIGRATE_LOG" &&
+        grep -q "$ENCRYPTED_OPS_INDEX_MIGRATION" "$MIGRATE_LOG"
+}
+
+is_encrypted_ops_index_transaction_block_failure() {
+    [ -n "$MIGRATE_LOG" ] &&
+        grep -q 'P3018' "$MIGRATE_LOG" &&
+        grep -q "$ENCRYPTED_OPS_INDEX_MIGRATION" "$MIGRATE_LOG" &&
+        grep -q 'cannot run inside a transaction block' "$MIGRATE_LOG"
+}
+
 run_concurrent_index_sql() {
     local sql="$1"
     local execute_status
@@ -234,6 +248,15 @@ apply_full_state_index_migration_outside_prisma() {
     run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_server_seq_idx";'
 }
 
+apply_encrypted_ops_index_migration_outside_prisma() {
+    echo ""
+    echo "==> Applying $ENCRYPTED_OPS_INDEX_MIGRATION outside Prisma migrate..."
+    echo "    Prisma cannot run CREATE INDEX CONCURRENTLY in a transaction block."
+
+    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_server_seq_encrypted_idx";'
+    run_concurrent_index_sql 'CREATE INDEX CONCURRENTLY "operations_user_id_server_seq_encrypted_idx" ON "operations"("user_id", "server_seq") WHERE "is_payload_encrypted" = true;'
+}
+
 resolve_failed_full_state_index_migration() {
     local resolve_status
 
@@ -243,6 +266,30 @@ resolve_failed_full_state_index_migration() {
     set +e
     timeout "$POSTGRES_WAIT_TIMEOUT" \
         $MIGRATOR_RUN npx prisma migrate resolve --rolled-back "$FULL_STATE_INDEX_MIGRATION"
+    resolve_status=$?
+    set -e
+
+    if [ "$resolve_status" -eq 124 ]; then
+        echo ""
+        echo "ERROR: prisma migrate resolve timed out after ${POSTGRES_WAIT_TIMEOUT}s."
+        exit 1
+    fi
+    if [ "$resolve_status" -ne 0 ]; then
+        echo ""
+        echo "ERROR: prisma migrate resolve failed (exit $resolve_status)."
+        exit "$resolve_status"
+    fi
+}
+
+resolve_failed_encrypted_ops_index_migration() {
+    local resolve_status
+
+    echo ""
+    echo "==> Resolving failed index-only migration $ENCRYPTED_OPS_INDEX_MIGRATION..."
+    echo "    Marking it rolled back so Prisma can retry the migration SQL."
+    set +e
+    timeout "$POSTGRES_WAIT_TIMEOUT" \
+        $MIGRATOR_RUN npx prisma migrate resolve --rolled-back "$ENCRYPTED_OPS_INDEX_MIGRATION"
     resolve_status=$?
     set -e
 
@@ -281,6 +328,29 @@ resolve_applied_full_state_index_migration() {
     fi
 }
 
+resolve_applied_encrypted_ops_index_migration() {
+    local resolve_status
+
+    echo ""
+    echo "==> Marking $ENCRYPTED_OPS_INDEX_MIGRATION as applied after out-of-band SQL..."
+    set +e
+    timeout "$POSTGRES_WAIT_TIMEOUT" \
+        $MIGRATOR_RUN npx prisma migrate resolve --applied "$ENCRYPTED_OPS_INDEX_MIGRATION"
+    resolve_status=$?
+    set -e
+
+    if [ "$resolve_status" -eq 124 ]; then
+        echo ""
+        echo "ERROR: prisma migrate resolve --applied timed out after ${POSTGRES_WAIT_TIMEOUT}s."
+        exit 1
+    fi
+    if [ "$resolve_status" -ne 0 ]; then
+        echo ""
+        echo "ERROR: prisma migrate resolve --applied failed (exit $resolve_status)."
+        exit "$resolve_status"
+    fi
+}
+
 run_migrate_deploy
 if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
     is_recoverable_full_state_index_migration_failure; then
@@ -295,6 +365,21 @@ if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
     resolve_applied_full_state_index_migration
     echo ""
     echo "==> Retrying database migrations after applying $FULL_STATE_INDEX_MIGRATION..."
+    run_migrate_deploy
+fi
+if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
+    is_recoverable_encrypted_ops_index_migration_failure; then
+    resolve_failed_encrypted_ops_index_migration
+    echo ""
+    echo "==> Retrying database migrations after resolving $ENCRYPTED_OPS_INDEX_MIGRATION..."
+    run_migrate_deploy
+fi
+if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
+    is_encrypted_ops_index_transaction_block_failure; then
+    apply_encrypted_ops_index_migration_outside_prisma
+    resolve_applied_encrypted_ops_index_migration
+    echo ""
+    echo "==> Retrying database migrations after applying $ENCRYPTED_OPS_INDEX_MIGRATION..."
     run_migrate_deploy
 fi
 

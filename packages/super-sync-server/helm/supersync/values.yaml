@@ -176,12 +176,14 @@ service:
   port: 80
 
 # -- Resource requests and limits for the SuperSync container
+# Snapshot upload/replay can hold decompressed request data plus replay state
+# near MAX_SNAPSHOT_DECOMPRESSED_BYTES and MAX_REPLAY_STATE_SIZE_BYTES.
 resources:
   requests:
     cpu: 100m
-    memory: 128Mi
-  limits:
     memory: 256Mi
+  limits:
+    memory: 512Mi
 
 # -- Horizontal Pod Autoscaler configuration
 autoscaling:

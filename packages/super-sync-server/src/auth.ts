@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import { sendLoginMagicLinkEmail, sendVerificationEmail } from './email';
 import { loadConfigFromEnv } from './config';
 import { Prisma } from '@prisma/client';
+import { authCache } from './auth-cache';
 
 // Auth constants
 const MIN_JWT_SECRET_LENGTH = 32;
@@ -76,6 +77,8 @@ export const revokeAllTokens = async (userId: number): Promise<void> => {
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
   });
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(userId);
   Logger.info(`All tokens revoked for user ${userId}`);
 };
 
@@ -97,6 +100,8 @@ export const replaceToken = async (
     });
     return user.tokenVersion;
   });
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(userId);
 
   const token = jwt.sign({ userId, email, tokenVersion: newTokenVersion }, JWT_SECRET, {
     expiresIn: JWT_EXPIRY,
@@ -124,6 +129,12 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
       });
     });
 
+    const tokenVersion = payload.tokenVersion ?? 0;
+    const cachedUser = authCache.get(payload.userId);
+    if (cachedUser && cachedUser.isVerified && cachedUser.tokenVersion === tokenVersion) {
+      return { valid: true, userId: payload.userId, email: payload.email };
+    }
+
     // Verify user exists, is verified, and token version matches
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
@@ -137,12 +148,12 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
 
     if (!user.isVerified) {
       Logger.warn(`Token verification failed: User ${payload.userId} is not verified`);
+      authCache.set(payload.userId, user.tokenVersion ?? 0, false);
       return { valid: false, reason: 'Account unavailable' };
     }
 
     // Check token version - if it doesn't match, the token has been revoked
     // (e.g., user used "Revoke & Replace Token"). Tokens without version are treated as version 0.
-    const tokenVersion = payload.tokenVersion ?? 0;
     const currentVersion = user.tokenVersion ?? 0;
     if (tokenVersion !== currentVersion) {
       Logger.warn(
@@ -155,6 +166,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
       };
     }
 
+    authCache.set(payload.userId, currentVersion, true);
     return { valid: true, userId: payload.userId, email: payload.email };
   } catch (err) {
     if (err instanceof TokenExpiredError) {
@@ -168,7 +180,8 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
     if (err instanceof JsonWebTokenError) {
       return { valid: false, reason: 'Invalid token' };
     }
-    const errMsg = err instanceof Error ? `[${err.name}] ${err.message}` : 'non-Error value';
+    const errMsg =
+      err instanceof Error ? `[${err.name}] ${err.message}` : 'non-Error value';
     Logger.error(`Token verification failed due to unexpected error: ${errMsg}`);
     throw err;
   }

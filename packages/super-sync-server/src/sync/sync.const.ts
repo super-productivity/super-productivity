@@ -15,9 +15,8 @@ export {
  * payloads can be up to 20MB, so 1024 undercounts by ~20000x and the cached
  * counter ends up permanently low if reconcile fails. `deleteOldestRestorePointAndOps`
  * measures the exact `pg_column_size(payload)` for those 1-2 rows BEFORE
- * deleting; the per-row scan there is bounded to the restore-point fan-out
- * (very small) and does not reintroduce the SUM(pg_column_size) DoS that
- * scanning every delta op caused.
+ * deleting; the persisted payload_bytes value avoids reintroducing the
+ * SUM(pg_column_size) DoS that scanning every delta op caused.
  */
 export const APPROX_BYTES_PER_OP = 1024;
 
@@ -26,8 +25,8 @@ export const APPROX_BYTES_PER_OP = 1024;
  * vector clock will occupy on disk. Used by both the route layer (for quota
  * gating and post-commit counter deltas) and the service layer (for the atomic
  * counter write inside the upload transaction). Keeping a single
- * implementation guarantees the gate and the increment cannot disagree about
- * what "size" means.
+ * implementation guarantees the gate, the operation payload_bytes column, and
+ * the increment cannot disagree about what "size" means.
  *
  * Robust against malformed payloads: if JSON.stringify throws (e.g. BigInt,
  * circular ref), the op is charged APPROX_BYTES_PER_OP so the counter cannot

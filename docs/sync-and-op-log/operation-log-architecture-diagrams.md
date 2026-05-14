@@ -221,8 +221,8 @@ graph TB
             end
 
             subgraph ConflictCheck["2. Conflict Detection"]
-                C1["Find latest op for entity"]
-                C2["Compare vector clocks"]
+                C1["Prefetch existing op IDs<br/>and latest touched entities"]
+                C2["Compare vector clocks<br/>in batch order"]
                 C3{Result?}
                 C3 -- GREATER_THAN --> C4[Accept]
                 C3 -- CONCURRENT --> C5[Reject]
@@ -230,13 +230,10 @@ graph TB
             end
 
             subgraph Persist["3. Persistence (REPEATABLE_READ)"]
-                P1["Increment lastSeq"]
-                P2["Re-check conflict"]
-                P3["INSERT operation"]
-                P4{DEL op?}
-                P4 -- Yes --> P5["UPSERT tombstone"]
-                P4 -- No --> P6[Skip]
-                P7["UPSERT sync_device"]
+                P1["Reserve contiguous seq range<br/>via user_sync_state.lastSeq row lock"]
+                P2["Bulk INSERT accepted operations"]
+                P3["Update full-state aggregate VC<br/>(if needed)"]
+                P4["UPSERT sync_device"]
             end
         end
     end
@@ -248,13 +245,11 @@ graph TB
     subgraph PostgreSQL["POSTGRESQL DATABASE"]
         direction TB
 
-        OpsTable[("operations<br/>━━━━━━━━━━━━━━━<br/>id, serverSeq<br/>opType, entityType<br/>entityId, payload<br/>vectorClock<br/>clientTimestamp")]:::db
+        OpsTable[("operations<br/>━━━━━━━━━━━━━━━<br/>id, serverSeq<br/>opType, entityType<br/>entityId, payload<br/>payloadBytes<br/>vectorClock<br/>clientTimestamp")]:::db
 
-        SyncState[("user_sync_state<br/>━━━━━━━━━━━━━━━<br/>lastSeq<br/>snapshotData<br/>lastSnapshotSeq")]:::db
+        SyncState[("user_sync_state<br/>━━━━━━━━━━━━━━━<br/>lastSeq<br/>snapshotData<br/>lastSnapshotSeq<br/>latestFullStateVectorClock")]:::db
 
         Devices[("sync_devices<br/>━━━━━━━━━━━━━━━<br/>clientId<br/>lastSeenAt<br/>lastAckedSeq")]:::db
-
-        Tombstones[("tombstones<br/>━━━━━━━━━━━━━━━<br/>entityType<br/>entityId<br/>deletedAt")]:::db
     end
 
     %% ═══════════════════════════════════════════════════════════════
@@ -266,8 +261,6 @@ graph TB
     V1 --> V2 --> V3 --> V4 --> V5
     V5 --> C1 --> C2 --> C3
     C4 --> P1 --> P2 --> P3 --> P4
-    P5 --> P7
-    P6 --> P7
 
     %% ═══════════════════════════════════════════════════════════════
     %% CONNECTIONS: Processing -> Database
@@ -304,7 +297,7 @@ graph TB
 
 | Endpoint                   | Method | Purpose                         | DB Operations                                                        |
 | -------------------------- | ------ | ------------------------------- | -------------------------------------------------------------------- |
-| `/api/sync/ops`            | POST   | Upload operations               | INSERT ops, UPDATE lastSeq, UPSERT device, UPSERT tombstone (if DEL) |
+| `/api/sync/ops`            | POST   | Upload operations               | Prefetch duplicate/conflict rows, reserve lastSeq range, bulk INSERT ops, UPSERT device |
 | `/api/sync/ops?sinceSeq=N` | GET    | Download operations             | SELECT ops, SELECT lastSeq, find latest snapshot (skip optimization) |
 | `/api/sync/snapshot`       | POST   | Upload full state (SYNC_IMPORT) | Same as POST /ops + UPDATE snapshot cache                            |
 | `/api/sync/snapshot`       | GET    | Get full state                  | SELECT snapshot (or replay ops if stale)                             |
@@ -316,8 +309,8 @@ graph TB
 
 | Table             | Purpose                                    | Key Columns                                             |
 | ----------------- | ------------------------------------------ | ------------------------------------------------------- |
-| `operations`      | Event log (append-only)                    | id, serverSeq, opType, entityType, payload, vectorClock |
-| `user_sync_state` | Per-user metadata + cached snapshot        | lastSeq, snapshotData, lastSnapshotSeq                  |
+| `operations`      | Event log (append-only)                    | id, serverSeq, opType, entityType, payload, payloadBytes, vectorClock |
+| `user_sync_state` | Per-user metadata + cached snapshot        | lastSeq, snapshotData, lastSnapshotSeq, latestFullStateVectorClock |
 | `sync_devices`    | Device tracking                            | clientId, lastSeenAt, lastAckedSeq                      |
 | `tombstones`      | Deleted entity tracking (30-day retention) | entityType, entityId, deletedAt, expiresAt              |
 

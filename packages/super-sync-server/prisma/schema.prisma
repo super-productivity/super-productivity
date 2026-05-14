@@ -70,6 +70,7 @@ model Operation {
   entityType         String  @map("entity_type")
   entityId           String? @map("entity_id")
   payload            Json
+  payloadBytes       BigInt  @default(0) @map("payload_bytes")
   vectorClock        Json    @map("vector_clock")
   schemaVersion      Int     @map("schema_version")
   clientTimestamp    BigInt  @map("client_timestamp")

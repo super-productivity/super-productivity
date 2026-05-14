@@ -17,6 +17,7 @@ import { sendPasskeyRecoveryEmail } from './email';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv } from './config';
 import { VERIFICATION_TOKEN_EXPIRY_MS, MAX_VERIFICATION_RESEND_COUNT } from './auth';
+import { authCache } from './auth-cache';
 
 // Constants
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
@@ -274,6 +275,7 @@ export const verifyRegistration = async (
       });
       if (user && user.isVerified === 0) {
         await prisma.user.delete({ where: { id: user.id } });
+        authCache.invalidate(user.id);
         Logger.info(`Cleaned up failed passkey registration (ID: ${user.id})`);
       }
       throw new Error('Failed to send verification email. Please try again later.');
@@ -612,6 +614,8 @@ export const completePasskeyRecovery = async (
       },
     });
   });
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(user.id);
 
   Logger.info(`Passkey recovery completed (ID: ${user.id})`);
 

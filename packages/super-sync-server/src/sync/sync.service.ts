@@ -30,6 +30,7 @@ import {
 } from './services';
 
 interface DuplicateOperationCandidate {
+  id: string;
   userId: number;
   clientId: string;
   actionType: string;
@@ -49,6 +50,22 @@ interface LatestEntityOperationRow {
   entityId: string;
   clientId: string;
   vectorClock: unknown;
+}
+
+interface LatestBatchEntityOperationRow extends LatestEntityOperationRow {
+  entityType: string;
+}
+
+interface BatchUploadCandidate {
+  op: Operation;
+  resultIndex: number;
+  originalTimestamp: number;
+  fullStateVectorClock?: VectorClock;
+}
+
+interface AcceptedBatchOperation extends BatchUploadCandidate {
+  serverSeq: number;
+  storageBytes: number;
 }
 
 // Conservative enough to avoid planner-heavy BitmapOr + Sort plans on large
@@ -387,6 +404,131 @@ export class SyncService {
     return value;
   }
 
+  private clampFutureTimestamp(
+    userId: number,
+    clientId: string,
+    op: Operation,
+    now: number,
+  ): number {
+    const originalTimestamp = op.timestamp;
+    const maxAllowedTimestamp = now + this.config.maxClockDriftMs;
+    if (op.timestamp > maxAllowedTimestamp) {
+      op.timestamp = maxAllowedTimestamp;
+      Logger.audit({
+        event: 'TIMESTAMP_CLAMPED',
+        userId,
+        clientId,
+        opId: op.id,
+        entityType: op.entityType,
+        originalTimestamp,
+        clampedTo: maxAllowedTimestamp,
+        driftMs: originalTimestamp - now,
+      });
+    }
+    return originalTimestamp;
+  }
+
+  private rejectedUploadResult(
+    userId: number,
+    clientId: string,
+    op: Operation,
+    error: string | undefined,
+    errorCode: UploadResult['errorCode'],
+    existingClock?: VectorClock,
+  ): UploadResult {
+    Logger.audit({
+      event: 'OP_REJECTED',
+      userId,
+      clientId,
+      opId: op.id,
+      entityType: op.entityType,
+      entityId: op.entityId,
+      errorCode,
+      reason: error,
+      opType: op.opType,
+    });
+
+    return {
+      opId: op.id,
+      accepted: false,
+      error,
+      errorCode,
+      existingClock,
+    };
+  }
+
+  private getConflictEntityIds(op: Operation): string[] {
+    const rawEntityIds = op.entityIds?.length
+      ? op.entityIds
+      : op.entityId
+        ? [op.entityId]
+        : [];
+    return Array.from(new Set(rawEntityIds));
+  }
+
+  private getEntityConflictKey(entityType: string, entityId: string): string {
+    return `${entityType}\u0000${entityId}`;
+  }
+
+  private async prefetchLatestEntityOpsForBatch(
+    userId: number,
+    candidates: BatchUploadCandidate[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, LatestBatchEntityOperationRow>> {
+    const entityPairs = new Map<string, { entityType: string; entityId: string }>();
+
+    for (const candidate of candidates) {
+      if (isFullStateOpType(candidate.op.opType)) continue;
+
+      for (const entityId of this.getConflictEntityIds(candidate.op)) {
+        entityPairs.set(this.getEntityConflictKey(candidate.op.entityType, entityId), {
+          entityType: candidate.op.entityType,
+          entityId,
+        });
+      }
+    }
+
+    if (entityPairs.size === 0) return new Map();
+
+    const touchedRows = Array.from(entityPairs.values()).map(
+      ({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`,
+    );
+
+    const latestOps = await tx.$queryRaw<LatestBatchEntityOperationRow[]>`
+      SELECT DISTINCT ON (o.entity_type, o.entity_id)
+        o.entity_type AS "entityType",
+        o.entity_id AS "entityId",
+        o.client_id AS "clientId",
+        o.vector_clock AS "vectorClock"
+      FROM operations o
+      JOIN (VALUES ${Prisma.join(touchedRows)}) AS touched(entity_type, entity_id)
+        ON touched.entity_type = o.entity_type
+       AND touched.entity_id = o.entity_id
+      WHERE o.user_id = ${userId}
+      ORDER BY o.entity_type, o.entity_id, o.server_seq DESC
+    `;
+
+    const latestByEntity = new Map<string, LatestBatchEntityOperationRow>();
+    for (const latestOp of latestOps) {
+      latestByEntity.set(
+        this.getEntityConflictKey(latestOp.entityType, latestOp.entityId),
+        latestOp,
+      );
+    }
+    return latestByEntity;
+  }
+
+  private pruneVectorClockForStorage(op: Operation): void {
+    const beforeSize = Object.keys(op.vectorClock).length;
+    op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+    const afterSize = Object.keys(op.vectorClock).length;
+    if (afterSize < beforeSize) {
+      Logger.debug(
+        `[client:${op.clientId}] Vector clock pruned from ${beforeSize} to ${afterSize} before storage`,
+      );
+    }
+  }
+
   // === Upload Operations ===
 
   async uploadOps(
@@ -397,6 +539,8 @@ export class SyncService {
   ): Promise<UploadResult[]> {
     const results: UploadResult[] = [];
     const now = Date.now();
+    const txStartedAt = Date.now();
+    let uploadDbRoundtrips = 0;
 
     try {
       // Use transaction to acquire write lock and ensure atomicity
@@ -438,16 +582,6 @@ export class SyncService {
             Logger.info(`[user:${userId}] Clean slate completed - all data deleted`);
           }
 
-          // Ensure user has sync state row (init if needed)
-          // We assume user exists in `users` table because of foreign key,
-          // but if `uploadOps` is called, authentication should have verified user existence.
-          // However, `user_sync_state` might not exist yet.
-          await tx.userSyncState.upsert({
-            where: { userId },
-            create: { userId, lastSeq: 0 },
-            update: {}, // No-op update to ensure it exists
-          });
-
           // Track the delta-bytes for accepted ops so we can write
           // `users.storage_used_bytes` atomically in the same transaction as the
           // op inserts. Doing the counter write outside this transaction (as
@@ -456,13 +590,39 @@ export class SyncService {
           // `markStorageNeedsReconcile` marker is lost too.
           let acceptedDeltaBytes = 0;
           let unserializableAccepted = 0;
-          for (const op of ops) {
-            const result = await this.processOperation(userId, clientId, op, now, tx);
-            results.push(result);
-            if (result.accepted) {
-              const sized = computeOpStorageBytes(op);
-              acceptedDeltaBytes += sized.bytes;
-              if (sized.fallback) unserializableAccepted += 1;
+
+          if (this.config.batchUpload) {
+            const batchResult = await this.processOperationBatch(
+              userId,
+              clientId,
+              ops,
+              now,
+              tx,
+            );
+            results.push(...batchResult.results);
+            acceptedDeltaBytes = batchResult.acceptedDeltaBytes;
+            unserializableAccepted = batchResult.unserializableAccepted;
+            uploadDbRoundtrips += batchResult.dbRoundtrips;
+          } else {
+            // Ensure user has sync state row (init if needed)
+            // We assume user exists in `users` table because of foreign key,
+            // but if `uploadOps` is called, authentication should have verified user existence.
+            // However, `user_sync_state` might not exist yet.
+            await tx.userSyncState.upsert({
+              where: { userId },
+              create: { userId, lastSeq: 0 },
+              update: {}, // No-op update to ensure it exists
+            });
+            uploadDbRoundtrips++;
+
+            for (const op of ops) {
+              const result = await this.processOperation(userId, clientId, op, now, tx);
+              results.push(result);
+              if (result.accepted) {
+                const sized = computeOpStorageBytes(op);
+                acceptedDeltaBytes += sized.bytes;
+                if (sized.fallback) unserializableAccepted += 1;
+              }
             }
           }
           if (unserializableAccepted > 0) {
@@ -471,6 +631,8 @@ export class SyncService {
                 `charged at APPROX_BYTES_PER_OP for user=${userId} (uploadOps)`,
             );
           }
+
+          if (this.config.batchUpload && acceptedDeltaBytes === 0) return;
 
           // Update device last seen
           await tx.syncDevice.upsert({
@@ -493,6 +655,7 @@ export class SyncService {
               lastSeenAt: BigInt(now),
             },
           });
+          uploadDbRoundtrips++;
 
           // W1: write the storage counter as the LAST statement before COMMIT
           // so the row-level write lock on `users` is held for only the
@@ -508,6 +671,7 @@ export class SyncService {
               SET storage_used_bytes = GREATEST(storage_used_bytes + ${delta}::bigint, 0::bigint)
               WHERE id = ${userId}
             `;
+            uploadDbRoundtrips++;
           } else if (acceptedDeltaBytes > 0 && isCleanSlate) {
             const delta = BigInt(Math.floor(acceptedDeltaBytes));
             await tx.$executeRaw`
@@ -515,6 +679,7 @@ export class SyncService {
               SET storage_used_bytes = ${delta}::bigint
               WHERE id = ${userId}
             `;
+            uploadDbRoundtrips++;
           }
         },
         {
@@ -522,9 +687,9 @@ export class SyncService {
           // Default Prisma timeout (5s) is too short for these. Use 60s to match generateSnapshot.
           timeout: 60000,
           // FIX 1.6: Set explicit isolation level for strict consistency.
-          // REPEATABLE_READ prevents phantom reads and ensures consistent conflict detection.
-          // Combined with the FIX 1.5 re-check after sequence allocation, this prevents
-          // race conditions where two concurrent requests both pass conflict detection.
+          // The serial path also performs the legacy post-sequence conflict re-check.
+          // The batch path serializes accepted writers through the shared
+          // user_sync_state.last_seq row update; see ARCHITECTURE-DECISIONS.md.
           isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
         },
       );
@@ -538,6 +703,17 @@ export class SyncService {
         this.storageQuotaService.clearForUser(userId);
         this.requestDeduplicationService.clearForUser(userId);
       }
+
+      const accepted = results.filter((result) => result.accepted).length;
+      Logger.info('UPLOAD_BATCH_SUMMARY', {
+        userId,
+        opsInBatch: ops.length,
+        accepted,
+        rejected: results.length - accepted,
+        txDurationMs: Date.now() - txStartedAt,
+        dbRoundtrips: uploadDbRoundtrips,
+        batchUpload: this.config.batchUpload,
+      });
     } catch (err) {
       // Transaction failed - all operations were rolled back
       const errorMessage = (err as Error).message || 'Unknown error';
@@ -625,6 +801,308 @@ export class SyncService {
       );
     }
     return out;
+  }
+
+  private async processOperationBatch(
+    userId: number,
+    clientId: string,
+    ops: Operation[],
+    now: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    results: UploadResult[];
+    acceptedDeltaBytes: number;
+    unserializableAccepted: number;
+    dbRoundtrips: number;
+  }> {
+    const results = new Array<UploadResult>(ops.length);
+    const validatedCandidates: BatchUploadCandidate[] = [];
+    let dbRoundtrips = 0;
+
+    for (let i = 0; i < ops.length; i++) {
+      const op = ops[i];
+      const originalTimestamp = this.clampFutureTimestamp(userId, clientId, op, now);
+      const validation = this.validationService.validateOp(op, clientId);
+
+      if (!validation.valid) {
+        results[i] = this.rejectedUploadResult(
+          userId,
+          clientId,
+          op,
+          validation.error,
+          validation.errorCode,
+        );
+        continue;
+      }
+
+      validatedCandidates.push({
+        op,
+        resultIndex: i,
+        originalTimestamp,
+        fullStateVectorClock: isFullStateOpType(op.opType)
+          ? { ...op.vectorClock }
+          : undefined,
+      });
+    }
+
+    const seenOpIds = new Set<string>();
+    const uniqueCandidates: BatchUploadCandidate[] = [];
+    for (const candidate of validatedCandidates) {
+      if (seenOpIds.has(candidate.op.id)) {
+        results[candidate.resultIndex] = this.rejectedUploadResult(
+          userId,
+          clientId,
+          candidate.op,
+          'Duplicate operation ID',
+          SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+        );
+        continue;
+      }
+      seenOpIds.add(candidate.op.id);
+      uniqueCandidates.push(candidate);
+    }
+
+    if (uniqueCandidates.length === 0) {
+      return {
+        results: results as UploadResult[],
+        acceptedDeltaBytes: 0,
+        unserializableAccepted: 0,
+        dbRoundtrips,
+      };
+    }
+
+    dbRoundtrips++;
+    const existingOps = await tx.operation.findMany({
+      where: { id: { in: uniqueCandidates.map((candidate) => candidate.op.id) } },
+      select: {
+        id: true,
+        userId: true,
+        clientId: true,
+        actionType: true,
+        opType: true,
+        entityType: true,
+        entityId: true,
+        payload: true,
+        vectorClock: true,
+        schemaVersion: true,
+        clientTimestamp: true,
+        receivedAt: true,
+        isPayloadEncrypted: true,
+        syncImportReason: true,
+      },
+    });
+    const existingOpById = new Map(
+      existingOps.map((existingOp) => [existingOp.id, existingOp]),
+    );
+
+    const duplicateFreeCandidates: BatchUploadCandidate[] = [];
+    for (const candidate of uniqueCandidates) {
+      const existingOp = existingOpById.get(candidate.op.id);
+      if (!existingOp) {
+        duplicateFreeCandidates.push(candidate);
+        continue;
+      }
+
+      if (
+        !this.isSameDuplicateOperation(
+          existingOp,
+          userId,
+          candidate.op,
+          candidate.originalTimestamp,
+        )
+      ) {
+        results[candidate.resultIndex] = this.rejectedUploadResult(
+          userId,
+          clientId,
+          candidate.op,
+          'Operation ID already belongs to a different operation',
+          SYNC_ERROR_CODES.INVALID_OP_ID,
+        );
+        continue;
+      }
+
+      results[candidate.resultIndex] = this.rejectedUploadResult(
+        userId,
+        clientId,
+        candidate.op,
+        'Duplicate operation ID',
+        SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+      );
+    }
+
+    const needsEntityPrefetch = duplicateFreeCandidates.some(
+      (candidate) =>
+        !isFullStateOpType(candidate.op.opType) &&
+        this.getConflictEntityIds(candidate.op).length > 0,
+    );
+    if (needsEntityPrefetch) dbRoundtrips++;
+    const latestOpByEntity = await this.prefetchLatestEntityOpsForBatch(
+      userId,
+      duplicateFreeCandidates,
+      tx,
+    );
+
+    const accepted: AcceptedBatchOperation[] = [];
+    let acceptedDeltaBytes = 0;
+    let unserializableAccepted = 0;
+
+    for (const candidate of duplicateFreeCandidates) {
+      const { op } = candidate;
+      if (!isFullStateOpType(op.opType)) {
+        let conflict: ConflictResult | null = null;
+        for (const entityId of this.getConflictEntityIds(op)) {
+          const existingOp = latestOpByEntity.get(
+            this.getEntityConflictKey(op.entityType, entityId),
+          );
+          if (!existingOp) continue;
+
+          const conflictResult = this.resolveConflictForExistingOp(
+            op,
+            entityId,
+            existingOp,
+          );
+          if (conflictResult.hasConflict) {
+            conflict = conflictResult;
+            break;
+          }
+        }
+
+        if (conflict) {
+          const errorCode =
+            conflict.conflictType === 'concurrent' ||
+            conflict.conflictType === 'equal_different_client'
+              ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
+              : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
+          results[candidate.resultIndex] = this.rejectedUploadResult(
+            userId,
+            clientId,
+            op,
+            conflict.reason,
+            errorCode,
+            conflict.existingClock,
+          );
+          continue;
+        }
+      }
+
+      this.pruneVectorClockForStorage(op);
+      const sized = computeOpStorageBytes(op);
+      acceptedDeltaBytes += sized.bytes;
+      if (sized.fallback) unserializableAccepted++;
+
+      const acceptedOperation: AcceptedBatchOperation = {
+        ...candidate,
+        serverSeq: 0,
+        storageBytes: sized.bytes,
+      };
+      accepted.push(acceptedOperation);
+
+      if (!isFullStateOpType(op.opType)) {
+        for (const entityId of this.getConflictEntityIds(op)) {
+          latestOpByEntity.set(this.getEntityConflictKey(op.entityType, entityId), {
+            entityType: op.entityType,
+            entityId,
+            clientId: op.clientId,
+            vectorClock: op.vectorClock,
+          });
+        }
+      }
+    }
+
+    if (accepted.length === 0) {
+      return {
+        results: results as UploadResult[],
+        acceptedDeltaBytes: 0,
+        unserializableAccepted: 0,
+        dbRoundtrips,
+      };
+    }
+
+    dbRoundtrips++;
+    const syncStateRows = await tx.$queryRaw<Array<{ lastSeq: number | bigint }>>`
+      INSERT INTO user_sync_state (user_id, last_seq)
+      VALUES (${userId}, ${accepted.length})
+      ON CONFLICT (user_id) DO UPDATE
+        SET last_seq = user_sync_state.last_seq + EXCLUDED.last_seq
+      RETURNING last_seq AS "lastSeq"
+    `;
+    const lastSeq = Number(syncStateRows[0]?.lastSeq);
+    if (!Number.isInteger(lastSeq) || lastSeq < accepted.length) {
+      throw new Error(`Failed to reserve server sequence range for user ${userId}`);
+    }
+    const firstSeq = lastSeq - accepted.length + 1;
+    for (let i = 0; i < accepted.length; i++) {
+      accepted[i].serverSeq = firstSeq + i;
+    }
+
+    dbRoundtrips++;
+    await tx.operation.createMany({
+      data: accepted.map((candidate) => ({
+        id: candidate.op.id,
+        userId,
+        clientId,
+        serverSeq: candidate.serverSeq,
+        actionType: candidate.op.actionType,
+        opType: candidate.op.opType,
+        entityType: candidate.op.entityType,
+        entityId: candidate.op.entityId ?? null,
+        payload: candidate.op.payload as Prisma.InputJsonValue,
+        payloadBytes: BigInt(candidate.storageBytes),
+        vectorClock: candidate.op.vectorClock as Prisma.InputJsonValue,
+        schemaVersion: candidate.op.schemaVersion,
+        clientTimestamp: BigInt(candidate.op.timestamp),
+        receivedAt: BigInt(now),
+        isPayloadEncrypted: candidate.op.isPayloadEncrypted ?? false,
+        syncImportReason: candidate.op.syncImportReason ?? null,
+      })),
+    });
+
+    let lastFullStateOp: AcceptedBatchOperation | null = null;
+    for (const acceptedOp of accepted) {
+      if (acceptedOp.fullStateVectorClock) {
+        lastFullStateOp = acceptedOp;
+      }
+    }
+
+    if (lastFullStateOp?.fullStateVectorClock) {
+      dbRoundtrips += 2;
+      const priorAggregate = await this._aggregatePriorVectorClock(
+        tx,
+        userId,
+        lastFullStateOp.serverSeq,
+      );
+      const mergedClock: VectorClock = { ...priorAggregate };
+      for (const [fullStateClientId, counter] of Object.entries(
+        lastFullStateOp.fullStateVectorClock,
+      )) {
+        mergedClock[fullStateClientId] = Math.max(
+          mergedClock[fullStateClientId] ?? 0,
+          counter,
+        );
+      }
+      await tx.userSyncState.update({
+        where: { userId },
+        data: {
+          latestFullStateSeq: lastFullStateOp.serverSeq,
+          latestFullStateVectorClock: mergedClock as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    for (const acceptedOp of accepted) {
+      results[acceptedOp.resultIndex] = {
+        opId: acceptedOp.op.id,
+        accepted: true,
+        serverSeq: acceptedOp.serverSeq,
+      };
+    }
+
+    return {
+      results: results as UploadResult[],
+      acceptedDeltaBytes,
+      unserializableAccepted,
+      dbRoundtrips,
+    };
   }
 
   /**
@@ -847,6 +1325,7 @@ export class SyncService {
           entityType: op.entityType,
           entityId: op.entityId ?? null,
           payload: op.payload as Prisma.InputJsonValue,
+          payloadBytes: BigInt(computeOpStorageBytes(op).bytes),
           vectorClock: op.vectorClock as Prisma.InputJsonValue,
           schemaVersion: op.schemaVersion,
           clientTimestamp: BigInt(op.timestamp),
@@ -1369,17 +1848,14 @@ export class SyncService {
     // Full-state ops (SYNC_IMPORT/BACKUP_IMPORT/REPAIR) can be up to 20MB each,
     // so the APPROX_BYTES_PER_OP=1024 fallback used for delta ops would undercount
     // by ~20000x and leave the cached counter permanently low if a reconcile
-    // failure later rolls back to that figure. Measure the exact bytes for the
-    // restore-point rows in the deletion window via pg_column_size BEFORE we
-    // delete them — `deleteOldestRestorePointAndOps` deletes at most ONE
-    // restore point per call (or zero, when it keeps the single remaining one),
-    // so this is a bounded 0-1 row scan that does not reintroduce the DoS the
-    // earlier SUM(pg_column_size) over every delta op caused.
+    // failure later rolls back to that figure. Use the write-time payload_bytes
+    // value so cleanup accounting matches quota reconciliation without
+    // detoasting JSONB payloads.
     const fullStateRows = await prisma.$queryRaw<
       Array<{ exact_bytes: bigint | null; full_state_count: bigint }>
     >`
       SELECT
-        COALESCE(SUM(pg_column_size(payload) + pg_column_size(vector_clock)), 0) AS exact_bytes,
+        COALESCE(SUM(payload_bytes), 0) AS exact_bytes,
         COUNT(*)::bigint AS full_state_count
       FROM operations
       WHERE user_id = ${userId}

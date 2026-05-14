@@ -118,6 +118,52 @@ sync primitives.
 
 ---
 
+### 4. Batch Uploads Under RepeatableRead
+
+**Status**: ✅ Active (since May 2026)
+
+**Decision**: SuperSync batch uploads derive conflict-safety from the shared
+`user_sync_state.lastSeq` row write that reserves server sequence numbers, not
+from PostgreSQL RepeatableRead snapshot isolation alone.
+
+**Rationale**:
+
+- PostgreSQL RepeatableRead does not provide full serializable snapshot isolation
+- Two concurrent upload transactions can both pass conflict prefetch checks when
+  they read the same pre-insert snapshot
+- Reserving sequence numbers through one `user_sync_state.lastSeq` row forces
+  accepted writers for the same user to serialize on that row lock
+- If two batches race, the later writer blocks on the row and the transaction
+  retry path handles the serialization failure rather than silently accepting
+  conflicting operations
+
+**Implementation**:
+
+- Batch upload conflict detection runs in memory against prefetched latest
+  entity rows and updates that map as operations are accepted
+- Accepted operations reserve one contiguous sequence range with
+  `INSERT ... ON CONFLICT ... DO UPDATE SET last_seq = last_seq + delta`
+- The batch insert does not use `skipDuplicates`; an unexpected unique conflict
+  aborts the transaction and lets the request retry
+- Removing or sharding the `lastSeq` write requires replacing this safety
+  mechanism with an equivalent per-user serialization primitive
+
+**Documentation**: [`docs/sync-and-op-log/operation-log-architecture-diagrams.md`](docs/sync-and-op-log/operation-log-architecture-diagrams.md)
+
+**Key Files**:
+
+- [`packages/super-sync-server/src/sync/sync.service.ts`](packages/super-sync-server/src/sync/sync.service.ts) - Upload transaction and batch primitive
+- [`packages/super-sync-server/prisma/schema.prisma`](packages/super-sync-server/prisma/schema.prisma) - `user_sync_state.last_seq`
+
+**When to Update This Pattern**:
+
+- Changing upload conflict detection
+- Changing server sequence assignment
+- Changing transaction isolation for upload operations
+- Introducing multi-writer or multi-region upload processing
+
+---
+
 ## How to Use This Document
 
 ### When Making Architectural Changes

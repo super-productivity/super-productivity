@@ -228,6 +228,32 @@ describe('loadConfigFromEnv - CORS_ORIGINS parsing', () => {
   });
 });
 
+describe('loadConfigFromEnv - SuperSync rollout flags', () => {
+  beforeEach(() => {
+    resetEnv();
+  });
+
+  afterEach(() => {
+    resetEnv();
+  });
+
+  it('should keep batch uploads disabled by default', async () => {
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.batchUpload).toBe(false);
+  });
+
+  it('should enable batch uploads only when SUPERSYNC_BATCH_UPLOAD is true', async () => {
+    process.env.SUPERSYNC_BATCH_UPLOAD = 'true';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.batchUpload).toBe(true);
+  });
+});
+
 describe('DEFAULT_CORS_ORIGINS', () => {
   beforeEach(() => {
     resetEnv();

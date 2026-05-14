@@ -30,9 +30,8 @@ export class StorageQuotaService {
   /**
    * Per-user in-flight reconcile promises. When multiple concurrent requests
    * for the same user hit the quota cache-miss path, only the first triggers
-   * the slow SUM(pg_column_size) scan; the rest await the same promise. Cap
-   * the number of duplicate full-table scans under a retry storm. Sequential
-   * calls are unaffected (entry is deleted in `finally` before resolve).
+   * the exact SUM(payload_bytes) reconcile; the rest await the same promise.
+   * Sequential calls are unaffected (entry is deleted in `finally` before resolve).
    */
   private inflightReconciles: Map<number, Promise<void>> = new Map();
 
@@ -74,50 +73,45 @@ export class StorageQuotaService {
   }
 
   /**
-   * Calculate actual storage usage for a user by summing on-disk payload sizes.
+   * Calculate actual storage usage for a user by summing the write-time byte
+   * counters on operation rows plus the cached snapshot blob length.
    *
-   * SLOW PATH — DO NOT CALL PER REQUEST. SUM(pg_column_size(payload)) forces
-   * PostgreSQL to detoast every payload for the user (TOAST table reads),
-   * which on active users takes minutes and saturates disk I/O. Reserved for:
+   * SLOW PATH — DO NOT CALL PER REQUEST. Even without detoasting JSONB payloads,
+   * this still scans one user's operation rows and is reserved for:
    *   1. Quota-cache reconciliation, run at most once per quota-cleanup event
    *      (rare per user) — see SyncService.freeStorageForUpload.
    *   2. Offline / admin reconciliation scripts.
    * Hot-path tracking uses incrementStorageUsage / decrementStorageUsage with
    * deltas computed locally on the Node side.
    *
-   * KNOWN BYTE-COUNTING MISMATCH (tracked for follow-up):
-   * `pg_column_size` returns the TOAST-compressed on-disk size, while the
-   * hot-path delta (sync.routes.ts `computeOpsStorageBytes`) uses
-   * `Buffer.byteLength(JSON.stringify(...))` — the uncompressed UTF-8 length.
-   * For large compressible JSONB payloads (~2KB+) the compressed size can be
-   * substantially smaller, so a reconcile can shrink a counter that was
-   * incremented with the larger uncompressed numbers, making the quota
-   * artificially generous after each reconcile.
-   *
-   * A no-DoS fix is to add a `payload_bytes` column populated at insert time
-   * with the uncompressed length and SUM that column here. That is a schema
-   * migration and is outside the scope of this service-only file; switching
-   * to `octet_length(payload::text)` in-place would re-detoast every row and
-   * resurrect the original disk-I/O DoS that pg_column_size also caused (see
-   * sync.const.ts `APPROX_BYTES_PER_OP`).
+   * Rows with payload_bytes=0 are treated as unbackfilled and therefore
+   * under-counted by design until `npm run migrate-payload-bytes` completes.
+   * Falling back to payload JSONB reads here would reintroduce the reconcile
+   * I/O spike this column avoids.
    */
   async calculateStorageUsage(userId: number): Promise<{
     operationsBytes: number;
     snapshotBytes: number;
     totalBytes: number;
   }> {
-    const opsResult = await prisma.$queryRaw<[{ total: bigint | null }]>`
-      SELECT COALESCE(SUM(pg_column_size(payload) + pg_column_size(vector_clock)), 0) as total
-      FROM operations WHERE user_id = ${userId}
+    const usageResult = await prisma.$queryRaw<
+      [{ operations_bytes: bigint | null; snapshot_bytes: number | bigint | null }]
+    >`
+      SELECT
+        (
+          SELECT COALESCE(SUM(payload_bytes), 0)
+          FROM operations
+          WHERE user_id = ${userId}
+        ) as operations_bytes,
+        (
+          SELECT COALESCE(octet_length(snapshot_data), 0)
+          FROM user_sync_state
+          WHERE user_id = ${userId}
+        ) as snapshot_bytes
     `;
 
-    const snapshotResult = await prisma.userSyncState.findUnique({
-      where: { userId },
-      select: { snapshotData: true },
-    });
-
-    const operationsBytes = Number(opsResult[0]?.total ?? 0);
-    const snapshotBytes = snapshotResult?.snapshotData?.length ?? 0;
+    const operationsBytes = Number(usageResult[0]?.operations_bytes ?? 0);
+    const snapshotBytes = Number(usageResult[0]?.snapshot_bytes ?? 0);
     const totalBytes = operationsBytes + snapshotBytes;
 
     return {

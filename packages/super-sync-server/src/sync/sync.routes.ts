@@ -996,6 +996,9 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
             .send(createValidationErrorResponse(parseResult.error.issues));
         }
 
+        const snapshotRequest = parseResult.data as typeof parseResult.data & {
+          requestId?: string;
+        };
         const {
           state,
           clientId,
@@ -1008,7 +1011,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           snapshotOpType,
           syncImportReason,
           requestId,
-        } = parseResult.data;
+        } = snapshotRequest;
         const syncService = getSyncService();
 
         if (requestId) {

@@ -57,6 +57,23 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
   });
 
+  it('adds partial encrypted-op sequence index concurrently', () => {
+    const migrationSql = readFileSync(
+      join(
+        currentDir,
+        '../prisma/migrations/20260514000000_add_encrypted_ops_partial_index/migration.sql',
+      ),
+      'utf8',
+    );
+
+    expect(migrationSql).toContain('CREATE INDEX CONCURRENTLY');
+    expect(migrationSql).toContain('"operations_user_id_server_seq_encrypted_idx"');
+    expect(migrationSql).toContain('ON "operations"("user_id", "server_seq")');
+    expect(migrationSql).toContain('WHERE "is_payload_encrypted" = true');
+    expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
   it('runs migrations before replacing the app during compose deploys', () => {
     const deployScript = readFileSync(join(currentDir, '../scripts/deploy.sh'), 'utf8');
     const dockerfile = readFileSync(join(currentDir, '../Dockerfile'), 'utf8');
@@ -78,7 +95,13 @@ describe('performance migrations', () => {
     expect(deployScript).toContain(
       'FULL_STATE_INDEX_MIGRATION="20260512000000_add_full_state_sequence_index_drop_redundant_indexes"',
     );
+    expect(deployScript).toContain(
+      'ENCRYPTED_OPS_INDEX_MIGRATION="20260514000000_add_encrypted_ops_partial_index"',
+    );
     expect(deployScript).toContain('is_recoverable_full_state_index_migration_failure');
+    expect(deployScript).toContain(
+      'is_recoverable_encrypted_ops_index_migration_failure',
+    );
     expect(deployScript).toContain("grep -q 'P3009'");
     expect(deployScript).toContain('is_full_state_index_transaction_block_failure');
     expect(deployScript).toContain("grep -q 'P3018'");
@@ -93,6 +116,9 @@ describe('performance migrations', () => {
       'CREATE INDEX CONCURRENTLY \\"operations_user_id_full_state_server_seq_idx\\"',
     );
     expect(deployScript).toContain(
+      'CREATE INDEX CONCURRENTLY "operations_user_id_server_seq_encrypted_idx"',
+    );
+    expect(deployScript).toContain(
       'migrate resolve --rolled-back "$FULL_STATE_INDEX_MIGRATION"',
     );
     expect(deployScript).toContain(
@@ -103,6 +129,9 @@ describe('performance migrations', () => {
     );
     expect(deployScript).toContain(
       'Retrying database migrations after applying $FULL_STATE_INDEX_MIGRATION',
+    );
+    expect(deployScript).toContain(
+      'Retrying database migrations after applying $ENCRYPTED_OPS_INDEX_MIGRATION',
     );
     expect(deployScript).toContain(externalDbStartCommand);
     expect(deployScript).toContain('RUN_MIGRATIONS_ON_STARTUP');

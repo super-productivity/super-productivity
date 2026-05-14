@@ -382,6 +382,7 @@ export interface SyncConfig {
   downloadRateLimit: { max: number; windowMs: number };
   retentionMs: number; // Unified retention period for ops, devices, and validation
   maxClockDriftMs: number;
+  batchUpload: boolean;
 }
 
 // Time constants (in milliseconds)
@@ -404,4 +405,5 @@ export const DEFAULT_SYNC_CONFIG: SyncConfig = {
   downloadRateLimit: { max: 200, windowMs: MS_PER_MINUTE },
   retentionMs: RETENTION_MS, // 45 days - used for ops, devices, and validation
   maxClockDriftMs: MS_PER_MINUTE, // 60 seconds
+  batchUpload: false,
 };

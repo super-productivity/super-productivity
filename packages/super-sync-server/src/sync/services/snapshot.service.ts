@@ -46,10 +46,7 @@ const MAX_SNAPSHOT_DECOMPRESSED_BYTES = 100 * 1024 * 1024;
  */
 const MAX_REPLAY_STATE_SIZE_BYTES = 100 * 1024 * 1024;
 
-/**
- * How often to check state size during replay (every N operations).
- */
-const REPLAY_SIZE_CHECK_INTERVAL = 1000;
+const REPLAY_SIZE_CHECK_THRESHOLD_BYTES = MAX_REPLAY_STATE_SIZE_BYTES * 0.8;
 
 /**
  * Reject these as property keys when applying user-supplied ids to the
@@ -59,6 +56,25 @@ const REPLAY_SIZE_CHECK_INTERVAL = 1000;
  */
 const isUnsafeEntityKey = (key: string): boolean =>
   key === '__proto__' || key === 'constructor' || key === 'prototype';
+
+const isReplayFullStateOpType = (opType: string): boolean =>
+  opType === 'SYNC_IMPORT' || opType === 'BACKUP_IMPORT' || opType === 'REPAIR';
+
+const getReplayPayloadDeltaBytes = (opType: string, payload: unknown): number => {
+  if (opType === 'DEL') return 0;
+  return Buffer.byteLength(JSON.stringify(payload ?? ''), 'utf8');
+};
+
+const assertReplayStateSize = (state: Record<string, unknown>): number => {
+  const stateBytes = Buffer.byteLength(JSON.stringify(state), 'utf8');
+  if (stateBytes > MAX_REPLAY_STATE_SIZE_BYTES) {
+    throw new Error(
+      `State too large during replay: ${Math.round(stateBytes / 1024 / 1024)}MB ` +
+        `(max: ${Math.round(MAX_REPLAY_STATE_SIZE_BYTES / 1024 / 1024)}MB)`,
+    );
+  }
+  return stateBytes;
+};
 
 const encryptedOpsNotSupportedMessage = (encryptedOpCount: number): string =>
   `ENCRYPTED_OPS_NOT_SUPPORTED: Cannot generate snapshot - ${encryptedOpCount} operations have encrypted payloads. ` +
@@ -875,6 +891,8 @@ export class SnapshotService {
     initialState: Record<string, unknown> = {},
   ): Record<string, unknown> {
     const state = { ...(initialState as Record<string, Record<string, unknown>>) };
+    let estimatedBytes = assertReplayStateSize(state);
+    let accumulatedDeltaBytes = 0;
 
     for (let i = 0; i < ops.length; i++) {
       const row = ops[i];
@@ -885,24 +903,12 @@ export class SnapshotService {
         throw new EncryptedOpsNotSupportedError(1);
       }
 
-      // Periodically check state size to prevent memory exhaustion.
-      // Measure in UTF-8 bytes (Buffer.byteLength) so the limit matches the
-      // constant's documented unit — JSON.stringify(state).length counts
-      // UTF-16 code units, which under-counts up to 4x for non-ASCII content.
-      if (i > 0 && i % REPLAY_SIZE_CHECK_INTERVAL === 0) {
-        const estimatedSize = Buffer.byteLength(JSON.stringify(state), 'utf8');
-        if (estimatedSize > MAX_REPLAY_STATE_SIZE_BYTES) {
-          throw new Error(
-            `State too large during replay: ${Math.round(estimatedSize / 1024 / 1024)}MB ` +
-              `(max: ${Math.round(MAX_REPLAY_STATE_SIZE_BYTES / 1024 / 1024)}MB)`,
-          );
-        }
-      }
-
       let opType = row.opType as Operation['opType'];
       let entityType = row.entityType;
       let entityId = row.entityId;
       let payload = row.payload;
+      accumulatedDeltaBytes += getReplayPayloadDeltaBytes(opType, payload);
+      let forceStateSizeMeasurement = false;
 
       const opSchemaVersion = row.schemaVersion ?? 1;
 
@@ -966,11 +972,7 @@ export class SnapshotService {
         // otherwise stale entity types from a prior state survive a "reset"
         // and `_resolveExpectedFirstSeq`'s leading-gap acceptance becomes
         // incorrect (the gap is only safe if the full-state op truly resets).
-        if (
-          processOpType === 'SYNC_IMPORT' ||
-          processOpType === 'BACKUP_IMPORT' ||
-          processOpType === 'REPAIR'
-        ) {
+        if (isReplayFullStateOpType(processOpType)) {
           const fullState =
             processPayload &&
             typeof processPayload === 'object' &&
@@ -999,6 +1001,7 @@ export class SnapshotService {
             if (isUnsafeEntityKey(key)) continue;
             state[key] = fullStateRecord[key] as Record<string, unknown>;
           }
+          forceStateSizeMeasurement = true;
           continue;
         }
 
@@ -1067,6 +1070,14 @@ export class SnapshotService {
             }
             break;
         }
+      }
+
+      if (
+        forceStateSizeMeasurement ||
+        estimatedBytes + accumulatedDeltaBytes > REPLAY_SIZE_CHECK_THRESHOLD_BYTES
+      ) {
+        estimatedBytes = assertReplayStateSize(state);
+        accumulatedDeltaBytes = 0;
       }
     }
     return state;

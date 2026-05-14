@@ -33,10 +33,9 @@ describe('StorageQuotaService', () => {
 
   describe('calculateStorageUsage', () => {
     it('should calculate storage from operations and snapshot', async () => {
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ total: BigInt(5000) }]);
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: Buffer.alloc(3000),
-      } as any);
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: BigInt(5000), snapshot_bytes: BigInt(3000) },
+      ]);
 
       const result = await service.calculateStorageUsage(1);
 
@@ -48,8 +47,9 @@ describe('StorageQuotaService', () => {
     });
 
     it('should handle null operation total', async () => {
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ total: null }]);
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: null, snapshot_bytes: null },
+      ]);
 
       const result = await service.calculateStorageUsage(1);
 
@@ -61,10 +61,9 @@ describe('StorageQuotaService', () => {
     });
 
     it('should handle missing snapshot', async () => {
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ total: BigInt(1000) }]);
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: null,
-      } as any);
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: BigInt(1000), snapshot_bytes: BigInt(0) },
+      ]);
 
       const result = await service.calculateStorageUsage(1);
 
@@ -75,11 +74,24 @@ describe('StorageQuotaService', () => {
       });
     });
 
-    it('should avoid materializing JSON payloads as text', async () => {
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ total: BigInt(1000) }]);
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: null,
-      } as any);
+    it('should hard-cut to payload_bytes even when rows are still unbackfilled', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: BigInt(0), snapshot_bytes: BigInt(100) },
+      ]);
+
+      const result = await service.calculateStorageUsage(1);
+
+      expect(result).toEqual({
+        operationsBytes: 0,
+        snapshotBytes: 100,
+        totalBytes: 100,
+      });
+    });
+
+    it('should use persisted byte counters and avoid loading snapshot blobs', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: BigInt(1000), snapshot_bytes: BigInt(0) },
+      ]);
 
       await service.calculateStorageUsage(1);
 
@@ -89,8 +101,10 @@ describe('StorageQuotaService', () => {
       ];
       const query = Array.from(queryParts).join('');
 
-      expect(query).toContain('pg_column_size(payload)');
-      expect(query).toContain('pg_column_size(vector_clock)');
+      expect(query).toContain('SUM(payload_bytes)');
+      expect(query).toContain('octet_length(snapshot_data)');
+      expect(query).not.toContain('snapshot_data: true');
+      expect(query).not.toContain('pg_column_size');
       expect(query).not.toContain('payload::text');
       expect(query).not.toContain('vector_clock::text');
     });
@@ -154,10 +168,9 @@ describe('StorageQuotaService', () => {
 
   describe('updateStorageUsage', () => {
     it('should update storage usage from calculated total', async () => {
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ total: BigInt(75000) }]);
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: Buffer.alloc(25000),
-      } as any);
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: BigInt(75000), snapshot_bytes: BigInt(25000) },
+      ]);
       vi.mocked(prisma.user.update).mockResolvedValue({} as any);
 
       await service.updateStorageUsage(1);
@@ -169,24 +182,23 @@ describe('StorageQuotaService', () => {
     });
 
     it('should dedupe concurrent reconciles for the same user', async () => {
-      // Simulate a slow SUM(pg_column_size) scan so concurrent callers
+      // Simulate a slow exact usage scan so concurrent callers
       // overlap on the in-flight promise.
-      let releaseScan: (value: [{ total: bigint }]) => void = () => undefined;
+      let releaseScan: (
+        value: [{ operations_bytes: bigint; snapshot_bytes: bigint }],
+      ) => void = () => undefined;
       vi.mocked(prisma.$queryRaw).mockReturnValueOnce(
         new Promise((resolve) => {
           releaseScan = resolve;
         }) as any,
       );
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: null,
-      } as any);
       vi.mocked(prisma.user.update).mockResolvedValue({} as any);
 
       const first = service.updateStorageUsage(1);
       const second = service.updateStorageUsage(1);
       const third = service.updateStorageUsage(1);
 
-      releaseScan([{ total: BigInt(123) }]);
+      releaseScan([{ operations_bytes: BigInt(123), snapshot_bytes: BigInt(0) }]);
       await Promise.all([first, second, third]);
 
       // Only one scan + one write should have run for three concurrent calls.
@@ -195,10 +207,9 @@ describe('StorageQuotaService', () => {
     });
 
     it('should re-scan on a subsequent sequential call after the lock clears', async () => {
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ total: BigInt(10) }]);
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: null,
-      } as any);
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: BigInt(10), snapshot_bytes: BigInt(0) },
+      ]);
       vi.mocked(prisma.user.update).mockResolvedValue({} as any);
 
       await service.updateStorageUsage(1);
@@ -210,16 +221,15 @@ describe('StorageQuotaService', () => {
 
     it('should release the lock when the scan throws', async () => {
       vi.mocked(prisma.$queryRaw).mockRejectedValueOnce(new Error('db down'));
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: null,
-      } as any);
       vi.mocked(prisma.user.update).mockResolvedValue({} as any);
 
       await expect(service.updateStorageUsage(1)).rejects.toThrow('db down');
 
       // Lock must be cleared so the next call retries the scan rather than
       // returning the rejected promise forever.
-      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ total: BigInt(0) }]);
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        { operations_bytes: BigInt(0), snapshot_bytes: BigInt(0) },
+      ]);
       await expect(service.updateStorageUsage(1)).resolves.toBeUndefined();
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
     });
@@ -245,10 +255,9 @@ describe('StorageQuotaService', () => {
       ).inflightReconciles;
       inflightMap.set(1, neverResolves);
 
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ total: BigInt(42) }] as any);
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: null,
-      } as any);
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: BigInt(42), snapshot_bytes: BigInt(0) },
+      ] as any);
       vi.mocked(prisma.user.update).mockResolvedValue({} as any);
 
       const insideResult = await Promise.race([
@@ -287,11 +296,8 @@ describe('StorageQuotaService', () => {
 
       vi.mocked(prisma.$queryRaw).mockImplementation(async () => {
         events.push('scan');
-        return [{ total: BigInt(123) }];
+        return [{ operations_bytes: BigInt(123), snapshot_bytes: BigInt(0) }];
       });
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: null,
-      } as any);
       vi.mocked(prisma.user.update).mockImplementation(async () => {
         events.push('write');
         return {} as any;
@@ -348,10 +354,9 @@ describe('StorageQuotaService', () => {
       // Marker indicates the cached counter is known stale (e.g. a previous
       // post-commit increment failed). Quota check must self-heal before
       // answering, otherwise drift accumulates until daily cleanup.
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ total: BigInt(10_000) }] as any);
-      vi.mocked(prisma.userSyncState.findUnique).mockResolvedValue({
-        snapshotData: null,
-      } as any);
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([
+        { operations_bytes: BigInt(10_000), snapshot_bytes: BigInt(0) },
+      ] as any);
       vi.mocked(prisma.user.update).mockResolvedValue({} as any);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         storageQuotaBytes: BigInt(100_000),

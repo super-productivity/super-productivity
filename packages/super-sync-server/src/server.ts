@@ -11,7 +11,7 @@ import { prisma, disconnectDb } from './db';
 import websocket from '@fastify/websocket';
 import { apiRoutes } from './api';
 import { pageRoutes } from './pages';
-import { syncRoutes, startCleanupJobs, stopCleanupJobs } from './sync';
+import { syncRoutes, startCleanupJobs, stopCleanupJobs, initSyncService } from './sync';
 import { wsRoutes } from './sync/websocket.routes';
 import {
   getWsConnectionService,
@@ -109,6 +109,7 @@ export const createServer = (
   stop: () => Promise<void>;
 } => {
   const fullConfig = loadConfigFromEnv(config);
+  initSyncService({ batchUpload: fullConfig.batchUpload });
 
   // Ensure data directory exists
   if (!fs.existsSync(fullConfig.dataDir)) {
