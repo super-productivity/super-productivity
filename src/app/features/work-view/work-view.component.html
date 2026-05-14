@@ -125,7 +125,8 @@
               <collapsible
                 [title]="group.key | scheduledDateGroup"
                 [isIconBefore]="true"
-                [isExpanded]="true"
+                [isExpanded]="!customizerService.collapsedGroupIds().includes(group.key)"
+                (isExpandedChange)="customizerService.toggleGroupExpansion(group.key)"
                 [isGroup]="true"
               >
                 <task-list
@@ -166,7 +167,10 @@
                   <collapsible
                     [title]="section.title"
                     [isIconBefore]="true"
-                    [isExpanded]="true"
+                    [isExpanded]="section.isExpanded"
+                    (isExpandedChange)="
+                      sectionService.updateSection(section.id, { isExpanded: $event })
+                    "
                     [isTitleDragHandle]="true"
                   >
                     <ng-container actions>

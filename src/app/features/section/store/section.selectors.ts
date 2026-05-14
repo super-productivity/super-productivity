@@ -9,8 +9,10 @@ export const selectAllSections = createSelector(selectSectionFeatureState, selec
 
 export const selectSectionById = createSelector(
   selectSectionFeatureState,
-  (state: SectionState, props: { id: string }): Section | undefined =>
-    state.entities[props.id],
+  (state: SectionState, props: { id: string }): Section | undefined => {
+    const s = state.entities[props.id];
+    return s && s.isExpanded === undefined ? { ...s, isExpanded: true } : s;
+  },
 );
 
 /**
@@ -23,11 +25,12 @@ export const selectSectionsByContextIdMap = createSelector(
   (sections): Map<string, Section[]> => {
     const map = new Map<string, Section[]>();
     for (const s of sections) {
-      const arr = map.get(s.contextId);
+      const section = s.isExpanded === undefined ? { ...s, isExpanded: true } : s;
+      const arr = map.get(section.contextId);
       if (arr) {
-        arr.push(s);
+        arr.push(section);
       } else {
-        map.set(s.contextId, [s]);
+        map.set(section.contextId, [section]);
       }
     }
     return map;

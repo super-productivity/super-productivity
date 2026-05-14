@@ -1289,4 +1289,26 @@ describe('TaskViewCustomizerService', () => {
       });
     });
   });
+
+  describe('collapsedGroupIds', () => {
+    it('should toggle group expansion', () => {
+      service.toggleGroupExpansion('group1');
+      expect(service.collapsedGroupIds()).toContain('group1');
+      service.toggleGroupExpansion('group1');
+      expect(service.collapsedGroupIds()).not.toContain('group1');
+    });
+
+    it('should persist collapsedGroupIds to localStorage', (done) => {
+      service.toggleGroupExpansion('group2');
+
+      // The effect is async, so we wait a bit
+      setTimeout(() => {
+        const stored = JSON.parse(
+          localStorage.getItem(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT) || '{}',
+        );
+        expect(stored['TAG:TODAY'].collapsedGroupIds).toContain('group2');
+        done();
+      }, 50);
+    });
+  });
 });

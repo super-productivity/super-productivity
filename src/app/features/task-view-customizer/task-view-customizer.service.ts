@@ -55,6 +55,7 @@ export class TaskViewCustomizerService {
   public selectedSort = signal<SortOption>(DEFAULT_OPTIONS.sort);
   public selectedGroup = signal<GroupOption>(DEFAULT_OPTIONS.group);
   public selectedFilter = signal<FilterOption>(DEFAULT_OPTIONS.filter);
+  public collapsedGroupIds = signal<string[]>([]);
 
   isCustomized = computed(() => {
     return [
@@ -93,19 +94,30 @@ export class TaskViewCustomizerService {
         this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
         this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
         this.selectedFilter.set(stored?.filter ?? DEFAULT_OPTIONS.filter);
+        this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
       });
 
     effect(() => {
       const sort = this.selectedSort();
       const group = this.selectedGroup();
       const filter = this.selectedFilter();
+      const collapsedGroupIds = this.collapsedGroupIds();
       if (!this._currentContextKey) return;
       this._stateByContext = {
         ...this._stateByContext,
-        [this._currentContextKey]: { sort, group, filter },
+        [this._currentContextKey]: { sort, group, filter, collapsedGroupIds },
       };
       lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, this._stateByContext);
     });
+  }
+
+  toggleGroupExpansion(groupId: string): void {
+    const current = this.collapsedGroupIds();
+    if (current.includes(groupId)) {
+      this.collapsedGroupIds.set(current.filter((id) => id !== groupId));
+    } else {
+      this.collapsedGroupIds.set([...current, groupId]);
+    }
   }
 
   private _allProjects: Project[] = [];
