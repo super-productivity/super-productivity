@@ -589,6 +589,9 @@ export const completePasskeyRecovery = async (
   const credentialIdBase64url = Buffer.from(credentialInfo.id).toString('utf-8');
   const credentialIdRawBytes = Buffer.from(credentialIdBase64url, 'base64url');
 
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(user.id);
+
   // Delete old passkeys and create new one, clear recovery token, invalidate sessions
   await prisma.$transaction(async (tx) => {
     await tx.passkey.deleteMany({ where: { userId: user.id } });

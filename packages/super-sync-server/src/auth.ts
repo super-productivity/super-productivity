@@ -73,6 +73,8 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
  * Call this when the user explicitly logs out all devices.
  */
 export const revokeAllTokens = async (userId: number): Promise<void> => {
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(userId);
   await prisma.user.update({
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
@@ -90,6 +92,8 @@ export const replaceToken = async (
   userId: number,
   email: string,
 ): Promise<{ token: string; user: { id: number; email: string } }> => {
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(userId);
   // Use transaction to ensure atomicity of version increment and read
   const newTokenVersion = await prisma.$transaction(async (tx) => {
     // Increment token version to invalidate all existing tokens
