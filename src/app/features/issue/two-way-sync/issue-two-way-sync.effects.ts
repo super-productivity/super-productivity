@@ -76,6 +76,10 @@ const ACTION_EXTRACTORS: Record<
       changes: a.task.changes as Partial<Task>,
     };
   },
+  [TaskSharedActions.addTagToTask.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.addTagToTask>;
+    return { taskId: a.taskId, changes: { tagIds: undefined } };
+  },
   [PlannerActions.planTaskForDay.type]: (action) => {
     const a = action as ReturnType<typeof PlannerActions.planTaskForDay>;
     return { taskId: a.task.id, changes: { dueDay: a.day } };
@@ -115,6 +119,7 @@ export class IssueTwoWaySyncEffects {
           TaskSharedActions.scheduleTaskWithTime,
           TaskSharedActions.reScheduleTaskWithTime,
           TaskSharedActions.unscheduleTask,
+          TaskSharedActions.addTagToTask,
           PlannerActions.planTaskForDay,
           PlannerActions.transferTask,
         ),
