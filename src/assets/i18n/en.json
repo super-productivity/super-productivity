@@ -277,6 +277,8 @@
       },
       "BACK_TO_PLANNING": "Back to Planning",
       "BREAK_RELAX_MSG": "Take a moment to relax",
+      "BROWSER_TITLE_BREAK": "Break",
+      "BROWSER_TITLE_PAUSED": "Paused",
       "CLICK_TO_EDIT_DURATION": "Click to edit duration",
       "COMPLETE_FOCUS_SESSION": "Complete focus session",
       "CONTINUE_TO_NEXT_SESSION": "Continue to next session",

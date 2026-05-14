@@ -1,29 +1,49 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
+import { TranslateService } from '@ngx-translate/core';
 import { BrowserTitleService } from './browser-title.service';
-import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
-import { signal } from '@angular/core';
 import { FocusModeMode } from '../../features/focus-mode/focus-mode.model';
+import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
 
 describe('BrowserTitleService', () => {
   let service: BrowserTitleService;
   let titleService: jasmine.SpyObj<Title>;
+  let translateService: jasmine.SpyObj<TranslateService>;
   let focusModeServiceMock: any;
 
   beforeEach(() => {
     titleService = jasmine.createSpyObj('Title', ['setTitle']);
+
+    translateService = jasmine.createSpyObj('TranslateService', ['instant']);
+
+    translateService.instant.and.callFake((key: string) => {
+      if (key.includes('BREAK')) {
+        return 'Break';
+      }
+
+      if (key.includes('PAUSED')) {
+        return 'Paused';
+      }
+
+      return key;
+    });
+
     focusModeServiceMock = {
       mode: signal(FocusModeMode.Pomodoro),
       timeRemaining: signal(1500000),
+      timeElapsed: signal(0),
       isBreakActive: signal(false),
       isRunning: signal(false),
       isSessionPaused: signal(false),
+      isInOvertime: signal(false),
     };
 
     TestBed.configureTestingModule({
       providers: [
         BrowserTitleService,
         { provide: Title, useValue: titleService },
+        { provide: TranslateService, useValue: translateService },
         { provide: FocusModeService, useValue: focusModeServiceMock },
       ],
     });
@@ -43,7 +63,10 @@ describe('BrowserTitleService', () => {
         false,
         true,
         false,
+        false,
+        0,
       );
+
       expect(result).toBe('Super Productivity');
     });
 
@@ -54,78 +77,155 @@ describe('BrowserTitleService', () => {
         false,
         false,
         false,
+        false,
+        0,
       );
+
       expect(result).toBe('Super Productivity');
     });
 
-    it('should show time when running', () => {
+    it('should show remaining time when running', () => {
       const result = (service as any)._getTitle(
         FocusModeMode.Pomodoro,
-        1500000, // 25:00
+        1500000,
         false,
         true,
         false,
+        false,
+        0,
       );
+
       expect(result).toBe('(25:00) Super Productivity');
     });
 
     it('should show "Paused" when paused', () => {
       const result = (service as any)._getTitle(
         FocusModeMode.Pomodoro,
-        1500000, // 25:00
+        1500000,
         false,
         false,
         true,
+        false,
+        0,
       );
+
       expect(result).toBe('(Paused 25:00) Super Productivity');
     });
 
     it('should show "Break" when break is active', () => {
       const result = (service as any)._getTitle(
         FocusModeMode.Pomodoro,
-        300000, // 05:00
+        300000,
         true,
         true,
         false,
+        false,
+        0,
       );
+
       expect(result).toBe('(05:00 Break) Super Productivity');
     });
 
     it('should show both "Paused" and "Break" when both are active', () => {
       const result = (service as any)._getTitle(
         FocusModeMode.Pomodoro,
-        300000, // 05:00
+        300000,
         true,
         false,
         true,
+        false,
+        0,
       );
+
       expect(result).toBe('(Paused 05:00 Break) Super Productivity');
+    });
+
+    it('should show elapsed time during overtime', () => {
+      const result = (service as any)._getTitle(
+        FocusModeMode.Pomodoro,
+        0,
+        false,
+        true,
+        false,
+        true,
+        1560000,
+      );
+
+      expect(result).toBe('(26:00) Super Productivity');
+    });
+
+    it('should show elapsed break time during overtime', () => {
+      const result = (service as any)._getTitle(
+        FocusModeMode.Pomodoro,
+        0,
+        true,
+        true,
+        false,
+        true,
+        360000,
+      );
+
+      expect(result).toBe('(06:00 Break) Super Productivity');
+    });
+
+    it('should pad single digit minutes correctly', () => {
+      const result = (service as any)._getTitle(
+        FocusModeMode.Pomodoro,
+        300000,
+        false,
+        true,
+        false,
+        false,
+        0,
+      );
+
+      expect(result).toBe('(05:00) Super Productivity');
     });
   });
 
-  it('should update document title when signals change', () => {
-    focusModeServiceMock.isRunning.set(true);
-    focusModeServiceMock.timeRemaining.set(1499000); // 24:59
+  describe('effect integration', () => {
+    it('should update document title when signals change', () => {
+      focusModeServiceMock.isRunning.set(true);
+      focusModeServiceMock.timeRemaining.set(1499000);
 
-    TestBed.flushEffects();
-    expect(titleService.setTitle).toHaveBeenCalledWith('(24:59) Super Productivity');
+      TestBed.flushEffects();
 
-    focusModeServiceMock.isBreakActive.set(true);
-    focusModeServiceMock.timeRemaining.set(299000); // 04:59
-    TestBed.flushEffects();
-    expect(titleService.setTitle).toHaveBeenCalledWith(
-      '(04:59 Break) Super Productivity',
-    );
+      expect(titleService.setTitle).toHaveBeenCalledWith('(24:59) Super Productivity');
 
-    focusModeServiceMock.isRunning.set(false);
-    focusModeServiceMock.isSessionPaused.set(true);
-    TestBed.flushEffects();
-    expect(titleService.setTitle).toHaveBeenCalledWith(
-      '(Paused 04:59 Break) Super Productivity',
-    );
+      focusModeServiceMock.isBreakActive.set(true);
+      focusModeServiceMock.timeRemaining.set(299000);
 
-    focusModeServiceMock.mode.set(FocusModeMode.Flowtime);
-    TestBed.flushEffects();
-    expect(titleService.setTitle).toHaveBeenCalledWith('Super Productivity');
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith(
+        '(04:59 Break) Super Productivity',
+      );
+
+      focusModeServiceMock.isRunning.set(false);
+      focusModeServiceMock.isSessionPaused.set(true);
+
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith(
+        '(Paused 04:59 Break) Super Productivity',
+      );
+
+      focusModeServiceMock.isSessionPaused.set(false);
+      focusModeServiceMock.isRunning.set(true);
+      focusModeServiceMock.isInOvertime.set(true);
+      focusModeServiceMock.timeElapsed.set(1560000);
+
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith(
+        '(26:00 Break) Super Productivity',
+      );
+
+      focusModeServiceMock.mode.set(FocusModeMode.Flowtime);
+
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith('Super Productivity');
+    });
   });
 });
