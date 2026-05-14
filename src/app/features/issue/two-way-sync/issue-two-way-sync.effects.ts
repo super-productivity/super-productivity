@@ -6,6 +6,7 @@ import { catchError, concatMap, filter, map } from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskService } from '../../tasks/task.service';
 import { Task } from '../../tasks/task.model';
+import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { IssueProviderService } from '../issue-provider.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
@@ -29,6 +30,7 @@ import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.s
 import { TagService } from '../../tag/tag.service';
 import { createPluginSyncAdapter } from '../../../plugins/issue-provider/plugin-sync-adapter.service';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { deleteTag, deleteTags } from '../../tag/store/tag.actions';
 
 const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'isDone',
@@ -39,6 +41,14 @@ const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'timeEstimate',
   'tagIds',
 ]);
+
+const toSortedStringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value
+        .filter((v): v is string => typeof v === 'string')
+        .slice()
+        .sort()
+    : [];
 
 // Lookup map to extract taskId and changes from each action type,
 // replacing chained if/else with manual casts.
@@ -157,6 +167,49 @@ export class IssueTwoWaySyncEffects {
           this._pushChanges$(fullTask, changes).pipe(
             catchError((err) => {
               IssueLog.err('Two-way sync push failed', err);
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.ISSUE.S.TWO_WAY_SYNC_PUSH_FAILED,
+                translateParams: { errorMsg: getErrorTxt(err) },
+              });
+              return EMPTY;
+            }),
+          ),
+        ),
+      ),
+    { dispatch: false },
+  );
+
+  pushTagChangesAfterTagDelete$: Observable<unknown> = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(deleteTag, deleteTags),
+        map((action) => action.deletedTagTitles ?? []),
+        filter((deletedTagTitles) => deletedTagTitles.length > 0),
+        concatMap((deletedTagTitles) =>
+          this._store.select(selectAllTasks).pipe(
+            first(),
+            map((tasks) =>
+              tasks.filter((task) =>
+                this._isTaskAffectedByDeletedTagTitles(task, deletedTagTitles),
+              ),
+            ),
+            concatMap((tasks) => from(tasks)),
+          ),
+        ),
+        filter((task) => {
+          if (this._syncOriginatedTaskIds.delete(task.id)) {
+            return false;
+          }
+          if (!task.issueType || !task.issueProviderId || !task.issueId) {
+            return false;
+          }
+          return !!this._getAdapter(task.issueType);
+        }),
+        concatMap((task) =>
+          this._pushChanges$(task, { tagIds: task.tagIds }).pipe(
+            catchError((err) => {
+              IssueLog.err('Two-way sync tag delete push failed', err);
               this._snackService.open({
                 type: 'ERROR',
                 msg: T.F.ISSUE.S.TWO_WAY_SYNC_PUSH_FAILED,
@@ -345,6 +398,42 @@ export class IssueTwoWaySyncEffects {
     if (pluginCfg) {
       return !!(pluginCfg as Record<string, unknown>)?.['isAutoCreateIssues'];
     }
+    return false;
+  }
+
+  private _isTaskAffectedByDeletedTagTitles(
+    task: Task,
+    deletedTagTitles: string[],
+  ): boolean {
+    if (!task.issueType || !task.issueId || !task.issueLastSyncedValues) {
+      return false;
+    }
+
+    const adapter = this._getAdapter(task.issueType);
+    if (!adapter) {
+      return false;
+    }
+
+    const deletedTitleSet = new Set(deletedTagTitles);
+    const parsed = parseInt(task.issueId, 10);
+    const ctx = {
+      issueId: task.issueId,
+      issueNumber: Number.isNaN(parsed) ? undefined : parsed,
+    };
+
+    for (const mapping of adapter.getFieldMappings()) {
+      if (mapping.taskField !== 'tagIds') {
+        continue;
+      }
+      const lastValue = task.issueLastSyncedValues[mapping.issueField];
+      const labels = toSortedStringArray(
+        lastValue != null ? mapping.toTaskValue(lastValue, ctx) : [],
+      );
+      if (labels.some((label) => deletedTitleSet.has(label))) {
+        return true;
+      }
+    }
+
     return false;
   }
 

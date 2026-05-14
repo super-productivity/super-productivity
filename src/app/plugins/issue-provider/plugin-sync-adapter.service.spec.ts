@@ -403,5 +403,24 @@ describe('createPluginSyncAdapter', () => {
 
       expect(result['labels']).toEqual(['bug', 'feature']);
     });
+
+    it('should fall back to the raw issue field when extractSyncValues omits labels', () => {
+      const definition = createMockDefinition({
+        fieldMappings: [...MOCK_FIELD_MAPPINGS, MOCK_TAG_IDS_FIELD_MAPPING],
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ state: 'open', title: 'test' }),
+      });
+      const adapter = createPluginSyncAdapter(
+        definition,
+        () => mockHttpHelper,
+        tagServiceWithTags,
+      );
+
+      const issue = { state: 'open', title: 'test', labels: ['feature', 'bug'] };
+      const result = adapter.extractSyncValues(issue);
+
+      expect(result['labels']).toEqual(['bug', 'feature']);
+    });
   });
 });

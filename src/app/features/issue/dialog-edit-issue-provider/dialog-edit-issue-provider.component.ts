@@ -59,7 +59,7 @@ import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
-import { OAuthFlowConfig } from '@super-productivity/plugin-api';
+import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 // ClickUp is now a plugin — no built-in config component needed
@@ -506,6 +506,26 @@ export class DialogEditIssueProviderComponent {
       migrated['readCalendarIds'] = [migrated['calendarId'] as string];
       migrated['writeCalendarId'] = migrated['writeCalendarId'] || migrated['calendarId'];
     }
+    const defaultPluginConfig = this._getDefaultPluginConfig();
+    const defaultTwoWaySync = defaultPluginConfig['twoWaySync'] as
+      | Record<string, PluginSyncDirection>
+      | undefined;
+    if (defaultTwoWaySync) {
+      const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+      const isPushSupported = !!provider?.definition.updateIssue;
+      const currentTwoWaySync =
+        (migrated['twoWaySync'] as Record<string, PluginSyncDirection> | undefined) ?? {};
+      const normalizedCurrentTwoWaySync = Object.fromEntries(
+        Object.entries(currentTwoWaySync).map(([field, direction]) => [
+          field,
+          this._normalizeSyncDirectionForCapabilities(direction, isPushSupported),
+        ]),
+      );
+      migrated['twoWaySync'] = {
+        ...defaultTwoWaySync,
+        ...normalizedCurrentTwoWaySync,
+      };
+    }
     return { ...model, pluginConfig: migrated } as Partial<IssueProvider>;
   }
 
@@ -513,15 +533,30 @@ export class DialogEditIssueProviderComponent {
     if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
       return {};
     }
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    const isPushSupported = !!provider?.definition.updateIssue;
     const fieldMappings = this._pluginRegistry.getFieldMappings(this.issueProviderKey);
     if (!fieldMappings?.length) {
       return {};
     }
     const twoWaySync: Record<string, string> = {};
     for (const m of fieldMappings) {
-      twoWaySync[m.taskField] = m.defaultDirection;
+      twoWaySync[m.taskField] = this._normalizeSyncDirectionForCapabilities(
+        m.defaultDirection as PluginSyncDirection,
+        isPushSupported,
+      );
     }
     return { twoWaySync };
+  }
+
+  private _normalizeSyncDirectionForCapabilities(
+    direction: PluginSyncDirection,
+    isPushSupported: boolean,
+  ): PluginSyncDirection {
+    if (!isPushSupported && (direction === 'pushOnly' || direction === 'both')) {
+      return 'pullOnly';
+    }
+    return direction;
   }
 
   private _getPluginFormSection(): ConfigFormSection<IssueIntegrationCfg> | undefined {
@@ -626,11 +661,17 @@ export class DialogEditIssueProviderComponent {
     pluginKey: IssueProviderKey,
     fieldMappings: { taskField: string; issueField: string; defaultDirection: string }[],
   ): unknown {
+    const provider = this._pluginRegistry.getProvider(pluginKey);
+    const isPushSupported = !!provider?.definition.updateIssue;
     const syncDirectionOptions = [
       { value: 'off', label: T.F.ISSUE.TWO_WAY_SYNC.OFF },
       { value: 'pullOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PULL_ONLY },
-      { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
-      { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+      ...(isPushSupported
+        ? [
+            { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
+            { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+          ]
+        : []),
     ];
     const TASK_FIELD_LABELS: Record<string, string> = {
       isDone: T.F.ISSUE.TWO_WAY_SYNC.STATUS,
@@ -649,7 +690,6 @@ export class DialogEditIssueProviderComponent {
         options: syncDirectionOptions,
       },
     }));
-    const provider = this._pluginRegistry.getProvider(pluginKey);
     if (provider?.definition.createIssue) {
       syncFields.push({
         key: 'pluginConfig.isAutoCreateIssues',

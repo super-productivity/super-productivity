@@ -121,7 +121,12 @@ export const createPluginSyncAdapter = (
 
       const result: Record<string, unknown> = {};
       for (const m of fieldMappings) {
-        const value = data[m.issueField];
+        const value = Object.prototype.hasOwnProperty.call(data, m.issueField)
+          ? data[m.issueField]
+          : issue[m.issueField];
+        if (value === undefined) {
+          continue;
+        }
         if (tagIssueFields.has(m.issueField)) {
           result[m.issueField] = sortTagLabels(value);
         } else {

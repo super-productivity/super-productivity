@@ -111,6 +111,28 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return this._buildBaseIssueTask(issueData as PluginIssue);
   }
 
+  getAddTaskDataForCfg(issueData: IssueDataReduced, cfg: unknown): IssueTask {
+    const pluginCfg = this._asPluginCfg(cfg);
+    if (!pluginCfg) {
+      return this.getAddTaskData(issueData);
+    }
+
+    const provider = this._registry.getProvider(pluginCfg.issueProviderKey);
+    if (!provider) {
+      return this.getAddTaskData(issueData);
+    }
+
+    const issue = issueData as PluginIssue;
+    const syncValues = this._extractSyncValues(issue, provider);
+    const tagIds = this._extractInitialTagIds(provider, syncValues, pluginCfg, issue);
+
+    return {
+      ...this._getAddTaskDataForProvider(issue, provider, syncValues),
+      ...(tagIds ? { tagIds } : {}),
+      issueLastSyncedValues: syncValues,
+    };
+  }
+
   async searchIssues(
     searchTerm: string,
     issueProviderId: string,
@@ -187,19 +209,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         issue.lastUpdated != null && issue.lastUpdated > (task.issueLastUpdated || 0);
       if (isUpdated) {
         // Compute sync values once and pass through to avoid redundant calls
-        const rawSyncValues =
-          resolved.provider.definition.extractSyncValues?.(issue) ?? {};
-        // Normalize tag arrays to match adapter.extractSyncValues sorting
-        const tagIssueFields = (resolved.provider.definition.fieldMappings ?? [])
-          .filter((m) => m.taskField === 'tagIds')
-          .map((m) => m.issueField);
-        for (const field of tagIssueFields) {
-          const value = rawSyncValues[field];
-          if (Array.isArray(value)) {
-            rawSyncValues[field] = sortTagLabels(value);
-          }
-        }
-        const issueLastSyncedValues: Record<string, unknown> = rawSyncValues;
+        const issueLastSyncedValues = this._extractSyncValues(issue, resolved.provider);
         const addTaskData = this._getAddTaskDataForProvider(
           issue,
           resolved.provider,
@@ -288,7 +298,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
 
   // --- Private helpers ---
 
-  private _asPluginCfg(cfg: IssueIntegrationCfg): IssueProviderPluginType | undefined {
+  private _asPluginCfg(cfg: unknown): IssueProviderPluginType | undefined {
     const candidate = cfg as unknown as Record<string, unknown>;
     if (
       typeof candidate['pluginId'] !== 'string' ||
@@ -337,6 +347,35 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
   private _getIssueNumber(issue: PluginIssue): number | undefined {
     const n = (issue as { number?: unknown }).number;
     return typeof n === 'number' ? n : undefined;
+  }
+
+  private _extractSyncValues(
+    issue: PluginIssue,
+    provider: RegisteredPluginIssueProvider,
+  ): Record<string, unknown> {
+    const fieldMappings = provider.definition.fieldMappings;
+    if (!fieldMappings?.length) {
+      return {};
+    }
+
+    const data = provider.definition.extractSyncValues
+      ? provider.definition.extractSyncValues(issue)
+      : (issue as Record<string, unknown>);
+    const issueRecord = issue as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+
+    for (const mapping of fieldMappings) {
+      const value = Object.prototype.hasOwnProperty.call(data, mapping.issueField)
+        ? data[mapping.issueField]
+        : issueRecord[mapping.issueField];
+      if (value === undefined) {
+        continue;
+      }
+      result[mapping.issueField] =
+        mapping.taskField === 'tagIds' ? sortTagLabels(value) : value;
+    }
+
+    return result;
   }
 
   private _extractTaskFieldsFromIssueWithSyncValues(
@@ -451,6 +490,44 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       }
     }
     return tagIds;
+  }
+
+  private _extractInitialTagIds(
+    provider: RegisteredPluginIssueProvider,
+    syncValues: Record<string, unknown>,
+    cfg: IssueProviderPluginType,
+    issue: PluginIssue,
+  ): string[] | undefined {
+    const fieldMappings = provider.definition.fieldMappings;
+    if (!fieldMappings?.length) {
+      return undefined;
+    }
+
+    const twoWaySync = (cfg.pluginConfig?.['twoWaySync'] as Record<string, string>) ?? {};
+    const ctx = {
+      issueId: issue.id,
+      issueNumber: this._getIssueNumber(issue),
+    };
+    const isAutoCreateTags = !!(cfg.pluginConfig as Record<string, unknown>)?.[
+      'isAutoCreateTags'
+    ];
+
+    for (const mapping of fieldMappings) {
+      const dir = twoWaySync[mapping.taskField] ?? mapping.defaultDirection;
+      if (mapping.taskField !== 'tagIds' || (dir !== 'pullOnly' && dir !== 'both')) {
+        continue;
+      }
+
+      const issueValue = syncValues[mapping.issueField];
+      if (issueValue == null) {
+        continue;
+      }
+
+      const labels = sortTagLabels(mapping.toTaskValue(issueValue, ctx));
+      return this._mapLabelsToTagIds(labels, isAutoCreateTags);
+    }
+
+    return undefined;
   }
 
   private _applyFieldMappingPull(
