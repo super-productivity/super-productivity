@@ -345,7 +345,11 @@ export class ScheduleComponent {
   displayTodayDate = computed(() => {
     const todayDateStr = this._globalTrackingIntervalService.todayDateStr();
     const locale = this._dateTimeFormatService.currentLocale();
-    return safeFormatDate(todayDateStr, 'EEEE, MMM dd, yyyy', locale);
+    return this._dateTimeFormatService.formatDate(
+      parseDbDateStr(todayDateStr),
+      locale,
+      'long',
+    );
   });
 
   // Tracks whether the scroll-wrapper has been scrolled horizontally. Used
