@@ -274,6 +274,9 @@ export const verifyRegistration = async (
         where: { email: email.toLowerCase() },
       });
       if (user && user.isVerified === 0) {
+        // AUTH_CACHE_INVALIDATION: bracket the delete pre + post, matching every
+        // other user-delete site, so the convention stays uniformly auditable.
+        authCache.invalidate(user.id);
         await prisma.user.delete({ where: { id: user.id } });
         authCache.invalidate(user.id);
         Logger.info(`Cleaned up failed passkey registration (ID: ${user.id})`);

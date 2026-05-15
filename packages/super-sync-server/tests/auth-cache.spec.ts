@@ -130,4 +130,21 @@ describe('auth verification cache', () => {
     });
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
   });
+
+  it('bounds invalidationVersions and keeps recent invalidations newest', () => {
+    // A long-ago invalidation must not pin heap forever.
+    authCache.invalidate(1);
+    expect(authCache.getInvalidationVersion(1)).toBe(1);
+
+    // Push >10k distinct invalidations so user 1 (the oldest) is evicted.
+    for (let userId = 2; userId <= 10_002; userId++) {
+      authCache.invalidate(userId);
+    }
+
+    // Evicted -> reverts to the default (0). Memory is bounded.
+    expect(authCache.getInvalidationVersion(1)).toBe(0);
+    // A freshly-invalidated user sits at the MRU tail and is retained, so the
+    // CAS race protection still holds for the window that matters.
+    expect(authCache.getInvalidationVersion(10_002)).toBe(1);
+  });
 });

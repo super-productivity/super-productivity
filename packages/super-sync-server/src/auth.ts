@@ -64,6 +64,11 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
     },
   });
 
+  // AUTH_CACHE_INVALIDATION: drop any negative (isVerified:false) entry so the
+  // now-verified user isn't denied for up to the cache TTL, and so the cache
+  // stays correct if a verified -> unverified path is ever added.
+  authCache.invalidate(user.id);
+
   Logger.info(`User verified (ID: ${user.id})`);
   return true;
 };
@@ -372,6 +377,11 @@ export const registerWithMagicLink = async (
         // Send verification email; clean up new user on failure
         const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
         if (!emailSent) {
+          // AUTH_CACHE_INVALIDATION: no invalidate needed here. This only
+          // deletes the user just created above (isVerified: 0). No JWT is
+          // issued for an unverified user, so verifyToken was never called for
+          // it and no authCache entry can exist. Documented to keep the
+          // bracket-every-delete convention auditable.
           await prisma.user.deleteMany({
             where: { email: normalizedEmail, isVerified: 0 },
           });

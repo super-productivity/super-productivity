@@ -64,8 +64,26 @@ class AuthCache {
   }
 
   invalidate(userId: number): void {
-    this.invalidationVersions.set(userId, this.getInvalidationVersion(userId) + 1);
+    const nextVersion = this.getInvalidationVersion(userId) + 1;
+    // Re-insert at the tail so the just-invalidated user is the MOST recently
+    // used. invalidationVersions must persist after entries.delete() so a
+    // verifyToken whose DB read raced this invalidate fails its setIfCurrent CAS
+    // and does not cache stale-valid data. Bounding the map is required (it
+    // otherwise grows one entry per lifetime-invalidated user, unbounded on a
+    // long-lived single replica). Evicting the OLDEST invalidations is safe: an
+    // invalidation only needs to survive until the racing in-flight read's
+    // setIfCurrent (bounded by one DB round trip). A freshly-invalidated user
+    // sits at the MRU tail, so it can only be evicted after every other of the
+    // 10k tracked invalidations is newer than it — far beyond any read window.
+    this.invalidationVersions.delete(userId);
+    this.invalidationVersions.set(userId, nextVersion);
     this.entries.delete(userId);
+
+    while (this.invalidationVersions.size > AUTH_CACHE_MAX_ENTRIES) {
+      const oldestKey = this.invalidationVersions.keys().next().value;
+      if (oldestKey === undefined) break;
+      this.invalidationVersions.delete(oldestKey);
+    }
   }
 
   clear(): void {
