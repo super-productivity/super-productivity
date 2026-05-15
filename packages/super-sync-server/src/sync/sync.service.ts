@@ -46,6 +46,29 @@ interface DuplicateOperationCandidate {
   syncImportReason: string | null;
 }
 
+/**
+ * The exact column set `isSameDuplicateOperation` needs to compare an incoming
+ * op against a stored one. Shared by every duplicate-detection query (batch
+ * prefetch + both legacy per-op checks) so a field added here can never be
+ * silently missed at one of the call sites.
+ */
+const DUPLICATE_OP_SELECT = {
+  id: true,
+  userId: true,
+  clientId: true,
+  actionType: true,
+  opType: true,
+  entityType: true,
+  entityId: true,
+  payload: true,
+  vectorClock: true,
+  schemaVersion: true,
+  clientTimestamp: true,
+  receivedAt: true,
+  isPayloadEncrypted: true,
+  syncImportReason: true,
+} satisfies Prisma.OperationSelect;
+
 interface LatestEntityOperationRow {
   entityId: string;
   clientId: string;
@@ -872,6 +895,33 @@ export class SyncService {
     return out;
   }
 
+  /**
+   * Aggregate the prior vector clock, merge the full-state op's clock into it
+   * (max per client) and persist it as the user's latest-full-state marker.
+   * Shared by the batch and legacy per-op paths so the aggregate-and-merge
+   * semantics cannot drift between them. Costs 2 DB round trips (the aggregate
+   * scan + the userSyncState update).
+   */
+  private async persistMergedFullStateClock(
+    tx: Prisma.TransactionClient,
+    userId: number,
+    serverSeq: number,
+    opClock: VectorClock,
+  ): Promise<void> {
+    const priorAggregate = await this._aggregatePriorVectorClock(tx, userId, serverSeq);
+    const mergedClock: VectorClock = { ...priorAggregate };
+    for (const [clientId, counter] of Object.entries(opClock)) {
+      mergedClock[clientId] = Math.max(mergedClock[clientId] ?? 0, counter);
+    }
+    await tx.userSyncState.update({
+      where: { userId },
+      data: {
+        latestFullStateSeq: serverSeq,
+        latestFullStateVectorClock: mergedClock as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   private async processOperationBatch(
     userId: number,
     clientId: string,
@@ -885,9 +935,98 @@ export class SyncService {
     dbRoundtrips: number;
   }> {
     const results = new Array<UploadResult>(ops.length);
-    const validatedCandidates: BatchUploadCandidate[] = [];
     let dbRoundtrips = 0;
 
+    // Pipeline: validate+clamp -> intra-batch dedupe -> classify existing
+    // duplicates -> conflict-detect -> reserve seq + insert -> full-state
+    // clock. Each stage writes terminal rejections into `results` by index
+    // and passes the surviving candidates forward; the two empty-set guards
+    // short-circuit exactly as the original single function did.
+    const validatedCandidates = this.validateAndClampBatch(
+      userId,
+      clientId,
+      ops,
+      now,
+      results,
+    );
+
+    const uniqueCandidates = this.rejectIntraBatchDuplicates(
+      userId,
+      clientId,
+      validatedCandidates,
+      results,
+    );
+
+    if (uniqueCandidates.length === 0) {
+      return {
+        results: results as UploadResult[],
+        acceptedDeltaBytes: 0,
+        unserializableAccepted: 0,
+        dbRoundtrips,
+      };
+    }
+
+    const classified = await this.classifyExistingDuplicates(
+      userId,
+      clientId,
+      uniqueCandidates,
+      tx,
+      results,
+    );
+    dbRoundtrips += classified.dbRoundtrips;
+    const duplicateFreeCandidates = classified.duplicateFreeCandidates;
+
+    const conflictOutcome = await this.detectBatchConflicts(
+      userId,
+      clientId,
+      duplicateFreeCandidates,
+      tx,
+      results,
+    );
+    dbRoundtrips += conflictOutcome.dbRoundtrips;
+    const { accepted, acceptedDeltaBytes, unserializableAccepted } = conflictOutcome;
+
+    if (accepted.length === 0) {
+      return {
+        results: results as UploadResult[],
+        acceptedDeltaBytes: 0,
+        unserializableAccepted: 0,
+        dbRoundtrips,
+      };
+    }
+
+    dbRoundtrips += await this.reserveSeqAndInsert(userId, clientId, accepted, now, tx);
+
+    dbRoundtrips += await this.persistBatchFullStateClock(userId, accepted, tx);
+
+    for (const acceptedOp of accepted) {
+      results[acceptedOp.resultIndex] = {
+        opId: acceptedOp.op.id,
+        accepted: true,
+        serverSeq: acceptedOp.serverSeq,
+      };
+    }
+
+    return {
+      results: results as UploadResult[],
+      acceptedDeltaBytes,
+      unserializableAccepted,
+      dbRoundtrips,
+    };
+  }
+
+  /**
+   * Stage 1: clamp future timestamps and validate every op in memory (no DB).
+   * Invalid ops get a terminal rejection written into `results` by index.
+   */
+  private validateAndClampBatch(
+    userId: number,
+    clientId: string,
+    ops: Operation[],
+    now: number,
+    results: UploadResult[],
+  ): BatchUploadCandidate[] {
+    const validatedCandidates: BatchUploadCandidate[] = [];
     for (let i = 0; i < ops.length; i++) {
       const op = ops[i];
       const originalTimestamp = this.clampFutureTimestamp(userId, clientId, op, now);
@@ -913,7 +1052,21 @@ export class SyncService {
           : undefined,
       });
     }
+    return validatedCandidates;
+  }
 
+  /**
+   * Stage 2: within a single batch, accept the first op for an id and reject
+   * every later op sharing that id as DUPLICATE_OPERATION (by id, not content
+   * — see plan §1a step 2 / the C4 divergence note). Must run before sequence
+   * reservation so a duplicate never consumes a server_seq.
+   */
+  private rejectIntraBatchDuplicates(
+    userId: number,
+    clientId: string,
+    validatedCandidates: BatchUploadCandidate[],
+    results: UploadResult[],
+  ): BatchUploadCandidate[] {
     const seenOpIds = new Set<string>();
     const uniqueCandidates: BatchUploadCandidate[] = [];
     for (const candidate of validatedCandidates) {
@@ -930,35 +1083,28 @@ export class SyncService {
       seenOpIds.add(candidate.op.id);
       uniqueCandidates.push(candidate);
     }
+    return uniqueCandidates;
+  }
 
-    if (uniqueCandidates.length === 0) {
-      return {
-        results: results as UploadResult[],
-        acceptedDeltaBytes: 0,
-        unserializableAccepted: 0,
-        dbRoundtrips,
-      };
-    }
-
-    dbRoundtrips++;
+  /**
+   * Stage 3: prefetch any already-persisted ops sharing an incoming id (one
+   * query) and classify each as an idempotent retry (DUPLICATE_OPERATION) or
+   * an id collision with different content (INVALID_OP_ID). Survivors are
+   * returned for conflict detection.
+   */
+  private async classifyExistingDuplicates(
+    userId: number,
+    clientId: string,
+    uniqueCandidates: BatchUploadCandidate[],
+    tx: Prisma.TransactionClient,
+    results: UploadResult[],
+  ): Promise<{
+    duplicateFreeCandidates: BatchUploadCandidate[];
+    dbRoundtrips: number;
+  }> {
     const existingOps = await tx.operation.findMany({
       where: { id: { in: uniqueCandidates.map((candidate) => candidate.op.id) } },
-      select: {
-        id: true,
-        userId: true,
-        clientId: true,
-        actionType: true,
-        opType: true,
-        entityType: true,
-        entityId: true,
-        payload: true,
-        vectorClock: true,
-        schemaVersion: true,
-        clientTimestamp: true,
-        receivedAt: true,
-        isPayloadEncrypted: true,
-        syncImportReason: true,
-      },
+      select: DUPLICATE_OP_SELECT,
     });
     const existingOpById = new Map(
       existingOps.map((existingOp) => [existingOp.id, existingOp]),
@@ -998,9 +1144,32 @@ export class SyncService {
         SYNC_ERROR_CODES.DUPLICATE_OPERATION,
       );
     }
+    return { duplicateFreeCandidates, dbRoundtrips: 1 };
+  }
 
+  /**
+   * Stage 4: prefetch the latest op per touched entity and run conflict
+   * detection in memory. The prefetched map is updated as each non-full-state
+   * op is accepted so intra-batch conflicts on the same entity resolve in
+   * serial order — this must stay co-located with the conflict loop. Accepted
+   * ops are sized for the storage counter here.
+   */
+  private async detectBatchConflicts(
+    userId: number,
+    clientId: string,
+    duplicateFreeCandidates: BatchUploadCandidate[],
+    tx: Prisma.TransactionClient,
+    results: UploadResult[],
+  ): Promise<{
+    accepted: AcceptedBatchOperation[];
+    acceptedDeltaBytes: number;
+    unserializableAccepted: number;
+    dbRoundtrips: number;
+  }> {
     const entityPairs = this.getBatchConflictEntityPairs(duplicateFreeCandidates);
-    dbRoundtrips += Math.ceil(entityPairs.length / CONFLICT_DETECTION_ENTITY_BATCH_SIZE);
+    const dbRoundtrips = Math.ceil(
+      entityPairs.length / CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+    );
     const latestOpByEntity = await this.prefetchLatestEntityOpsForBatch(
       userId,
       entityPairs,
@@ -1074,16 +1243,22 @@ export class SyncService {
       }
     }
 
-    if (accepted.length === 0) {
-      return {
-        results: results as UploadResult[],
-        acceptedDeltaBytes: 0,
-        unserializableAccepted: 0,
-        dbRoundtrips,
-      };
-    }
+    return { accepted, acceptedDeltaBytes, unserializableAccepted, dbRoundtrips };
+  }
 
-    dbRoundtrips++;
+  /**
+   * Stage 5: reserve a contiguous server_seq range for the accepted ops in one
+   * INSERT ... ON CONFLICT (which also serializes concurrent batches via the
+   * user_sync_state row lock), assign each op its seq, and bulk-insert. Returns
+   * the DB round trips consumed (2).
+   */
+  private async reserveSeqAndInsert(
+    userId: number,
+    clientId: string,
+    accepted: AcceptedBatchOperation[],
+    now: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
     const syncStateRows = await tx.$queryRaw<Array<{ lastSeq: number | bigint }>>`
       INSERT INTO user_sync_state (user_id, last_seq)
       VALUES (${userId}, ${accepted.length})
@@ -1100,7 +1275,6 @@ export class SyncService {
       accepted[i].serverSeq = firstSeq + i;
     }
 
-    dbRoundtrips++;
     await tx.operation.createMany({
       data: accepted.map((candidate) => ({
         id: candidate.op.id,
@@ -1121,7 +1295,20 @@ export class SyncService {
         syncImportReason: candidate.op.syncImportReason ?? null,
       })),
     });
+    return 2;
+  }
 
+  /**
+   * Stage 6: if the batch accepted any full-state op, persist the merged
+   * latest-full-state vector clock once for the last such op (last write
+   * wins). Returns the DB round trips consumed (2 if a full-state op was
+   * accepted, else 0).
+   */
+  private async persistBatchFullStateClock(
+    userId: number,
+    accepted: AcceptedBatchOperation[],
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
     let lastFullStateOp: AcceptedBatchOperation | null = null;
     for (const acceptedOp of accepted) {
       if (acceptedOp.fullStateVectorClock) {
@@ -1130,44 +1317,15 @@ export class SyncService {
     }
 
     if (lastFullStateOp?.fullStateVectorClock) {
-      dbRoundtrips += 2;
-      const priorAggregate = await this._aggregatePriorVectorClock(
+      await this.persistMergedFullStateClock(
         tx,
         userId,
         lastFullStateOp.serverSeq,
-      );
-      const mergedClock: VectorClock = { ...priorAggregate };
-      for (const [fullStateClientId, counter] of Object.entries(
         lastFullStateOp.fullStateVectorClock,
-      )) {
-        mergedClock[fullStateClientId] = Math.max(
-          mergedClock[fullStateClientId] ?? 0,
-          counter,
-        );
-      }
-      await tx.userSyncState.update({
-        where: { userId },
-        data: {
-          latestFullStateSeq: lastFullStateOp.serverSeq,
-          latestFullStateVectorClock: mergedClock as Prisma.InputJsonValue,
-        },
-      });
+      );
+      return 2;
     }
-
-    for (const acceptedOp of accepted) {
-      results[acceptedOp.resultIndex] = {
-        opId: acceptedOp.op.id,
-        accepted: true,
-        serverSeq: acceptedOp.serverSeq,
-      };
-    }
-
-    return {
-      results: results as UploadResult[],
-      acceptedDeltaBytes,
-      unserializableAccepted,
-      dbRoundtrips,
-    };
+    return 0;
   }
 
   /**
@@ -1181,22 +1339,9 @@ export class SyncService {
     now: number,
     tx: Prisma.TransactionClient,
   ): Promise<UploadResult> {
-    // Clamp future timestamps instead of rejecting them (prevents silent data loss)
-    const originalTimestamp = op.timestamp;
-    const maxAllowedTimestamp = now + this.config.maxClockDriftMs;
-    if (op.timestamp > maxAllowedTimestamp) {
-      op.timestamp = maxAllowedTimestamp;
-      Logger.audit({
-        event: 'TIMESTAMP_CLAMPED',
-        userId,
-        clientId,
-        opId: op.id,
-        entityType: op.entityType,
-        originalTimestamp,
-        clampedTo: maxAllowedTimestamp,
-        driftMs: originalTimestamp - now,
-      });
-    }
+    // Clamp future timestamps instead of rejecting them (prevents silent data
+    // loss). Shares the exact clamp + audit with the batch path.
+    const originalTimestamp = this.clampFutureTimestamp(userId, clientId, op, now);
 
     // Validate operation (including clientId match)
     const validation = this.validationService.validateOp(op, clientId);
@@ -1233,22 +1378,7 @@ export class SyncService {
     // from advancing lastSeq.
     const existingOp = await tx.operation.findUnique({
       where: { id: op.id },
-      select: {
-        id: true,
-        userId: true,
-        clientId: true,
-        actionType: true,
-        opType: true,
-        entityType: true,
-        entityId: true,
-        payload: true,
-        vectorClock: true,
-        schemaVersion: true,
-        clientTimestamp: true,
-        receivedAt: true,
-        isPayloadEncrypted: true,
-        syncImportReason: true,
-      },
+      select: DUPLICATE_OP_SELECT,
     });
 
     if (existingOp) {
@@ -1408,22 +1538,7 @@ export class SyncService {
     if (createResult.count === 0) {
       const duplicateOp = await tx.operation.findUnique({
         where: { id: op.id },
-        select: {
-          id: true,
-          userId: true,
-          clientId: true,
-          actionType: true,
-          opType: true,
-          entityType: true,
-          entityId: true,
-          payload: true,
-          vectorClock: true,
-          schemaVersion: true,
-          clientTimestamp: true,
-          receivedAt: true,
-          isPayloadEncrypted: true,
-          syncImportReason: true,
-        },
+        select: DUPLICATE_OP_SELECT,
       });
 
       if (!duplicateOp) {
@@ -1487,18 +1602,7 @@ export class SyncService {
       // to per-snapshot — full-state ops are rare so the upload-time scan is
       // strictly cheaper overall. Stored unpruned; the download path applies
       // `limitVectorClockSize` with `preserveClientIds` known to that read.
-      const priorAggregate = await this._aggregatePriorVectorClock(tx, userId, serverSeq);
-      const mergedClock: VectorClock = { ...priorAggregate };
-      for (const [clientId, counter] of Object.entries(fullStateVectorClock)) {
-        mergedClock[clientId] = Math.max(mergedClock[clientId] ?? 0, counter);
-      }
-      await tx.userSyncState.update({
-        where: { userId },
-        data: {
-          latestFullStateSeq: serverSeq,
-          latestFullStateVectorClock: mergedClock as Prisma.InputJsonValue,
-        },
-      });
+      await this.persistMergedFullStateClock(tx, userId, serverSeq, fullStateVectorClock);
     }
 
     return {
