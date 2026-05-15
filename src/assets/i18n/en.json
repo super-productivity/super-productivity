@@ -153,7 +153,7 @@
         "CALDAV_RESOURCE": "The name of the CalDAV resource (the calendar)",
         "CALDAV_URL": "CalDAV URL (the base URL)",
         "CALDAV_USER": "Your CalDAV username",
-        "IS_ADD_SUB_TASKS": "Import also sub-tasks when a task is added",
+        "IS_ADD_SUB_TASKS": "Also import subtasks when a task is added",
         "TWO_WAY_SYNC_BOTH": "Both (bidirectional)",
         "TWO_WAY_SYNC_NOTES": "Notes / Description sync direction",
         "TWO_WAY_SYNC_OFF": "Off",
