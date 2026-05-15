@@ -72,6 +72,7 @@ describe('ScheduleComponent', () => {
       [],
       {
         todayDateStr$: of('2026-01-20'),
+        todayDateStr: signal('2026-01-20'),
       },
     );
 
