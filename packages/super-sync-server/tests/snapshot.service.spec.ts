@@ -1574,7 +1574,13 @@ describe('SnapshotService', () => {
       expect(result.PROJECT).toEqual({ 'proj-1': { id: 'proj-1' } });
     });
 
-    it('should stringify the full replay state only once for small delta ops', () => {
+    it('should never stringify the full replay state for small delta ops', () => {
+      // Delta accounting is a proven over-estimate, so when the running bound
+      // stays well under the cap the exact measurement is provably redundant
+      // and skipped entirely. This matches the pre-existing per-op-loop replay
+      // (which did zero full stringifications below its 1000-op cadence) — the
+      // earlier "exactly 1" expectation encoded a regression on the dominant
+      // small/incremental-replay path.
       const stringifySpy = vi.spyOn(JSON, 'stringify');
       const ops = Array.from({ length: 1500 }, (_, index) => ({
         id: `op-${index}`,
@@ -1598,7 +1604,7 @@ describe('SnapshotService', () => {
             Object.prototype.hasOwnProperty.call(value, 'TASK')
           );
         });
-        expect(fullStateStringifications).toHaveLength(1);
+        expect(fullStateStringifications).toHaveLength(0);
       } finally {
         stringifySpy.mockRestore();
       }

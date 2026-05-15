@@ -60,6 +60,17 @@ const isUnsafeEntityKey = (key: string): boolean =>
 const isReplayFullStateOpType = (opType: string): boolean =>
   opType === 'SYNC_IMPORT' || opType === 'BACKUP_IMPORT' || opType === 'REPAIR';
 
+/**
+ * Generous upper bound on the JSON structural overhead of inserting one new
+ * `state[entityType][entityId] = {...}` slot: the id key's quotes + colon +
+ * comma (~4 bytes) plus, when the entity-type map is new, a `"type":{}` wrapper
+ * (~6 bytes). Padded to 32 so the running delta accounting can NEVER
+ * under-count — the replay size guard's correctness (and the decision to skip
+ * the final exact measurement when the upper bound proves safety) depends on
+ * this being an over-estimate.
+ */
+const REPLAY_ENTITY_KEY_JSON_OVERHEAD_BYTES = 32;
+
 const getReplayPayloadDeltaBytes = (opType: string, payload: unknown): number => {
   if (opType === 'DEL') return 0;
   return Buffer.byteLength(JSON.stringify(payload ?? ''), 'utf8');
@@ -71,8 +82,14 @@ const getReplayEntityKeyDeltaBytes = (
 ): number =>
   Buffer.byteLength(entityType, 'utf8') +
   (entityId ? Buffer.byteLength(entityId, 'utf8') : 0) +
-  32;
+  REPLAY_ENTITY_KEY_JSON_OVERHEAD_BYTES;
 
+/**
+ * Throws if the serialized state exceeds the replay cap. The return value is
+ * load-bearing, NOT incidental: callers assign it back to `estimatedBytes` to
+ * reset the running delta-accounting baseline. Do not "simplify" this to
+ * `void`.
+ */
 const assertReplayStateSize = (state: Record<string, unknown>): number => {
   const stateBytes = Buffer.byteLength(JSON.stringify(state), 'utf8');
   if (stateBytes > MAX_REPLAY_STATE_SIZE_BYTES) {
@@ -1091,7 +1108,17 @@ export class SnapshotService {
         accumulatedDeltaBytes = 0;
       }
     }
-    assertReplayStateSize(state);
+    // `estimatedBytes + accumulatedDeltaBytes` is a proven over-estimate of the
+    // true serialized size (payload byteLength upper-bounds merged growth, DEL
+    // contributes 0, entity-key overhead is padded). When it is within the cap
+    // the true size is too, so the exact final measurement is provably
+    // redundant — skipping it keeps the common small/incremental replay at zero
+    // expensive full stringifications. The exact check still runs (and throws)
+    // whenever the bound does not prove safety; any state that truly exceeds
+    // the cap pushes the over-estimate past it and trips this.
+    if (estimatedBytes + accumulatedDeltaBytes > MAX_REPLAY_STATE_SIZE_BYTES) {
+      assertReplayStateSize(state);
+    }
     return state;
   }
 
