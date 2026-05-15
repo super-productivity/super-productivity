@@ -88,9 +88,9 @@ h2 {
     text-align: center;
     position: relative;
 
-    &.is-warning .time-val,
-    &.is-warning mat-icon {
-      color: var(--c-warn);
+    &.is-info .time-val,
+    &.is-info mat-icon {
+      color: var(--text-color-muted);
     }
   }
 
@@ -111,16 +111,16 @@ h2 {
     justify-content: center;
   }
 
-  .status-warning-chip {
+  .status-info-chip {
     display: inline-flex;
     align-items: center;
     gap: var(--s-quarter);
     margin-top: var(--s-half);
     padding: 2px 8px;
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--c-warn) 40%, transparent);
-    background: color-mix(in srgb, var(--bg-lighter) 84%, var(--c-warn) 16%);
-    color: var(--c-warn);
+    border: 1px solid color-mix(in srgb, var(--text-color-muted) 32%, transparent);
+    background: color-mix(in srgb, var(--bg-lighter) 90%, var(--text-color-muted) 10%);
+    color: var(--text-color-muted);
     font-size: 11px;
     line-height: 1.2;
 

@@ -50,9 +50,13 @@
             ></tag-list>
           }
           @if (isOutsideWorkHours()) {
-            <div class="task-warning-chip">
-              <mat-icon>warning_amber</mat-icon>
-              <span>Outside work hours</span>
+            <div
+              class="task-info-chip"
+              [matTooltip]="T.F.TASK.CMP.OUTSIDE_WORK_HOURS | translate"
+              [attr.aria-label]="T.F.TASK.CMP.OUTSIDE_WORK_HOURS | translate"
+            >
+              <mat-icon>info</mat-icon>
+              <span>{{ T.F.TASK.CMP.OUTSIDE_WORK_HOURS | translate }}</span>
             </div>
           }
         </div>
@@ -127,6 +131,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button
@@ -141,6 +154,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button
@@ -159,6 +181,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button

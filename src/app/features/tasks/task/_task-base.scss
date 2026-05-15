@@ -152,7 +152,11 @@
   }
 
   :host.hasTimeConflict .inner-wrapper > & {
-    border-color: color-mix(in srgb, var(--text-color-muted) 36%, var(--extra-border-color));
+    border-color: color-mix(
+      in srgb,
+      var(--text-color-muted) 36%,
+      var(--extra-border-color)
+    );
     border-width: 1px;
     border-style: solid;
     box-shadow:
