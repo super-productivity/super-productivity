@@ -72,7 +72,9 @@
       [matTooltipDisabled]="isViewingToday()"
     >
       <mat-icon>wb_sunny</mat-icon>
-      {{ T.G.TODAY_TAG_TITLE | translate }}
+      @if (!this.layoutService.isXxxs()) {
+        {{ T.G.TODAY_TAG_TITLE | translate }}
+      }
     </button>
 
     <button
