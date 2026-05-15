@@ -64,6 +64,18 @@
 
   <div class="date-nav-group">
     <button
+      class="today-btn"
+      (click)="goToToday()"
+      [disabled]="isViewingToday()"
+      [attr.aria-label]="T.G.TODAY_TAG_TITLE | translate"
+      [matTooltip]="displayTodayDate()"
+      [matTooltipDisabled]="isViewingToday()"
+    >
+      <mat-icon>wb_sunny</mat-icon>
+      {{ T.G.TODAY_TAG_TITLE | translate }}
+    </button>
+
+    <button
       mat-icon-button
       (click)="goToPreviousPeriod()"
       [disabled]="isViewingToday()"
@@ -77,18 +89,6 @@
       "
     >
       <mat-icon>chevron_left</mat-icon>
-    </button>
-
-    <button
-      class="today-btn"
-      (click)="goToToday()"
-      [disabled]="isViewingToday()"
-      [attr.aria-label]="T.G.TODAY_TAG_TITLE | translate"
-      [matTooltip]="displayTodayDate()"
-      [matTooltipDisabled]="isViewingToday()"
-    >
-      <mat-icon>wb_sunny</mat-icon>
-      {{ T.G.TODAY_TAG_TITLE | translate }}
     </button>
 
     <button
