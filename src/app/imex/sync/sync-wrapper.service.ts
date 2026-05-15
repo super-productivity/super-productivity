@@ -606,7 +606,13 @@ export class SyncWrapperService {
         // SuperSync AuthFailSPError gets special handling: tolerate up to 2 transient 401s
         // (e.g. infrastructure errors returning 401 instead of 500), but on the 3rd
         // consecutive failure, clear the token to break the stale-credential loop.
-        // Other providers (Dropbox, WebDAV) clear immediately so their OAuth/re-auth flows work.
+        // Dropbox clears its refreshable OAuth token immediately so its re-auth flow
+        // works. WebDAV/Nextcloud intentionally do NOT clear: the credential is a
+        // user-typed (often irrecoverable) password, not a refreshable token — they
+        // expose no clearAuthCredentials hook, so clearAuthCredentials() below is a
+        // no-op for them and the actionable snackbar handles recovery without
+        // destroying the user's config. See issue #7616 — do NOT re-add a WebDAV
+        // clearAuthCredentials override.
         let skipClear = false;
         if (error instanceof AuthFailSPError && providerId === SyncProviderId.SuperSync) {
           this._consecutiveSuperSyncAuthFailures++;

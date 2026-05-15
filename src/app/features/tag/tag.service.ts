@@ -59,11 +59,13 @@ export class TagService {
   }
 
   deleteTag(id: string): void {
-    this._store$.dispatch(deleteTag({ id }));
+    this._store$.dispatch(
+      deleteTag({ id, deletedTagTitles: this._getTagTitlesByIds([id]) }),
+    );
   }
 
   removeTag(id: string): void {
-    this._store$.dispatch(deleteTag({ id }));
+    this.deleteTag(id);
   }
 
   updateColor(id: string, color: string): void {
@@ -75,7 +77,9 @@ export class TagService {
   }
 
   deleteTags(ids: string[]): void {
-    this._store$.dispatch(deleteTags({ ids }));
+    this._store$.dispatch(
+      deleteTags({ ids, deletedTagTitles: this._getTagTitlesByIds(ids) }),
+    );
   }
 
   updateTag(id: string, changes: Partial<Tag>): void {
@@ -102,5 +106,16 @@ export class TagService {
       id: newTag.id,
       action: addTag({ tag: newTag }),
     };
+  }
+
+  private _getTagTitlesByIds(ids: string[]): string[] {
+    const idSet = new Set(ids);
+    try {
+      return this.tags()
+        .filter((tag) => idSet.has(tag.id))
+        .map((tag) => tag.title);
+    } catch {
+      return [];
+    }
   }
 }

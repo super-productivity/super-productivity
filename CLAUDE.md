@@ -7,6 +7,7 @@ Guidance for Claude Code working in this repository. Super Productivity is a tod
 - Styling changes → [`docs/styling-guide.md`](docs/styling-guide.md)
 - User-facing functionality changes → [`docs/documentation-guide.md`](docs/documentation-guide.md)
 - Sync, op-log, vector clocks → [`docs/sync-and-op-log/`](docs/sync-and-op-log/)
+- Effects/reducers/bulk-dispatch touching synced state → [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md)
 - E2E tests → [`e2e/CLAUDE.md`](e2e/CLAUDE.md)
 - Load-bearing decisions → [`ARCHITECTURE-DECISIONS.md`](ARCHITECTURE-DECISIONS.md)
 
@@ -41,14 +42,14 @@ For SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/CLAUDE.
 
 ## Sync-correctness rules
 
-Touched on most state-related PRs. Read the linked source/doc for full reasoning before editing.
+Touched on most state-related PRs. Read the linked source/doc for full reasoning before editing. Rules 1–3 and 6 are one invariant — *one user intent = one op; replayed/remote ops must not re-trigger effects* — fully explained in [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md).
 
-1. **Effects use `inject(LOCAL_ACTIONS)`**, never `inject(Actions)` — effects must not run for remote sync ops. For archive-specific side effects on remote clients (writing/deleting from IndexedDB), use `ArchiveOperationHandler` (called by `OperationApplierService`). → `src/app/util/local-actions.token.ts`, `docs/sync-and-op-log/operation-log-architecture-diagrams.md` §8.
-2. **Action-based effects only.** Selector-based effects fire on every store change (including hydration/sync replay) and bypass `LOCAL_ACTIONS` filtering; if unavoidable, wrap with the `skipDuringSyncWindow()` operator (or guard with `HydrationStateService.isApplyingRemoteOps()`). → `src/app/features/tag/store/tag.effects.ts`.
-3. **Multi-entity changes use meta-reducers**, not effects — one reducer pass = one sync op (e.g. deleting a tag also removes it from every task). → `src/app/root-store/meta/task-shared-meta-reducers/`.
+1. **Effects inject `LOCAL_ACTIONS`**, never `Actions` (`ALL_ACTIONS` only for the op-log capture effect; remote archive side effects → `ArchiveOperationHandler`, not `ALL_ACTIONS`). Lint-enforced (`no-actions-in-effects`). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md), `src/app/util/local-actions.token.ts`.
+2. **Prefer action-based effects**; a selector-based effect needs `skipDuringSyncWindow()`. Lint-enforced (`require-hydration-guard`). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md).
+3. **Multi-entity change = meta-reducer**, not an effect fan-out (one reducer pass = one op). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md), `src/app/root-store/meta/task-shared-meta-reducers/`.
 4. **Logical clock:** route "what day is this?" through `DateService` (`getLogicalTodayDate`, `isToday`, `todayStr`). Pure reducers/selectors take `startOfNextDayDiffMs` as an arg and call `isTodayWithOffset` for replay determinism. The raw `DateService.startOfNextDayDiff` is `private`; use `getStartOfNextDayDiffMs()` at service boundaries.
 5. **`TODAY_TAG` (`'TODAY'`) is virtual** — never add to `task.tagIds`; membership comes from `task.dueWithTime` or `task.dueDay`. `TODAY_TAG.taskIds` only stores ordering. → `ARCHITECTURE-DECISIONS.md` Decision #2.
-6. **Bulk dispatches:** add `await new Promise(r => setTimeout(r, 0))` after the loop — `store.dispatch()` is non-blocking, and without yielding, 50+ rapid dispatches lose state updates. → `OperationApplierService.applyOperations()`.
+6. **Bulk dispatch loop:** `await new Promise(r => setTimeout(r, 0))` after the loop (else 50+ rapid dispatches lose state). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md), `OperationApplierService.applyOperations()`.
 7. **`SYNC_IMPORT` / `BACKUP_IMPORT`** replace state and intentionally drop concurrent ops (CONCURRENT or LESS_THAN by vector clock) — by design, not a bug. → `SyncImportFilterService`.
 8. **Vector clocks:** `MAX_VECTOR_CLOCK_SIZE = 20`. Server prunes after conflict detection, before storage. → `docs/sync-and-op-log/vector-clocks.md`.
 9. **Logging:** `Log.log({ id: task.id })`, never `Log.log(task)` or `Log.log(title)` — log history is exportable, never log user content.

@@ -39,6 +39,7 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TaskComponent } from '../task/task.component';
 import { AsyncPipe } from '@angular/common';
+import { TranslatePipe } from '@ngx-translate/core';
 import { TaskViewCustomizerService } from '../../task-view-customizer/task-view-customizer.service';
 import { TaskLog } from '../../../core/log';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
@@ -91,6 +92,7 @@ export interface DropModelDataForList {
     CdkDropList,
     CdkDrag,
     AsyncPipe,
+    TranslatePipe,
     forwardRef(() => TaskComponent),
   ],
 })

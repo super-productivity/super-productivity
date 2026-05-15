@@ -2,7 +2,18 @@ import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { createEffect, ofType } from '@ngrx/effects';
 import { EMPTY, Observable, from } from 'rxjs';
-import { catchError, concatMap, filter, map, mergeMap, first, tap } from 'rxjs/operators';
+import {
+  catchError,
+  concatMap,
+  debounceTime,
+  filter,
+  first,
+  groupBy,
+  map,
+  mergeMap,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskService } from '../../tasks/task.service';
 import { Task } from '../../tasks/task.model';
@@ -29,6 +40,14 @@ interface TimeBlockContext {
   http: PluginHttp;
 }
 
+/**
+ * Time-block writes for the same task are coalesced over this window. A single
+ * user edit dispatches several actions (e.g. applyShortSyntax + updateTask);
+ * without coalescing each fires its own Google Calendar write, bursting past
+ * Google's per-event write rate limit. One settled edit = one write.
+ */
+export const COALESCE_MS = 1000;
+
 @Injectable()
 export class TimeBlockSyncEffects {
   private readonly _actions$ = inject(LOCAL_ACTIONS);
@@ -41,62 +60,64 @@ export class TimeBlockSyncEffects {
   private readonly _backfilledProviderIds = new Set<string>();
 
   /**
-   * When a task is scheduled or rescheduled, create/update the time-block event.
+   * When a task is scheduled, rescheduled, or a synced field (title,
+   * timeEstimate, isDone) changes, create/update its time-block event.
+   *
+   * A single user edit dispatches several of these actions in quick
+   * succession (e.g. applyShortSyntax + updateTask). They are coalesced per
+   * task over COALESCE_MS so one edit produces a single calendar write. The
+   * latest task state is re-read after the debounce, so the write always
+   * reflects the final state (and is skipped if the task is no longer
+   * scheduled — the delete effects handle that case).
    */
-  createOrUpdateOnSchedule$: Observable<unknown> = createEffect(
+  upsertOnTaskChange$: Observable<unknown> = createEffect(
     () =>
       this._actions$.pipe(
         ofType(
           TaskSharedActions.scheduleTaskWithTime,
           TaskSharedActions.reScheduleTaskWithTime,
           TaskSharedActions.applyShortSyntax,
+          TaskSharedActions.updateTask,
         ),
-        map((action) => {
+        map((action): string | null => {
           if (action.type === TaskSharedActions.applyShortSyntax.type) {
             const a = action as ReturnType<typeof TaskSharedActions.applyShortSyntax>;
-            if (!a.schedulingInfo?.dueWithTime) return null;
-            return { taskId: a.task.id, dueWithTime: a.schedulingInfo.dueWithTime };
+            return a.schedulingInfo?.dueWithTime ? a.task.id : null;
+          }
+          if (action.type === TaskSharedActions.updateTask.type) {
+            const a = action as ReturnType<typeof TaskSharedActions.updateTask>;
+            const changes = a.task.changes;
+            const isRelevant =
+              'title' in changes || 'timeEstimate' in changes || 'isDone' in changes;
+            return isRelevant ? (a.task.id as string) : null;
           }
           const a = action as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>;
-          return { taskId: a.task.id, dueWithTime: a.dueWithTime };
+          return a.task.id;
         }),
-        filter((v): v is { taskId: string; dueWithTime: number } => v !== null),
-        concatMap(({ taskId, dueWithTime }) =>
-          this._withTimeBlockContext$((ctx) =>
-            this._taskService
-              .getByIdOnce$(taskId)
-              .pipe(
-                concatMap((task) =>
-                  from(this._upsertEvent(ctx, task, dueWithTime)).pipe(
-                    catchError((err) => this._handleError(err)),
-                  ),
-                ),
-              ),
-          ),
-        ),
-      ),
-    { dispatch: false },
-  );
-
-  /**
-   * When title or timeEstimate changes on a scheduled task, update the event.
-   */
-  updateOnFieldChange$: Observable<unknown> = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter((action) => {
-          const changes = action.task.changes;
-          return 'title' in changes || 'timeEstimate' in changes || 'isDone' in changes;
+        filter((taskId): taskId is string => taskId !== null),
+        // Coalesce rapid changes to the same task; idle groups auto-complete.
+        groupBy((taskId) => taskId, {
+          duration: (g) => g.pipe(debounceTime(COALESCE_MS * 5)),
         }),
-        concatMap((action) =>
-          this._taskService.getByIdOnce$(action.task.id as string).pipe(
-            filter((task) => !!task?.dueWithTime),
-            concatMap((task) =>
+        mergeMap((taskId$) =>
+          taskId$.pipe(
+            debounceTime(COALESCE_MS),
+            switchMap((taskId) =>
               this._withTimeBlockContext$((ctx) =>
-                from(this._upsertEvent(ctx, task, task.dueWithTime!)).pipe(
-                  catchError((err) => this._handleError(err)),
-                ),
+                // Re-read the latest task after the debounce: the write
+                // reflects the settled state, trusting the store rather than
+                // any single triggering action's payload.
+                this._taskService
+                  .getByIdOnce$(taskId)
+                  .pipe(
+                    concatMap((task) =>
+                      task?.dueWithTime
+                        ? from(this._upsertEvent(ctx, task, task.dueWithTime)).pipe(
+                            catchError((err) => this._handleError(err)),
+                          )
+                        : EMPTY,
+                    ),
+                  ),
               ),
             ),
           ),

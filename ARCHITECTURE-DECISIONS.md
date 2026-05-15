@@ -148,7 +148,7 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
 - Removing or sharding the `lastSeq` write requires replacing this safety
   mechanism with an equivalent per-user serialization primitive
 
-**Documentation**: [`docs/sync-and-op-log/operation-log-architecture-diagrams.md`](docs/sync-and-op-log/operation-log-architecture-diagrams.md)
+**Documentation**: [`docs/sync-and-op-log/diagrams/02-server-sync.md`](docs/sync-and-op-log/diagrams/02-server-sync.md)
 
 **Key Files**:
 

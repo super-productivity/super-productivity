@@ -8,6 +8,7 @@ import type {
 } from '../../../src/file-based/webdav/webdav-http-adapter';
 import type { WebdavPrivateCfg } from '../../../src/webdav';
 import {
+  AuthFailSPError,
   EmptyRemoteBodySPError,
   HttpNotOkAPIError,
   InvalidDataSPError,
@@ -241,6 +242,45 @@ describe('WebdavApi', () => {
       adapter.request.mockResolvedValue(okResponse(sampleListing, 207));
       const r = await makeApi(adapter).testConnection(cfg);
       expect(r.success).toBe(true);
+    });
+
+    // Regression: issue #7617. The probe must hit the WebDAV base ROOT,
+    // not `baseUrl + syncFolderPath`. On a first-time setup the sync
+    // folder does not exist yet (created lazily on first upload), so
+    // probing it would 404 and falsely fail an otherwise valid config.
+    it('probes the base root, not the configured sync folder', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(okResponse(sampleListing, 207));
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(true);
+      expect(adapter.request).toHaveBeenCalledTimes(1);
+      const arg = adapter.request.mock.calls[0][0] as { url: string };
+      expect(arg.url).toBe('https://dav.example.com/dav/');
+      expect(arg.url).not.toContain('/sp');
+      // ...but the result still reports the configured sync folder (where
+      // data will sync), NOT the probed root — UI invariant.
+      expect(r.fullUrl).toBe('https://dav.example.com/dav/sp');
+    });
+
+    // A wrong username / base path makes the base root itself 404 on
+    // Nextcloud — that is a genuine misconfig and must still fail.
+    it('returns success: false when the base root is 404 (wrong base/username)', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockRejectedValue(
+        new RemoteFileNotFoundAPIError('https://dav.example.com/dav/'),
+      );
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(false);
+    });
+
+    // Safety invariant for #7617: relaxing the folder check must NOT let a
+    // bad password through. A 401 on the base root surfaces as
+    // AuthFailSPError and must still fail the test.
+    it('returns success: false on bad credentials (401 → AuthFailSPError)', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockRejectedValue(new AuthFailSPError());
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(false);
     });
 
     it('returns success: false with user-facing error + fullUrl on failure', async () => {

@@ -26,6 +26,15 @@ export interface SyncProviderBase<
   isReady(): Promise<boolean>;
   getAuthHelper?(): Promise<SyncProviderAuthHelper>;
   setPrivateCfg(privateCfg: TPrivateCfg): Promise<void>;
+  /**
+   * Implement ONLY when the provider's credential is a machine-refreshable
+   * token (OAuth access/refresh token) that is SAFE to destroy on a 401 to
+   * force a re-auth flow (Dropbox, SuperSync). Do NOT implement for
+   * user-typed secrets (WebDAV/Nextcloud passwords) — clearing them is
+   * irreversible data loss. Absence is a deliberate, supported no-op:
+   * `ProviderManager.clearAuthCredentials` skips providers without this
+   * hook. See issue #7616.
+   */
   clearAuthCredentials?(): Promise<void>;
 }
 

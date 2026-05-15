@@ -89,6 +89,26 @@
       </mat-form-field>
     }
 
+    @if (
+      selectedTime &&
+      (scheduleWarnings().hasOverlap || scheduleWarnings().isOutsideWorkHours)
+    ) {
+      <div
+        class="schedule-info"
+        aria-live="polite"
+      >
+        <mat-icon>info</mat-icon>
+        <div class="schedule-info-text">
+          @if (scheduleWarnings().hasOverlap) {
+            <div>{{ T.F.TASK.D_SCHEDULE_TASK.INFO_OVERLAP | translate }}</div>
+          }
+          @if (scheduleWarnings().isOutsideWorkHours) {
+            <div>{{ T.F.TASK.D_SCHEDULE_TASK.INFO_OUTSIDE_WORK_HOURS | translate }}</div>
+          }
+        </div>
+      </div>
+    }
+
     <mat-dialog-actions align="start">
       <div class="schedule-actions">
         @if (data.task && (data.task.dueWithTime || plannedDayForTask)) {

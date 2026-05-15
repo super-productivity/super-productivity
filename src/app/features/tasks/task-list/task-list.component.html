@@ -8,11 +8,15 @@
       class="expand-tasks-btn"
       mat-button
     >
-      <!--TODO translate -->
-      <em
-        >+ {{ isHideDone() ? doneTasksLength() + ' done ' : allTasksLength() }} sub
-        tasks</em
-      >
+      <em>
+        @if (isHideDone()) {
+          {{
+            T.F.TASK.CMP.SHOW_HIDDEN_DONE_SUB_TASKS | translate: { nr: doneTasksLength() }
+          }}
+        } @else {
+          {{ T.F.TASK.CMP.SHOW_HIDDEN_SUB_TASKS | translate: { nr: allTasksLength() } }}
+        }
+      </em>
       <mat-icon>expand_more</mat-icon>
     </button>
   </div>

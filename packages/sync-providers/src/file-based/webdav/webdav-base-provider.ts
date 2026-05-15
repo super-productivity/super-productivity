@@ -52,9 +52,9 @@ export interface WebdavBaseDeps<T extends WebdavProviderId, TPrivateCfg> {
  */
 /**
  * Bare-credential surface every WebDAV-flavored cfg must expose. The
- * `isReady` / `clearAuthCredentials` paths in the base provider only
- * read these fields. Concrete cfgs (`WebdavPrivateCfg`,
- * `NextcloudPrivateCfg`) extend with their own required fields.
+ * `isReady` path in the base provider only reads these fields. Concrete
+ * cfgs (`WebdavPrivateCfg`, `NextcloudPrivateCfg`) extend with their own
+ * required fields.
  */
 type WebdavCredentialsLike = {
   userName?: string;
@@ -113,16 +113,12 @@ export abstract class WebdavBaseProvider<
     await this.privateCfg.setComplete(privateCfg);
   }
 
-  async clearAuthCredentials(): Promise<void> {
-    const cfg = await this.privateCfg.load();
-    if (cfg?.userName || cfg?.password) {
-      await this.privateCfg.setComplete({
-        ...cfg,
-        userName: '',
-        password: '',
-      });
-    }
-  }
+  // `clearAuthCredentials` is intentionally NOT implemented for WebDAV /
+  // Nextcloud: the credential is a user-typed, often-irrecoverable password,
+  // not a refreshable token — clearing it on a recoverable 401 is
+  // irreversible data loss. See the contract on `SyncProviderBase`
+  // (provider-types.ts) and issue #7616. Regression-guarded by
+  // webdav-base-provider.spec.ts. Do NOT add an override here.
 
   async getFileRev(
     targetPath: string,

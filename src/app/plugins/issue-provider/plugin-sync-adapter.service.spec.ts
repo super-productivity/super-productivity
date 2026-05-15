@@ -5,6 +5,7 @@ import {
   PluginHttp,
 } from './plugin-issue-provider.model';
 import { IssueProviderPluginType } from '../../features/issue/issue.model';
+import { TagService } from '../../features/tag/tag.service';
 
 const MOCK_FIELD_MAPPINGS: PluginFieldMapping[] = [
   {
@@ -22,6 +23,14 @@ const MOCK_FIELD_MAPPINGS: PluginFieldMapping[] = [
     toTaskValue: (v: unknown) => v,
   },
 ];
+
+const MOCK_TAG_IDS_FIELD_MAPPING: PluginFieldMapping = {
+  taskField: 'tagIds',
+  issueField: 'labels',
+  defaultDirection: 'both',
+  toIssueValue: (v: unknown) => v,
+  toTaskValue: (v: unknown) => v,
+};
 
 const createMockDefinition = (
   overrides: Partial<IssueProviderPluginDefinition> = {},
@@ -76,9 +85,18 @@ const mockHttpHelper: PluginHttp = {
   request: jasmine.createSpy('request'),
 };
 
+const mockTagService = {
+  tags: () => [],
+  addTag: jasmine.createSpy('addTag').and.returnValue('new-tag-id'),
+} as unknown as TagService;
+
 describe('createPluginSyncAdapter', () => {
   it('should return field mappings from plugin definition', () => {
-    const adapter = createPluginSyncAdapter(createMockDefinition(), () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      createMockDefinition(),
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const mappings = adapter.getFieldMappings();
 
@@ -89,7 +107,11 @@ describe('createPluginSyncAdapter', () => {
   });
 
   it('should return sync config from pluginConfig.twoWaySync', () => {
-    const adapter = createPluginSyncAdapter(createMockDefinition(), () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      createMockDefinition(),
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const syncConfig = adapter.getSyncConfig(MOCK_CFG);
 
@@ -101,8 +123,39 @@ describe('createPluginSyncAdapter', () => {
     );
   });
 
+  it('should downgrade push directions when updateIssue is absent', () => {
+    const adapter = createPluginSyncAdapter(
+      createMockDefinition({
+        updateIssue: undefined,
+        fieldMappings: [
+          {
+            taskField: 'isDone',
+            issueField: 'state',
+            defaultDirection: 'both',
+            toIssueValue: (v: unknown) => (v ? 'closed' : 'open'),
+            toTaskValue: (v: unknown) => v === 'closed',
+          },
+        ],
+      }),
+      () => mockHttpHelper,
+      mockTagService,
+    );
+
+    expect(adapter.getFieldMappings()[0].defaultDirection).toBe('pullOnly');
+    expect(
+      adapter.getSyncConfig({
+        ...MOCK_CFG,
+        pluginConfig: { twoWaySync: { isDone: 'pushOnly' } },
+      }).isDone,
+    ).toBe('pullOnly');
+  });
+
   it('should return empty sync config when twoWaySync is absent', () => {
-    const adapter = createPluginSyncAdapter(createMockDefinition(), () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      createMockDefinition(),
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const cfgWithoutSync = {
       ...MOCK_CFG,
@@ -114,7 +167,11 @@ describe('createPluginSyncAdapter', () => {
 
   it('should fetch issue via definition.getById', async () => {
     const definition = createMockDefinition();
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const result = await adapter.fetchIssue('1', MOCK_CFG);
 
@@ -128,7 +185,11 @@ describe('createPluginSyncAdapter', () => {
 
   it('should push changes via definition.updateIssue', async () => {
     const definition = createMockDefinition();
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     await adapter.pushChanges('1', { state: 'closed' }, MOCK_CFG);
 
@@ -142,7 +203,11 @@ describe('createPluginSyncAdapter', () => {
 
   it('should throw when pushing without updateIssue', async () => {
     const definition = createMockDefinition({ updateIssue: undefined });
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     await expectAsync(
       adapter.pushChanges('1', { state: 'closed' }, MOCK_CFG),
@@ -151,7 +216,11 @@ describe('createPluginSyncAdapter', () => {
 
   it('should extract sync values via definition.extractSyncValues', () => {
     const definition = createMockDefinition();
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const issue = { state: 'open', title: 'test', extra: 'ignored' };
     const result = adapter.extractSyncValues(issue);
@@ -162,7 +231,11 @@ describe('createPluginSyncAdapter', () => {
 
   it('should fall back to field-based extraction when extractSyncValues is absent', () => {
     const definition = createMockDefinition({ extractSyncValues: undefined });
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const issue = { state: 'open', title: 'test', extra: 'ignored' };
     const result = adapter.extractSyncValues(issue);
@@ -172,7 +245,11 @@ describe('createPluginSyncAdapter', () => {
 
   it('should create issue via definition.createIssue', async () => {
     const definition = createMockDefinition();
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const result = await adapter.createIssue!('new issue', MOCK_CFG);
 
@@ -187,7 +264,11 @@ describe('createPluginSyncAdapter', () => {
 
   it('should throw when creating without createIssue', async () => {
     const definition = createMockDefinition({ createIssue: undefined });
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     await expectAsync(adapter.createIssue!('new issue', MOCK_CFG)).toBeRejectedWithError(
       /does not implement createIssue/,
@@ -195,7 +276,11 @@ describe('createPluginSyncAdapter', () => {
   });
 
   it('should convert field mapping direction functions correctly', () => {
-    const adapter = createPluginSyncAdapter(createMockDefinition(), () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      createMockDefinition(),
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const mappings = adapter.getFieldMappings();
     const isDoneMapping = mappings[0];
@@ -221,6 +306,7 @@ describe('createPluginSyncAdapter', () => {
     const adapter = createPluginSyncAdapter(
       createMockDefinition({ fieldMappings: mappingsWithExclusive }),
       () => mockHttpHelper,
+      mockTagService,
     );
 
     const mappings = adapter.getFieldMappings();
@@ -231,7 +317,11 @@ describe('createPluginSyncAdapter', () => {
   });
 
   it('should not set mutuallyExclusive when not provided in plugin mapping', () => {
-    const adapter = createPluginSyncAdapter(createMockDefinition(), () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      createMockDefinition(),
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     const mappings = adapter.getFieldMappings();
 
@@ -243,7 +333,11 @@ describe('createPluginSyncAdapter', () => {
       .createSpy('deleteIssue')
       .and.returnValue(Promise.resolve());
     const definition = createMockDefinition({ deleteIssue: deleteIssueSpy });
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     await adapter.deleteIssue!('99', MOCK_CFG);
 
@@ -256,8 +350,104 @@ describe('createPluginSyncAdapter', () => {
 
   it('should set deleteIssue to undefined when definition does not implement it', () => {
     const definition = createMockDefinition({ deleteIssue: undefined });
-    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+    );
 
     expect(adapter.deleteIssue).toBeUndefined();
+  });
+
+  describe('tagIds mapping', () => {
+    const tagIdA = 'tag-a';
+    const tagIdB = 'tag-b';
+    const tagServiceWithTags = {
+      tags: () => [
+        { id: tagIdA, title: 'bug' },
+        { id: tagIdB, title: 'feature' },
+      ],
+      addTag: jasmine.createSpy('addTag'),
+    } as unknown as TagService;
+
+    it('should convert tagIds to sorted label array via toIssueValue', () => {
+      const definition = createMockDefinition({
+        fieldMappings: [...MOCK_FIELD_MAPPINGS, MOCK_TAG_IDS_FIELD_MAPPING],
+      });
+      const adapter = createPluginSyncAdapter(
+        definition,
+        () => mockHttpHelper,
+        tagServiceWithTags,
+      );
+
+      const mappings = adapter.getFieldMappings();
+      const tagMapping = mappings.find((m) => m.taskField === 'tagIds');
+
+      expect(tagMapping).toBeDefined();
+      const result = tagMapping!.toIssueValue([tagIdB, tagIdA], {
+        issueId: '1',
+      }) as string[];
+      expect(result).toEqual(['bug', 'feature']);
+    });
+
+    it('should fall back to raw tagId as label when tag is not found locally', () => {
+      const tagServiceNoTags = {
+        tags: () => [],
+        addTag: jasmine.createSpy('addTag'),
+      } as unknown as TagService;
+
+      const definition = createMockDefinition({
+        fieldMappings: [...MOCK_FIELD_MAPPINGS, MOCK_TAG_IDS_FIELD_MAPPING],
+      });
+      const adapter = createPluginSyncAdapter(
+        definition,
+        () => mockHttpHelper,
+        tagServiceNoTags,
+      );
+
+      const mappings = adapter.getFieldMappings();
+      const tagMapping = mappings.find((m) => m.taskField === 'tagIds');
+
+      const result = tagMapping!.toIssueValue(['unknown-tag-id'], {
+        issueId: '1',
+      }) as string[];
+      expect(result).toEqual(['unknown-tag-id']);
+    });
+
+    it('should sort label arrays in extractSyncValues for consistent diffing', () => {
+      const definition = createMockDefinition({
+        fieldMappings: [...MOCK_FIELD_MAPPINGS, MOCK_TAG_IDS_FIELD_MAPPING],
+        extractSyncValues: undefined,
+      });
+      const adapter = createPluginSyncAdapter(
+        definition,
+        () => mockHttpHelper,
+        tagServiceWithTags,
+      );
+
+      const issue = { state: 'open', title: 'test', labels: ['feature', 'bug'] };
+      const result = adapter.extractSyncValues(issue);
+
+      expect(result['labels']).toEqual(['bug', 'feature']);
+    });
+
+    it('should fall back to the raw issue field when extractSyncValues omits labels', () => {
+      const definition = createMockDefinition({
+        fieldMappings: [...MOCK_FIELD_MAPPINGS, MOCK_TAG_IDS_FIELD_MAPPING],
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ state: 'open', title: 'test' }),
+      });
+      const adapter = createPluginSyncAdapter(
+        definition,
+        () => mockHttpHelper,
+        tagServiceWithTags,
+      );
+
+      const issue = { state: 'open', title: 'test', labels: ['feature', 'bug'] };
+      const result = adapter.extractSyncValues(issue);
+
+      expect(result['labels']).toEqual(['bug', 'feature']);
+    });
   });
 });

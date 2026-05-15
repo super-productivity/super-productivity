@@ -52,7 +52,7 @@ $check-len: 18;
     transform: scale(1.15);
   }
 
-  .done-circle {
+  .done-shape {
     stroke: currentColor;
     stroke-width: 2;
     fill: none;
@@ -80,7 +80,7 @@ $check-len: 18;
   }
 
   &.is-done {
-    .done-circle {
+    .done-shape {
       opacity: 0.5;
     }
 
@@ -92,7 +92,7 @@ $check-len: 18;
 
   &.is-current:not(.is-done) {
     &:hover {
-      .done-circle {
+      .done-shape {
         opacity: 0.6;
       }
 
@@ -103,7 +103,7 @@ $check-len: 18;
   }
 
   &:hover {
-    .done-circle {
+    .done-shape {
       opacity: 0.6;
     }
 
@@ -112,7 +112,7 @@ $check-len: 18;
     }
 
     &.is-done {
-      .done-circle {
+      .done-shape {
         opacity: 0.8;
       }
 

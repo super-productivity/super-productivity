@@ -28,19 +28,22 @@ export const updateTag = createAction(
   }),
 );
 
-export const deleteTag = createAction('[Tag] Delete Tag', (tagProps: { id: string }) => ({
-  ...tagProps,
-  meta: {
-    isPersistent: true,
-    entityType: 'TAG',
-    entityId: tagProps.id,
-    opType: OpType.Delete,
-  } satisfies PersistentActionMeta,
-}));
+export const deleteTag = createAction(
+  '[Tag] Delete Tag',
+  (tagProps: { id: string; deletedTagTitles?: string[] }) => ({
+    ...tagProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'TAG',
+      entityId: tagProps.id,
+      opType: OpType.Delete,
+    } satisfies PersistentActionMeta,
+  }),
+);
 
 export const deleteTags = createAction(
   '[Tag] Delete multiple Tags',
-  (tagProps: { ids: string[] }) => ({
+  (tagProps: { ids: string[]; deletedTagTitles?: string[] }) => ({
     ...tagProps,
     meta: {
       isPersistent: true,

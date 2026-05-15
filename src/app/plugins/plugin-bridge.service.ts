@@ -343,12 +343,19 @@ export class PluginBridgeService implements OnDestroy {
       return;
     }
 
-    // Register sync adapter if plugin supports two-way sync
-    if (definition.fieldMappings?.length && definition.updateIssue) {
+    // Register adapter when plugin supports any issue side effects. Push support
+    // still requires updateIssue; create/delete can work without it.
+    if (
+      definition.createIssue ||
+      definition.deleteIssue ||
+      (definition.fieldMappings?.length && definition.updateIssue)
+    ) {
       const registered = this._pluginIssueProviderRegistry.getProvider(registeredKey);
       const httpOpts = { allowPrivateNetwork: registered?.allowPrivateNetwork };
-      const adapter = createPluginSyncAdapter(definition, (getHeaders) =>
-        this._pluginHttpService.createHttpHelper(getHeaders, httpOpts),
+      const adapter = createPluginSyncAdapter(
+        definition,
+        (getHeaders) => this._pluginHttpService.createHttpHelper(getHeaders, httpOpts),
+        this._tagService,
       );
       this._syncAdapterRegistry.register(registeredKey, adapter);
       PluginLog.log(
@@ -420,7 +427,8 @@ export class PluginBridgeService implements OnDestroy {
       duration: 5000, // 5 seconds default duration
     });
 
-    PluginLog.log('PluginBridge: Notification sent successfully', notifyCfg);
+    // No notifyCfg — title/body are user content; log history is exportable (rule #9).
+    PluginLog.log('PluginBridge: Notification sent successfully');
   }
 
   /**
@@ -1340,10 +1348,11 @@ export class PluginBridgeService implements OnDestroy {
 
     // Dispatch the action
     this._store.dispatch(action);
-    PluginLog.log(`PluginBridge: Dispatched action for plugin ${pluginId}`, {
-      actionType: action.type,
-      payload: action,
-    });
+    // Log the action TYPE only — the full action carries user content
+    // and the log history is user-exportable. See core/log.ts header / rule #9.
+    PluginLog.log(
+      `PluginBridge: Dispatched action '${action.type}' for plugin ${pluginId}`,
+    );
   }
 
   /**

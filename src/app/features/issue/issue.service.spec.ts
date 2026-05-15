@@ -27,6 +27,8 @@ import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-int
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
+import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
+import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 describe('IssueService', () => {
   let service: IssueService;
@@ -40,6 +42,8 @@ describe('IssueService', () => {
   let translateServiceSpy: jasmine.SpyObj<TranslateService>;
   let globalProgressBarServiceSpy: jasmine.SpyObj<GlobalProgressBarService>;
   let navigateToTaskServiceSpy: jasmine.SpyObj<NavigateToTaskService>;
+  let pluginAdapterSpy: jasmine.SpyObj<PluginIssueProviderAdapterService>;
+  let pluginRegistrySpy: jasmine.SpyObj<PluginIssueProviderRegistryService>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -91,7 +95,8 @@ describe('IssueService', () => {
     calendarIntegrationServiceSpy = jasmine.createSpyObj('CalendarIntegrationService', [
       'skipCalendarEvent',
     ]);
-    storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+    storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
+    storeSpy.pipe.and.returnValue(of([]));
     translateServiceSpy = jasmine.createSpyObj('TranslateService', ['instant']);
     globalProgressBarServiceSpy = jasmine.createSpyObj('GlobalProgressBarService', [
       'countUp',
@@ -100,6 +105,18 @@ describe('IssueService', () => {
     navigateToTaskServiceSpy = jasmine.createSpyObj('NavigateToTaskService', [
       'navigate',
     ]);
+    pluginAdapterSpy = jasmine.createSpyObj('PluginIssueProviderAdapterService', [
+      'getAddTaskData',
+      'getAddTaskDataForCfg',
+    ]);
+    pluginRegistrySpy = jasmine.createSpyObj('PluginIssueProviderRegistryService', [
+      'hasProvider',
+      'getIcon',
+      'getName',
+      'getIssueStrings',
+      'getPollIntervalMs',
+    ]);
+    pluginRegistrySpy.hasProvider.and.returnValue(false);
 
     // Default mock return values - use 'as any' to bypass strict type checking
     issueProviderServiceSpy.getCfgOnce$.and.returnValue(
@@ -153,6 +170,8 @@ describe('IssueService', () => {
           provide: CalendarCommonInterfacesService,
           useValue: mockCommonInterfaceService,
         },
+        { provide: PluginIssueProviderAdapterService, useValue: pluginAdapterSpy },
+        { provide: PluginIssueProviderRegistryService, useValue: pluginRegistrySpy },
       ],
     });
     service = TestBed.inject(IssueService);
@@ -341,6 +360,82 @@ describe('IssueService', () => {
       const addCall = taskServiceSpy.add.calls.mostRecent();
       const taskData = addCall.args[2] as Partial<Task>;
       expect(taskData.tagIds).toEqual(['tag-1', 'tag-2']);
+    });
+
+    it('should merge provider tagIds with default tags', async () => {
+      setupForNewTask();
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+        tagIds: ['remote-tag'],
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['default-tag'],
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['default-tag', 'remote-tag']);
+    });
+
+    it('should use plugin add task data with cfg so mapped tags are imported', async () => {
+      const pluginIssue = {
+        id: 'PLUGIN-1',
+        title: 'Plugin Issue',
+        labels: ['bug'],
+      };
+      pluginRegistrySpy.hasProvider.and.callFake((key) => key === 'plugin:test');
+      pluginAdapterSpy.getAddTaskDataForCfg.and.returnValue({
+        title: 'Plugin Issue',
+        tagIds: ['remote-tag'],
+        issueLastSyncedValues: { labels: ['bug'] },
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          id: 'plugin-provider-1',
+          issueProviderKey: 'plugin:test',
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['default-tag'],
+          pluginConfig: { twoWaySync: { tagIds: 'both' } },
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: pluginIssue as any,
+        issueProviderId: 'plugin-provider-1',
+        issueProviderKey: 'plugin:test' as any,
+      });
+
+      expect(pluginAdapterSpy.getAddTaskDataForCfg).toHaveBeenCalledWith(
+        pluginIssue as any,
+        jasmine.objectContaining({ issueProviderKey: 'plugin:test' }),
+      );
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['default-tag', 'remote-tag']);
+      expect(taskData.issueLastSyncedValues).toEqual({ labels: ['bug'] });
     });
 
     it('should set defaultNote when provider adapter does not set notes', async () => {

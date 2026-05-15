@@ -116,6 +116,39 @@ This document is structured around these four purposes. Most complexity lives in
 
 ---
 
+## Why this architecture: rejected alternatives
+
+The operation log is **not** incidental complexity. It is the minimum design
+that satisfies one hard, non-negotiable constraint:
+
+> **No silent data loss on concurrent multi-device edits, offline-first, with a
+> "dumb" server that cannot merge** (WebDAV/Dropbox/LocalFile have no server
+> logic; SuperSync payloads are end-to-end encrypted and opaque to the server).
+
+Independent prior analyses (three separate model reviews) evaluated every
+simpler approach against that constraint and rejected each:
+
+| Alternative | What it is | Why rejected |
+| --- | --- | --- |
+| **Last-Write-Wins (global timestamp)** | Drop logical clocks; newest wall-clock write wins | User devices have unreliable clocks; concurrent independent field edits silently overwrite each other. Unacceptable for a personal productivity app. (Survives only as a *field-level* tie-break inside conflict resolution.) |
+| **Delta / state-diff sync** | Keep a shadow copy, upload changed fields, server shallow-merges | Shadow state has no atomic coupling with the watermark → a crash mid-sync corrupts permanently; LWW shallow-merge loses concurrent independent edits; O(N) `JSON.stringify` diffing freezes the UI at 10k+ tasks; requires server-side merge, incompatible with opaque E2EE payloads. |
+| **Full-state / snapshot sync** | Sync whole model files (the old PFAPI model) | Re-transfers everything on every change; no per-entity conflict granularity; cannot reconstruct intent after an offline edit. Retained only as a *bootstrapping* mechanism (snapshot + tail replay), not the sync mechanism. |
+| **CRDTs (Yjs/Automerge/etc.)** | Math-guaranteed convergence | High conceptual complexity; most implementations assume a trusted server or relay, clashing with the dumb-file + E2EE constraint. The op-log deliberately *borrows* op-based-CRDT properties (UUID idempotency, causal ordering) without the full machinery. |
+| **Server-assigned sequence numbers** | Let the server impose a total order | Requires server connectivity for ordering — incompatible with offline-first and file-based providers that have no server. Used only as a *complement* (SuperSync seq for global order; vector clocks still required for the file-based/offline case). |
+
+**Consequences any future redesign must preserve:** no silent loss from
+concurrent independent edits; works without a trusted/merging server and with
+opaque E2EE payloads; offline edits rebase cleanly on reconnect; tombstones
+with retention; bounded growth via snapshot + compaction; conflict metadata
+prefers false-concurrency over false-ordering (compare clocks *before* pruning);
+scales to 10k+ active / 20k+ archived tasks without main-thread O(N) work.
+
+The only self-identified over-engineering historically was the vector-clock
+pruning *defense layers*, which were since removed (see
+[`vector-clocks.md`](./vector-clocks.md)).
+
+---
+
 # Part A: Local Persistence
 
 The operation log is primarily a **Write-Ahead Log (WAL)** for local persistence. It provides:
@@ -1289,20 +1322,6 @@ for (const entry of fullStateOps) {
 2. **Semantic clarity** - Full state uploads use appropriate endpoint
 3. **Server-side optimization** - Server can cache snapshots for faster client bootstrap
 
-## C.4 File-Based Sync Fallback
-
-For providers without API support (WebDAV/Dropbox), operations are synced via files (`OperationLogUploadService` and `OperationLogDownloadService` handle this transparently):
-
-```
-ops/
-├── manifest.json
-├── ops_CLIENT1_1701234567890.json
-├── ops_CLIENT1_1701234599999.json
-└── ops_CLIENT2_1701234600000.json
-```
-
-The manifest tracks which operation files exist. Each file contains a batch of operations. The system supports both API-based sync and this file-based fallback.
-
 ## C.4 Conflict Detection
 
 Conflicts are detected using vector clocks at the entity level. **Importantly, a conflict can only
@@ -1423,7 +1442,7 @@ When a `moveToArchive` operation conflicts with a field-level update (e.g., rena
 
 **Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `_createArchiveWinOp()`).
 
-This is the **first level** of archive resurrection prevention. The **second level** is in the `bulkOperationsMetaReducer` (see [Area 10: Bulk Application](#area-10-bulk-application) in the quick reference), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
+This is the **first level** of archive resurrection prevention. The **second level** is in the `bulkOperationsMetaReducer` (see [Archive Resurrection Prevention](diagrams/06-archive-operations.md#archive-resurrection-prevention-two-level-defense)), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
 
 **Key files:**
 
@@ -1542,7 +1561,7 @@ for (const op of ops) {
 
 **Why Drop CONCURRENT?** An operation from a client that never saw the import may reference entities that no longer exist in the imported state. Dropping ensures the import truly restores all clients to the same point in time.
 
-See [operation-log-architecture-diagrams.md](./operation-log-architecture-diagrams.md) Section 2c for visual diagrams.
+See [diagrams/03-conflict-resolution.md](./diagrams/03-conflict-resolution.md) for visual diagrams.
 
 ---
 
@@ -1976,6 +1995,34 @@ Fresh clients receive time tracking via SYNC_IMPORT:
 | `time-tracking.reducer.ts`             | NgRx reducer for syncTimeTracking |
 | `archive-operation-handler.service.ts` | Handles flushYoungToOld remotely  |
 
+## E.7 Archive Payload: Rejected Optimizations
+
+`moveToArchive` deliberately carries **full task data** (~2 KB/task), not just
+IDs. Reason: archive sync is two systems — the operation syncs immediately, but
+the archive model file syncs later. A remote client receiving `moveToArchive`
+must write the tasks to its local archive _now_, before the archive file
+arrives and while the tasks are already deleted from the originating client's
+active state. So the operation must be self-sufficient.
+
+Smaller-payload alternatives were explored and rejected:
+
+| Option                              | Idea                                       | Why rejected                                                                                                                                                              |
+| ----------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A — private `_tasks` field          | strip before storage                       | remote ops still need the full data for sync                                                                                                                              |
+| B — meta-reducer enrichment         | capture tasks from state before deletion   | meta-reducers must be pure; awkward async from the sync reducer                                                                                                            |
+| C — two-phase (write + delete)      | split into two ops                         | same total payload, just more complexity                                                                                                                                  |
+| D — operation-derived archive store | archive populated entirely by ID-only ops  | migration of years of existing archive data; initial sync must replay 20K+ archive ops; unbounded op-log growth; compaction must preserve archive state; PFAPI transition |
+
+**Decision: keep the full-payload approach** — it works, has no timing edge
+cases, is simple, and archiving is infrequent (end-of-day, not constant). The
+size reduction does not justify the complexity. For very large archives, chunk
+dispatches at `ARCHIVE_CHUNK_SIZE = 25`.
+
+**Escape hatch (preferred first resort if size becomes a real, not theoretical,
+problem):** task data is text/JSON and compresses >90% — compress the `_tasks`
+payload within the `moveToArchive` operation (LZ-string/GZIP) before sending.
+This removes the size concern without the Option-D architectural overhaul.
+
 ---
 
 # Part F: Atomic State Consistency
@@ -2336,7 +2383,6 @@ e2e/
 # References
 
 - [Operation Rules](./operation-rules.md) - Payload and validation rules
+- [Contributor Sync Model](./contributor-sync-model.md) - The single invariant for effects, reducers, and bulk dispatch
 - [SuperSync Encryption](./supersync-encryption-architecture.md) - End-to-end encryption implementation
-- [Hybrid Manifest Architecture](./long-term-plans/hybrid-manifest-architecture.md) - File-based sync optimization
 - [Vector Clocks](./vector-clocks.md) - Vector clock implementation details
-- [File-Based Sync Implementation](../ai/file-based-oplog-sync-implementation-plan.md) - Historical implementation plan

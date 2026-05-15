@@ -10,6 +10,7 @@ import {
   type WebdavPrivateCfg,
 } from '../../../src/webdav';
 import type { SyncCredentialStorePort } from '../../../src/credential-store';
+import type { SyncProviderBase } from '../../../src/provider-types';
 import type { NativeHttpExecutor } from '../../../src/http';
 import {
   MissingCredentialsSPError,
@@ -251,5 +252,92 @@ describe('NextcloudProvider', () => {
     await expect(provider.downloadFile('op-1.json')).rejects.toBeInstanceOf(
       MissingCredentialsSPError,
     );
+  });
+});
+
+/**
+ * Issue #7616: "18.5.0 breaks connection to Webdav".
+ *
+ * The auth-error path (sync-wrapper -> ProviderManager.clearAuthCredentials
+ * -> `provider.clearAuthCredentials?.()`) fires on a SINGLE
+ * AuthFailSPError / MissingCredentialsSPError for WebDAV (the transient
+ * tolerance is SuperSync-only). For WebDAV the "credential" is a
+ * user-typed username/password (often an irrecoverable Nextcloud app
+ * password), not a refreshable OAuth token. Erasing it on a recoverable
+ * 401 silently destroys the user's connection settings with no undo —
+ * exactly the reported symptom ("error message, then my connection
+ * settings were gone").
+ *
+ * Contract: invoking the provider's auth-clear hook the way
+ * ProviderManager does MUST NOT erase user-entered credentials for
+ * WebDAV / Nextcloud.
+ */
+describe('clearAuthCredentials — issue #7616: recoverable auth error must NOT erase user-typed credentials', () => {
+  const depsWith = <PID extends string, T>(
+    store: SyncCredentialStorePort<PID, T>,
+  ): {
+    logger: typeof NOOP_SYNC_LOGGER;
+    platformInfo: {
+      isNativePlatform: boolean;
+      isAndroidWebView: boolean;
+      isIosNative: boolean;
+    };
+    webFetch: () => typeof fetch;
+    nativeHttp: NativeHttpExecutor;
+    credentialStore: SyncCredentialStorePort<PID, T>;
+  } => ({
+    logger: NOOP_SYNC_LOGGER,
+    platformInfo: {
+      isNativePlatform: false,
+      isAndroidWebView: false,
+      isIosNative: false,
+    },
+    webFetch: () => globalThis.fetch as typeof fetch,
+    nativeHttp: nativeNoop,
+    credentialStore: store,
+  });
+
+  it('Webdav: the auth-clear hook keeps userName/password intact', async () => {
+    const store = fakeStore<typeof PROVIDER_ID_WEBDAV, WebdavPrivateCfg>({
+      ...validWebdavCfg,
+    });
+    // Typed as ProviderManager sees it: SyncProviderBase, where the hook
+    // is optional. After the fix it is undefined for WebDAV (safe no-op).
+    const provider: SyncProviderBase<typeof PROVIDER_ID_WEBDAV, WebdavPrivateCfg> =
+      new Webdav(depsWith(store));
+
+    // The contract ProviderManager's guard depends on: WebDAV must expose
+    // NO clearAuthCredentials hook. Re-adding one (even a "safe" one) fails
+    // here — that is the regression guard for issue #7616.
+    expect(provider.clearAuthCredentials).toBeUndefined();
+
+    // ProviderManager invokes it exactly like this.
+    await provider.clearAuthCredentials?.();
+
+    const after = await store.load();
+    expect(after?.userName).toBe(validWebdavCfg.userName);
+    expect(after?.password).toBe(validWebdavCfg.password);
+  });
+
+  it('NextcloudProvider: the auth-clear hook keeps userName/password intact', async () => {
+    const cfg: NextcloudPrivateCfg = {
+      serverUrl: 'https://cloud.example.com',
+      userName: 'alice',
+      password: 'app-password-cannot-be-recovered',
+      syncFolderPath: 'sp',
+    };
+    const store = fakeStore<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg>({
+      ...cfg,
+    });
+    const provider: SyncProviderBase<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg> =
+      new NextcloudProvider(depsWith(store));
+
+    expect(provider.clearAuthCredentials).toBeUndefined();
+
+    await provider.clearAuthCredentials?.();
+
+    const after = await store.load();
+    expect(after?.userName).toBe(cfg.userName);
+    expect(after?.password).toBe(cfg.password);
   });
 });

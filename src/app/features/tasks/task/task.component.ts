@@ -64,7 +64,7 @@ import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.comp
 import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-deadline-approaching';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ICAL_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
@@ -87,6 +87,10 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
+import { selectTimeConflictTaskIds } from '../store/task.selectors';
+import { MatTooltip } from '@angular/material/tooltip';
+import { selectTimelineConfig } from '../../config/store/global-config.reducer';
+import { isTaskOutsideWorkHours } from '../util/is-task-outside-work-hours';
 
 @Component({
   selector: 'task',
@@ -104,6 +108,7 @@ import { TaskFocusService } from '../task-focus.service';
     '[class.isSelected]': 'isSelected()',
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
+    '[class.hasTimeConflict]': 'hasTimeConflict()',
     '(contextmenu)': 'onHostContextMenu($event)',
   },
   imports: [
@@ -122,6 +127,7 @@ import { TaskFocusService } from '../task-focus.service';
     MsToStringPipe,
     LocalDateStrPipe,
     TranslatePipe,
+    MatTooltip,
     SubTaskTotalTimeSpentPipe,
     TagListComponent,
     ShortPlannedAtPipe,
@@ -146,6 +152,13 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
+  private readonly _timeConflictTaskIds = toSignal(
+    this._store.select(selectTimeConflictTaskIds),
+    { initialValue: new Set<string>() },
+  );
+  private readonly _timelineConfig = toSignal(this._store.select(selectTimelineConfig), {
+    initialValue: null,
+  });
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
@@ -212,6 +225,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       (t.dueDay && t.dueDay === todayStr)
     );
   });
+  hasTimeConflict = computed(() => {
+    const task = this.task();
+    return (
+      typeof task.dueWithTime === 'number' && this._timeConflictTaskIds().has(task.id)
+    );
+  });
+  isOutsideWorkHours = computed(() =>
+    isTaskOutsideWorkHours(this.task(), this._timelineConfig()),
+  );
 
   isShowDueDayBtn = computed(() => {
     const dueDay = this.task().dueDay;

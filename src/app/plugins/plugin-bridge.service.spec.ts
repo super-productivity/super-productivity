@@ -598,6 +598,8 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
+import { Log } from '../core/log';
+import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -824,5 +826,71 @@ describe('PluginBridgeService - Counter Methods', () => {
 
       expect(dataInitService.reInit).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
+  let service: PluginBridgeService;
+  let store: MockStore;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: {} },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: {} },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+    store = TestBed.inject(MockStore);
+    spyOn(store, 'dispatch');
+    Log.clearLogHistory();
+  });
+
+  afterEach(() => Log.clearLogHistory());
+
+  // Exercises the REAL bridge (not a mock) — the wrapper PluginAPI fix is
+  // bypassed if the bridge itself logs the action payload. See rule #9.
+  it('does not write the dispatched action payload to the exportable log', () => {
+    const SECRET = 'sync-secret-token-abcdef-13579';
+    const bound = service.createBoundMethods('test-plugin');
+
+    bound.dispatchAction({
+      type: updateGlobalConfigSection.type,
+      sectionKey: 'sync',
+      sectionCfg: { privateCfg: { encryptKey: SECRET } },
+    } as unknown as { type: string; [key: string]: unknown });
+
+    expect(Log.exportLogHistory()).not.toContain(SECRET);
+  });
+
+  it('still records the action type for diagnostics', () => {
+    const bound = service.createBoundMethods('test-plugin');
+
+    bound.dispatchAction({ type: updateGlobalConfigSection.type } as {
+      type: string;
+      [key: string]: unknown;
+    });
+
+    expect(Log.exportLogHistory()).toContain(updateGlobalConfigSection.type);
   });
 });

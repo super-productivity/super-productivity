@@ -2,6 +2,7 @@ import { IssueSyncAdapter } from '../../features/issue/two-way-sync/issue-sync-a
 import {
   FieldMapping,
   FieldSyncConfig,
+  SyncDirection,
 } from '../../features/issue/two-way-sync/issue-sync.model';
 import { IssueProviderPluginType } from '../../features/issue/issue.model';
 import {
@@ -10,30 +11,78 @@ import {
   PluginHttp,
 } from './plugin-issue-provider.model';
 import { Task } from '../../features/tasks/task.model';
+import { TagService } from '../../features/tag/tag.service';
+import { sortTagLabels } from './plugin-tag-utils';
 
-const convertMapping = (pm: PluginFieldMapping): FieldMapping => ({
-  taskField: pm.taskField,
-  issueField: pm.issueField,
-  defaultDirection: pm.defaultDirection,
-  toIssueValue: pm.toIssueValue,
-  toTaskValue: pm.toTaskValue,
-  ...(pm.mutuallyExclusive
-    ? { mutuallyExclusive: pm.mutuallyExclusive as (keyof Task)[] }
-    : {}),
-});
+const normalizeSyncDirectionForCapabilities = (
+  direction: SyncDirection,
+  isPushSupported: boolean,
+): SyncDirection =>
+  !isPushSupported && (direction === 'pushOnly' || direction === 'both')
+    ? 'pullOnly'
+    : direction;
+
+const convertMapping = (
+  pm: PluginFieldMapping,
+  tagService: TagService,
+  isPushSupported: boolean,
+): FieldMapping => {
+  if (pm.taskField === 'tagIds') {
+    return {
+      taskField: pm.taskField,
+      issueField: pm.issueField,
+      defaultDirection: normalizeSyncDirectionForCapabilities(
+        pm.defaultDirection,
+        isPushSupported,
+      ),
+      toIssueValue: (taskValue: unknown, ctx): unknown => {
+        const tagIds = (taskValue as string[]) || [];
+        const allTags = tagService.tags();
+        const labels = tagIds
+          .map((id) => allTags.find((t) => t.id === id)?.title || id)
+          .sort();
+        return pm.toIssueValue(labels, ctx);
+      },
+      toTaskValue: pm.toTaskValue,
+      ...(pm.mutuallyExclusive
+        ? { mutuallyExclusive: pm.mutuallyExclusive as (keyof Task)[] }
+        : {}),
+    };
+  }
+
+  return {
+    taskField: pm.taskField,
+    issueField: pm.issueField,
+    defaultDirection: normalizeSyncDirectionForCapabilities(
+      pm.defaultDirection,
+      isPushSupported,
+    ),
+    toIssueValue: pm.toIssueValue,
+    toTaskValue: pm.toTaskValue,
+    ...(pm.mutuallyExclusive
+      ? { mutuallyExclusive: pm.mutuallyExclusive as (keyof Task)[] }
+      : {}),
+  };
+};
 
 /**
  * Creates an IssueSyncAdapter for a specific plugin issue provider.
- * One instance is created per plugin that declares fieldMappings + updateIssue.
+ * One instance is created per plugin that declares issue side effects.
  */
 export const createPluginSyncAdapter = (
   definition: IssueProviderPluginDefinition,
   createHttpHelper: (
     getHeaders: () => Record<string, string> | Promise<Record<string, string>>,
   ) => PluginHttp,
+  tagService: TagService,
 ): IssueSyncAdapter<IssueProviderPluginType> => {
-  const fieldMappings: FieldMapping[] = (definition.fieldMappings ?? []).map(
-    convertMapping,
+  const isPushSupported = !!definition.updateIssue;
+  const fieldMappings: FieldMapping[] = (definition.fieldMappings ?? []).map((pm) =>
+    convertMapping(pm, tagService, isPushSupported),
+  );
+
+  const tagIssueFields = new Set(
+    fieldMappings.filter((m) => m.taskField === 'tagIds').map((m) => m.issueField),
   );
 
   const createHttp = (cfg: IssueProviderPluginType): PluginHttp =>
@@ -54,7 +103,10 @@ export const createPluginSyncAdapter = (
       for (const m of fieldMappings) {
         const direction = twoWay[m.taskField];
         if (direction && VALID_DIRECTIONS.has(direction)) {
-          result[m.taskField] = direction as FieldSyncConfig[keyof FieldSyncConfig];
+          result[m.taskField] = normalizeSyncDirectionForCapabilities(
+            direction as SyncDirection,
+            isPushSupported,
+          ) as FieldSyncConfig[keyof FieldSyncConfig];
         }
       }
       return result;
@@ -82,16 +134,27 @@ export const createPluginSyncAdapter = (
     },
 
     extractSyncValues: (issue: Record<string, unknown>): Record<string, unknown> => {
-      if (definition.extractSyncValues) {
-        return definition.extractSyncValues(
-          issue as Parameters<
-            NonNullable<IssueProviderPluginDefinition['extractSyncValues']>
-          >[0],
-        );
-      }
+      const data = definition.extractSyncValues
+        ? definition.extractSyncValues(
+            issue as Parameters<
+              NonNullable<IssueProviderPluginDefinition['extractSyncValues']>
+            >[0],
+          )
+        : issue;
+
       const result: Record<string, unknown> = {};
       for (const m of fieldMappings) {
-        result[m.issueField] = issue[m.issueField];
+        const value = Object.prototype.hasOwnProperty.call(data, m.issueField)
+          ? data[m.issueField]
+          : issue[m.issueField];
+        if (value === undefined) {
+          continue;
+        }
+        if (tagIssueFields.has(m.issueField)) {
+          result[m.issueField] = sortTagLabels(value);
+        } else {
+          result[m.issueField] = value;
+        }
       }
       return result;
     },

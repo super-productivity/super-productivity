@@ -1,182 +1,61 @@
-# Operation Log Documentation
+# Operation Log & Sync Documentation
 
-**Last Updated:** January 2026
-
-This directory contains the architectural documentation for Super Productivity's Operation Log system - an event-sourced persistence and synchronization layer that handles ALL sync providers (SuperSync, WebDAV, Dropbox, LocalFile).
-
-## Quick Start
-
-| If you want to...                   | Read this                                                                      |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
-| Understand the overall architecture | [operation-log-architecture.md](./operation-log-architecture.md)               |
-| See visual diagrams                 | [diagrams/](./diagrams/) (split by topic)                                      |
-| Learn the design rules              | [operation-rules.md](./operation-rules.md)                                     |
-| Understand package boundaries       | [package-boundaries.md](./package-boundaries.md)                               |
-| Understand file-based sync          | [diagrams/04-file-based-sync.md](./diagrams/04-file-based-sync.md)             |
-| Understand SuperSync encryption     | [supersync-encryption-architecture.md](./supersync-encryption-architecture.md) |
-
-## Documentation Overview
-
-### Core Documentation
-
-| Document                                                         | Description                                                                                                                                                                         | Status |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| [operation-log-architecture.md](./operation-log-architecture.md) | Comprehensive architecture reference covering Parts A-F: Local Persistence, File-Based Sync, Server Sync, Validation & Repair, Smart Archive Handling, and Atomic State Consistency | Active |
-| [diagrams/](./diagrams/)                                         | Mermaid diagrams split by topic (local persistence, server sync, file-based sync, etc.)                                                                                             | Active |
-| [operation-rules.md](./operation-rules.md)                       | Design rules and guidelines for the operation log store and operations                                                                                                              | Active |
-| [package-boundaries.md](./package-boundaries.md)                 | Dependency direction and ownership boundaries for `@sp/sync-core`, `@sp/sync-providers`, and app sync wiring                                                                        | Active |
-
-### Sync Architecture
-
-| Document                                                                       | Description                                                           | Status      |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------- | ----------- |
-| [diagrams/04-file-based-sync.md](./diagrams/04-file-based-sync.md)             | File-based sync with single sync-data.json (WebDAV/Dropbox/LocalFile) | Implemented |
-| [diagrams/02-server-sync.md](./diagrams/02-server-sync.md)                     | SuperSync server sync architecture                                    | Implemented |
-| [supersync-encryption-architecture.md](./supersync-encryption-architecture.md) | End-to-end encryption for SuperSync (AES-256-GCM + Argon2id)          | Implemented |
-
-### Historical / Completed Plans
-
-| Document                                                                               | Description                                              | Status                 |
-| -------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------- |
-| [replace-pfapi-with-oplog-plan.md](./long-term-plans/replace-pfapi-with-oplog-plan.md) | Plan to unify sync by replacing PFAPI with operation log | Completed (Jan 2026)   |
-| [e2e-encryption-plan.md](./long-term-plans/e2e-encryption-plan.md)                     | Original E2EE design (see supersync-encryption for impl) | Implemented (Dec 2025) |
-
-## Architecture at a Glance
-
-The Operation Log system is the **single sync system** for all providers:
+The Operation Log is the **single sync system** for all providers (SuperSync,
+WebDAV, Dropbox, LocalFile). It is an event-sourced persistence + sync layer:
+the log is the source of truth, current state is derived by replaying it, and
+vector clocks detect concurrent edits.
 
 ```
                          User Action
                               │
                               ▼
-                         NgRx Store
-                   (Runtime Source of Truth)
+                         NgRx Store  (runtime source of truth)
                               │
           ┌───────────────────┼───────────────────┐
           ▼                   │                   ▼
     OpLogEffects              │             Other Effects
           │                   │
-          ├──► SUP_OPS ◄──────┘
-          │    (Local Persistence - IndexedDB)
+          ├──► SUP_OPS ◄───────┘   (local persistence — IndexedDB)
           │
           └──► Sync Providers
-               ├── SuperSync (operation-based, real-time)
-               ├── WebDAV (file-based, single-file snapshot)
-               ├── Dropbox (file-based, single-file snapshot)
-               └── LocalFile (file-based, single-file snapshot)
+               ├── SuperSync   (operation-based, real-time)
+               └── WebDAV / Dropbox / LocalFile  (file-based, single sync-data.json)
 ```
 
-### Sync Provider Types
+## Start here
 
-| Provider Type    | Providers                  | How It Works                                                  |
-| ---------------- | -------------------------- | ------------------------------------------------------------- |
-| **Server-based** | SuperSync                  | Individual operations uploaded/downloaded via HTTP API        |
-| **File-based**   | WebDAV, Dropbox, LocalFile | Single `sync-data.json` file with state snapshot + recent ops |
+| You want to…                                                | Read                                                                                                 |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Write an effect/reducer/bulk-dispatch correctly             | **[contributor-sync-model.md](./contributor-sync-model.md)** — the one invariant, enforced by lint   |
+| Understand the whole architecture + why it's built this way | [operation-log-architecture.md](./operation-log-architecture.md) — Parts A–F + rejected alternatives |
+| See it visually                                             | [diagrams/](./diagrams/) — 8 topic diagrams                                                          |
 
-### The Core Parts
+## Reference docs
 
-| Part                       | Purpose                     | Description                                                                   |
-| -------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
-| **A. Local Persistence**   | Fast writes, crash recovery | Operations stored in IndexedDB (`SUP_OPS`), with snapshots for fast hydration |
-| **B. File-Based Sync**     | WebDAV/Dropbox/LocalFile    | Single-file sync with state snapshot and embedded operations buffer           |
-| **C. Server Sync**         | Operation-based sync        | Upload/download individual operations via SuperSync server                    |
-| **D. Validation & Repair** | Data integrity              | Checkpoint validation with automatic repair and REPAIR operations             |
+| Document                                                                       | Scope                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [operation-log-architecture.md](./operation-log-architecture.md)               | Authoritative architecture: Local Persistence (A), File-Based Sync (B), Server Sync (C), Validation & Repair (D), Smart Archive (E), Atomic State Consistency (F), and **Why this architecture: rejected alternatives** |
+| [contributor-sync-model.md](./contributor-sync-model.md)                       | The single sync invariant for contributors (one intent = one op; replayed/remote ops must not re-trigger effects)                                                                                                       |
+| [operation-rules.md](./operation-rules.md)                                     | Design rules and guidelines for operations                                                                                                                                                                              |
+| [package-boundaries.md](./package-boundaries.md)                               | Dependency/ownership boundaries for `@sp/sync-core`, `@sp/sync-providers`, app wiring                                                                                                                                   |
+| [vector-clocks.md](./vector-clocks.md)                                         | Vector clock implementation, pruning, history                                                                                                                                                                           |
+| [supersync-encryption-architecture.md](./supersync-encryption-architecture.md) | End-to-end encryption (AES-256-GCM + Argon2id)                                                                                                                                                                          |
+| [diagrams/](./diagrams/)                                                       | Mermaid diagrams split by topic                                                                                                                                                                                         |
 
-Additional architectural patterns:
+## Scenario catalogs (expected behavior)
 
-| Pattern                         | Purpose                                                            |
-| ------------------------------- | ------------------------------------------------------------------ |
-| **E. Smart Archive Handling**   | Deterministic archive operations synced via instructions, not data |
-| **F. Atomic State Consistency** | Meta-reducers ensure multi-entity changes are atomic               |
+| Document                                                               | Scope                                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| [supersync-scenarios.md](./supersync-scenarios.md)                     | Concrete SuperSync scenarios A–G with expected behavior |
+| [supersync-scenarios-flowchart.md](./supersync-scenarios-flowchart.md) | Visual decision tree for the SuperSync scenarios        |
+| [file-based-sync-flowchart.md](./file-based-sync-flowchart.md)         | Visual decision tree for file-based providers           |
 
-## Key Concepts
+## Related
 
-### Event Sourcing
+| Location                                                         | Content                             |
+| ---------------------------------------------------------------- | ----------------------------------- |
+| [packages/super-sync-server/](../../packages/super-sync-server/) | SuperSync server implementation     |
+| [ARCHITECTURE-DECISIONS.md](../../ARCHITECTURE-DECISIONS.md)     | Load-bearing product/data decisions |
 
-The Operation Log treats the database as a **timeline of events** rather than mutable state:
-
-- **Source of Truth**: The log is truth; current state is derived by replaying the log
-- **Immutability**: Operations are never modified, only appended
-- **Snapshots**: Periodic snapshots speed up hydration (replay from snapshot + tail ops)
-
-### Vector Clocks
-
-Vector clocks track causality for conflict detection:
-
-- Each client has its own counter in the vector clock
-- Comparison reveals: `EQUAL`, `LESS_THAN`, `GREATER_THAN`, or `CONCURRENT`
-- `CONCURRENT` indicates a true conflict requiring resolution
-
-### LOCAL_ACTIONS Token
-
-Effects that perform side effects (snacks, external APIs, UI) must use `LOCAL_ACTIONS` instead of `Actions`:
-
-```typescript
-private _actions$ = inject(LOCAL_ACTIONS); // Excludes remote operations
-```
-
-This prevents duplicate side effects when syncing operations from other clients.
-
-## Key Files
-
-### Sync Packages
-
-```
-packages/sync-core/src/
-├── operation.types.ts          # Generic operation primitives
-├── vector-clock.ts             # Compare/merge/prune algorithms
-├── conflict-resolution.ts      # Pure conflict helpers
-├── replay-coordinator.ts       # Generic remote replay ordering
-└── ports.ts                    # App-side orchestration contracts
-
-packages/sync-providers/src/
-├── super-sync/                 # SuperSync provider implementation
-├── file-based/dropbox/         # Dropbox provider implementation
-├── file-based/webdav/          # WebDAV + Nextcloud providers
-├── file-based/local-file/      # LocalFile provider classes
-└── provider-types.ts           # Provider-neutral contracts
-```
-
-### App Sync Wiring
-
-```
-src/app/op-log/sync-providers/
-├── sync-providers.factory.ts       # Composes app deps into package providers
-├── credential-store.service.ts     # OAuth/credential storage implementation
-├── wrapped-provider.service.ts     # Provider wrapper with encryption
-├── file-based/                     # File-based adapter + app shims
-└── super-sync/                     # SuperSync app shims + validators
-```
-
-### Core Operation Log
-
-```
-src/app/op-log/
-├── core/                           # Core types and operations
-├── persistence/                    # IndexedDB storage
-├── sync/                           # Sync orchestration
-└── validation/                     # Data validation and repair
-```
-
-## Related Documentation
-
-| Location                                                         | Content                               |
-| ---------------------------------------------------------------- | ------------------------------------- |
-| [vector-clocks.md](./vector-clocks.md)                           | Vector clock implementation details   |
-| [packages/super-sync-server/](../../packages/super-sync-server/) | SuperSync server implementation       |
-| [background-info/](./background-info/)                           | Research and best practices documents |
-
-## Implementation Status
-
-| Component                    | Status                                           |
-| ---------------------------- | ------------------------------------------------ |
-| Local Persistence (Part A)   | Complete                                         |
-| File-Based Sync (Part B)     | Complete (WebDAV, Dropbox, LocalFile)            |
-| Server Sync (Part C)         | Complete (SuperSync)                             |
-| Validation & Repair (Part D) | Complete                                         |
-| End-to-End Encryption        | Complete (AES-256-GCM + Argon2id)                |
-| PFAPI Elimination            | Complete (Jan 2026)                              |
-| Cross-version Sync (A.7.11)  | Documented (not yet implemented)                 |
-| Schema Migrations            | Infrastructure ready (no migrations defined yet) |
-
-See [operation-log-architecture.md#implementation-status](./operation-log-architecture.md#implementation-status) for detailed status.
+> Historical design notes and superseded plans are not kept as docs; they live
+> in git history (reference the relevant commit if you need the rationale).
