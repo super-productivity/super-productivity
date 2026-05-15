@@ -605,6 +605,22 @@ describe('SyncService', () => {
   const userId = 1;
   const clientId = 'test-device-1';
 
+  // Factory for the repeated Operation fixture (mirrors createOp in
+  // sync-fixes.spec.ts). Override only the fields a test cares about.
+  const makeOp = (overrides: Partial<Operation> = {}): Operation => ({
+    id: uuidv7(),
+    clientId,
+    actionType: 'ADD_TASK',
+    opType: 'CRT',
+    entityType: 'TASK',
+    entityId: 'task-1',
+    payload: { title: 'Test Task' },
+    vectorClock: {},
+    timestamp: Date.now(),
+    schemaVersion: 1,
+    ...overrides,
+  });
+
   beforeEach(() => {
     // Reset all test data stores
     resetTestState();
@@ -631,18 +647,7 @@ describe('SyncService', () => {
   describe('uploadOps', () => {
     it('should correctly upload operations', async () => {
       const service = getSyncService();
-      const op: Operation = {
-        id: uuidv7(),
-        clientId,
-        actionType: 'ADD_TASK',
-        opType: 'CRT',
-        entityType: 'TASK',
-        entityId: 'task-1',
-        payload: { title: 'Test Task' },
-        vectorClock: {},
-        timestamp: Date.now(),
-        schemaVersion: 1,
-      };
+      const op: Operation = makeOp();
 
       const results = await service.uploadOps(userId, clientId, [op]);
 
@@ -657,30 +662,12 @@ describe('SyncService', () => {
     it('should handle multiple operations in order', async () => {
       const service = getSyncService();
       const ops: Operation[] = [
-        {
-          id: uuidv7(),
-          clientId,
-          actionType: 'ADD_TASK',
-          opType: 'CRT',
-          entityType: 'TASK',
-          entityId: 'task-1',
-          payload: { title: 'Task 1' },
-          vectorClock: {},
-          timestamp: Date.now(),
-          schemaVersion: 1,
-        },
-        {
-          id: uuidv7(),
-          clientId,
-          actionType: 'ADD_TASK',
-          opType: 'CRT',
-          entityType: 'TASK',
+        makeOp({ entityId: 'task-1', payload: { title: 'Task 1' } }),
+        makeOp({
           entityId: 'task-2',
           payload: { title: 'Task 2' },
-          vectorClock: {},
           timestamp: Date.now() + 1,
-          schemaVersion: 1,
-        },
+        }),
       ];
 
       const results = await service.uploadOps(userId, clientId, ops);
@@ -692,18 +679,14 @@ describe('SyncService', () => {
 
     it('should batch upload operations behind the rollout flag', async () => {
       const service = new SyncService({ batchUpload: true });
-      const ops: Operation[] = Array.from({ length: 25 }, (_, index) => ({
-        id: uuidv7(),
-        clientId,
-        actionType: 'ADD_TASK',
-        opType: 'CRT',
-        entityType: 'TASK',
-        entityId: `task-${index}`,
-        payload: { title: `Task ${index}` },
-        vectorClock: { [clientId]: index + 1 },
-        timestamp: Date.now() + index,
-        schemaVersion: 1,
-      }));
+      const ops: Operation[] = Array.from({ length: 25 }, (_, index) =>
+        makeOp({
+          entityId: `task-${index}`,
+          payload: { title: `Task ${index}` },
+          vectorClock: { [clientId]: index + 1 },
+          timestamp: Date.now() + index,
+        }),
+      );
 
       const results = await service.uploadOps(userId, clientId, ops);
 
@@ -716,37 +699,38 @@ describe('SyncService', () => {
       expect(testState.operations.size).toBe(25);
     });
 
-    it('should reject intra-batch duplicate operation IDs without sequence gaps', async () => {
+    it('rejects an intra-batch same-id op as DUPLICATE_OPERATION even when its content differs (deliberate divergence from the legacy per-op path, which yields INVALID_OP_ID)', async () => {
+      // C4: the batch path dedups intra-batch purely by op.id (plan §1a step 2)
+      // and rejects the later op as DUPLICATE_OPERATION regardless of content.
+      // The legacy per-op path inserts the first then catches the second at the
+      // DB and returns INVALID_OP_ID for differing content. Both are terminal
+      // rejections with no row and no sequence gap, so sync invariants hold;
+      // the client treats DUPLICATE_OPERATION as a silent success and
+      // INVALID_OP_ID as a hard rejection. This test pins the chosen batch
+      // semantics so the divergence stays intentional, not accidental drift.
       const service = new SyncService({ batchUpload: true });
       const opId = uuidv7();
-      const ops: Operation[] = [
-        {
-          id: opId,
-          clientId,
-          actionType: 'ADD_TASK',
-          opType: 'CRT',
-          entityType: 'TASK',
-          entityId: 'task-1',
-          payload: { title: 'Task 1' },
-          vectorClock: { [clientId]: 1 },
-          timestamp: Date.now(),
-          schemaVersion: 1,
-        },
-        {
-          id: opId,
-          clientId,
-          actionType: 'ADD_TASK',
-          opType: 'CRT',
-          entityType: 'TASK',
-          entityId: 'task-2',
-          payload: { title: 'Task 2' },
-          vectorClock: { [clientId]: 2 },
-          timestamp: Date.now() + 1,
-          schemaVersion: 1,
-        },
-      ];
+      const first = makeOp({
+        id: opId,
+        entityId: 'task-1',
+        payload: { title: 'Task 1' },
+        vectorClock: { [clientId]: 1 },
+      });
+      const sameIdDifferentContent = makeOp({
+        id: opId,
+        entityId: 'task-2',
+        payload: { title: 'Task 2' },
+        vectorClock: { [clientId]: 2 },
+        timestamp: Date.now() + 1,
+      });
+      // Guard the premise: the two ops genuinely differ in content.
+      expect(sameIdDifferentContent.id).toBe(first.id);
+      expect(sameIdDifferentContent.payload).not.toEqual(first.payload);
 
-      const results = await service.uploadOps(userId, clientId, ops);
+      const results = await service.uploadOps(userId, clientId, [
+        first,
+        sameIdDifferentContent,
+      ]);
 
       expect(results[0]).toEqual(
         expect.objectContaining({ accepted: true, serverSeq: 1 }),
@@ -757,6 +741,7 @@ describe('SyncService', () => {
           errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
         }),
       );
+      // No sequence gap: lastSeq advanced by exactly 1, exactly one row.
       expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
       expect(testState.operations.size).toBe(1);
     });
@@ -929,8 +914,19 @@ describe('SyncService', () => {
       );
     });
 
-    it('should persist full-state batch aggregate metadata once', async () => {
+    it('runs the prior-vector-clock aggregate exactly once per batch and last full-state op wins, even with multiple full-state ops', async () => {
+      // NEW-2: a single full-state op cannot prove the "once" invariant — it
+      // would pass even if the expensive _aggregatePriorVectorClock ran per
+      // full-state op. Use TWO full-state ops so the test catches a regression
+      // that reverts to per-op aggregation (the exact perf footgun the batch
+      // path optimizes away), and assert last-write-wins over N full-state ops.
       const service = new SyncService({ batchUpload: true });
+      const aggregateSpy = vi.spyOn(
+        service as unknown as {
+          _aggregatePriorVectorClock: (...args: unknown[]) => Promise<unknown>;
+        },
+        '_aggregatePriorVectorClock',
+      );
 
       const results = await service.uploadOps(userId, clientId, [
         {
@@ -947,25 +943,35 @@ describe('SyncService', () => {
         {
           id: uuidv7(),
           clientId,
-          actionType: 'ADD_TASK',
-          opType: 'CRT',
-          entityType: 'TASK',
-          entityId: 'task-after',
-          payload: { title: 'After' },
-          vectorClock: { [clientId]: 8 },
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          payload: { TASK: {} },
+          vectorClock: { [clientId]: 9 },
           timestamp: Date.now() + 1,
           schemaVersion: 1,
         },
+        makeOp({
+          entityId: 'task-after',
+          payload: { title: 'After' },
+          vectorClock: { [clientId]: 10 },
+          timestamp: Date.now() + 2,
+        }),
       ]);
 
-      expect(results.map((result) => result.accepted)).toEqual([true, true]);
+      expect(results.map((result) => result.accepted)).toEqual([true, true, true]);
+      // Aggregate is computed once for the batch, not once per full-state op.
+      expect(aggregateSpy).toHaveBeenCalledTimes(1);
+      // Last full-state op wins: marker points at the SECOND import (seq 2),
+      // not the first, with its (merged) clock.
       expect(testState.userSyncStates.get(userId)).toEqual(
         expect.objectContaining({
-          lastSeq: 2,
-          latestFullStateSeq: 1,
-          latestFullStateVectorClock: { [clientId]: 7 },
+          lastSeq: 3,
+          latestFullStateSeq: 2,
+          latestFullStateVectorClock: { [clientId]: 9 },
         }),
       );
+      aggregateSpy.mockRestore();
     });
 
     it('should classify batch createMany P2002 stale-prefetch races as retryable', async () => {
