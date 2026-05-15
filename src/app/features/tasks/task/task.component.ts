@@ -87,8 +87,8 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
-import { selectAllTasksWithDueTimeSorted } from '../store/task.selectors';
-import { getTimeConflictTaskIds } from '../util/get-time-conflict-task-ids';
+import { selectTimeConflictTaskIds } from '../store/task.selectors';
+import { MatTooltip } from '@angular/material/tooltip';
 import { selectTimelineConfig } from '../../config/store/global-config.reducer';
 import { isTaskOutsideWorkHours } from '../util/is-task-outside-work-hours';
 
@@ -127,6 +127,7 @@ import { isTaskOutsideWorkHours } from '../util/is-task-outside-work-hours';
     MsToStringPipe,
     LocalDateStrPipe,
     TranslatePipe,
+    MatTooltip,
     SubTaskTotalTimeSpentPipe,
     TagListComponent,
     ShortPlannedAtPipe,
@@ -151,8 +152,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
-  private readonly _tasksWithDueTimeSorted = this._store.selectSignal(
-    selectAllTasksWithDueTimeSorted,
+  private readonly _timeConflictTaskIds = this._store.selectSignal(
+    selectTimeConflictTaskIds,
   );
   private readonly _timelineConfig = this._store.selectSignal(selectTimelineConfig);
 
@@ -221,18 +222,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       (t.dueDay && t.dueDay === todayStr)
     );
   });
-  timeConflictTaskIds = computed(() =>
-    getTimeConflictTaskIds(
-      this._tasksWithDueTimeSorted(),
-      this._dateService.isToday.bind(this._dateService),
-    ),
-  );
   hasTimeConflict = computed(() => {
     const task = this.task();
     return (
-      !!task.dueWithTime &&
-      this._dateService.isToday(task.dueWithTime) &&
-      this.timeConflictTaskIds().has(task.id)
+      typeof task.dueWithTime === 'number' && this._timeConflictTaskIds().has(task.id)
     );
   });
   isOutsideWorkHours = computed(() =>

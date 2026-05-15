@@ -3,12 +3,9 @@ import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 
 const MIN_TASK_DURATION = 60 * 1000;
 
-export const getTimeConflictTaskIds = (
-  tasks: TaskWithDueTime[],
-  isSameDay: (timestamp: number) => boolean,
-): Set<string> => {
+export const getTimeConflictTaskIds = (tasks: TaskWithDueTime[]): Set<string> => {
   const relevantTasks = tasks
-    .filter((task) => !task.isDone && isSameDay(task.dueWithTime))
+    .filter((task) => !task.isDone)
     .sort((a, b) => a.dueWithTime - b.dueWithTime);
 
   const conflictingIds = new Set<string>();

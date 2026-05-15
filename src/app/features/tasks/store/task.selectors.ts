@@ -25,6 +25,7 @@ import {
 } from '../../../root-store/app-state/app-state.selectors';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { isTodayWithOffset } from '../../../util/is-today.util';
+import { getTimeConflictTaskIds } from '../util/get-time-conflict-task-ids';
 const mapSubTasksToTasks = (tasksIN: Task[]): TaskWithSubTasks[] => {
   // Create a Map for O(1) lookups instead of O(n) find() calls
   const taskMap = new Map<string, Task>();
@@ -618,6 +619,11 @@ export const selectAllTasksWithDueTimeSorted = createSelector(
       )
       .sort((a, b) => a.dueWithTime - b.dueWithTime);
   },
+);
+
+export const selectTimeConflictTaskIds = createSelector(
+  selectAllTasksWithDueTimeSorted,
+  getTimeConflictTaskIds,
 );
 
 export const selectAllTasksWithReminder = createSelector(

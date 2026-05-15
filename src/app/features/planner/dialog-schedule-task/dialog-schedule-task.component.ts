@@ -190,16 +190,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       tagIds: this.task?.tagIds || [],
       created: this.task?.created || 0,
     };
-    const selectedDay = getDbDateStr(plannedTimestamp);
-    const sameDay = (timestamp: number): boolean =>
-      getDbDateStr(timestamp) === selectedDay;
-    const conflictIds = getTimeConflictTaskIds(
-      [
-        ...this._tasksWithDueTimeSorted().filter((task) => task.id !== this.task?.id),
-        candidateTask,
-      ],
-      sameDay,
-    );
+    const conflictIds = getTimeConflictTaskIds([
+      ...this._tasksWithDueTimeSorted().filter((task) => task.id !== this.task?.id),
+      candidateTask,
+    ]);
 
     return {
       hasOverlap: conflictIds.has(this._previewTaskId),
@@ -486,24 +480,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     const newDate = new Date(
       getDateTimeFromClockString(this.selectedTime as string, this.selectedDate as Date),
     );
-    const warnings = this.scheduleWarnings();
-
-    if (warnings.hasOverlap || warnings.isOutsideWorkHours) {
-      const msgParts: string[] = [];
-      if (warnings.hasOverlap) {
-        msgParts.push('This time overlaps with another scheduled task.');
-      }
-      if (warnings.isOutsideWorkHours) {
-        msgParts.push('This time falls outside your work hours.');
-      }
-      this._snackService.open({
-        type: 'CUSTOM',
-        ico: 'warning',
-        msg: msgParts.join(' '),
-        isSkipTranslate: true,
-      });
-    }
-
     this._taskService.scheduleTask(
       task,
       newDate.getTime(),
