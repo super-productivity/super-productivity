@@ -3,6 +3,7 @@ set -eu
 
 FULL_STATE_INDEX_MIGRATION="20260512000000_add_full_state_sequence_index_drop_redundant_indexes"
 ENCRYPTED_OPS_INDEX_MIGRATION="20260514000000_add_encrypted_ops_partial_index"
+PAYLOAD_BYTES_INDEX_MIGRATION="20260514000002_add_payload_bytes_unbackfilled_index"
 
 MIGRATE_LOG=""
 MIGRATE_STATUS=0
@@ -53,6 +54,12 @@ apply_encrypted_ops_index_migration() {
   run_sql 'CREATE INDEX CONCURRENTLY "operations_user_id_server_seq_encrypted_idx" ON "operations"("user_id", "server_seq") WHERE "is_payload_encrypted" = true;'
 }
 
+apply_payload_bytes_index_migration() {
+  echo "Applying $PAYLOAD_BYTES_INDEX_MIGRATION outside Prisma migrate..."
+  run_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_payload_bytes_unbackfilled_idx";'
+  run_sql 'CREATE INDEX CONCURRENTLY "operations_payload_bytes_unbackfilled_idx" ON "operations"("user_id", "id") WHERE "payload_bytes" = 0;'
+}
+
 recover_index_migration() {
   migration="$1"
 
@@ -70,6 +77,9 @@ recover_index_migration() {
       ;;
     "$ENCRYPTED_OPS_INDEX_MIGRATION")
       apply_encrypted_ops_index_migration
+      ;;
+    "$PAYLOAD_BYTES_INDEX_MIGRATION")
+      apply_payload_bytes_index_migration
       ;;
     *)
       echo "Unknown migration: $migration"
@@ -91,6 +101,12 @@ fi
 if [ "$MIGRATE_STATUS" -ne 0 ] &&
   is_recoverable_migration_failure "$ENCRYPTED_OPS_INDEX_MIGRATION"; then
   recover_index_migration "$ENCRYPTED_OPS_INDEX_MIGRATION"
+  run_migrate_deploy
+fi
+
+if [ "$MIGRATE_STATUS" -ne 0 ] &&
+  is_recoverable_migration_failure "$PAYLOAD_BYTES_INDEX_MIGRATION"; then
+  recover_index_migration "$PAYLOAD_BYTES_INDEX_MIGRATION"
   run_migrate_deploy
 fi
 

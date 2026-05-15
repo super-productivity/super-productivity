@@ -77,6 +77,52 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
   });
 
+  it('adds operation payload_bytes as a metadata-only column (no table rewrite)', () => {
+    const migrationSql = readFileSync(
+      join(
+        currentDir,
+        '../prisma/migrations/20260514000001_add_operation_payload_bytes/migration.sql',
+      ),
+      'utf8',
+    );
+
+    // ADD COLUMN ... NOT NULL DEFAULT <constant> is a metadata-only operation on
+    // PostgreSQL 11+ (the default is stored in pg_attribute, no table rewrite).
+    // These guards lock in the fast path: a future edit to a volatile/expression
+    // default or a separate UPDATE backfill would rewrite/lock a 100M-row table.
+    expect(migrationSql).toMatch(
+      /ALTER TABLE "operations"\s+ADD COLUMN "payload_bytes" BIGINT NOT NULL DEFAULT 0/i,
+    );
+    expect(migrationSql).not.toMatch(/\bUPDATE\b/i);
+    expect(migrationSql).not.toMatch(/\bUSING\b/i);
+    expect(migrationSql).not.toMatch(/DEFAULT\s+(?!0\b)/i);
+    expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  it('adds the payload_bytes unbackfilled partial index concurrently', () => {
+    const migrationSql = readFileSync(
+      join(
+        currentDir,
+        '../prisma/migrations/20260514000002_add_payload_bytes_unbackfilled_index/migration.sql',
+      ),
+      'utf8',
+    );
+
+    expect(migrationSql).toContain('CREATE INDEX CONCURRENTLY');
+    expect(migrationSql).toContain(
+      'DROP INDEX CONCURRENTLY IF EXISTS "operations_payload_bytes_unbackfilled_idx"',
+    );
+    expect(migrationSql).toContain('"operations_payload_bytes_unbackfilled_idx"');
+    expect(migrationSql).toContain('ON "operations"("user_id", "id")');
+    // Partial predicate must match the boot self-check / quota probe
+    // (payload_bytes = 0) so the index drains to empty post-backfill.
+    expect(migrationSql).toContain('WHERE "payload_bytes" = 0');
+    expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bALTER\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
   it('runs migrations before replacing the app during compose deploys', () => {
     const deployScript = readFileSync(join(currentDir, '../scripts/deploy.sh'), 'utf8');
     const runtimeMigrateScript = readFileSync(
@@ -108,6 +154,9 @@ describe('performance migrations', () => {
     );
     expect(deployScript).toContain(
       'ENCRYPTED_OPS_INDEX_MIGRATION="20260514000000_add_encrypted_ops_partial_index"',
+    );
+    expect(deployScript).toContain(
+      'PAYLOAD_BYTES_INDEX_MIGRATION="20260514000002_add_payload_bytes_unbackfilled_index"',
     );
     expect(deployScript).toContain('is_recoverable_full_state_index_migration_failure');
     expect(deployScript).toContain(
@@ -144,6 +193,16 @@ describe('performance migrations', () => {
     expect(deployScript).toContain(
       'Retrying database migrations after applying $ENCRYPTED_OPS_INDEX_MIGRATION',
     );
+    expect(deployScript).toContain(
+      'is_recoverable_payload_bytes_index_migration_failure',
+    );
+    expect(deployScript).toContain('is_payload_bytes_index_transaction_block_failure');
+    expect(deployScript).toContain(
+      'CREATE INDEX CONCURRENTLY "operations_payload_bytes_unbackfilled_idx"',
+    );
+    expect(deployScript).toContain(
+      'Retrying database migrations after applying $PAYLOAD_BYTES_INDEX_MIGRATION',
+    );
     expect(deployScript).toContain(externalDbStartCommand);
     expect(deployScript).toContain('RUN_MIGRATIONS_ON_STARTUP');
     expect(deployScript.indexOf(migrationCommand)).toBeLessThan(
@@ -160,6 +219,12 @@ describe('performance migrations', () => {
     );
     expect(runtimeMigrateScript).toContain(
       'CREATE INDEX CONCURRENTLY "operations_user_id_server_seq_encrypted_idx"',
+    );
+    expect(runtimeMigrateScript).toContain(
+      'DROP INDEX CONCURRENTLY IF EXISTS "operations_payload_bytes_unbackfilled_idx"',
+    );
+    expect(runtimeMigrateScript).toContain(
+      'CREATE INDEX CONCURRENTLY "operations_payload_bytes_unbackfilled_idx"',
     );
     expect(composeFile).toContain(
       'RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}',
@@ -182,7 +247,13 @@ describe('performance migrations', () => {
     const packageJson = readFileSync(join(currentDir, '../package.json'), 'utf8');
 
     expect(script).toContain('SELECT DISTINCT user_id');
-    expect(script).toContain('const DEFAULT_BATCH_SIZE = 5');
+    // Batch size sized for throughput: a tiny batch made a 100M-row backfill take
+    // tens of hours, prolonging the slow octet_length() quota fallback window.
+    expect(script).toContain('const DEFAULT_BATCH_SIZE = 500');
+    expect(script).toContain('const MAX_BATCH_SIZE = 1000');
+    // The override is still clamped so a fat-fingered value cannot OOM the
+    // Node process building the VALUES string.
+    expect(script).toContain('Math.min(parsed, MAX_BATCH_SIZE)');
     expect(script).toContain('userId,');
     expect(script).toContain('FROM (VALUES ${values}) AS v(id, bytes)');
     expect(script).toContain('SET payload_bytes = v.bytes');

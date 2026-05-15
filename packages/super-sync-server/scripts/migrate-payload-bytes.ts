@@ -1,8 +1,16 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { computeOpStorageBytes } from '../src/sync/sync.const';
 
-const DEFAULT_BATCH_SIZE = 5;
-const MAX_BATCH_SIZE = 25;
+// One backfill iteration is 2 round trips (findMany + UPDATE ... FROM (VALUES ...))
+// per BATCH_SIZE rows. The UPDATE is N primary-key lookups joined to a small VALUES
+// list, so it only takes short per-row locks and never a table lock; VALUES lists of
+// a few thousand short tuples are cheap. Keeping these tiny made a 100M-row backfill
+// take tens of hours, which in turn keeps the slow octet_length() quota fallback and
+// the boot-time backfill self-check on the un-indexed scan path far longer than
+// necessary. Size for throughput; the MAX cap still bounds the VALUES string so a
+// fat-fingered override cannot OOM the Node process.
+const DEFAULT_BATCH_SIZE = 500;
+const MAX_BATCH_SIZE = 1000;
 const USER_PAGE_SIZE = 1000;
 
 const prisma = new PrismaClient();
