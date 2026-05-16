@@ -13,17 +13,22 @@ import { SyncHydrationService } from './sync-hydration.service';
 import { ArchiveMigrationService } from './archive-migration.service';
 import { OpLog } from '../../core/log';
 import { StateSnapshotService, AppStateSnapshot } from '../backup/state-snapshot.service';
-import { Operation, OpType, RepairPayload } from '../core/operation.types';
+import { Operation, OpType, RepairPayload, RepairSummary } from '../core/operation.types';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
+import { TranslateService } from '@ngx-translate/core';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { alertDialog } from '../../util/native-dialogs';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { RepairOperationService } from '../validation/repair-operation.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { bulkApplyOperations } from '../apply/bulk-hydration.action';
 import { VectorClockService } from '../sync/vector-clock.service';
-import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
+import {
+  MAX_AUTO_REPAIR_FIXES,
+  MAX_CONFLICT_RETRY_ATTEMPTS,
+} from '../core/operation-log.const';
 import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { limitVectorClockSize } from '../../core/util/vector-clock';
@@ -51,10 +56,12 @@ export class OperationLogHydratorService {
   private stateSnapshotService = inject(StateSnapshotService);
   private snackService = inject(SnackService);
   private validateStateService = inject(ValidateStateService);
+  private repairOperationService = inject(RepairOperationService);
   private vectorClockService = inject(VectorClockService);
   private operationApplierService = inject(OperationApplierService);
   private hydrationStateService = inject(HydrationStateService);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private translateService = inject(TranslateService);
 
   // Extracted services
   private snapshotService = inject(OperationLogSnapshotService);
@@ -529,30 +536,84 @@ export class OperationLogHydratorService {
       return { wasRepaired: false };
     }
 
-    // DISABLED: Repair system is non-functional - this code path is unreachable
-    // because validateAndRepair() always returns wasRepaired: false
-    //
-    // const repairPromise = (async () => {
-    //   try {
-    //     const clientId = await this.pfapiService.pf.metaModel.loadClientId();
-    //     await this.repairOperationService.createRepairOperation(
-    //       result.repairedState!,
-    //       result.repairSummary!,
-    //       clientId,
-    //     );
-    //     OpLog.log(`[OperationLogHydratorService] Created REPAIR operation for ${context}`);
-    //   } catch (e) {
-    //     OpLog.err(`[OperationLogHydratorService] Failed to create REPAIR operation for ${context}:`, e);
-    //     throw e;
-    //   } finally {
-    //     this._repairMutex = null;
-    //   }
-    // })();
-    // this._repairMutex = repairPromise;
-    // await repairPromise;
+    // If repair ran but revalidation still fails, do not persist the partial
+    // result. The user has already seen the "Repair attempted but failed"
+    // alert from ValidateStateService and should restore from backup. This
+    // matches the sync-side guard in ValidateStateService.validateAndRepairCurrentState.
+    if (!result.isValid) {
+      OpLog.err(
+        `[OperationLogHydratorService] Repair did not produce valid state for ${context}:`,
+        result.error,
+      );
+      return { wasRepaired: false };
+    }
 
-    // Should never reach here while repair is disabled
-    return { wasRepaired: false };
+    // Safety cap: refuse to commit a large auto-repair without explicit user
+    // intervention. Validation false-positives have historically caused real
+    // data loss; a magnitude this high is more likely corruption than routine
+    // sync drift. Direct the user to backups instead.
+    const totalFixes = this._sumRepairFixes(result.repairSummary);
+    if (totalFixes > MAX_AUTO_REPAIR_FIXES) {
+      OpLog.err(
+        `[OperationLogHydratorService] Auto-repair magnitude (${totalFixes}) exceeds safety cap (${MAX_AUTO_REPAIR_FIXES}) for ${context}` +
+          ' — skipping persistence.',
+      );
+      const title = this.translateService.instant(T.F.SYNC.D_DATA_REPAIR_TOO_LARGE.TITLE);
+      const msg = this.translateService.instant(T.F.SYNC.D_DATA_REPAIR_TOO_LARGE.MSG, {
+        count: totalFixes.toString(),
+        max: MAX_AUTO_REPAIR_FIXES.toString(),
+      });
+      alertDialog(`${title}\n\n${msg}`);
+      return { wasRepaired: false };
+    }
+
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err(
+        `[OperationLogHydratorService] Cannot persist repair (${context}) - no clientId`,
+      );
+      return { wasRepaired: false };
+    }
+
+    const repairedState = result.repairedState;
+    const repairSummary = result.repairSummary;
+    const repairPromise = (async (): Promise<void> => {
+      try {
+        await this.repairOperationService.createRepairOperation(
+          repairedState,
+          repairSummary,
+          clientId,
+        );
+        OpLog.log(
+          `[OperationLogHydratorService] Created REPAIR operation for ${context}`,
+        );
+      } finally {
+        this._repairMutex = null;
+      }
+    })();
+    this._repairMutex = repairPromise;
+    try {
+      await repairPromise;
+    } catch (e) {
+      OpLog.err(
+        `[OperationLogHydratorService] Failed to create REPAIR operation for ${context}:`,
+        e,
+      );
+      return { wasRepaired: false };
+    }
+
+    return { wasRepaired: true, repairedState };
+  }
+
+  private _sumRepairFixes(summary: RepairSummary): number {
+    return (
+      summary.entityStateFixed +
+      summary.orphanedEntitiesRestored +
+      summary.invalidReferencesRemoved +
+      summary.relationshipsFixed +
+      summary.structureRepaired +
+      summary.typeErrorsFixed
+    );
   }
 
   /**

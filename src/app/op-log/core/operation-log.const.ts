@@ -206,6 +206,15 @@ export const RETRY_DELAY_BASE_MS = new InjectionToken<number>('RETRY_DELAY_BASE_
 export const MAX_OPS_PER_UPLOAD_REQUEST = 25;
 
 /**
+ * Safety cap on the magnitude of changes a startup auto-repair will commit.
+ * If `dataRepair()` would change more entities/references than this, the hydrator
+ * skips persistence and prompts the user to restore a backup instead. This
+ * protects against false-positive validation failures wiping out large amounts
+ * of legitimate data with one click.
+ */
+export const MAX_AUTO_REPAIR_FIXES = 50;
+
+/**
  * Number of operations to request per download page from the sync server.
  * Server returns up to this many operations per request with hasMore indicator.
  */
