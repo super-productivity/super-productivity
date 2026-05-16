@@ -1,5 +1,5 @@
 import * as fromSelectors from './task.selectors';
-import { DEFAULT_TASK, Task, TaskState } from '../task.model';
+import { DEFAULT_TASK, Task, TaskState, TaskWithDueDay } from '../task.model';
 import { TASK_FEATURE_NAME } from './task.reducer';
 import { taskAdapter } from './task.adapter';
 import { TODAY_TAG } from '../../tag/tag.const';
@@ -130,6 +130,20 @@ describe('Task Selectors', () => {
       timeSpent: 0,
       attachments: [],
     },
+    task9: {
+      id: 'task9',
+      title: 'Task With Deadline',
+      created: Date.now(),
+      isDone: false,
+      subTaskIds: [],
+      tagIds: [],
+      projectId: 'project1',
+      timeSpentOnDay: {},
+      deadlineDay: tomorrow,
+      timeEstimate: 0,
+      timeSpent: 0,
+      attachments: [],
+    },
     subtask1: {
       id: 'subtask1',
       title: 'Subtask 1',
@@ -247,7 +261,7 @@ describe('Task Selectors', () => {
 
     it('should select all tasks', () => {
       const result = fromSelectors.selectAllTasks(mockState);
-      expect(result.length).toBe(10);
+      expect(result.length).toBe(11);
     });
   });
 
@@ -269,7 +283,7 @@ describe('Task Selectors', () => {
     it('should flatten tasks', () => {
       const tasksWithSubTasks = fromSelectors.selectAllTasksWithSubTasks(mockState);
       const result = fromSelectors.flattenTasks(tasksWithSubTasks);
-      expect(result.length).toBe(10);
+      expect(result.length).toBe(11);
     });
 
     it('should select task by ID with subtask data', () => {
@@ -285,7 +299,7 @@ describe('Task Selectors', () => {
   describe('Startable tasks selectors', () => {
     it('should select startable tasks', () => {
       const result = fromSelectors.selectStartableTasks(mockState);
-      expect(result.length).toBe(7);
+      expect(result.length).toBe(8);
     });
   });
 
@@ -656,7 +670,7 @@ describe('Task Selectors', () => {
         tagId: TODAY_TAG.id,
       });
       // Virtual tag pattern: TODAY_TAG not in task.tagIds, so all 8 main tasks are returned
-      expect(result.length).toBe(8);
+      expect(result.length).toBe(9);
     });
 
     it('should select all calendar task event IDs', () => {
@@ -777,7 +791,7 @@ describe('Task Selectors', () => {
     it('should select all tasks without hidden projects', () => {
       const result = fromSelectors.selectAllTasksWithoutHiddenProjects(mockState);
       // All tasks should still be returned since none belong to hidden project3
-      expect(result.length).toBe(10);
+      expect(result.length).toBe(11);
     });
   });
 
@@ -1033,6 +1047,94 @@ describe('Task Selectors', () => {
       expect(result.subTasks.length).toBe(2);
       expect(result.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
       (window.confirm as jasmine.Spy).and.returnValue(true);
+    });
+  });
+
+  describe('selectAllTasksWithDueTimeSorted', () => {
+    // task5 has dueWithTime and projectId='project1'
+    it('should exclude tasks from archived projects', () => {
+      const allTasks = Object.values(mockTasks);
+      const archivedProjectIds = new Set<string>(['project1']);
+      const result = fromSelectors.selectAllTasksWithDueTimeSorted.projector(
+        allTasks,
+        archivedProjectIds,
+      );
+      expect(result.map((t) => t.id)).not.toContain('task5');
+    });
+
+    it('should include tasks when project is not archived', () => {
+      const allTasks = Object.values(mockTasks);
+      const archivedProjectIds = new Set<string>();
+      const result = fromSelectors.selectAllTasksWithDueTimeSorted.projector(
+        allTasks,
+        archivedProjectIds,
+      );
+      expect(result.map((t) => t.id)).toContain('task5');
+    });
+  });
+
+  describe('selectAllUndoneTasksWithDueDay', () => {
+    // task3 has dueDay=today, isDone=false, projectId='project1'
+    it('should exclude tasks from archived projects', () => {
+      const allTasks = Object.values(mockTasks);
+      const allTasksWithDueDay = allTasks.filter((t) => !!t.dueDay) as TaskWithDueDay[];
+      const archivedProjectIds = new Set<string>(['project1']);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(
+        allTasksWithDueDay,
+        archivedProjectIds,
+      );
+      expect(result.map((t) => t.id)).not.toContain('task3');
+    });
+
+    it('should include tasks when project is not archived', () => {
+      const allTasks = Object.values(mockTasks);
+      const allTasksWithDueDay = allTasks.filter((t) => !!t.dueDay) as TaskWithDueDay[];
+      const archivedProjectIds = new Set<string>();
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(
+        allTasksWithDueDay,
+        archivedProjectIds,
+      );
+      expect(result.map((t) => t.id)).toContain('task3');
+    });
+  });
+
+  describe('selectAllUndoneTasksWithDeadlineSorted', () => {
+    // task9 has deadlineDay=tomorrow, isDone=false, projectId='project1'
+    it('should exclude tasks from archived projects', () => {
+      const allTasks = Object.values(mockTasks);
+      const archivedProjectIds = new Set<string>(['project1']);
+      const result = fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(
+        allTasks,
+        archivedProjectIds,
+      );
+      expect(result.map((t) => t.id)).not.toContain('task9');
+    });
+
+    it('should include tasks when project is not archived', () => {
+      const allTasks = Object.values(mockTasks);
+      const archivedProjectIds = new Set<string>();
+      const result = fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(
+        allTasks,
+        archivedProjectIds,
+      );
+      expect(result.map((t) => t.id)).toContain('task9');
+    });
+
+    it('should exclude tasks with deadlineWithTime from archived projects', () => {
+      const taskWithDeadlineTime: Task = {
+        ...mockTasks['task9'],
+        id: 'task10',
+        deadlineDay: undefined,
+        deadlineWithTime: Date.now() + 86400000,
+        projectId: 'project1',
+      };
+      const allTasks = [...Object.values(mockTasks), taskWithDeadlineTime];
+      const archivedProjectIds = new Set<string>(['project1']);
+      const result = fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(
+        allTasks,
+        archivedProjectIds,
+      );
+      expect(result.map((t) => t.id)).not.toContain('task10');
     });
   });
 });

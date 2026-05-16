@@ -928,13 +928,10 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
     const cfg4 = dummyRepeatable('R4', { title: 'D Task', projectId: null });
     const cfg5 = dummyRepeatable('R5', { title: 'E Task', projectId: 'proj1' });
 
-    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector([
-      cfg1,
-      cfg2,
-      cfg3,
-      cfg4,
-      cfg5,
-    ]);
+    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector(
+      [cfg1, cfg2, cfg3, cfg4, cfg5],
+      NO_ARCHIVED_PROJECTS,
+    );
 
     // Expected order: null projects first (sorted by title), then by project ID (sorted by title within project)
     expect(result).toEqual([
@@ -950,7 +947,10 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
     const cfg1 = dummyRepeatable('R1', { title: '', projectId: null });
     const cfg2 = dummyRepeatable('R2', { title: 'A Task', projectId: null });
 
-    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector([cfg1, cfg2]);
+    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector(
+      [cfg1, cfg2],
+      NO_ARCHIVED_PROJECTS,
+    );
 
     expect(result).toEqual([cfg1, cfg2]);
   });
@@ -959,10 +959,31 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
     const cfg1 = dummyRepeatable('R1', { title: 'Same Task', projectId: 'proj1' });
     const cfg2 = dummyRepeatable('R2', { title: 'Same Task', projectId: 'proj1' });
 
-    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector([cfg1, cfg2]);
+    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector(
+      [cfg1, cfg2],
+      NO_ARCHIVED_PROJECTS,
+    );
 
     // Order should be preserved when title and project are the same
     expect(result).toEqual([cfg1, cfg2]);
+  });
+
+  it('should exclude repeat configs belonging to archived projects', () => {
+    const cfg1 = dummyRepeatable('R1', { title: 'Active Task', projectId: 'proj1' });
+    const cfg2 = dummyRepeatable('R2', {
+      title: 'Archived Task',
+      projectId: 'archivedProj',
+    });
+    const cfg3 = dummyRepeatable('R3', { title: 'No Project Task', projectId: null });
+
+    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector(
+      [cfg1, cfg2, cfg3],
+      new Set<string>(['archivedProj']),
+    );
+
+    expect(result).not.toContain(cfg2);
+    expect(result).toContain(cfg1);
+    expect(result).toContain(cfg3);
   });
 });
 
