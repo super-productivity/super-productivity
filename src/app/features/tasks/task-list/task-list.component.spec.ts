@@ -14,6 +14,7 @@ import { TaskWithSubTasks } from '../task.model';
 import { SectionService } from '../../section/section.service';
 import { moveSubTask } from '../store/task.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 describe('TaskListComponent', () => {
   let component: TaskListComponent;
@@ -22,7 +23,12 @@ describe('TaskListComponent', () => {
   let store: MockStore;
 
   // Helper to create mock CdkDrag
-  const createMockDrag = (task: { id: string; parentId: string | null }): CdkDrag =>
+  const createMockDrag = (
+    task: Omit<Partial<TaskWithSubTasks>, 'parentId'> & {
+      id: string;
+      parentId: string | null;
+    },
+  ): CdkDrag =>
     ({
       data: task,
     }) as unknown as CdkDrag;
@@ -194,10 +200,38 @@ describe('TaskListComponent', () => {
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block parent task from dropping to subtask list', () => {
+      it('should allow parent task to drop into another task subtask list', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
         // Task ID listed as a subtask drop-list (listId='SUB').
+        const drop = createMockDrop('some-task-id', [], 'SUB');
+        expect(component.enterPredicate(drag, drop)).toBe(true);
+      });
+
+      it('should block parent task from dropping into its own subtask list', () => {
+        const task = { id: 'task1', parentId: null };
+        const drag = createMockDrag(task);
+        const drop = createMockDrop('task1', [], 'SUB');
+        expect(component.enterPredicate(drag, drop)).toBe(false);
+      });
+
+      it('should block parent task from dropping into a direct child subtask list', () => {
+        const task = { id: 'task1', parentId: null, subTaskIds: ['sub1'] };
+        const drag = createMockDrag(task);
+        const drop = createMockDrop('sub1', [], 'SUB');
+        expect(component.enterPredicate(drag, drop)).toBe(false);
+      });
+
+      it('should block repeating parent task from dropping to a subtask list', () => {
+        const task = { id: 'task1', parentId: null, repeatCfgId: 'repeat1' };
+        const drag = createMockDrag(task);
+        const drop = createMockDrop('some-task-id', [], 'SUB');
+        expect(component.enterPredicate(drag, drop)).toBe(false);
+      });
+
+      it('should block issue-linked parent task from dropping to a subtask list', () => {
+        const task = { id: 'task1', parentId: null, issueId: 'ISSUE-1' };
+        const drag = createMockDrag(task);
         const drop = createMockDrop('some-task-id', [], 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
@@ -332,11 +366,12 @@ describe('TaskListComponent', () => {
       srcListId: 'PARENT' | 'SUB',
       targetListId: 'PARENT' | 'SUB',
       newOrderedIds: string[] = [taskId],
+      parentId: string | null = null,
     ): void => {
       (
         component as unknown as {
           _move: (
-            t: string,
+            t: TaskWithSubTasks,
             s: string,
             tg: string,
             sl: 'PARENT' | 'SUB',
@@ -344,12 +379,19 @@ describe('TaskListComponent', () => {
             ids: string[],
           ) => void;
         }
-      )._move(taskId, src, target, srcListId, targetListId, newOrderedIds);
+      )._move(
+        { id: taskId, parentId, subTaskIds: [] } as unknown as TaskWithSubTasks,
+        src,
+        target,
+        srcListId,
+        targetListId,
+        newOrderedIds,
+      );
     };
 
     it('routes a subtask drop into another subtask list to moveSubTask (not addTaskToSection)', () => {
       // Both src and target are subtask lists with parent task ids as listModelId.
-      callMove('sub1', 'parentA', 'parentB', 'SUB', 'SUB');
+      callMove('sub1', 'parentA', 'parentB', 'SUB', 'SUB', ['sub1'], 'parentA');
 
       expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
       const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
@@ -358,6 +400,19 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.taskId).toBe('sub1');
       expect(dispatchedAction.srcTaskId).toBe('parentA');
       expect(dispatchedAction.targetTaskId).toBe('parentB');
+    });
+
+    it('routes a parent drop into a subtask list to convertToSubTask', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB', ['existing-sub', 'task1']);
+
+      expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
+      expect(sectionServiceMock.removeTaskFromSection).not.toHaveBeenCalled();
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.convertToSubTask>;
+      expect(dispatchedAction.type).toBe(TaskSharedActions.convertToSubTask.type);
+      expect(dispatchedAction.taskId).toBe('task1');
+      expect(dispatchedAction.targetTaskId).toBe('parentB');
+      expect(dispatchedAction.afterTaskId).toBe('existing-sub');
     });
 
     it('routes a parent drop into a section drop-list (PARENT + non-reserved id) to addTaskToSection', () => {

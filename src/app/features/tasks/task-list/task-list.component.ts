@@ -178,7 +178,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
   enterPredicate = (drag: CdkDrag, drop: CdkDropList): boolean => {
     // TODO this gets called very often for nested lists. Maybe there are possibilities to optimize
-    const task = drag.data;
+    const task = drag.data as TaskWithSubTasks;
     const targetModelId = drop.data.listModelId;
     const targetListId = drop.data.listId;
     const isSubtask = !!task.parentId;
@@ -213,12 +213,25 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return false;
     }
 
-    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS or to sections (parent-level
-    // lists with a non-reserved id). Subtask drop-lists (listId === 'SUB') are
-    // rejected so a top-level task can't be nested into another task's subtree.
+    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS, to sections (parent-level
+    // lists with a non-reserved id), or to a subtask list to convert the task.
     const srcModelId = drag.dropContainer?.data?.listModelId;
     const srcListIdRaw = drag.dropContainer?.data?.listId;
     const isSrcSection = srcListIdRaw === 'PARENT' && !RESERVED_LIST_IDS.has(srcModelId);
+
+    if (targetListId === 'SUB') {
+      if (
+        targetModelId === task.id ||
+        task.subTaskIds?.includes(targetModelId) ||
+        task.repeatCfgId ||
+        task.issueId ||
+        task.issueProviderId ||
+        task.issueType
+      ) {
+        return false;
+      }
+      return true;
+    }
 
     if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
       // Reject section → BACKLOG: _move() dispatches `removeTaskFromSection`
@@ -320,7 +333,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     this.dropListService.blockAniTrigger$.next();
     this._move(
-      draggedTask.id,
+      draggedTask,
       srcListData.listModelId,
       targetListData.listModelId,
       srcListData.listId,
@@ -347,19 +360,43 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   private _move(
-    taskId: string,
+    task: TaskWithSubTasks,
     src: DropListModelSource | string,
     target: DropListModelSource | string,
     srcListId: TaskListId,
     targetListId: TaskListId,
     newOrderedIds: string[],
   ): void {
+    const taskId = task.id;
     const isSrcRegularList = src === 'DONE' || src === 'UNDONE';
     const isTargetRegularList = target === 'DONE' || target === 'UNDONE';
     const workContextId = this._workContextService.activeWorkContextId as string;
 
     // Handle LATER_TODAY - prevent any moves to or from this list
     if (src === 'LATER_TODAY' || target === 'LATER_TODAY') {
+      return;
+    }
+
+    if (targetListId === 'SUB') {
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      if (task.parentId) {
+        this._store.dispatch(
+          moveSubTask({
+            taskId,
+            srcTaskId: task.parentId,
+            targetTaskId: target,
+            afterTaskId,
+          }),
+        );
+      } else {
+        this._store.dispatch(
+          TaskSharedActions.convertToSubTask({
+            taskId,
+            targetTaskId: target,
+            afterTaskId,
+          }),
+        );
+      }
       return;
     }
 
