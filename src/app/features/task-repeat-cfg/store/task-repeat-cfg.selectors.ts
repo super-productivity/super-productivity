@@ -5,6 +5,7 @@ import { isSameDay } from '../../../util/is-same-day';
 import { getNewestPossibleDueDate } from './get-newest-possible-due-date.util';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creation-day.util';
+import { selectArchivedProjectIds } from '../../project/store/project.selectors';
 
 export const adapter: EntityAdapter<TaskRepeatCfg> = createEntityAdapter<TaskRepeatCfg>();
 export const TASK_REPEAT_CFG_FEATURE_NAME = 'taskRepeatCfg';
@@ -118,8 +119,10 @@ export const selectTaskRepeatCfgsForExactDay = createSelector(
 // This includes all overdue tasks regardless of their specific due date
 export const selectAllUnprocessedTaskRepeatCfgs = createSelector(
   selectAllTaskRepeatCfgs,
+  selectArchivedProjectIds,
   (
     taskRepeatCfgs: TaskRepeatCfg[],
+    archivedProjectIds: Set<string>,
     { dayDate }: { dayDate: number },
   ): TaskRepeatCfg[] => {
     const dateToCheckTimestamp = dayDate;
@@ -129,6 +132,11 @@ export const selectAllUnprocessedTaskRepeatCfgs = createSelector(
     return (
       taskRepeatCfgs &&
       taskRepeatCfgs.filter((taskRepeatCfg: TaskRepeatCfg) => {
+        // Skip repeat configs belonging to archived projects
+        if (taskRepeatCfg.projectId && archivedProjectIds.has(taskRepeatCfg.projectId)) {
+          return false;
+        }
+
         // Skip paused repeat configs - they should not generate task instances
         if (taskRepeatCfg.isPaused) {
           return false;
