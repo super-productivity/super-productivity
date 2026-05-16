@@ -56,7 +56,7 @@ describe('BrowserTitleService', () => {
   });
 
   describe('_getTitle', () => {
-    it('should return base title when not in Pomodoro mode', () => {
+    it('should show elapsed time for Flowtime mode when running', () => {
       const result = (service as any)._getTitle(
         FocusModeMode.Flowtime,
         1500000,
@@ -64,10 +64,38 @@ describe('BrowserTitleService', () => {
         true,
         false,
         false,
+        30000,
+      );
+
+      expect(result).toBe('00:30');
+    });
+
+    it('should show "Paused" for Flowtime mode when paused', () => {
+      const result = (service as any)._getTitle(
+        FocusModeMode.Flowtime,
+        0,
+        false,
+        false,
+        true,
+        false,
+        120000,
+      );
+
+      expect(result).toBe('Paused 02:00');
+    });
+
+    it('should show remaining time for Countdown mode when running', () => {
+      const result = (service as any)._getTitle(
+        FocusModeMode.Countdown,
+        600000,
+        false,
+        true,
+        false,
+        false,
         0,
       );
 
-      expect(result).toBe('Super Productivity');
+      expect(result).toBe('10:00');
     });
 
     it('should return base title when in Pomodoro but not running or paused', () => {
@@ -95,7 +123,7 @@ describe('BrowserTitleService', () => {
         0,
       );
 
-      expect(result).toBe('(25:00) Super Productivity');
+      expect(result).toBe('25:00');
     });
 
     it('should show "Paused" when paused', () => {
@@ -109,7 +137,7 @@ describe('BrowserTitleService', () => {
         0,
       );
 
-      expect(result).toBe('(Paused 25:00) Super Productivity');
+      expect(result).toBe('Paused 25:00');
     });
 
     it('should show "Break" when break is active', () => {
@@ -123,7 +151,7 @@ describe('BrowserTitleService', () => {
         0,
       );
 
-      expect(result).toBe('(05:00 Break) Super Productivity');
+      expect(result).toBe('05:00 (Break)');
     });
 
     it('should show both "Paused" and "Break" when both are active', () => {
@@ -137,7 +165,7 @@ describe('BrowserTitleService', () => {
         0,
       );
 
-      expect(result).toBe('(Paused 05:00 Break) Super Productivity');
+      expect(result).toBe('Paused 05:00 (Break)');
     });
 
     it('should show elapsed time during overtime', () => {
@@ -151,7 +179,7 @@ describe('BrowserTitleService', () => {
         1560000,
       );
 
-      expect(result).toBe('(26:00) Super Productivity');
+      expect(result).toBe('26:00');
     });
 
     it('should show elapsed break time during overtime', () => {
@@ -165,7 +193,7 @@ describe('BrowserTitleService', () => {
         360000,
       );
 
-      expect(result).toBe('(06:00 Break) Super Productivity');
+      expect(result).toBe('06:00 (Break)');
     });
 
     it('should pad single digit minutes correctly', () => {
@@ -179,7 +207,7 @@ describe('BrowserTitleService', () => {
         0,
       );
 
-      expect(result).toBe('(05:00) Super Productivity');
+      expect(result).toBe('05:00');
     });
   });
 
@@ -190,25 +218,21 @@ describe('BrowserTitleService', () => {
 
       TestBed.flushEffects();
 
-      expect(titleService.setTitle).toHaveBeenCalledWith('(24:59) Super Productivity');
+      expect(titleService.setTitle).toHaveBeenCalledWith('24:59');
 
       focusModeServiceMock.isBreakActive.set(true);
       focusModeServiceMock.timeRemaining.set(299000);
 
       TestBed.flushEffects();
 
-      expect(titleService.setTitle).toHaveBeenCalledWith(
-        '(04:59 Break) Super Productivity',
-      );
+      expect(titleService.setTitle).toHaveBeenCalledWith('04:59 (Break)');
 
       focusModeServiceMock.isRunning.set(false);
       focusModeServiceMock.isSessionPaused.set(true);
 
       TestBed.flushEffects();
 
-      expect(titleService.setTitle).toHaveBeenCalledWith(
-        '(Paused 04:59 Break) Super Productivity',
-      );
+      expect(titleService.setTitle).toHaveBeenCalledWith('Paused 04:59 (Break)');
 
       focusModeServiceMock.isSessionPaused.set(false);
       focusModeServiceMock.isRunning.set(true);
@@ -217,11 +241,17 @@ describe('BrowserTitleService', () => {
 
       TestBed.flushEffects();
 
-      expect(titleService.setTitle).toHaveBeenCalledWith(
-        '(26:00 Break) Super Productivity',
-      );
+      expect(titleService.setTitle).toHaveBeenCalledWith('26:00 (Break)');
 
       focusModeServiceMock.mode.set(FocusModeMode.Flowtime);
+      focusModeServiceMock.timeElapsed.set(60000);
+
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith('01:00 (Break)');
+
+      focusModeServiceMock.isRunning.set(false);
+      focusModeServiceMock.isSessionPaused.set(false);
 
       TestBed.flushEffects();
 

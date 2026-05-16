@@ -41,8 +41,9 @@ export class BrowserTitleService {
     isInOvertime: boolean,
     timeElapsed: number,
   ): string {
-    if (mode === FocusModeMode.Pomodoro && (isRunning || isSessionPaused)) {
-      const displayTime = isInOvertime ? timeElapsed : timeRemaining;
+    if (isRunning || isSessionPaused) {
+      const isCountTimeDown = mode !== FocusModeMode.Flowtime;
+      const displayTime = isCountTimeDown && !isInOvertime ? timeRemaining : timeElapsed;
 
       const timeStr = msToMinuteClockString(displayTime);
 
@@ -50,14 +51,16 @@ export class BrowserTitleService {
       const formattedTime = `${minutes.padStart(2, '0')}:${seconds}`;
 
       const breakStr = isBreakActive
-        ? ` ${this._translateService.instant(T.F.FOCUS_MODE.BROWSER_TITLE_BREAK)}`
+        ? ` (${this._translateService.instant(T.F.FOCUS_MODE.BROWSER_TITLE_BREAK)})`
         : '';
 
-      const pausedStr = isSessionPaused
-        ? `${this._translateService.instant(T.F.FOCUS_MODE.BROWSER_TITLE_PAUSED)} `
-        : '';
+      if (isSessionPaused) {
+        return `${this._translateService.instant(
+          T.F.FOCUS_MODE.BROWSER_TITLE_PAUSED,
+        )} ${formattedTime}${breakStr}`;
+      }
 
-      return `(${pausedStr}${formattedTime}${breakStr}) ${this._baseTitle}`;
+      return `${formattedTime}${breakStr}`;
     }
 
     return this._baseTitle;
