@@ -1634,7 +1634,7 @@
         "REMOVE_FROM_MY_DAY": "Remove from Today",
         "SCHEDULE": "Schedule task",
         "SET_DEADLINE": "Set deadline",
-        "SHOW_HIDDEN_DONE_SUB_TASKS": "+ {{nr}} completed subtasks",
+        "SHOW_HIDDEN_DONE_SUB_TASKS": "+ {{nr}} done subtasks",
         "SHOW_HIDDEN_SUB_TASKS": "+ {{nr}} subtasks",
         "TIME_CONFLICT": "Overlaps with another scheduled task",
         "TOGGLE_ATTACHMENTS": "Show/hide attachments",
@@ -1701,12 +1701,12 @@
         "UNSCHEDULE_ALL": "Unschedule all"
       },
       "D_SCHEDULE_TASK": {
-        "INFO_OUTSIDE_WORK_HOURS": "Falls outside your configured work hours.",
-        "INFO_OVERLAP": "Overlaps with another scheduled task.",
         "QA_NEXT_MONTH": "Schedule next month",
         "QA_NEXT_WEEK": "Schedule next week",
         "QA_TODAY": "Schedule today",
         "QA_TOMORROW": "Schedule tomorrow",
+        "INFO_OUTSIDE_WORK_HOURS": "Falls outside your configured work hours.",
+        "INFO_OVERLAP": "Overlaps with another scheduled task.",
         "REMIND_AT": "Remind at",
         "RO_1H": "1 hour before it starts",
         "RO_5M": "5 minutes before it starts",
