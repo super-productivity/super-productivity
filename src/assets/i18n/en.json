@@ -941,7 +941,14 @@
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the menu on the top left.",
         "DELETED": "Deleted Project",
         "UNARCHIVED": "Unarchived project",
+        "UNARCHIVED_BUT_HIDDEN": "Project unarchived, but still hidden from menu",
         "UPDATED": "Updated project settings"
+      },
+      "ARCHIVED_PROJECTS": {
+        "EMPTY": "No archived projects.",
+        "LINK_LABEL": "Archived projects",
+        "SEARCH": "Search archived projects",
+        "UNARCHIVE": "Restore project"
       }
     },
     "PROJECT_FOLDER": {
@@ -2516,6 +2523,7 @@
     "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
+    "ARCHIVE_PROJECT": "Archive project",
     "DELETE_PROJECT": "Delete project",
     "DELETE_TAG": "Delete tag",
     "DISABLE_FEATURE": "Disable feature",
@@ -2564,7 +2572,8 @@
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
-    "WORKLOG": "Worklog"
+    "WORKLOG": "Worklog",
+    "ARCHIVED_PROJECTS": "Archived Projects"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Do you want to download a backup of your legacy data (can be used with older versions of Super Productivity)?",

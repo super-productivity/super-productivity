@@ -171,4 +171,12 @@
       <span>{{ project.title }}</span>
     </button>
   }
+  <mat-divider></mat-divider>
+  <button
+    mat-menu-item
+    (click)="goToArchivedProjects()"
+  >
+    <mat-icon>archive</mat-icon>
+    <span>{{ T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate }}</span>
+  </button>
 </mat-menu>

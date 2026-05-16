@@ -14,7 +14,10 @@ import { isDBDateStr } from '../../../util/get-db-date-str';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { IssueProvider, isPluginIssueProvider } from '../../issue/issue.model';
 import { Project } from '../../project/project.model';
-import { selectAllProjects } from '../../project/store/project.selectors';
+import {
+  selectAllProjects,
+  selectArchivedProjectIds,
+} from '../../project/store/project.selectors';
 import {
   selectTagFeatureState,
   selectTodayTagTaskIds,
@@ -148,7 +151,8 @@ export const selectOverdueTasks = createSelector(
   selectTaskFeatureState,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (s, todayStr, startOfNextDayDiffMs): Task[] => {
+  selectArchivedProjectIds,
+  (s, todayStr, startOfNextDayDiffMs, archivedProjectsIds): Task[] => {
     const today = dateStrToUtcDate(todayStr);
     today.setHours(0, 0, 0, 0);
     // The logical start of "today" is shifted by the offset
@@ -158,6 +162,7 @@ export const selectOverdueTasks = createSelector(
       .filter(
         (task): task is Task =>
           !!task &&
+          !archivedProjectsIds.has(task.projectId) &&
           // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
           // which is lexicographically sortable. This avoids timezone conversion issues.
           !!(
@@ -612,10 +617,14 @@ export const selectAllTasksWithDueTime = createSelector(
 
 export const selectAllTasksWithDueTimeSorted = createSelector(
   selectAllTasks,
-  (tasks: Task[]): TaskWithDueTime[] => {
+  selectArchivedProjectIds,
+  (tasks: Task[], archivedProjectIds: Set<string>): TaskWithDueTime[] => {
     return tasks
       .filter(
-        (task): task is TaskWithDueTime => !!task && typeof task.dueWithTime === 'number',
+        (task): task is TaskWithDueTime =>
+          !!task &&
+          typeof task.dueWithTime === 'number' &&
+          !archivedProjectIds.has(task.projectId),
       )
       .sort((a, b) => a.dueWithTime - b.dueWithTime);
   },
@@ -628,30 +637,42 @@ export const selectTimeConflictTaskIds = createSelector(
 
 export const selectAllTasksWithReminder = createSelector(
   selectAllTasks,
-  (tasks: Task[]): TaskWithReminder[] => {
+  selectArchivedProjectIds,
+  (tasks: Task[], archivedProjectIds: Set<string>): TaskWithReminder[] => {
     return tasks.filter(
-      (task) => task && typeof task.remindAt === 'number' && !task.isDone,
+      (task) =>
+        task &&
+        typeof task.remindAt === 'number' &&
+        !task.isDone &&
+        !archivedProjectIds.has(task.projectId),
     ) as TaskWithReminder[];
   },
 );
 
 export const selectAllTasksWithDeadlineReminder = createSelector(
   selectAllTasks,
-  (tasks: Task[]): Task[] => {
+  selectArchivedProjectIds,
+  (tasks: Task[], archivedProjectIds: Set<string>): Task[] => {
     return tasks.filter(
-      (task) => task && typeof task.deadlineRemindAt === 'number' && !task.isDone,
+      (task) =>
+        task &&
+        typeof task.deadlineRemindAt === 'number' &&
+        !task.isDone &&
+        !archivedProjectIds.has(task.projectId),
     );
   },
 );
 
 export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
   selectAllTasks,
-  (tasks: Task[]): Task[] => {
+  selectArchivedProjectIds,
+  (tasks: Task[], archivedProjectIds: Set<string>): Task[] => {
     return tasks
       .filter(
         (task) =>
           task &&
           !task.isDone &&
+          !archivedProjectIds.has(task.projectId) &&
           (task.deadlineDay || typeof task.deadlineWithTime === 'number'),
       )
       .sort((a, b) => {
@@ -751,7 +772,7 @@ export const selectAllTasksWithoutHiddenProjects = createSelector(
       const project = projectMap[projectId];
       if (!project) return true;
 
-      if (project.isHiddenFromMenu) return false;
+      if (project.isHiddenFromMenu || project.isArchived) return false;
 
       // if (project.backlogTaskIds && project.backlogTaskIds.includes(task.id)) {
       //   return false;
@@ -780,7 +801,10 @@ export const selectAllTasksWithDueDay = createSelector(
 
 export const selectAllUndoneTasksWithDueDay = createSelector(
   selectAllTasksWithDueDay,
-  (tasks): TaskWithDueDay[] => {
-    return tasks.filter((task) => !task.isDone);
+  selectArchivedProjectIds,
+  (tasks, archivedProjectIds: Set<string>): TaskWithDueDay[] => {
+    return tasks.filter(
+      (task) => !task.isDone && !archivedProjectIds.has(task.projectId),
+    );
   },
 );

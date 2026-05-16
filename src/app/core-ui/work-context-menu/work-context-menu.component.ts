@@ -124,6 +124,20 @@ export class WorkContextMenuComponent implements OnInit {
     }
   }
 
+  async archiveProject(): Promise<void> {
+    const activeId = this._workContextService.activeWorkContextId;
+    if (activeId === this.contextId) {
+      await this._router.navigateByUrl('/');
+    }
+    this._projectService.archive(this.contextId);
+    this._snackService.open({
+      ico: 'archive',
+      msg: T.F.PROJECT.S.ARCHIVED,
+      actionStr: T.G.UNDO,
+      actionFn: () => this._projectService.unarchive(this.contextId),
+    });
+  }
+
   async duplicateProject(): Promise<void> {
     try {
       await this._projectService.duplicateProject(this.contextId);
