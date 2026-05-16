@@ -617,10 +617,14 @@ export const selectAllTasksWithDueTime = createSelector(
 
 export const selectAllTasksWithDueTimeSorted = createSelector(
   selectAllTasks,
-  (tasks: Task[]): TaskWithDueTime[] => {
+  selectArchivedProjectIds,
+  (tasks: Task[], archivedProjectIds: Set<string>): TaskWithDueTime[] => {
     return tasks
       .filter(
-        (task): task is TaskWithDueTime => !!task && typeof task.dueWithTime === 'number',
+        (task): task is TaskWithDueTime =>
+          !!task &&
+          typeof task.dueWithTime === 'number' &&
+          !archivedProjectIds.has(task.projectId),
       )
       .sort((a, b) => a.dueWithTime - b.dueWithTime);
   },
@@ -661,12 +665,14 @@ export const selectAllTasksWithDeadlineReminder = createSelector(
 
 export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
   selectAllTasks,
-  (tasks: Task[]): Task[] => {
+  selectArchivedProjectIds,
+  (tasks: Task[], archivedProjectIds: Set<string>): Task[] => {
     return tasks
       .filter(
         (task) =>
           task &&
           !task.isDone &&
+          !archivedProjectIds.has(task.projectId) &&
           (task.deadlineDay || typeof task.deadlineWithTime === 'number'),
       )
       .sort((a, b) => {
@@ -795,7 +801,10 @@ export const selectAllTasksWithDueDay = createSelector(
 
 export const selectAllUndoneTasksWithDueDay = createSelector(
   selectAllTasksWithDueDay,
-  (tasks): TaskWithDueDay[] => {
-    return tasks.filter((task) => !task.isDone);
+  selectArchivedProjectIds,
+  (tasks, archivedProjectIds: Set<string>): TaskWithDueDay[] => {
+    return tasks.filter(
+      (task) => !task.isDone && !archivedProjectIds.has(task.projectId),
+    );
   },
 );

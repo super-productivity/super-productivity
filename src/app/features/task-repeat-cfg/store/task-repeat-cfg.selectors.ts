@@ -55,24 +55,27 @@ export const selectTaskRepeatCfgsWithAndWithoutStartTime = createSelector(
 );
 export const selectTaskRepeatCfgsSortedByTitleAndProject = createSelector(
   selectAllTaskRepeatCfgs,
-  (taskRepeatCfgs: TaskRepeatCfg[]): TaskRepeatCfg[] => {
-    return [...taskRepeatCfgs].sort((a, b) => {
-      if (a.projectId !== b.projectId) {
-        if (a.projectId === null) {
-          return -1;
+  selectArchivedProjectIds,
+  (taskRepeatCfgs: TaskRepeatCfg[], archivedProjectIds: Set<string>): TaskRepeatCfg[] => {
+    return [...taskRepeatCfgs]
+      .filter((cfg) => !cfg.projectId || !archivedProjectIds.has(cfg.projectId))
+      .sort((a, b) => {
+        if (a.projectId !== b.projectId) {
+          if (a.projectId === null) {
+            return -1;
+          }
+          if (b.projectId === null) {
+            return 1;
+          }
+          if (a.projectId < b.projectId) {
+            return -1;
+          }
+          if (a.projectId > b.projectId) {
+            return 1;
+          }
         }
-        if (b.projectId === null) {
-          return 1;
-        }
-        if (a.projectId < b.projectId) {
-          return -1;
-        }
-        if (a.projectId > b.projectId) {
-          return 1;
-        }
-      }
-      return (a.title || '').localeCompare(b.title || '');
-    });
+        return (a.title || '').localeCompare(b.title || '');
+      });
   },
 );
 // Returns task repeat configs where the calculated due date matches the specified day
