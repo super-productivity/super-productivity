@@ -592,7 +592,9 @@
         "PASSWORD": "Token / Password",
         "USE_PAT": "Use Personal Access Token instead (LEGACY)",
         "USER_NAME": "Email / Username",
-        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback Authentication (desktop app only)"
+        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback Authentication (desktop app only)",
+        "ALLOW_FETCH_FALLBACK": "Allow direct fetch as fallback, when no other interface works",
+        "ALT_PUBLIC_LINK_HOST": "Alternative host for Jira links (e.g. public URL when API host differs; path prefix allowed)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Advanced Config",

@@ -98,19 +98,17 @@ export class JiraApiService {
   private _requestsLog: { [key: string]: JiraRequestLogItem } = {};
   private _isBlockAccess: boolean = !!sessionStorage.getItem(BLOCK_ACCESS_KEY);
   private _isExtension: boolean = false;
-  private _isInterfacesReadyIfNeeded$: Observable<boolean> =
-    IS_ELECTRON || IS_ANDROID_WEB_VIEW
-      ? of(true).pipe()
-      : this._chromeExtensionInterfaceService.onReady$.pipe(
-          mapTo(true),
-          shareReplay(1),
-          timeoutWith(
-            500,
-            throwError({
-              [HANDLED_ERROR_PROP_STR]: 'Jira: Extension not installed or not ready',
-            }),
-          ),
-        );
+  private _extensionReady$: Observable<boolean> =
+    this._chromeExtensionInterfaceService.onReady$.pipe(
+      mapTo(true),
+      shareReplay(1),
+      timeoutWith(
+        500,
+        throwError({
+          [HANDLED_ERROR_PROP_STR]: 'Jira: Extension not installed or not ready',
+        }),
+      ),
+    );
 
   constructor() {
     // set up callback listener for electron
@@ -392,13 +390,23 @@ export class JiraApiService {
   // Complex Functions
 
   // --------
+  private _isInterfacesReadyIfNeeded$(cfg: JiraCfg): Observable<boolean> {
+    if (IS_ELECTRON || IS_ANDROID_WEB_VIEW || cfg.allowFetchFallback) {
+      return of(true);
+    }
+    return this._extensionReady$;
+  }
+
   private _isMinimalSettings(settings: JiraCfg): boolean {
     return !!(
       settings &&
       settings.host &&
       settings.userName &&
       settings.password &&
-      (IS_ELECTRON || this._isExtension || IS_ANDROID_WEB_VIEW)
+      (IS_ELECTRON ||
+        IS_ANDROID_WEB_VIEW ||
+        this._isExtension ||
+        settings.allowFetchFallback)
     );
   }
 
@@ -413,7 +421,7 @@ export class JiraApiService {
     isForce?: boolean;
     suppressErrorSnack?: boolean;
   }): Observable<any> {
-    return this._isInterfacesReadyIfNeeded$.pipe(
+    return this._isInterfacesReadyIfNeeded$(cfg).pipe(
       take(1),
       concatMap(() => {
         // assign uuid to request to know which responsive belongs to which promise
@@ -493,39 +501,39 @@ export class JiraApiService {
     jiraCfg: JiraCfg,
     suppressErrorSnack: boolean,
   ): Observable<any> {
-    // TODO refactor to observable for request canceling etc
-    let promiseResolve;
-    let promiseReject;
-    const promise = new Promise((resolve, reject) => {
-      promiseResolve = resolve;
-      promiseReject = reject;
-    });
+    let promise!: Promise<unknown>;
+    const registerRequest = (): void => {
+      if (promise !== undefined)
+        throw new Error("'registerRequest' was called twice but must only called once!");
 
-    // save to request log (also sets up timeout)
-    // since we don't use the requestLog anyway on android web view we can just use the requestId
-    if (!IS_ANDROID_WEB_VIEW) {
-      this._requestsLog[requestId] = this._makeJiraRequestLogItem({
-        promiseResolve,
-        promiseReject,
-        requestId,
-        requestInit,
-        transform,
-        jiraCfg,
+      promise = new Promise<unknown>((promiseResolve, promiseReject) => {
+        // save to request log (also sets up timeout)
+        // since we don't use the requestLog anyway on android web view we can just use the requestId
+        this._requestsLog[requestId] = this._makeJiraRequestLogItem({
+          promiseResolve,
+          promiseReject,
+          requestId,
+          requestInit,
+          transform,
+          jiraCfg,
+        });
       });
-    }
+    };
 
     const requestToSend = { requestId, requestInit, url };
     if (IS_ELECTRON) {
+      registerRequest();
       window.ea.makeJiraRequest({
         ...requestToSend,
         jiraCfg,
       });
     } else if (this._isExtension) {
+      registerRequest();
       this._chromeExtensionInterfaceService.dispatchEvent(
         'SP_JIRA_REQUEST',
         requestToSend,
       );
-    } else if (IS_ANDROID_WEB_VIEW) {
+    } else if (IS_ANDROID_WEB_VIEW || jiraCfg.allowFetchFallback) {
       return from(
         fetch(url, requestInit)
           .then((response) => response.body)

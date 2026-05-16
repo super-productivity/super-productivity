@@ -43,7 +43,9 @@ export class JiraCommonInterfacesService extends BaseIssueProviderService<JiraCf
     return firstValueFrom(
       this._getCfgOnce$(issueProviderId).pipe(
         first(),
-        map((jiraCfg) => jiraCfg.host + '/browse/' + issueId),
+        map(
+          (jiraCfg) => (jiraCfg.altPublicLinkHost || jiraCfg.host) + '/browse/' + issueId,
+        ),
       ),
     ).then((result) => result ?? '');
   }
