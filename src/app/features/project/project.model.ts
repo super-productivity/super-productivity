@@ -18,6 +18,9 @@ export interface ProjectBasicCfg {
   taskIds: string[];
   backlogTaskIds: string[];
   noteIds: string[];
+  targetDate?: string | null;
+  targetStartDate?: string | null;
+  targetDuration?: number | null;
 }
 
 // Omit conflicting properties from PluginProject when extending

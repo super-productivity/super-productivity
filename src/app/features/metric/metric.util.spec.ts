@@ -256,7 +256,7 @@ describe('metric.util', () => {
         expect(result.nrOfSubTasks).toBe(0);
         expect(result.nrOfParentTasks).toBe(0);
         expect(result.timeEstimate).toBe(0);
-        expect(result.start).toBe(getDbDateStr(999999999999999)); // Default max value
+        expect(result.start).toBe(getDbDateStr());
       });
 
       it('should handle tasks with no time spent', () => {
@@ -278,7 +278,7 @@ describe('metric.util', () => {
       });
 
       it('should handle worklog with zero daysWorked (divide by zero)', () => {
-        const tasks: Task[] = [createTask()];
+        const tasks: Task[] = [createTask({ id: '1' })];
         const breakNr: BreakNr = { [DAY_2025_01_15]: 5 };
         const breakTime: BreakTime = { [DAY_2025_01_15]: 1000000 };
         const worklog: Worklog = {}; // Empty worklog = 0 daysWorked
@@ -286,12 +286,73 @@ describe('metric.util', () => {
         const result = mapSimpleMetrics([breakNr, breakTime, worklog, 0, tasks]);
 
         expect(result.daysWorked).toBe(0);
-        // Dividing by zero results in Infinity (1 mainTask / 0 days = Infinity)
-        expect(result.avgTasksPerDay).toBe(Infinity);
-        // Dividing 0 by 0 results in NaN (0 timeSpent / 0 days)
-        expect(result.avgTimeSpentOnDay).toBeNaN();
-        expect(result.avgBreakNr).toBe(Infinity); // 5 breaks / 0 days
-        expect(result.avgBreakTime).toBe(Infinity); // 1000000ms / 0 days
+        // Dividing by zero now results in 0 (handled in util)
+        expect(result.avgTasksPerDay).toBe(0);
+        expect(result.avgTimeSpentOnDay).toBe(0);
+        expect(result.avgBreakNr).toBe(0);
+        expect(result.avgBreakTime).toBe(0);
+      });
+
+      it('should calculate actualStart, actualEnd and totalSpanDays', () => {
+        const tasks: Task[] = [createTask()];
+        const breakNr: BreakNr = {};
+        const breakTime: BreakTime = {};
+        const worklog = createWorklog([
+          {
+            year: 2025,
+            months: [
+              {
+                month: 1,
+                days: [
+                  { day: 10, timeSpent: 1000 },
+                  { day: 15, timeSpent: 1000 },
+                ],
+              },
+            ],
+          },
+        ]);
+
+        const result = mapSimpleMetrics([breakNr, breakTime, worklog, 2000, tasks]);
+
+        expect(result.actualStart).toBe('2025-01-10');
+        expect(result.actualEnd).toBe('2025-01-15');
+        expect(result.totalSpanDays).toBe(6); // 10, 11, 12, 13, 14, 15
+      });
+
+      it('should identify significant pauses (threshold 1 day)', () => {
+        const tasks: Task[] = [createTask()];
+        const breakNr: BreakNr = {};
+        const breakTime: BreakTime = {};
+        const worklog = createWorklog([
+          {
+            year: 2025,
+            months: [
+              {
+                month: 1,
+                days: [
+                  { day: 1, timeSpent: 1000 },
+                  { day: 2, timeSpent: 1000 },
+                  { day: 7, timeSpent: 1000 }, // Pause 3, 4, 5, 6 (4 days)
+                  { day: 12, timeSpent: 1000 }, // Pause 8, 9, 10, 11 (4 days)
+                ],
+              },
+            ],
+          },
+        ]);
+
+        const result = mapSimpleMetrics([breakNr, breakTime, worklog, 4000, tasks]);
+
+        expect(result.pauses?.length).toBe(2);
+        expect(result.pauses?.[0]).toEqual({
+          start: '2025-01-03',
+          end: '2025-01-06',
+          duration: 4,
+        });
+        expect(result.pauses?.[1]).toEqual({
+          start: '2025-01-08',
+          end: '2025-01-11',
+          duration: 4,
+        });
       });
 
       it('should handle tasks with undefined subTaskIds', () => {
