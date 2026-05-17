@@ -256,7 +256,7 @@ describe('metric.util', () => {
         expect(result.nrOfSubTasks).toBe(0);
         expect(result.nrOfParentTasks).toBe(0);
         expect(result.timeEstimate).toBe(0);
-        expect(result.start).toBe(getDbDateStr(999999999999999)); // Default max value
+        expect(result.start).toBe(getDbDateStr());
       });
 
       it('should handle tasks with no time spent', () => {
