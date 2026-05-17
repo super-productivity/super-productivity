@@ -1,6 +1,8 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { MatButton } from '@angular/material/button';
+import { INBOX_PROJECT } from '../../project/project.const';
 
 import { of } from 'rxjs';
 import { map, switchMap, take } from 'rxjs/operators';
@@ -19,7 +21,6 @@ import {
 } from '../../tasks/store/task.selectors';
 import {
   cancelFocusSession,
-  hideFocusOverlay,
   selectFocusTask,
   selectFocusDuration,
   startBreak,
@@ -43,6 +44,7 @@ export class FocusModeSessionDoneComponent implements AfterViewInit {
   private readonly _confettiService = inject(ConfettiService);
   private readonly _focusModeService = inject(FocusModeService);
   private readonly _strategyFactory = inject(FocusModeStrategyFactory);
+  private readonly _router = inject(Router);
 
   mode = this._focusModeService.mode;
   FocusModeMode = FocusModeMode;
@@ -81,8 +83,11 @@ export class FocusModeSessionDoneComponent implements AfterViewInit {
   }
 
   cancelAndCloseFocusOverlay(): void {
-    this._store.dispatch(hideFocusOverlay());
+    // cancelFocusSession both clears tracking and hides the overlay; pair
+    // with router navigation so "Back to planning" deterministically lands
+    // the user on the Inbox across all timer modes.
     this._store.dispatch(cancelFocusSession());
+    this._router.navigateByUrl(`/project/${INBOX_PROJECT.id}/tasks`);
   }
 
   startNextFocusSession(): void {

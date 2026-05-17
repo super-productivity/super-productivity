@@ -78,6 +78,22 @@ export class DialogFlowtimeSettingsComponent {
     T.F.FOCUS_MODE.FLOWTIME_VALIDATION_MIN_MAX,
   );
 
+  // Disable expression shared by every break-related field: editable only
+  // while "Enable Flowtime breaks" is checked. Model values remain set
+  // regardless of toggle state.
+  private readonly _disabledWhenBreaksOff = (field: FormlyFieldConfig): boolean => {
+    // For top-level fields, the parent is the root form; for nested fields
+    // (inside the repeat group), walk up until we find isBreakEnabled.
+    let f: FormlyFieldConfig | undefined = field.parent;
+    while (f) {
+      if (f.model && 'isBreakEnabled' in f.model) {
+        return !f.model.isBreakEnabled;
+      }
+      f = f.parent;
+    }
+    return false;
+  };
+
   readonly fields = computed(() => [
     {
       key: 'isBreakEnabled',
@@ -90,7 +106,8 @@ export class DialogFlowtimeSettingsComponent {
       key: 'breakMode',
       type: 'select',
       expressions: {
-        hide: (field: FormlyFieldConfig) => !field.parent?.model?.isBreakEnabled,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'props.disabled': this._disabledWhenBreaksOff,
       },
       props: {
         label: T.F.FOCUS_MODE.FLOWTIME_BREAK_MODE,
@@ -110,9 +127,9 @@ export class DialogFlowtimeSettingsComponent {
       key: 'breakPercentage',
       type: 'input',
       expressions: {
-        hide: (field: FormlyFieldConfig) =>
-          !field.parent?.model?.isBreakEnabled ||
-          field.parent?.model?.breakMode !== 'ratio',
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'props.disabled': this._disabledWhenBreaksOff,
+        hide: (field: FormlyFieldConfig) => field.parent?.model?.breakMode !== 'ratio',
       },
       props: {
         label: T.F.FOCUS_MODE.FLOWTIME_BREAK_PERCENTAGE,
@@ -125,12 +142,11 @@ export class DialogFlowtimeSettingsComponent {
     },
     {
       key: 'breakRules',
+      className: 'flowtime-break-rules',
       description: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULES_DESC,
       type: 'repeat',
       expressions: {
-        hide: (field: FormlyFieldConfig) =>
-          !field.parent?.model?.isBreakEnabled ||
-          field.parent?.model?.breakMode !== 'rule',
+        hide: (field: FormlyFieldConfig) => field.parent?.model?.breakMode !== 'rule',
       },
       props: {
         addText: T.F.FOCUS_MODE.FLOWTIME_ADD_BREAK_RULE,
@@ -141,6 +157,7 @@ export class DialogFlowtimeSettingsComponent {
         },
       },
       fieldArray: {
+        fieldGroupClassName: 'formly-row',
         validators: {
           minMaxDuration: {
             expression: (control: AbstractControl) => {
@@ -159,6 +176,10 @@ export class DialogFlowtimeSettingsComponent {
           {
             key: 'minDuration',
             type: 'input',
+            expressions: {
+              // eslint-disable-next-line @typescript-eslint/naming-convention
+              'props.disabled': this._disabledWhenBreaksOff,
+            },
             props: {
               label: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULE_MIN,
               type: 'number',
@@ -170,6 +191,10 @@ export class DialogFlowtimeSettingsComponent {
           {
             key: 'maxDuration',
             type: 'input',
+            expressions: {
+              // eslint-disable-next-line @typescript-eslint/naming-convention
+              'props.disabled': this._disabledWhenBreaksOff,
+            },
             props: {
               label: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULE_MAX,
               type: 'number',
@@ -180,6 +205,10 @@ export class DialogFlowtimeSettingsComponent {
           {
             key: 'breakDuration',
             type: 'input',
+            expressions: {
+              // eslint-disable-next-line @typescript-eslint/naming-convention
+              'props.disabled': this._disabledWhenBreaksOff,
+            },
             props: {
               label: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULE_DURATION,
               type: 'number',
@@ -212,6 +241,9 @@ export class DialogFlowtimeSettingsComponent {
 
     this.model.set({
       ...flowtime,
+      // Default to 'ratio' when not yet configured so the percentage field
+      // shows by default (per UX: disabled but visible until enable is on).
+      breakMode: flowtime.breakMode ?? 'ratio',
       breakRules:
         breakRulesInMinutes.length > 0
           ? breakRulesInMinutes

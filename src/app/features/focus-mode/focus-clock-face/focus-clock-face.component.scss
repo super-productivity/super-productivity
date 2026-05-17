@@ -1,0 +1,135 @@
+@use '../../../../styles/_globals.scss' as *;
+
+:host {
+  // Single source of truth for clock sizing. Consumers can override per-context.
+  // Fluid scaling: vmin tracks the smaller viewport dimension (clock is
+  // square), capped by vh so squat (wide-short) windows don't push the
+  // task title and pause/complete row off-screen. Floor keeps the clock
+  // legible on tiny windows; ceiling prevents it from dominating 4K displays.
+  --clock-face-size: clamp(180px, min(54vmin, 58vh), 640px);
+
+  // Derived from the face size so everything scales together.
+  // --clock-time-size: digits in the center.
+  // --control-offset:  distance the in-circle controls (pause/done/+/-) sit
+  //                    from the rim.
+  --clock-time-size: calc(var(--clock-face-size) * 0.22);
+  --control-offset: calc(var(--clock-face-size) * 0.07);
+
+  display: block;
+  position: relative;
+  width: var(--clock-face-size);
+  height: var(--clock-face-size);
+}
+
+.clock-face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &__layer {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+
+  &__content {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    text-align: center;
+  }
+}
+
+// Breathing dot fills nearly the entire ring so Flowtime reads as the same
+// size as Pomodoro/Countdown.
+breathing-dot {
+  --breathing-dot-size: calc(var(--clock-face-size) * 0.92);
+}
+
+// Inner-content styling shared across consumers (focus-mode-main,
+// focus-mode-break). Projected content lives in the parent's view scope so
+// reach it through ::ng-deep. Token references (--clock-time-size,
+// --control-offset) inherit via CSS custom properties.
+:host ::ng-deep {
+  .clock-wrapper {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    text-align: center;
+  }
+
+  .clock-time {
+    font-size: var(--clock-time-size, 52px);
+    font-weight: bold;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    // Optical centering: Roboto Bold digits sit slightly below the line-box
+    // center; nudge up ~5% of font-size so digits land in the visual middle.
+    transform: translate(-50%, calc(-50% - 0.05em));
+  }
+
+  .pause-resume-btn {
+    position: absolute;
+    top: var(--control-offset);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .complete-session-btn {
+    position: absolute;
+    bottom: var(--control-offset);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .time-adjust-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+
+    &--decrease {
+      left: var(--control-offset);
+    }
+
+    &--increase {
+      right: var(--control-offset);
+    }
+  }
+}
+
+.focus-progress-circle {
+  width: 100%;
+  height: 100%;
+
+  &__bg {
+    fill: none;
+    stroke: var(--progress-bg, rgba(255, 255, 255, 0.15));
+    stroke-width: 1.8;
+  }
+
+  &__progress {
+    fill: none;
+    stroke: var(--c-primary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.3s ease;
+  }
+
+  // Idle variant shown behind the breathing dot in Flowtime so the visual
+  // shape stays consistent across modes.
+  &--idle {
+    opacity: 0.6;
+  }
+}

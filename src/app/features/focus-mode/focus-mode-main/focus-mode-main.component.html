@@ -1,5 +1,6 @@
 @let isCountDown = isCountTimeDown();
 @let ct = currentTask();
+@let displayed = displayedTask();
 <!-- Countdown Animation -->
 @if (isShowCountdown()) {
   <focus-mode-countdown
@@ -42,51 +43,52 @@
 
 <!-- Main Content (visible in Preparation and In Progress states) -->
 <div class="center-block">
-  <!-- Task title -->
+  <!-- Task title (switch on left, finish on right when task selected) -->
   <div class="task-section">
-    @if (ct) {
-      @if (ct.parentId && parentTaskTitle()) {
+    @if (displayed) {
+      @if (displayed.parentId && parentTaskTitle()) {
         <div class="parent-title">
           <div class="title">{{ parentTaskTitle() }}</div>
         </div>
       }
-      <task-title
-        @fade
-        (valueEdited)="updateTaskTitleIfChanged($event.wasChanged, $event.newVal)"
-        [value]="ct.title"
-        class="task-title"
-      ></task-title>
-    } @else {
-      <div
-        class="task-title-placeholder"
-        (click)="openTaskSelector(); $event.stopPropagation()"
-      >
-        {{ T.F.FOCUS_MODE.SELECT_TASK_TO_FOCUS | translate }}
-      </div>
-    }
-
-    <div
-      class="task-actions"
-      @fade
-    >
-      <button
-        mat-icon-button
-        (click)="openTaskSelector(); $event.stopPropagation()"
-        [matTooltip]="T.F.FOCUS_MODE.SWITCH_TASK | translate"
-      >
-        <mat-icon>swap_horiz</mat-icon>
-      </button>
-
-      @if (ct) {
+      <div class="task-title-row">
         <button
           mat-icon-button
+          class="task-side-btn"
+          (click)="openTaskSelector(); $event.stopPropagation()"
+          [matTooltip]="T.F.FOCUS_MODE.SWITCH_TASK | translate"
+        >
+          <mat-icon>swap_horiz</mat-icon>
+        </button>
+
+        <task-title
+          @fade
+          (valueEdited)="updateTaskTitleIfChanged($event.wasChanged, $event.newVal)"
+          [value]="displayed.title"
+          class="task-title"
+        ></task-title>
+
+        <button
+          mat-icon-button
+          class="task-side-btn"
           [matTooltip]="T.F.FOCUS_MODE.FINISH_TASK_AND_SELECT_NEXT | translate"
           (click)="finishCurrentTask()"
         >
           <mat-icon>done</mat-icon>
         </button>
-      }
-    </div>
+      </div>
+    } @else {
+      <button
+        mat-fab
+        extended
+        color="primary"
+        class="select-task-cta task-title-placeholder"
+        (click)="openTaskSelector(); $event.stopPropagation()"
+      >
+        <mat-icon>add_task</mat-icon>
+        {{ T.F.FOCUS_MODE.SELECT_TASK_TO_FOCUS | translate }}
+      </button>
+    }
   </div>
 
   <!-- Clock Display -->
@@ -95,34 +97,13 @@
       class="clock-display__content"
       [class.is-duration-slider-active]="isShowDurationSlider()"
     >
-      <div
+      <focus-clock-face
         class="clock-face"
         [@modeSwitchFade]="mode()"
+        [variant]="isCountDown ? 'ring' : 'breathing'"
+        [progress]="quantizedProgress()"
+        [isPaused]="!isSessionRunning()"
       >
-        <svg
-          class="clock-face__layer focus-progress-circle"
-          viewBox="0 0 36 36"
-          [class.is-hidden]="!isCountDown"
-        >
-          <path
-            class="focus-progress-circle__bg"
-            d="M18 2.0845
-                a 15.9155 15.9155 0 0 1 0 31.831
-                a 15.9155 15.9155 0 0 1 0 -31.831"
-          />
-          <path
-            class="focus-progress-circle__progress"
-            [attr.stroke-dasharray]="quantizedProgress() + ', 100'"
-            d="M18 2.0845
-                a 15.9155 15.9155 0 0 1 0 31.831
-                a 15.9155 15.9155 0 0 1 0 -31.831"
-          />
-        </svg>
-        <breathing-dot
-          class="clock-face__layer"
-          [class.is-hidden]="isCountDown"
-          [isPaused]="!isSessionRunning()"
-        ></breathing-dot>
         <div class="clock-wrapper">
           <!-- Time adjustment buttons (In Progress state) -->
           @if (isShowTimeAdjustButtons()) {
@@ -155,6 +136,14 @@
             }
           </div>
 
+          <!-- Pomodoro cycle counter, sits below the clock digits -->
+          @if (isPomodoro()) {
+            <div class="cycle-counter">
+              <mat-icon>repeat</mat-icon>
+              {{ focusModeService.currentCycle() }}
+            </div>
+          }
+
           @if (isShowTimeAdjustButtons()) {
             <button
               mat-icon-button
@@ -165,56 +154,103 @@
               <mat-icon>add</mat-icon>
             </button>
           }
-
-          <!-- Pause/Resume button (In Progress state) -->
-          @if (isShowPauseButton()) {
-            @if (focusModeService.isSessionPaused()) {
-              <button
-                mat-icon-button
-                [matTooltip]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
-                (click)="resumeSession()"
-                class="pause-resume-btn"
-              >
-                <mat-icon>play_arrow</mat-icon>
-              </button>
-            } @else {
-              <button
-                mat-icon-button
-                [matTooltip]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
-                (click)="pauseSession()"
-                class="pause-resume-btn"
-              >
-                <mat-icon>pause</mat-icon>
-              </button>
-            }
-          }
-
-          <!-- Complete session button (In Progress state) -->
-          @if (isShowCompleteSessionButton()) {
-            <button
-              mat-icon-button
-              [matTooltip]="T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate"
-              (click)="completeFocusSession()"
-              class="complete-session-btn"
-            >
-              <mat-icon>done_all</mat-icon>
-            </button>
-          }
-
-          <!-- Reset cycles button (In Progress state, Pomodoro only) -->
-          @if (isShowCompleteSessionButton() && isPomodoro()) {
-            <button
-              mat-icon-button
-              [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
-              (click)="resetCycles()"
-              class="reset-cycles-btn"
-            >
-              <mat-icon>restart_alt</mat-icon>
-            </button>
-          }
         </div>
+      </focus-clock-face>
 
-        <!-- Pomodoro settings cog (Preparation + Pomodoro mode) -->
+      <!-- Overtime message -->
+      @if (focusModeService.isInOvertime()) {
+        <div class="overtime-msg">
+          {{ T.F.FOCUS_MODE.OVERTIME_MSG | translate }}
+        </div>
+      }
+
+      <!-- Duration slider (Preparation state: Countdown drags + types, Pomodoro types only) -->
+      @if (isShowDurationSlider()) {
+        <div class="duration-slider-overlay-wrapper">
+          <div
+            class="duration-slider-overlay"
+            [class.is-handle-hidden]="isPomodoro()"
+            [@modeSwitchFade]="mode()"
+          >
+            <input-duration-slider
+              [model]="displayDuration()"
+              [useFlexibleIncrement]="!isPomodoro()"
+              (modelChange)="onDurationChange($event)"
+            ></input-duration-slider>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Session controls below the circle (pause / complete / reset, in-progress only) -->
+    @if (isShowPauseButton() || isShowCompleteSessionButton()) {
+      <div
+        class="circle-controls"
+        @fade
+      >
+        @if (isShowPauseButton()) {
+          @if (focusModeService.isSessionPaused()) {
+            <button
+              mat-icon-button
+              class="pause-resume-btn"
+              [matTooltip]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
+              (click)="resumeSession()"
+            >
+              <mat-icon>play_arrow</mat-icon>
+            </button>
+          } @else {
+            <button
+              mat-icon-button
+              class="pause-resume-btn"
+              [matTooltip]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
+              (click)="pauseSession()"
+            >
+              <mat-icon>pause</mat-icon>
+            </button>
+          }
+        }
+
+        @if (isShowCompleteSessionButton()) {
+          <button
+            mat-icon-button
+            class="complete-session-btn"
+            [matTooltip]="T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate"
+            (click)="completeFocusSession()"
+          >
+            <mat-icon>done_all</mat-icon>
+          </button>
+        }
+
+        @if (isShowCompleteSessionButton() && isPomodoro()) {
+          <button
+            mat-icon-button
+            [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+            (click)="resetCycles()"
+          >
+            <mat-icon>restart_alt</mat-icon>
+          </button>
+        }
+      </div>
+    }
+
+    <!-- Play FAB + mode settings cog (Preparation state) -->
+    @if (isShowPlayButton()) {
+      <div class="play-actions">
+        <button
+          mat-fab
+          color="primary"
+          [matTooltip]="
+            isPlayButtonDisabled()
+              ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
+              : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
+          "
+          [disabled]="isPlayButtonDisabled()"
+          (click)="startSession()"
+          class="play-button"
+        >
+          <mat-icon>play_arrow</mat-icon>
+        </button>
+
         @if (isShowPomodoroSettings()) {
           <button
             mat-icon-button
@@ -226,7 +262,6 @@
           </button>
         }
 
-        <!-- Flowtime settings cog (Preparation + Flowtime mode) -->
         @if (isShowFlowtimeSettings()) {
           <button
             mat-icon-button
@@ -238,66 +273,26 @@
           </button>
         }
       </div>
-
-      <!-- Overtime message -->
-      @if (focusModeService.isInOvertime()) {
-        <div class="overtime-msg">
-          {{ T.F.FOCUS_MODE.OVERTIME_MSG | translate }}
-        </div>
-      }
-
-      <!-- Duration slider (Preparation state, Countdown mode only) -->
-      @if (isShowDurationSlider()) {
-        <div class="duration-slider-overlay-wrapper">
-          <div
-            class="duration-slider-overlay"
-            [@modeSwitchFade]="mode()"
-          >
-            <input-duration-slider
-              [model]="displayDuration()"
-              (modelChange)="onDurationChange($event)"
-            ></input-duration-slider>
-          </div>
-        </div>
-      }
-    </div>
-
-    <!-- Play button (Preparation state) -->
-    @if (isShowPlayButton()) {
-      <button
-        mat-fab
-        color="primary"
-        [matTooltip]="
-          isPlayButtonDisabled()
-            ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
-            : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
-        "
-        [disabled]="isPlayButtonDisabled()"
-        (click)="startSession()"
-        class="play-button"
-      >
-        <mat-icon>play_arrow</mat-icon>
-      </button>
     }
 
     <!-- Bottom control buttons (In Progress state) -->
     @if (isShowBottomControls()) {
       <section class="bottom-controls">
-        @if (ct && ct.issueId && ct.issueType !== ICAL_TYPE) {
+        @if (displayed && displayed.issueId && displayed.issueType !== ICAL_TYPE) {
           <a
             mat-icon-button
             [matTooltip]="T.F.FOCUS_MODE.OPEN_ISSUE_IN_BROWSER | translate"
             target="_blank"
             [href]="issueUrl$ | async"
           >
-            @if (ct.issuePoints) {
-              <div class="mini-badge bgc-primary">{{ ct.issuePoints }}</div>
+            @if (displayed.issuePoints) {
+              <div class="mini-badge bgc-primary">{{ displayed.issuePoints }}</div>
             }
-            <mat-icon [svgIcon]="ct.issueType | issueIcon"></mat-icon>
+            <mat-icon [svgIcon]="displayed.issueType | issueIcon"></mat-icon>
           </a>
         }
 
-        @if (ct) {
+        @if (displayed) {
           <button
             (click)="isFocusNotes.set(!isFocusNotes())"
             [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
@@ -326,10 +321,11 @@
   }
 
   <!-- Notes and Attachments (In Progress only) -->
-  @if (isShowBottomControls() && ct && isFocusNotes()) {
+  @if (isShowBottomControls() && displayed && isFocusNotes()) {
     <div
-      style="height: 100px"
-      @expand
+      class="notes-backdrop"
+      (click)="isFocusNotes.set(false)"
+      @fade
     ></div>
 
     <div
@@ -352,19 +348,19 @@
           (changed)="changeTaskNotes($event); isFocusNotes.set(false)"
           [isFocus]="isFocusNotes()"
           [isShowControls]="true"
-          [isDefaultText]="!ct.notes"
-          [model]="ct.notes || defaultTaskNotes()"
-          [taskId]="ct.id"
+          [isDefaultText]="!displayed.notes"
+          [model]="displayed.notes || defaultTaskNotes()"
+          [taskId]="displayed.id"
         ></inline-markdown>
       </div>
-      @if (ct.attachments.length) {
+      @if (displayed.attachments.length) {
         <div
           class="attachment-list-wrapper"
           @fade
         >
           <task-attachment-list
-            [taskId]="ct.id"
-            [attachments]="ct.attachments"
+            [taskId]="displayed.id"
+            [attachments]="displayed.attachments"
           ></task-attachment-list>
         </div>
       }
@@ -372,10 +368,10 @@
   }
 
   <!-- Drag Over Message -->
-  @if (ct && isDragOver()) {
+  @if (displayed && isDragOver()) {
     <div class="bgc-accent drag-over-msg">
       <mat-icon>add</mat-icon>
-      {{ T.F.TASK.CMP.DROP_ATTACHMENT | translate: { title: ct.title } }}
+      {{ T.F.TASK.CMP.DROP_ATTACHMENT | translate: { title: displayed.title } }}
     </div>
   }
 </div>

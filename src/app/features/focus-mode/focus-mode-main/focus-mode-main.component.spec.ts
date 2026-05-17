@@ -113,6 +113,7 @@ describe('FocusModeMainComponent', () => {
       focusModeConfig: jasmine.createSpy().and.returnValue({
         isSkipPreparation: false,
       }),
+      pomodoroConfig: jasmine.createSpy().and.returnValue(undefined),
       isInOvertime: jasmine.createSpy().and.returnValue(false),
       isSessionPaused: jasmine.createSpy().and.returnValue(false),
     });
@@ -656,6 +657,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       focusModeConfig: signal({
         isSkipPreparation: false,
       }),
+      pomodoroConfig: signal(undefined),
       isInOvertime: signal(false),
     };
 
@@ -798,8 +800,13 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       isSkipPreparation: false,
     });
 
-    const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+    const storeSpy = jasmine.createSpyObj('Store', [
+      'dispatch',
+      'select',
+      'selectSignal',
+    ]);
     storeSpy.select.and.returnValue(of([]));
+    storeSpy.selectSignal.and.returnValue(signal(null));
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       tasks: jasmine.createSpy().and.returnValue({
@@ -847,6 +854,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       mode: signal(FocusModeMode.Pomodoro),
       mainState: signal(FocusMainUIState.Preparation),
       focusModeConfig: focusModeConfigSignal,
+      pomodoroConfig: signal(undefined),
       isInOvertime: signal(false),
     };
 

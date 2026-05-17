@@ -80,15 +80,22 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     // Verify mode selector is NOT visible on break screen
     await expect(modeSelector).not.toBeVisible();
 
-    // Click "Back to Planning" button
+    // Click "Back to Planning" — unified flow cancels the focus session and
+    // closes the overlay (navigates to /tasks). User must re-open focus mode
+    // to switch timer modes.
     await expect(backToPlanningButton).toBeVisible();
     await backToPlanningButton.click();
 
-    // Verify we're back on the main screen
-    await expect(focusModeMain).toBeVisible({ timeout: 5000 });
+    // Overlay closes, break screen gone
+    await expect(focusModeOverlay).not.toBeVisible({ timeout: 5000 });
     await expect(focusModeBreak).not.toBeVisible();
 
-    // Verify mode selector IS now visible
+    // Re-open focus mode to access mode selector
+    await mainFocusButton.click();
+    await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
+    await expect(focusModeMain).toBeVisible({ timeout: 5000 });
+
+    // Mode selector is visible in preparation state
     await expect(modeSelector).toBeVisible();
 
     // Change mode to Flowtime
@@ -237,11 +244,18 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     // In Pomodoro mode, break auto-starts after session completion via effects chain
     await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
-    // Click Back to Planning
+    // Click Back to Planning — unified flow cancels the focus session and
+    // closes the overlay (no auto-started next session).
     await backToPlanningButton.click();
 
-    // Verify we're back on main screen in PREPARATION state
-    // (mode selector SHOULD be visible because we're NOT auto-starting)
+    // Overlay closes; no session auto-started
+    await expect(focusModeOverlay).not.toBeVisible({ timeout: 5000 });
+    await expect(focusModeBreak).not.toBeVisible();
+
+    // Re-open focus mode: should land in preparation state (mode selector
+    // visible, play button visible, no in-progress complete button)
+    await mainFocusButton.click();
+    await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
     await expect(focusModeMain).toBeVisible({ timeout: 5000 });
     await expect(modeSelector).toBeVisible();
     await expect(playButton).toBeVisible();

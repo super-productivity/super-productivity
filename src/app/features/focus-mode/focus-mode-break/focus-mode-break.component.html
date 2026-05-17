@@ -1,122 +1,113 @@
 <div class="focus-mode-break">
-  <h1>
-    @if (isBreakOffer()) {
-      {{ T.F.FOCUS_MODE.FLOWTIME_BREAK_TITLE | translate }}
-    } @else {
-      {{
-        (focusModeService.isBreakLong()
-          ? T.F.FOCUS_MODE.LONG_BREAK_TITLE
-          : T.F.FOCUS_MODE.SHORT_BREAK_TITLE
-        ) | translate: { cycle: focusModeService.currentCycle() - 1 }
-      }}
-    }
-  </h1>
-
-  <div class="timer-container">
-    <mat-progress-spinner
-      mode="determinate"
-      [value]="progressPercentage()"
-      diameter="160"
-      strokeWidth="6"
-    >
-    </mat-progress-spinner>
-    <div class="timer-text">
-      {{ remainingTime() | msToMinuteClockString }}
-    </div>
-    @if (remainingTime() > 0 && !isBreakOffer()) {
-      @if (isBreakPaused()) {
-        <button
-          mat-icon-button
-          [matTooltip]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
-          (click)="resumeBreak()"
-          class="pause-resume-btn"
-        >
-          <mat-icon>play_arrow</mat-icon>
-        </button>
-      } @else {
-        <button
-          mat-icon-button
-          [matTooltip]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
-          (click)="pauseBreak()"
-          class="pause-resume-btn"
-        >
-          <mat-icon>pause</mat-icon>
-        </button>
-      }
+  <!-- Task name above the circle — mirrors the focus-mode-main layout so the
+       circle/digit baseline stays put across focus ↔ break transitions. -->
+  <div class="task-section">
+    @if (displayedTask(); as t) {
+      <div class="task-title">{{ t.title }}</div>
     }
   </div>
 
+  <focus-clock-face
+    variant="ring"
+    [progress]="progressPercentage()"
+  >
+    <div class="clock-wrapper">
+      <!-- "Short break" / "Long break" / "Take a break" label, sits above
+           the digits inside the circle. Mirrors the cycle counter below. -->
+      <div class="break-label">{{ breakLabelKey() | translate }}</div>
+
+      <div class="clock-time">
+        {{ remainingTime() | msToMinuteClockString }}
+      </div>
+
+      @if (isPomodoro()) {
+        <div class="cycle-counter">
+          <mat-icon>repeat</mat-icon>
+          {{ displayedCycle() }}
+        </div>
+      }
+    </div>
+  </focus-clock-face>
+
+  <!-- Secondary controls under the circle: pause, skip, reset (pomodoro). -->
+  @if ((remainingTime() > 0 && !isBreakOffer()) || isPomodoro()) {
+    <div class="circle-controls">
+      @if (remainingTime() > 0 && !isBreakOffer()) {
+        @if (isBreakPaused()) {
+          <button
+            mat-icon-button
+            class="pause-resume-btn"
+            [attr.aria-label]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
+            [matTooltip]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
+            (click)="resumeBreak()"
+          >
+            <mat-icon>play_arrow</mat-icon>
+          </button>
+        } @else {
+          <button
+            mat-icon-button
+            class="pause-resume-btn"
+            [attr.aria-label]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
+            [matTooltip]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
+            (click)="pauseBreak()"
+          >
+            <mat-icon>pause</mat-icon>
+          </button>
+        }
+
+        <button
+          mat-icon-button
+          [attr.aria-label]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
+          [matTooltip]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
+          (click)="skipBreak()"
+        >
+          <mat-icon>skip_next</mat-icon>
+        </button>
+      }
+
+      @if (isPomodoro()) {
+        <button
+          mat-icon-button
+          [attr.aria-label]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+          [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+          (click)="resetCycles()"
+        >
+          <mat-icon>restart_alt</mat-icon>
+        </button>
+      }
+    </div>
+  }
+
   <task-tracking-info></task-tracking-info>
 
-  <p class="break-message">{{ T.F.FOCUS_MODE.BREAK_RELAX_MSG | translate }}</p>
+  <!-- Primary actions at the bottom: back to planning + state-specific CTA. -->
+  <div class="bottom-actions">
+    <button
+      mat-stroked-button
+      (click)="exitToPlanning()"
+    >
+      <mat-icon>arrow_back</mat-icon>
+      {{ T.F.FOCUS_MODE.BACK_TO_PLANNING | translate }}
+    </button>
 
-  @if (remainingTime() > 0) {
-    <div class="button-row">
-      @if (isBreakOffer()) {
-        <button
-          mat-raised-button
-          color="primary"
-          (click)="resumeBreak()"
-        >
-          <mat-icon>play_arrow</mat-icon>
-          {{ T.F.FOCUS_MODE.START_BREAK | translate }}
-        </button>
-      }
-
+    @if (isBreakOffer()) {
       <button
-        mat-stroked-button
-        (click)="exitToPlanning()"
+        mat-raised-button
+        color="primary"
+        (click)="resumeBreak()"
       >
-        <mat-icon>edit_calendar</mat-icon>
-        {{ T.F.FOCUS_MODE.BACK_TO_PLANNING | translate }}
+        <mat-icon>play_arrow</mat-icon>
+        {{ T.F.FOCUS_MODE.START_BREAK | translate }}
       </button>
-      @if (isPomodoro()) {
-        <button
-          mat-stroked-button
-          (click)="resetCycles()"
-          class="reset-cycles-btn"
-        >
-          <mat-icon>restart_alt</mat-icon>
-          {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
-        </button>
-      }
-      <button
-        mat-stroked-button
-        (click)="skipBreak()"
-      >
-        <mat-icon>skip_next</mat-icon>
-        {{ T.F.FOCUS_MODE.SKIP_BREAK | translate }}
-      </button>
-    </div>
-  } @else {
-    <div class="button-row">
-      <button
-        mat-stroked-button
-        (click)="exitToPlanning()"
-      >
-        <mat-icon>done_all</mat-icon>
-        {{ T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate }}
-      </button>
-
-      @if (isPomodoro()) {
-        <button
-          mat-stroked-button
-          (click)="resetCycles()"
-          class="reset-cycles-btn"
-        >
-          <mat-icon>restart_alt</mat-icon>
-          {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
-        </button>
-      }
-
+    } @else if (remainingTime() <= 0) {
       <button
         mat-raised-button
         color="primary"
         (click)="completeBreak()"
       >
         <mat-icon>arrow_forward</mat-icon>
-        {{ T.F.FOCUS_MODE.CONTINUE_TO_NEXT_SESSION | translate }}
+        {{ T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate }}
       </button>
-    </div>
-  }
+    }
+  </div>
 </div>

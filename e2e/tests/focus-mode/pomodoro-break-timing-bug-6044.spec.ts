@@ -133,10 +133,11 @@ const skipBreakAndStartNextSession = async (page: Page): Promise<void> => {
   const breakScreen = page.locator('focus-mode-break');
   await expect(breakScreen).toBeVisible({ timeout: 5000 });
 
-  // Click the "Skip break" button
-  const skipButton = page.locator('focus-mode-break button', {
-    hasText: /skip break/i,
-  });
+  // Click the "Skip break" button (accessible name from aria-label;
+  // the visible content is just an icon ligature)
+  const skipButton = page
+    .locator('focus-mode-break')
+    .getByRole('button', { name: /skip break/i });
   await skipButton.click();
 
   // Wait for session to start

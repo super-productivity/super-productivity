@@ -7,7 +7,7 @@ import {
   completeBreak,
   pauseFocusSession,
   unPauseFocusSession,
-  exitBreakToPlanning,
+  cancelFocusSession,
   startBreak,
 } from '../store/focus-mode.actions';
 import {
@@ -182,12 +182,10 @@ describe('FocusModeBreakComponent', () => {
   });
 
   describe('exitToPlanning', () => {
-    it('should dispatch exitBreakToPlanning action with pausedTaskId', () => {
+    it('should dispatch cancelFocusSession (unified back-to-planning flow)', () => {
       component.exitToPlanning();
 
-      expect(mockStore.dispatch).toHaveBeenCalledWith(
-        exitBreakToPlanning({ pausedTaskId: mockPausedTaskId }),
-      );
+      expect(mockStore.dispatch).toHaveBeenCalledWith(cancelFocusSession());
     });
   });
 
