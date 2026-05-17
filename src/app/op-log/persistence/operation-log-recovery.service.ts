@@ -11,6 +11,7 @@ import { uuidv7 } from '../../util/uuid-v7';
 import { PENDING_OPERATION_EXPIRY_MS } from '../core/operation-log.const';
 import { OpLog } from '../../core/log';
 import { AppDataComplete } from '../model/model-config';
+import { ValidateStateService } from '../validation/validate-state.service';
 
 /**
  * Handles crash recovery and data restoration for the operation log system.
@@ -29,6 +30,7 @@ export class OperationLogRecoveryService {
   private opLogStore = inject(OperationLogStoreService);
   private legacyPfDb = inject(LegacyPfDbService);
   private clientIdService = inject(ClientIdService);
+  private validateStateService = inject(ValidateStateService);
 
   /**
    * Attempts to recover from a corrupted or missing SUP_OPS database.
@@ -74,6 +76,21 @@ export class OperationLogRecoveryService {
    * Recovers from legacy data by creating a new genesis snapshot.
    */
   async recoverFromLegacyData(legacyData: Record<string, unknown>): Promise<void> {
+    // Refuse to import legacy data that doesn't validate. Importing corrupted
+    // legacy data would just propagate the corruption into SUP_OPS and the next
+    // hydration would fail validation in turn.
+    const validationResult = await this.validateStateService.validateState(legacyData);
+    if (!validationResult.isValid) {
+      OpLog.err('OperationLogRecoveryService: Refusing to import invalid legacy data', {
+        typiaErrorCount: validationResult.typiaErrors.length,
+        crossModelError: validationResult.crossModelError,
+      });
+      throw new Error(
+        `Legacy recovery data validation failed (${validationResult.typiaErrors.length} typia errors` +
+          `${validationResult.crossModelError ? `, cross-model: ${validationResult.crossModelError}` : ''})`,
+      );
+    }
+
     const clientId = await this.clientIdService.loadClientId();
     if (!clientId) {
       throw new Error('Failed to load clientId - cannot create recovery operation');

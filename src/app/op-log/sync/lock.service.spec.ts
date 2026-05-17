@@ -747,6 +747,53 @@ describe('LockService', () => {
       expect(executed).toBe(true);
     });
 
+    it('should recover after a timed-out fallback waiter once the holder finishes', async () => {
+      const originalLocks = navigator.locks;
+      Object.defineProperty(navigator, 'locks', {
+        value: undefined,
+        configurable: true,
+      });
+
+      const fallbackService = new LockService();
+      const SHORT_TIMEOUT = 30;
+      let recovered = false;
+
+      try {
+        const holder = fallbackService.request(
+          'recover_after_timeout_lock',
+          async () => {
+            await new Promise((r) => setTimeout(r, 80));
+          },
+          SHORT_TIMEOUT,
+        );
+
+        await expectAsync(
+          fallbackService.request(
+            'recover_after_timeout_lock',
+            async () => {},
+            SHORT_TIMEOUT,
+          ),
+        ).toBeRejectedWithError(/Timed out waiting.*to acquire lock/);
+
+        await holder;
+
+        await fallbackService.request(
+          'recover_after_timeout_lock',
+          async () => {
+            recovered = true;
+          },
+          SHORT_TIMEOUT,
+        );
+
+        expect(recovered).toBeTrue();
+      } finally {
+        Object.defineProperty(navigator, 'locks', {
+          value: originalLocks,
+          configurable: true,
+        });
+      }
+    });
+
     it('should preserve mutex invariant after timeout (no concurrent execution)', async () => {
       // Regression test: when B times out waiting for A, C must NOT run
       // concurrently with A. The lock chain must remain intact.

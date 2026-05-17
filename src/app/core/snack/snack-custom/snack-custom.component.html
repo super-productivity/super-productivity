@@ -46,6 +46,19 @@
     </div>
   </div>
 
+  @if (data.type === 'ERROR' || data.type === 'WARNING') {
+    <button
+      (click)="close($event)"
+      [attr.aria-label]="T.G.DISMISS | translate"
+      [matTooltip]="T.G.DISMISS | translate"
+      class="close"
+      mat-icon-button
+      type="button"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  }
+
   @if (data.promise || data.showWhile$ || data.isSpinner) {
     <mat-progress-bar mode="indeterminate"></mat-progress-bar>
   }

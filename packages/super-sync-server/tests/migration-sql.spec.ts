@@ -199,7 +199,7 @@ describe('performance migrations', () => {
     expect(dockerfile).toContain('LABEL org.opencontainers.image.revision=$VCS_REF');
     expect(dockerfile).toContain('RUN_MIGRATIONS_ON_STARTUP');
     expect(dockerfile).toContain('sh scripts/migrate-deploy.sh');
-    expect(dockerfile).toContain('NODE_OPTIONS=--max-old-space-size=896');
+    expect(dockerfile).toContain('NODE_OPTIONS=--max-old-space-size=576');
     expect(composeBuildFile).toContain('VCS_REF: ${SUPERSYNC_BUILD_SHA:-local}');
     expect(buildAndPushScript).toContain('supersync_image_source_revision()');
     expect(buildAndPushScript).toContain('assert_clean_supersync_image_inputs');

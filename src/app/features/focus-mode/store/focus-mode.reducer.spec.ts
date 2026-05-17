@@ -160,6 +160,26 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(false);
     });
 
+    it('should update elapsed time when pausing a running focus session', () => {
+      spyOn(Date, 'now').and.returnValue(10 * 60 * 1000);
+      const runningState = {
+        ...initialState,
+        timer: {
+          isRunning: true,
+          startedAt: 2 * 60 * 1000,
+          elapsed: 0,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const action = a.pauseFocusSession({ pausedTaskId: null });
+      const result = focusModeReducer(runningState, action);
+
+      expect(result.timer.isRunning).toBe(false);
+      expect(result.timer.elapsed).toBe(8 * 60 * 1000);
+    });
+
     it('should pause break sessions', () => {
       const breakState = {
         ...initialState,
@@ -310,6 +330,27 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(false);
       expect(result.timer.purpose).toBeNull();
       expect(result.lastCompletedDuration).toBe(60000);
+    });
+
+    it('should use provided completedDuration when completing a focus session', () => {
+      const runningState = {
+        ...initialState,
+        timer: {
+          isRunning: true,
+          startedAt: Date.now() - 60000,
+          elapsed: 60000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const action = a.completeFocusSession({
+        isManual: false,
+        completedDuration: 1500000,
+      });
+      const result = focusModeReducer(runningState, action);
+
+      expect(result.lastCompletedDuration).toBe(1500000);
     });
 
     it('should cancel focus session', () => {

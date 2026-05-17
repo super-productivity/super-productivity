@@ -19,12 +19,14 @@ import { FocusModeMode, TimerState } from '../../focus-mode/focus-mode.model';
 import { DroidLog } from '../../../core/log';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 
 @Injectable()
 export class AndroidFocusModeEffects {
   private _store = inject(Store);
   private _hydrationState = inject(HydrationStateService);
   private _snackService = inject(SnackService);
+  private _globalTrackingInterval = inject(GlobalTrackingIntervalService);
 
   // Start/stop focus mode notification when timer state changes
   syncFocusModeToNotification$ =
@@ -135,8 +137,20 @@ export class AndroidFocusModeEffects {
     createEffect(() =>
       androidInterface.onFocusPause$.pipe(
         tap(() => DroidLog.log('AndroidFocusModeEffects: Pause action received')),
-        withLatestFrom(this._store.select(selectCurrentTaskId)),
-        map(([_, currentTaskId]) =>
+        withLatestFrom(
+          this._store.select(selectTimer),
+          this._store.select(selectCurrentTaskId),
+        ),
+        tap(([, timer]) => {
+          if (timer.purpose === 'work' && timer.isRunning) {
+            const cap =
+              timer.duration > 0
+                ? Math.max(0, timer.duration - timer.elapsed)
+                : undefined;
+            this._globalTrackingInterval.triggerWakeUpTick(cap);
+          }
+        }),
+        map(([, , currentTaskId]) =>
           focusModeActions.pauseFocusSession({ pausedTaskId: currentTaskId }),
         ),
       ),
@@ -156,8 +170,12 @@ export class AndroidFocusModeEffects {
     createEffect(() =>
       androidInterface.onFocusSkip$.pipe(
         tap(() => DroidLog.log('AndroidFocusModeEffects: Skip action received')),
-        withLatestFrom(this._store.select(selectPausedTaskId)),
-        map(([_, pausedTaskId]) => focusModeActions.skipBreak({ pausedTaskId })),
+        withLatestFrom(
+          this._store.select(selectTimer),
+          this._store.select(selectPausedTaskId),
+        ),
+        filter(([, timer]) => timer.purpose === 'break'),
+        map(([, , pausedTaskId]) => focusModeActions.skipBreak({ pausedTaskId })),
       ),
     );
 
@@ -166,11 +184,17 @@ export class AndroidFocusModeEffects {
     createEffect(() =>
       androidInterface.onFocusComplete$.pipe(
         tap(() => DroidLog.log('AndroidFocusModeEffects: Complete action received')),
-        map(() => focusModeActions.completeFocusSession({ isManual: true })),
+        withLatestFrom(this._store.select(selectTimer)),
+        filter(([, timer]) => timer.purpose === 'work' && timer.isRunning),
+        map(([, timer]) =>
+          focusModeActions.completeFocusSession({
+            isManual: true,
+            completedDuration: this._completionDuration(timer),
+          }),
+        ),
       ),
     );
 
-  // Handle native timer completion (when native service detects timer reached 0 in background)
   handleNativeTimerComplete$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(() =>
@@ -180,18 +204,36 @@ export class AndroidFocusModeEffects {
             'AndroidFocusModeEffects: Native timer complete received, isBreak=' + isBreak,
           ),
         ),
-        withLatestFrom(this._store.select(selectPausedTaskId)),
-        map(([isBreak, pausedTaskId]) => {
+        withLatestFrom(
+          this._store.select(selectTimer),
+          this._store.select(selectPausedTaskId),
+        ),
+        filter(([isBreak, timer]) =>
+          isBreak
+            ? timer.purpose === 'break'
+            : timer.purpose === 'work' && timer.isRunning,
+        ),
+        map(([isBreak, timer, pausedTaskId]) => {
           if (isBreak) {
-            // Break timer completed, skip the break (go back to work)
             return focusModeActions.skipBreak({ pausedTaskId });
-          } else {
-            // Work session completed
-            return focusModeActions.completeFocusSession({ isManual: false });
           }
+          return focusModeActions.completeFocusSession({
+            isManual: false,
+            completedDuration: this._completionDuration(timer),
+          });
         }),
       ),
     );
+
+  private _completionDuration(timer: TimerState): number {
+    if (timer.duration > 0) {
+      const cap = Math.max(0, timer.duration - timer.elapsed);
+      const tick = this._globalTrackingInterval.triggerWakeUpTick(cap);
+      return Math.min(timer.duration, timer.elapsed + tick.duration);
+    }
+    const tick = this._globalTrackingInterval.triggerWakeUpTick();
+    return timer.elapsed + tick.duration;
+  }
 
   private _safeNativeCall(fn: () => void, errorMsg: string, showSnackbar = false): void {
     try {

@@ -77,10 +77,9 @@ export class LockService {
    * Each request waits for the previous one to complete before executing.
    * Includes timeout to prevent infinite waits on stuck locks.
    *
-   * On timeout, the lock chain is preserved (releaseLock is NOT called) so that
-   * subsequent waiters cannot bypass a stuck lock holder. Each subsequent request
-   * will also timeout, which is correct — the lock holder is stuck and nothing
-   * should proceed until the app restarts.
+   * On timeout, the waiter's placeholder is released only after the previous
+   * lock resolves. This keeps later waiters behind the real lock holder without
+   * poisoning the queue if that holder eventually finishes.
    */
   private async _fallbackRequest(
     lockName: string,
@@ -90,14 +89,14 @@ export class LockService {
     // Wait for any existing lock to be released
     const existingLock = this._fallbackLocks.get(lockName);
 
-    // Create a new lock that resolves after we're done
+    // Create a placeholder that later waiters must queue behind.
     let releaseLock: () => void;
     const newLock = new Promise<void>((resolve) => {
       releaseLock = resolve;
     });
-    this._fallbackLocks.set(lockName, newLock);
+    const lockChain = existingLock ? existingLock.then(() => newLock) : newLock;
+    this._fallbackLocks.set(lockName, lockChain);
 
-    let acquired = false;
     try {
       // Wait for previous lock holder with timeout
       if (existingLock) {
@@ -112,19 +111,16 @@ export class LockService {
           }),
         ]);
       }
-      acquired = true;
       // Execute the callback
       await callback();
     } finally {
-      // Only release the lock if we successfully acquired it.
-      // On timeout, leave the chain intact so subsequent waiters cannot
-      // bypass the stuck lock holder.
-      if (acquired) {
-        releaseLock!();
-        // Clean up if we're the last one
-        if (this._fallbackLocks.get(lockName) === newLock) {
-          this._fallbackLocks.delete(lockName);
-        }
+      releaseLock!();
+      if (this._fallbackLocks.get(lockName) === lockChain) {
+        void lockChain.finally(() => {
+          if (this._fallbackLocks.get(lockName) === lockChain) {
+            this._fallbackLocks.delete(lockName);
+          }
+        });
       }
     }
   }

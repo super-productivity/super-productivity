@@ -46,6 +46,10 @@ export class SnackService {
     }
   }
 
+  private _getDefaultDuration(type: SnackParams['type']): number {
+    return type === 'ERROR' || type === 'WARNING' ? 8000 : DEFAULT_SNACK_CFG.duration;
+  }
+
   @debounce(100)
   private _openSnack(params: SnackParams): void {
     const _destroy$: Subject<boolean> = new Subject<boolean>();
@@ -69,7 +73,7 @@ export class SnackService {
 
     const cfg = {
       ...DEFAULT_SNACK_CFG,
-      duration: type === 'ERROR' ? 8000 : DEFAULT_SNACK_CFG.duration,
+      duration: this._getDefaultDuration(type),
       ...config,
       data: {
         ...params,

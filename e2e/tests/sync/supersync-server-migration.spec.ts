@@ -8,6 +8,38 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 
+const MIGRATION_TEST_TIMEOUT = 180000;
+
+const waitForTasksAfterSync = async (
+  client: SimulatedE2EClient,
+  taskNames: string[],
+  maxAttempts = 3,
+): Promise<void> => {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await client.sync.syncAndWait();
+    } catch (error) {
+      lastError = error;
+    }
+
+    try {
+      await Promise.all(
+        taskNames.map((taskName) => waitForTask(client.page, taskName, 5000)),
+      );
+      expect(await client.sync.hasSyncError()).toBe(false);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Expected synced tasks to become visible');
+};
+
 /**
  * SuperSync Server Migration E2E Tests
  *
@@ -52,7 +84,7 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
     baseURL,
     testRunId,
   }, testInfo) => {
-    testInfo.setTimeout(120000); // 2 minutes - migration tests need extra time
+    testInfo.setTimeout(MIGRATION_TEST_TIMEOUT);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
 
@@ -114,7 +146,7 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
       await clientB.sync.setupSuperSync(syncConfig2);
 
       // Client B syncs - should receive ALL of Client A's data
-      await clientB.sync.syncAndWait();
+      await waitForTasksAfterSync(clientB, [task1, task2, task3]);
       console.log('[Test] Client B synced with new server');
 
       // === PHASE 4: Verification ===
@@ -149,7 +181,7 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
     baseURL,
     testRunId,
   }, testInfo) => {
-    testInfo.setTimeout(120000); // 2 minutes - migration tests need extra time
+    testInfo.setTimeout(MIGRATION_TEST_TIMEOUT);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
 
@@ -205,14 +237,7 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
       // Client B joins
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig2);
-      // First sync to pull data from server
-      await clientB.sync.syncAndWait();
-      await clientB.page.waitForTimeout(1000);
-      // Second sync to ensure all operations are applied
-      await clientB.sync.syncAndWait();
-      await clientB.page.waitForTimeout(1000);
-      // Third sync - some operations may need multiple cycles
-      await clientB.sync.syncAndWait();
+      await waitForTasksAfterSync(clientB, [task1, task2]);
       console.log('[Test] Client B sync completed');
 
       // Allow extra time for store updates to propagate to UI

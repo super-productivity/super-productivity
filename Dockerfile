@@ -23,6 +23,14 @@ RUN apt-get update && \
 
 # Copy and install dependencies
 COPY package*.json ./
+COPY packages/sync-core/package*.json ./packages/sync-core/
+COPY packages/sync-core/tsconfig*.json ./packages/sync-core/
+COPY packages/sync-core/tsup.config.ts ./packages/sync-core/
+COPY packages/sync-core/src ./packages/sync-core/src
+COPY packages/sync-providers/package*.json ./packages/sync-providers/
+COPY packages/sync-providers/tsconfig*.json ./packages/sync-providers/
+COPY packages/sync-providers/tsup.config.ts ./packages/sync-providers/
+COPY packages/sync-providers/src ./packages/sync-providers/src
 COPY packages/plugin-api/package*.json ./packages/plugin-api/
 COPY packages/plugin-api/tsconfig.json ./packages/plugin-api/
 COPY packages/plugin-api/src ./packages/plugin-api/src

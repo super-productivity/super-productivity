@@ -20,6 +20,7 @@ import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
+import com.superproductivity.superproductivity.service.FocusModeNotificationHelper
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
@@ -333,11 +334,13 @@ class CapacitorMainActivity : BridgeActivity() {
             }
             FocusModeForegroundService.ACTION_SKIP -> {
                 Log.d("SP_FOCUS", "Skip action received from focus mode notification")
+                FocusModeNotificationHelper.cancelCompletionNotification(this)
                 callJSInterfaceFunctionIfExists("next", "onFocusSkip$")
                 return
             }
             FocusModeForegroundService.ACTION_COMPLETE -> {
                 Log.d("SP_FOCUS", "Complete action received from focus mode notification")
+                FocusModeNotificationHelper.cancelCompletionNotification(this)
                 callJSInterfaceFunctionIfExists("next", "onFocusComplete$")
                 return
             }

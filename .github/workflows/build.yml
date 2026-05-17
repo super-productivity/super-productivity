@@ -116,23 +116,46 @@ jobs:
         run: npm run build
 
       - name: Build/Release Electron app
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: johannesjo/action-electron-builder@9ea9e2d991c97668843d57337848e3e2b1ffab3d # v1
         with:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
-          release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          release: true
 
-      # rename to possibly fix release issue
-      - run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;
-      # Release to edge if no tag and to candidate if tag
+      - name: Build Electron app
+        if: false == startsWith(github.ref, 'refs/tags/v')
+        uses: johannesjo/action-electron-builder@9ea9e2d991c97668843d57337848e3e2b1ffab3d # v1
+        with:
+          build_script_name: empty
+          github_token: ${{ secrets.github_token }}
+          release: false
+          args: '--publish never'
+
+      - name: Normalize snap file name
+        if: false == startsWith(github.ref, 'refs/tags/v')
+        run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;
+
+      - name: Check for final release tag on this commit
+        id: release-tag
+        if: false == startsWith(github.ref, 'refs/tags/v')
+        run: |
+          git fetch --force --tags origin 'refs/tags/v*:refs/tags/v*'
+          if git tag --points-at HEAD | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "has_final_release_tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_final_release_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+      # Upload branch builds to edge. Published releases upload the exact
+      # GitHub release snap to edge/stable in build-publish-to-snap-on-release.yml.
       # Uses Canonical's official snapcraft container instead of `sudo snap
       # install snapcraft --classic` on the runner, which has been a recurring
       # source of "unable to contact snap store" failures.
       # The container runs snapcraft as a pebble service whose working-dir is
       # hard-coded to /project, so docker's -w flag is ignored — mount the
       # build dir at /project so `snapcraft upload sp.snap` resolves correctly.
-      - #otherwise it would be executed twice
-        if: false == startsWith(github.ref, 'refs/tags/v')
+      - name: Upload branch snap to edge
+        if: false == startsWith(github.ref, 'refs/tags/v') && steps.release-tag.outputs.has_final_release_tag != 'true'
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
           max_attempts: 3

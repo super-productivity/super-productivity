@@ -123,11 +123,12 @@ export const focusModeReducer = createReducer(
   on(a.pauseFocusSession, (state, { pausedTaskId }) => {
     // Allow pausing both work sessions and breaks
     if (state.timer.purpose === null) return state;
+    const timer = updateTimer(state.timer);
 
     return {
       ...state,
       timer: {
-        ...state.timer,
+        ...timer,
         isRunning: false,
       },
       // Store paused task ID if provided (for sync feature)
@@ -161,8 +162,8 @@ export const focusModeReducer = createReducer(
     _isResumingBreak: false,
   })),
 
-  on(a.completeFocusSession, (state, { isManual }) => {
-    const duration = state.timer.elapsed;
+  on(a.completeFocusSession, (state, { completedDuration }) => {
+    const duration = completedDuration ?? state.timer.elapsed;
 
     return {
       ...state,
