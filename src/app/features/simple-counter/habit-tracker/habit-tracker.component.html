@@ -38,10 +38,10 @@
   >
     <div class="header-row">
       <div class="header-spacer"></div>
-      @for (day of days(); track day) {
+      @for (day of days(); track day.str) {
         <div class="day-header">
-          <div class="day-name">{{ parseDateLocal(day) | localeDate: 'EEE' }}</div>
-          <div class="day-date">{{ parseDateLocal(day) | localeDate: 'dd' }}</div>
+          <div class="day-name">{{ day.date | localeDate: 'EEE' }}</div>
+          <div class="day-date">{{ day.date | localeDate: 'dd' }}</div>
         </div>
       }
     </div>
@@ -69,24 +69,26 @@
           }
           <span class="habit-name">{{ counter.title }}</span>
         </div>
-        @for (day of days(); track day) {
+        @for (day of days(); track day.str) {
           <div
             class="day-cell"
-            (click)="onCellClick(counter, day)"
-            (contextmenu)="onCellContextMenu($event, counter, day)"
-            (mousedown)="onPressStart(counter, day)"
+            [class.is-disabled]="!isDayEnabled(counter, day.dow)"
+            [attr.aria-disabled]="!isDayEnabled(counter, day.dow) || null"
+            (click)="onCellClick(counter, day.str, day.dow)"
+            (contextmenu)="onCellContextMenu($event, counter, day.str, day.dow)"
+            (mousedown)="onPressStart(counter, day.str)"
             (mouseup)="onPressEnd()"
             (mouseleave)="onPressEnd()"
-            (touchstart)="onPressStart(counter, day)"
+            (touchstart)="onPressStart(counter, day.str)"
             (touchend)="onPressEnd()"
           >
             <div
               class="check-circle"
-              [class.is-done]="getVal(counter, day) >= (counter.streakMinValue || 1)"
+              [class.is-done]="getVal(counter, day.str) >= (counter.streakMinValue || 1)"
             >
               @if (
-                getProgress(counter, day) > 0 &&
-                getProgress(counter, day) < 100 &&
+                getProgress(counter, day.str) > 0 &&
+                getProgress(counter, day.str) < 100 &&
                 !isSimpleCompletion(counter)
               ) {
                 <svg
@@ -103,15 +105,15 @@
                     cy="16"
                     [style.stroke-dasharray]="'88 88'"
                     [style.stroke-dashoffset]="
-                      88 - (88 * getProgress(counter, day)) / 100
+                      88 - (88 * getProgress(counter, day.str)) / 100
                     "
                   ></circle>
                 </svg>
               }
-              @if (isSimpleCompletion(counter) && getVal(counter, day) > 0) {
+              @if (isSimpleCompletion(counter) && getVal(counter, day.str) > 0) {
                 <mat-icon>check</mat-icon>
-              } @else if (getDisplayValue(counter, day)) {
-                <span class="value-text">{{ getDisplayValue(counter, day) }}</span>
+              } @else if (getDisplayValue(counter, day.str)) {
+                <span class="value-text">{{ getDisplayValue(counter, day.str) }}</span>
               }
             </div>
           </div>

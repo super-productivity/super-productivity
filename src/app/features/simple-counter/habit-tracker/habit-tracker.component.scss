@@ -316,6 +316,12 @@
   @include mq(xs, max) {
     min-width: 32px;
   }
+
+  &.is-disabled {
+    cursor: default;
+    opacity: 0.3;
+    pointer-events: none;
+  }
 }
 
 .check-circle {

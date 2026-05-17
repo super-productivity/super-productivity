@@ -26,6 +26,12 @@ import { dragDelayForTouch } from '../../../util/input-intent';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 
+interface HabitDay {
+  str: string;
+  date: Date;
+  dow: number;
+}
+
 @Component({
   selector: 'habit-tracker',
   standalone: true,
@@ -61,13 +67,17 @@ export class HabitTrackerComponent {
   dayOffset = signal(0);
 
   days = computed(() => {
-    const days: string[] = [];
+    const days: HabitDay[] = [];
     const today = new Date();
     const offset = this.dayOffset();
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i + offset);
-      days.push(this._dateService.todayStr(d));
+      days.push({
+        str: this._dateService.todayStr(d),
+        date: d,
+        dow: d.getDay(),
+      });
     }
     return days;
   });
@@ -97,8 +107,8 @@ export class HabitTrackerComponent {
   dateRangeLabel = computed(() => {
     const days = this.days();
     if (days.length === 0) return '';
-    const first = this.parseDateLocal(days[0]);
-    const last = this.parseDateLocal(days[days.length - 1]);
+    const first = days[0].date;
+    const last = days[days.length - 1].date;
 
     const locale = this._dateTimeFormatService.currentLocale();
     const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
@@ -108,16 +118,14 @@ export class HabitTrackerComponent {
     return `${firstStr} - ${lastStr}`;
   });
 
-  parseDateLocal(dateStr: string): Date {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  }
-
   private _longPressTimer?: number;
   private _isLongPress = false;
   private _pendingLongPressAction?: { counter: SimpleCounter; date: string };
 
-  onCellClick(counter: SimpleCounter, date: string): void {
+  onCellClick(counter: SimpleCounter, date: string, dow: number): void {
+    if (!this.isDayEnabled(counter, dow)) {
+      return;
+    }
     if (this._isLongPress) {
       this._isLongPress = false;
       return;
@@ -138,8 +146,16 @@ export class HabitTrackerComponent {
     }
   }
 
-  onCellContextMenu(event: MouseEvent, counter: SimpleCounter, date: string): void {
-    event.preventDefault(); // Prevent default browser context menu
+  onCellContextMenu(
+    event: MouseEvent,
+    counter: SimpleCounter,
+    date: string,
+    dow: number,
+  ): void {
+    if (!this.isDayEnabled(counter, dow)) {
+      return;
+    }
+    event.preventDefault();
     this.openEditDialog(counter, date);
   }
 
@@ -176,6 +192,17 @@ export class HabitTrackerComponent {
       data: { simpleCounter: counterCopy, selectedDate: date },
       restoreFocus: true,
     });
+  }
+
+  isDayEnabled(counter: SimpleCounter, dow: number): boolean {
+    if (!counter.isTrackStreaks || counter.streakMode === 'weekly-frequency') {
+      return true;
+    }
+    // Default to 'specific-days' logic
+    if (!counter.streakWeekDays) {
+      return true;
+    }
+    return !!counter.streakWeekDays[dow];
   }
 
   isSimpleCompletion(counter: SimpleCounter): boolean {
