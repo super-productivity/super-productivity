@@ -240,13 +240,18 @@ export const mapSimpleMetrics = ([
   const taskMetricMap = new Map<string, TaskMetric>();
   const mainTaskIds: string[] = [];
 
+  // First pass: Fill the map with all tasks
+  allTasks.forEach((task) => {
+    taskMetricMap.set(task.id, mapTaskToMetric(task));
+  });
+
+  // Second pass: Link subtasks to parents and calculate counts/estimates
   allTasks.forEach((task: Task) => {
     if (task.created < s.startTs) {
       s.startTs = task.created;
     }
 
-    const taskMetric = mapTaskToMetric(task);
-    taskMetricMap.set(task.id, taskMetric);
+    const taskMetric = taskMetricMap.get(task.id)!;
 
     if (task.parentId) {
       s.nrOfSubTasks++;
