@@ -118,6 +118,9 @@ export class HabitTrackerComponent {
   private _pendingLongPressAction?: { counter: SimpleCounter; date: string };
 
   onCellClick(counter: SimpleCounter, date: string): void {
+    if (!this.isDayEnabled(counter, date)) {
+      return;
+    }
     if (this._isLongPress) {
       this._isLongPress = false;
       return;
@@ -139,7 +142,10 @@ export class HabitTrackerComponent {
   }
 
   onCellContextMenu(event: MouseEvent, counter: SimpleCounter, date: string): void {
-    event.preventDefault(); // Prevent default browser context menu
+    if (!this.isDayEnabled(counter, date)) {
+      return;
+    }
+    event.preventDefault();
     this.openEditDialog(counter, date);
   }
 
@@ -176,6 +182,14 @@ export class HabitTrackerComponent {
       data: { simpleCounter: counterCopy, selectedDate: date },
       restoreFocus: true,
     });
+  }
+
+  isDayEnabled(counter: SimpleCounter, day: string): boolean {
+    if (!counter.isTrackStreaks || !counter.streakWeekDays) {
+      return true;
+    }
+    const dow = this.parseDateLocal(day).getDay();
+    return !!counter.streakWeekDays[dow];
   }
 
   isSimpleCompletion(counter: SimpleCounter): boolean {

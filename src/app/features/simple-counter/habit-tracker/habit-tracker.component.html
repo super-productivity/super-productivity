@@ -72,6 +72,8 @@
         @for (day of days(); track day) {
           <div
             class="day-cell"
+            [class.is-disabled]="!isDayEnabled(counter, day)"
+            [attr.aria-disabled]="!isDayEnabled(counter, day) || null"
             (click)="onCellClick(counter, day)"
             (contextmenu)="onCellContextMenu($event, counter, day)"
             (mousedown)="onPressStart(counter, day)"
