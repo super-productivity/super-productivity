@@ -45,17 +45,17 @@
     >
     </magic-side-nav>
 
-    <main class="main-content">
-      <header
-        [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
-        class="header-wrapper"
-      >
-        <main-header></main-header>
+    <right-panel>
+      <main class="main-content">
+        <header
+          [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
+          class="header-wrapper"
+        >
+          <main-header></main-header>
 
-        <banner></banner>
-      </header>
+          <banner></banner>
+        </header>
 
-      <right-panel>
         <div
           #routeWrapper
           [@warpRoute]="getPage(o)"
@@ -63,9 +63,9 @@
         >
           <router-outlet #o="outlet"></router-outlet>
         </div>
-      </right-panel>
-      <global-progress-bar></global-progress-bar>
-    </main>
+        <global-progress-bar></global-progress-bar>
+      </main>
+    </right-panel>
 
     <!-- Mobile Bottom Navigation -->
     @if (isShowMobileButtonNav()) {
