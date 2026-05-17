@@ -63,7 +63,6 @@ import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { unique } from '../../../util/unique';
 import { MentionConfigService } from '../mention-config.service';
@@ -79,6 +78,7 @@ import { BodyClass } from '../../../app.constants';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { DateService } from '../../../core/date/date.service';
 
 @Component({
   selector: 'add-task-bar',
@@ -121,6 +121,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _store = inject(Store);
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _markdownPasteService = inject(MarkdownPasteService);
+  private readonly _dateService = inject(DateService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -211,7 +212,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           workContext?.id === 'TODAY'
         ) {
           return {
-            date: getDbDateStr(),
+            date: this._dateService.todayStr(),
             time: undefined as string | undefined,
           };
         }
@@ -454,7 +455,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       } else if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
         // When a repeat preset is selected without an explicit date, set dueDay to today
         // so the first task instance appears as today's occurrence instead of staying in inbox
-        taskData.dueDay = getDbDateStr();
+        taskData.dueDay = this._dateService.todayStr();
       } else {
         // Explicitly set dueDay to undefined when no date is selected
         // This prevents automatic assignment of today's date in TODAY context
@@ -502,7 +503,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         if (state.repeatQuickSetting === 'CUSTOM') {
           this._openRepeatDialogForTask(taskId, resolvedRemindOption);
         } else {
-          const startDate = state.date || getDbDateStr();
+          const startDate = state.date || this._dateService.todayStr();
           const referenceDate = dateStrToUtcDate(startDate);
           const quickSettingUpdates =
             getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};

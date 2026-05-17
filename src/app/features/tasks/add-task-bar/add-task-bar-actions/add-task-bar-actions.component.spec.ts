@@ -18,6 +18,7 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { Store } from '@ngrx/store';
 import { GlobalConfigService } from 'src/app/features/config/global-config.service';
 import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
+import { DateService } from '../../../../core/date/date.service';
 
 const expectedLocaleTime = (timeStr: string, locale: string): string => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -35,6 +36,7 @@ describe('AddTaskBarActionsComponent', () => {
   let mockTagService: jasmine.SpyObj<TagService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
+  let mockDateService: jasmine.SpyObj<DateService>;
 
   const mockProject: Project = {
     id: '1',
@@ -142,6 +144,14 @@ describe('AddTaskBarActionsComponent', () => {
 
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockMatDialog.open.and.returnValue(mockDialogRef);
+    mockDateService = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+      'getLogicalTodayDate',
+    ]);
+    mockDateService.todayStr.and.callFake(() => getDbDateStr(new Date()));
+    mockDateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    mockDateService.getLogicalTodayDate.and.callFake(() => new Date());
 
     await TestBed.configureTestingModule({
       imports: [
@@ -153,6 +163,7 @@ describe('AddTaskBarActionsComponent', () => {
         { provide: AddTaskBarStateService, useValue: mockStateService },
         { provide: AddTaskBarParserService, useValue: mockParserService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+        { provide: DateService, useValue: mockDateService },
         {
           provide: GlobalConfigService,
           useValue: mockConfigService(DateTimeLocales.en_us),
@@ -221,7 +232,7 @@ describe('AddTaskBarActionsComponent', () => {
     });
 
     it('should compute dateDisplay for today', () => {
-      const today = getDbDateStr(new Date());
+      const today = mockDateService.todayStr();
       const stateWithToday = {
         ...mockState,
         date: today,
@@ -234,7 +245,7 @@ describe('AddTaskBarActionsComponent', () => {
     });
 
     it('should compute dateDisplay for today with time', () => {
-      const today = getDbDateStr(new Date());
+      const today = mockDateService.todayStr();
       const time = '14:30';
       const stateWithTime = {
         ...mockState,
@@ -250,7 +261,7 @@ describe('AddTaskBarActionsComponent', () => {
     });
 
     it('should compute dateDisplay for tomorrow', () => {
-      const tomorrow = new Date();
+      const tomorrow = new Date(Date.now() - mockDateService.getStartOfNextDayDiffMs());
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = getDbDateStr(tomorrow);
       const stateWithTomorrow = {
@@ -262,6 +273,25 @@ describe('AddTaskBarActionsComponent', () => {
 
       fixture.detectChanges();
       expect(component.dateDisplay()).toBe('Tomorrow');
+    });
+
+    it('should compute dateDisplay for logical today before start of next day', () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      const offsetMs = 3 * 60 * 60 * 1000;
+      mockDateService.getStartOfNextDayDiffMs.and.returnValue(offsetMs);
+      const nowMs = new Date(2024, 4, 20, 1, 30, 0, 0).getTime();
+      mockDateService.getLogicalTodayDate.and.returnValue(new Date(nowMs - offsetMs));
+      spyOn(Date, 'now').and.returnValue(nowMs);
+
+      const stateWithLogicalToday = {
+        ...mockState,
+        date: '2024-05-19',
+        time: null,
+      };
+      (mockStateService as any)._mockStateSignal.set(stateWithLogicalToday);
+
+      fixture.detectChanges();
+      expect(component.dateDisplay()).toBe('Today');
     });
 
     it('should compute dateDisplay for other dates', () => {
@@ -347,6 +377,7 @@ describe('AddTaskBarActionsComponent', () => {
               currentLocale: () => 'de-de',
             }),
           },
+          { provide: DateService, useValue: mockDateService },
           {
             provide: GlobalConfigService,
             useValue: mockConfigService(DateTimeLocales.de_de),
