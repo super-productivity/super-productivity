@@ -8,6 +8,7 @@ import { BehaviorSubject, of } from 'rxjs';
 import { WorkContext, WorkContextType } from '../work-context/work-context.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { SimpleMetrics } from './metric.model';
+import { ProjectService } from '../project/project.service';
 import { signal } from '@angular/core';
 import { T } from '../../t.const';
 
@@ -45,6 +46,8 @@ describe('MetricComponent', () => {
     breakNr: 2,
     timeEstimate: 5000,
     nrOfCompletedTasks: 5,
+    nrOfCompletedMainTasks: 3,
+    nrOfCompletedSubTasks: 2,
     nrOfAllTasks: 10,
     nrOfSubTasks: 3,
     nrOfMainTasks: 7,
@@ -85,6 +88,10 @@ describe('MetricComponent', () => {
     const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
       activeWorkContext$: activeWorkContext$.asObservable(),
     });
+    const projectServiceSpy = jasmine.createSpyObj('ProjectService', [
+      'getByIdLive$',
+      'update',
+    ]);
 
     // Default return values for MetricService
     metricServiceSpy.getSimpleClickCounterMetrics$.and.returnValue(of(null));
@@ -100,6 +107,7 @@ describe('MetricComponent', () => {
         { provide: ProjectMetricsService, useValue: projectMetricsServiceSpy },
         { provide: AllTasksMetricsService, useValue: allTasksMetricsServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
+        { provide: ProjectService, useValue: projectServiceSpy },
       ],
     }).overrideComponent(MetricComponent, {
       set: {

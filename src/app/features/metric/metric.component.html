@@ -19,6 +19,20 @@
       </p>
       <div class="material-table">
         <table>
+          @if (sm.actualStart) {
+            <tr>
+              <th>{{ T.F.METRIC.CMP.ACTUAL_START | translate }}</th>
+              <td>{{ sm.actualStart }}</td>
+            </tr>
+            <tr>
+              <th>{{ T.F.METRIC.CMP.ACTUAL_END | translate }}</th>
+              <td>{{ sm.actualEnd }}</td>
+            </tr>
+            <tr>
+              <th>{{ T.F.METRIC.CMP.PROJECT_SPAN | translate }}</th>
+              <td>{{ sm.totalSpanDays }} {{ T.F.METRIC.CMP.DAYS | translate }}</td>
+            </tr>
+          }
           <tr>
             <th>{{ T.F.METRIC.CMP.TIME_SPENT | translate }}</th>
             <td>{{ sm.timeSpent | msToString }}</td>
@@ -35,6 +49,30 @@
             <th>{{ T.F.METRIC.CMP.DAYS_WORKED | translate }}</th>
             <td>{{ sm.daysWorked }}</td>
           </tr>
+          @if (sm.pauses && sm.pauses.length > 0) {
+            <tr>
+              <th>{{ T.F.METRIC.CMP.PAUSES | translate }}</th>
+              <td>
+                @for (pause of sm.pauses; track pause.start) {
+                  <div class="pause-entry">
+                    {{
+                      T.F.METRIC.CMP.PAUSE_DESCRIPTION
+                        | translate
+                          : {
+                              start: pause.start,
+                              end: pause.end,
+                              duration: pause.duration,
+                            }
+                    }}
+                  </div>
+                }
+              </td>
+            </tr>
+            <tr>
+              <th>{{ T.F.METRIC.CMP.TOTAL_PAUSE_DAYS | translate }}</th>
+              <td>{{ sm.totalPauseDays }} {{ T.F.METRIC.CMP.DAYS | translate }}</td>
+            </tr>
+          }
           <tr>
             <th>{{ T.F.METRIC.CMP.AVG_TASKS_PER_DAY_WORKED | translate }}</th>
             <td>{{ sm.avgTasksPerDay | number: '1.0-1' }}</td>
@@ -65,11 +103,453 @@
         </table>
       </div>
     </section>
+
+    <section class="heatmap-section">
+      <activity-heatmap></activity-heatmap>
+    </section>
+
+    @if (sm.taskMetrics && sm.taskMetrics.length > 0) {
+      <section class="task-details-section">
+        <h1 class="mat-h1">{{ T.F.METRIC.CMP.TASK_DETAILS | translate }}</h1>
+        <div class="task-metrics-list">
+          @for (taskMetric of sm.taskMetrics; track taskMetric.id) {
+            <div class="task-metric-item">
+              <div
+                class="task-metric-header"
+                (click)="toggleTask(taskMetric.id)"
+              >
+                <mat-icon>{{
+                  expandedTaskIds()[taskMetric.id] ? 'expand_more' : 'chevron_right'
+                }}</mat-icon>
+                @if (taskMetric.isDone) {
+                  <mat-icon class="task-done-icon">check_circle</mat-icon>
+                }
+                <span class="task-title">{{ taskMetric.title }}</span>
+                <span class="task-time"
+                  >{{ taskMetric.timeSpent | msToString }} /
+                  {{ taskMetric.timeEstimate | msToString }}</span
+                >
+              </div>
+              @if (expandedTaskIds()[taskMetric.id]) {
+                <div class="task-metric-content">
+                  <div class="task-timeline">
+                    @if (taskMetric.actualStart) {
+                      <p>
+                        <strong>{{ T.F.METRIC.CMP.ACTUAL_START | translate }}:</strong>
+                        {{ taskMetric.actualStart }}
+                      </p>
+                      <p>
+                        <strong>{{ T.F.METRIC.CMP.ACTUAL_END | translate }}:</strong>
+                        {{ taskMetric.actualEnd }}
+                      </p>
+                    }
+                    @if (taskMetric.pauses && taskMetric.pauses.length > 0) {
+                      <div class="task-pauses">
+                        <strong>{{ T.F.METRIC.CMP.PAUSES | translate }}:</strong>
+                        @for (pause of taskMetric.pauses; track pause.start) {
+                          <div class="pause-entry">
+                            {{
+                              T.F.METRIC.CMP.PAUSE_DESCRIPTION
+                                | translate
+                                  : {
+                                      start: pause.start,
+                                      end: pause.end,
+                                      duration: pause.duration,
+                                    }
+                            }}
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                  @if (taskMetric.subTasks && taskMetric.subTasks.length > 0) {
+                    <div class="subtask-metrics">
+                      @for (subTask of taskMetric.subTasks; track subTask.id) {
+                        <div class="subtask-metric-item">
+                          @if (subTask.isDone) {
+                            <mat-icon class="subtask-done-icon">check_circle</mat-icon>
+                          }
+                          <span class="subtask-title">{{ subTask.title }}</span>
+                          <span class="subtask-time">{{
+                            subTask.timeSpent | msToString
+                          }}</span>
+                          @if (subTask.actualStart) {
+                            <div class="subtask-timeline-mini">
+                              {{ subTask.actualStart }} - {{ subTask.actualEnd }}
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    } @else {
+      <p class="no-data-msg">{{ T.F.METRIC.CMP.NO_TASK_METRICS | translate }}</p>
+    }
   }
 
-  <section class="heatmap-section">
-    <activity-heatmap></activity-heatmap>
-  </section>
+  @if (isProjectWithTasks()) {
+    <section class="deadline-tracking-section">
+      <h1 class="mat-h1">{{ T.F.METRIC.CMP.DEADLINE_TRACKING | translate }}</h1>
+
+      @if (projectProgress(); as pp) {
+        <div class="deadline-config">
+          @if (editingStartDate()) {
+            <div class="deadline-edit-row">
+              <mat-form-field
+                appearance="outline"
+                subscriptSizing="dynamic"
+              >
+                <mat-label>{{ T.F.METRIC.CMP.START_DATE | translate }}</mat-label>
+                <input
+                  matInput
+                  [matDatepicker]="startPicker2"
+                  [(ngModel)]="editStartDateValue"
+                />
+                <mat-datepicker-toggle
+                  matSuffix
+                  [for]="startPicker2"
+                />
+                <mat-datepicker #startPicker2 />
+              </mat-form-field>
+              <button
+                mat-icon-button
+                (click)="saveProjectDates()"
+              >
+                <mat-icon>check</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                (click)="cancelEdit()"
+              >
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          } @else {
+            <div class="deadline-display-row">
+              <span class="deadline-label"
+                >{{ T.F.METRIC.CMP.START_DATE | translate }}:</span
+              >
+              <span class="deadline-value">{{ pp.startDate }}</span>
+              <button
+                mat-icon-button
+                (click)="startEditStartDate()"
+              >
+                <mat-icon>edit</mat-icon>
+              </button>
+            </div>
+          }
+
+          @if (editingDeadline()) {
+            <div class="deadline-edit-row">
+              <mat-slide-toggle [(ngModel)]="useDurationMode">
+                {{ T.F.METRIC.CMP.USE_DURATION | translate }}
+              </mat-slide-toggle>
+              @if (useDurationMode()) {
+                <mat-form-field
+                  appearance="outline"
+                  subscriptSizing="dynamic"
+                >
+                  <mat-label>{{ T.F.METRIC.CMP.DURATION_DAYS | translate }}</mat-label>
+                  <input
+                    matInput
+                    type="number"
+                    [(ngModel)]="editDurationValue"
+                    placeholder="56"
+                  />
+                </mat-form-field>
+              } @else {
+                <mat-form-field
+                  appearance="outline"
+                  subscriptSizing="dynamic"
+                >
+                  <mat-label>{{ T.F.METRIC.CMP.DEADLINE_DATE | translate }}</mat-label>
+                  <input
+                    matInput
+                    [matDatepicker]="deadlinePicker"
+                    [(ngModel)]="editDeadlineValue"
+                  />
+                  <mat-datepicker-toggle
+                    matSuffix
+                    [for]="deadlinePicker"
+                  />
+                  <mat-datepicker #deadlinePicker />
+                </mat-form-field>
+              }
+              <button
+                mat-icon-button
+                (click)="saveProjectDates()"
+              >
+                <mat-icon>check</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                (click)="cancelEdit()"
+              >
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          } @else {
+            <div class="deadline-display-row">
+              <span class="deadline-label"
+                >{{ T.F.METRIC.CMP.DEADLINE_DATE | translate }}:</span
+              >
+              <span class="deadline-value">{{ pp.deadline }}</span>
+              <button
+                mat-icon-button
+                (click)="startEditDeadline()"
+              >
+                <mat-icon>edit</mat-icon>
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="progress-bars">
+          <div class="progress-row">
+            <span class="progress-label">{{
+              T.F.METRIC.CMP.TASKS_PROGRESS | translate
+            }}</span>
+            <div class="progress-bar-wrapper">
+              <progress-bar [progress]="pp.mainProgressPercent" />
+            </div>
+            <span class="progress-value"
+              >{{ pp.doneTasks }}/{{ pp.totalTasks }} ({{
+                pp.mainProgressPercent
+              }}%)</span
+            >
+          </div>
+          @if (pp.timeEstimate > 0) {
+            <div class="progress-row">
+              <span class="progress-label">{{
+                T.F.METRIC.CMP.TIME_PROGRESS | translate
+              }}</span>
+              <div class="progress-bar-wrapper">
+                <progress-bar [progress]="pp.timeProgressPercent" />
+              </div>
+              <span class="progress-value"
+                >{{ pp.timeSpent | msToString }}/{{ pp.timeEstimate | msToString }} ({{
+                  pp.timeProgressPercent
+                }}%)</span
+              >
+            </div>
+          }
+        </div>
+
+        <div class="deadline-stats">
+          <div class="stat-card">
+            <span class="stat-label">{{ T.F.METRIC.CMP.DAYS_ELAPSED | translate }}</span>
+            <span class="stat-value">{{ pp.daysElapsed }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">{{
+              T.F.METRIC.CMP.DAYS_REMAINING | translate
+            }}</span>
+            <span
+              class="stat-value"
+              [class.overdue]="pp.daysRemaining <= 0"
+              >{{ pp.daysRemaining }}</span
+            >
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">{{ T.F.METRIC.CMP.REQUIRED_PACE | translate }}</span>
+            <span class="stat-value">{{ pp.requiredPace | number: '1.1-1' }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">{{
+              T.F.METRIC.CMP.HISTORICAL_PACE | translate
+            }}</span>
+            <span class="stat-value">{{ pp.historicalPace | number: '1.1-1' }}</span>
+          </div>
+        </div>
+
+        @if (pp.daysElapsed === 0 && pp.doneTasks === 0) {
+          <div class="deadline-status not-started">
+            <mat-icon>schedule</mat-icon>
+            <span>{{ T.F.METRIC.CMP.NOT_STARTED | translate }}</span>
+          </div>
+        } @else if (pp.daysElapsed === 0) {
+          <div class="deadline-status just-started">
+            <mat-icon>today</mat-icon>
+            <span>
+              {{
+                T.F.METRIC.CMP.DAILY_TARGET
+                  | translate
+                    : {
+                        pace: pp.requiredPace | number: '1.0-1',
+                        done: pp.doneTasks,
+                        remaining: pp.remainingTasks,
+                      }
+              }}
+            </span>
+          </div>
+        } @else {
+          <div
+            class="deadline-status"
+            [class.ahead]="pp.isAhead"
+            [class.behind]="!pp.isAhead"
+          >
+            @if (pp.isAhead) {
+              <mat-icon>check_circle</mat-icon>
+              <span>{{ T.F.METRIC.CMP.AHEAD_SCHEDULE | translate }}</span>
+            } @else {
+              <mat-icon>warning</mat-icon>
+              <span>{{ T.F.METRIC.CMP.BEHIND_SCHEDULE | translate }}</span>
+            }
+          </div>
+        }
+
+        @if (pp.historicalPace > 0) {
+          <p class="prediction">
+            {{ T.F.METRIC.CMP.PREDICTED_END | translate: { date: pp.predictedEndDate } }}
+          </p>
+        } @else if (pp.requiredPace > 0) {
+          <p class="prediction no-data">
+            {{ T.F.METRIC.CMP.START_WORKING | translate }}
+          </p>
+        }
+        @if (pp.totalTasks - pp.doneTasks > 0) {
+          <p class="remaining-summary">
+            {{
+              T.F.METRIC.CMP.REMAINING_TASKS
+                | translate
+                  : {
+                      count: pp.totalTasks - pp.doneTasks,
+                      pace: pp.requiredPace | number: '1.1-1',
+                    }
+            }}
+          </p>
+        }
+        @if (simpleMetrics()?.workBlocks && simpleMetrics()?.workBlocks.length > 0) {
+          <div class="timeline-section">
+            <div
+              class="timeline-header"
+              (click)="timelineExpanded.set(!timelineExpanded())"
+            >
+              <mat-icon>{{
+                timelineExpanded() ? 'expand_more' : 'chevron_right'
+              }}</mat-icon>
+              <span>{{ T.F.METRIC.CMP.PROJECT_TIMELINE | translate }}</span>
+              <span class="timeline-summary"
+                >{{ simpleMetrics()?.workBlocks.length }}
+                {{ T.F.METRIC.CMP.PERIODS | translate }}</span
+              >
+            </div>
+            @if (timelineExpanded()) {
+              <div class="timeline-content">
+                @for (
+                  block of simpleMetrics()?.workBlocks;
+                  track block.start;
+                  let idx = $index
+                ) {
+                  @if (block.isPause) {
+                    <div class="timeline-pause">
+                      <div class="timeline-line pause"></div>
+                      <div class="timeline-dot pause-dot">
+                        <mat-icon>pause_circle</mat-icon>
+                      </div>
+                      <div class="timeline-card pause-card">
+                        <span class="tl-label">{{
+                          T.F.METRIC.CMP.PAUSE | translate
+                        }}</span>
+                        <span class="tl-dates">{{ block.start }} → {{ block.end }}</span>
+                        <span class="tl-duration"
+                          >{{ block.days }} {{ T.F.METRIC.CMP.DAYS | translate }}</span
+                        >
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="timeline-work">
+                      <div class="timeline-line work"></div>
+                      <div class="timeline-dot work-dot">
+                        <mat-icon>play_arrow</mat-icon>
+                      </div>
+                      <div class="timeline-card work-card">
+                        <span class="tl-label"
+                          >{{ T.F.METRIC.CMP.WORK_PERIOD | translate }} #{{
+                            idx + 1
+                          }}</span
+                        >
+                        <span class="tl-dates">{{ block.start }} → {{ block.end }}</span>
+                        <span class="tl-duration"
+                          >{{ block.days }} {{ T.F.METRIC.CMP.DAYS | translate }}</span
+                        >
+                      </div>
+                    </div>
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
+      } @else {
+        <div class="deadline-unconfigured">
+          <p>{{ T.F.METRIC.CMP.SET_DEADLINE_PROMPT | translate }}</p>
+          <div class="deadline-edit-row">
+            <mat-form-field
+              appearance="outline"
+              subscriptSizing="dynamic"
+            >
+              <mat-label>{{ T.F.METRIC.CMP.START_DATE | translate }}</mat-label>
+              <input
+                matInput
+                [matDatepicker]="startPicker"
+                [(ngModel)]="editStartDateValue"
+              />
+              <mat-datepicker-toggle
+                matSuffix
+                [for]="startPicker"
+              />
+              <mat-datepicker #startPicker />
+            </mat-form-field>
+          </div>
+          <div class="deadline-edit-row">
+            <mat-form-field
+              appearance="outline"
+              subscriptSizing="dynamic"
+            >
+              <mat-label>{{ T.F.METRIC.CMP.DEADLINE_DATE | translate }}</mat-label>
+              <input
+                matInput
+                [matDatepicker]="deadlinePicker3"
+                [(ngModel)]="editDeadlineValue"
+              />
+              <mat-datepicker-toggle
+                matSuffix
+                [for]="deadlinePicker3"
+              />
+              <mat-datepicker #deadlinePicker3 />
+            </mat-form-field>
+            <span>or</span>
+            <mat-form-field
+              appearance="outline"
+              subscriptSizing="dynamic"
+            >
+              <mat-label>{{ T.F.METRIC.CMP.DURATION_DAYS | translate }}</mat-label>
+              <input
+                matInput
+                type="number"
+                [(ngModel)]="editDurationValue"
+                placeholder="56"
+              />
+            </mat-form-field>
+          </div>
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="saveProjectDates()"
+          >
+            {{ T.F.METRIC.CMP.SAVE_DEADLINE | translate }}
+          </button>
+        </div>
+      }
+    </section>
+  }
 
   @if (!metricService.hasData()) {
     <p class="no-data-msg">
