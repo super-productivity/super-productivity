@@ -6,6 +6,17 @@ import { BreakNr, BreakTime } from '../work-context/work-context.model';
 
 const SIGNIFICANT_PAUSE_THRESHOLD = 1;
 
+const parseDateStr = (str: string): { year: number; month: number; day: number } => {
+  const parts = str.split('-');
+  return { year: +parts[0], month: +parts[1], day: +parts[2] };
+};
+
+const addDays = (str: string, n: number): string => {
+  const { year, month, day } = parseDateStr(str);
+  const d = new Date(year, month - 1, day + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const calculateTimeline = (
   dates: string[],
 ): {
@@ -35,12 +46,9 @@ const calculateTimeline = (
         (next.getTime() - current.getTime()) / (1000 * 60 * 60 * 24),
       );
       if (diffDays > SIGNIFICANT_PAUSE_THRESHOLD) {
-        const oneDay = 1000 * 60 * 60 * 24;
-        const pauseStartTs = current.getTime() + oneDay;
-        const pauseEndTs = next.getTime() - oneDay;
         result.pauses.push({
-          start: getDbDateStr(new Date(pauseStartTs)),
-          end: getDbDateStr(new Date(pauseEndTs)),
+          start: addDays(sortedDates[i], 1),
+          end: addDays(sortedDates[i + 1], -1),
           duration: diffDays - 1,
         });
       }
