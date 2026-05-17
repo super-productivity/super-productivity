@@ -106,6 +106,7 @@ import { isTaskOutsideWorkHours } from '../util/is-task-outside-work-hours';
     '[class.isDone]': 'task().isDone',
     '[class.isCurrent]': 'isCurrent()',
     '[class.isSelected]': 'isSelected()',
+    '[class.hasVisibleTimeProgress]': 'isCurrent() && progress() > 1',
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
     '[class.hasTimeConflict]': 'hasTimeConflict()',
@@ -249,6 +250,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   progress = computed<number>(() => {
     const t = this.task();
     return (t.timeEstimate && (t.timeSpent / t.timeEstimate) * 100) || 0;
+  });
+
+  subTaskProgress = computed<number>(() => {
+    const subTasks = this.task().subTasks;
+    if (!subTasks?.length) {
+      return 0;
+    }
+
+    const doneSubTasksCount = subTasks.filter((subTask) => subTask.isDone).length;
+    return (doneSubTasksCount / subTasks.length) * 100;
   });
 
   isShowRemoveFromToday = computed(() => {
