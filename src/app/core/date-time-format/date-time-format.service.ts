@@ -91,12 +91,28 @@ export class DateTimeFormatService {
    * // For en-GB locale
    * formatDate(new Date(2000, 11, 31), 'en-GB'); // 31/12/2000
    */
-  formatDate(date: Date, locale: DateTimeLocale = this.currentLocale()): string {
-    const formatter = new Intl.DateTimeFormat(locale, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
+  formatDate(
+    date: Date,
+    locale: DateTimeLocale = this.currentLocale(),
+    formatOptions?: 'long',
+  ): string {
+    let format: Intl.DateTimeFormatOptions = {};
+
+    if (formatOptions === 'long') {
+      format = {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: '2-digit',
+      };
+    } else {
+      format = {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      };
+    }
+    const formatter = new Intl.DateTimeFormat(locale, format);
 
     return formatter.format(date);
   }
