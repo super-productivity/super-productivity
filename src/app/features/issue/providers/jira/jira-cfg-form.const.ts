@@ -114,6 +114,14 @@ export const JIRA_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderJira> = {
       props: { label: T.G.ADVANCED_CFG },
       fieldGroup: [
         {
+          key: 'altPublicLinkHost',
+          type: 'input',
+          templateOptions: {
+            type: 'url',
+            label: T.F.JIRA.FORM_CRED.ALT_PUBLIC_LINK_HOST,
+          },
+        },
+        {
           key: 'isAllowSelfSignedCertificate',
           type: 'checkbox',
           templateOptions: {
@@ -126,6 +134,13 @@ export const JIRA_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderJira> = {
           templateOptions: {
             required: false,
             label: T.F.JIRA.FORM_CRED.USE_PAT,
+          },
+        },
+        {
+          key: 'allowFetchFallback',
+          type: 'checkbox',
+          templateOptions: {
+            label: T.F.JIRA.FORM_CRED.ALLOW_FETCH_FALLBACK,
           },
         },
 
