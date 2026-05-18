@@ -14,6 +14,7 @@
         <button
           mat-icon-button
           matSuffix
+          [attr.aria-label]="T.G.CLEAR | translate"
           (click)="searchTerm.set('')"
         >
           <mat-icon>close</mat-icon>
@@ -31,6 +32,7 @@
           <li class="project-row">
             <mat-icon
               class="project-icon"
+              aria-hidden="true"
               [style.color]="project.theme?.primary || null"
               >{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon
             >
@@ -38,6 +40,7 @@
             <button
               mat-icon-button
               [matTooltip]="T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE | translate"
+              [attr.aria-label]="T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE | translate"
               (click)="unarchive(project.id)"
             >
               <mat-icon>unarchive</mat-icon>
