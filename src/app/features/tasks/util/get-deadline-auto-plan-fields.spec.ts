@@ -78,6 +78,7 @@ describe('getDeadlineAutoPlanDecision', () => {
       shouldAutoPlan: true,
       shouldUpdateDueDay: true,
       shouldClearDueWithTime: false,
+      shouldClearRemindAt: false,
     });
   });
 
@@ -92,10 +93,11 @@ describe('getDeadlineAutoPlanDecision', () => {
       shouldAutoPlan: true,
       shouldUpdateDueDay: false,
       shouldClearDueWithTime: false,
+      shouldClearRemindAt: false,
     });
   });
 
-  it('should move overdue timed tasks to dueDay today and clear dueWithTime', () => {
+  it('should move overdue timed tasks to dueDay today and clear dueWithTime + remindAt', () => {
     expect(
       getDeadlineAutoPlanDecision(
         createTask({ dueWithTime: new Date(2026, 0, 4, 12).getTime() }),
@@ -106,6 +108,7 @@ describe('getDeadlineAutoPlanDecision', () => {
       shouldAutoPlan: true,
       shouldUpdateDueDay: true,
       shouldClearDueWithTime: true,
+      shouldClearRemindAt: true,
     });
   });
 
@@ -120,6 +123,7 @@ describe('getDeadlineAutoPlanDecision', () => {
       shouldAutoPlan: false,
       shouldUpdateDueDay: false,
       shouldClearDueWithTime: false,
+      shouldClearRemindAt: false,
     });
   });
 
@@ -135,6 +139,7 @@ describe('getDeadlineAutoPlanDecision', () => {
       shouldAutoPlan: false,
       shouldUpdateDueDay: false,
       shouldClearDueWithTime: false,
+      shouldClearRemindAt: false,
     });
   });
 });

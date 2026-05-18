@@ -53,7 +53,11 @@ const autoPlanTaskDueToDeadline = (
 
   let updatedState = state;
 
-  if (decision.shouldUpdateDueDay || decision.shouldClearDueWithTime) {
+  if (
+    decision.shouldUpdateDueDay ||
+    decision.shouldClearDueWithTime ||
+    decision.shouldClearRemindAt
+  ) {
     updatedState = {
       ...updatedState,
       [TASK_FEATURE_NAME]: taskAdapter.updateOne(
@@ -62,6 +66,7 @@ const autoPlanTaskDueToDeadline = (
           changes: {
             ...(decision.shouldUpdateDueDay ? { dueDay: context.today } : {}),
             ...(decision.shouldClearDueWithTime ? { dueWithTime: undefined } : {}),
+            ...(decision.shouldClearRemindAt ? { remindAt: undefined } : {}),
           },
         },
         updatedState[TASK_FEATURE_NAME],

@@ -334,13 +334,13 @@ describe('taskSharedDeadlineMetaReducer', () => {
         expect(todayTag.taskIds).toContain('task1');
       });
 
-      it('should clear dueWithTime, set dueDay, and add to Today if overdue', () => {
+      it('should clear dueWithTime, remindAt, set dueDay, and add to Today if overdue', () => {
         const testState = createStateWithExistingTasks(['task1'], [], [], []);
         const pastTimestamp = new Date(2024, 0, 1, 10).getTime();
         testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
           id: 'task1',
           dueWithTime: pastTimestamp,
-          remindAt: pastTimestamp, // should preserve remindAt
+          remindAt: pastTimestamp, // orphaned once dueWithTime cleared -> must clear
         });
 
         const action = TaskSharedActions.setDeadline({
@@ -356,7 +356,7 @@ describe('taskSharedDeadlineMetaReducer', () => {
 
         expect(updatedTask.dueDay).toBe(todayStr);
         expect(updatedTask.dueWithTime).toBeUndefined();
-        expect(updatedTask.remindAt).toBe(pastTimestamp);
+        expect(updatedTask.remindAt).toBeUndefined();
         expect(todayTag.taskIds).toContain('task1');
       });
 
