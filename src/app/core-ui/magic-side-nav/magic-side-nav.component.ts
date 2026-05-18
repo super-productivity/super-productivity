@@ -12,6 +12,7 @@ import {
   OnDestroy,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { NavigationStart, Router, RouterModule } from '@angular/router';
 import { NavItemComponent } from './nav-item/nav-item.component';
@@ -172,6 +173,13 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
         window.setTimeout(() => {
           this.toggleNavFocus();
         });
+      }
+    });
+
+    effect(() => {
+      const trigger = this._layoutService.toggleSideNavModeTrigger();
+      if (trigger > 0 && !this.isMobile()) {
+        untracked(() => this.toggleSideNavMode());
       }
     });
 
