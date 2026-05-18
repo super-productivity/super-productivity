@@ -23,6 +23,8 @@ export const TaskSharedActions = createActionGroup({
       isAddToBacklog: boolean;
       isAddToBottom: boolean;
       isIgnoreShortSyntax?: boolean;
+      autoPlanToday?: string;
+      autoPlanStartOfNextDayDiffMs?: number;
     }) => ({
       ...taskProps,
       meta: {
@@ -183,6 +185,8 @@ export const TaskSharedActions = createActionGroup({
       deadlineDay?: string;
       deadlineWithTime?: number;
       deadlineRemindAt?: number;
+      autoPlanToday?: string;
+      autoPlanStartOfNextDayDiffMs?: number;
     }) => ({
       ...taskProps,
       meta: {
@@ -210,6 +214,21 @@ export const TaskSharedActions = createActionGroup({
         entityType: 'TASK',
         entityId: taskProps.taskId,
         opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
+    planDeadlineTasksForToday: (taskProps: {
+      taskIds: string[];
+      today: string;
+      startOfNextDayDiffMs: number;
+    }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityIds: taskProps.taskIds,
+        opType: OpType.Update,
+        isBulk: true,
       } satisfies PersistentActionMeta,
     }),
 

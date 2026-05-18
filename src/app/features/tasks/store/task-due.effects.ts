@@ -6,7 +6,6 @@ import {
   distinctUntilChanged,
   filter,
   first,
-  map,
   switchMap,
   withLatestFrom,
 } from 'rxjs/operators';
@@ -35,8 +34,6 @@ import { environment } from '../../../../environments/environment';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
-import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { DateService } from '../../../core/date/date.service';
 
 export const getOverdueIdsInTodayOrder = (
   overdue: ReadonlyArray<{ id: string }>,
@@ -54,8 +51,6 @@ export class TaskDueEffects {
   private _addTasksForTomorrowService = inject(AddTasksForTomorrowService);
   private _syncTriggerService = inject(SyncTriggerService);
   private _hydrationState = inject(HydrationStateService);
-  private _actions$ = inject(LOCAL_ACTIONS);
-  private _dateService = inject(DateService);
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   // Uses afterInitialSyncDoneStrict$ to ensure sync has completed before creating repeat tasks,
@@ -191,38 +186,39 @@ export class TaskDueEffects {
             return combineLatest([
               this._store$.select(selectTasksDueForDay, { day: todayStr }),
               this._store$.select(selectTasksWithDueTimeForRange, todayRange),
-              // Also include deadline tasks for today (both whole-day and timed).
-              // Tasks are added to Today automatically so users never miss a deadline.
               this._store$.select(selectTasksWithDeadlineDayForDay, { day: todayStr }),
               this._store$.select(selectTasksWithDeadlineTimeForRange, todayRange),
             ]).pipe(
               first(),
               withLatestFrom(this._store$.select(selectTodayTaskIds)),
-              map(
+              concatMap(
                 ([
-                  [
-                    tasksDueByDay,
-                    tasksDueByTime,
-                    tasksWithDeadlineDay,
-                    tasksWithDeadlineTime,
-                  ],
+                  [tasksDueByDay, tasksDueByTime, deadlineDay, deadlineTime],
                   todayTaskIds,
                 ]) => {
-                  // Merge all four lists, deduplicating by ID.
+                  // Merge both lists, deduplicating by ID.
                   // Tasks with dueWithTime set have dueDay cleared (mutual exclusivity),
-                  // so we must check both due selectors to catch all scheduled tasks.
-                  // Likewise deadlineWithTime and deadlineDay are mutually exclusive.
+                  // so we must check both selectors to catch all tasks due today.
                   const seenIds = new Set<string>();
-                  const allTasksDueToday = [
-                    ...tasksDueByDay,
-                    ...tasksDueByTime,
-                    ...tasksWithDeadlineDay,
-                    ...tasksWithDeadlineTime,
-                  ].filter((task) => {
-                    if (seenIds.has(task.id)) return false;
-                    seenIds.add(task.id);
-                    return true;
-                  });
+                  const allTasksDueToday = [...tasksDueByDay, ...tasksDueByTime].filter(
+                    (task) => {
+                      if (seenIds.has(task.id)) return false;
+                      seenIds.add(task.id);
+                      return true;
+                    },
+                  );
+                  const dueTaskIds = new Set(allTasksDueToday.map((task) => task.id));
+
+                  const seenDeadlineIds = new Set<string>();
+                  const allDeadlineTasksToday = [...deadlineDay, ...deadlineTime].filter(
+                    (task) => {
+                      if (dueTaskIds.has(task.id) || seenDeadlineIds.has(task.id)) {
+                        return false;
+                      }
+                      seenDeadlineIds.add(task.id);
+                      return true;
+                    },
+                  );
 
                   const missingTaskIds = allTasksDueToday
                     .filter((task) => !todayTaskIds.includes(task.id))
@@ -234,40 +230,70 @@ export class TaskDueEffects {
                     )
                     .map((task) => task.id);
 
+                  const missingDeadlineTaskIds = allDeadlineTasksToday
+                    .filter((task) => !todayTaskIds.includes(task.id))
+                    .filter(
+                      (task) => !task.parentId || !todayTaskIds.includes(task.parentId),
+                    )
+                    .sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId))
+                    .map((task) => task.id);
+
                   // Debug log to investigate repeated operations
                   TaskLog.log('[TaskDueEffects] ensureTasksDueTodayInTodayTag check:', {
                     tasksDueByDayCount: tasksDueByDay.length,
                     tasksDueByTimeCount: tasksDueByTime.length,
-                    tasksWithDeadlineDayCount: tasksWithDeadlineDay.length,
-                    tasksWithDeadlineTimeCount: tasksWithDeadlineTime.length,
+                    tasksWithDeadlineDayCount: deadlineDay.length,
+                    tasksWithDeadlineTimeCount: deadlineTime.length,
                     tasksDueTodayIds: allTasksDueToday.map((t) => t.id),
+                    deadlineTasksTodayIds: allDeadlineTasksToday.map((t) => t.id),
                     todayTaskIdsCount: todayTaskIds.length,
                     missingTaskIds,
-                    willDispatch: missingTaskIds.length > 0,
+                    missingDeadlineTaskIds,
+                    willDispatch:
+                      missingTaskIds.length > 0 || missingDeadlineTaskIds.length > 0,
                   });
 
-                  if (!environment.production && missingTaskIds.length > 0) {
+                  if (
+                    !environment.production &&
+                    (missingTaskIds.length > 0 || missingDeadlineTaskIds.length > 0)
+                  ) {
                     TaskLog.err(
-                      '[TaskDueEffects] Found tasks due today missing from TODAY tag:',
+                      '[TaskDueEffects] Found due/deadline tasks missing from TODAY tag:',
                       {
                         tasksDueToday: allTasksDueToday.length,
+                        deadlineTasksToday: allDeadlineTasksToday.length,
                         todayTaskIds: todayTaskIds.length,
                         missingTaskIds,
+                        missingDeadlineTaskIds,
                       },
                     );
                   }
 
-                  return missingTaskIds.length > 0
-                    ? TaskSharedActions.planTasksForToday({
-                        taskIds: missingTaskIds,
-                        today: todayStr,
-                        startOfNextDayDiffMs,
-                        isSkipRemoveReminder: true,
-                      })
-                    : null;
+                  const actions = [
+                    ...(missingTaskIds.length > 0
+                      ? [
+                          TaskSharedActions.planTasksForToday({
+                            taskIds: missingTaskIds,
+                            today: todayStr,
+                            startOfNextDayDiffMs,
+                            isSkipRemoveReminder: true,
+                          }),
+                        ]
+                      : []),
+                    ...(missingDeadlineTaskIds.length > 0
+                      ? [
+                          TaskSharedActions.planDeadlineTasksForToday({
+                            taskIds: missingDeadlineTaskIds,
+                            today: todayStr,
+                            startOfNextDayDiffMs,
+                          }),
+                        ]
+                      : []),
+                  ];
+
+                  return actions.length > 0 ? of(...actions) : EMPTY;
                 },
               ),
-              filter((action) => !!action),
             );
           }),
         ),

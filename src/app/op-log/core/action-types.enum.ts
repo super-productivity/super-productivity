@@ -73,6 +73,7 @@ export enum ActionType {
   TASK_SHARED_SET_DEADLINE = '[Task Shared] setDeadline',
   TASK_SHARED_REMOVE_DEADLINE = '[Task Shared] removeDeadline',
   TASK_SHARED_CLEAR_DEADLINE_REMINDER = '[Task Shared] clearDeadlineReminder',
+  TASK_SHARED_PLAN_DEADLINE_FOR_TODAY = '[Task Shared] planDeadlineTasksForToday',
 
   // IssueProvider actions (I)
   ISSUE_PROVIDER_ADD = '[IssueProvider/API] Add IssueProvider',

@@ -32,6 +32,7 @@ import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.u
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
+import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 import {
   selectAllTaskRepeatCfgs,
   selectTaskRepeatCfgById,
@@ -293,6 +294,11 @@ export class TaskRepeatCfgService {
           : (this._workContextService.activeWorkContextId as string),
         isAddToBacklog: false,
         isAddToBottom,
+        ...getDeadlineAutoPlanFields(
+          this._dateService,
+          taskWithTargetDates.deadlineDay,
+          taskWithTargetDates.deadlineWithTime,
+        ),
       }),
       updateTaskRepeatCfg({
         taskRepeatCfg: {

@@ -38,6 +38,7 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { DateService } from '../../../core/date/date.service';
+import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
@@ -230,6 +231,11 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
           ...(task.deadlineDay ? { deadlineDay: task.deadlineDay } : {}),
           ...(task.deadlineWithTime ? { deadlineWithTime: task.deadlineWithTime } : {}),
           deadlineRemindAt: newRemindAt,
+          ...getDeadlineAutoPlanFields(
+            this._dateService,
+            task.deadlineDay,
+            task.deadlineWithTime,
+          ),
         }),
       );
     } else {

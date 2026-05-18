@@ -47,6 +47,8 @@ import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { addNote } from '../note/store/note.actions';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { DateService } from '../../core/date/date.service';
+import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 
 @Injectable({
   providedIn: 'root',
@@ -59,6 +61,7 @@ export class ProjectService {
   private readonly _taskService = inject(TaskService);
   private readonly _translate = inject(TranslateService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _dateService = inject(DateService);
 
   list$: Observable<Project[]> = this._store$.pipe(select(selectUnarchivedProjects));
   list = toSignal(this.list$, { initialValue: [] });
@@ -344,6 +347,11 @@ export class ProjectService {
           workContextType: WorkContextType.PROJECT,
           isAddToBacklog: isBacklog,
           isAddToBottom: true,
+          ...getDeadlineAutoPlanFields(
+            this._dateService,
+            newParentTask.deadlineDay,
+            newParentTask.deadlineWithTime,
+          ),
         }),
       );
 

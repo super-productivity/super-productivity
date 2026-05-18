@@ -41,6 +41,8 @@ import {
 import { Log } from '../../core/log';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../android/android-interface';
+import { DateService } from '../../core/date/date.service';
+import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 
 const SNOOZE_10M_MS = 10 * 60 * 1000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
@@ -62,6 +64,7 @@ export class ReminderModule {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _capacitorReminderService = inject(CapacitorReminderService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
+  private readonly _dateService = inject(DateService);
 
   constructor() {
     // Initialize reminder service (runs migration in background)
@@ -285,6 +288,11 @@ export class ReminderModule {
                   ? { deadlineDay: task.deadlineDay }
                   : {}),
               deadlineRemindAt: newRemindAt,
+              ...getDeadlineAutoPlanFields(
+                this._dateService,
+                task.deadlineDay,
+                task.deadlineWithTime,
+              ),
             }),
           );
         } else {

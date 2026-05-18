@@ -98,6 +98,7 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
+import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 import { TaskLog } from '../../core/log';
 import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
@@ -411,6 +412,11 @@ export class TaskService {
         workContextType,
         isAddToBacklog,
         isAddToBottom,
+        ...getDeadlineAutoPlanFields(
+          this._dateService,
+          task.deadlineDay,
+          task.deadlineWithTime,
+        ),
       }),
     );
     return task && task.id;
