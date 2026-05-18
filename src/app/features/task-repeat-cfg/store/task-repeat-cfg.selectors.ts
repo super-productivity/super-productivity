@@ -17,6 +17,14 @@ export const selectAllTaskRepeatCfgs = createSelector(
   selectTaskRepeatCfgFeatureState,
   selectAll,
 );
+export const selectActiveTaskRepeatCfgs = createSelector(
+  selectAllTaskRepeatCfgs,
+  selectArchivedProjectIds,
+  (cfgs: TaskRepeatCfg[], archivedIds: Set<string>): TaskRepeatCfg[] =>
+    archivedIds.size === 0
+      ? cfgs
+      : cfgs.filter((c) => !c.projectId || !archivedIds.has(c.projectId)),
+);
 export const selectTaskRepeatCfgById = createSelector(
   selectTaskRepeatCfgFeatureState,
   (state: TaskRepeatCfgState, props: { id: string }): TaskRepeatCfg => {
@@ -28,13 +36,13 @@ export const selectTaskRepeatCfgById = createSelector(
   },
 );
 export const selectTaskRepeatCfgsWithStartTime = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (taskRepeatCfgs: TaskRepeatCfg[]): TaskRepeatCfg[] => {
     return taskRepeatCfgs.filter((cfg) => !!cfg.startTime);
   },
 );
 export const selectTaskRepeatCfgsWithAndWithoutStartTime = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (
     taskRepeatCfgs: TaskRepeatCfg[],
   ): {
@@ -54,34 +62,31 @@ export const selectTaskRepeatCfgsWithAndWithoutStartTime = createSelector(
   },
 );
 export const selectTaskRepeatCfgsSortedByTitleAndProject = createSelector(
-  selectAllTaskRepeatCfgs,
-  selectArchivedProjectIds,
-  (taskRepeatCfgs: TaskRepeatCfg[], archivedProjectIds: Set<string>): TaskRepeatCfg[] => {
-    return [...taskRepeatCfgs]
-      .filter((cfg) => !cfg.projectId || !archivedProjectIds.has(cfg.projectId))
-      .sort((a, b) => {
-        if (a.projectId !== b.projectId) {
-          if (a.projectId === null) {
-            return -1;
-          }
-          if (b.projectId === null) {
-            return 1;
-          }
-          if (a.projectId < b.projectId) {
-            return -1;
-          }
-          if (a.projectId > b.projectId) {
-            return 1;
-          }
+  selectActiveTaskRepeatCfgs,
+  (taskRepeatCfgs: TaskRepeatCfg[]): TaskRepeatCfg[] => {
+    return [...taskRepeatCfgs].sort((a, b) => {
+      if (a.projectId !== b.projectId) {
+        if (a.projectId === null) {
+          return -1;
         }
-        return (a.title || '').localeCompare(b.title || '');
-      });
+        if (b.projectId === null) {
+          return 1;
+        }
+        if (a.projectId < b.projectId) {
+          return -1;
+        }
+        if (a.projectId > b.projectId) {
+          return 1;
+        }
+      }
+      return (a.title || '').localeCompare(b.title || '');
+    });
   },
 );
 // Returns task repeat configs where the calculated due date matches the specified day
 // Note: This includes overdue tasks if their calculated due date happens to be the specified day
 export const selectTaskRepeatCfgsForExactDay = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (
     taskRepeatCfgs: TaskRepeatCfg[],
     { dayDate }: { dayDate: number },
@@ -121,11 +126,9 @@ export const selectTaskRepeatCfgsForExactDay = createSelector(
 // Returns all task repeat configs that need task creation up to the specified day
 // This includes all overdue tasks regardless of their specific due date
 export const selectAllUnprocessedTaskRepeatCfgs = createSelector(
-  selectAllTaskRepeatCfgs,
-  selectArchivedProjectIds,
+  selectActiveTaskRepeatCfgs,
   (
     taskRepeatCfgs: TaskRepeatCfg[],
-    archivedProjectIds: Set<string>,
     { dayDate }: { dayDate: number },
   ): TaskRepeatCfg[] => {
     const dateToCheckTimestamp = dayDate;
@@ -135,11 +138,6 @@ export const selectAllUnprocessedTaskRepeatCfgs = createSelector(
     return (
       taskRepeatCfgs &&
       taskRepeatCfgs.filter((taskRepeatCfg: TaskRepeatCfg) => {
-        // Skip repeat configs belonging to archived projects
-        if (taskRepeatCfg.projectId && archivedProjectIds.has(taskRepeatCfg.projectId)) {
-          return false;
-        }
-
         // Skip paused repeat configs - they should not generate task instances
         if (taskRepeatCfg.isPaused) {
           return false;
@@ -174,7 +172,7 @@ export const selectTaskRepeatCfgsByProjectId = createSelector(
   },
 );
 export const selectTaskRepeatCfgsByTagId = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (taskRepeatCfgs: TaskRepeatCfg[], props: { tagId: string }): TaskRepeatCfg[] => {
     return taskRepeatCfgs
       .filter((cfg) => cfg.tagIds?.includes(props.tagId))

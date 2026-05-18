@@ -6,6 +6,7 @@ import {
   selectAllUnprocessedTaskRepeatCfgs,
   selectTaskRepeatCfgsForExactDay,
   selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   selectTaskRepeatCfgById,
   selectTaskRepeatCfgByIdAllowUndefined,
   selectTaskRepeatCfgsWithStartTime,
@@ -42,8 +43,6 @@ const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
 const FAKE_MONDAY_THE_10TH = new Date(2022, 0, 10).getTime();
-
-const NO_ARCHIVED_PROJECTS = new Set<string>();
 
 const dummyRepeatable = (id: string, fields: Partial<TaskRepeatCfg>): TaskRepeatCfg => ({
   ...DUMMY_REPEATABLE_TASK,
@@ -453,7 +452,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
           lastTaskCreationDay: '2024-06-26',
         }),
       ],
-      NO_ARCHIVED_PROJECTS,
       {
         dayDate: dateStrToUtcDate('2024-07-16').getTime(),
       },
@@ -473,7 +471,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
             startDate: '2022-01-10',
           }),
         ],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: dateStrToUtcDate('2025-11-11').getTime(),
         },
@@ -502,7 +499,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
               startDate: '2022-01-10',
             }),
           ],
-          NO_ARCHIVED_PROJECTS,
           {
             dayDate: new Date(dayDateStr).getTime(),
           },
@@ -532,7 +528,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
               startDate: '2022-01-10',
             }),
           ],
-          NO_ARCHIVED_PROJECTS,
           {
             dayDate: new Date(dayDateStr).getTime(),
           },
@@ -560,7 +555,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
               remindAt: TaskReminderOptionId.AtStart,
             }),
           ],
-          NO_ARCHIVED_PROJECTS,
           {
             dayDate: new Date(dayDateStr).getTime(),
           },
@@ -581,7 +575,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
             monday: true,
           }),
         ],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: FAKE_MONDAY_THE_10TH,
         },
@@ -600,7 +593,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
             monday: true,
           }),
         ],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: dateStrToUtcDate('2022-02-07').getTime(),
         },
@@ -618,7 +610,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
             repeatCycle: 'WEEKLY',
           }),
         ],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: FAKE_MONDAY_THE_10TH,
         },
@@ -632,7 +623,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
     it('should return cfg for startDate today', () => {
       const result = selectAllUnprocessedTaskRepeatCfgs.projector(
         [dummyRepeatable('R1', { repeatCycle: 'MONTHLY', startDate: '2022-01-10' })],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: FAKE_MONDAY_THE_10TH,
         },
@@ -644,7 +634,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
     it('should return cfg for startDate in the past', () => {
       const result = selectAllUnprocessedTaskRepeatCfgs.projector(
         [dummyRepeatable('R1', { repeatCycle: 'MONTHLY', startDate: '2022-01-10' })],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: dateStrToUtcDate('2022-02-10').getTime(),
         },
@@ -656,7 +645,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
     it('should NOT return cfg for future startDate', () => {
       const result = selectAllUnprocessedTaskRepeatCfgs.projector(
         [dummyRepeatable('R1', { repeatCycle: 'MONTHLY', startDate: '2022-02-10' })],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: FAKE_MONDAY_THE_10TH,
         },
@@ -674,7 +662,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
             repeatEvery: 2,
           }),
         ],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: dateStrToUtcDate('2022-03-10').getTime(),
         },
@@ -693,7 +680,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
             lastTaskCreationDay: '2022-01-10',
           }),
         ],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: dateStrToUtcDate('2022-03-10').getTime(),
         },
@@ -707,7 +693,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
     it('should return cfg for startDate today', () => {
       const result = selectAllUnprocessedTaskRepeatCfgs.projector(
         [dummyRepeatable('R1', { repeatCycle: 'YEARLY', startDate: '2022-01-10' })],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: FAKE_MONDAY_THE_10TH,
         },
@@ -719,7 +704,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
     it('should return cfg for startDate in the past', () => {
       const result = selectAllUnprocessedTaskRepeatCfgs.projector(
         [dummyRepeatable('R1', { repeatCycle: 'YEARLY', startDate: '2021-01-10' })],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: dateStrToUtcDate('2022-01-10').getTime(),
         },
@@ -731,7 +715,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
     it('should NOT return cfg for future startDate', () => {
       const result = selectAllUnprocessedTaskRepeatCfgs.projector(
         [dummyRepeatable('R1', { repeatCycle: 'YEARLY', startDate: '2023-01-10' })],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: FAKE_MONDAY_THE_10TH,
         },
@@ -749,7 +732,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
             repeatEvery: 2,
           }),
         ],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: dateStrToUtcDate('2024-01-10').getTime(),
         },
@@ -768,7 +750,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
             repeatEvery: 2,
           }),
         ],
-        NO_ARCHIVED_PROJECTS,
         {
           dayDate: dateStrToUtcDate('2023-01-10').getTime(),
         },
@@ -928,10 +909,13 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
     const cfg4 = dummyRepeatable('R4', { title: 'D Task', projectId: null });
     const cfg5 = dummyRepeatable('R5', { title: 'E Task', projectId: 'proj1' });
 
-    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector(
-      [cfg1, cfg2, cfg3, cfg4, cfg5],
-      NO_ARCHIVED_PROJECTS,
-    );
+    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector([
+      cfg1,
+      cfg2,
+      cfg3,
+      cfg4,
+      cfg5,
+    ]);
 
     // Expected order: null projects first (sorted by title), then by project ID (sorted by title within project)
     expect(result).toEqual([
@@ -947,10 +931,7 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
     const cfg1 = dummyRepeatable('R1', { title: '', projectId: null });
     const cfg2 = dummyRepeatable('R2', { title: 'A Task', projectId: null });
 
-    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector(
-      [cfg1, cfg2],
-      NO_ARCHIVED_PROJECTS,
-    );
+    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector([cfg1, cfg2]);
 
     expect(result).toEqual([cfg1, cfg2]);
   });
@@ -959,15 +940,14 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
     const cfg1 = dummyRepeatable('R1', { title: 'Same Task', projectId: 'proj1' });
     const cfg2 = dummyRepeatable('R2', { title: 'Same Task', projectId: 'proj1' });
 
-    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector(
-      [cfg1, cfg2],
-      NO_ARCHIVED_PROJECTS,
-    );
+    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector([cfg1, cfg2]);
 
     // Order should be preserved when title and project are the same
     expect(result).toEqual([cfg1, cfg2]);
   });
+});
 
+describe('selectActiveTaskRepeatCfgs', () => {
   it('should exclude repeat configs belonging to archived projects', () => {
     const cfg1 = dummyRepeatable('R1', { title: 'Active Task', projectId: 'proj1' });
     const cfg2 = dummyRepeatable('R2', {
@@ -976,7 +956,7 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
     });
     const cfg3 = dummyRepeatable('R3', { title: 'No Project Task', projectId: null });
 
-    const result = selectTaskRepeatCfgsSortedByTitleAndProject.projector(
+    const result = selectActiveTaskRepeatCfgs.projector(
       [cfg1, cfg2, cfg3],
       new Set<string>(['archivedProj']),
     );
@@ -984,6 +964,14 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
     expect(result).not.toContain(cfg2);
     expect(result).toContain(cfg1);
     expect(result).toContain(cfg3);
+  });
+
+  it('should return all cfgs when no archived projects', () => {
+    const cfg1 = dummyRepeatable('R1', { projectId: 'proj1' });
+    const cfg2 = dummyRepeatable('R2', { projectId: 'proj2' });
+
+    const result = selectActiveTaskRepeatCfgs.projector([cfg1, cfg2], new Set<string>());
+    expect(result).toEqual([cfg1, cfg2]);
   });
 });
 
@@ -1165,7 +1153,6 @@ describe('isPaused filter for selectAllUnprocessedTaskRepeatCfgs', () => {
           isPaused: true,
         }),
       ],
-      NO_ARCHIVED_PROJECTS,
       { dayDate: FAKE_MONDAY_THE_10TH },
     );
     expect(result.map((item) => item.id)).toEqual([]);
@@ -1180,7 +1167,6 @@ describe('isPaused filter for selectAllUnprocessedTaskRepeatCfgs', () => {
           isPaused: false,
         }),
       ],
-      NO_ARCHIVED_PROJECTS,
       { dayDate: FAKE_MONDAY_THE_10TH },
     );
     expect(result.map((item) => item.id)).toEqual(['R1']);
@@ -1205,7 +1191,6 @@ describe('isPaused filter for selectAllUnprocessedTaskRepeatCfgs', () => {
           isPaused: false,
         }),
       ],
-      NO_ARCHIVED_PROJECTS,
       { dayDate: FAKE_MONDAY_THE_10TH },
     );
     expect(result.map((item) => item.id)).toEqual(['R1', 'R3']);
@@ -1296,9 +1281,9 @@ describe('Timezone Edge Cases for selectTaskRepeatCfgsForExactDay', () => {
   });
 });
 
-describe('archived projects filter for selectAllUnprocessedTaskRepeatCfgs', () => {
+describe('archived projects filter for selectActiveTaskRepeatCfgs', () => {
   it('should NOT return cfg belonging to an archived project', () => {
-    const result = selectAllUnprocessedTaskRepeatCfgs.projector(
+    const result = selectActiveTaskRepeatCfgs.projector(
       [
         dummyRepeatable('R1', {
           repeatCycle: 'DAILY',
@@ -1307,13 +1292,12 @@ describe('archived projects filter for selectAllUnprocessedTaskRepeatCfgs', () =
         }),
       ],
       new Set<string>(['ARCHIVED_PROJECT']),
-      { dayDate: FAKE_MONDAY_THE_10TH },
     );
     expect(result.map((item) => item.id)).toEqual([]);
   });
 
   it('should return cfg belonging to a non-archived project', () => {
-    const result = selectAllUnprocessedTaskRepeatCfgs.projector(
+    const result = selectActiveTaskRepeatCfgs.projector(
       [
         dummyRepeatable('R1', {
           repeatCycle: 'DAILY',
@@ -1322,13 +1306,12 @@ describe('archived projects filter for selectAllUnprocessedTaskRepeatCfgs', () =
         }),
       ],
       new Set<string>(['ARCHIVED_PROJECT']),
-      { dayDate: FAKE_MONDAY_THE_10TH },
     );
     expect(result.map((item) => item.id)).toEqual(['R1']);
   });
 
   it('should return cfg with no project even when archived projects exist', () => {
-    const result = selectAllUnprocessedTaskRepeatCfgs.projector(
+    const result = selectActiveTaskRepeatCfgs.projector(
       [
         dummyRepeatable('R1', {
           repeatCycle: 'DAILY',
@@ -1337,13 +1320,12 @@ describe('archived projects filter for selectAllUnprocessedTaskRepeatCfgs', () =
         }),
       ],
       new Set<string>(['ARCHIVED_PROJECT']),
-      { dayDate: FAKE_MONDAY_THE_10TH },
     );
     expect(result.map((item) => item.id)).toEqual(['R1']);
   });
 
   it('should filter out only archived projects keeping active ones', () => {
-    const result = selectAllUnprocessedTaskRepeatCfgs.projector(
+    const result = selectActiveTaskRepeatCfgs.projector(
       [
         dummyRepeatable('R1', {
           repeatCycle: 'DAILY',
@@ -1362,7 +1344,6 @@ describe('archived projects filter for selectAllUnprocessedTaskRepeatCfgs', () =
         }),
       ],
       new Set<string>(['ARCHIVED']),
-      { dayDate: FAKE_MONDAY_THE_10TH },
     );
     expect(result.map((item) => item.id)).toEqual(['R1', 'R3']);
   });
