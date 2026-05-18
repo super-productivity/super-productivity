@@ -78,6 +78,7 @@ export class NavListTreeComponent implements OnDestroy {
 
   // Access to service methods and data for visibility menu (includes Inbox for unhiding)
   readonly allUnarchivedProjects = this._navConfigService.allUnarchivedProjects;
+  readonly archivedProjectsCount = this._navConfigService.archivedProjectsCount;
 
   // ViewChild for visibility menu trigger to close menu after toggling
   visibilityMenuTrigger = viewChild('visibilityBtn', { read: MatMenuTrigger });
