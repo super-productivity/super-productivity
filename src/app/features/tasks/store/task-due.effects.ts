@@ -215,13 +215,14 @@ export class TaskDueEffects {
                     },
                   );
 
+                  const todayTaskIdSet = new Set(todayTaskIds);
                   const missingDueTaskIds = allTasksDueToday
-                    .filter((task) => !todayTaskIds.includes(task.id))
+                    .filter((task) => !todayTaskIdSet.has(task.id))
                     // Exclude subtasks whose parent is already in TODAY
                     // (preventParentAndSubTaskInTodayList$ will remove them anyway,
                     // causing an infinite add/remove loop and phantom sync changes)
                     .filter(
-                      (task) => !task.parentId || !todayTaskIds.includes(task.parentId),
+                      (task) => !task.parentId || !todayTaskIdSet.has(task.parentId),
                     )
                     .map((task) => task.id);
 
@@ -240,7 +241,7 @@ export class TaskDueEffects {
                     const decision = getDeadlineAutoPlanDecision(
                       task,
                       context,
-                      Array.from(plannedTodayIds),
+                      plannedTodayIds,
                       parentTask,
                     );
 

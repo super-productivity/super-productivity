@@ -74,12 +74,14 @@ describe('getDeadlineAutoPlanDecision', () => {
     }) as Task;
 
   it('should set dueDay for an unscheduled task with a deadline today', () => {
-    expect(getDeadlineAutoPlanDecision(createTask(), context, [])).toEqual({
-      shouldAutoPlan: true,
-      shouldUpdateDueDay: true,
-      shouldClearDueWithTime: false,
-      shouldClearRemindAt: false,
-    });
+    expect(getDeadlineAutoPlanDecision(createTask(), context, new Set<string>())).toEqual(
+      {
+        shouldAutoPlan: true,
+        shouldUpdateDueDay: true,
+        shouldClearDueWithTime: false,
+        shouldClearRemindAt: false,
+      },
+    );
   });
 
   it('should only add Today ordering when the task is already due today', () => {
@@ -87,7 +89,7 @@ describe('getDeadlineAutoPlanDecision', () => {
       getDeadlineAutoPlanDecision(
         createTask({ dueWithTime: new Date(2026, 0, 5, 12).getTime() }),
         context,
-        [],
+        new Set<string>(),
       ),
     ).toEqual({
       shouldAutoPlan: true,
@@ -102,7 +104,7 @@ describe('getDeadlineAutoPlanDecision', () => {
       getDeadlineAutoPlanDecision(
         createTask({ dueWithTime: new Date(2026, 0, 4, 12).getTime() }),
         context,
-        [],
+        new Set<string>(),
       ),
     ).toEqual({
       shouldAutoPlan: true,
@@ -117,7 +119,7 @@ describe('getDeadlineAutoPlanDecision', () => {
       getDeadlineAutoPlanDecision(
         createTask({ dueWithTime: new Date(2026, 0, 6, 12).getTime() }),
         context,
-        [],
+        new Set<string>(),
       ),
     ).toEqual({
       shouldAutoPlan: false,
@@ -135,7 +137,9 @@ describe('getDeadlineAutoPlanDecision', () => {
     });
     const subTask = createTask({ id: 'sub', parentId: 'parent' });
 
-    expect(getDeadlineAutoPlanDecision(subTask, context, [], parentTask)).toEqual({
+    expect(
+      getDeadlineAutoPlanDecision(subTask, context, new Set<string>(), parentTask),
+    ).toEqual({
       shouldAutoPlan: false,
       shouldUpdateDueDay: false,
       shouldClearDueWithTime: false,

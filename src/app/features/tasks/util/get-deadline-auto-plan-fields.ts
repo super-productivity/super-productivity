@@ -1,7 +1,6 @@
 import type { DateService } from '../../../core/date/date.service';
 import type { Task } from '../task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { isTodayWithOffset } from '../../../util/is-today.util';
 
 export type DeadlineAutoPlanFields = {
   autoPlanToday?: string;
@@ -44,17 +43,10 @@ const isDeadlineTodayForAutoPlan = (
   deadlineDay: string | null | undefined,
   deadlineWithTime: number | null | undefined,
   context: DeadlineAutoPlanContext,
-): boolean => {
-  if (isPositiveFiniteTimestamp(deadlineWithTime)) {
-    return isTodayWithOffset(
-      deadlineWithTime,
-      context.today,
-      context.startOfNextDayDiffMs,
-    );
-  }
-
-  return deadlineDay === context.today;
-};
+): boolean =>
+  isPositiveFiniteTimestamp(deadlineWithTime)
+    ? getDateStrWithOffset(deadlineWithTime, context) === context.today
+    : deadlineDay === context.today;
 
 const getDueScheduleDay = (
   task: Pick<Task, 'dueDay' | 'dueWithTime'>,
@@ -67,7 +59,7 @@ const getDueScheduleDay = (
   return task.dueDay ?? undefined;
 };
 
-export const isTaskDueTodayBySchedule = (
+const isTaskDueTodayBySchedule = (
   task: Pick<Task, 'dueDay' | 'dueWithTime'>,
   context: DeadlineAutoPlanContext,
 ): boolean => getDueScheduleDay(task, context) === context.today;
@@ -91,7 +83,7 @@ export const isTaskDueTodayBySchedule = (
 export const getDeadlineAutoPlanDecision = (
   task: Task,
   context: DeadlineAutoPlanContext,
-  todayTaskIds: readonly string[],
+  todayTaskIds: ReadonlySet<string>,
   parentTask?: Task,
 ): DeadlineAutoPlanDecision => {
   if (
@@ -103,13 +95,13 @@ export const getDeadlineAutoPlanDecision = (
 
   if (
     task.parentId &&
-    (todayTaskIds.includes(task.parentId) ||
+    (todayTaskIds.has(task.parentId) ||
       (parentTask && isTaskDueTodayBySchedule(parentTask, context)))
   ) {
     return NO_AUTO_PLAN;
   }
 
-  const isInTodayOrder = todayTaskIds.includes(task.id);
+  const isInTodayOrder = todayTaskIds.has(task.id);
 
   if (isTaskDueTodayBySchedule(task, context)) {
     return isInTodayOrder

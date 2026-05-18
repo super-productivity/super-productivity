@@ -43,7 +43,7 @@ const autoPlanTaskDueToDeadline = (
   const decision = getDeadlineAutoPlanDecision(
     task,
     context,
-    todayTag.taskIds,
+    new Set(todayTag.taskIds),
     parentTask,
   );
 
