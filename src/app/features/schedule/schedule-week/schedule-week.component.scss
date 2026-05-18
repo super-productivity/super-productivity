@@ -202,6 +202,15 @@
       border: none !important;
     }
 
+    // Panel is a single, full-width day cell with centered content. Anchoring
+    // the badge absolutely to the right edge leaves a large gap from the
+    // centered date; let it flow as a centered flex child next to the date
+    // instead (the week-view multi-column layout keeps the absolute variant).
+    .over-budget-badge {
+      position: static;
+      transform: none;
+    }
+
     .filler {
       display: none;
     }
