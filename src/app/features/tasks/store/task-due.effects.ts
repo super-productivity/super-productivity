@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { createEffect } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import {
   concatMap,
   debounceTime,
@@ -17,6 +17,8 @@ import { Store } from '@ngrx/store';
 import {
   selectOverdueTasksOnToday,
   selectTasksDueForDay,
+  selectTasksWithDeadlineDayForDay,
+  selectTasksWithDeadlineTimeForRange,
   selectTasksWithDueTimeForRange,
 } from './task.selectors';
 import { SyncWrapperService } from '../../../imex/sync/sync-wrapper.service';
@@ -33,6 +35,8 @@ import { environment } from '../../../../environments/environment';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { DateService } from '../../../core/date/date.service';
 
 export const getOverdueIdsInTodayOrder = (
   overdue: ReadonlyArray<{ id: string }>,
@@ -50,6 +54,56 @@ export class TaskDueEffects {
   private _addTasksForTomorrowService = inject(AddTasksForTomorrowService);
   private _syncTriggerService = inject(SyncTriggerService);
   private _hydrationState = inject(HydrationStateService);
+  private _actions$ = inject(LOCAL_ACTIONS);
+  private _dateService = inject(DateService);
+
+  /**
+   * Immediately adds a task to Today when its deadline is set to today.
+   * Fires on both setDeadline and addTask actions so there's no need to
+   * wait for a day-change or app refresh.
+   */
+  addDeadlineTaskToTodayOnSet$ = createEffect(() =>
+    this._actions$.pipe(
+      ofType(TaskSharedActions.setDeadline, TaskSharedActions.addTask),
+      // Extract the task id and the deadline fields from whichever action fired
+      map((action) => {
+        if (action.type === TaskSharedActions.setDeadline.type) {
+          return {
+            taskId: action.taskId,
+            deadlineDay: action.deadlineDay,
+            deadlineWithTime: action.deadlineWithTime,
+          };
+        }
+        // addTask — deadline may have been set at creation time
+        return {
+          taskId: action.task.id,
+          deadlineDay: action.task.deadlineDay,
+          deadlineWithTime: action.task.deadlineWithTime,
+        };
+      }),
+      // Only proceed when the deadline is for today
+      filter(({ deadlineDay, deadlineWithTime }) => {
+        const todayStr = this._dateService.todayStr();
+        if (deadlineDay) {
+          return deadlineDay === todayStr;
+        }
+        if (typeof deadlineWithTime === 'number') {
+          return this._dateService.isToday(deadlineWithTime);
+        }
+        return false;
+      }),
+      withLatestFrom(this._store$.select(selectTodayTaskIds)),
+      filter(([{ taskId }, todayTaskIds]) => !todayTaskIds.includes(taskId)),
+      map(([{ taskId }]) =>
+        TaskSharedActions.planTasksForToday({
+          taskIds: [taskId],
+          today: this._dateService.todayStr(),
+          startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+          isSkipRemoveReminder: true,
+        }),
+      ),
+    ),
+  );
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   // Uses afterInitialSyncDoneStrict$ to ensure sync has completed before creating repeat tasks,
@@ -185,62 +239,82 @@ export class TaskDueEffects {
             return combineLatest([
               this._store$.select(selectTasksDueForDay, { day: todayStr }),
               this._store$.select(selectTasksWithDueTimeForRange, todayRange),
+              // Also include deadline tasks for today (both whole-day and timed).
+              // Tasks are added to Today automatically so users never miss a deadline.
+              this._store$.select(selectTasksWithDeadlineDayForDay, { day: todayStr }),
+              this._store$.select(selectTasksWithDeadlineTimeForRange, todayRange),
             ]).pipe(
               first(),
               withLatestFrom(this._store$.select(selectTodayTaskIds)),
-              map(([[tasksDueByDay, tasksDueByTime], todayTaskIds]) => {
-                // Merge both lists, deduplicating by ID.
-                // Tasks with dueWithTime set have dueDay cleared (mutual exclusivity),
-                // so we must check both selectors to catch all tasks due today.
-                const seenIds = new Set<string>();
-                const allTasksDueToday = [...tasksDueByDay, ...tasksDueByTime].filter(
-                  (task) => {
+              map(
+                ([
+                  [
+                    tasksDueByDay,
+                    tasksDueByTime,
+                    tasksWithDeadlineDay,
+                    tasksWithDeadlineTime,
+                  ],
+                  todayTaskIds,
+                ]) => {
+                  // Merge all four lists, deduplicating by ID.
+                  // Tasks with dueWithTime set have dueDay cleared (mutual exclusivity),
+                  // so we must check both due selectors to catch all scheduled tasks.
+                  // Likewise deadlineWithTime and deadlineDay are mutually exclusive.
+                  const seenIds = new Set<string>();
+                  const allTasksDueToday = [
+                    ...tasksDueByDay,
+                    ...tasksDueByTime,
+                    ...tasksWithDeadlineDay,
+                    ...tasksWithDeadlineTime,
+                  ].filter((task) => {
                     if (seenIds.has(task.id)) return false;
                     seenIds.add(task.id);
                     return true;
-                  },
-                );
+                  });
 
-                const missingTaskIds = allTasksDueToday
-                  .filter((task) => !todayTaskIds.includes(task.id))
-                  // Exclude subtasks whose parent is already in TODAY
-                  // (preventParentAndSubTaskInTodayList$ will remove them anyway,
-                  // causing an infinite add/remove loop and phantom sync changes)
-                  .filter(
-                    (task) => !task.parentId || !todayTaskIds.includes(task.parentId),
-                  )
-                  .map((task) => task.id);
+                  const missingTaskIds = allTasksDueToday
+                    .filter((task) => !todayTaskIds.includes(task.id))
+                    // Exclude subtasks whose parent is already in TODAY
+                    // (preventParentAndSubTaskInTodayList$ will remove them anyway,
+                    // causing an infinite add/remove loop and phantom sync changes)
+                    .filter(
+                      (task) => !task.parentId || !todayTaskIds.includes(task.parentId),
+                    )
+                    .map((task) => task.id);
 
-                // Debug log to investigate repeated operations
-                TaskLog.log('[TaskDueEffects] ensureTasksDueTodayInTodayTag check:', {
-                  tasksDueByDayCount: tasksDueByDay.length,
-                  tasksDueByTimeCount: tasksDueByTime.length,
-                  tasksDueTodayIds: allTasksDueToday.map((t) => t.id),
-                  todayTaskIdsCount: todayTaskIds.length,
-                  missingTaskIds,
-                  willDispatch: missingTaskIds.length > 0,
-                });
+                  // Debug log to investigate repeated operations
+                  TaskLog.log('[TaskDueEffects] ensureTasksDueTodayInTodayTag check:', {
+                    tasksDueByDayCount: tasksDueByDay.length,
+                    tasksDueByTimeCount: tasksDueByTime.length,
+                    tasksWithDeadlineDayCount: tasksWithDeadlineDay.length,
+                    tasksWithDeadlineTimeCount: tasksWithDeadlineTime.length,
+                    tasksDueTodayIds: allTasksDueToday.map((t) => t.id),
+                    todayTaskIdsCount: todayTaskIds.length,
+                    missingTaskIds,
+                    willDispatch: missingTaskIds.length > 0,
+                  });
 
-                if (!environment.production && missingTaskIds.length > 0) {
-                  TaskLog.err(
-                    '[TaskDueEffects] Found tasks due today missing from TODAY tag:',
-                    {
-                      tasksDueToday: allTasksDueToday.length,
-                      todayTaskIds: todayTaskIds.length,
-                      missingTaskIds,
-                    },
-                  );
-                }
+                  if (!environment.production && missingTaskIds.length > 0) {
+                    TaskLog.err(
+                      '[TaskDueEffects] Found tasks due today missing from TODAY tag:',
+                      {
+                        tasksDueToday: allTasksDueToday.length,
+                        todayTaskIds: todayTaskIds.length,
+                        missingTaskIds,
+                      },
+                    );
+                  }
 
-                return missingTaskIds.length > 0
-                  ? TaskSharedActions.planTasksForToday({
-                      taskIds: missingTaskIds,
-                      today: todayStr,
-                      startOfNextDayDiffMs,
-                      isSkipRemoveReminder: true,
-                    })
-                  : null;
-              }),
+                  return missingTaskIds.length > 0
+                    ? TaskSharedActions.planTasksForToday({
+                        taskIds: missingTaskIds,
+                        today: todayStr,
+                        startOfNextDayDiffMs,
+                        isSkipRemoveReminder: true,
+                      })
+                    : null;
+                },
+              ),
               filter((action) => !!action),
             );
           }),
