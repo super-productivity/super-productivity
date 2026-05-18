@@ -31,6 +31,10 @@ export const selectUnarchivedHiddenProjectIds = createSelector(
 export const selectArchivedProjects = createSelector(selectAllProjects, (projects) =>
   projects.filter((p) => p.isArchived),
 );
+export const selectArchivedProjectsSortedByTitle = createSelector(
+  selectArchivedProjects,
+  (projects) => [...projects].sort((a, b) => a.title.localeCompare(b.title)),
+);
 export const selectArchivedProjectIds = createSelector(
   selectArchivedProjects,
   (projects): Set<string> => new Set(projects.map((p) => p.id)),

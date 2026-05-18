@@ -6,7 +6,6 @@ import {
   signal,
 } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -14,8 +13,9 @@ import { MatFormField, MatLabel, MatSuffix } from '@angular/material/form-field'
 import { MatInput } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
-import { selectArchivedProjects } from '../../features/project/store/project.selectors';
+import { selectArchivedProjectsSortedByTitle } from '../../features/project/store/project.selectors';
 import { ProjectService } from '../../features/project/project.service';
+import { Project } from '../../features/project/project.model';
 import { DEFAULT_PROJECT_ICON } from '../../features/project/project.const';
 import { T } from '../../t.const';
 import { SnackService } from '../../core/snack/snack.service';
@@ -48,26 +48,22 @@ export class ArchivedProjectsPageComponent {
 
   readonly searchTerm = signal('');
 
-  private readonly _allArchivedProjects = toSignal(
-    this._store.select(selectArchivedProjects),
-    { initialValue: [] },
+  private readonly _archivedProjectsSorted = this._store.selectSignal(
+    selectArchivedProjectsSortedByTitle,
   );
 
   readonly filteredProjects = computed(() => {
     const term = this.searchTerm().trim().toLowerCase();
-    const sorted = [...this._allArchivedProjects()].sort((a, b) =>
-      a.title.localeCompare(b.title),
-    );
-    if (!term) return sorted;
-    return sorted.filter((p) => p.title.toLowerCase().includes(term));
+    const projects = this._archivedProjectsSorted();
+    if (!term) return projects;
+    return projects.filter((p) => p.title.toLowerCase().includes(term));
   });
 
-  unarchive(projectId: string): void {
-    const project = this.filteredProjects().find((p) => p.id === projectId);
-    this._projectService.unarchive(projectId);
+  unarchive(project: Project): void {
+    this._projectService.unarchive(project.id);
     this._snackService.open({
       ico: 'unarchive',
-      msg: project?.isHiddenFromMenu
+      msg: project.isHiddenFromMenu
         ? T.F.PROJECT.S.UNARCHIVED_BUT_HIDDEN
         : T.F.PROJECT.S.UNARCHIVED,
     });
