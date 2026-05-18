@@ -21,6 +21,8 @@ const _parseTime = (timeStr: string): { hours: number; minutes: number } | null 
 const _formatTime = (hours: number, minutes: number): string =>
   `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 
+// Expects canonical HH:MM format. Lenient parseInt means "09abc:30" would parse as "09:30";
+// callers guarantee HH:MM via <input step="60">.
 export const stepTimeString = (timeStr: string, stepMinutes: number): string | null => {
   const parsed = _parseTime(timeStr);
   if (!parsed) return null;

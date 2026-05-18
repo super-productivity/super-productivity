@@ -53,6 +53,7 @@ import {
 import { MatSelect } from '@angular/material/select';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatInput } from '@angular/material/input';
+import { TimeStepDirective } from '../../../ui/time-step/time-step.directive';
 import { Log } from '../../../core/log';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
@@ -82,6 +83,7 @@ const DEFAULT_TIME = '09:00';
     MatLabel,
     MatSuffix,
     MatPrefix,
+    TimeStepDirective,
   ],
   templateUrl: './dialog-schedule-task.component.html',
   styleUrl: './dialog-schedule-task.component.scss',

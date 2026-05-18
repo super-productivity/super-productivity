@@ -17,9 +17,12 @@ export class TimeStepDirective {
 
     if (!isSmall && !isLarge) return;
 
+    const el = this._el.nativeElement;
+    if (el.disabled || el.readOnly) return;
+
     ev.preventDefault();
 
-    const oldValue = this._el.nativeElement.value;
+    const oldValue = el.value;
     if (!oldValue) return;
 
     const direction = ev.key === 'ArrowUp' ? 1 : -1;
@@ -29,7 +32,7 @@ export class TimeStepDirective {
 
     if (result === null) return;
 
-    this._el.nativeElement.value = result;
-    this._el.nativeElement.dispatchEvent(new Event('input', { bubbles: true }));
+    el.value = result;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
   }
 }

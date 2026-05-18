@@ -44,6 +44,7 @@ import {
 import { MatSelect } from '@angular/material/select';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatInput } from '@angular/material/input';
+import { TimeStepDirective } from '../../../ui/time-step/time-step.directive';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 
@@ -70,6 +71,7 @@ type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
     MatLabel,
     MatSuffix,
     MatPrefix,
+    TimeStepDirective,
   ],
   templateUrl: './dialog-deadline.component.html',
   styleUrl: './dialog-deadline.component.scss',
