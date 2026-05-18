@@ -295,6 +295,47 @@ describe('Task Selectors', () => {
     });
   });
 
+  describe('selectAllTasksInActiveProjects', () => {
+    it('should return all tasks when no archived projects (fast path)', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksInActiveProjects.projector(
+        allTasks,
+        new Set<string>(),
+      );
+      expect(result).toBe(allTasks);
+    });
+
+    it('should exclude tasks belonging to archived project', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksInActiveProjects.projector(
+        allTasks,
+        new Set<string>(['project1']),
+      );
+      expect(result.every((t) => t.projectId !== 'project1')).toBe(true);
+    });
+
+    it('should keep tasks from non-archived projects', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksInActiveProjects.projector(
+        allTasks,
+        new Set<string>(['project2']),
+      );
+      expect(result.some((t) => t.projectId === 'project1')).toBe(true);
+      expect(result.every((t) => t.projectId !== 'project2')).toBe(true);
+    });
+
+    it('should return identity reference when archivedIds is empty (fast path)', () => {
+      const allTasks = Object.values(mockTasks);
+      const emptySet = new Set<string>();
+      const result = fromSelectors.selectAllTasksInActiveProjects.projector(
+        allTasks,
+        emptySet,
+      );
+      // Same reference — no copy, no filter
+      expect(result).toBe(allTasks);
+    });
+  });
+
   // Startable tasks selectors
   describe('Startable tasks selectors', () => {
     it('should select startable tasks', () => {
@@ -1051,25 +1092,11 @@ describe('Task Selectors', () => {
   });
 
   describe('selectAllTasksWithDueTimeSorted', () => {
-    // task5 has dueWithTime and projectId='project1'
-    it('should exclude tasks from archived projects', () => {
+    it('should return only tasks with dueWithTime, sorted ascending', () => {
       const allTasks = Object.values(mockTasks);
-      const archivedProjectIds = new Set<string>(['project1']);
-      const result = fromSelectors.selectAllTasksWithDueTimeSorted.projector(
-        allTasks,
-        archivedProjectIds,
-      );
-      expect(result.map((t) => t.id)).not.toContain('task5');
-    });
-
-    it('should include tasks when project is not archived', () => {
-      const allTasks = Object.values(mockTasks);
-      const archivedProjectIds = new Set<string>();
-      const result = fromSelectors.selectAllTasksWithDueTimeSorted.projector(
-        allTasks,
-        archivedProjectIds,
-      );
+      const result = fromSelectors.selectAllTasksWithDueTimeSorted.projector(allTasks);
       expect(result.map((t) => t.id)).toContain('task5');
+      expect(result.every((t) => typeof t.dueWithTime === 'number')).toBe(true);
     });
   });
 
@@ -1099,42 +1126,12 @@ describe('Task Selectors', () => {
   });
 
   describe('selectAllUndoneTasksWithDeadlineSorted', () => {
-    // task9 has deadlineDay=tomorrow, isDone=false, projectId='project1'
-    it('should exclude tasks from archived projects', () => {
+    it('should return only undone tasks with deadline, sorted', () => {
       const allTasks = Object.values(mockTasks);
-      const archivedProjectIds = new Set<string>(['project1']);
-      const result = fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(
-        allTasks,
-        archivedProjectIds,
-      );
-      expect(result.map((t) => t.id)).not.toContain('task9');
-    });
-
-    it('should include tasks when project is not archived', () => {
-      const allTasks = Object.values(mockTasks);
-      const archivedProjectIds = new Set<string>();
-      const result = fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(
-        allTasks,
-        archivedProjectIds,
-      );
+      const result =
+        fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(allTasks);
       expect(result.map((t) => t.id)).toContain('task9');
-    });
-
-    it('should exclude tasks with deadlineWithTime from archived projects', () => {
-      const taskWithDeadlineTime: Task = {
-        ...mockTasks['task9'],
-        id: 'task10',
-        deadlineDay: undefined,
-        deadlineWithTime: Date.now() + 86400000,
-        projectId: 'project1',
-      };
-      const allTasks = [...Object.values(mockTasks), taskWithDeadlineTime];
-      const archivedProjectIds = new Set<string>(['project1']);
-      const result = fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(
-        allTasks,
-        archivedProjectIds,
-      );
-      expect(result.map((t) => t.id)).not.toContain('task10');
+      expect(result.every((t) => !t.isDone)).toBe(true);
     });
   });
 });
