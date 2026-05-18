@@ -331,7 +331,8 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
           body: JSON.stringify({
             name: segment,
             folder: {},
-            ...{ ['@microsoft.graph.conflictBehavior']: 'replace' },
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            '@microsoft.graph.conflictBehavior': 'replace',
           }),
         });
       } catch (e) {
