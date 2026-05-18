@@ -89,8 +89,6 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
 import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
-import { selectTimelineConfig } from '../../config/store/global-config.reducer';
-import { isTaskOutsideWorkHours } from '../util/is-task-outside-work-hours';
 
 @Component({
   selector: 'task',
@@ -156,9 +154,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._store.select(selectTimeConflictTaskIds),
     { initialValue: new Set<string>() },
   );
-  private readonly _timelineConfig = toSignal(this._store.select(selectTimelineConfig), {
-    initialValue: null,
-  });
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
@@ -231,9 +226,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       typeof task.dueWithTime === 'number' && this._timeConflictTaskIds().has(task.id)
     );
   });
-  isOutsideWorkHours = computed(() =>
-    isTaskOutsideWorkHours(this.task(), this._timelineConfig()),
-  );
 
   isShowDueDayBtn = computed(() => {
     const dueDay = this.task().dueDay;

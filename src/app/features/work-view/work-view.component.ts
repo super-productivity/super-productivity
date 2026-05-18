@@ -85,7 +85,6 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
 import { recordSearchNavDebug } from '../../util/search-nav-debug';
 import { dragDelayForTouch } from '../../util/input-intent';
 import { DateService } from '../../core/date/date.service';
-import { DEFAULT_WORK_HOURS } from '../planner/util/calculate-available-hours';
 
 @Component({
   selector: 'work-view',
@@ -194,9 +193,6 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isShowRepeatCfgsPanel = computed(
     () =>
       !this.customizerService.isCustomized() && this.repeatCfgsForContext().length > 0,
-  );
-  isEstimateRemainingOverloaded = computed(
-    () => this.estimateRemainingToday() > DEFAULT_WORK_HOURS,
   );
 
   // Section Logic

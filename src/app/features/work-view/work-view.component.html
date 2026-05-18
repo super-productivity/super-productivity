@@ -18,7 +18,6 @@
           >
             <div
               class="item"
-              [class.is-info]="isEstimateRemainingOverloaded()"
               matTooltip="{{ T.WW.TODAY_REMAINING | translate }} ~{{
                 todayRemainingInProject() | msToString
               }}"
@@ -34,15 +33,6 @@
                 }}</strong>
                 <mat-icon style="margin-left: 2px">hourglass_empty</mat-icon>
               </span>
-              @if (isEstimateRemainingOverloaded()) {
-                <span
-                  class="status-info-chip"
-                  [matTooltip]="T.WW.ESTIMATE_REMAINING_OVER_8H | translate"
-                >
-                  <mat-icon>info</mat-icon>
-                  <span>{{ T.WW.ESTIMATE_REMAINING_OVER_8H | translate }}</span>
-                </span>
-              }
             </div>
             <div class="item">
               <span class="label">{{ T.WW.WORKING_TODAY | translate }}</span>

@@ -49,16 +49,6 @@
               [isShowProjectTagNever]="isInSubTaskList()"
             ></tag-list>
           }
-          @if (isOutsideWorkHours()) {
-            <div
-              class="task-info-chip"
-              [matTooltip]="T.F.TASK.CMP.OUTSIDE_WORK_HOURS | translate"
-              [attr.aria-label]="T.F.TASK.CMP.OUTSIDE_WORK_HOURS | translate"
-            >
-              <mat-icon>info</mat-icon>
-              <span>{{ T.F.TASK.CMP.OUTSIDE_WORK_HOURS | translate }}</span>
-            </div>
-          }
         </div>
       </div>
 

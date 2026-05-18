@@ -448,27 +448,6 @@ done-toggle {
   }
 }
 
-.task-info-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-quarter);
-  margin: 0 0 var(--s-half) 6px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--text-color-muted) 32%, transparent);
-  background: color-mix(in srgb, var(--bg-lighter) 90%, var(--text-color-muted) 10%);
-  color: var(--text-color-muted);
-  font-size: 11px;
-  line-height: 1.2;
-  white-space: nowrap;
-
-  mat-icon {
-    width: 14px;
-    height: 14px;
-    font-size: 14px;
-  }
-}
-
 @media (min-width: #{$layout-sm}) and (max-width: #{$layout-xl - 1px}) {
   .closeBtn {
     min-width: 40px;
