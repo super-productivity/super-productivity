@@ -8,10 +8,120 @@ import {
 import { Task } from '../../../features/tasks/task.model';
 import { ActionHandlerMap } from './task-shared-helpers';
 import { isDBDateStr } from '../../../util/get-db-date-str';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { isTodayWithOffset } from '../../../util/is-today.util';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { getTag, updateTags, removeTaskFromPlannerDays } from './task-shared-helpers';
+import { unique } from '../../../util/unique';
 
 // =============================================================================
 // ACTION HANDLERS
 // =============================================================================
+
+const autoPlanTaskDueToDeadline = (
+  state: RootState,
+  taskId: string,
+  deadlineDay?: string,
+  deadlineWithTime?: number,
+): RootState => {
+  const task = state[TASK_FEATURE_NAME].entities[taskId] as Task;
+  if (!task) return state;
+
+  // 1. Check if deadline is today
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const startOfNextDayDiffMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
+
+  let isDeadlineToday = false;
+  if (deadlineDay === todayStr) {
+    isDeadlineToday = true;
+  } else if (typeof deadlineWithTime === 'number') {
+    isDeadlineToday = isTodayWithOffset(deadlineWithTime, todayStr, startOfNextDayDiffMs);
+  }
+
+  if (!isDeadlineToday) {
+    return state;
+  }
+
+  // 2. Check if task is done or subtask whose parent is already in Today
+  if (task.isDone) {
+    return state;
+  }
+  const todayTag = getTag(state, TODAY_TAG.id);
+  if (task.parentId && todayTag.taskIds.includes(task.parentId)) {
+    return state;
+  }
+
+  // 3. Apply scheduling policy for today deadline
+  const isDueTodayStr = task.dueDay === todayStr;
+  const isDueWithTimeToday =
+    typeof task.dueWithTime === 'number' &&
+    isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs);
+
+  let shouldAutoPlan = false;
+  let shouldClearTime = false;
+  let shouldUpdateDueDay = false;
+
+  if (isDueTodayStr || isDueWithTimeToday) {
+    shouldAutoPlan = !todayTag.taskIds.includes(taskId);
+  } else if (!task.dueDay && typeof task.dueWithTime !== 'number') {
+    shouldAutoPlan = true;
+    shouldUpdateDueDay = true;
+  } else {
+    let isOverdue = false;
+    if (task.dueDay && task.dueDay < todayStr) isOverdue = true;
+    else if (typeof task.dueWithTime === 'number' && task.dueWithTime < Date.now()) {
+      isOverdue = true;
+    }
+
+    if (isOverdue) {
+      shouldAutoPlan = true;
+      shouldClearTime = true;
+      shouldUpdateDueDay = true;
+    }
+  }
+
+  if (!shouldAutoPlan) {
+    return state;
+  }
+
+  let updatedState = state;
+
+  if (shouldUpdateDueDay || shouldClearTime) {
+    updatedState = {
+      ...updatedState,
+      [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+        {
+          id: taskId,
+          changes: {
+            ...(shouldUpdateDueDay ? { dueDay: todayStr } : {}),
+            ...(shouldClearTime ? { dueWithTime: undefined } : {}),
+            // Note: intentionally preserving remindAt to keep user intent
+          },
+        },
+        updatedState[TASK_FEATURE_NAME],
+      ),
+    };
+
+    if (shouldUpdateDueDay) {
+      updatedState = removeTaskFromPlannerDays(updatedState, taskId);
+    }
+  }
+
+  // Add to TODAY_TAG
+  if (!getTag(updatedState, TODAY_TAG.id).taskIds.includes(taskId)) {
+    updatedState = updateTags(updatedState, [
+      {
+        id: TODAY_TAG.id,
+        changes: {
+          taskIds: unique([taskId, ...getTag(updatedState, TODAY_TAG.id).taskIds]),
+        },
+      },
+    ]);
+  }
+
+  return updatedState;
+};
 
 const handleSetDeadline = (
   state: RootState,
@@ -37,7 +147,7 @@ const handleSetDeadline = (
     return state;
   }
 
-  return {
+  const updatedState = {
     ...state,
     [TASK_FEATURE_NAME]: taskAdapter.updateOne(
       {
@@ -52,6 +162,8 @@ const handleSetDeadline = (
       state[TASK_FEATURE_NAME],
     ),
   };
+
+  return autoPlanTaskDueToDeadline(updatedState, taskId, deadlineDay, deadlineWithTime);
 };
 
 const handleRemoveDeadline = (state: RootState, taskId: string): RootState => {
@@ -97,6 +209,18 @@ const handleClearDeadlineReminder = (state: RootState, taskId: string): RootStat
 // =============================================================================
 
 const createActionHandlers = (state: RootState, action: Action): ActionHandlerMap => ({
+  [TaskSharedActions.addTask.type]: () => {
+    const { task } = action as ReturnType<typeof TaskSharedActions.addTask>;
+    if (task.deadlineDay || task.deadlineWithTime !== undefined) {
+      return autoPlanTaskDueToDeadline(
+        state,
+        task.id,
+        task.deadlineDay || undefined,
+        task.deadlineWithTime === null ? undefined : task.deadlineWithTime,
+      );
+    }
+    return state;
+  },
   [TaskSharedActions.setDeadline.type]: () => {
     const { taskId, deadlineDay, deadlineWithTime, deadlineRemindAt } =
       action as ReturnType<typeof TaskSharedActions.setDeadline>;

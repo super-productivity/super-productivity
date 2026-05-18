@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { createEffect, ofType } from '@ngrx/effects';
+import { createEffect } from '@ngrx/effects';
 import {
   concatMap,
   debounceTime,
@@ -56,54 +56,6 @@ export class TaskDueEffects {
   private _hydrationState = inject(HydrationStateService);
   private _actions$ = inject(LOCAL_ACTIONS);
   private _dateService = inject(DateService);
-
-  /**
-   * Immediately adds a task to Today when its deadline is set to today.
-   * Fires on both setDeadline and addTask actions so there's no need to
-   * wait for a day-change or app refresh.
-   */
-  addDeadlineTaskToTodayOnSet$ = createEffect(() =>
-    this._actions$.pipe(
-      ofType(TaskSharedActions.setDeadline, TaskSharedActions.addTask),
-      // Extract the task id and the deadline fields from whichever action fired
-      map((action) => {
-        if (action.type === TaskSharedActions.setDeadline.type) {
-          return {
-            taskId: action.taskId,
-            deadlineDay: action.deadlineDay,
-            deadlineWithTime: action.deadlineWithTime,
-          };
-        }
-        // addTask — deadline may have been set at creation time
-        return {
-          taskId: action.task.id,
-          deadlineDay: action.task.deadlineDay,
-          deadlineWithTime: action.task.deadlineWithTime,
-        };
-      }),
-      // Only proceed when the deadline is for today
-      filter(({ deadlineDay, deadlineWithTime }) => {
-        const todayStr = this._dateService.todayStr();
-        if (deadlineDay) {
-          return deadlineDay === todayStr;
-        }
-        if (typeof deadlineWithTime === 'number') {
-          return this._dateService.isToday(deadlineWithTime);
-        }
-        return false;
-      }),
-      withLatestFrom(this._store$.select(selectTodayTaskIds)),
-      filter(([{ taskId }, todayTaskIds]) => !todayTaskIds.includes(taskId)),
-      map(([{ taskId }]) =>
-        TaskSharedActions.planTasksForToday({
-          taskIds: [taskId],
-          today: this._dateService.todayStr(),
-          startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
-          isSkipRemoveReminder: true,
-        }),
-      ),
-    ),
-  );
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   // Uses afterInitialSyncDoneStrict$ to ensure sync has completed before creating repeat tasks,
