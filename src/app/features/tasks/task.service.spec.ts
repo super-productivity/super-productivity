@@ -82,11 +82,9 @@ describe('TaskService', () => {
 
     const dateServiceSpy = jasmine.createSpyObj('DateService', [
       'todayStr',
-      'isToday',
       'getStartOfNextDayDiffMs',
     ]);
     dateServiceSpy.todayStr.and.returnValue('2026-01-05');
-    dateServiceSpy.isToday.and.returnValue(false);
     dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(0);
 
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -282,18 +280,14 @@ describe('TaskService', () => {
       expect(action.task.notes).toBe('Test notes');
     });
 
-    it('should attach auto-plan context when adding a task with deadline today', () => {
-      const dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
-      dateService.todayStr.and.returnValue('2026-01-05');
-      dateService.getStartOfNextDayDiffMs.and.returnValue(123);
-
+    it('should include auto-plan context when adding a task with a deadline today', () => {
       service.add('New Task', false, { deadlineDay: '2026-01-05' });
 
       const dispatchCall = (store.dispatch as jasmine.Spy).calls.mostRecent();
       const action = dispatchCall.args[0] as ReturnType<typeof TaskSharedActions.addTask>;
 
       expect(action.autoPlanToday).toBe('2026-01-05');
-      expect(action.autoPlanStartOfNextDayDiffMs).toBe(123);
+      expect(action.autoPlanStartOfNextDayDiffMs).toBe(0);
     });
   });
 

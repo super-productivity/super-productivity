@@ -32,7 +32,6 @@ import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.u
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
-import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 import {
   selectAllTaskRepeatCfgs,
   selectTaskRepeatCfgById,
@@ -41,6 +40,7 @@ import {
   selectTaskRepeatCfgsForExactDay,
 } from './store/task-repeat-cfg.selectors';
 import { getRepeatableTaskId } from './get-repeatable-task-id.util';
+import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 
 @Injectable({
   providedIn: 'root',

@@ -29,6 +29,7 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { TODAY_TAG } from '../tag/tag.const';
 import { getRepeatableTaskId } from './get-repeatable-task-id.util';
+import { DateService } from '../../core/date/date.service';
 
 describe('TaskRepeatCfgService', () => {
   let service: TaskRepeatCfgService;
@@ -96,6 +97,14 @@ describe('TaskRepeatCfgService', () => {
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
+        {
+          provide: DateService,
+          useValue: {
+            todayStr: () => getDbDateStr(),
+            isToday: (date: number | Date) => getDbDateStr(date) === getDbDateStr(),
+            getStartOfNextDayDiffMs: () => 0,
+          },
+        },
       ],
     });
 

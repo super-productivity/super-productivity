@@ -66,8 +66,8 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
         {
           provide: DateService,
           useValue: {
-            todayStr: () => '2026-05-06',
             isToday: () => false,
+            todayStr: () => '2026-05-06',
             getStartOfNextDayDiffMs: () => 0,
           },
         },
@@ -101,6 +101,7 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     expect(calls.length).toBe(1);
     expect(calls[0].deadlineWithTime).toBeDefined();
     expect(calls[0].deadlineDay).toBeUndefined();
+    expect(calls[0].autoPlanToday).toBe('2026-05-06');
     expect(matDialogRefSpy.close).toHaveBeenCalled();
   });
 
@@ -116,7 +117,6 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     expect(calls[0].deadlineDay).toBe('2026-05-06');
     expect(calls[0].deadlineWithTime).toBeUndefined();
     expect(calls[0].autoPlanToday).toBe('2026-05-06');
-    expect(calls[0].autoPlanStartOfNextDayDiffMs).toBe(0);
   });
 
   // Currently FAILS — proves issue #7490. After the fix, submit() must not

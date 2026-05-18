@@ -19,7 +19,6 @@ import {
 } from '../../core/platform/capacitor-notification.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { Task } from '../tasks/task.model';
-import { DateService } from '../../core/date/date.service';
 
 describe('ReminderModule iOS notification actions', () => {
   let module: ReminderModule;
@@ -110,14 +109,6 @@ describe('ReminderModule iOS notification actions', () => {
           useValue: jasmine.createSpyObj('CapacitorReminderService', ['initialize'], {
             action$,
           }),
-        },
-        {
-          provide: DateService,
-          useValue: {
-            todayStr: () => '2026-05-04',
-            isToday: (value: number) => value === 456,
-            getStartOfNextDayDiffMs: () => 0,
-          },
         },
       ],
     });

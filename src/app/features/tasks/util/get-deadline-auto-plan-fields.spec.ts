@@ -1,19 +1,21 @@
-import { DateService } from '../../../core/date/date.service';
-import { getDeadlineAutoPlanFields } from './get-deadline-auto-plan-fields';
+import type { DateService } from '../../../core/date/date.service';
+import { DEFAULT_TASK, Task } from '../task.model';
+import {
+  getDeadlineAutoPlanDecision,
+  getDeadlineAutoPlanFields,
+} from './get-deadline-auto-plan-fields';
 
 describe('getDeadlineAutoPlanFields', () => {
   let dateService: jasmine.SpyObj<
-    Pick<DateService, 'todayStr' | 'isToday' | 'getStartOfNextDayDiffMs'>
+    Pick<DateService, 'todayStr' | 'getStartOfNextDayDiffMs'>
   >;
 
   beforeEach(() => {
     dateService = jasmine.createSpyObj('DateService', [
       'todayStr',
-      'isToday',
       'getStartOfNextDayDiffMs',
     ]);
     dateService.todayStr.and.returnValue('2026-01-05');
-    dateService.isToday.and.returnValue(false);
     dateService.getStartOfNextDayDiffMs.and.returnValue(123);
   });
 
@@ -25,22 +27,114 @@ describe('getDeadlineAutoPlanFields', () => {
   });
 
   it('should include auto-plan context for a timed deadline today', () => {
-    const deadlineWithTime = new Date('2026-01-05T12:00:00').getTime();
-    dateService.isToday.and.returnValue(true);
+    dateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    const deadlineWithTime = new Date(2026, 0, 5, 12).getTime();
 
     expect(getDeadlineAutoPlanFields(dateService, undefined, deadlineWithTime)).toEqual({
       autoPlanToday: '2026-01-05',
-      autoPlanStartOfNextDayDiffMs: 123,
+      autoPlanStartOfNextDayDiffMs: 0,
     });
-    expect(dateService.isToday).toHaveBeenCalledWith(deadlineWithTime);
   });
 
   it('should return no auto-plan context for future deadlines', () => {
-    const deadlineWithTime = new Date('2026-01-06T12:00:00').getTime();
+    dateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    const deadlineWithTime = new Date(2026, 0, 6, 12).getTime();
 
     expect(getDeadlineAutoPlanFields(dateService, '2026-01-06')).toEqual({});
     expect(getDeadlineAutoPlanFields(dateService, undefined, deadlineWithTime)).toEqual(
       {},
     );
+  });
+
+  it('should let deadlineWithTime take precedence over stale deadlineDay', () => {
+    dateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    const futureDeadlineWithTime = new Date(2026, 0, 6, 12).getTime();
+
+    expect(
+      getDeadlineAutoPlanFields(dateService, '2026-01-05', futureDeadlineWithTime),
+    ).toEqual({});
+  });
+});
+
+describe('getDeadlineAutoPlanDecision', () => {
+  const context = {
+    today: '2026-01-05',
+    startOfNextDayDiffMs: 0,
+  };
+
+  const createTask = (overrides: Partial<Task> = {}): Task =>
+    ({
+      ...DEFAULT_TASK,
+      id: 'task1',
+      title: 'Task 1',
+      projectId: 'project1',
+      created: new Date(2026, 0, 1, 12).getTime(),
+      deadlineDay: context.today,
+      ...overrides,
+    }) as Task;
+
+  it('should set dueDay for an unscheduled task with a deadline today', () => {
+    expect(getDeadlineAutoPlanDecision(createTask(), context, [])).toEqual({
+      shouldAutoPlan: true,
+      shouldUpdateDueDay: true,
+      shouldClearDueWithTime: false,
+    });
+  });
+
+  it('should only add Today ordering when the task is already due today', () => {
+    expect(
+      getDeadlineAutoPlanDecision(
+        createTask({ dueWithTime: new Date(2026, 0, 5, 12).getTime() }),
+        context,
+        [],
+      ),
+    ).toEqual({
+      shouldAutoPlan: true,
+      shouldUpdateDueDay: false,
+      shouldClearDueWithTime: false,
+    });
+  });
+
+  it('should move overdue timed tasks to dueDay today and clear dueWithTime', () => {
+    expect(
+      getDeadlineAutoPlanDecision(
+        createTask({ dueWithTime: new Date(2026, 0, 4, 12).getTime() }),
+        context,
+        [],
+      ),
+    ).toEqual({
+      shouldAutoPlan: true,
+      shouldUpdateDueDay: true,
+      shouldClearDueWithTime: true,
+    });
+  });
+
+  it('should skip future-scheduled tasks', () => {
+    expect(
+      getDeadlineAutoPlanDecision(
+        createTask({ dueWithTime: new Date(2026, 0, 6, 12).getTime() }),
+        context,
+        [],
+      ),
+    ).toEqual({
+      shouldAutoPlan: false,
+      shouldUpdateDueDay: false,
+      shouldClearDueWithTime: false,
+    });
+  });
+
+  it('should skip subtasks whose parent is due today', () => {
+    const parentTask = createTask({
+      id: 'parent',
+      deadlineDay: undefined,
+      dueDay: context.today,
+    });
+    const subTask = createTask({ id: 'sub', parentId: 'parent' });
+
+    expect(getDeadlineAutoPlanDecision(subTask, context, [], parentTask)).toEqual({
+      shouldAutoPlan: false,
+      shouldUpdateDueDay: false,
+      shouldClearDueWithTime: false,
+    });
   });
 });

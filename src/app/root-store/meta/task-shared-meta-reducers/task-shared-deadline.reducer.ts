@@ -7,143 +7,68 @@ import {
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { ActionHandlerMap } from './task-shared-helpers';
-import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
-import { isTodayWithOffset } from '../../../util/is-today.util';
+import { isDBDateStr } from '../../../util/get-db-date-str';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { getTag, updateTags, removeTaskFromPlannerDays } from './task-shared-helpers';
 import { unique } from '../../../util/unique';
+import { getDeadlineAutoPlanDecision } from '../../../features/tasks/util/get-deadline-auto-plan-fields';
+import type { DeadlineAutoPlanContext } from '../../../features/tasks/util/get-deadline-auto-plan-fields';
 
 // =============================================================================
 // ACTION HANDLERS
 // =============================================================================
 
-const hasDueWithTime = (task: Task): boolean =>
-  typeof task.dueWithTime === 'number' &&
-  Number.isFinite(task.dueWithTime) &&
-  task.dueWithTime > 0;
-
-const isTaskDueTodayBySchedule = (
-  task: Task,
-  todayStr: string,
-  startOfNextDayDiffMs: number,
-): boolean => {
-  if (hasDueWithTime(task)) {
-    return isTodayWithOffset(task.dueWithTime as number, todayStr, startOfNextDayDiffMs);
-  }
-  return task.dueDay === todayStr;
-};
+const getAutoPlanContext = (
+  today?: string,
+  startOfNextDayDiffMs?: number,
+): DeadlineAutoPlanContext | undefined =>
+  today && isDBDateStr(today) && Number.isFinite(startOfNextDayDiffMs)
+    ? { today, startOfNextDayDiffMs: startOfNextDayDiffMs as number }
+    : undefined;
 
 const autoPlanTaskDueToDeadline = (
   state: RootState,
   taskId: string,
-  deadlineDay?: string,
-  deadlineWithTime?: number,
-  autoPlanToday?: string,
-  autoPlanStartOfNextDayDiffMs?: number,
+  context?: DeadlineAutoPlanContext,
 ): RootState => {
+  if (!context) return state;
+
   const task = state[TASK_FEATURE_NAME].entities[taskId] as Task;
   if (!task) return state;
 
-  if (
-    !autoPlanToday ||
-    !isDBDateStr(autoPlanToday) ||
-    typeof autoPlanStartOfNextDayDiffMs !== 'number' ||
-    !Number.isFinite(autoPlanStartOfNextDayDiffMs)
-  ) {
-    return state;
-  }
-
-  const todayStr = autoPlanToday;
-  const startOfNextDayDiffMs = autoPlanStartOfNextDayDiffMs;
-
-  // Auto-plan context is persisted only for local actions whose deadline was
-  // evaluated as "today" at action creation. Re-check it here so malformed
-  // callers cannot auto-plan arbitrary future deadlines.
-  let isDeadlineToday = false;
-  if (deadlineDay === todayStr) {
-    isDeadlineToday = true;
-  } else if (
-    typeof deadlineWithTime === 'number' &&
-    Number.isFinite(deadlineWithTime) &&
-    deadlineWithTime > 0
-  ) {
-    isDeadlineToday = isTodayWithOffset(deadlineWithTime, todayStr, startOfNextDayDiffMs);
-  }
-
-  if (!isDeadlineToday) {
-    return state;
-  }
-
-  // 2. Check if task is done or subtask whose parent is already in Today
-  if (task.isDone) {
-    return state;
-  }
   const todayTag = getTag(state, TODAY_TAG.id);
   const parentTask = task.parentId
-    ? (state[TASK_FEATURE_NAME].entities[task.parentId] as Task)
+    ? (state[TASK_FEATURE_NAME].entities[task.parentId] as Task | undefined)
     : undefined;
-  if (
-    task.parentId &&
-    (todayTag.taskIds.includes(task.parentId) ||
-      (parentTask &&
-        isTaskDueTodayBySchedule(parentTask, todayStr, startOfNextDayDiffMs)))
-  ) {
-    return state;
-  }
+  const decision = getDeadlineAutoPlanDecision(
+    task,
+    context,
+    todayTag.taskIds,
+    parentTask,
+  );
 
-  // 3. Apply scheduling policy for today deadline
-  const isDueToday = isTaskDueTodayBySchedule(task, todayStr, startOfNextDayDiffMs);
-
-  let shouldAutoPlan = false;
-  let shouldClearTime = false;
-  let shouldUpdateDueDay = false;
-
-  if (isDueToday) {
-    shouldAutoPlan = !todayTag.taskIds.includes(taskId);
-  } else if (!task.dueDay && !hasDueWithTime(task)) {
-    shouldAutoPlan = true;
-    shouldUpdateDueDay = true;
-  } else {
-    let isOverdue = false;
-    if (hasDueWithTime(task)) {
-      const dueWithTimeDay = getDbDateStr(
-        (task.dueWithTime as number) - startOfNextDayDiffMs,
-      );
-      isOverdue = dueWithTimeDay < todayStr;
-    } else if (task.dueDay && task.dueDay < todayStr) {
-      isOverdue = true;
-    }
-
-    if (isOverdue) {
-      shouldAutoPlan = true;
-      shouldClearTime = true;
-      shouldUpdateDueDay = true;
-    }
-  }
-
-  if (!shouldAutoPlan) {
+  if (!decision.shouldAutoPlan) {
     return state;
   }
 
   let updatedState = state;
 
-  if (shouldUpdateDueDay || shouldClearTime) {
+  if (decision.shouldUpdateDueDay || decision.shouldClearDueWithTime) {
     updatedState = {
       ...updatedState,
       [TASK_FEATURE_NAME]: taskAdapter.updateOne(
         {
           id: taskId,
           changes: {
-            ...(shouldUpdateDueDay ? { dueDay: todayStr } : {}),
-            ...(shouldClearTime ? { dueWithTime: undefined } : {}),
-            // Note: intentionally preserving remindAt to keep user intent
+            ...(decision.shouldUpdateDueDay ? { dueDay: context.today } : {}),
+            ...(decision.shouldClearDueWithTime ? { dueWithTime: undefined } : {}),
           },
         },
         updatedState[TASK_FEATURE_NAME],
       ),
     };
 
-    if (shouldUpdateDueDay) {
+    if (decision.shouldUpdateDueDay) {
       updatedState = removeTaskFromPlannerDays(updatedState, taskId);
     }
   }
@@ -208,12 +133,19 @@ const handleSetDeadline = (
   return autoPlanTaskDueToDeadline(
     updatedState,
     taskId,
-    deadlineDay,
-    deadlineWithTime,
-    autoPlanToday,
-    autoPlanStartOfNextDayDiffMs,
+    getAutoPlanContext(autoPlanToday, autoPlanStartOfNextDayDiffMs),
   );
 };
+
+const sortTaskIdsForDeadlinePlanning = (
+  state: RootState,
+  taskIds: readonly string[],
+): string[] =>
+  [...taskIds].sort((a, b) => {
+    const taskA = state[TASK_FEATURE_NAME].entities[a] as Task | undefined;
+    const taskB = state[TASK_FEATURE_NAME].entities[b] as Task | undefined;
+    return Number(!!taskA?.parentId) - Number(!!taskB?.parentId);
+  });
 
 const handleRemoveDeadline = (state: RootState, taskId: string): RootState => {
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
@@ -253,32 +185,6 @@ const handleClearDeadlineReminder = (state: RootState, taskId: string): RootStat
   };
 };
 
-const handlePlanDeadlineTasksForToday = (
-  state: RootState,
-  taskIds: string[],
-  today: string,
-  startOfNextDayDiffMs: number,
-): RootState =>
-  [...taskIds]
-    .sort((a, b) => {
-      const taskA = state[TASK_FEATURE_NAME].entities[a] as Task | undefined;
-      const taskB = state[TASK_FEATURE_NAME].entities[b] as Task | undefined;
-      return Number(!!taskA?.parentId) - Number(!!taskB?.parentId);
-    })
-    .reduce((updatedState, taskId) => {
-      const task = updatedState[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
-      if (!task) return updatedState;
-
-      return autoPlanTaskDueToDeadline(
-        updatedState,
-        taskId,
-        task.deadlineDay || undefined,
-        task.deadlineWithTime === null ? undefined : task.deadlineWithTime,
-        today,
-        startOfNextDayDiffMs,
-      );
-    }, state);
-
 // =============================================================================
 // META REDUCER
 // =============================================================================
@@ -292,10 +198,7 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
       return autoPlanTaskDueToDeadline(
         state,
         task.id,
-        task.deadlineDay || undefined,
-        task.deadlineWithTime === null ? undefined : task.deadlineWithTime,
-        autoPlanToday,
-        autoPlanStartOfNextDayDiffMs,
+        getAutoPlanContext(autoPlanToday, autoPlanStartOfNextDayDiffMs),
       );
     }
     return state;
@@ -319,6 +222,16 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
       autoPlanStartOfNextDayDiffMs,
     );
   },
+  [TaskSharedActions.planDeadlineTasksForToday.type]: () => {
+    const { taskIds, today, startOfNextDayDiffMs } = action as ReturnType<
+      typeof TaskSharedActions.planDeadlineTasksForToday
+    >;
+    const context = getAutoPlanContext(today, startOfNextDayDiffMs);
+    return sortTaskIdsForDeadlinePlanning(state, taskIds).reduce(
+      (updatedState, taskId) => autoPlanTaskDueToDeadline(updatedState, taskId, context),
+      state,
+    );
+  },
   [TaskSharedActions.removeDeadline.type]: () => {
     const { taskId } = action as ReturnType<typeof TaskSharedActions.removeDeadline>;
     return handleRemoveDeadline(state, taskId);
@@ -328,12 +241,6 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
       typeof TaskSharedActions.clearDeadlineReminder
     >;
     return handleClearDeadlineReminder(state, taskId);
-  },
-  [TaskSharedActions.planDeadlineTasksForToday.type]: () => {
-    const { taskIds, today, startOfNextDayDiffMs } = action as ReturnType<
-      typeof TaskSharedActions.planDeadlineTasksForToday
-    >;
-    return handlePlanDeadlineTasksForToday(state, taskIds, today, startOfNextDayDiffMs);
   },
 });
 

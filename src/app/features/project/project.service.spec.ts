@@ -18,6 +18,7 @@ import { WorkContextType } from '../work-context/work-context.model';
 import { T } from '../../t.const';
 import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { NoteState } from '../note/note.model';
+import { DateService } from '../../core/date/date.service';
 
 describe('ProjectService', () => {
   let service: ProjectService;
@@ -136,6 +137,13 @@ describe('ProjectService', () => {
           useValue: { getTaskRepeatCfgsWithLabels$: () => of([]) },
         },
         { provide: TimeTrackingService, useValue: timeTrackingService },
+        {
+          provide: DateService,
+          useValue: {
+            todayStr: () => '2026-01-05',
+            getStartOfNextDayDiffMs: () => 0,
+          },
+        },
       ],
     });
     workContextService.activeWorkContext$ = EMPTY;
