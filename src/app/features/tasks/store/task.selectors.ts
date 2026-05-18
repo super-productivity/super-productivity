@@ -601,6 +601,29 @@ export const selectTasksWithDueTimeForRange = createSelector(
   },
 );
 
+/** Tasks whose whole-day deadline is exactly `day` and that are not yet done. */
+export const selectTasksWithDeadlineDayForDay = createSelector(
+  selectAllTasks,
+  (tasks: Task[], props: { day: string }): Task[] =>
+    tasks.filter(
+      (task): task is Task => !!task && !task.isDone && task.deadlineDay === props.day,
+    ),
+);
+
+/** Tasks whose timed deadline falls within [start, end] and that are not yet done. */
+export const selectTasksWithDeadlineTimeForRange = createSelector(
+  selectAllTasks,
+  (tasks: Task[], props: { start: number; end: number }): Task[] =>
+    tasks.filter(
+      (task): task is Task =>
+        !!task &&
+        !task.isDone &&
+        typeof task.deadlineWithTime === 'number' &&
+        task.deadlineWithTime >= props.start &&
+        task.deadlineWithTime <= props.end,
+    ),
+);
+
 export const selectAllTasksWithDueTime = createSelector(
   selectAllTasks,
   (tasks: Task[]): TaskWithDueTime[] => {
