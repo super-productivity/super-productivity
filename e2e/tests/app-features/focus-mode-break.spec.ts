@@ -164,6 +164,7 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
       'focus-mode-main button.complete-session-btn',
     );
     const skipBreakButton = page.getByRole('button', { name: 'Skip Break' });
+    const modeSelector = page.locator('focus-mode-main segmented-button-group');
 
     // Open focus mode overlay
     await mainFocusButton.click();
