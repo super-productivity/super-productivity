@@ -156,7 +156,7 @@ export class JiraApiService {
       //   res.length > 0 ? of(res) : this.issuePicker$(searchTerm, cfg),
       // ),
       catchError((err) => {
-        const code = err?.error?.statusCode ?? err?.status ?? err?.error?.status;
+        const code = extractHttpStatus(err);
         if (code === 404) {
           // Fallback for Server/DC: /search?jql=...
           return this._sendRequest$({
@@ -246,7 +246,7 @@ export class JiraApiService {
       suppressErrorSnack: true,
     }).pipe(
       catchError((err) => {
-        const code = err?.error?.statusCode ?? err?.status ?? err?.error?.status;
+        const code = extractHttpStatus(err);
         if (code === 401 || code === 403) return throwError(() => err);
         // Fallback for Server/DC: POST /search with jql in body
         return this._sendRequest$({
@@ -536,13 +536,13 @@ export class JiraApiService {
     } else if (IS_ANDROID_WEB_VIEW || jiraCfg.allowFetchFallback) {
       return from(
         fetch(url, requestInit)
-          .then((response) => response.body)
-          .then((body) => streamToJsonIfPossible(body as ReadableStream))
+          .then((response) => this._parseFetchResponse(response))
           .then((res) => {
-            const resObj = res as Record<string, unknown>;
+            const resObj = res as Record<string, unknown> | null;
             if (Array.isArray(resObj?.errorMessages)) {
               throw new Error((resObj.errorMessages as string[]).join(', '));
             }
+
             return transform ? transform({ response: res }, jiraCfg) : { response: res };
           }),
       ).pipe(
@@ -553,7 +553,8 @@ export class JiraApiService {
           if (!suppressErrorSnack) {
             this._snackService.open({ type: 'ERROR', msg: errTxt });
           }
-          return throwError({ [HANDLED_ERROR_PROP_STR]: errTxt });
+          const status = extractHttpStatus(err);
+          return throwError(() => ({ [HANDLED_ERROR_PROP_STR]: errTxt, status }));
         }),
       );
     } else {
@@ -569,7 +570,8 @@ export class JiraApiService {
         if (!suppressErrorSnack) {
           this._snackService.open({ type: 'ERROR', msg: errTxt });
         }
-        return throwError({ [HANDLED_ERROR_PROP_STR]: errTxt });
+        const status = extractHttpStatus(err);
+        return throwError(() => ({ [HANDLED_ERROR_PROP_STR]: errTxt, status }));
       }),
       first(),
       finalize(() => this._globalProgressBarService.countDown()),
@@ -687,13 +689,7 @@ export class JiraApiService {
       if (!res || res.error) {
         IssueLog.err('JIRA_RESPONSE_ERROR', res, currentRequest);
         // let msg =
-        if (
-          res?.error &&
-          (res.error.statusCode === 401 ||
-            res.error.status === 401 ||
-            res.error.message === 'Forbidden' ||
-            res.error.message === 'Unauthorized')
-        ) {
+        if (res?.error && isUnauthorizedError(res.error)) {
           this._blockAccess();
         }
 
@@ -722,6 +718,23 @@ export class JiraApiService {
     } else {
       IssueLog.err('Jira: Response Request ID not existing', res && res.requestId);
     }
+  }
+
+  private async _parseFetchResponse(response: Response): Promise<unknown> {
+    if (!response.ok) {
+      if (isUnauthorizedError(response)) this._blockAccess();
+
+      const errorBody = response.body
+        ? await streamToJsonIfPossible(response.body).catch(() => null)
+        : null;
+
+      throw Object.assign(new Error(`HTTP ${response.status}`), {
+        status: response.status,
+        error: errorBody,
+      });
+    }
+
+    return response.body ? streamToJsonIfPossible(response.body) : null;
   }
 
   private _blockAccess(): void {
@@ -757,6 +770,27 @@ async function streamToString(stream: ReadableStream): Promise<string> {
   result += decoder.decode(); // flush the decoder
   return result;
 }
+
+const extractHttpStatus = (err: unknown): number | undefined => {
+  if (!err || typeof err !== 'object') return undefined;
+  const e = err as { status?: number; error?: { statusCode?: number; status?: number } };
+  return e.status ?? e.error?.statusCode ?? e.error?.status;
+};
+
+const isUnauthorizedError = ({
+  status,
+  statusCode,
+  message,
+}: {
+  status?: number;
+  statusCode?: number;
+  message?: string;
+}): boolean => {
+  const code = statusCode ?? status;
+  return (
+    code === 401 || code === 403 || message === 'Forbidden' || message === 'Unauthorized'
+  );
+};
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 async function streamToJsonIfPossible(stream: ReadableStream): Promise<unknown> {

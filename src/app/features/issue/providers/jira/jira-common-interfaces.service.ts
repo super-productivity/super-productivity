@@ -12,6 +12,7 @@ import { JiraCfg } from './jira.model';
 import { isJiraEnabled } from './is-jira-enabled.util';
 import { JIRA_POLL_INTERVAL } from './jira.const';
 import { assertTruthy } from '../../../../util/assert-truthy';
+import { stripTrailing } from '../../../../util/strip-trailing';
 import { IssueLog } from '../../../../core/log';
 
 @Injectable({
@@ -44,7 +45,10 @@ export class JiraCommonInterfacesService extends BaseIssueProviderService<JiraCf
       this._getCfgOnce$(issueProviderId).pipe(
         first(),
         map(
-          (jiraCfg) => (jiraCfg.altPublicLinkHost || jiraCfg.host) + '/browse/' + issueId,
+          (jiraCfg) =>
+            stripTrailing(jiraCfg.altPublicLinkHost || jiraCfg.host || '', '/') +
+            '/browse/' +
+            issueId,
         ),
       ),
     ).then((result) => result ?? '');
