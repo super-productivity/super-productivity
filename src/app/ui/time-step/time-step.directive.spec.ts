@@ -127,7 +127,7 @@ describe('TimeStepDirective', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('ignores repeated keydown events (ev.repeat)', () => {
+  it('still steps on held key (ev.repeat)', () => {
     nativeInput.value = '09:00';
     nativeInput.dispatchEvent(
       new KeyboardEvent('keydown', {
