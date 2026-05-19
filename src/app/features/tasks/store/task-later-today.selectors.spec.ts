@@ -1,5 +1,5 @@
 import { selectLaterTodayTasksWithSubTasks } from './task.selectors';
-import { Task, TaskState } from '../task.model';
+import { Task, TaskWithSubTasks } from '../task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('selectLaterTodayTasksWithSubTasks', () => {
@@ -23,19 +23,16 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     return date.getTime();
   };
 
-  // Helper to create TaskState from array of tasks
-  const createTaskState = (tasks: Task[]): TaskState => {
-    const entities = tasks.reduce((acc, task) => ({ ...acc, [task.id]: task }), {});
-    const ids = tasks.map((t) => t.id);
-    return {
-      entities,
-      ids,
-      currentTaskId: null,
-      selectedTaskId: null,
-      lastCurrentTaskId: null,
-      taskDetailTargetPanel: 'Default' as any,
-      isDataLoaded: true,
-    } as TaskState;
+  const toTasksWithSubTasks = (tasks: Task[]): TaskWithSubTasks[] => {
+    const taskMap = new Map(tasks.map((t) => [t.id, t]));
+    return tasks
+      .filter((t) => !t.parentId)
+      .map((t) => ({
+        ...t,
+        subTasks: (t.subTaskIds || [])
+          .map((id) => taskMap.get(id))
+          .filter((st): st is Task => !!st),
+      }));
   };
 
   const createMockTask = (overrides: Partial<Task>): Task =>
@@ -167,7 +164,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
   it('should select tasks scheduled for later today', () => {
     // Virtual tag pattern: tasks are "in TODAY" because of dueDay or dueWithTime for today
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockAllTasks),
+      toTasksWithSubTasks(mockAllTasks),
       todayStr,
       0,
     );
@@ -192,7 +189,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
   it('should not include tasks scheduled for earlier today', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockAllTasks),
+      toTasksWithSubTasks(mockAllTasks),
       todayStr,
       0,
     );
@@ -203,7 +200,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
   it('should not include tasks scheduled for tomorrow', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockAllTasks),
+      toTasksWithSubTasks(mockAllTasks),
       todayStr,
       0,
     );
@@ -214,7 +211,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
   it('should not include unscheduled tasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockAllTasks),
+      toTasksWithSubTasks(mockAllTasks),
       todayStr,
       0,
     );
@@ -225,7 +222,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
   it('should not include done tasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockAllTasks),
+      toTasksWithSubTasks(mockAllTasks),
       todayStr,
       0,
     );
@@ -258,7 +255,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     });
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState([...mockAllTasks, taskForTomorrow]),
+      toTasksWithSubTasks([...mockAllTasks, taskForTomorrow]),
       todayStr,
       0,
     );
@@ -269,7 +266,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
   it('should include parent tasks with all their subtasks (not as separate items)', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockAllTasks),
+      toTasksWithSubTasks(mockAllTasks),
       todayStr,
       0,
     );
@@ -298,7 +295,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const tasksWithCurrent = [...mockAllTasks, taskAtCurrentTime];
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(tasksWithCurrent),
+      toTasksWithSubTasks(tasksWithCurrent),
       todayStr,
       0,
     );
@@ -323,7 +320,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const tasksWithMidnight = [...mockAllTasks, taskAtMidnight];
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(tasksWithMidnight),
+      toTasksWithSubTasks(tasksWithMidnight),
       todayStr,
       0,
     );
@@ -347,7 +344,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     ];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(noMatchingTasks),
+      toTasksWithSubTasks(noMatchingTasks),
       todayStr,
       0,
     );
@@ -357,7 +354,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
   it('should return empty array when todayStr is null', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockAllTasks),
+      toTasksWithSubTasks(mockAllTasks),
       null as any,
       0,
     );
@@ -385,7 +382,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [parentWithScheduledSubtask, scheduledSubtask];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -417,7 +414,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [parentTask, scheduledSubtask];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -472,7 +469,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [parent1, sub1, parent2, sub2];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -517,7 +514,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [parentUnscheduled, subUnscheduled, subPast];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -546,7 +543,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [parentTask, subtask];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -594,7 +591,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [parentNotToday, orphanedSubtask];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -633,7 +630,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [parentTask, scheduledSubtask, unscheduledSubtask];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -681,7 +678,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [grandparent, parent, child];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -705,7 +702,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     });
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState([taskWithTimeOnly]),
+      toTasksWithSubTasks([taskWithTimeOnly]),
       todayStr,
       0,
     );
@@ -745,7 +742,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const mockTasks = [parentTask, doneSubtask, notDoneSubtask];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockTasks),
+      toTasksWithSubTasks(mockTasks),
       todayStr,
       0,
     );
@@ -792,7 +789,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       });
 
       const result = selectLaterTodayTasksWithSubTasks.projector(
-        createTaskState([taskAt2amFeb16]),
+        toTasksWithSubTasks([taskAt2amFeb16]),
         feb15Str,
         FOUR_HOURS_MS,
       );
@@ -813,7 +810,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       });
 
       const result = selectLaterTodayTasksWithSubTasks.projector(
-        createTaskState([taskAt5amFeb16]),
+        toTasksWithSubTasks([taskAt5amFeb16]),
         feb15Str,
         FOUR_HOURS_MS,
       );
@@ -834,7 +831,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       });
 
       const result = selectLaterTodayTasksWithSubTasks.projector(
-        createTaskState([taskAt359amFeb16]),
+        toTasksWithSubTasks([taskAt359amFeb16]),
         feb15Str,
         FOUR_HOURS_MS,
       );
@@ -856,7 +853,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       });
 
       const result = selectLaterTodayTasksWithSubTasks.projector(
-        createTaskState([taskAt401amFeb16]),
+        toTasksWithSubTasks([taskAt401amFeb16]),
         feb15Str,
         FOUR_HOURS_MS,
       );
@@ -874,7 +871,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       });
 
       const result = selectLaterTodayTasksWithSubTasks.projector(
-        createTaskState([taskAt3pmFeb15]),
+        toTasksWithSubTasks([taskAt3pmFeb15]),
         feb15Str,
         FOUR_HOURS_MS,
       );
@@ -893,7 +890,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       });
 
       const result = selectLaterTodayTasksWithSubTasks.projector(
-        createTaskState([taskAt8amFeb15]),
+        toTasksWithSubTasks([taskAt8amFeb15]),
         feb15Str,
         FOUR_HOURS_MS,
       );
