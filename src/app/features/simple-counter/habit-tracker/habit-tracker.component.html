@@ -76,10 +76,10 @@
             [attr.aria-disabled]="!isDayEnabled(counter, day.dow) || null"
             (click)="onCellClick(counter, day.str, day.dow)"
             (contextmenu)="onCellContextMenu($event, counter, day.str, day.dow)"
-            (mousedown)="onPressStart(counter, day.str)"
+            (mousedown)="onPressStart(counter, day.str, day.dow)"
             (mouseup)="onPressEnd()"
             (mouseleave)="onPressEnd()"
-            (touchstart)="onPressStart(counter, day.str)"
+            (touchstart)="onPressStart(counter, day.str, day.dow)"
             (touchend)="onPressEnd()"
           >
             <div

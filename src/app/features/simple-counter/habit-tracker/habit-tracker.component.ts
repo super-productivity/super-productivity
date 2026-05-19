@@ -152,14 +152,17 @@ export class HabitTrackerComponent {
     date: string,
     dow: number,
   ): void {
+    event.preventDefault();
     if (!this.isDayEnabled(counter, dow)) {
       return;
     }
-    event.preventDefault();
     this.openEditDialog(counter, date);
   }
 
-  onPressStart(counter: SimpleCounter, date: string): void {
+  onPressStart(counter: SimpleCounter, date: string, dow: number): void {
+    if (!this.isDayEnabled(counter, dow)) {
+      return;
+    }
     this._isLongPress = false;
     this._pendingLongPressAction = undefined;
     this._longPressTimer = window.setTimeout(() => {
