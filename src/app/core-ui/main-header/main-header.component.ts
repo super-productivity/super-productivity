@@ -1,8 +1,8 @@
 import {
-  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   ElementRef,
   inject,
   OnDestroy,
@@ -71,7 +71,7 @@ import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
     FocusButtonComponent,
   ],
 })
-export class MainHeaderComponent implements AfterViewInit, OnDestroy {
+export class MainHeaderComponent implements OnDestroy {
   private readonly _elRef = inject(ElementRef<HTMLElement>);
   private _teleportedNav: HTMLElement | null = null;
   private _teleportObserver: MutationObserver | null = null;
@@ -202,25 +202,68 @@ export class MainHeaderComponent implements AfterViewInit, OnDestroy {
 
   private _subs: Subscription = new Subscription();
 
-  ngAfterViewInit(): void {
-    // EXPERIMENT: teleport the right-side action nav to document.body so it
-    // escapes any ancestor containing-block (transform/filter/contain) and
-    // position: fixed reliably anchors to the viewport. Desktop only.
-    if (this.layoutService.isXs()) return;
-    const root = this._elRef.nativeElement as HTMLElement;
-    const tryTeleport = (): boolean => {
-      const nav = root.querySelector('nav.action-nav-right') as HTMLElement | null;
-      if (!nav || this._teleportedNav) return !!nav;
-      nav.classList.add('action-nav-right--teleported');
-      document.body.appendChild(nav);
-      this._teleportedNav = nav;
-      return true;
-    };
-    if (!tryTeleport()) {
-      this._teleportObserver = new MutationObserver(() => {
-        if (tryTeleport()) this._teleportObserver?.disconnect();
-      });
-      this._teleportObserver.observe(root, { childList: true, subtree: true });
+  // Vertical action bar is desktop-only and opt-in via misc config.
+  private readonly _isVerticalActionBar = computed(
+    () => !this.isXs() && !!this.globalConfigService.misc()?.isVerticalActionBar,
+  );
+
+  constructor() {
+    // Teleport the action nav to document.body (and back) so the fixed
+    // vertical strip escapes any ancestor containing-block
+    // (transform/filter/contain) and reliably anchors to the viewport.
+    // Reacts live to the config toggle and the desktop/mobile breakpoint;
+    // also re-runs once the nav enters the DOM (it sits behind
+    // @if(isDataLoaded())).
+    effect(() => {
+      const enabled = this._isVerticalActionBar();
+      this.isDataLoaded();
+      this._syncTeleport(enabled);
+    });
+  }
+
+  private _syncTeleport(enabled: boolean): void {
+    if (enabled) {
+      if (this._teleportedNav?.isConnected) return;
+      if (!this._teleportNav()) {
+        this._teleportObserver?.disconnect();
+        this._teleportObserver = new MutationObserver(() => {
+          if (this._teleportNav()) this._teleportObserver?.disconnect();
+        });
+        this._teleportObserver.observe(this._elRef.nativeElement, {
+          childList: true,
+          subtree: true,
+        });
+      }
+    } else {
+      this._teleportObserver?.disconnect();
+      this._teleportObserver = null;
+      this._restoreNav();
+    }
+  }
+
+  private _teleportNav(): boolean {
+    if (this._teleportedNav?.isConnected) return true;
+    this._teleportedNav = null;
+    const nav = (this._elRef.nativeElement as HTMLElement).querySelector(
+      'nav.action-nav-right',
+    ) as HTMLElement | null;
+    if (!nav) return false;
+    nav.classList.add('action-nav-right--teleported');
+    document.body.appendChild(nav);
+    this._teleportedNav = nav;
+    return true;
+  }
+
+  private _restoreNav(): void {
+    const nav = this._teleportedNav;
+    if (!nav) return;
+    this._teleportedNav = null;
+    nav.classList.remove('action-nav-right--teleported');
+    const wrapper = (this._elRef.nativeElement as HTMLElement).querySelector('.wrapper');
+    if (wrapper) {
+      wrapper.appendChild(nav);
+    } else {
+      nav.remove();
     }
   }
 

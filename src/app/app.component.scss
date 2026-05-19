@@ -12,16 +12,19 @@
   min-height: 100vh;
   // mobile viewport bug fix
   min-height: -webkit-fill-available;
+}
 
-  // EXPERIMENT: reserve a column on the right for the vertical action strip
-  // rendered by main-header (desktop only). The strip is position: fixed,
-  // so this padding keeps the main content + right-panel to the left of it.
+// Vertical action bar (opt-in via misc.isVerticalActionBar): reserve a
+// column on the right for the fixed action strip teleported by main-header
+// (desktop only). The strip is position: fixed, so this padding keeps the
+// main content + right-panel to the left of it.
+.app-container.has-vertical-action-bar {
   @include mq(xs) {
     padding-right: var(--vertical-action-bar-width);
   }
 }
 
-:host-context([dir='rtl']) .app-container {
+:host-context([dir='rtl']) .app-container.has-vertical-action-bar {
   @include mq(xs) {
     padding-right: 0;
     padding-left: var(--vertical-action-bar-width);

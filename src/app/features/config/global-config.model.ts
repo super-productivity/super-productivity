@@ -33,6 +33,10 @@ export type MiscConfig = Readonly<{
   /** Canonical start-of-next-day value, including minute precision. */
   startOfNextDayTime?: string;
   isDisableAnimations: boolean;
+  // Experimental: render the header action buttons as a vertical strip on
+  // the right edge of the viewport instead of the horizontal top header.
+  // Desktop only. Optional because it was added later.
+  isVerticalActionBar?: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;
   isShowProductivityTipLonger?: boolean;

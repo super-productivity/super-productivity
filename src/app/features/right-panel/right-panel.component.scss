@@ -5,11 +5,8 @@
   flex-direction: row;
   justify-content: stretch;
   align-items: stretch;
-  // Full container height: right-panel is now a direct child of .app-container
-  // (sibling of magic-side-nav) so its side spans the full viewport height
-  // including the area above the header.
-  flex: 1;
-  height: 100%;
+  // Classic layout: right-panel sits below the header inside <main>.
+  height: calc(100% - var(--bar-height));
   min-width: 0;
 
   &.resizing {
@@ -30,6 +27,14 @@
       pointer-events: none;
     }
   }
+}
+
+// Vertical action bar layout: right-panel is a direct child of
+// .app-container (sibling of magic-side-nav) so its side spans the full
+// viewport height including the area above the header.
+:host-context(.app-container.has-vertical-action-bar) {
+  flex: 1;
+  height: 100%;
 }
 
 // Disable transitions during external resize drags
@@ -55,10 +60,15 @@
   flex-grow: 1;
   max-width: 100%;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
   position: relative;
   z-index: var(--z-right-panel);
+}
+
+// Vertical action bar: <main> is projected into .content, so it must be a
+// column flex container for the route + progress bar to fill the height.
+:host-context(.app-container.has-vertical-action-bar) .content {
+  display: flex;
+  flex-direction: column;
 }
 
 .side {

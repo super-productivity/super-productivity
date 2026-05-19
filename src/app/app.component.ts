@@ -172,6 +172,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return misc?.isDisableAnimations ?? false;
   });
 
+  // Experimental: vertical action strip on the right edge instead of the
+  // horizontal top header. Switches the DOM layout live (see template).
+  readonly isVerticalActionBar = computed(
+    () => this._globalConfigService.misc()?.isVerticalActionBar ?? false,
+  );
+
   isRTL: boolean = false;
 
   private _isOverlayShownFromStore = toSignal(this._store.select(selectIsOverlayShown), {
