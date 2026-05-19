@@ -47,6 +47,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { CalendarContextInfoTarget } from '../providers/calendar/calendar.model';
 import { IssueIconPipe } from '../issue-icon/issue-icon.pipe';
 import { JiraAdditionalCfgComponent } from '../providers/jira/jira-view-components/jira-cfg/jira-additional-cfg.component';
+import { JiraCfg } from '../providers/jira/jira.model';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
@@ -398,6 +399,10 @@ export class DialogEditIssueProviderComponent {
   protected readonly IS_ANDROID_WEB_VIEW = IS_ANDROID_WEB_VIEW;
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
+
+  protected get isJiraDirectFetchEnabled(): boolean {
+    return !!(this.model as Partial<JiraCfg>).allowFetchFallback;
+  }
 
   protected isOAuthUnavailableInWeb(oauthConfig: OAuthFlowConfig): boolean {
     return !IS_ELECTRON && !IS_NATIVE_PLATFORM && !oauthConfig.webClientId;

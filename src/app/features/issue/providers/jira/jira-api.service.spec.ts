@@ -258,9 +258,25 @@ describe('JiraApiService', () => {
         });
     });
 
-    it('does NOT call fetch() when extension is active (dispatches via extension instead)', () => {
+    it('calls fetch() even when extension is active if allowFetchFallback is set', () => {
       (service as any)._isExtension = true;
       const cfg = { ...baseCfg, allowFetchFallback: true };
+
+      (service as any)._sendRequestToExecutor$(
+        'test-id',
+        'https://jira.example.com/rest/api/latest/issue/picker',
+        { method: 'GET', headers: {} },
+        undefined,
+        cfg,
+        true,
+      );
+
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+
+    it('dispatches via extension when allowFetchFallback is NOT set', () => {
+      (service as any)._isExtension = true;
+      const cfg = { ...baseCfg, allowFetchFallback: false };
 
       (service as any)._sendRequestToExecutor$(
         'test-id',

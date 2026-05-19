@@ -19,7 +19,11 @@
 
 @if (ip.isEnabled) {
   <!---->
-  @if (ip.issueProviderKey === 'JIRA' && IS_WEB_EXTENSION_REQUIRED_FOR_JIRA) {
+  @if (
+    ip.issueProviderKey === 'JIRA' &&
+    IS_WEB_EXTENSION_REQUIRED_FOR_JIRA &&
+    !isJiraDirectFetchEnabled()
+  ) {
     <div [ngClass]="HelperClasses.isHideForAdvancedFeatures">
       <p [innerHTML]="T.F.ISSUE.CROSS_ORIGIN_BROWSER_WARNING | translate"></p>
     </div>

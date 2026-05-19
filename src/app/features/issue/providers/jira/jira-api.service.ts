@@ -527,26 +527,29 @@ export class JiraApiService {
         ...requestToSend,
         jiraCfg,
       });
-    } else if (this._isExtension) {
-      registerRequest();
-      this._chromeExtensionInterfaceService.dispatchEvent(
-        'SP_JIRA_REQUEST',
-        requestToSend,
-      );
     } else if (IS_ANDROID_WEB_VIEW || jiraCfg.allowFetchFallback) {
+      const abortController = new AbortController();
+      const timeoutId = this._scheduleRequestTimeout(() => abortController.abort());
+
       return from(
-        fetch(url, requestInit)
+        fetch(url, { ...requestInit, signal: abortController.signal })
           .then((response) => this._parseFetchResponse(response))
           .then((res) => {
             const resObj = res as Record<string, unknown> | null;
             if (Array.isArray(resObj?.errorMessages)) {
               throw new Error((resObj.errorMessages as string[]).join(', '));
             }
-
             return transform ? transform({ response: res }, jiraCfg) : { response: res };
-          }),
+          })
+          .finally(() => clearTimeout(timeoutId)),
       ).pipe(
         catchError((err) => {
+          if ((err as { name?: string })?.name === 'AbortError') {
+            return throwError(() => ({
+              [HANDLED_ERROR_PROP_STR]: 'Jira: Request timed out',
+            }));
+          }
+
           IssueLog.log(err);
           IssueLog.log(getErrorTxt(err));
           const errTxt = `Jira: ${getErrorTxt(err)}`;
@@ -556,6 +559,12 @@ export class JiraApiService {
           const status = extractHttpStatus(err);
           return throwError(() => ({ [HANDLED_ERROR_PROP_STR]: errTxt, status }));
         }),
+      );
+    } else if (this._isExtension) {
+      registerRequest();
+      this._chromeExtensionInterfaceService.dispatchEvent(
+        'SP_JIRA_REQUEST',
+        requestToSend,
       );
     } else {
       throw new Error('Jira: No valid interface found');
@@ -664,17 +673,10 @@ export class JiraApiService {
       requestInit,
       jiraCfg,
 
-      timeoutId: window.setTimeout(() => {
-        IssueLog.log('ERROR', 'Jira Request timed out', requestInit);
-        this._blockAccess();
-        // delete entry for promise
-        this._snackService.open({
-          msg: T.F.JIRA.S.TIMED_OUT,
-          type: 'ERROR',
-        });
+      timeoutId: this._scheduleRequestTimeout(() => {
         this._requestsLog[requestId].reject('Request timed out');
         delete this._requestsLog[requestId];
-      }, JIRA_REQUEST_TIMEOUT_DURATION),
+      }),
     };
   }
 
@@ -718,6 +720,15 @@ export class JiraApiService {
     } else {
       IssueLog.err('Jira: Response Request ID not existing', res && res.requestId);
     }
+  }
+
+  private _scheduleRequestTimeout(onTimeout: () => void): number {
+    return window.setTimeout(() => {
+      IssueLog.log('ERROR', 'Jira Request timed out');
+      this._blockAccess();
+      this._snackService.open({ msg: T.F.JIRA.S.TIMED_OUT, type: 'ERROR' });
+      onTimeout();
+    }, JIRA_REQUEST_TIMEOUT_DURATION);
   }
 
   private async _parseFetchResponse(response: Response): Promise<unknown> {
