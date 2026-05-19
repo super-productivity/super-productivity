@@ -178,8 +178,10 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
     effect(() => {
       const trigger = this._layoutService.toggleSideNavModeTrigger();
-      if (trigger > 0 && !this.isMobile()) {
-        untracked(() => this.toggleSideNavMode());
+      if (trigger > 0) {
+        untracked(() => {
+          if (!this.isMobile()) this.toggleSideNavMode();
+        });
       }
     });
 
