@@ -87,6 +87,8 @@ const clampWidth = (width: number, maxWidth: number | string): number => {
     '[class.resizing]': 'isResizing()',
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '[class.windowResizing]': 'isWindowResizing()',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '[class.isPanelAnimating]': 'isPanelAnimating()',
   },
   standalone: true,
 })
@@ -148,6 +150,9 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   readonly currentWidth = signal<number>(RIGHT_PANEL_CONFIG.DEFAULT_WIDTH);
   readonly isResizing = signal(false);
   readonly isWindowResizing = signal(false);
+  // True only while the slide-in/out animation runs; clips the transient
+  // width-vs-min-width overflow of the panel content (see component scss).
+  readonly isPanelAnimating = signal(false);
   private readonly _startX = signal(0);
   private readonly _startWidth = signal(0);
 

@@ -56,6 +56,14 @@
   }
 }
 
+// While the slide-in/out animation runs, .side width animates 0 <-> *
+// but .side-inner keeps its min-width, so the content spills past the
+// (intentionally overflow:visible) .side. Clip it at the host for the
+// duration only — `clip` avoids creating a scroll container.
+:host(.isPanelAnimating) {
+  overflow: clip;
+}
+
 .content {
   flex-grow: 1;
   max-width: 100%;
