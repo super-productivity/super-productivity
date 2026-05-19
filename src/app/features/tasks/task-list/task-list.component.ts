@@ -73,6 +73,20 @@ const RESERVED_LIST_IDS = new Set<string>([
 ] satisfies DropListModelSource[]);
 const PARENT_ALLOWED_LISTS = ['DONE', 'UNDONE', 'OVERDUE', 'BACKLOG', 'ADD_TASK_PANEL'];
 
+const canConvertParentDropToSubTask = (
+  task: TaskWithSubTasks,
+  targetModelId: ListModelId,
+  targetListId: TaskListId,
+): boolean =>
+  targetListId === 'SUB' &&
+  !RESERVED_LIST_IDS.has(targetModelId) &&
+  targetModelId !== task.id &&
+  (task.subTaskIds?.length ?? 0) === 0 &&
+  !task.repeatCfgId &&
+  !task.issueId &&
+  !task.issueProviderId &&
+  !task.issueType;
+
 export interface DropModelDataForList {
   listId: TaskListId;
   listModelId: ListModelId;
@@ -213,12 +227,16 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return false;
     }
 
-    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS or to sections (parent-level
-    // lists with a non-reserved id). Subtask drop-lists (listId === 'SUB') are
-    // rejected so a top-level task can't be nested into another task's subtree.
+    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS, to sections (parent-level
+    // lists with a non-reserved id), or into another task's subtask list when
+    // the move does not create nested subtasks or unsupported linked subtasks.
     const srcModelId = drag.dropContainer?.data?.listModelId;
     const srcListIdRaw = drag.dropContainer?.data?.listId;
     const isSrcSection = srcListIdRaw === 'PARENT' && !RESERVED_LIST_IDS.has(srcModelId);
+
+    if (canConvertParentDropToSubTask(task, targetModelId, targetListId)) {
+      return true;
+    }
 
     if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
       // Reject section → BACKLOG: _move() dispatches `removeTaskFromSection`
@@ -360,6 +378,22 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     // Handle LATER_TODAY - prevent any moves to or from this list
     if (src === 'LATER_TODAY' || target === 'LATER_TODAY') {
+      return;
+    }
+
+    if (
+      srcListId === 'PARENT' &&
+      targetListId === 'SUB' &&
+      !RESERVED_LIST_IDS.has(target)
+    ) {
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        TaskSharedActions.convertToSubTask({
+          taskId,
+          targetParentId: target as string,
+          afterTaskId,
+        }),
+      );
       return;
     }
 

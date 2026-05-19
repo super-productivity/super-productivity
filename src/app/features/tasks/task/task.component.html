@@ -252,28 +252,37 @@
         [progress]="progress()"
       ></progress-bar>
     }
-    @if (t.subTasks?.length) {
-      <div class="sub-tasks">
-        <button
-          (click)="toggleSubTaskMode()"
-          [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
-          class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
-          color=""
-          mat-mini-fab
-        >
-          @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
-            <mat-icon>add</mat-icon>
-          } @else {
-            <mat-icon
-              [class.isHideDoneTasks]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
-              >remove
-            </mat-icon>
-          }
-        </button>
+    @if (t.subTasks?.length || isEmptySubTaskDropTargetVisible()) {
+      <div
+        [class.is-empty-drop-target]="!t.subTasks?.length"
+        class="sub-tasks"
+      >
+        @if (t.subTasks?.length) {
+          <button
+            (click)="toggleSubTaskMode()"
+            [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
+            class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
+            color=""
+            mat-mini-fab
+          >
+            @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
+              <mat-icon>add</mat-icon>
+            } @else {
+              <mat-icon
+                [class.isHideDoneTasks]="
+                  t._hideSubTasksMode === ShowSubTasksMode.HideDone
+                "
+                >remove
+              </mat-icon>
+            }
+          </button>
+        }
         <task-list
           [@expandInOnly]
-          [isHideAll]="!!t._hideSubTasksMode"
-          [isHideDone]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
+          [isHideAll]="!!t.subTasks?.length && !!t._hideSubTasksMode"
+          [isHideDone]="
+            !!t.subTasks?.length && t._hideSubTasksMode === ShowSubTasksMode.HideDone
+          "
           [isSubTaskList]="true"
           [listModelId]="t.id"
           [parentId]="t.id"

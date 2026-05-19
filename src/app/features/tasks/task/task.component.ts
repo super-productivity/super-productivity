@@ -89,6 +89,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
 import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
+import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 
 @Component({
   selector: 'task',
@@ -146,6 +147,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _scheduleExternalDragService = inject(ScheduleExternalDragService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -272,6 +274,25 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       this.globalTrackingIntervalService.todayDateStr(),
     ),
   );
+
+  isEmptySubTaskDropTargetVisible = computed(() => {
+    const t = this.task();
+    const activeTask = this._scheduleExternalDragService.activeTask();
+
+    return (
+      !this.isInSubTaskList() &&
+      !t.parentId &&
+      t.id !== activeTask?.id &&
+      (t.subTaskIds?.length ?? 0) === 0 &&
+      !!activeTask &&
+      !activeTask.parentId &&
+      (activeTask.subTaskIds?.length ?? 0) === 0 &&
+      !activeTask.repeatCfgId &&
+      !activeTask.issueId &&
+      !activeTask.issueProviderId &&
+      !activeTask.issueType
+    );
+  });
 
   hasDeadline = computed(() => {
     const t = this.task();

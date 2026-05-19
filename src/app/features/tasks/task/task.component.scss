@@ -3,6 +3,20 @@
 @use './task-base';
 @use './task-controls';
 
+.sub-tasks.is-empty-drop-target {
+  margin-top: var(--s-half);
+  margin-bottom: var(--s-half);
+  min-height: 12px;
+
+  ::ng-deep task-list {
+    padding: 0;
+  }
+
+  ::ng-deep .task-list-inner {
+    min-height: 12px;
+  }
+}
+
 :host.isDragReady:not(.cdk-drag-placeholder) {
   background: var(--bg-lighter);
   box-shadow: var(--whiteframe-shadow-8dp);

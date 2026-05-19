@@ -112,6 +112,32 @@ describe('sectionSharedMetaReducer', () => {
     expect(updated.entities['s2']?.taskIds).toEqual([]);
   });
 
+  it('removes a task from sections when converting it to a subtask', () => {
+    const state = stateWith({ task1: {}, parent: {}, other: {} }, [
+      {
+        id: 's1',
+        contextId: 'project1',
+        contextType: WorkContextType.PROJECT,
+        title: 'A',
+        taskIds: ['task1', 'other'],
+      },
+    ]);
+
+    metaReducer(
+      state,
+      TaskSharedActions.convertToSubTask({
+        taskId: 'task1',
+        targetParentId: 'parent',
+        afterTaskId: null,
+      }),
+    );
+
+    const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+      SECTION_FEATURE_NAME
+    ] as SectionState;
+    expect(updated.entities['s1']?.taskIds).toEqual(['other']);
+  });
+
   it('strips archived tasks (and their subtasks) from sections on moveToArchive', () => {
     const state = stateWith(
       {

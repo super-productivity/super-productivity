@@ -335,6 +335,10 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], Array.from(idSet)),
     );
   },
+  [TaskSharedActions.convertToSubTask.type]: (state, action) => {
+    const { taskId } = action as ReturnType<typeof TaskSharedActions.convertToSubTask>;
+    return handleTaskRemoval(state, [taskId]);
+  },
   [TaskSharedActions.deleteProject.type]: (state, action) => {
     const { projectId, allTaskIds } = action as ReturnType<
       typeof TaskSharedActions.deleteProject
