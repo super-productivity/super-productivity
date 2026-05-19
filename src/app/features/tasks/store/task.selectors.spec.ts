@@ -1,5 +1,5 @@
 import * as fromSelectors from './task.selectors';
-import { DEFAULT_TASK, Task, TaskState, TaskWithDueDay } from '../task.model';
+import { DEFAULT_TASK, Task, TaskState } from '../task.model';
 import { TASK_FEATURE_NAME } from './task.reducer';
 import { taskAdapter } from './task.adapter';
 import { TODAY_TAG } from '../../tag/tag.const';
@@ -896,126 +896,6 @@ describe('Task Selectors', () => {
     });
   });
 
-  // selectAllTasksWithDueDay selector tests
-  describe('selectAllTasksWithDueDay', () => {
-    it('should return tasks that have dueDay set', () => {
-      const result = fromSelectors.selectAllTasksWithDueDay(mockState);
-      // Should include task2, task3, task4, task6 (all have dueDay)
-      expect(result.length).toBe(4);
-      const ids = result.map((t) => t.id);
-      expect(ids).toContain('task2');
-      expect(ids).toContain('task3');
-      expect(ids).toContain('task4');
-      expect(ids).toContain('task6');
-    });
-
-    it('should exclude tasks without dueDay', () => {
-      const result = fromSelectors.selectAllTasksWithDueDay(mockState);
-      const ids = result.map((t) => t.id);
-      // task1, task5, task7, task8, subtask1, subtask2 don't have dueDay
-      expect(ids).not.toContain('task1');
-      expect(ids).not.toContain('task5');
-      expect(ids).not.toContain('task7');
-      expect(ids).not.toContain('task8');
-      expect(ids).not.toContain('subtask1');
-      expect(ids).not.toContain('subtask2');
-    });
-
-    it('should sort results by dueDay chronologically', () => {
-      const result = fromSelectors.selectAllTasksWithDueDay(mockState);
-      // yesterday < today < tomorrow
-      // task6 (yesterday), task2 (today), task3 (today), task4 (tomorrow)
-      const dueDays = result.map((t) => t.dueDay);
-      for (let i = 1; i < dueDays.length; i++) {
-        expect(dueDays[i - 1].localeCompare(dueDays[i])).toBeLessThanOrEqual(0);
-      }
-    });
-
-    it('should return empty array when no tasks have dueDay', () => {
-      const stateWithoutDueDays = {
-        ...mockState,
-        [TASK_FEATURE_NAME]: {
-          ...mockTaskState,
-          ids: ['task1', 'task5'],
-          entities: {
-            task1: mockTasks.task1,
-            task5: mockTasks.task5,
-          },
-        },
-      };
-
-      const result = fromSelectors.selectAllTasksWithDueDay(stateWithoutDueDays);
-      expect(result.length).toBe(0);
-    });
-
-    it('should handle empty task state', () => {
-      const emptyState = {
-        ...mockState,
-        [TASK_FEATURE_NAME]: {
-          ...mockTaskState,
-          ids: [],
-          entities: {},
-        },
-      };
-
-      const result = fromSelectors.selectAllTasksWithDueDay(emptyState);
-      expect(result.length).toBe(0);
-    });
-
-    it('should handle missing entity references gracefully', () => {
-      const stateWithMissingEntity = {
-        ...mockState,
-        [TASK_FEATURE_NAME]: {
-          ...mockTaskState,
-          ids: ['task2', 'nonExistent', 'task3'],
-          entities: {
-            task2: mockTasks.task2,
-            task3: mockTasks.task3,
-          },
-        },
-      };
-
-      const result = fromSelectors.selectAllTasksWithDueDay(stateWithMissingEntity);
-      expect(result.length).toBe(2);
-      expect(result.map((t) => t.id)).toEqual(
-        jasmine.arrayContaining(['task2', 'task3']),
-      );
-    });
-
-    it('should include subtasks with dueDay', () => {
-      const subtaskWithDueDay: Task = {
-        id: 'subtaskWithDue',
-        title: 'Subtask with Due',
-        created: Date.now(),
-        isDone: false,
-        subTaskIds: [],
-        tagIds: [],
-        projectId: 'project1',
-        parentId: 'task1',
-        timeSpentOnDay: {},
-        dueDay: tomorrow,
-        timeEstimate: 0,
-        timeSpent: 0,
-        attachments: [],
-      };
-
-      const stateWithSubtaskDue = {
-        ...mockState,
-        [TASK_FEATURE_NAME]: {
-          ...mockTaskState,
-          ids: [...mockTaskState.ids, 'subtaskWithDue'],
-          entities: {
-            ...mockTaskState.entities,
-            subtaskWithDue: subtaskWithDueDay,
-          },
-        },
-      };
-
-      const result = fromSelectors.selectAllTasksWithDueDay(stateWithSubtaskDue);
-      expect(result.map((t) => t.id)).toContain('subtaskWithDue');
-    });
-  });
-
   // mapSubTasksToTasks optimization tests
   describe('mapSubTasksToTasks optimization', () => {
     it('should correctly map subtasks to parent tasks using Map lookup', () => {
@@ -1101,27 +981,33 @@ describe('Task Selectors', () => {
   });
 
   describe('selectAllUndoneTasksWithDueDay', () => {
-    // task3 has dueDay=today, isDone=false, projectId='project1'
     it('should exclude tasks from archived projects', () => {
-      const allTasks = Object.values(mockTasks);
-      const allTasksWithDueDay = allTasks.filter((t) => !!t.dueDay) as TaskWithDueDay[];
-      const archivedProjectIds = new Set<string>(['project1']);
-      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(
-        allTasksWithDueDay,
-        archivedProjectIds,
+      const activeTasks = Object.values(mockTasks).filter(
+        (t) => t.projectId !== 'project1',
       );
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(activeTasks);
       expect(result.map((t) => t.id)).not.toContain('task3');
     });
 
     it('should include tasks when project is not archived', () => {
       const allTasks = Object.values(mockTasks);
-      const allTasksWithDueDay = allTasks.filter((t) => !!t.dueDay) as TaskWithDueDay[];
-      const archivedProjectIds = new Set<string>();
-      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(
-        allTasksWithDueDay,
-        archivedProjectIds,
-      );
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
       expect(result.map((t) => t.id)).toContain('task3');
+    });
+
+    it('should exclude done tasks', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
+      expect(result.every((t) => !t.isDone)).toBeTrue();
+    });
+
+    it('should sort results by dueDay chronologically', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
+      const dueDays = result.map((t) => t.dueDay);
+      for (let i = 1; i < dueDays.length; i++) {
+        expect(dueDays[i - 1].localeCompare(dueDays[i])).toBeLessThanOrEqual(0);
+      }
     });
   });
 
