@@ -70,7 +70,7 @@ describe('BrowserTitleService', () => {
       expect(result).toBe('00:30');
     });
 
-    it('should show "Paused" for Flowtime mode when paused', () => {
+    it('should show "Paused" for Flowtime mode when paused and time has elapsed', () => {
       const result = (service as any)._getTitle(
         FocusModeMode.Flowtime,
         0,
@@ -82,6 +82,48 @@ describe('BrowserTitleService', () => {
       );
 
       expect(result).toBe('Paused 02:00');
+    });
+
+    it('should show remaining time for Flowtime break offer (not running, zero elapsed)', () => {
+      const result = (service as any)._getTitle(
+        FocusModeMode.Flowtime,
+        300000,
+        true,
+        false,
+        true,
+        false,
+        0,
+      );
+
+      expect(result).toBe('05:00 (Break)');
+    });
+
+    it('should show remaining time for active Flowtime break', () => {
+      const result = (service as any)._getTitle(
+        FocusModeMode.Flowtime,
+        270000,
+        true,
+        true,
+        false,
+        false,
+        30000,
+      );
+
+      expect(result).toBe('04:30 (Break)');
+    });
+
+    it('should show "Paused" and remaining time for paused Flowtime break', () => {
+      const result = (service as any)._getTitle(
+        FocusModeMode.Flowtime,
+        270000,
+        true,
+        false,
+        true,
+        false,
+        30000,
+      );
+
+      expect(result).toBe('Paused 04:30 (Break)');
     });
 
     it('should show remaining time for Countdown mode when running', () => {
@@ -154,7 +196,7 @@ describe('BrowserTitleService', () => {
       expect(result).toBe('05:00 (Break)');
     });
 
-    it('should show both "Paused" and "Break" when both are active', () => {
+    it('should show both "Paused" and "Break" when both are active and time elapsed', () => {
       const result = (service as any)._getTitle(
         FocusModeMode.Pomodoro,
         300000,
@@ -162,7 +204,7 @@ describe('BrowserTitleService', () => {
         false,
         true,
         false,
-        0,
+        1000,
       );
 
       expect(result).toBe('Paused 05:00 (Break)');
@@ -229,6 +271,7 @@ describe('BrowserTitleService', () => {
 
       focusModeServiceMock.isRunning.set(false);
       focusModeServiceMock.isSessionPaused.set(true);
+      focusModeServiceMock.timeElapsed.set(1000);
 
       TestBed.flushEffects();
 

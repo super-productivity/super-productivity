@@ -42,7 +42,7 @@ export class BrowserTitleService {
     timeElapsed: number,
   ): string {
     if (isRunning || isSessionPaused) {
-      const isCountTimeDown = mode !== FocusModeMode.Flowtime;
+      const isCountTimeDown = mode !== FocusModeMode.Flowtime || isBreakActive;
       const displayTime = isCountTimeDown && !isInOvertime ? timeRemaining : timeElapsed;
 
       const timeStr = msToMinuteClockString(displayTime);
@@ -54,7 +54,9 @@ export class BrowserTitleService {
         ? ` (${this._translateService.instant(T.F.FOCUS_MODE.BROWSER_TITLE_BREAK)})`
         : '';
 
-      if (isSessionPaused) {
+      const isActuallyPaused = isSessionPaused && !(isBreakActive && timeElapsed === 0);
+
+      if (isActuallyPaused) {
         return `${this._translateService.instant(
           T.F.FOCUS_MODE.BROWSER_TITLE_PAUSED,
         )} ${formattedTime}${breakStr}`;
