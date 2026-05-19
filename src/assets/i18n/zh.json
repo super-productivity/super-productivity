@@ -1296,6 +1296,8 @@
         "PASSWORD_SET_INFO": "🔒加密密码已设置。",
         "BTN_CHANGE_PASSWORD": "修改密码",
         "BTN_DISABLE_ENCRYPTION": "禁用加密",
+        "BTN_REAUTHENTICATE": "重新认证",
+        "REAUTH_SUCCESS": "重新认证成功！凭据已更新。",
         "TITLE": "同步",
         "FILE_BASED": {
           "BTN_REMOVE_ENCRYPTION": "移除加密",

@@ -1210,6 +1210,8 @@
       "FORM": {
         "BTN_CHANGE_PASSWORD": "變更密碼",
         "BTN_DISABLE_ENCRYPTION": "停用加密",
+        "BTN_REAUTHENTICATE": "重新驗證",
+        "REAUTH_SUCCESS": "重新驗證成功！認證資訊已更新。",
         "DROPBOX": {
           "AUTH_SUCCESS": "Dropbox 驗證成功！認證資訊已儲存。",
           "BTN_AUTHENTICATE": "使用 Dropbox 驗證",

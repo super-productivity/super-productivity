@@ -1248,6 +1248,8 @@
       "FORM": {
         "BTN_CHANGE_PASSWORD": "Change Password",
         "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
+        "BTN_REAUTHENTICATE": "Re-authenticate",
+        "REAUTH_SUCCESS": "Re-authentication successful! Credentials updated.",
         "DROPBOX": {
           "AUTH_SUCCESS": "Dropbox authentication successful! Credentials saved.",
           "BTN_AUTHENTICATE": "Authenticate with Dropbox",

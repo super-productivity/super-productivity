@@ -15,6 +15,7 @@ export enum SyncProviderId {
  */
 export const OAUTH_SYNC_PROVIDERS: ReadonlySet<SyncProviderId> = new Set([
   SyncProviderId.Dropbox,
+  SyncProviderId.OneDrive,
 ]);
 
 /**
