@@ -66,10 +66,7 @@ import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { updateWorkContextData } from '../time-tracking/store/time-tracking.actions';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { INBOX_PROJECT } from '../project/project.const';
-import {
-  selectArchivedProjectIds,
-  selectProjectById,
-} from '../project/store/project.selectors';
+import { selectProjectById } from '../project/store/project.selectors';
 import { Project } from '../project/project.model';
 import { Log } from '../../core/log';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
@@ -711,20 +708,7 @@ export class WorkContextService {
       Log.log({ ids });
       throw new Error('Invalid param provided for getByIds$ :(');
     }
-    return combineLatest([
-      this._store$.select(selectTasksWithSubTasksByIds, { ids }),
-      this._store$.select(selectArchivedProjectIds),
-      this.activeWorkContextTypeAndId$,
-    ]).pipe(
-      map(([tasks, archivedProjectIds, workContextTypeAndId]) => {
-        // No need to filter out tasks from archived projects in project context
-        if (workContextTypeAndId.activeType === WorkContextType.PROJECT) {
-          return tasks;
-        }
-
-        return tasks.filter((task) => !archivedProjectIds.has(task.projectId));
-      }),
-    );
+    return this._store$.select(selectTasksWithSubTasksByIds, { ids });
   }
 
   private _filterFutureScheduledTasksForToday(

@@ -7,12 +7,16 @@ import {
 } from '../../tag/store/tag.reducer';
 import {
   mapSubTasksToTask,
+  selectAllTasksInActiveProjects,
   selectTaskEntities,
   selectTaskFeatureState,
 } from '../../tasks/store/task.selectors';
 import { Task, TaskWithDueTime, TaskWithSubTasks } from '../../tasks/task.model';
 import { devError } from '../../../util/dev-error';
-import { selectProjectFeatureState } from '../../project/store/project.selectors';
+import {
+  selectArchivedProjectIds,
+  selectProjectFeatureState,
+} from '../../project/store/project.selectors';
 import { selectNoteTodayOrder } from '../../note/store/note.reducer';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { Log } from '../../../core/log';
@@ -24,6 +28,20 @@ import {
 } from '../../../root-store/app-state/app-state.selectors';
 
 export const WORK_CONTEXT_FEATURE_NAME = 'workContext';
+
+const filterTaskEntitiesByActiveProjects = (
+  entities: Record<string, Task | undefined>,
+  archivedProjectIds: Set<string>,
+): Record<string, Task | undefined> => {
+  if (archivedProjectIds.size === 0) {
+    return entities;
+  }
+  return Object.fromEntries(
+    Object.entries(entities).filter(
+      ([, t]) => !t || !archivedProjectIds.has(t.projectId),
+    ),
+  );
+};
 
 /**
  * Computes ordered task IDs for TODAY_TAG using dueDay for membership.
@@ -144,6 +162,7 @@ export const selectActiveWorkContext = createSelector(
   selectProjectFeatureState,
   selectTagFeatureState,
   selectTaskFeatureState,
+  selectArchivedProjectIds,
   selectNoteTodayOrder,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
@@ -152,6 +171,7 @@ export const selectActiveWorkContext = createSelector(
     projectState,
     tagState,
     taskState,
+    archivedProjectIds,
     todayOrder,
     todayStr,
     startOfNextDayDiffMs,
@@ -159,17 +179,22 @@ export const selectActiveWorkContext = createSelector(
     if (activeType === WorkContextType.TAG) {
       const tag = selectTagById.projector(tagState, { id: activeId });
 
+      const activeTaskEntities = filterTaskEntitiesByActiveProjects(
+        taskState.entities,
+        archivedProjectIds,
+      );
+
       // TODAY_TAG uses dueDay for membership (virtual tag pattern)
       // Regular tags use task.tagIds for membership (board-style pattern)
       const orderedTaskIds =
         activeId === TODAY_TAG.id
           ? computeOrderedTaskIdsForToday(
               tag,
-              taskState.entities,
+              activeTaskEntities,
               todayStr,
               startOfNextDayDiffMs,
             )
-          : computeOrderedTaskIdsForTag(activeId, tag, taskState.entities);
+          : computeOrderedTaskIdsForTag(activeId, tag, activeTaskEntities);
 
       return {
         ...tag,
@@ -332,13 +357,18 @@ export const selectDoneBacklogTaskIdsForActiveContext = createSelector(
 export const selectTodayTaskIds = createSelector(
   selectTagFeatureState,
   selectTaskFeatureState,
+  selectArchivedProjectIds,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (tagState, taskState, todayStr, startOfNextDayDiffMs): string[] => {
+  (tagState, taskState, archivedProjectIds, todayStr, startOfNextDayDiffMs): string[] => {
     const todayTag = tagState.entities[TODAY_TAG.id];
+    const activeTaskEntities = filterTaskEntitiesByActiveProjects(
+      taskState.entities,
+      archivedProjectIds,
+    );
     return computeOrderedTaskIdsForToday(
       todayTag,
-      taskState.entities,
+      activeTaskEntities,
       todayStr,
       startOfNextDayDiffMs,
     );
@@ -357,24 +387,21 @@ export const selectUndoneTodayTaskIds = createSelector(
 export const selectTimelineTasks = createSelector(
   selectTodayTaskIds,
   selectTaskFeatureState,
+  selectAllTasksInActiveProjects,
   (
     todayIds,
     s,
+    activeProjectTasks,
   ): {
     planned: TaskWithDueTime[];
     unPlanned: TaskWithSubTasks[];
   } => {
     const allPlannedTasks: TaskWithDueTime[] = [];
-    s.ids
-      .map((id) => s.entities[id])
-      .filter((t): t is Task => !!t)
-      .forEach((t) => {
-        if (!t.isDone) {
-          if (t.dueWithTime) {
-            allPlannedTasks.push(t as TaskWithDueTime);
-          }
-        }
-      });
+    activeProjectTasks.forEach((t) => {
+      if (!t.isDone && t.dueWithTime) {
+        allPlannedTasks.push(t as TaskWithDueTime);
+      }
+    });
     // Use Set for O(1) lookup instead of O(n) .includes() in filter
     const allPlannedIdSet = new Set(allPlannedTasks.map((t) => t.id));
 
