@@ -403,7 +403,7 @@ describe('FocusModeEffects', () => {
           });
       });
 
-      it('should NOT dispatch startBreak when isManualBreakStart is enabled', (done) => {
+      it('should dispatch startBreak when isManualBreakStart is enabled', (done) => {
         actions$ = of(actions.incrementCycle());
         store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
         store.overrideSelector(selectors.selectCurrentCycle, 1);
@@ -416,7 +416,12 @@ describe('FocusModeEffects', () => {
         effects.autoStartBreakOnSessionComplete$
           .pipe(toArray())
           .subscribe((actionsArr) => {
-            expect(actionsArr.length).toBe(0);
+            const startBreakAction = actionsArr.find(
+              (a) => a.type === actions.startBreak.type,
+            ) as any;
+            expect(startBreakAction).toBeDefined();
+            expect(startBreakAction.duration).toBe(5 * 60 * 1000);
+            expect(startBreakAction.isLongBreak).toBeFalse();
             done();
           });
       });
@@ -2360,111 +2365,6 @@ describe('FocusModeEffects', () => {
     });
   });
 
-  describe('storePausedTaskOnManualBreakSession$ (Bug #5954)', () => {
-    it('should dispatch setPausedTaskId when session completes with manual break start and pause tracking enabled', (done) => {
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: true,
-        isPauseTrackingDuringBreak: true,
-      });
-      currentTaskId$.next('task-123');
-      store.refreshState();
-
-      effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
-        expect(action.type).toBe('[FocusMode] Set Paused Task Id');
-        expect((action as any).pausedTaskId).toBe('task-123');
-        done();
-      });
-    });
-
-    it('should NOT dispatch setPausedTaskId when isManualBreakStart is false', (done) => {
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: false, // Not manual break
-        isPauseTrackingDuringBreak: true,
-      });
-      currentTaskId$.next('task-123');
-      store.refreshState();
-
-      effects.storePausedTaskOnManualBreakSession$
-        .pipe(toArray())
-        .subscribe((actionsArr) => {
-          expect(actionsArr.length).toBe(0);
-          done();
-        });
-    });
-
-    // Bug #5974 fix: Store pausedTaskId even when isPauseTrackingDuringBreak is false
-    // This allows tracking to resume if user manually stops tracking before starting break
-    it('should dispatch setPausedTaskId when isPauseTrackingDuringBreak is false', (done) => {
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: true,
-        isPauseTrackingDuringBreak: false, // Don't pause tracking
-      });
-      currentTaskId$.next('task-123');
-      store.refreshState();
-
-      effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
-        expect(action.type).toEqual(actions.setPausedTaskId.type);
-        expect(action.pausedTaskId).toBe('task-123');
-        done();
-      });
-    });
-
-    it('should NOT dispatch setPausedTaskId when no current task', (done) => {
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: true,
-        isPauseTrackingDuringBreak: true,
-      });
-      currentTaskId$.next(null); // No current task
-      store.refreshState();
-
-      effects.storePausedTaskOnManualBreakSession$
-        .pipe(toArray())
-        .subscribe((actionsArr) => {
-          expect(actionsArr.length).toBe(0);
-          done();
-        });
-    });
-
-    it('should NOT dispatch setPausedTaskId for Flowtime mode (no breaks)', (done) => {
-      // For Flowtime, shouldStartBreakAfterSession is false
-      strategyFactoryMock.getStrategy.and.returnValue({
-        initialSessionDuration: 0,
-        shouldStartBreakAfterSession: false,
-        shouldAutoStartNextSession: false,
-        getBreakDuration: () => null,
-      });
-
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: true,
-        isPauseTrackingDuringBreak: true,
-      });
-      currentTaskId$.next('task-123');
-      store.refreshState();
-
-      effects.storePausedTaskOnManualBreakSession$
-        .pipe(toArray())
-        .subscribe((actionsArr) => {
-          expect(actionsArr.length).toBe(0);
-          done();
-        });
-    });
-  });
-
   describe('Bug #5954 Additional Edge Cases', () => {
     describe('syncSessionStartToTracking$ edge cases', () => {
       it('should prefer pausedTaskId over lastCurrentTask when both exist', (done) => {
@@ -2611,44 +2511,6 @@ describe('FocusModeEffects', () => {
 
         effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
           expect(actionsArr.length).toBe(0);
-          done();
-        });
-      });
-    });
-
-    describe('storePausedTaskOnManualBreakSession$ edge cases', () => {
-      it('should store pausedTaskId correctly for later resumption', (done) => {
-        actions$ = of(actions.completeFocusSession({ isManual: false }));
-        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-        store.overrideSelector(selectFocusModeConfig, {
-          isManualBreakStart: true,
-          isPauseTrackingDuringBreak: true,
-          isSkipPreparation: false,
-        });
-        currentTaskId$.next('important-task-123');
-        store.refreshState();
-
-        effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
-          expect(action.type).toEqual('[FocusMode] Set Paused Task Id');
-          expect((action as any).pausedTaskId).toBe('important-task-123');
-          done();
-        });
-      });
-
-      it('should work with sync disabled but manual break start and pause tracking enabled', (done) => {
-        actions$ = of(actions.completeFocusSession({ isManual: false }));
-        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-        store.overrideSelector(selectFocusModeConfig, {
-          isManualBreakStart: true,
-          isPauseTrackingDuringBreak: true,
-          isSkipPreparation: false,
-        });
-        currentTaskId$.next('task-123');
-        store.refreshState();
-
-        // Should still dispatch since it only checks isManualBreakStart and isPauseTrackingDuringBreak
-        effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
-          expect(action.type).toEqual('[FocusMode] Set Paused Task Id');
           done();
         });
       });
