@@ -26,7 +26,7 @@ import { LockService } from './lock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from './sync-import-filter.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
-import { OperationLogEffects } from '../capture/operation-log.effects';
+import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -406,7 +406,7 @@ export class RemoteOpsProcessingService {
     });
 
     if (result.appendedOps.length > 0) {
-      await this._processDeferredActionsAfterRemoteApply(callerHoldsLock);
+      await processDeferredActionsAfterRemoteApply(this.injector, callerHoldsLock);
     }
 
     if (result.skippedCount > 0) {
@@ -457,19 +457,6 @@ export class RemoteOpsProcessingService {
       op.opType === OpType.BackupImport ||
       op.opType === OpType.Repair
     );
-  }
-
-  private async _processDeferredActionsAfterRemoteApply(
-    callerHoldsLock: boolean,
-  ): Promise<void> {
-    const operationLogEffects = this.injector.get(OperationLogEffects);
-    if (callerHoldsLock) {
-      await operationLogEffects.processDeferredActions({
-        callerHoldsOperationLogLock: true,
-      });
-      return;
-    }
-    await operationLogEffects.processDeferredActions();
   }
 
   /**

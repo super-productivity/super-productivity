@@ -768,5 +768,33 @@ describe('OperationLogEffects', () => {
         }),
       );
     });
+
+    // #7700: when callerHoldsOperationLogLock=true and quota fires, the
+    // bail path skips emergency compaction (would deadlock against the
+    // held sp_op_log) BUT must NOT silently treat the failed write as
+    // a success — pre-this-commit, handleQuotaExceeded returned without
+    // throwing, the retry loop saw success=true, and the deferred action
+    // vanished. Now it throws so the retry loop surfaces the failure as
+    // DEFERRED_ACTION_FAILED after retries exhaust.
+    it('should surface DEFERRED_ACTION_FAILED when quota fires under caller-holds-lock', async () => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      bufferDeferredAction(action);
+      mockOpLogStore.appendWithVectorClockUpdate.and.rejectWith(
+        new DOMException('Quota exceeded', 'QuotaExceededError'),
+      );
+
+      await effects.processDeferredActions({ callerHoldsOperationLogLock: true });
+
+      // The action was NEVER persisted.
+      // (appendWithVectorClockUpdate was attempted but each call rejected.)
+      // The differentiating assertion: DEFERRED_ACTION_FAILED fires ONLY
+      // when the retry loop sees writeOperation throw. Pre-fix it didn't.
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.DEFERRED_ACTION_FAILED,
+        }),
+      );
+    });
   });
 });

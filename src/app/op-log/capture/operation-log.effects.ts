@@ -450,12 +450,21 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     );
 
     // Use lock for cross-tab coordination - only one tab handles quota at a time
+    let bailReason: Error | null = null;
     await this.lockService.request('sp_quota_exceeded', async () => {
       if (options.callerHoldsOperationLogLock) {
         OpLog.err(
           'OperationLogEffects: Skipping emergency compaction because operation-log lock is already held',
         );
         this.showStorageQuotaExceededError();
+        // Bail loud: we cannot recover here (compaction would deadlock).
+        // Capture the failure and re-throw OUTSIDE the cross-tab lock so the
+        // deferred-action retry loop surfaces DEFERRED_ACTION_FAILED rather
+        // than treating the dropped write as a success. Throwing from inside
+        // a LockService callback is fine, but we keep it outside for clarity.
+        bailReason = new Error(
+          'Storage quota exceeded while operation-log lock is held — emergency compaction skipped',
+        );
         return;
       }
 
@@ -485,6 +494,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
       // Compaction failed or retry failed - show error with action
       this.showStorageQuotaExceededError();
     });
+    if (bailReason !== null) {
+      throw bailReason;
+    }
   }
 
   private showStorageQuotaExceededError(): void {
