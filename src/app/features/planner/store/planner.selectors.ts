@@ -34,6 +34,7 @@ import {
 } from '../../../root-store/app-state/app-state.selectors';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { oneDayInMilliseconds } from '../../../util/month-time-conversion';
 
 export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState>(
   fromPlanner.plannerFeatureKey,
@@ -361,9 +362,9 @@ const getIcalEventsForDay = (
     icalMapEntry.items.forEach((calEv) => {
       const start = calEv.start;
       if (getDbDateStr(new Date(start - startOfNextDayDiffMs)) === dayDate) {
-        if (calEv.isAllDay) {
-          // All-day events go to a separate list with full event data
-          allDayEvents.push({ ...calEv });
+        if (isPlannerAllDayCalendarEvent(calEv)) {
+          // Some providers expose all-day events as 24h timed events.
+          allDayEvents.push({ ...calEv, isAllDay: true });
         } else {
           // Timed events go to scheduled items
           const end = calEv.start + calEv.duration;
@@ -382,6 +383,9 @@ const getIcalEventsForDay = (
   });
   return { timedEvents, allDayEvents };
 };
+
+const isPlannerAllDayCalendarEvent = (calEv: ScheduleFromCalendarEvent): boolean =>
+  calEv.isAllDay === true || calEv.duration >= oneDayInMilliseconds;
 
 /**
  * Groups all undone deadline tasks by their effective day string.

@@ -1517,7 +1517,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Mevcut \"{{taskTitle}}\" görevini ekle",
         "CREATE_NEW_TAGS": "Yeni etiketler oluştur",
-        "DUE_BUTTON": "Son Tarih",
+        "DUE_BUTTON": "Planla",
         "ESTIMATE_BUTTON": "Tahmin",
         "PLACEHOLDER_CREATE": "Bir görev başlığı #etiket @16:00",
         "PLACEHOLDER_SEARCH": "Mevcut görev veya sorunları ekle...",

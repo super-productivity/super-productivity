@@ -1482,7 +1482,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "إضافة مهمة موجودة \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "إنشاء وسوم جديدة",
-        "DUE_BUTTON": "سبب",
+        "DUE_BUTTON": "جدولة",
         "ESTIMATE_BUTTON": "تقدير",
         "PLACEHOLDER_CREATE": "عنوان مهمة #tag @16:00",
         "PLACEHOLDER_SEARCH": "أضف المهام أو المشاكل الحالية...",

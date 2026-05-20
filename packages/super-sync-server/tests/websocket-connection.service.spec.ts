@@ -110,10 +110,14 @@ describe('WebSocketConnectionService', () => {
       expect(service.getConnectionCount()).toBe(0);
     });
 
-    it('should replace a stale connection from the same clientId', () => {
+    it('should replace a stale connection from the same clientId after the reconnect cooldown', () => {
       const stale = createMockWs();
       service.addConnection(1, 'client-a', stale as any);
       expect(service.getConnectionCount()).toBe(1);
+
+      // Past the cooldown: a reconnect is treated as genuine and evicts the
+      // stale incumbent (the original recovery path is preserved).
+      vi.advanceTimersByTime(5_000);
 
       const fresh = createMockWs();
       service.addConnection(1, 'client-a', fresh as any);
@@ -122,7 +126,7 @@ describe('WebSocketConnectionService', () => {
       expect(stale.close).toHaveBeenCalledWith(4009, 'Replaced by newer connection');
       // Only the fresh entry remains.
       expect(service.getConnectionCount()).toBe(1);
-      // The new connection was accepted, not rejected with 4008.
+      // The new connection was accepted, not rejected.
       expect(fresh.close).not.toHaveBeenCalled();
 
       // Real `ws` fires the 'close' event asynchronously after `ws.close()`.
@@ -130,6 +134,47 @@ describe('WebSocketConnectionService', () => {
       stale._emitClose();
       expect(service.getConnectionCount()).toBe(1);
       expect(fresh.close).not.toHaveBeenCalled();
+    });
+
+    it('should refuse a challenger that reconnects within the cooldown and keep the incumbent', () => {
+      const incumbent = createMockWs();
+      service.addConnection(1, 'client-a', incumbent as any);
+      expect(service.getConnectionCount()).toBe(1);
+
+      // Same clientId reconnects immediately (the shared-clientId storm).
+      const challenger = createMockWs();
+      service.addConnection(1, 'client-a', challenger as any);
+
+      // Challenger is refused; incumbent is NOT evicted (no 4009 emitted).
+      expect(challenger.close).toHaveBeenCalledWith(4008, 'Reconnecting too fast');
+      expect(incumbent.close).not.toHaveBeenCalled();
+      expect(service.getConnectionCount()).toBe(1);
+
+      // The incumbent socket — not the challenger — remains the live one.
+      challenger.send.mockClear();
+      service.notifyNewOps(1, 'other-client', 7);
+      vi.advanceTimersByTime(100);
+      const incumbentMsgs = parseSendCalls(incumbent);
+      expect(incumbentMsgs).toContainEqual(
+        expect.objectContaining({ type: 'new_ops', latestSeq: 7 }),
+      );
+      expect(challenger.send).not.toHaveBeenCalled();
+    });
+
+    it('should replace a dead incumbent even within the cooldown', () => {
+      const stale = createMockWs();
+      service.addConnection(1, 'client-a', stale as any);
+
+      // Incumbent socket is dead at the OS level: a genuine reconnect must
+      // recover immediately, not wait out the cooldown behind a dead socket.
+      stale.readyState = WS_CLOSED;
+
+      const fresh = createMockWs();
+      service.addConnection(1, 'client-a', fresh as any);
+
+      // Fresh socket accepted (not refused with 4008), dead incumbent replaced.
+      expect(fresh.close).not.toHaveBeenCalled();
+      expect(service.getConnectionCount()).toBe(1);
     });
 
     it('should not call close() on the evicted socket when it is already CLOSED', () => {
@@ -151,17 +196,34 @@ describe('WebSocketConnectionService', () => {
     });
 
     it('should not exceed the per-user cap when same clientId reconnects repeatedly', () => {
-      // 9 unique clientIds use 9 slots; clientId 'A' reconnects 5 times in the
-      // remaining slot. Without dedup, attempts 2-5 would be rejected with 4008.
+      // 9 unique clientIds use 9 slots; clientId 'A' takes the remaining slot.
       for (let i = 0; i < 9; i++) {
         service.addConnection(1, `unique-${i}`, createMockWs() as any);
       }
-      for (let i = 0; i < 5; i++) {
+
+      // First 'A' is accepted into the last slot.
+      const incumbent = createMockWs();
+      service.addConnection(1, 'A', incumbent as any);
+      expect(incumbent.close).not.toHaveBeenCalled();
+
+      // Rapid 'A' reconnects within the cooldown are refused (4008); the
+      // incumbent is kept, so the slot count never exceeds the cap and the
+      // reconnect storm cannot consume slots.
+      for (let i = 0; i < 4; i++) {
         const ws = createMockWs();
         service.addConnection(1, 'A', ws as any);
-        // The latest 'A' socket is the survivor — it was not rejected/closed.
-        expect(ws.close).not.toHaveBeenCalled();
+        expect(ws.close).toHaveBeenCalledWith(4008, 'Reconnecting too fast');
       }
+      expect(incumbent.close).not.toHaveBeenCalled();
+      expect(service.getConnectionCount()).toBe(10);
+
+      // After the cooldown a genuine reconnect evicts the incumbent and reuses
+      // the slot — still capped at 10.
+      vi.advanceTimersByTime(5_000);
+      const successor = createMockWs();
+      service.addConnection(1, 'A', successor as any);
+      expect(incumbent.close).toHaveBeenCalledWith(4009, 'Replaced by newer connection');
+      expect(successor.close).not.toHaveBeenCalled();
       expect(service.getConnectionCount()).toBe(10);
     });
 

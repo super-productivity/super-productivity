@@ -10,6 +10,8 @@ import { TASK_FEATURE_NAME } from '../../tasks/store/task.reducer';
 import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 
+const DAY_DURATION_MS = 24 * 60 * 60 * 1000;
+
 // Helper to create a timestamp for a specific day at noon local time
 const getLocalNoon = (year: number, month: number, day: number): number => {
   return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
@@ -46,9 +48,9 @@ describe('Planner Selectors - All Day Events', () => {
       icalMapEntry.items.forEach((calEv) => {
         const start = calEv.start;
         if (isSameDay(start, currentDayDate)) {
-          if (calEv.isAllDay) {
+          if (calEv.isAllDay || calEv.duration >= DAY_DURATION_MS) {
             // All-day events go to a separate list with full event data
-            allDayEvents.push({ ...calEv });
+            allDayEvents.push({ ...calEv, isAllDay: true });
           } else {
             const end = calEv.start + calEv.duration;
             timedEvents.push({
@@ -593,6 +595,53 @@ describe('Planner Selectors - selectPlannerDays', () => {
     // timeEstimate should NOT include all-day events (they use raw 24h duration)
     // so it should be 0 when there are no timed events
     expect(result[0].timeEstimate).toBe(0);
+  });
+
+  it('should NOT include 24h calendar events without isAllDay in timeEstimate', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      {
+        items: [
+          {
+            id: 'duration-all-day-event',
+            calProviderId: 'provider-1',
+            issueProviderKey: 'ICAL',
+            title: 'Provider All Day Event',
+            start: todayAtHour(0),
+            duration: DAY_DURATION_MS,
+          },
+        ],
+      },
+    ];
+
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      [],
+      calendarEvents,
+      [],
+      today,
+    );
+    const result = selector.projector(
+      emptyTaskState,
+      emptyPlannerState,
+      scheduleConfig,
+      0,
+    );
+
+    expect(result[0].timeEstimate).toBe(0);
+    expect(result[0].progressPercentage).toBe(0);
+    expect(result[0].scheduledIItems.length).toBe(0);
+    expect(result[0].allDayEvents.map((ev) => ev.id)).toEqual(['duration-all-day-event']);
+    expect(result[0].allDayEvents[0].isAllDay).toBe(true);
   });
 
   it('should combine task time estimates with calendar event durations', () => {

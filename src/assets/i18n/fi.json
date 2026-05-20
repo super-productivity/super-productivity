@@ -1388,7 +1388,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Lisää olemassa oleva tehtävä \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Luo uusia tunnisteita",
-        "DUE_BUTTON": "Määräaika",
+        "DUE_BUTTON": "Ajoita",
         "ESTIMATE_BUTTON": "Arvio",
         "PLACEHOLDER_CREATE": "Tehtävän otsikko #tunniste @16:00",
         "PLACEHOLDER_SEARCH": "Lisää olemassa oleva tehtävä tai ongelma...",

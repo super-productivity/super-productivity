@@ -1519,7 +1519,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Añadir tarea existente \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Crear nuevas etiquetas",
-        "DUE_BUTTON": "Vencimiento",
+        "DUE_BUTTON": "Programar",
         "ESTIMATE_BUTTON": "Estimación",
         "PLACEHOLDER_CREATE": "Un título de tarea #etiqueta @16:00",
         "PLACEHOLDER_SEARCH": "Añadir tarea existente o incidencias...",

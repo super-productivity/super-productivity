@@ -9,6 +9,7 @@ import {
 } from 'electron';
 import { log } from 'electron-log/main';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import { getDistChannel } from './shared-with-frontend/get-dist-channel';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
 import { release } from 'os';
@@ -76,10 +77,11 @@ const WINDOWS_TRAY_GUIDS = {
 } as const;
 
 const getWindowsTrayGuid = (): string => {
-  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+  const channel = getDistChannel();
+  if (channel === 'win-portable') {
     return WINDOWS_TRAY_GUIDS.portable;
   }
-  if ((process as NodeJS.Process & { windowsStore?: boolean }).windowsStore) {
+  if (channel === 'win-store') {
     return WINDOWS_TRAY_GUIDS.store;
   }
   return WINDOWS_TRAY_GUIDS.nsis;

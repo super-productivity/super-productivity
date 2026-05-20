@@ -140,9 +140,9 @@
   },
   "devDependencies": {
     "@sp/sync-core": "*",
-    "@xmldom/xmldom": "^0.8.12",
+    "@xmldom/xmldom": "^0.9.10",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.6"
   }
 }

@@ -106,7 +106,11 @@ test.describe('Issue #7642: switch active Pomodoro to Flowtime', () => {
 
       await flowtimeButton.click();
 
-      await expect(flowtimeButton).toHaveClass(/is-active/);
+      // After switching to Flowtime mid-session the mode selector hides:
+      // the breathing dot + count-up clock already convey the mode and the
+      // user can't switch back to a fixed-duration mode mid-session.
+      await expect(flowtimeButton).not.toBeVisible();
+      await expect(pomodoroButton).not.toBeVisible();
       await expect(completeSessionButton).toBeVisible();
       await expect(decreaseTimeButton).not.toBeVisible();
       await expect(pauseResumeIcon).toHaveText('pause');

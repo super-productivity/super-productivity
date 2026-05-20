@@ -263,6 +263,75 @@ describe('SyncWrapperService', () => {
 
       expect(result).toBe(SyncStatus.InSync);
     });
+
+    // discussion #7196: sync button must distinguish "data changed" from
+    // "already up to date" instead of always showing "Already in sync".
+    it('should return InSync when nothing changed (no download, nothing uploaded)', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({ kind: 'no_new_ops' as const }),
+      );
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.InSync);
+    });
+
+    it('should return UpdateRemote when local ops were uploaded', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({ kind: 'no_new_ops' as const }),
+      );
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 3,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.UpdateRemote);
+    });
+
+    it('should return UpdateRemote when remote ops were downloaded', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'ops_processed' as const,
+          newOpsCount: 5,
+          localWinOpsCreated: 0,
+        }),
+      );
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.UpdateRemote);
+    });
   });
 
   describe('syncInterval$', () => {
@@ -858,7 +927,8 @@ describe('SyncWrapperService', () => {
 
       const result = await service.sync();
 
-      expect(result).toBe(SyncStatus.InSync);
+      // 5 ops uploaded → data changed this sync (discussion #7196)
+      expect(result).toBe(SyncStatus.UpdateRemote);
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
     });
 
@@ -2024,7 +2094,8 @@ describe('SyncWrapperService', () => {
       // 1 initial upload + 1 retry (which returns 0) = 2 total
       // The retry returns 0 so no more retries needed
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
-      expect(result).toBe(SyncStatus.InSync);
+      // ops were uploaded → data changed this sync (discussion #7196)
+      expect(result).toBe(SyncStatus.UpdateRemote);
     });
 
     it('should treat blocked_fresh_client reupload result as 0 localWinOpsCreated and exit loop', async () => {
@@ -2056,7 +2127,8 @@ describe('SyncWrapperService', () => {
 
       // 1 initial + 1 retry (returns blocked_fresh_client -> treated as 0) = 2 total
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
-      expect(result).toBe(SyncStatus.InSync);
+      // first upload moved 1 op → data changed this sync (discussion #7196)
+      expect(result).toBe(SyncStatus.UpdateRemote);
     });
 
     it('should enter while loop when both download and upload produce LWW ops', async () => {
@@ -2089,7 +2161,8 @@ describe('SyncWrapperService', () => {
       // Retry 1: upload returns 0 -> exits loop
       // Total uploads: 1 initial + 1 retry = 2
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
-      expect(result).toBe(SyncStatus.InSync);
+      // 5 ops downloaded + 3 uploaded → data changed this sync (discussion #7196)
+      expect(result).toBe(SyncStatus.UpdateRemote);
     });
   });
 });

@@ -86,9 +86,13 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB:-supersync}
     # Tuned for the 1.5g mem_limit. shared_buffers needs shm_size > default 64m.
-    # max_connections=40 keeps the worst-case sort budget (max_conn × work_mem)
-    # well inside the 1.5g cap; Prisma's per-instance pool is single-digit so
-    # 40 is generous headroom for migrations + psql + a future second replica.
+    # 120 × 4MB work_mem = 480MB worst-case sort budget + 384MB shared_buffers,
+    # well inside the 1.5g cap. Prisma's DEFAULT pool is ~(host_cpu_count × 2),
+    # read from host cores NOT the container cpu limit — it is NOT single-digit
+    # on this VPS and will silently consume the entire cap. The app MUST bound
+    # it via DATABASE_URL ?connection_limit=N (currently 60). max_connections
+    # stays well above N to reserve slots for migrations, psql, the old-ops
+    # cleanup job, and the reconnect stampede after an in-place crash recovery.
     command:
       - postgres
       - -c
@@ -100,7 +104,7 @@ services:
       - -c
       - maintenance_work_mem=128MB
       - -c
-      - max_connections=40
+      - max_connections=120
       - -c
       - random_page_cost=1.1
       - -c

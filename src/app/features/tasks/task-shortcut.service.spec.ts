@@ -47,12 +47,17 @@ describe('TaskShortcutService', () => {
     moveTaskToBottom: null,
   };
 
-  const createKeyboardEvent = (key: string, code?: string): KeyboardEvent => {
+  const createKeyboardEvent = (
+    key: string,
+    code?: string,
+    init: KeyboardEventInit = {},
+  ): KeyboardEvent => {
     return new KeyboardEvent('keydown', {
       key,
       code: code || (key.length === 1 ? `Key${key.toUpperCase()}` : key),
       bubbles: true,
       cancelable: true,
+      ...init,
     });
   };
 
@@ -290,6 +295,100 @@ describe('TaskShortcutService', () => {
         // Assert
         expect(result).toBe(false);
       }
+    });
+  });
+
+  describe('copy focused task title shortcut', () => {
+    let originalClipboardDescriptor: PropertyDescriptor | undefined;
+    let writeText: jasmine.Spy;
+
+    beforeEach(() => {
+      writeText = jasmine.createSpy('writeText').and.returnValue(Promise.resolve());
+      originalClipboardDescriptor = Object.getOwnPropertyDescriptor(
+        navigator,
+        'clipboard',
+      );
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      });
+      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set({
+        task: () => ({ id: 'focused-task-1', title: 'Task title to copy' }),
+        taskContextMenu: () => undefined,
+      });
+    });
+
+    afterEach(() => {
+      if (originalClipboardDescriptor) {
+        Object.defineProperty(navigator, 'clipboard', originalClipboardDescriptor);
+      } else {
+        delete (navigator as { clipboard?: Clipboard }).clipboard;
+      }
+      originalClipboardDescriptor = undefined;
+    });
+
+    it('should copy the focused task title on Ctrl+C', () => {
+      const event = createKeyboardEvent('c', 'KeyC', { ctrlKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(writeText).toHaveBeenCalledWith('Task title to copy');
+      expect(event.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should copy the focused task title on Cmd+C', () => {
+      const event = createKeyboardEvent('c', 'KeyC', { metaKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(writeText).toHaveBeenCalledWith('Task title to copy');
+      expect(event.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should fire on non-Latin keyboard layouts (key=Cyrillic, code=KeyC)', () => {
+      // Cyrillic 'с' (U+0441) — what the physical KeyC produces on a
+      // Russian layout. The shortcut must still trigger so behavior matches
+      // the browser's native Ctrl+C, which binds on physical position.
+      const event = createKeyboardEvent('с', 'KeyC', { ctrlKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(writeText).toHaveBeenCalledWith('Task title to copy');
+      expect(event.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should not override native copy when the event target is an input', () => {
+      const input = document.createElement('input');
+      const event = createKeyboardEvent('c', 'KeyC', { metaKey: true });
+      Object.defineProperty(event, 'target', { configurable: true, value: input });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(false);
+      expect(writeText).not.toHaveBeenCalled();
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('should not override native copy when text is selected', () => {
+      spyOn(window, 'getSelection').and.returnValue({
+        toString: () => 'selected text',
+      } as unknown as Selection);
+      const event = createKeyboardEvent('c', 'KeyC', { ctrlKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(false);
+      expect(writeText).not.toHaveBeenCalled();
+      expect(event.preventDefault).not.toHaveBeenCalled();
     });
   });
 

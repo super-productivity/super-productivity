@@ -7,6 +7,10 @@ import {
 } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
 import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
+import {
+  getDistChannel,
+  ElectronDistChannel,
+} from './shared-with-frontend/get-dist-channel';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
   PluginManifest,
@@ -52,6 +56,10 @@ const ea: ElectronAPI = {
     // NOTE: there is no proper way to unsubscribe apart from unsubscribing all
     ipcRenderer.on(channel, listener);
   },
+  // SYNC
+  // ----
+  getDistChannel: (): ElectronDistChannel | null => getDistChannel(),
+
   // INVOKE
   // ------
   getUserDataPath: () => _invoke('GET_PATH', 'userData') as Promise<string>,

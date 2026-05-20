@@ -285,9 +285,12 @@ export class SyncWrapperService {
       }
     });
 
-    // After successful sync, prompt for encryption if SuperSync is active without it.
-    // This ensures data is downloaded and merged first, preventing data loss.
-    if (result === SyncStatus.InSync) {
+    // After any successful sync, prompt for encryption if SuperSync is active
+    // without it. This ensures data is downloaded and merged first, preventing
+    // data loss. Note: a successful sync now returns UpdateRemote when data
+    // changed and InSync only when nothing changed (discussion #7196), so this
+    // gate must accept both — only HANDLED_ERROR skips the prompt.
+    if (result !== 'HANDLED_ERROR') {
       this._promptSuperSyncEncryptionIfNeeded().catch((err) => {
         SyncLog.err('Error prompting for encryption:', err);
       });
@@ -561,6 +564,20 @@ export class SyncWrapperService {
       this._providerManager.setSyncStatus('IN_SYNC');
       SyncLog.log('SyncWrapperService: Sync complete, status=IN_SYNC');
 
+      // Did this sync actually move any data (either direction)? Used by the
+      // sync button to show "Data successfully synced" vs "Already in sync"
+      // (discussion #7196). UpdateRemote is reused here as the generic
+      // "data changed this sync" status — the only consumer that inspects the
+      // return value (main-header) treats all UpdateLocal/UpdateRemote variants
+      // identically, so no new enum value is needed.
+      const didDownloadChanges =
+        downloadResult.kind === 'snapshot_hydrated' ||
+        downloadResult.kind === 'server_migration_handled' ||
+        (downloadResult.kind === 'ops_processed' && downloadResult.newOpsCount > 0);
+      const didUploadChanges =
+        uploadResult.kind === 'completed' && uploadResult.uploadedCount > 0;
+      const didChange = didDownloadChanges || didUploadChanges;
+
       // Connect WebSocket after first successful SuperSync sync (fire-and-forget)
       if (
         providerId === SyncProviderId.SuperSync &&
@@ -574,7 +591,7 @@ export class SyncWrapperService {
         });
       }
 
-      return SyncStatus.InSync;
+      return didChange ? SyncStatus.UpdateRemote : SyncStatus.InSync;
     } catch (error) {
       SyncLog.err(error);
 

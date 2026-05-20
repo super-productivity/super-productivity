@@ -7,6 +7,7 @@ import { Log } from '../../core/log';
 import { TaskComponent } from './task/task.component';
 import { TaskContextMenuComponent } from './task-context-menu/task-context-menu.component';
 import { TaskContextMenuInnerComponent } from './task-context-menu/task-context-menu-inner/task-context-menu-inner.component';
+import { isInputElement } from '../../util/dom-element';
 
 type TaskId = string;
 
@@ -101,15 +102,22 @@ export class TaskShortcutService {
       return false;
     }
 
-    // Ctrl+C / Cmd+C: copy focused task title to clipboard
-    if ((ev.ctrlKey || ev.metaKey) && ev.code === 'KeyC') {
-      const selection = window.getSelection();
-      const hasTextSelected = selection !== null && selection.toString().length > 0;
-      if (!hasTextSelected) {
+    // Ctrl+C / Cmd+C: copy focused task title. Match on `code` (physical
+    // position) so the shortcut still fires on non-Latin layouts, mirroring
+    // how the browser's native copy is bound.
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.code === 'KeyC') {
+      const target = ev.target;
+      const hasTextSelected = !!window.getSelection()?.toString();
+      if (
+        !(target instanceof HTMLElement && isInputElement(target)) &&
+        !hasTextSelected
+      ) {
         const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
-        if (taskComponent) {
-          const title = taskComponent.task().title;
-          navigator.clipboard?.writeText(title).catch((err) => {
+        // Recovery path (above) can derive focusedTaskId from the DOM before
+        // lastFocusedTaskComponent has caught up — fall through to native copy
+        // rather than copying a stale title.
+        if (taskComponent?.task().id === focusedTaskId) {
+          void navigator.clipboard?.writeText(taskComponent.task().title).catch((err) => {
             Log.warn('Failed to copy task title to clipboard:', err);
           });
           ev.preventDefault();

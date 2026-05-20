@@ -701,6 +701,13 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     expect(component.isShowModeSelector()).toBe(true);
   });
 
+  it('should hide the mode selector while a Flowtime session is in progress', () => {
+    modeSignal.set(FocusModeMode.Flowtime);
+    fixture.detectChanges();
+
+    expect(component.isShowModeSelector()).toBe(false);
+  });
+
   it('should only show the active fixed-duration mode and Flowtime while in progress', () => {
     const options = component.modeOptions();
 

@@ -41,8 +41,9 @@ export class BrowserTitleService {
     isInOvertime: boolean,
     timeElapsed: number,
   ): string {
-    if (mode === FocusModeMode.Pomodoro && (isRunning || isSessionPaused)) {
-      const displayTime = isInOvertime ? timeElapsed : timeRemaining;
+    if (isRunning || isSessionPaused) {
+      const isCountTimeDown = mode !== FocusModeMode.Flowtime || isBreakActive;
+      const displayTime = isCountTimeDown && !isInOvertime ? timeRemaining : timeElapsed;
 
       const timeStr = msToMinuteClockString(displayTime);
 
@@ -50,14 +51,18 @@ export class BrowserTitleService {
       const formattedTime = `${minutes.padStart(2, '0')}:${seconds}`;
 
       const breakStr = isBreakActive
-        ? ` ${this._translateService.instant(T.F.FOCUS_MODE.BROWSER_TITLE_BREAK)}`
+        ? ` (${this._translateService.instant(T.F.FOCUS_MODE.BROWSER_TITLE_BREAK)})`
         : '';
 
-      const pausedStr = isSessionPaused
-        ? `${this._translateService.instant(T.F.FOCUS_MODE.BROWSER_TITLE_PAUSED)} `
-        : '';
+      const isActuallyPaused = isSessionPaused && !(isBreakActive && timeElapsed === 0);
 
-      return `(${pausedStr}${formattedTime}${breakStr}) ${this._baseTitle}`;
+      if (isActuallyPaused) {
+        return `${this._translateService.instant(
+          T.F.FOCUS_MODE.BROWSER_TITLE_PAUSED,
+        )} ${formattedTime}${breakStr}`;
+      }
+
+      return `${formattedTime}${breakStr}`;
     }
 
     return this._baseTitle;

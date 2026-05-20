@@ -168,7 +168,11 @@ export class FocusModeMainComponent {
   displayDuration = signal(25 * 60 * 1000); // Default 25 minutes
   isTaskSelectorOpen = signal(false);
 
-  isShowModeSelector = computed(() => this._isPreparation() || this._isInProgress());
+  isShowModeSelector = computed(
+    () =>
+      this._isPreparation() ||
+      (this._isInProgress() && this.mode() !== FocusModeMode.Flowtime),
+  );
   isShowPomodoroSettings = computed(
     () => this._isPreparation() && this.mode() === FocusModeMode.Pomodoro,
   );

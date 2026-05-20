@@ -6,6 +6,8 @@ interface ConnectedClient {
   clientId: string;
   userId: number;
   lastPong: number;
+  /** Wall-clock ms when this socket was accepted; gates the reconnect cooldown. */
+  connectedAt: number;
 }
 
 /**
@@ -29,6 +31,18 @@ export class WebSocketConnectionService {
   private static readonly MAX_CONNECTIONS_PER_USER = 10;
   /** Close code sent to the stale socket when a new one from the same clientId replaces it */
   private static readonly REPLACED_CLOSE_CODE = 4009;
+  /** Close code sent to a challenger socket refused during the reconnect cooldown */
+  private static readonly RECONNECT_COOLDOWN_CLOSE_CODE = 4008;
+  /**
+   * If a still-OPEN socket for this clientId was accepted less than this long
+   * ago, a new socket from the same clientId is refused (the incumbent is kept,
+   * NOT evicted). Breaks the shared-clientId reconnect storm from pre-18.6.0
+   * clients that reconnect immediately on the 4009 eviction: the incumbent is
+   * never evicted, so the server stops emitting 4009 and the loop loses its
+   * fuel. A genuinely dead/closing incumbent bypasses this (see addConnection),
+   * so a real network-blip reconnect still recovers within the cooldown.
+   */
+  private static readonly RECONNECT_COOLDOWN_MS = 5_000;
 
   private pendingNotifications = new Map<
     number,
@@ -49,6 +63,35 @@ export class WebSocketConnectionService {
     if (existingSet) {
       for (const existing of existingSet) {
         if (existing.clientId === clientId) {
+          // Reconnect cooldown: if the incumbent socket is still OPEN and was
+          // accepted less than RECONNECT_COOLDOWN_MS ago, this is a too-fast
+          // reconnect (the shared-clientId storm from pre-18.6.0 clients that
+          // reconnect immediately on 4009). Refuse the challenger and KEEP the
+          // incumbent untouched — the incumbent is never evicted, so the server
+          // stops emitting 4009 and the loop loses its fuel. A dead/closing
+          // incumbent falls through to normal eviction so a genuine
+          // network-blip reconnect still recovers.
+          if (
+            existing.ws.readyState === WebSocket.OPEN &&
+            Date.now() - existing.connectedAt <
+              WebSocketConnectionService.RECONNECT_COOLDOWN_MS
+          ) {
+            Logger.warn(
+              `[ws:user:${userId}:${clientId}] Reconnect within cooldown; refusing challenger, keeping incumbent`,
+            );
+            try {
+              ws.close(
+                WebSocketConnectionService.RECONNECT_COOLDOWN_CLOSE_CODE,
+                'Reconnecting too fast',
+              );
+            } catch (err) {
+              Logger.debug(
+                `[ws:user:${userId}:${clientId}] Error closing refused challenger`,
+                err,
+              );
+            }
+            return;
+          }
           Logger.info(
             `[ws:user:${userId}:${clientId}] Replacing stale connection from same client`,
           );
@@ -81,6 +124,7 @@ export class WebSocketConnectionService {
       clientId,
       userId,
       lastPong: Date.now(),
+      connectedAt: Date.now(),
     };
     userSet.add(client);
 

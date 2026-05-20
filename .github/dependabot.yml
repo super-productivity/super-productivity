@@ -13,7 +13,8 @@ updates:
       day: 'monday'
       time: '09:00'
       timezone: 'Europe/Berlin'
-
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 10
 
     reviewers:
@@ -38,7 +39,8 @@ updates:
       day: 'monday'
       time: '09:00'
       timezone: 'Europe/Berlin'
-
+    cooldown:
+      default-days: 3
     # Limit concurrent PRs to avoid overwhelming maintainers
     open-pull-requests-limit: 5
 
