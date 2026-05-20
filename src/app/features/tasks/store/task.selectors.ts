@@ -466,7 +466,7 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
 );
 
 export const selectAllDoneIds = createSelector(
-  selectAllTasks,
+  selectAllTasksInActiveProjects,
   (tasks: Task[]): string[] => tasks.filter((t) => t?.isDone).map((t) => t.id),
 );
 
@@ -477,6 +477,9 @@ export const selectTaskById = createSelector(
   (state: TaskState, props: { id: string }): Task => state.entities[props.id] as Task,
 );
 
+// intentionally unfiltered: calendar banner shows "Add as Task" when undefined
+// filtering archived projects would cause duplicate task creation for events already
+// linked to an archived-project task
 export const selectTaskByIssueId = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { issueId: string }): Task | undefined =>
@@ -524,13 +527,15 @@ export const selectTaskByIdWithSubTaskData = createSelector(
 );
 
 export const selectMainTasksWithoutTag = createSelector(
-  selectAllTasks,
+  selectAllTasksInActiveProjects,
   (tasks: Task[], props: { tagId: string }): Task[] =>
     tasks.filter(
       (task) => !!task && !task.parentId && !task.tagIds.includes(props.tagId),
     ),
 );
 
+// intentionally unfiltered: filters out calendar events already linked to a task — must include
+// archived projects or those events would reappear in the schedule as "not yet added"
 export const selectAllCalendarTaskEventIds = createSelector(
   selectAllTasks,
   (tasks: Task[]): string[] =>
@@ -544,6 +549,8 @@ export const selectAllCalendarTaskEventIds = createSelector(
       .map((t) => t.issueId as string),
 );
 
+// intentionally unfiltered: explicit design choice to poll ALL calendar tasks across all projects
+// (including archived) — see poll-issue-updates.effects.ts comment "poll ALL calendar tasks"
 export const selectAllCalendarIssueTasks = createSelector(
   selectAllTasks,
   (tasks: Task[]): Task[] =>
@@ -555,6 +562,7 @@ export const selectAllCalendarIssueTasks = createSelector(
     ),
 );
 
+// intentionally unfiltered: seems unused
 export const selectTasksWorkedOnOrDoneFlat = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { day: string }) => {
@@ -584,7 +592,7 @@ export const selectTasksDueForDay = createSelector(
 );
 
 export const selectTasksDueAndOverdueForDay = createSelector(
-  selectAllTasks,
+  selectAllTasksInActiveProjects,
   (tasks: Task[], props: { day: string }): TaskWithDueDay[] => {
     return tasks.filter(
       // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
