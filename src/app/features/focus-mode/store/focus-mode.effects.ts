@@ -405,23 +405,19 @@ export class FocusModeEffects {
     ),
   );
 
-  // Effect 3b: Offer Flowtime breaks when user explicitly ends their session
-  // Triggers on endFlowtimeSession — NOT pauseFocusSession (which is fired by
-  // sync-stop, idle, and the regular pause button)
   offerFlowtimeBreakOnSessionEnd$ = createEffect(() =>
     this.actions$.pipe(
       ofType(actions.endFlowtimeSession),
       withLatestFrom(
         this.store.select(selectors.selectMode),
         this.store.select(selectors.selectTimer),
-        this.store.select(selectFocusModeConfig),
       ),
       filter(([_action, mode, timer]) => {
         if (mode !== FocusModeMode.Flowtime) return false;
         if (timer.purpose !== 'work') return false;
         return true;
       }),
-      switchMap(([action, mode, timer, config]) => {
+      switchMap(([action, mode, timer]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
         const breakInfo = strategy.getBreakDuration(timer.elapsed);
 
@@ -429,23 +425,13 @@ export class FocusModeEffects {
           return [actions.completeFocusSession({ isManual: true })];
         }
 
-        const shouldPauseTracking =
-          config.isPauseTrackingDuringBreak && !!action.pausedTaskId;
-        const actionsArr: Action[] = [];
-
-        if (shouldPauseTracking) {
-          actionsArr.push(unsetCurrentTask());
-        }
-
-        actionsArr.push(
-          actions.startBreak({
+        return [
+          actions.offerFlowtimeBreak({
             duration: breakInfo.duration,
             isLongBreak: breakInfo.isLong,
-            pausedTaskId: shouldPauseTracking ? action.pausedTaskId : undefined,
+            pausedTaskId: action.pausedTaskId,
           }),
-        );
-
-        return actionsArr;
+        ];
       }),
     ),
   );
@@ -629,36 +615,10 @@ export class FocusModeEffects {
   logFocusSession$ = createEffect(
     () =>
       this.actions$.pipe(
-        // Flowtime sessions are logged when the break is offered or when a break starts immediately,
-        // even if the user declines the break or completes the session.
-        ofType(
-          actions.completeFocusSession,
-          actions.offerFlowtimeBreak,
-          actions.startBreak,
-        ),
-        withLatestFrom(
-          this.store.select(selectors.selectLastSessionDuration),
-          this.store.select(selectors.selectMode),
-        ),
-        filter(([action, _duration, mode]) => {
-          // If the action is completeFocusSession or offerFlowtimeBreak, we always log it
-          // (this covers Pomodoro, Flowtime with breaks disabled, or manual break offers)
-          if (
-            action.type === actions.completeFocusSession.type ||
-            action.type === actions.offerFlowtimeBreak.type
-          ) {
-            return true;
-          }
-          // If the action is startBreak, we only log it for Flowtime mode
-          // (Pomodoro logs on completeFocusSession)
-          if (
-            action.type === actions.startBreak.type &&
-            mode === FocusModeMode.Flowtime
-          ) {
-            return true;
-          }
-          return false;
-        }),
+        // Flowtime sessions are logged when the break is offered, even if the
+        // user declines the break and never starts it.
+        ofType(actions.completeFocusSession, actions.offerFlowtimeBreak),
+        withLatestFrom(this.store.select(selectors.selectLastSessionDuration)),
         tap(([, duration]) => {
           if (duration > 0) {
             this.metricService.logFocusSession(duration);
