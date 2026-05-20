@@ -576,12 +576,7 @@ describe('Planner Selectors - selectPlannerDays', () => {
       [],
       today,
     );
-    const result = selector.projector(
-      emptyTaskState,
-      emptyPlannerState,
-      scheduleConfig,
-      0,
-    );
+    const result = selector.projector([], emptyPlannerState, scheduleConfig, 0);
 
     expect(result[0].timeEstimate).toBe(0);
     expect(result[0].progressPercentage).toBe(0);
