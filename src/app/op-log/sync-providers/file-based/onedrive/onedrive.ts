@@ -634,10 +634,10 @@ export class OneDrive implements FileSyncProvider<SyncProviderId.OneDrive> {
         throw new RemoteFileNotFoundAPIError(targetPath);
       }
       if (status === 429) {
-        throw new TooManyRequestsAPIError(
-          `OneDrive request throttled (status=${status})`,
-          targetPath,
-        );
+        throw new TooManyRequestsAPIError({
+          status,
+          path: targetPath,
+        });
       }
       if (status === 409 || status === 412) {
         throw new UploadRevToMatchMismatchAPIError(targetPath);
