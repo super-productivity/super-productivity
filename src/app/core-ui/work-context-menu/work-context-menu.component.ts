@@ -126,10 +126,10 @@ export class WorkContextMenuComponent implements OnInit {
 
   async archiveProject(): Promise<void> {
     const activeId = this._workContextService.activeWorkContextId;
+    this._projectService.archive(this.contextId);
     if (activeId === this.contextId) {
       await this._router.navigateByUrl('/');
     }
-    this._projectService.archive(this.contextId);
     this._snackService.open({
       ico: 'archive',
       msg: T.F.PROJECT.S.ARCHIVED,
