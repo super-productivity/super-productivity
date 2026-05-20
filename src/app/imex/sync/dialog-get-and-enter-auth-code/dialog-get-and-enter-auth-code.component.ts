@@ -24,6 +24,7 @@ import { Subscription } from 'rxjs';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ELECTRON } from '../../../app.constants';
+import { validateOAuthState } from '../oauth-state.util';
 
 @Component({
   selector: 'dialog-get-and-enter-auth-code',
@@ -120,15 +121,32 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
       return undefined;
     }
 
+    let codeFromInput: string | undefined;
+
     // Allow pasting the full callback URL and extract `code` automatically.
     try {
       const parsedUrl = new URL(trimmed);
-      const codeFromUrl = parsedUrl.searchParams.get('code');
-      if (codeFromUrl) {
-        return codeFromUrl;
+      codeFromInput = parsedUrl.searchParams.get('code') ?? undefined;
+
+      // Validate state parameter when present (CSRF protection for manual paste).
+      // State validation is a defense-in-depth measure; PKCE already ensures an
+      // attacker-supplied code cannot be exchanged for a token.
+      const stateFromUrl = parsedUrl.searchParams.get('state');
+      if (stateFromUrl && this.data.providerName.toLowerCase() === 'onedrive') {
+        if (!validateOAuthState('onedrive', stateFromUrl)) {
+          this._snackService.open({
+            type: 'ERROR',
+            msg: 'OAuth state validation failed. Please try again.',
+          });
+          return undefined;
+        }
       }
     } catch {
       // Not a URL, continue with other extraction attempts.
+    }
+
+    if (codeFromInput) {
+      return codeFromInput;
     }
 
     // An attacker-supplied code is harmless here — it won't match the user's

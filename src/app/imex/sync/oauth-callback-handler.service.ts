@@ -25,6 +25,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
   private _pluginOAuthService = inject(PluginOAuthService);
   private _authCodeReceived$ = new Subject<OAuthCallbackData>();
   private _urlListenerHandle?: PluginListenerHandle;
+  private _isDestroyed = false;
 
   readonly authCodeReceived$ = this._authCodeReceived$.asObservable();
 
@@ -38,6 +39,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this._isDestroyed = true;
     this._urlListenerHandle?.remove();
     this._authCodeReceived$.complete();
   }
@@ -76,6 +78,9 @@ export class OAuthCallbackHandlerService implements OnDestroy {
 
   private _setupElectronOAuthListener(): void {
     window.ea.on(IPC.OAUTH_CALLBACK, (_event, payload) => {
+      if (this._isDestroyed) {
+        return;
+      }
       const callbackUrl =
         typeof payload === 'string'
           ? payload

@@ -412,6 +412,24 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     this._matDialogRef.close();
   }
 
+  private async _persistOneDriveFormCfgBeforeAuth(
+    providerId: SyncProviderId,
+  ): Promise<void> {
+    if (providerId !== SyncProviderId.OneDrive) {
+      return;
+    }
+    const oneDriveProvider = await this._providerManager.getProviderById(providerId);
+    if (oneDriveProvider) {
+      const existingCfg = await oneDriveProvider.privateCfg.load();
+      const formOneDriveCfg = this._tmpUpdatedCfg.oneDrive || {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await oneDriveProvider.privateCfg.setComplete({
+        ...(existingCfg || {}),
+        ...formOneDriveCfg,
+      } as any);
+    }
+  }
+
   async save(): Promise<void> {
     // Check if form is valid
     if (!this.form.valid) {
@@ -438,21 +456,8 @@ export class DialogSyncCfgComponent implements AfterViewInit {
 
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
-      // OneDrive: save form config (clientId, tenantId, etc.) to privateCfg
-      // before auth so getAuthHelper() can read them. Without this, users on
-      // custom app builds (HAS_OFFICIAL_ONEDRIVE_CLIENT_ID=false) cannot
-      // authenticate because _cfgOrError() throws MissingCredentialsSPError.
       if (providerId === SyncProviderId.OneDrive) {
-        const oneDriveProvider = await this._providerManager.getProviderById(providerId);
-        if (oneDriveProvider) {
-          const existingCfg = await oneDriveProvider.privateCfg.load();
-          const formOneDriveCfg = this._tmpUpdatedCfg.oneDrive || {};
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await oneDriveProvider.privateCfg.setComplete({
-            ...(existingCfg || {}),
-            ...formOneDriveCfg,
-          } as any);
-        }
+        await this._persistOneDriveFormCfgBeforeAuth(providerId);
       }
 
       await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);
@@ -487,19 +492,8 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       return;
     }
     try {
-      // OneDrive: save form config to privateCfg before auth so getAuthHelper()
-      // can read clientId. Without this, re-auth fails on custom app builds.
       if (providerId === SyncProviderId.OneDrive) {
-        const oneDriveProvider = await this._providerManager.getProviderById(providerId);
-        if (oneDriveProvider) {
-          const existingCfg = await oneDriveProvider.privateCfg.load();
-          const formOneDriveCfg = this._tmpUpdatedCfg.oneDrive || {};
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await oneDriveProvider.privateCfg.setComplete({
-            ...(existingCfg || {}),
-            ...formOneDriveCfg,
-          } as any);
-        }
+        await this._persistOneDriveFormCfgBeforeAuth(providerId);
       }
 
       const result =

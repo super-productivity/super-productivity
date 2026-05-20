@@ -143,7 +143,7 @@ export class OneDrive implements FileSyncProvider<
       );
       return { rev: item.eTag || '' };
     } catch (e) {
-      this._mapAndThrow(e, targetPath);
+      this._mapAndThrow(e);
     }
     throw new RemoteFileNotFoundAPIError(targetPath);
   }
@@ -171,7 +171,7 @@ export class OneDrive implements FileSyncProvider<
         dataStr,
       };
     } catch (e) {
-      this._mapAndThrow(e, targetPath);
+      this._mapAndThrow(e);
     }
     throw new RemoteFileNotFoundAPIError(targetPath);
   }
@@ -200,7 +200,7 @@ export class OneDrive implements FileSyncProvider<
       const result = (await response.json()) as { eTag?: string };
       return { rev: result.eTag || '' };
     } catch (e) {
-      this._mapAndThrow(e, targetPath);
+      this._mapAndThrow(e);
     }
     throw new UploadRevToMatchMismatchAPIError(targetPath);
   }
@@ -213,7 +213,7 @@ export class OneDrive implements FileSyncProvider<
         path: this._getDriveItemPath(targetPath, cfg),
       });
     } catch (e) {
-      this._mapAndThrow(e, targetPath);
+      this._mapAndThrow(e);
     }
   }
 
@@ -310,6 +310,15 @@ export class OneDrive implements FileSyncProvider<
       return;
     }
 
+    // Probe the full path first — if it exists, skip per-segment creation entirely.
+    const fullPath = `/me/drive/special/approot:/${this._encodePath(folderPath)}`;
+    try {
+      await this._request({ method: 'GET', path: fullPath });
+      return;
+    } catch {
+      // 404 means we need to create the folder chain; fall through.
+    }
+
     const segments = folderPath.split('/').filter(Boolean);
     let currentPath = '';
 
@@ -325,11 +334,7 @@ export class OneDrive implements FileSyncProvider<
         await this._request({
           method: 'POST',
           path: createPath,
-          headers: (() => {
-            const requestHeaders = new Headers();
-            requestHeaders.set('Content-Type', 'application/json');
-            return requestHeaders;
-          })(),
+          headers: new Headers({ 'Content-Type': 'application/json' }), // eslint-disable-line @typescript-eslint/naming-convention
           body: JSON.stringify({
             name: segment,
             folder: {},
@@ -494,26 +499,22 @@ export class OneDrive implements FileSyncProvider<
     if (!response.ok) {
       const body = await response.text();
       if (response.status === 400) {
+        let parsed: { error?: string } | null = null;
         try {
-          const parsedBody = JSON.parse(body) as {
-            error?: string;
-            error_description?: string;
-          };
-          if (parsedBody.error === 'invalid_grant') {
-            this._deps.logger.warn(
-              '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
-            );
-            await this.clearAuthCredentials();
-            throw new MissingRefreshTokenAPIError();
-          }
-        } catch (_parseErr) {
-          if (_parseErr instanceof MissingRefreshTokenAPIError) {
-            throw _parseErr;
-          }
-          /* fall through to generic HttpNotOkAPIError */
+          parsed = JSON.parse(body) as { error?: string };
+        } catch {
+          /* not JSON */
+        }
+        if (parsed?.error === 'invalid_grant') {
+          this._deps.logger.warn(
+            '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
+          );
+          await this.clearAuthCredentials();
+          throw new MissingRefreshTokenAPIError();
         }
       }
-      throw new HttpNotOkAPIError(response, body);
+      const redactedBody = this._redactTokenBody(body);
+      throw new HttpNotOkAPIError(response, redactedBody);
     }
 
     return (await response.json()) as OneDriveTokenResponse;
@@ -582,7 +583,7 @@ export class OneDrive implements FileSyncProvider<
     }
 
     if (!response.ok) {
-      throw new HttpNotOkAPIError(response, responseBody);
+      throw new HttpNotOkAPIError(response, this._redactResponseBody(responseBody));
     }
 
     return response;
@@ -611,7 +612,7 @@ export class OneDrive implements FileSyncProvider<
     }
   }
 
-  private _mapAndThrow(error: unknown, targetPath: string): never {
+  private _mapAndThrow(error: unknown): never {
     if (error instanceof RemoteFileNotFoundAPIError) {
       throw error;
     }
@@ -622,23 +623,47 @@ export class OneDrive implements FileSyncProvider<
       const status = error.response.status;
       if (status === 404) {
         this._ensuredFolderPath = null;
-        throw new RemoteFileNotFoundAPIError(targetPath);
+        throw new RemoteFileNotFoundAPIError();
       }
       if (status === 429) {
         throw new TooManyRequestsAPIError({
           status,
-          path: targetPath,
         });
       }
       if (status === 409 || status === 412) {
-        throw new UploadRevToMatchMismatchAPIError(targetPath);
+        throw new UploadRevToMatchMismatchAPIError();
       }
       if (status === 401 || status === 403) {
-        throw new AuthFailSPError(`OneDrive auth failed (status=${status})`, targetPath);
+        throw new AuthFailSPError(`OneDrive auth failed (status=${status})`);
       }
     }
 
     throw error;
+  }
+
+  private _redactTokenBody(body: string): string {
+    return this._redactSensitiveFields(body);
+  }
+
+  private _redactResponseBody(body: string): string {
+    return this._redactSensitiveFields(body);
+  }
+
+  private _redactSensitiveFields(body: string): string {
+    try {
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      const sensitiveKeys = ['code', 'code_verifier', 'refresh_token', 'access_token'];
+      let changed = false;
+      for (const key of sensitiveKeys) {
+        if (key in parsed) {
+          parsed[key] = '[REDACTED]';
+          changed = true;
+        }
+      }
+      return changed ? JSON.stringify(parsed) : body;
+    } catch {
+      return body;
+    }
   }
 }
 

@@ -50,6 +50,8 @@ describe('OneDrive', () => {
     isElectron: false,
   };
 
+  let originalFetch: typeof fetch | undefined;
+
   beforeEach(() => {
     cfgStoreSpy = jasmine.createSpyObj('SyncCredentialStore', ['load', 'setComplete']);
     const deps: OneDriveDeps = {
@@ -58,6 +60,7 @@ describe('OneDrive', () => {
     };
     provider = new PackageOneDrive({}, deps);
 
+    originalFetch = (globalThis as any).fetch;
     fetchSpy = jasmine.createSpy('fetch');
     (globalThis as any).fetch = fetchSpy;
   });
@@ -265,6 +268,6 @@ describe('OneDrive', () => {
   });
 
   afterEach(() => {
-    (globalThis as any).fetch = undefined;
+    (globalThis as any).fetch = originalFetch;
   });
 });

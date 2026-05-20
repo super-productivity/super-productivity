@@ -426,15 +426,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             text: T.F.SYNC.FORM.ONEDRIVE.INFO_TEXT,
           },
         },
-        {
-          type: 'tpl',
-          key: 'authStatus',
-          className: 'auth-status-indicator',
-          templateOptions: {
-            tag: 'p',
-            text: '',
-          },
-        },
       ],
     },
 
