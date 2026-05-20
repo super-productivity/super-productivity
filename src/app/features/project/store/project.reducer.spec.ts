@@ -500,6 +500,16 @@ describe('projectReducer', () => {
       const r = projectReducer(s as any, archiveProject({ id: 'P1' }) as any);
       expect((r.entities as any).P2.isArchived).toBeFalse();
     });
+
+    it('should never archive INBOX_PROJECT', () => {
+      const s = fakeEntityStateFromArray([
+        { id: INBOX_PROJECT.id, isArchived: false },
+        { id: 'P1', isArchived: false },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(s as any, archiveProject({ id: INBOX_PROJECT.id }) as any);
+      expect((r.entities as any)[INBOX_PROJECT.id].isArchived).toBeFalse();
+    });
   });
 
   describe('unarchiveProject', () => {
