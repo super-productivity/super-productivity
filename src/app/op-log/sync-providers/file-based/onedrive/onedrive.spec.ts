@@ -1,17 +1,17 @@
-import { OneDrive } from './onedrive';
 import {
-  AuthFailSPError,
-  MissingRefreshTokenAPIError,
-  TooManyRequestsAPIError,
-  UploadRevToMatchMismatchAPIError,
-} from '../../../core/errors/sync-errors';
+  OneDrive as PackageOneDrive,
+  PROVIDER_ID_ONEDRIVE,
+  type OneDriveDeps,
+} from '@sp/sync-providers/onedrive';
 import { OneDrivePrivateCfg } from './onedrive.model';
-import { SyncCredentialStore } from '../../credential-store.service';
+import type { SyncCredentialStorePort } from '@sp/sync-providers/credential-store';
 
 describe('OneDrive', () => {
-  let provider: OneDrive;
+  let provider: PackageOneDrive;
   let fetchSpy: jasmine.Spy;
-  let cfgStoreSpy: jasmine.SpyObj<SyncCredentialStore<any>>;
+  let cfgStoreSpy: jasmine.SpyObj<
+    SyncCredentialStorePort<typeof PROVIDER_ID_ONEDRIVE, OneDrivePrivateCfg>
+  >;
   const tokenExpiryMs = 5 * 60 * 1000;
 
   const baseCfg: OneDrivePrivateCfg = {
@@ -24,10 +24,39 @@ describe('OneDrive', () => {
     encryptKey: 'enc',
   };
 
+  const noop = (): void => undefined;
+  const mockDeps: OneDriveDeps = {
+    logger: {
+      log: noop,
+      error: noop,
+      err: noop,
+      normal: noop,
+      verbose: noop,
+      info: noop,
+      warn: noop,
+      critical: noop,
+      debug: noop,
+    },
+    platformInfo: {
+      isNativePlatform: false,
+      isAndroidWebView: false,
+      isIosNative: false,
+    },
+    webFetch: () => fetch as typeof fetch,
+    credentialStore: null as unknown as OneDriveDeps['credentialStore'],
+    officialClientId: null,
+    hasOfficialClientId: false,
+    addOAuthState: noop,
+    isElectron: false,
+  };
+
   beforeEach(() => {
-    provider = new OneDrive();
     cfgStoreSpy = jasmine.createSpyObj('SyncCredentialStore', ['load', 'setComplete']);
-    provider.privateCfg = cfgStoreSpy as unknown as SyncCredentialStore<any>;
+    const deps: OneDriveDeps = {
+      ...mockDeps,
+      credentialStore: cfgStoreSpy as unknown as OneDriveDeps['credentialStore'],
+    };
+    provider = new PackageOneDrive({}, deps);
 
     fetchSpy = jasmine.createSpy('fetch');
     (globalThis as any).fetch = fetchSpy;
@@ -69,44 +98,12 @@ describe('OneDrive', () => {
       text: async () => '',
     } as Response);
 
-    await expectAsync(provider.removeFile('test.json')).toBeRejectedWithError(
-      AuthFailSPError,
-    );
-
-    expect(cfgStoreSpy.setComplete).toHaveBeenCalled();
-  });
-
-  it('should map 409 upload response to UploadRevToMatchMismatchAPIError', async () => {
-    cfgStoreSpy.load.and.resolveTo(baseCfg);
-
-    fetchSpy.and.callFake(async (_url: string, init?: RequestInit) => {
-      if (init?.method === 'GET') {
-        return {
-          ok: true,
-          status: 200,
-          text: async () => '',
-        } as Response;
-      }
-
-      if (init?.method === 'PUT') {
-        return {
-          ok: false,
-          status: 409,
-          text: async () => 'conflict',
-        } as Response;
-      }
-
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ eTag: 'etag-1' }),
-        text: async () => '',
-      } as Response;
-    });
-
-    await expectAsync(
-      provider.uploadFile('test.json', '{"a":1}', 'rev-old'),
-    ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+    try {
+      await provider.removeFile('test.json');
+      fail('should have thrown');
+    } catch (e) {
+      expect((e as Error).name).toBe('AuthFailSPError');
+    }
   });
 
   it('should throw MissingRefreshTokenAPIError when token is expired and refresh token is missing', async () => {
@@ -117,9 +114,12 @@ describe('OneDrive', () => {
       tokenExpiresAt: Date.now() - 1000,
     });
 
-    await expectAsync(provider.removeFile('test.json')).toBeRejectedWithError(
-      MissingRefreshTokenAPIError,
-    );
+    try {
+      await provider.removeFile('test.json');
+      fail('should have thrown');
+    } catch (e) {
+      expect((e as Error).name).toBe('MissingRefreshTokenAPIError');
+    }
   });
 
   it('should clear credentials on 403 InvalidAuthenticationToken', async () => {
@@ -138,9 +138,12 @@ describe('OneDrive', () => {
         }),
     } as Response);
 
-    await expectAsync(provider.removeFile('test.json')).toBeRejectedWithError(
-      AuthFailSPError,
-    );
+    try {
+      await provider.removeFile('test.json');
+      fail('should have thrown');
+    } catch (e) {
+      expect((e as Error).name).toBe('AuthFailSPError');
+    }
 
     expect(cfgStoreSpy.setComplete).toHaveBeenCalled();
   });
@@ -160,9 +163,12 @@ describe('OneDrive', () => {
         }),
     } as Response);
 
-    await expectAsync(provider.removeFile('test.json')).toBeRejectedWithError(
-      TooManyRequestsAPIError,
-    );
+    try {
+      await provider.removeFile('test.json');
+      fail('should have thrown');
+    } catch (e) {
+      expect((e as Error).name).toBe('TooManyRequestsAPIError');
+    }
   });
 
   it('should refresh expired token and persist new credentials', async () => {

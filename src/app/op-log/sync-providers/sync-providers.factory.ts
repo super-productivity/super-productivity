@@ -34,7 +34,7 @@ export interface LocalFileSyncPicker {
 const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> => {
   const [
     { createDropboxProvider },
-    { OneDrive },
+    { createOneDriveProvider },
     { createWebdavProvider },
     { createSuperSyncProvider },
     { createNextcloudProvider },
@@ -53,7 +53,9 @@ const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> =
       appKey: DROPBOX_APP_KEY,
       basePath: environment.production ? `/` : `/DEV/`,
     }) as SyncProviderBase<SyncProviderId>,
-    new OneDrive() as SyncProviderBase<SyncProviderId>,
+    createOneDriveProvider({
+      devPath: extraPath,
+    }) as SyncProviderBase<SyncProviderId>,
     createWebdavProvider(extraPath) as SyncProviderBase<SyncProviderId>,
     createSuperSyncProvider() as SyncProviderBase<SyncProviderId>,
     createNextcloudProvider(extraPath) as SyncProviderBase<SyncProviderId>,

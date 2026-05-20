@@ -81,7 +81,7 @@ import type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
 import type { LocalFileSyncPrivateCfg as PackageLocalFileSyncPrivateCfg } from '@sp/sync-providers/local-file';
 import type { NextcloudPrivateCfg, WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
-import type { OneDrivePrivateCfg } from '../../sync-providers/file-based/onedrive/onedrive.model';
+import type { OneDrivePrivateCfg } from '@sp/sync-providers/onedrive';
 
 export type LocalFileSyncPrivateCfg = PackageLocalFileSyncPrivateCfg;
 

@@ -44,6 +44,16 @@
         "default": "./dist/super-sync.js"
       }
     },
+    "./onedrive": {
+      "import": {
+        "types": "./dist/onedrive.d.mts",
+        "default": "./dist/onedrive.mjs"
+      },
+      "require": {
+        "types": "./dist/onedrive.d.ts",
+        "default": "./dist/onedrive.js"
+      }
+    },
     "./http": {
       "import": {
         "types": "./dist/http.d.mts",
