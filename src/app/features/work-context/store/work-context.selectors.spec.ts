@@ -315,13 +315,11 @@ describe('workContext selectors', () => {
         subTaskIds: [],
       } as Partial<TaskCopy> as TaskCopy;
 
-      const taskState = fakeEntityStateFromArray([
-        taskWithUndefinedSubTaskIds,
-        normalTask,
-      ]) as any;
-
       // Should not throw "Cannot read properties of undefined (reading 'length')"
-      const result = selectTrackableTasksActiveContextFirst.projector(taskState, []);
+      const result = selectTrackableTasksActiveContextFirst.projector(
+        [taskWithUndefinedSubTaskIds, normalTask],
+        [],
+      );
       expect(result.length).toBe(2);
     });
   });

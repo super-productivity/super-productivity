@@ -287,19 +287,15 @@ export const selectStartableTasksForActiveContext = createSelector(
 );
 
 export const selectTrackableTasksActiveContextFirst = createSelector(
-  selectTaskFeatureState,
+  selectAllTasksInActiveProjects,
   selectStartableTasksForActiveContext,
-  (s, forActiveContext): Task[] => {
+  (allActiveTasks, forActiveContext): Task[] => {
     // Use Set for O(1) lookup instead of O(n) .includes() in filter
     const activeContextIdSet = new Set(forActiveContext.map((item) => item.id));
-    const otherTasks = s.ids
-      .map((id) => s.entities[id])
-      .filter(
-        (task): task is Task =>
-          !!task &&
-          (!!task.parentId || !task.subTaskIds?.length) &&
-          !activeContextIdSet.has(task.id),
-      );
+    const otherTasks = allActiveTasks.filter(
+      (task): task is Task =>
+        (!!task.parentId || !task.subTaskIds?.length) && !activeContextIdSet.has(task.id),
+    );
     return [...forActiveContext, ...otherTasks].sort(sortDoneLast);
   },
 );
