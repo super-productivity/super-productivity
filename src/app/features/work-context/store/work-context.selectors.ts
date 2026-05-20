@@ -9,14 +9,12 @@ import {
   mapSubTasksToTask,
   selectAllTasksInActiveProjects,
   selectTaskEntities,
+  selectTaskEntitiesInActiveProjects,
   selectTaskFeatureState,
 } from '../../tasks/store/task.selectors';
 import { Task, TaskWithDueTime, TaskWithSubTasks } from '../../tasks/task.model';
 import { devError } from '../../../util/dev-error';
-import {
-  selectArchivedProjectIds,
-  selectProjectFeatureState,
-} from '../../project/store/project.selectors';
+import { selectProjectFeatureState } from '../../project/store/project.selectors';
 import { selectNoteTodayOrder } from '../../note/store/note.reducer';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { Log } from '../../../core/log';
@@ -28,20 +26,6 @@ import {
 } from '../../../root-store/app-state/app-state.selectors';
 
 export const WORK_CONTEXT_FEATURE_NAME = 'workContext';
-
-const filterTaskEntitiesByActiveProjects = (
-  entities: Record<string, Task | undefined>,
-  archivedProjectIds: Set<string>,
-): Record<string, Task | undefined> => {
-  if (archivedProjectIds.size === 0) {
-    return entities;
-  }
-  return Object.fromEntries(
-    Object.entries(entities).filter(
-      ([, t]) => !t || !archivedProjectIds.has(t.projectId),
-    ),
-  );
-};
 
 /**
  * Computes ordered task IDs for TODAY_TAG using dueDay for membership.
@@ -161,8 +145,7 @@ export const selectActiveWorkContext = createSelector(
   selectActiveContextTypeAndId,
   selectProjectFeatureState,
   selectTagFeatureState,
-  selectTaskFeatureState,
-  selectArchivedProjectIds,
+  selectTaskEntitiesInActiveProjects,
   selectNoteTodayOrder,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
@@ -170,19 +153,13 @@ export const selectActiveWorkContext = createSelector(
     { activeId, activeType },
     projectState,
     tagState,
-    taskState,
-    archivedProjectIds,
+    activeTaskEntities,
     todayOrder,
     todayStr,
     startOfNextDayDiffMs,
   ): WorkContext => {
     if (activeType === WorkContextType.TAG) {
       const tag = selectTagById.projector(tagState, { id: activeId });
-
-      const activeTaskEntities = filterTaskEntitiesByActiveProjects(
-        taskState.entities,
-        archivedProjectIds,
-      );
 
       // TODAY_TAG uses dueDay for membership (virtual tag pattern)
       // Regular tags use task.tagIds for membership (board-style pattern)
@@ -217,7 +194,7 @@ export const selectActiveWorkContext = createSelector(
         // Fallback to TODAY tag - use dueDay for membership (virtual tag pattern)
         const orderedTaskIds = computeOrderedTaskIdsForToday(
           tag,
-          taskState.entities,
+          activeTaskEntities,
           todayStr,
           startOfNextDayDiffMs,
         );
@@ -352,16 +329,11 @@ export const selectDoneBacklogTaskIdsForActiveContext = createSelector(
  */
 export const selectTodayTaskIds = createSelector(
   selectTagFeatureState,
-  selectTaskFeatureState,
-  selectArchivedProjectIds,
+  selectTaskEntitiesInActiveProjects,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (tagState, taskState, archivedProjectIds, todayStr, startOfNextDayDiffMs): string[] => {
+  (tagState, activeTaskEntities, todayStr, startOfNextDayDiffMs): string[] => {
     const todayTag = tagState.entities[TODAY_TAG.id];
-    const activeTaskEntities = filterTaskEntitiesByActiveProjects(
-      taskState.entities,
-      archivedProjectIds,
-    );
     return computeOrderedTaskIdsForToday(
       todayTag,
       activeTaskEntities,

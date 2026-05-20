@@ -34,8 +34,7 @@ describe('workContext selectors', () => {
         // } as Partial<WorkContextCopy> as WorkContextCopy,
         fakeEntityStateFromArray([]),
         fakeEntityStateFromArray([TODAY_TAG]),
-        fakeEntityStateFromArray([]) as any, // taskState - no tasks
-        new Set<string>(),
+        (fakeEntityStateFromArray([]) as any).entities,
         [],
         todayStr,
         0,
@@ -104,8 +103,7 @@ describe('workContext selectors', () => {
         } as any,
         fakeEntityStateFromArray([]),
         fakeEntityStateFromArray([todayTagWithStaleIds]),
-        fakeEntityStateFromArray([task1, task2, taskNotForToday]) as any,
-        new Set<string>(),
+        fakeEntityStateFromArray([task1, task2, taskNotForToday]).entities,
         [],
         todayStr,
         0,
@@ -140,8 +138,7 @@ describe('workContext selectors', () => {
           } as any,
           fakeEntityStateFromArray([]),
           fakeEntityStateFromArray([todayTagWithOrder]),
-          fakeEntityStateFromArray([task]) as any,
-          new Set<string>(),
+          fakeEntityStateFromArray([task]).entities,
           [],
           offsetTodayStr,
           FOUR_HOURS_MS,
@@ -191,8 +188,7 @@ describe('workContext selectors', () => {
           } as any,
           fakeEntityStateFromArray([]),
           fakeEntityStateFromArray([todayTagWithOrder]),
-          fakeEntityStateFromArray([taskDueDay, taskDueWithTime, taskNotToday]) as any,
-          new Set<string>(),
+          fakeEntityStateFromArray([taskDueDay, taskDueWithTime, taskNotToday]).entities,
           [],
           offsetTodayStr,
           FOUR_HOURS_MS,
@@ -211,20 +207,11 @@ describe('workContext selectors', () => {
         subTaskIds: [],
         projectId: 'activeProject',
       } as Partial<TaskCopy> as TaskCopy;
-      const archivedTask = {
-        id: 'archived',
-        tagIds: [],
-        dueDay: todayStr,
-        subTaskIds: [],
-        projectId: 'archivedProject',
-      } as Partial<TaskCopy> as TaskCopy;
-
       const result = selectActiveWorkContext.projector(
         { activeId: TODAY_TAG.id, activeType: WorkContextType.TAG } as any,
         fakeEntityStateFromArray([]),
         fakeEntityStateFromArray([TODAY_TAG]),
-        fakeEntityStateFromArray([activeTask, archivedTask]) as any,
-        new Set<string>(['archivedProject']),
+        fakeEntityStateFromArray([activeTask]).entities,
         [],
         todayStr,
         0,
@@ -451,8 +438,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -484,8 +470,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -516,8 +501,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -548,8 +532,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -581,8 +564,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -614,8 +596,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -641,8 +622,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -673,8 +653,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -706,8 +685,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -739,8 +717,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -772,8 +749,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -805,8 +781,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -847,8 +822,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -885,8 +859,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -925,8 +898,7 @@ describe('workContext selectors', () => {
 
       const result = selectTodayTaskIds.projector(
         tagState,
-        taskState,
-        new Set<string>(),
+        taskState.entities,
         todayStr,
         0,
       );
@@ -957,8 +929,7 @@ describe('workContext selectors', () => {
 
         const result = selectTodayTaskIds.projector(
           tagState,
-          taskState,
-          new Set<string>(),
+          taskState.entities,
           offsetTodayStr,
           FOUR_HOURS_MS,
         );
@@ -983,8 +954,7 @@ describe('workContext selectors', () => {
 
         const result = selectTodayTaskIds.projector(
           tagState,
-          taskState,
-          new Set<string>(),
+          taskState.entities,
           offsetTodayStr,
           FOUR_HOURS_MS,
         );
@@ -1009,8 +979,7 @@ describe('workContext selectors', () => {
 
         const result = selectTodayTaskIds.projector(
           tagState,
-          taskState,
-          new Set<string>(),
+          taskState.entities,
           offsetTodayStr,
           FOUR_HOURS_MS,
         );
@@ -1036,8 +1005,7 @@ describe('workContext selectors', () => {
 
         const result = selectTodayTaskIds.projector(
           tagState,
-          taskState,
-          new Set<string>(),
+          taskState.entities,
           offsetTodayStr,
           FOUR_HOURS_MS,
         );
@@ -1063,8 +1031,7 @@ describe('workContext selectors', () => {
 
         const result = selectTodayTaskIds.projector(
           tagState,
-          taskState,
-          new Set<string>(),
+          taskState.entities,
           offsetTodayStr,
           FOUR_HOURS_MS,
         );
@@ -1086,8 +1053,7 @@ describe('workContext selectors', () => {
 
         const result = selectTodayTaskIds.projector(
           tagState,
-          taskState,
-          new Set<string>(),
+          taskState.entities,
           offsetTodayStr,
           FOUR_HOURS_MS,
         );
@@ -1136,8 +1102,7 @@ describe('workContext selectors', () => {
 
         const result = selectTodayTaskIds.projector(
           tagState,
-          taskState,
-          new Set<string>(),
+          taskState.entities,
           offsetTodayStr,
           FOUR_HOURS_MS,
         );

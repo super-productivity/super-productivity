@@ -101,6 +101,16 @@ export const flattenTasks = (tasksIN: TaskWithSubTasks[]): TaskWithSubTasks[] =>
 const { selectEntities, selectAll } = taskAdapter.getSelectors();
 export const selectTaskFeatureState = createFeatureSelector<TaskState>(TASK_FEATURE_NAME);
 export const selectTaskEntities = createSelector(selectTaskFeatureState, selectEntities);
+export const selectTaskEntitiesInActiveProjects = createSelector(
+  selectTaskEntities,
+  selectArchivedProjectIds,
+  (entities, archivedIds): Record<string, Task | undefined> =>
+    archivedIds.size === 0
+      ? entities
+      : Object.fromEntries(
+          Object.entries(entities).filter(([, t]) => !t || !archivedIds.has(t.projectId)),
+        ),
+);
 export const selectCurrentTaskId = createSelector(
   selectTaskFeatureState,
   (state) => state.currentTaskId,
