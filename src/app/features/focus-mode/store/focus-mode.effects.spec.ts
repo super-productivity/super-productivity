@@ -403,25 +403,57 @@ describe('FocusModeEffects', () => {
           });
       });
 
-      it('should dispatch startBreak when isManualBreakStart is enabled', (done) => {
+      it('should dispatch both unsetCurrentTask and startBreak with pausedTaskId when isPauseTrackingDuringBreak is true and task is active', (done) => {
         actions$ = of(actions.incrementCycle());
         store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
         store.overrideSelector(selectors.selectCurrentCycle, 1);
         store.overrideSelector(selectFocusModeConfig, {
           isSkipPreparation: false,
           isManualBreakStart: true,
+          isPauseTrackingDuringBreak: true,
         });
+        currentTaskId$.next('task-123');
         store.refreshState();
 
         effects.autoStartBreakOnSessionComplete$
           .pipe(toArray())
           .subscribe((actionsArr) => {
-            const startBreakAction = actionsArr.find(
-              (a) => a.type === actions.startBreak.type,
-            ) as any;
-            expect(startBreakAction).toBeDefined();
-            expect(startBreakAction.duration).toBe(5 * 60 * 1000);
-            expect(startBreakAction.isLongBreak).toBeFalse();
+            expect(actionsArr.length).toBe(2);
+            expect(actionsArr[0]).toEqual(unsetCurrentTask());
+            expect(actionsArr[1]).toEqual(
+              actions.startBreak({
+                duration: 5 * 60 * 1000,
+                isLongBreak: false,
+                pausedTaskId: 'task-123',
+              }),
+            );
+            done();
+          });
+      });
+
+      it('should NOT dispatch unsetCurrentTask and should dispatch startBreak with pausedTaskId undefined when isPauseTrackingDuringBreak is false and task is active', (done) => {
+        actions$ = of(actions.incrementCycle());
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        store.overrideSelector(selectors.selectCurrentCycle, 1);
+        store.overrideSelector(selectFocusModeConfig, {
+          isSkipPreparation: false,
+          isManualBreakStart: true,
+          isPauseTrackingDuringBreak: false,
+        });
+        currentTaskId$.next('task-123');
+        store.refreshState();
+
+        effects.autoStartBreakOnSessionComplete$
+          .pipe(toArray())
+          .subscribe((actionsArr) => {
+            expect(actionsArr.length).toBe(1);
+            expect(actionsArr[0]).toEqual(
+              actions.startBreak({
+                duration: 5 * 60 * 1000,
+                isLongBreak: false,
+                pausedTaskId: undefined,
+              }),
+            );
             done();
           });
       });
@@ -637,13 +669,17 @@ describe('FocusModeEffects', () => {
     });
 
     describe('offerFlowtimeBreakOnSessionEnd$', () => {
-      it('should dispatch offerFlowtimeBreak when mode is Flowtime, timer is work, and breakInfo is present', (done) => {
+      it('should dispatch unsetCurrentTask and startBreak when mode is Flowtime, timer is work, breakInfo is present, and pause tracking is enabled', (done) => {
         actions$ = of(actions.endFlowtimeSession({ pausedTaskId: 'task-123' }));
         store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
         store.overrideSelector(
           selectors.selectTimer,
           createMockTimer({ purpose: 'work', elapsed: 1500000 }),
         );
+        store.overrideSelector(selectFocusModeConfig, {
+          isPauseTrackingDuringBreak: true,
+          isSkipPreparation: false,
+        });
         store.refreshState();
 
         strategyFactoryMock.getStrategy.and.returnValue({
@@ -651,16 +687,53 @@ describe('FocusModeEffects', () => {
           getBreakDuration: () => ({ duration: 300000, isLong: false }),
         });
 
-        effects.offerFlowtimeBreakOnSessionEnd$.pipe(take(1)).subscribe((action) => {
-          expect(action).toEqual(
-            actions.offerFlowtimeBreak({
-              duration: 300000,
-              isLongBreak: false,
-              pausedTaskId: 'task-123',
-            }),
-          );
-          done();
+        effects.offerFlowtimeBreakOnSessionEnd$
+          .pipe(toArray())
+          .subscribe((actionsArr) => {
+            expect(actionsArr.length).toBe(2);
+            expect(actionsArr[0]).toEqual(unsetCurrentTask());
+            expect(actionsArr[1]).toEqual(
+              actions.startBreak({
+                duration: 300000,
+                isLongBreak: false,
+                pausedTaskId: 'task-123',
+              }),
+            );
+            done();
+          });
+      });
+
+      it('should dispatch only startBreak when mode is Flowtime, timer is work, breakInfo is present, and pause tracking is disabled', (done) => {
+        actions$ = of(actions.endFlowtimeSession({ pausedTaskId: 'task-123' }));
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
+        store.overrideSelector(
+          selectors.selectTimer,
+          createMockTimer({ purpose: 'work', elapsed: 1500000 }),
+        );
+        store.overrideSelector(selectFocusModeConfig, {
+          isPauseTrackingDuringBreak: false,
+          isSkipPreparation: false,
         });
+        store.refreshState();
+
+        strategyFactoryMock.getStrategy.and.returnValue({
+          shouldStartBreakAfterSession: true,
+          getBreakDuration: () => ({ duration: 300000, isLong: false }),
+        });
+
+        effects.offerFlowtimeBreakOnSessionEnd$
+          .pipe(toArray())
+          .subscribe((actionsArr) => {
+            expect(actionsArr.length).toBe(1);
+            expect(actionsArr[0]).toEqual(
+              actions.startBreak({
+                duration: 300000,
+                isLongBreak: false,
+                pausedTaskId: undefined,
+              }),
+            );
+            done();
+          });
       });
 
       it('should dispatch completeFocusSession when mode is Flowtime, timer is work, but breakInfo is null', (done) => {
@@ -670,6 +743,10 @@ describe('FocusModeEffects', () => {
           selectors.selectTimer,
           createMockTimer({ purpose: 'work', elapsed: 1500000 }),
         );
+        store.overrideSelector(selectFocusModeConfig, {
+          isPauseTrackingDuringBreak: true,
+          isSkipPreparation: false,
+        });
         store.refreshState();
 
         strategyFactoryMock.getStrategy.and.returnValue({
@@ -980,6 +1057,40 @@ describe('FocusModeEffects', () => {
       effects.logFocusSession$.subscribe();
 
       expect(metricServiceMock.logFocusSession).toHaveBeenCalledWith(25 * 60 * 1000);
+    });
+
+    it('should call metricService.logFocusSession with duration on startBreak when mode is Flowtime', () => {
+      actions$ = of(
+        actions.startBreak({
+          duration: 5 * 60 * 1000,
+          isLongBreak: false,
+          pausedTaskId: 'task-123',
+        }),
+      );
+      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
+      store.refreshState();
+
+      effects.logFocusSession$.subscribe();
+
+      expect(metricServiceMock.logFocusSession).toHaveBeenCalledWith(25 * 60 * 1000);
+    });
+
+    it('should NOT call metricService.logFocusSession with duration on startBreak when mode is Pomodoro', () => {
+      actions$ = of(
+        actions.startBreak({
+          duration: 5 * 60 * 1000,
+          isLongBreak: false,
+          pausedTaskId: 'task-123',
+        }),
+      );
+      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.refreshState();
+
+      effects.logFocusSession$.subscribe();
+
+      expect(metricServiceMock.logFocusSession).not.toHaveBeenCalled();
     });
 
     it('should NOT log when duration is 0', () => {
