@@ -20,7 +20,7 @@ import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
 } from './protocol-handler';
-import { getIsQuiting, setIsLocked } from './shared-state';
+import { getIsQuiting, setIsLocked, setIsMinimizeToTray } from './shared-state';
 import { clearStaleLevelDbLocks } from './clear-stale-idb-locks';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
@@ -432,9 +432,9 @@ export const startApp = (): void => {
       event.preventDefault();
       const win = getWin();
       if (win && !win.isDestroyed()) {
+        // unset "minimize to tray" make sure window is not just hidden
+        setIsMinimizeToTray(false);
         win.close();
-        // On macOS call quitApp(), since closing windows alone will not quit the app
-        if (IS_MAC) quitApp();
       } else {
         // No window to close — set flag and re-trigger quit directly.
         quitApp();
