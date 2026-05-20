@@ -9,7 +9,7 @@ import { PluginOAuthService } from '../../plugins/oauth/plugin-oauth.service';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { validateOAuthState } from './oauth-state.util';
 
-type OAuthProvider = 'dropbox' | 'onedrive' | 'plugin';
+type OAuthProvider = 'dropbox' | 'onedrive' | 'plugin' | 'unknown';
 
 export interface OAuthCallbackData {
   code?: string;
@@ -103,7 +103,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
       const providerFromQuery = urlObj.searchParams.get('provider')?.toLowerCase();
       const providerRaw = providerFromPath || providerFromQuery;
 
-      // Validate state parameter for CSRF protection (OneDrive only)
+      // Validate state parameter for CSRF protection
       let provider: OAuthProvider;
       if (providerRaw === 'onedrive') {
         const stateValid = validateOAuthState('onedrive', state);
@@ -118,8 +118,13 @@ export class OAuthCallbackHandlerService implements OnDestroy {
           };
         }
         provider = 'onedrive';
+      } else if (providerRaw === 'dropbox') {
+        provider = 'dropbox';
+      } else if (providerRaw === 'plugin') {
+        provider = 'plugin';
       } else {
-        provider = providerRaw === 'plugin' ? 'plugin' : 'dropbox';
+        SyncLog.warn('OAuthCallbackHandler: Unknown provider in callback', providerRaw);
+        provider = 'unknown';
       }
 
       return {
@@ -129,11 +134,11 @@ export class OAuthCallbackHandlerService implements OnDestroy {
         provider,
       };
     } catch (e) {
-      SyncLog.err('OAuthCallbackHandler: Failed to parse URL', url, e);
+      SyncLog.err('OAuthCallbackHandler: Failed to parse URL');
       return {
         error: 'parse_error',
         error_description: 'Failed to parse OAuth callback URL',
-        provider: 'dropbox',
+        provider: 'unknown',
       };
     }
   }

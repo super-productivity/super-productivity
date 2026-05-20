@@ -64,7 +64,6 @@ export class OneDrive implements FileSyncProvider<
   private _folderEnsureInFlightPath: string | null = null;
   private _folderEnsureInFlightPromise: Promise<void> | null = null;
   private _tokenRefreshInFlightPromise: Promise<string> | null = null;
-  private _is401Retry = false;
   private readonly _devPath?: string;
   private readonly _deps: OneDriveDeps;
 
@@ -88,6 +87,13 @@ export class OneDrive implements FileSyncProvider<
     const cfg = await this.privateCfg.load();
     if (!cfg) {
       return;
+    }
+    if (this._tokenRefreshInFlightPromise) {
+      try {
+        await this._tokenRefreshInFlightPromise;
+      } catch {
+        /* discard refresh result */
+      }
     }
     this._tokenRefreshInFlightPromise = null;
     await this.privateCfg.setComplete({
@@ -328,7 +334,7 @@ export class OneDrive implements FileSyncProvider<
             name: segment,
             folder: {},
             // eslint-disable-next-line @typescript-eslint/naming-convention
-            '@microsoft.graph.conflictBehavior': 'replace',
+            '@microsoft.graph.conflictBehavior': 'fail',
           }),
         });
       } catch (e) {
@@ -520,7 +526,7 @@ export class OneDrive implements FileSyncProvider<
     return ONEDRIVE_PROTOCOL.electronRedirectUri;
   }
 
-  private async _request(options: ApiRequestOptions): Promise<Response> {
+  private async _request(options: ApiRequestOptions, isRetry = false): Promise<Response> {
     const cfg = await this._cfgOrError();
     const accessToken = await this._refreshAccessTokenIfNeeded(cfg);
     const isUploadRequest = options.method === 'PUT' && options.path.endsWith('/content');
@@ -553,19 +559,15 @@ export class OneDrive implements FileSyncProvider<
     }
 
     if (response.status === 401) {
-      if (!this._is401Retry) {
-        this._is401Retry = true;
+      if (!isRetry) {
         try {
-          const currentCfg = await this._cfgOrError();
           await this._refreshAccessTokenIfNeeded({
-            ...currentCfg,
+            ...cfg,
             tokenExpiresAt: 0,
           });
-          return this._request(options);
+          return this._request(options, true);
         } catch {
           /* fall through to auth clear */
-        } finally {
-          this._is401Retry = false;
         }
       }
       await this.clearAuthCredentials();
