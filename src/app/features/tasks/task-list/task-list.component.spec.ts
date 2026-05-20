@@ -72,6 +72,7 @@ describe('TaskListComponent', () => {
           provide: ScheduleExternalDragService,
           useValue: {
             activeTask: () => null,
+            activeDragRef: () => null,
             setActiveTask: () => {},
             isCancelNextDrop: () => false,
             setCancelNextDrop: () => {},
