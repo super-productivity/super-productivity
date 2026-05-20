@@ -21,18 +21,24 @@
   height: 0;
   margin: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   pointer-events: none;
+  position: relative;
 
   ::ng-deep task-list {
+    display: block;
     height: 0;
     margin: 0;
     padding: 0;
   }
 
   ::ng-deep .task-list-inner {
-    height: 0;
-    min-height: 0;
+    height: 12px;
+    min-height: 12px;
+    opacity: 0;
+    position: absolute;
+    top: 0;
+    width: 100%;
   }
 }
 
