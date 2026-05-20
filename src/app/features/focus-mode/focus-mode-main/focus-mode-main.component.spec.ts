@@ -697,8 +697,8 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     (mockStore.dispatch as jasmine.Spy).calls.reset();
   });
 
-  it('should show the mode selector while a focus session is in progress', () => {
-    expect(component.isShowModeSelector()).toBe(true);
+  it('should hide the mode selector while a focus session is in progress', () => {
+    expect(component.isShowModeSelector()).toBe(false);
   });
 
   it('should hide the mode selector while a Flowtime session is in progress', () => {

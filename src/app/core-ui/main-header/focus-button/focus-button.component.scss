@@ -1,3 +1,5 @@
+@use '../../../../styles/components/number-badge' as badge;
+
 :host {
   display: inline-flex;
   align-items: center;
@@ -5,13 +7,14 @@
 }
 
 .focus-btn-wrapper {
-  display: inline-grid;
-  place-items: center;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 100%;
 }
 
 .focus-btn-anchor {
-  grid-area: 1 / 1;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -22,23 +25,13 @@
 }
 
 .focus-label {
-  grid-area: 1 / 1;
-  align-self: end;
-  box-sizing: border-box;
-  min-width: var(--s7);
-  padding: var(--s-quarter) var(--s-half);
-  line-height: 1;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
+  // Reuses the shared simple-counter badge so width grows with content
+  // (no min-width). Wrapper stays at --header-button-size so the icon
+  // never shifts when a session starts/stops.
+  @include badge.number-badge;
   font-variant-numeric: tabular-nums;
   text-align: center;
   white-space: nowrap;
-  pointer-events: none;
-  border-radius: var(--s);
-  background: var(--bg-lighter);
-  color: var(--text-color-most-intense);
-  transform: translateY(var(--s-quarter));
-  z-index: 4;
 }
 
 .focus-cycle {

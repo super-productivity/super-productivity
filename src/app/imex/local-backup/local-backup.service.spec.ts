@@ -1,5 +1,5 @@
-import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { BehaviorSubject, of } from 'rxjs';
 import { LocalBackupService } from './local-backup.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
@@ -8,6 +8,8 @@ import { SnackService } from '../../core/snack/snack.service';
 import { TranslateService } from '@ngx-translate/core';
 import { ArchiveModel } from '../../features/archive/archive.model';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
+
+const BACKUP_INTERVAL = 5 * 60 * 1000;
 
 describe('LocalBackupService', () => {
   let service: LocalBackupService;
@@ -134,6 +136,41 @@ describe('LocalBackupService', () => {
       expect(backupData.archiveYoung.task.entities['archivedTask1']).toBeDefined();
       expect(backupData.archiveOld.task.entities['oldArchivedTask1']).toBeDefined();
     });
+  });
+
+  describe('automatic backup timer', () => {
+    it('should stop creating automatic backups when disabled after being enabled', fakeAsync(() => {
+      const cfg$ = new BehaviorSubject({
+        localBackup: { isEnabled: true },
+      });
+      globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+        cfg$,
+      });
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          LocalBackupService,
+          { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
+          { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
+          { provide: BackupService, useValue: backupServiceSpy },
+          { provide: SnackService, useValue: snackServiceSpy },
+          { provide: TranslateService, useValue: translateServiceSpy },
+        ],
+      });
+      service = TestBed.inject(LocalBackupService);
+      spyOn(service as any, '_backup').and.resolveTo();
+
+      service.init();
+      tick(BACKUP_INTERVAL);
+
+      expect((service as any)._backup).toHaveBeenCalledTimes(1);
+
+      cfg$.next({ localBackup: { isEnabled: false } });
+      tick(BACKUP_INTERVAL);
+
+      expect((service as any)._backup).toHaveBeenCalledTimes(1);
+    }));
   });
 
   describe('import backup', () => {

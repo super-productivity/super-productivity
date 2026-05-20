@@ -1345,6 +1345,7 @@
           "DISABLE_ENCRYPTION_WARNING": "WARNING: This will permanently delete ALL encrypted sync data on the server! This is necessary because encrypted operations cannot be mixed with unencrypted ones.",
           "DISABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
           "E2E_ENCRYPTION_DESCRIPTION": "Will be slower, but more secure",
+          "E2E_ENCRYPTION_INFO": "SuperSync uses end-to-end encryption. Your data is encrypted on this device before it leaves, using a password you choose during setup.",
           "ENABLE_ENCRYPTION_ITEM_1": "All sync history and backups on the server will be deleted",
           "ENABLE_ENCRYPTION_ITEM_2": "Your current data will be re-uploaded with encryption",
           "ENABLE_ENCRYPTION_ITEM_3": "All other devices will need to enter this encryption password",
