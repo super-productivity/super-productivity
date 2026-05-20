@@ -20,7 +20,7 @@ import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
 } from './protocol-handler';
-import { getIsQuiting, setIsQuiting, setIsLocked } from './shared-state';
+import { getIsQuiting, setIsLocked } from './shared-state';
 import { clearStaleLevelDbLocks } from './clear-stale-idb-locks';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
@@ -433,10 +433,11 @@ export const startApp = (): void => {
       const win = getWin();
       if (win && !win.isDestroyed()) {
         win.close();
+        // On macOS call quitApp(), since closing windows alone will not quit the app
+        if (IS_MAC) quitApp();
       } else {
         // No window to close — set flag and re-trigger quit directly.
-        setIsQuiting(true);
-        app.quit();
+        quitApp();
       }
       return;
     }
