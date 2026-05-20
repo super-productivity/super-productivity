@@ -382,19 +382,37 @@ describe('TaskListComponent', () => {
       srcListId: 'PARENT' | 'SUB',
       targetListId: 'PARENT' | 'SUB',
       newOrderedIds: string[] = [taskId],
+      taskOverrides: Partial<TaskWithSubTasks> = {},
+      targetAllTaskIds: string[] = [],
     ): void => {
+      const task = {
+        id: taskId,
+        parentId: srcListId === 'SUB' ? src : undefined,
+        subTaskIds: [],
+        ...taskOverrides,
+      } as TaskWithSubTasks;
+
       (
         component as unknown as {
           _move: (
-            t: string,
+            t: TaskWithSubTasks,
             s: string,
             tg: string,
             sl: 'PARENT' | 'SUB',
             tl: 'PARENT' | 'SUB',
             ids: string[],
+            allIds?: string[],
           ) => void;
         }
-      )._move(taskId, src, target, srcListId, targetListId, newOrderedIds);
+      )._move(
+        task,
+        src,
+        target,
+        srcListId,
+        targetListId,
+        newOrderedIds,
+        targetAllTaskIds,
+      );
     };
 
     it('routes a subtask drop into another subtask list to moveSubTask (not addTaskToSection)', () => {
@@ -420,6 +438,27 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.taskId).toBe('task1');
       expect(dispatchedAction.targetParentId).toBe('parentA');
       expect(dispatchedAction.afterTaskId).toBe('sub1');
+    });
+
+    it('does not dispatch convertToSubTask when the parent task is not convertible', () => {
+      callMove('task1', 'UNDONE', 'parentA', 'PARENT', 'SUB', ['task1'], {
+        subTaskIds: ['child1'],
+      });
+
+      expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('appends to existing subtasks when the target subtask list is hidden', () => {
+      callMove('task1', 'UNDONE', 'parentA', 'PARENT', 'SUB', ['task1'], {}, [
+        'existing-sub',
+        'last-sub',
+      ]);
+
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.convertToSubTask>;
+      expect(dispatchedAction.type).toBe(TaskSharedActions.convertToSubTask.type);
+      expect(dispatchedAction.afterTaskId).toBe('last-sub');
     });
 
     it('routes a parent drop into a section drop-list (PARENT + non-reserved id) to addTaskToSection', () => {

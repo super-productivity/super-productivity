@@ -254,7 +254,12 @@
     }
     @if (t.subTasks?.length || isEmptySubTaskDropTargetVisible()) {
       <div
-        [class.is-empty-drop-target]="!t.subTasks?.length"
+        [class.is-empty-drop-target]="
+          !t.subTasks?.length && isEmptySubTaskDropTargetActive()
+        "
+        [class.is-empty-drop-target-prepared]="
+          !t.subTasks?.length && !isEmptySubTaskDropTargetActive()
+        "
         class="sub-tasks"
       >
         @if (t.subTasks?.length) {

@@ -84,6 +84,18 @@ const canConvertParentDropToSubTask = (
   targetModelId !== task.id &&
   canConvertTaskToSubTask(task);
 
+const getConvertToSubTaskAfterTaskId = (
+  taskId: string,
+  newOrderedIds: string[],
+  targetAllTaskIds: string[],
+): string | null => {
+  const visibleIdsWithoutDraggedTask = newOrderedIds.filter((id) => id !== taskId);
+
+  return visibleIdsWithoutDraggedTask.length === 0 && targetAllTaskIds.length > 0
+    ? targetAllTaskIds[targetAllTaskIds.length - 1]
+    : getAnchorFromDragDrop(taskId, newOrderedIds);
+};
+
 export interface DropModelDataForList {
   listId: TaskListId;
   listModelId: ListModelId;
@@ -366,12 +378,13 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     this.dropListService.blockAniTrigger$.next();
     this._move(
-      draggedTask.id,
+      draggedTask,
       srcListData.listModelId,
       targetListData.listModelId,
       srcListData.listId,
       targetListData.listId,
       newIds.map((p) => p.id),
+      targetListData.allTasks.map((p) => p.id),
     );
 
     this._taskViewCustomizerService.setSort(DEFAULT_OPTIONS.sort);
@@ -393,13 +406,15 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   private _move(
-    taskId: string,
+    task: TaskWithSubTasks,
     src: DropListModelSource | string,
     target: DropListModelSource | string,
     srcListId: TaskListId,
     targetListId: TaskListId,
     newOrderedIds: string[],
+    targetAllTaskIds: string[] = [],
   ): void {
+    const taskId = task.id;
     const isSrcRegularList = src === 'DONE' || src === 'UNDONE';
     const isTargetRegularList = target === 'DONE' || target === 'UNDONE';
     const workContextId = this._workContextService.activeWorkContextId as string;
@@ -414,7 +429,15 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       targetListId === 'SUB' &&
       !RESERVED_LIST_IDS.has(target)
     ) {
-      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      if (!canConvertParentDropToSubTask(task, target, targetListId)) {
+        return;
+      }
+
+      const afterTaskId = getConvertToSubTaskAfterTaskId(
+        taskId,
+        newOrderedIds,
+        targetAllTaskIds,
+      );
       this._store.dispatch(
         TaskSharedActions.convertToSubTask({
           taskId,

@@ -282,6 +282,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
     return canShowEmptySubTaskDropTarget(t, activeTask, this.isInSubTaskList());
   });
+  isEmptySubTaskDropTargetActive = computed(
+    () =>
+      this.isEmptySubTaskDropTargetVisible() &&
+      !!this._scheduleExternalDragService.activeDragRef(),
+  );
 
   hasDeadline = computed(() => {
     const t = this.task();

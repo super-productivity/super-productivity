@@ -5,7 +5,7 @@ import { DragRef } from '@angular/cdk/drag-drop';
 @Injectable({ providedIn: 'root' })
 export class ScheduleExternalDragService {
   private readonly _activeTask = signal<TaskWithSubTasks | null>(null);
-  private _activeDragRef: DragRef | null = null;
+  private readonly _activeDragRef = signal<DragRef | null>(null);
   private _cancelNextDrop: boolean = false;
 
   setCancelNextDrop(val: boolean): void {
@@ -21,11 +21,11 @@ export class ScheduleExternalDragService {
   }
 
   activeDragRef(): DragRef | null {
-    return this._activeDragRef;
+    return this._activeDragRef();
   }
 
   setActiveTask(task: TaskWithSubTasks | null, dragRef: DragRef | null = null): void {
     this._activeTask.set(task);
-    this._activeDragRef = dragRef;
+    this._activeDragRef.set(dragRef);
   }
 }
