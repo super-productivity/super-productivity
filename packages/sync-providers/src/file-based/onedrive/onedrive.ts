@@ -501,6 +501,9 @@ export class OneDrive implements FileSyncProvider<
             throw new MissingRefreshTokenAPIError();
           }
         } catch (_parseErr) {
+          if (_parseErr instanceof MissingRefreshTokenAPIError) {
+            throw _parseErr;
+          }
           /* fall through to generic HttpNotOkAPIError */
         }
       }
