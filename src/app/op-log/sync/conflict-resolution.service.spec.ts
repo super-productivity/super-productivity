@@ -3604,6 +3604,60 @@ describe('ConflictResolutionService', () => {
       expect(mockOpLogStore.markFailed).toHaveBeenCalled();
       expect(mockSnackService.open).toHaveBeenCalled();
     });
+
+    // Issue #7700: the deferred-actions flush must run even on the apply-
+    // failure path. Pre-fix, replayOperationBatch's finally took care of
+    // this; with the fix, the host explicitly calls
+    // _processDeferredActionsAfterRemoteApply before the throw. If the
+    // failure path ever forgets to flush, deferred local actions linger
+    // in the buffer until the NEXT sync — surfacing as ghost ops with
+    // stale clocks. This test pins the flush.
+    it('should process deferred actions before throwing on failedOp (callerHoldsOperationLogLock=true)', async () => {
+      const localOp = createOpForBug('local-1', 'client-a', now - 1000);
+      const remoteOp = createOpForBug('remote-1', 'client-b', now);
+
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          localOps: [localOp],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+      ];
+
+      const callOrder: string[] = [];
+      mockOperationApplier.applyOperations.and.callFake(async () => {
+        callOrder.push('applyOperations');
+        return {
+          appliedOps: [],
+          failedOp: { op: remoteOp, error: new Error('Apply failed for task-1') },
+        };
+      });
+      mockOpLogStore.markFailed.and.callFake(async () => {
+        callOrder.push('markFailed');
+      });
+      mockOperationLogEffects.processDeferredActions.and.callFake(async () => {
+        callOrder.push('processDeferredActions');
+      });
+
+      await expectAsync(
+        service.autoResolveConflictsLWW(conflicts, [], {
+          callerHoldsOperationLogLock: true,
+        }),
+      ).toBeRejectedWithError('Apply failed for task-1');
+
+      // Deferred flush must happen BEFORE the throw, and must thread the
+      // caller-holds-lock flag through so writeOperation skips the inner
+      // sp_op_log acquisition.
+      expect(mockOperationLogEffects.processDeferredActions).toHaveBeenCalledWith({
+        callerHoldsOperationLogLock: true,
+      });
+      expect(callOrder).toContain('processDeferredActions');
+      expect(callOrder.indexOf('processDeferredActions')).toBeGreaterThan(
+        callOrder.indexOf('applyOperations'),
+      );
+    });
   });
 
   describe('LWW Update payload always has top-level id (#7330)', () => {

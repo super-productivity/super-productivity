@@ -60,6 +60,7 @@ describe('regression #7700: operation-log lock reentry', () => {
   let effects: OperationLogEffects;
   let lockService: LockService;
   let snackSpy: jasmine.SpyObj<SnackService>;
+  let vectorClockSpy: jasmine.SpyObj<VectorClockService>;
   const actions$: Observable<Action> = of();
   let opLogStoreSpy: jasmine.SpyObj<OperationLogStoreService>;
 
@@ -83,7 +84,7 @@ describe('regression #7700: operation-log lock reentry', () => {
     opLogStoreSpy.appendWithVectorClockUpdate.and.resolveTo(1);
     opLogStoreSpy.getCompactionCounter.and.resolveTo(0);
 
-    const vectorClockSpy = jasmine.createSpyObj('VectorClockService', [
+    vectorClockSpy = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
     ]);
     vectorClockSpy.getCurrentVectorClock.and.resolveTo({ testClient: 5 });
@@ -232,5 +233,54 @@ describe('regression #7700: operation-log lock reentry', () => {
         msg: T.F.SYNC.S.DEFERRED_ACTION_FAILED,
       }),
     );
+  });
+
+  /**
+   * Vector-clock-ordering correctness: the substantive correctness win
+   * over the alternative architecture (#7700).
+   *
+   * Pre-fix, replayOperationBatch's finally fired processDeferredActions
+   * BEFORE the host's applyRemoteOperations called mergeRemoteOpClocks.
+   * getCurrentVectorClock() read a pre-merge clock, so deferred local
+   * actions were persisted with clocks that DIDN'T include the just-
+   * applied remote ops. On the next sync those deferred ops would
+   * compare as CONCURRENT (or worse, be filtered as superseded).
+   *
+   * The fix flushes deferred actions AFTER mergeRemoteOpClocks. This
+   * test pins that the clock VALUE — not just the call order — picks
+   * up the merged remote entries.
+   */
+  it('persists deferred actions with vector clocks that dominate the merged remote clock', async () => {
+    bufferDeferredAction(createDeferredAction());
+
+    // Simulate the lifecycle: host applies remote ops, then merges their
+    // clocks via mergeRemoteOpClocks. getCurrentVectorClock returns the
+    // PRE-merge clock until merge happens, then the POST-merge clock.
+    const PRE_MERGE = { testClient: 5 };
+    const POST_MERGE = { testClient: 5, remoteClient: 7, otherClient: 3 };
+    let merged = false;
+    vectorClockSpy.getCurrentVectorClock.and.callFake(async () =>
+      merged ? POST_MERGE : PRE_MERGE,
+    );
+
+    await lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+      // Host's order: applyOperations → markApplied → mergeRemoteOpClocks
+      // → processDeferredActions. We elide the apply/mark calls and just
+      // flip the clock to its post-merge state, which is what those
+      // steps would do in production.
+      merged = true;
+      await effects.processDeferredActions({ callerHoldsOperationLogLock: true });
+    });
+
+    expect(opLogStoreSpy.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+    const writtenOp = opLogStoreSpy.appendWithVectorClockUpdate.calls.mostRecent()
+      .args[0] as { vectorClock: Record<string, number> };
+
+    // The merged remote entries must be present.
+    expect(writtenOp.vectorClock['remoteClient']).toBe(7);
+    expect(writtenOp.vectorClock['otherClient']).toBe(3);
+    // And the local clientId must be incremented from the post-merge
+    // value (6, not 4 — i.e. derived from POST_MERGE.testClient=5).
+    expect(writtenOp.vectorClock['testClient']).toBe(6);
   });
 });
