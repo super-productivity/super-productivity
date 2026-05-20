@@ -230,11 +230,11 @@ export const selectUndoneOverdueDeadlineTasks = createSelector(
 );
 
 export const selectUnplannedDeadlineTasksForToday = createSelector(
-  selectTaskFeatureState,
+  selectAllTasksInActiveProjects,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (taskState, todayStr, startOfNextDayDiffMs): Task[] => {
-    if (!taskState || !todayStr) return [];
+  (tasks, todayStr, startOfNextDayDiffMs): Task[] => {
+    if (!todayStr) return [];
 
     const today = dateStrToUtcDate(todayStr);
     today.setHours(0, 0, 0, 0);
@@ -242,23 +242,20 @@ export const selectUnplannedDeadlineTasksForToday = createSelector(
     const oneDayMs = 24 * 60 * 60 * 1000;
     const todayEndMs = todayStartMs + oneDayMs;
 
-    return taskState.ids
-      .map((id) => taskState.entities[id])
-      .filter(
-        (task): task is Task =>
-          !!task &&
-          !task.isDone &&
-          // Has a date-only deadline for today (time-specific deadlines are excluded
-          // because they have their own reminder mechanism via deadlineRemindAt)
-          task.deadlineDay === todayStr &&
-          // Not already planned for today (dueDay or dueWithTime)
-          task.dueDay !== todayStr &&
-          !(
-            task.dueWithTime &&
-            task.dueWithTime >= todayStartMs &&
-            task.dueWithTime < todayEndMs
-          ),
-      );
+    return tasks.filter(
+      (task): task is Task =>
+        !task.isDone &&
+        // Has a date-only deadline for today (time-specific deadlines are excluded
+        // because they have their own reminder mechanism via deadlineRemindAt)
+        task.deadlineDay === todayStr &&
+        // Not already planned for today (dueDay or dueWithTime)
+        task.dueDay !== todayStr &&
+        !(
+          task.dueWithTime &&
+          task.dueWithTime >= todayStartMs &&
+          task.dueWithTime < todayEndMs
+        ),
+    );
   },
 );
 
