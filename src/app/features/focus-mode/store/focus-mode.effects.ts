@@ -405,6 +405,9 @@ export class FocusModeEffects {
     ),
   );
 
+  // Effect 3b: Offer Flowtime breaks when user explicitly ends their session
+  // Triggers on endFlowtimeSession — NOT pauseFocusSession (which is fired by
+  // sync-stop, idle, and the regular pause button)
   offerFlowtimeBreakOnSessionEnd$ = createEffect(() =>
     this.actions$.pipe(
       ofType(actions.endFlowtimeSession),
