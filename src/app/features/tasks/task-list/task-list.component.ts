@@ -46,6 +46,7 @@ import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedu
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { DateService } from '../../../core/date/date.service';
+import { canConvertTaskToSubTask } from '../util/can-convert-to-sub-task';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
@@ -81,11 +82,7 @@ const canConvertParentDropToSubTask = (
   targetListId === 'SUB' &&
   !RESERVED_LIST_IDS.has(targetModelId) &&
   targetModelId !== task.id &&
-  (task.subTaskIds?.length ?? 0) === 0 &&
-  !task.repeatCfgId &&
-  !task.issueId &&
-  !task.issueProviderId &&
-  !task.issueType;
+  canConvertTaskToSubTask(task);
 
 export interface DropModelDataForList {
   listId: TaskListId;
@@ -184,6 +181,37 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
   onDragStarted(task: TaskWithSubTasks, event: CdkDragStart): void {
     this._scheduleExternalDragService.setActiveTask(task, event.source._dragRef);
+  }
+
+  onDragPrepared(task: TaskWithSubTasks): void {
+    if (this.listModelId() === 'LATER_TODAY') {
+      return;
+    }
+
+    this._scheduleExternalDragService.setActiveTask(task);
+
+    const abortController = new AbortController();
+    const cleanup = (): void => {
+      abortController.abort();
+      window.setTimeout(() => {
+        const activeTask = this._scheduleExternalDragService.activeTask();
+        if (
+          activeTask?.id === task.id &&
+          !this._scheduleExternalDragService.activeDragRef()
+        ) {
+          this._scheduleExternalDragService.setActiveTask(null);
+        }
+      });
+    };
+
+    document.addEventListener('pointerup', cleanup, {
+      once: true,
+      signal: abortController.signal,
+    });
+    document.addEventListener('pointercancel', cleanup, {
+      once: true,
+      signal: abortController.signal,
+    });
   }
 
   onDragEnded(): void {

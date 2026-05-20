@@ -90,6 +90,7 @@ import { TaskFocusService } from '../task-focus.service';
 import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
+import { canShowEmptySubTaskDropTarget } from '../util/can-convert-to-sub-task';
 
 @Component({
   selector: 'task',
@@ -279,19 +280,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const t = this.task();
     const activeTask = this._scheduleExternalDragService.activeTask();
 
-    return (
-      !this.isInSubTaskList() &&
-      !t.parentId &&
-      t.id !== activeTask?.id &&
-      (t.subTaskIds?.length ?? 0) === 0 &&
-      !!activeTask &&
-      !activeTask.parentId &&
-      (activeTask.subTaskIds?.length ?? 0) === 0 &&
-      !activeTask.repeatCfgId &&
-      !activeTask.issueId &&
-      !activeTask.issueProviderId &&
-      !activeTask.issueType
-    );
+    return canShowEmptySubTaskDropTarget(t, activeTask, this.isInSubTaskList());
   });
 
   hasDeadline = computed(() => {

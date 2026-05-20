@@ -43,6 +43,7 @@ describe('TaskListComponent', () => {
     ({
       data: { listId, listModelId, allTasks },
     }) as unknown as CdkDropList;
+  const scheduledAt = 1779144000000;
 
   beforeEach(async () => {
     sectionServiceMock = jasmine.createSpyObj<SectionService>('SectionService', [
@@ -228,6 +229,19 @@ describe('TaskListComponent', () => {
         const drag = createMockDrag(task);
         const drop = createMockDrop('some-task-id', [], 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(false);
+      });
+
+      [
+        { label: 'dueWithTime', task: { dueWithTime: scheduledAt } },
+        { label: 'dueDay', task: { dueDay: '2026-05-19' } },
+        { label: 'remindAt', task: { remindAt: scheduledAt } },
+        { label: 'reminderId', task: { reminderId: 'reminder1' } },
+      ].forEach(({ label, task }) => {
+        it(`should block scheduled parent task with ${label} from dropping to subtask list`, () => {
+          const drag = createMockDrag({ id: 'task1', parentId: null, ...task });
+          const drop = createMockDrop('some-task-id', [], 'SUB');
+          expect(component.enterPredicate(drag, drop)).toBe(false);
+        });
       });
 
       it('should block parent task with issue provider from dropping to subtask list', () => {

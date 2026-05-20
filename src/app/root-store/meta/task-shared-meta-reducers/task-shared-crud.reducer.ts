@@ -44,6 +44,7 @@ import {
 } from './task-shared-helpers';
 import { plannerFeatureKey } from '../../../features/planner/store/planner.reducer';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
+import { canConvertTaskToSubTask } from '../../../features/tasks/util/can-convert-to-sub-task';
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -307,13 +308,7 @@ const handleConvertToSubTask = (
     return state;
   }
 
-  if (
-    task.subTaskIds.length > 0 ||
-    task.repeatCfgId ||
-    task.issueId ||
-    task.issueProviderId ||
-    task.issueType
-  ) {
+  if (!canConvertTaskToSubTask(task)) {
     return state;
   }
 

@@ -29,6 +29,7 @@ describe('taskSharedCrudMetaReducer', () => {
   let mockReducer: jasmine.Spy;
   let metaReducer: ActionReducer<any, Action>;
   let baseState: RootState;
+  const scheduledAt = 1779144000000;
 
   beforeEach(() => {
     mockReducer = jasmine.createSpy('reducer').and.callFake((state, action) => state);
@@ -2042,6 +2043,33 @@ describe('taskSharedCrudMetaReducer', () => {
         'parent-task',
         'task1',
       ]);
+    });
+
+    [
+      { label: 'dueWithTime', task: { dueWithTime: scheduledAt } },
+      { label: 'dueDay', task: { dueDay: '2026-05-19' } },
+      { label: 'remindAt', task: { remindAt: scheduledAt } },
+      { label: 'reminderId', task: { reminderId: 'reminder1' } },
+    ].forEach(({ label, task }) => {
+      it(`ignores scheduled tasks with ${label}`, () => {
+        const testState = createConvertToSubTaskState(task);
+        const action = TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'parent-task',
+          afterTaskId: null,
+        });
+
+        const result = metaReducer(testState, action);
+
+        expect(result[TASK_FEATURE_NAME].entities.task1?.parentId).toBeUndefined();
+        expect(result[TASK_FEATURE_NAME].entities['parent-task']?.subTaskIds).toEqual([
+          'existing-sub',
+        ]);
+        expect(result[PROJECT_FEATURE_NAME].entities.project1?.taskIds).toEqual([
+          'parent-task',
+          'task1',
+        ]);
+      });
     });
   });
 
