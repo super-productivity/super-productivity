@@ -89,13 +89,14 @@ export class OneDrive implements FileSyncProvider<
       return;
     }
     if (this._tokenRefreshInFlightPromise) {
+      const refreshPromise = this._tokenRefreshInFlightPromise;
+      this._tokenRefreshInFlightPromise = null;
       try {
-        await this._tokenRefreshInFlightPromise;
+        await refreshPromise;
       } catch {
         /* discard refresh result */
       }
     }
-    this._tokenRefreshInFlightPromise = null;
     await this.privateCfg.setComplete({
       ...cfg,
       accessToken: '',

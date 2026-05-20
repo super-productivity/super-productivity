@@ -267,6 +267,192 @@ describe('OneDrive', () => {
     expect(folderCreateCalls.length).toBe(1);
   });
 
+  it('should refresh token and retry on 401', async () => {
+    let firstRequest = true;
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    cfgStoreSpy.setComplete.and.resolveTo();
+
+    fetchSpy.and.callFake(async (url: string, init?: RequestInit) => {
+      // Token refresh endpoint
+      if (url.includes('/oauth2/v2.0/token')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            access_token: 'refreshed-token',
+            refresh_token: 'refreshed-refresh',
+            expires_in: 3600,
+          }),
+          text: async () => '',
+        } as Response;
+      }
+
+      // First API request returns 401, second succeeds
+      if (firstRequest && init?.method === 'DELETE') {
+        firstRequest = false;
+        return {
+          ok: false,
+          status: 401,
+          text: async () => '',
+        } as Response;
+      }
+
+      return {
+        ok: true,
+        status: 204,
+        text: async () => '',
+      } as Response;
+    });
+
+    await expectAsync(provider.removeFile('test.json')).toBeResolved();
+    // Token refresh was called
+    expect(
+      fetchSpy.calls.all().some((c) => String(c.args[0]).includes('/oauth2/v2.0/token')),
+    ).toBeTrue();
+  });
+
+  it('should clear credentials and throw AuthFailSPError when 401 retry also fails', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    cfgStoreSpy.setComplete.and.resolveTo();
+
+    fetchSpy.and.callFake(async (url: string, init?: RequestInit) => {
+      if (url.includes('/oauth2/v2.0/token')) {
+        return {
+          ok: false,
+          status: 400,
+          text: async () => JSON.stringify({ error: 'invalid_request' }),
+        } as Response;
+      }
+
+      return {
+        ok: false,
+        status: 401,
+        text: async () => '',
+      } as Response;
+    });
+
+    try {
+      await provider.removeFile('test.json');
+      fail('should have thrown');
+    } catch (e) {
+      expect((e as Error).name).toBe('AuthFailSPError');
+    }
+
+    expect(cfgStoreSpy.setComplete).toHaveBeenCalled();
+  });
+
+  it('should clear credentials on 400 invalid_grant from token endpoint', async () => {
+    cfgStoreSpy.load.and.resolveTo({
+      ...baseCfg,
+      accessToken: 'stale',
+      tokenExpiresAt: Date.now() - 1000,
+    });
+    cfgStoreSpy.setComplete.and.resolveTo();
+
+    fetchSpy.and.callFake(async (url: string) => {
+      if (url.includes('/oauth2/v2.0/token')) {
+        return {
+          ok: false,
+          status: 400,
+          text: async () =>
+            JSON.stringify({
+              error: 'invalid_grant',
+              error_description: 'Token has been revoked',
+            }),
+        } as Response;
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+      } as Response;
+    });
+
+    try {
+      await provider.removeFile('test.json');
+      fail('should have thrown');
+    } catch (e) {
+      // The error propagates through _mapAndThrow which re-throws unrecognized errors as-is
+      const name = (e as Error).name;
+      expect(name).toBe('HttpNotOkAPIError');
+    }
+
+    // The key assertion: credentials were cleared despite the error type
+    const clearCalls = cfgStoreSpy.setComplete.calls
+      .all()
+      .filter(
+        (call) => call.args[0]?.accessToken === '' && call.args[0]?.refreshToken === '',
+      );
+    expect(clearCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should map 412 responses to UploadRevToMatchMismatchAPIError', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+
+    fetchSpy.and.resolveTo({
+      ok: false,
+      status: 412,
+      text: async () =>
+        JSON.stringify({
+          error: {
+            code: 'preconditionFailed',
+            message: 'ETag does not match',
+          },
+        }),
+    } as Response);
+
+    try {
+      await provider.uploadFile('test.json', '{"a":1}', 'rev-old');
+      fail('should have thrown');
+    } catch (e) {
+      expect((e as Error).name).toBe('UploadRevToMatchMismatchAPIError');
+    }
+  });
+
+  it('should deduplicate concurrent token refresh requests', async () => {
+    let refreshCallCount = 0;
+    cfgStoreSpy.load.and.resolveTo({
+      ...baseCfg,
+      accessToken: 'old-token',
+      tokenExpiresAt: Date.now() - 1000,
+    });
+    cfgStoreSpy.setComplete.and.resolveTo();
+
+    fetchSpy.and.callFake(async (url: string, init?: RequestInit) => {
+      if (url.includes('/oauth2/v2.0/token')) {
+        refreshCallCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            access_token: 'new-token',
+            refresh_token: 'new-refresh',
+            expires_in: 3600,
+          }),
+          text: async () => '',
+        } as Response;
+      }
+
+      // API requests succeed
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ eTag: 'etag-1' }),
+      } as Response;
+    });
+
+    // Fire two concurrent requests that both need a token refresh
+    await Promise.all([
+      provider.removeFile('file-1.json'),
+      provider.removeFile('file-2.json'),
+    ]);
+
+    // Only one token refresh should have been made
+    expect(refreshCallCount).toBe(1);
+  });
+
   afterEach(() => {
     (globalThis as any).fetch = originalFetch;
   });
