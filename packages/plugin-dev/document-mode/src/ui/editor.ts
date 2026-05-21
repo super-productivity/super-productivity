@@ -875,7 +875,10 @@ const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> =>
     isLoadingDoc = false;
     return;
   }
-  lastSeenTaskIds = new Set(taskCache.keys());
+  // Snapshot of "tasks already in this context" — onAnyTaskUpdate compares
+  // future events against this to detect transitions into the context
+  // (a task gaining the TODAY tag, a dueDay being set, etc.).
+  lastSeenTaskIds = snapshotInContextTaskIds(ctx);
 
   const stored = storedState.docs[ctx.id];
   const docJson = stored ? prepareStoredDoc(stored) : buildSeedDoc(ctx);
@@ -1087,35 +1090,57 @@ const refreshTaskRef = (taskId: string): void => {
   }
 };
 
+/**
+ * Does `task` belong to the given work context? Matches the host's view-
+ * level filter:
+ *  - PROJECT: task.projectId equals ctx.id
+ *  - TODAY:   task has the TODAY tag OR a dueDay OR a dueWithTime
+ *  - TAG:     task.tagIds contains ctx.id
+ *
+ * Subtasks (task.parentId set) are *not* surfaced at the top level — they
+ * follow their parent. Including them here would cause appendMissingTask
+ * to insert orphaned subtask chips at the doc tail.
+ */
+const isInContext = (task: Task, ctx: ActiveWorkContext): boolean => {
+  if (task.parentId) return false;
+  if (ctx.type === 'PROJECT') return task.projectId === ctx.id;
+  if (ctx.id === 'TODAY') {
+    return !!task.tagIds?.includes('TODAY') || !!task.dueDay || !!task.dueWithTime;
+  }
+  if (ctx.type === 'TAG') return !!task.tagIds?.includes(ctx.id);
+  return false;
+};
+
+const snapshotInContextTaskIds = (ctx: ActiveWorkContext): Set<string> => {
+  const ids = new Set<string>();
+  for (const t of taskCache.values()) if (isInContext(t, ctx)) ids.add(t.id);
+  return ids;
+};
+
 const onAnyTaskUpdate = (payload: AnyTaskUpdatePayload): void => {
   if (!currentCtx || !editor) return;
   const ctxSnapshot = currentCtx;
   void refreshTaskCache().then(() => {
     if (payload.taskId) refreshTaskRef(payload.taskId);
 
-    // Auto-append only on transitions absent → present in the cache.
-    // Without this, time-tracking ticks (and every other ANY_TASK_UPDATE
-    // event for an existing task in this context) would re-insert chips
-    // the user had deliberately removed from the doc.
+    // Auto-append fires on transitions out→in for THIS context's filter,
+    // not just on transitions out→in for the cache globally. The previous
+    // global check meant a task that existed in another project became
+    // invisible the moment it gained the TODAY tag (still "known", so no
+    // transition detected) — which was exactly the "today not working"
+    // symptom. Scoping per-context fixes that and still prevents the
+    // chip-replay storm on time-tracking ticks (the task was in-context
+    // *and* is in-context, so wasInCtx is true → no append).
+    const newInCtx = snapshotInContextTaskIds(ctxSnapshot);
     if (payload.task && payload.taskId) {
-      const wasKnown = lastSeenTaskIds.has(payload.taskId);
-      const isKnown = taskCache.has(payload.taskId);
-      const isNewlyArrived = !wasKnown && isKnown;
-      // Refresh the snapshot regardless so later events compute correctly.
-      lastSeenTaskIds = new Set(taskCache.keys());
-      if (!isNewlyArrived) return;
-      const inProject =
-        ctxSnapshot.type === 'PROJECT' && payload.task.projectId === ctxSnapshot.id;
-      const inToday =
-        ctxSnapshot.id === 'TODAY' &&
-        (payload.task.tagIds?.includes('TODAY') ||
-          !!payload.task.dueDay ||
-          !!payload.task.dueWithTime);
-      if (inProject || inToday) appendMissingTask(payload.taskId);
+      const wasInCtx = lastSeenTaskIds.has(payload.taskId);
+      const isInCtx = newInCtx.has(payload.taskId);
+      lastSeenTaskIds = newInCtx;
+      if (!wasInCtx && isInCtx) appendMissingTask(payload.taskId);
     } else {
-      // Deletion or non-payload event — still keep the snapshot fresh so
-      // we don't treat a re-arrival after deletion as the "same" task.
-      lastSeenTaskIds = new Set(taskCache.keys());
+      // Deletion or non-payload event — refresh the snapshot so future
+      // transitions are detected against the new state.
+      lastSeenTaskIds = newInCtx;
     }
   });
 };
