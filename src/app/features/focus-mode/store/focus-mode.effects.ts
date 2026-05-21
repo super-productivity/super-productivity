@@ -286,7 +286,6 @@ export class FocusModeEffects {
           (timer) =>
             timer.purpose === 'break' &&
             !timer.isRunning &&
-            timer.duration > 0 &&
             timer.elapsed >= timer.duration,
         ),
         distinctUntilChanged(

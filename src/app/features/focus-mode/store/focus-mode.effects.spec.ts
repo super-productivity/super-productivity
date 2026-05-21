@@ -2421,6 +2421,30 @@ describe('FocusModeEffects', () => {
         done();
       }, 50);
     });
+
+    // Regression: reducer drops the `duration > 0` completion guard, so a
+    // break with duration=0 stops immediately. The effect must match — without
+    // this, the break ends silently with no notification.
+    it('should notify when a duration=0 break stops', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'break',
+          duration: 0,
+          elapsed: 0,
+        }),
+      );
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+      const notifyUserSpy = spyOn(effects as any, '_notifyUser');
+
+      effects.detectBreakTimeUp$.pipe(take(1)).subscribe(() => {
+        expect(notifyUserSpy).toHaveBeenCalled();
+        done();
+      });
+    });
   });
 
   describe('Bug #5954 Additional Edge Cases', () => {
