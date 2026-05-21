@@ -1325,6 +1325,12 @@ interface PendingDrag {
   pointerId: number;
   active: boolean;
   targetIdx: number | null;
+  // Source slice: index in doc.content + how many children move together.
+  // For a parent taskRef, sliceLen covers the parent and any trailing
+  // subTaskRefs so the whole group is dragged atomically.
+  fromIdx: number;
+  sliceLen: number;
+  sourceType: 'taskRef' | 'subTaskRef' | 'other';
 }
 
 let pendingDrag: PendingDrag | null = null;
@@ -1414,23 +1420,38 @@ const computeDropTarget = (
     }
     indicatorY = r.bottom;
   }
-  // Clamp into the valid range for the dragging block (e.g. keep a
-  // subtask inside its parent's group). Recompute indicatorY so the
-  // visual drop line follows the clamped target.
+  // Per-source constraints:
+  //  • subTaskRef: stay inside the parent's subtask group (validInsertRange)
+  //  • taskRef:    snap past a foreign subtask so the parent never lands
+  //                between someone else's parent and their first subtask
   if (pendingDrag) {
-    const range = validInsertRange(pendingDrag.nodePos);
-    if (range) {
-      const clamped = Math.max(range.min, Math.min(targetIdx, range.max));
-      if (clamped !== targetIdx) {
-        targetIdx = clamped;
-        if (targetIdx === 0) {
-          indicatorY = blocks[0].getBoundingClientRect().top;
-        } else if (targetIdx >= blocks.length) {
-          indicatorY = blocks[blocks.length - 1].getBoundingClientRect().bottom;
-        } else {
-          indicatorY = blocks[targetIdx - 1].getBoundingClientRect().bottom;
-        }
+    const doc = editor.state.doc;
+    if (pendingDrag.sourceType === 'subTaskRef') {
+      const range = validInsertRange(pendingDrag.nodePos);
+      if (range) {
+        targetIdx = Math.max(range.min, Math.min(targetIdx, range.max));
       }
+    } else if (pendingDrag.sourceType === 'taskRef') {
+      // If targetIdx points at a subTaskRef that isn't ours, advance past
+      // the run so the parent group lands cleanly after its previous owner.
+      while (
+        targetIdx < doc.childCount &&
+        doc.child(targetIdx).type.name === 'subTaskRef' &&
+        !(
+          targetIdx >= pendingDrag.fromIdx &&
+          targetIdx < pendingDrag.fromIdx + pendingDrag.sliceLen
+        )
+      ) {
+        targetIdx++;
+      }
+    }
+    // Recompute indicatorY for the (possibly snapped) target.
+    if (targetIdx === 0) {
+      indicatorY = blocks[0].getBoundingClientRect().top;
+    } else if (targetIdx >= blocks.length) {
+      indicatorY = blocks[blocks.length - 1].getBoundingClientRect().bottom;
+    } else {
+      indicatorY = blocks[targetIdx - 1].getBoundingClientRect().bottom;
     }
   }
   return { targetIdx, indicatorY, rootRect };
@@ -1441,7 +1462,15 @@ const endBlockDrag = (commit: boolean): void => {
   pendingDrag = null;
   hideDropIndicator();
   if (drag) {
-    drag.block.classList.remove('is-dragging');
+    // Clear the dim on every block in the slice (and as a safety net any
+    // stray .is-dragging the DOM might have).
+    if (editor) {
+      editor.view.dom
+        .querySelectorAll('.is-dragging')
+        .forEach((el) => el.classList.remove('is-dragging'));
+    } else {
+      drag.block.classList.remove('is-dragging');
+    }
     try {
       (document.body as HTMLElement).releasePointerCapture(drag.pointerId);
     } catch {
@@ -1449,7 +1478,7 @@ const endBlockDrag = (commit: boolean): void => {
     }
   }
   if (commit && drag && drag.active && drag.targetIdx !== null) {
-    moveBlockToIndex(drag.nodePos, drag.targetIdx);
+    moveContentSliceToIndex(drag.fromIdx, drag.sliceLen, drag.targetIdx);
   }
 };
 
@@ -1463,11 +1492,23 @@ const attachGripPointerHandlers = (grip: HTMLElement): void => {
     let nodePos: number;
     try {
       const pos = editor.view.posAtDOM(block, 0);
+      if (pos < 0) return;
       const resolved = editor.state.doc.resolve(pos);
+      if (resolved.depth === 0) return;
       nodePos = resolved.before(resolved.depth);
     } catch {
       return;
     }
+    const fromIdx = childIdxAtPos(nodePos);
+    if (fromIdx < 0) return;
+    const srcNode = editor.state.doc.child(fromIdx);
+    const sourceType: PendingDrag['sourceType'] =
+      srcNode.type.name === 'taskRef'
+        ? 'taskRef'
+        : srcNode.type.name === 'subTaskRef'
+          ? 'subTaskRef'
+          : 'other';
+    const sliceLen = sliceLenAt(fromIdx);
     pendingDrag = {
       startX: ev.clientX,
       startY: ev.clientY,
@@ -1476,6 +1517,9 @@ const attachGripPointerHandlers = (grip: HTMLElement): void => {
       pointerId: ev.pointerId,
       active: false,
       targetIdx: null,
+      fromIdx,
+      sliceLen,
+      sourceType,
     };
     // Select the node so the user sees what they're about to drag.
     try {
@@ -1514,7 +1558,15 @@ const installDocumentDragHandlers = (): void => {
     if (!drag.active) {
       if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
       drag.active = true;
-      drag.block.classList.add('is-dragging');
+      // Dim every block in the dragged slice (a parent + its subtasks
+      // move together — the user expects to see the whole group lifted).
+      if (editor) {
+        const root = editor.view.dom as HTMLElement;
+        for (let i = 0; i < drag.sliceLen; i++) {
+          const el = root.children[drag.fromIdx + i];
+          el?.classList.add('is-dragging');
+        }
+      }
       if (gutterEl) gutterEl.style.display = 'none';
       try {
         (document.body as HTMLElement).setPointerCapture(drag.pointerId);
@@ -1554,6 +1606,20 @@ const installDocumentDragHandlers = (): void => {
   });
   document.addEventListener('pointercancel', () => {
     if (pendingDrag) endBlockDrag(false);
+  });
+  // Safety net: pointerup / pointercancel may not fire when the drag leaves
+  // the iframe entirely (drag into an Electron menu, browser dragging into
+  // another tab, focus stolen by an OS-level overlay). Without this, the
+  // drop indicator and dim state would stay forever.
+  window.addEventListener('blur', () => {
+    if (pendingDrag) endBlockDrag(false);
+  });
+  document.documentElement.addEventListener('pointerleave', (ev) => {
+    if (!pendingDrag) return;
+    // pointerleave fires when pointer crosses the iframe boundary. Treat
+    // that as "drag aborted" — committing would land the slice based on
+    // stale coords.
+    if (!ev.relatedTarget) endBlockDrag(false);
   });
 };
 
@@ -1644,39 +1710,135 @@ const findBlockFromEvent = (ev: MouseEvent): HTMLElement | null => {
 };
 
 /**
- * Move a top-level block to a target slot index. `targetIdx` is interpreted as
- * the insertion gap (0 = before first child, doc.childCount = after last).
- * No-op when the target maps to the block's current slot.
+ * For a top-level child index `idx`, return how many siblings move as a
+ * single atomic unit. A parent taskRef is bundled with its trailing
+ * subTaskRef children — moving the parent out from under its subtasks
+ * leaves orphans whose host parent no longer matches their doc position.
  */
-const moveBlockToIndex = (fromPos: number, targetIdx: number): void => {
+const sliceLenAt = (idx: number): number => {
+  if (!editor) return 1;
+  const doc = editor.state.doc;
+  if (idx < 0 || idx >= doc.childCount) return 1;
+  const node = doc.child(idx);
+  if (node.type.name !== 'taskRef') return 1;
+  let end = idx + 1;
+  while (end < doc.childCount && doc.child(end).type.name === 'subTaskRef') end++;
+  return end - idx;
+};
+
+const childIdxAtPos = (pos: number): number => {
+  if (!editor) return -1;
+  const doc = editor.state.doc;
+  let cursor = 0;
+  for (let i = 0; i < doc.childCount; i++) {
+    if (cursor === pos) return i;
+    cursor += doc.child(i).nodeSize;
+  }
+  return -1;
+};
+
+/**
+ * Move a contiguous slice of top-level children to a new insertion-gap
+ * index. `targetIdx` is interpreted as the gap (0 = before first child,
+ * doc.childCount = after last). No-op when the target falls inside the
+ * slice itself.
+ *
+ * Used for single-block moves AND for parent-with-subtasks moves: those
+ * are the same operation with a different slice length.
+ */
+const moveContentSliceToIndex = (
+  fromIdx: number,
+  sliceLen: number,
+  targetIdx: number,
+): void => {
   if (!editor) return;
   const ed = editor;
   const doc = ed.state.doc;
-  const node = doc.nodeAt(fromPos);
-  if (!node) return;
-  const fromIdx = doc.resolve(fromPos).index(0);
-  if (targetIdx === fromIdx || targetIdx === fromIdx + 1) return;
+  if (fromIdx < 0 || sliceLen <= 0 || fromIdx + sliceLen > doc.childCount) return;
+  if (targetIdx >= fromIdx && targetIdx <= fromIdx + sliceLen) return;
 
-  let insertPos = 0;
-  for (let i = 0; i < targetIdx && i < doc.childCount; i++) {
-    insertPos += doc.child(i).nodeSize;
+  // Snapshot the slice's nodes and total size BEFORE building the tr.
+  let fromPos = 0;
+  for (let i = 0; i < fromIdx; i++) fromPos += doc.child(i).nodeSize;
+  let sliceSize = 0;
+  const sliceNodes: ProseMirrorNode[] = [];
+  for (let i = 0; i < sliceLen; i++) {
+    const child = doc.child(fromIdx + i);
+    sliceNodes.push(child);
+    sliceSize += child.nodeSize;
   }
-  // After deletion, positions past fromPos shift left by node.nodeSize.
-  const adjustedInsert = insertPos > fromPos ? insertPos - node.nodeSize : insertPos;
+
+  let toPos = 0;
+  for (let i = 0; i < targetIdx && i < doc.childCount; i++) {
+    toPos += doc.child(i).nodeSize;
+  }
+  // After deletion, positions past fromPos shift left by sliceSize.
+  const adjustedInsert = toPos > fromPos ? toPos - sliceSize : toPos;
 
   const tr = ed.state.tr;
-  tr.delete(fromPos, fromPos + node.nodeSize);
-  tr.insert(adjustedInsert, node);
+  tr.delete(fromPos, fromPos + sliceSize);
+  let insertCursor = adjustedInsert;
+  for (const node of sliceNodes) {
+    tr.insert(insertCursor, node);
+    insertCursor += node.nodeSize;
+  }
   tr.setSelection(NodeSelection.create(tr.doc, adjustedInsert));
   ed.view.dispatch(tr.scrollIntoView());
   ed.view.focus();
 };
 
+/**
+ * Move up / Move down from the block menu. Handles three cases:
+ *
+ *  - subTaskRef: moves a single step within the parent's subtask group,
+ *    refusing to cross the parent boundary (Move up on the first subtask
+ *    is a no-op; Move down on the last subtask is a no-op).
+ *  - taskRef parent (with or without trailing subtasks): moves the whole
+ *    group atomically past the previous / next sibling group. The
+ *    "previous group" is the prior taskRef + any subTaskRefs between it
+ *    and us; the "next group" is the next taskRef + its trailing subs.
+ *  - any other block: behaves like the old single-block swap.
+ */
 const moveBlock = (nodePos: number, direction: 'up' | 'down'): void => {
   if (!editor) return;
-  const idx = editor.state.doc.resolve(nodePos).index(0);
-  // 'up' = insert before previous sibling; 'down' = insert after next sibling.
-  moveBlockToIndex(nodePos, direction === 'up' ? idx - 1 : idx + 2);
+  const doc = editor.state.doc;
+  const idx = childIdxAtPos(nodePos);
+  if (idx < 0) return;
+  const src = doc.child(idx);
+  const sliceLen = sliceLenAt(idx);
+
+  let targetIdx: number;
+  if (direction === 'up') {
+    if (idx === 0) return;
+    if (src.type.name === 'subTaskRef') {
+      // Stop at the parent boundary — never escape the group.
+      if (doc.child(idx - 1).type.name !== 'subTaskRef') return;
+      targetIdx = idx - 1;
+    } else {
+      // Walk past any subtask siblings to find the start of the previous group.
+      let prev = idx - 1;
+      while (prev > 0 && doc.child(prev).type.name === 'subTaskRef') prev--;
+      targetIdx = prev;
+    }
+  } else {
+    const sliceEnd = idx + sliceLen;
+    if (sliceEnd >= doc.childCount) return;
+    if (src.type.name === 'subTaskRef') {
+      if (doc.child(sliceEnd).type.name !== 'subTaskRef') return;
+      targetIdx = sliceEnd + 1;
+    } else {
+      // Walk past the next group's parent + its trailing subtasks.
+      let groupEnd = sliceEnd + 1;
+      while (
+        groupEnd < doc.childCount &&
+        doc.child(groupEnd).type.name === 'subTaskRef'
+      ) {
+        groupEnd++;
+      }
+      targetIdx = groupEnd;
+    }
+  }
+  moveContentSliceToIndex(idx, sliceLen, targetIdx);
 };
 
 const openBlockMenu = (anchorRect: DOMRect): void => {
