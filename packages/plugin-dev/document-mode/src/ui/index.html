@@ -109,30 +109,77 @@
         pointer-events: none;
       }
 
-      /* taskRef — editable list-item, not a card */
+      /* taskRef — styled to match the app's task list item */
       .task-ref {
         display: flex;
-        align-items: baseline;
-        gap: 8px;
-        padding: 1px 2px;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
         margin: 0;
         line-height: 1.5;
         background: transparent;
-        border-radius: 3px;
+        border-radius: 4px;
+      }
+      .task-ref:hover {
+        background: var(--task-c-bg-hover, rgba(0, 0, 0, 0.04));
       }
       .ProseMirror-selectednode.task-ref {
         background: var(--task-c-selected-bg, rgba(63, 81, 181, 0.08));
         outline: 1px solid var(--c-primary, #3f51b5);
         outline-offset: -1px;
       }
-      .task-ref input[type='checkbox'] {
+
+      /* Done-toggle: mirror src/app/ui/done-toggle exactly */
+      .task-ref .done-toggle {
         flex-shrink: 0;
-        accent-color: var(--c-primary, #3f51b5);
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
-        margin: 0;
-        position: relative;
-        top: 2px;
+        color: var(--text-color, #222);
       }
+      .task-ref .done-toggle-svg {
+        width: 22px;
+        height: 22px;
+        transition: transform 0.15s ease;
+      }
+      .task-ref .done-toggle:hover .done-toggle-svg {
+        transform: scale(1.1);
+      }
+      .task-ref .done-circle {
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        opacity: 0.3;
+        transition: opacity 0.2s ease;
+      }
+      .task-ref .done-check {
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 18;
+        stroke-dashoffset: 18;
+        opacity: 0;
+        transition:
+          opacity 0.2s ease,
+          stroke-dashoffset 0.2s ease;
+      }
+      .task-ref.is-done .done-circle {
+        opacity: 0.5;
+      }
+      .task-ref.is-done .done-check {
+        opacity: 0.6;
+        stroke-dashoffset: 0;
+      }
+      .task-ref .done-toggle:hover .done-circle,
+      .task-ref .done-toggle:hover .done-check {
+        opacity: 0.65;
+      }
+
       .task-ref .title {
         flex: 1;
         min-width: 0;
@@ -150,6 +197,9 @@
       }
       .task-ref.is-missing .title:empty::before {
         content: '(task not found)';
+      }
+      .task-ref.is-missing .done-toggle {
+        cursor: default;
       }
 
       /* Block hover gutter */

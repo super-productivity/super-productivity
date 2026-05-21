@@ -202,9 +202,20 @@ const TaskRefNode = Node.create({
       dom.dataset.taskRef = '';
       dom.dataset.taskId = node.attrs.taskId;
 
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.contentEditable = 'false';
+      // Done-toggle: matches the app's <done-toggle> — a faint outline
+      // circle with an animated checkmark that fades in once done.
+      const toggle = document.createElement('span');
+      toggle.className = 'done-toggle';
+      toggle.contentEditable = 'false';
+      toggle.setAttribute('role', 'checkbox');
+      toggle.setAttribute('tabindex', '-1');
+      toggle.innerHTML = `
+        <svg class="done-toggle-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle class="done-circle" cx="12" cy="12" r="10"></circle>
+          <polyline class="done-check" points="6,12 10.5,16.5 18,8"></polyline>
+        </svg>
+      `;
+
       const title = document.createElement('span');
       title.className = 'title';
 
@@ -214,18 +225,18 @@ const TaskRefNode = Node.create({
         if (!task) {
           dom.classList.add('is-missing');
           dom.classList.remove('is-done');
-          checkbox.checked = false;
-          checkbox.disabled = true;
+          toggle.setAttribute('aria-checked', 'false');
+          toggle.setAttribute('aria-disabled', 'true');
         } else {
           dom.classList.remove('is-missing');
           const done = !!(n.attrs.isDone || task.isDone);
           dom.classList.toggle('is-done', done);
-          checkbox.checked = done;
-          checkbox.disabled = false;
+          toggle.setAttribute('aria-checked', done ? 'true' : 'false');
+          toggle.removeAttribute('aria-disabled');
         }
       };
 
-      checkbox.addEventListener('mousedown', (ev) => {
+      const onToggle = (ev: Event): void => {
         ev.preventDefault();
         ev.stopPropagation();
         const taskId = node.attrs.taskId as string;
@@ -244,9 +255,10 @@ const TaskRefNode = Node.create({
         } else {
           applyState(node);
         }
-      });
+      };
+      toggle.addEventListener('mousedown', onToggle);
 
-      dom.appendChild(checkbox);
+      dom.appendChild(toggle);
       dom.appendChild(title);
       applyState(node);
 
@@ -717,19 +729,21 @@ const closeMenu = (): void => {
 
 /**
  * Position a popover relative to an anchor rect. Default opens below; flips
- * above when there isn't room. Set styles BEFORE measuring offsetHeight so
- * the first paint is at the final spot (no visual flicker).
+ * above when there isn't room. The anchor rect is viewport-relative; we add
+ * scrollX/Y because the popover is `position: absolute` in document space.
+ * Set styles BEFORE measuring offsetHeight so the first paint is at the
+ * final spot (no visual flicker).
  */
 const positionPopover = (el: HTMLElement, rect: DOMRect): void => {
-  el.style.left = `${rect.left}px`;
-  el.style.top = `${rect.bottom + 4}px`;
+  el.style.left = `${rect.left + window.scrollX}px`;
+  el.style.top = `${rect.bottom + window.scrollY + 4}px`;
   el.style.visibility = 'hidden';
   document.body.appendChild(el);
   const h = el.offsetHeight;
   const overflowsBelow = rect.bottom + 4 + h > window.innerHeight;
   const fitsAbove = rect.top - 4 - h > 0;
   if (overflowsBelow && fitsAbove) {
-    el.style.top = `${rect.top - 4 - h}px`;
+    el.style.top = `${rect.top + window.scrollY - 4 - h}px`;
   }
   el.style.visibility = '';
 };
@@ -800,10 +814,23 @@ let gutterEl: HTMLDivElement | null = null;
 let hoveredBlock: HTMLElement | null = null;
 let hideGutterTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Drag-and-drop state for grip-based block reordering.
-let draggingNodePos: number | null = null;
+// Drag-and-drop state for grip-based block reordering. We drive this via
+// pointer events rather than the HTML5 drag API — the native API was
+// fragile across browsers when the drag source lived outside the editor
+// (the grip sits in document.body, not inside ProseMirror's view).
+interface PendingDrag {
+  startX: number;
+  startY: number;
+  nodePos: number;
+  block: HTMLElement;
+  pointerId: number;
+  active: boolean;
+  targetIdx: number | null;
+}
+
+let pendingDrag: PendingDrag | null = null;
 let dropIndicatorEl: HTMLDivElement | null = null;
-let dropTargetIdx: number | null = null;
+const DRAG_THRESHOLD_PX = 4;
 
 const ensureDropIndicator = (): HTMLDivElement => {
   if (dropIndicatorEl) return dropIndicatorEl;
@@ -826,14 +853,148 @@ const hideDropIndicator = (): void => {
   if (dropIndicatorEl) dropIndicatorEl.style.display = 'none';
 };
 
-const endBlockDrag = (): void => {
-  if (editor) {
-    const dragged = editor.view.dom.querySelector('.is-dragging');
-    if (dragged) dragged.classList.remove('is-dragging');
+const computeDropTarget = (
+  clientY: number,
+): { targetIdx: number; indicatorY: number; rootRect: DOMRect } | null => {
+  if (!editor) return null;
+  const editorRoot = editor.view.dom as HTMLElement;
+  const blocks = Array.from(editorRoot.children) as HTMLElement[];
+  if (blocks.length === 0) return null;
+  const rootRect = editorRoot.getBoundingClientRect();
+  let targetIdx = blocks.length;
+  let indicatorY = blocks[blocks.length - 1].getBoundingClientRect().bottom;
+  for (let i = 0; i < blocks.length; i++) {
+    const r = blocks[i].getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    if (clientY < mid) {
+      targetIdx = i;
+      indicatorY = r.top;
+      break;
+    }
+    indicatorY = r.bottom;
   }
-  draggingNodePos = null;
-  dropTargetIdx = null;
+  return { targetIdx, indicatorY, rootRect };
+};
+
+const endBlockDrag = (commit: boolean): void => {
+  const drag = pendingDrag;
+  pendingDrag = null;
   hideDropIndicator();
+  if (drag) {
+    drag.block.classList.remove('is-dragging');
+    try {
+      (document.body as HTMLElement).releasePointerCapture(drag.pointerId);
+    } catch {
+      // pointer may already be released
+    }
+  }
+  if (commit && drag && drag.active && drag.targetIdx !== null) {
+    moveBlockToIndex(drag.nodePos, drag.targetIdx);
+  }
+};
+
+const attachGripPointerHandlers = (grip: HTMLElement): void => {
+  grip.addEventListener('pointerdown', (ev) => {
+    ev.stopPropagation();
+    // Only react to primary button (left mouse / touch / pen tip).
+    if (ev.button !== 0) return;
+    if (!hoveredBlock || !editor) return;
+    const block = hoveredBlock;
+    let nodePos: number;
+    try {
+      const pos = editor.view.posAtDOM(block, 0);
+      const resolved = editor.state.doc.resolve(pos);
+      nodePos = resolved.before(resolved.depth);
+    } catch {
+      return;
+    }
+    pendingDrag = {
+      startX: ev.clientX,
+      startY: ev.clientY,
+      nodePos,
+      block,
+      pointerId: ev.pointerId,
+      active: false,
+      targetIdx: null,
+    };
+    // Select the node so the user sees what they're about to drag.
+    try {
+      editor.view.dispatch(
+        editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, nodePos)),
+      );
+    } catch {
+      // selection may not be valid (e.g. doc root)
+    }
+  });
+
+  // Suppress the click that follows pointerup when a real drag occurred —
+  // otherwise the block menu would pop open right after dropping.
+  grip.addEventListener('click', (ev) => {
+    if (grip.dataset.justDragged === '1') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      delete grip.dataset.justDragged;
+      return;
+    }
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (!hoveredBlock || !editor) return;
+    openBlockMenu(grip.getBoundingClientRect());
+  });
+};
+
+// Document-level pointer handlers; armed once at mount time. They drive any
+// in-progress grip drag regardless of which gutter instance started it.
+const installDocumentDragHandlers = (): void => {
+  document.addEventListener('pointermove', (ev) => {
+    const drag = pendingDrag;
+    if (!drag || drag.pointerId !== ev.pointerId) return;
+    const dx = ev.clientX - drag.startX;
+    const dy = ev.clientY - drag.startY;
+    if (!drag.active) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+      drag.active = true;
+      drag.block.classList.add('is-dragging');
+      if (gutterEl) gutterEl.style.display = 'none';
+      try {
+        (document.body as HTMLElement).setPointerCapture(drag.pointerId);
+      } catch {
+        // setPointerCapture can fail in odd states; the listener still works
+      }
+    }
+    const target = computeDropTarget(ev.clientY);
+    if (!target) {
+      drag.targetIdx = null;
+      hideDropIndicator();
+      return;
+    }
+    drag.targetIdx = target.targetIdx;
+    positionDropIndicator(target.indicatorY, target.rootRect.left, target.rootRect.width);
+  });
+  document.addEventListener('pointerup', (ev) => {
+    const drag = pendingDrag;
+    if (!drag || drag.pointerId !== ev.pointerId) return;
+    const wasActive = drag.active;
+    endBlockDrag(true);
+    if (wasActive) {
+      // Mark all grips so the synthetic click that follows pointerup is
+      // ignored (browsers fire click after pointerup unless preventDefault'd
+      // on pointerdown, which would also break selection).
+      document
+        .querySelectorAll<HTMLElement>('.block-gutter-btn[data-action="grip"]')
+        .forEach((el) => {
+          el.dataset.justDragged = '1';
+        });
+      setTimeout(() => {
+        document
+          .querySelectorAll<HTMLElement>('.block-gutter-btn[data-action="grip"]')
+          .forEach((el) => delete el.dataset.justDragged);
+      }, 0);
+    }
+  });
+  document.addEventListener('pointercancel', () => {
+    if (pendingDrag) endBlockDrag(false);
+  });
 };
 
 const scheduleHideGutter = (): void => {
@@ -858,7 +1019,7 @@ const createGutter = (): HTMLDivElement => {
     <button class="block-gutter-btn" data-action="add" title="Insert below">
       ${iconSvg('add')}
     </button>
-    <button class="block-gutter-btn" data-action="grip" title="Drag to move; click for menu" draggable="true">
+    <button class="block-gutter-btn" data-action="grip" title="Drag to move; click for menu">
       ${iconSvg('drag_indicator')}
     </button>
   `;
@@ -883,49 +1044,7 @@ const createGutter = (): HTMLDivElement => {
 
   const grip = g.querySelector('[data-action="grip"]') as HTMLElement | null;
   if (grip) {
-    grip.addEventListener('mousedown', (ev) => {
-      ev.stopPropagation();
-      if (!hoveredBlock || !editor) return;
-      const pos = editor.view.posAtDOM(hoveredBlock, 0);
-      const resolved = editor.state.doc.resolve(pos);
-      const nodePos = resolved.before(resolved.depth);
-      try {
-        editor.view.dispatch(
-          editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, nodePos)),
-        );
-      } catch {
-        // selection may not be valid (e.g. doc root)
-      }
-    });
-    grip.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (!hoveredBlock || !editor) return;
-      const rect = (grip as HTMLElement).getBoundingClientRect();
-      openBlockMenu(rect);
-    });
-    grip.addEventListener('dragstart', (ev) => {
-      if (!hoveredBlock || !editor) {
-        ev.preventDefault();
-        return;
-      }
-      const pos = editor.view.posAtDOM(hoveredBlock, 0);
-      const resolved = editor.state.doc.resolve(pos);
-      draggingNodePos = resolved.before(resolved.depth);
-      if (ev.dataTransfer) {
-        ev.dataTransfer.effectAllowed = 'move';
-        // Some browsers require data on dragstart to actually start the drag.
-        ev.dataTransfer.setData('text/plain', 'doc-mode-block');
-        // Use the hovered block itself as the drag image for visual feedback.
-        ev.dataTransfer.setDragImage(hoveredBlock, 10, 10);
-      }
-      hoveredBlock.classList.add('is-dragging');
-      // Hide gutter so it doesn't steal pointer events during drag.
-      if (gutterEl) gutterEl.style.display = 'none';
-    });
-    grip.addEventListener('dragend', () => {
-      endBlockDrag();
-    });
+    attachGripPointerHandlers(grip);
   }
 
   return g;
@@ -1160,49 +1279,7 @@ const mount = async (): Promise<void> => {
     scheduleHideGutter();
   });
 
-  // Drag-and-drop for block reordering. The grip sets draggingNodePos on
-  // dragstart; we listen on the editor root for dragover/drop, compute the
-  // insertion slot from the cursor's y position, and dispatch a move on drop.
-  root.addEventListener('dragover', (ev) => {
-    if (draggingNodePos === null || !editor) return;
-    ev.preventDefault();
-    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
-    const editorRoot = editor.view.dom as HTMLElement;
-    const blocks = Array.from(editorRoot.children) as HTMLElement[];
-    if (blocks.length === 0) return;
-    const y = ev.clientY;
-    let targetIdx = blocks.length;
-    let indicatorY = 0;
-    const rootRect = editorRoot.getBoundingClientRect();
-    for (let i = 0; i < blocks.length; i++) {
-      const r = blocks[i].getBoundingClientRect();
-      const mid = r.top + r.height / 2;
-      if (y < mid) {
-        targetIdx = i;
-        indicatorY = r.top;
-        break;
-      }
-      indicatorY = r.bottom;
-    }
-    dropTargetIdx = targetIdx;
-    positionDropIndicator(indicatorY, rootRect.left, rootRect.width);
-  });
-  root.addEventListener('drop', (ev) => {
-    if (draggingNodePos === null || dropTargetIdx === null) {
-      endBlockDrag();
-      return;
-    }
-    ev.preventDefault();
-    const from = draggingNodePos;
-    const target = dropTargetIdx;
-    endBlockDrag();
-    moveBlockToIndex(from, target);
-  });
-  // dragend on the source may not fire if the drop landed outside; listen on
-  // window as a safety net.
-  window.addEventListener('dragend', () => {
-    if (draggingNodePos !== null) endBlockDrag();
-  });
+  installDocumentDragHandlers();
 
   editor.view.dom.addEventListener('keydown', (ev: KeyboardEvent) => {
     if (menuEl) {
