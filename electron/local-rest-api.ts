@@ -108,12 +108,23 @@ const handleResponse = (_event: unknown, payload: LocalRestApiResponsePayload): 
   pending.resolve(payload);
 };
 
-const ALLOWED_HOSTS = new Set([
-  `${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`,
-  `localhost:${LOCAL_REST_API_PORT}`,
-  LOCAL_REST_API_HOST,
-  'localhost',
-]);
+let currentHost = LOCAL_REST_API_HOST;
+
+const isAllowedHost = (host: string): boolean => {
+  // When binding to all interfaces, any Host header is acceptable because
+  // the client reaches the server via its own IP (not necessarily localhost).
+  // The Origin-check below still guards against browser-based CSRF.
+  if (currentHost === '0.0.0.0') {
+    return true;
+  }
+  const allowedHosts = new Set([
+    `${currentHost}:${LOCAL_REST_API_PORT}`,
+    `localhost:${LOCAL_REST_API_PORT}`,
+    currentHost,
+    'localhost',
+  ]);
+  return allowedHosts.has(host);
+};
 
 const isForceEnabledForDev = (): boolean =>
   process.env.NODE_ENV === 'DEV' && process.env.SP_FORCE_LOCAL_REST_API === '1';
@@ -124,7 +135,7 @@ const handleHttpRequest = async (
 ): Promise<void> => {
   // Block DNS rebinding: reject requests with unexpected Host headers
   const host = req.headers.host;
-  if (!host || !ALLOWED_HOSTS.has(host)) {
+  if (!host || !isAllowedHost(host)) {
     writeJson(res, 403, {
       ok: false,
       error: {
@@ -163,7 +174,7 @@ const handleHttpRequest = async (
     return;
   }
 
-  const requestUrl = new URL(req.url ?? '/', `http://${LOCAL_REST_API_HOST}`);
+  const requestUrl = new URL(req.url ?? '/', `http://${currentHost}`);
   const method = req.method ?? 'GET';
 
   if (method === 'GET' && requestUrl.pathname === '/health') {
@@ -254,16 +265,15 @@ const startServer = (): void => {
     return;
   }
 
-  server.listen(LOCAL_REST_API_PORT, LOCAL_REST_API_HOST, () => {
+  server.listen(LOCAL_REST_API_PORT, currentHost, () => {
     isListening = true;
-    log(
-      `[local-rest-api] Listening on http://${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`,
-    );
+    log(`[local-rest-api] Listening on http://${currentHost}:${LOCAL_REST_API_PORT}`);
   });
 };
 
-const stopServer = (): void => {
+const stopServer = (onStopped?: () => void): void => {
   if (!server || !isListening) {
+    onStopped?.();
     return;
   }
 
@@ -275,12 +285,36 @@ const stopServer = (): void => {
 
     isListening = false;
     log('[local-rest-api] Server stopped');
+    onStopped?.();
   });
+};
+
+const resolveHost = (cfg: GlobalConfigState): string => {
+  if (process.env['SP_LOCAL_REST_API_HOST']) {
+    return process.env['SP_LOCAL_REST_API_HOST'];
+  }
+  return cfg.misc.isLocalRestApiExternalAccessEnabled ? '0.0.0.0' : LOCAL_REST_API_HOST;
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
   const isForcedForDev = isForceEnabledForDev();
   const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
+  const nextHost = resolveHost(cfg);
+  const hostChanged = nextHost !== currentHost;
+
+  if (hostChanged && isListening) {
+    currentHost = nextHost;
+    isEnabled = nextEnabled;
+    stopServer(() => {
+      if (nextEnabled) {
+        startServer();
+      }
+    });
+    return;
+  }
+
+  currentHost = nextHost;
+
   if (nextEnabled === isEnabled) {
     if (nextEnabled && !isListening) {
       startServer();
