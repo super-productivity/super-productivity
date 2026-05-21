@@ -759,6 +759,15 @@ type PMNode = {
  * host that aren't already present right after their parent taskRef.
  * Idempotent — existing subtask blocks are preserved in order.
  */
+/**
+ * Two-step pipeline applied to a stored doc before loading it into TipTap.
+ * Order matters and is enforced by `prepareStoredDoc`: schema migration
+ * MUST run before subtask backfill, because the backfill walks taskRef /
+ * subTaskRef shapes that the migration is responsible for producing.
+ */
+const prepareStoredDoc = (raw: unknown): unknown =>
+  ensureSubtasksInJSON(migrateStoredDoc(raw));
+
 const ensureSubtasksInJSON = (doc: unknown): unknown => {
   const root = doc as PMNode;
   if (!root || root.type !== 'doc' || !Array.isArray(root.content)) return doc;
@@ -869,9 +878,7 @@ const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> =>
   lastSeenTaskIds = new Set(taskCache.keys());
 
   const stored = storedState.docs[ctx.id];
-  const docJson = stored
-    ? ensureSubtasksInJSON(migrateStoredDoc(stored))
-    : buildSeedDoc(ctx);
+  const docJson = stored ? prepareStoredDoc(stored) : buildSeedDoc(ctx);
   try {
     editor.commands.setContent(
       docJson as Parameters<typeof editor.commands.setContent>[0],
@@ -2164,18 +2171,42 @@ const mount = async (): Promise<void> => {
   });
 };
 
+/**
+ * Wait for the host to inject the PluginAPI global before bootstrapping.
+ * Bounded so a misconfigured host (no injection) doesn't leave us busy-
+ * polling forever — log and bail after ~5s, after which mount() will be
+ * unable to run anyway.
+ */
 const waitForPluginAPI = (): Promise<void> =>
-  new Promise<void>((resolve) => {
+  new Promise<void>((resolve, reject) => {
+    const INTERVAL_MS = 20;
+    const MAX_ATTEMPTS = 250; // ~5s total
+    let attempts = 0;
     const check = (): void => {
       if (
         typeof (window as unknown as { PluginAPI?: unknown }).PluginAPI !== 'undefined'
       ) {
         resolve();
-      } else {
-        setTimeout(check, 20);
+        return;
       }
+      attempts++;
+      if (attempts >= MAX_ATTEMPTS) {
+        // eslint-disable-next-line no-console
+        console.error(
+          '[document-mode] PluginAPI not injected after',
+          MAX_ATTEMPTS * INTERVAL_MS,
+          'ms — giving up',
+        );
+        reject(new Error('PluginAPI injection timed out'));
+        return;
+      }
+      setTimeout(check, INTERVAL_MS);
     };
     check();
   });
 
-void waitForPluginAPI().then(() => mount());
+void waitForPluginAPI()
+  .then(() => mount())
+  .catch(() => {
+    // Already logged in waitForPluginAPI — nothing to mount.
+  });

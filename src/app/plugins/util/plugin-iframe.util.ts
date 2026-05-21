@@ -1,6 +1,6 @@
 import { PluginBridgeService } from '../plugin-bridge.service';
 import { PluginBaseCfg, PluginManifest } from '../plugin-api.model';
-import { PluginIframeMessageType } from '@super-productivity/plugin-api';
+import { PluginHooks, PluginIframeMessageType } from '@super-productivity/plugin-api';
 import { PluginLog } from '../../core/log';
 import { PLUGIN_UI_KIT_CSS } from './plugin-ui-kit.css';
 
@@ -295,21 +295,9 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
         window.PluginAPI = {
           cfg: ${JSON.stringify(config.baseCfg)},
 
-          // Add Hooks enum
-          Hooks: {
-            TASK_CREATED: 'taskCreated',
-            TASK_COMPLETE: 'taskComplete',
-            TASK_UPDATE: 'taskUpdate',
-            TASK_DELETE: 'taskDelete',
-            CURRENT_TASK_CHANGE: 'currentTaskChange',
-            FINISH_DAY: 'finishDay',
-            LANGUAGE_CHANGE: 'languageChange',
-            PERSISTED_DATA_UPDATE: 'persistedDataUpdate',
-            ACTION: 'action',
-            ANY_TASK_UPDATE: 'anyTaskUpdate',
-            PROJECT_LIST_UPDATE: 'projectListUpdate',
-            WORK_CONTEXT_CHANGE: 'workContextChange'
-          },
+          // Add Hooks enum (kept in sync with PluginHooks via JSON.stringify
+          // of the real source — no hand-edited mirror to drift).
+          Hooks: ${JSON.stringify({ ...PluginHooks })},
 
           // Task methods
           getTasks: () => callApi('getTasks'),

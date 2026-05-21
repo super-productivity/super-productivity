@@ -192,17 +192,28 @@ export interface ProjectListUpdatePayload {
 /**
  * Snapshot of the active work context (project or tag).
  * Used by getActiveWorkContext() and as the WORK_CONTEXT_CHANGE payload.
+ *
+ * **`taskIds` is a snapshot at the moment of emission**, not a live view.
+ * It goes stale as soon as a task is added, removed, or moved. Plugins
+ * that need the current ordering should call `getActiveWorkContext()` /
+ * `getTasks()` on demand or subscribe to `ANY_TASK_UPDATE` for changes.
  */
 export interface ActiveWorkContext {
   id: string;
   type: 'PROJECT' | 'TAG';
   title: string;
+  /**
+   * Frozen at emit time — see the {@link ActiveWorkContext} note above.
+   */
   taskIds: string[];
 }
 
 /**
  * Fires when the user switches between projects/tags. Payload is null when
  * no context is active (e.g. on a non-work-view route).
+ *
+ * The included `taskIds` is a snapshot — re-read via `getActiveWorkContext()`
+ * if you care about the current order/membership.
  */
 export type WorkContextChangePayload = ActiveWorkContext | null;
 
