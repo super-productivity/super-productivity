@@ -66,6 +66,8 @@ export class ArchivedProjectsPageComponent {
       msg: project.isHiddenFromMenu
         ? T.F.PROJECT.S.UNARCHIVED_BUT_HIDDEN
         : T.F.PROJECT.S.UNARCHIVED,
+      actionStr: T.G.UNDO,
+      actionFn: () => this._projectService.archive(project.id),
     });
   }
 }
