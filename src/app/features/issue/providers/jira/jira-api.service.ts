@@ -501,7 +501,10 @@ export class JiraApiService {
     jiraCfg: JiraCfg,
     suppressErrorSnack: boolean,
   ): Observable<any> {
-    const useDirectFetch = IS_ANDROID_WEB_VIEW || jiraCfg.allowFetchFallback;
+    // direct-fetch path doesn't use _requestsLog / promise plumbing; bail out early
+    if (IS_ANDROID_WEB_VIEW || jiraCfg.allowFetchFallback) {
+      return this._directFetch$(url, requestInit, transform, jiraCfg, suppressErrorSnack);
+    }
 
     let promiseResolve!: (value: unknown) => void;
     let promiseReject!: (reason?: unknown) => void;
@@ -511,17 +514,14 @@ export class JiraApiService {
     });
 
     // save to request log (also sets up timeout)
-    // since we don't use the requestLog anyway on directFetch we can just use the requestId
-    if (!useDirectFetch) {
-      this._requestsLog[requestId] = this._makeJiraRequestLogItem({
-        promiseResolve,
-        promiseReject,
-        requestId,
-        requestInit,
-        transform,
-        jiraCfg,
-      });
-    }
+    this._requestsLog[requestId] = this._makeJiraRequestLogItem({
+      promiseResolve,
+      promiseReject,
+      requestId,
+      requestInit,
+      transform,
+      jiraCfg,
+    });
 
     const requestToSend = { requestId, requestInit, url };
     if (IS_ELECTRON) {
@@ -529,8 +529,6 @@ export class JiraApiService {
         ...requestToSend,
         jiraCfg,
       });
-    } else if (useDirectFetch) {
-      return this._directFetch$(url, requestInit, transform, jiraCfg, suppressErrorSnack);
     } else if (this._isExtension) {
       this._chromeExtensionInterfaceService.dispatchEvent(
         'SP_JIRA_REQUEST',
@@ -569,6 +567,8 @@ export class JiraApiService {
       suppressSnack: suppressErrorSnack,
     });
 
+    this._globalProgressBarService.countUp(url);
+
     return from(
       fetch(url, { ...requestInit, signal: abortController.signal })
         .then((response) => this._parseFetchResponse(response))
@@ -596,6 +596,8 @@ export class JiraApiService {
         }
         return throwError(() => ({ [HANDLED_ERROR_PROP_STR]: errTxt, status }));
       }),
+      first(),
+      finalize(() => this._globalProgressBarService.countDown()),
     );
   }
 
