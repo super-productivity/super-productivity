@@ -54,6 +54,7 @@ describe('OneDrive', () => {
 
   beforeEach(() => {
     cfgStoreSpy = jasmine.createSpyObj('SyncCredentialStore', ['load', 'setComplete']);
+    cfgStoreSpy.setComplete.and.resolveTo();
     const deps: OneDriveDeps = {
       ...mockDeps,
       credentialStore: cfgStoreSpy as unknown as OneDriveDeps['credentialStore'],
@@ -224,11 +225,22 @@ describe('OneDrive', () => {
   it('should avoid repeated folder existence checks after first successful upload', async () => {
     cfgStoreSpy.load.and.resolveTo(baseCfg);
 
+    let postCount = 0;
     fetchSpy.and.callFake(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'GET') {
         return {
           ok: true,
           status: 200,
+          text: async () => '',
+        } as Response;
+      }
+
+      if (init?.method === 'POST') {
+        postCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
           text: async () => '',
         } as Response;
       }
@@ -256,15 +268,8 @@ describe('OneDrive', () => {
       provider.uploadFile('file-2.json', '{"a":2}', null, true),
     ).toBeResolved();
 
-    const folderCreateCalls = fetchSpy.calls
-      .all()
-      .filter(
-        (call) =>
-          (call.args[1] as RequestInit | undefined)?.method === 'POST' &&
-          String(call.args[0]).includes('/me/drive/special/approot/children'),
-      );
-
-    expect(folderCreateCalls.length).toBe(1);
+    // The GET probe succeeds so no POST folder creation is needed
+    expect(postCount).toBe(0);
   });
 
   it('should refresh token and retry on 401', async () => {
@@ -342,11 +347,13 @@ describe('OneDrive', () => {
   });
 
   it('should clear credentials on 400 invalid_grant from token endpoint', async () => {
-    cfgStoreSpy.load.and.resolveTo({
+    const expiredCfg = {
       ...baseCfg,
       accessToken: 'stale',
       tokenExpiresAt: Date.now() - 1000,
-    });
+    };
+    // load() returns expired cfg; clearAuthCredentials also calls load() before setComplete
+    cfgStoreSpy.load.and.resolveTo(expiredCfg);
     cfgStoreSpy.setComplete.and.resolveTo();
 
     fetchSpy.and.callFake(async (url: string) => {
@@ -373,12 +380,13 @@ describe('OneDrive', () => {
       await provider.removeFile('test.json');
       fail('should have thrown');
     } catch (e) {
-      // The error propagates through _mapAndThrow which re-throws unrecognized errors as-is
-      const name = (e as Error).name;
-      expect(name).toBe('HttpNotOkAPIError');
+      // invalid_grant → clearAuthCredentials → throw MissingRefreshTokenAPIError.
+      // Propagates: refresh IIFE → _request → removeFile catch → _mapAndThrow
+      // which re-throws as-is (not an HttpNotOkAPIError).
+      expect((e as Error).name).toBe('MissingRefreshTokenAPIError');
     }
 
-    // The key assertion: credentials were cleared despite the error type
+    // Credentials were cleared by clearAuthCredentials()
     const clearCalls = cfgStoreSpy.setComplete.calls
       .all()
       .filter(

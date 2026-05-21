@@ -88,15 +88,10 @@ export class OneDrive implements FileSyncProvider<
     if (!cfg) {
       return;
     }
-    if (this._tokenRefreshInFlightPromise) {
-      const refreshPromise = this._tokenRefreshInFlightPromise;
-      this._tokenRefreshInFlightPromise = null;
-      try {
-        await refreshPromise;
-      } catch {
-        /* discard refresh result */
-      }
-    }
+    // Null without awaiting: clearAuthCredentials can be called from inside
+    // the refresh IIFE (invalid_grant path), so awaiting would deadlock.
+    // The IIFE's currentCfg.refreshToken guard already prevents stale writes.
+    this._tokenRefreshInFlightPromise = null;
     await this.privateCfg.setComplete({
       ...cfg,
       accessToken: '',

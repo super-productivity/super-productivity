@@ -91,6 +91,13 @@ export class OAuthCallbackHandlerService implements OnDestroy {
         return;
       }
 
+      if (!callbackUrl.startsWith('superproductivity://')) {
+        SyncLog.warn(
+          'OAuthCallbackHandler: Rejected callback URL with unexpected scheme',
+        );
+        return;
+      }
+
       SyncLog.log('OAuthCallbackHandler: Received Electron OAuth callback URL');
       this._authCodeReceived$.next(this._parseOAuthCallback(callbackUrl));
     });
@@ -108,7 +115,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
       const providerFromQuery = urlObj.searchParams.get('provider')?.toLowerCase();
       const providerRaw = providerFromPath || providerFromQuery;
 
-      // Validate state parameter for CSRF protection
+      // Validate state for OneDrive CSRF protection.
       let provider: OAuthProvider;
       if (providerRaw === 'onedrive') {
         const stateValid = validateOAuthState('onedrive', state);
