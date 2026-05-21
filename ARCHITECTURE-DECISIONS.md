@@ -120,42 +120,60 @@ sync primitives.
 
 ### 4. Document Mode Delta-Based Sync for documentBlocks
 
-**Status**: ✅ Active
+**Status**: ⛔ Superseded by Decision #5 (feature removed in commit `de5e399a`).
 
-**Decision**: Document mode uses a **delta-based sync pattern** for `documentBlocks`. Instead of sending the entire array on every sync, only changed/added blocks, removed block IDs, and the new block order are persisted via the `updateDocumentBlocksDelta` action. The service tracks the last-persisted state per context and computes a minimal diff on flush.
+The original in-tree document-mode feature stored a `documentBlocks` array on each project/tag entity and used `updateDocumentBlocksDelta` + meta-reducers to sync a minimal diff per context. That feature has been removed in favour of a TipTap-based plugin (see Decision #5) which trades the delta machinery for portability outside the host's NgRx + op-log world.
+
+The original action type (`DOCUMENT_MODE_UPDATE_BLOCKS_DELTA`) and its op-log code (`DU`) are kept in `action-types.enum.ts` and `action-type-codes.ts` for stable historical-op-log decoding only — no reducer handles them anymore.
+
+---
+
+### 5. Document Mode lives in plugin-owned synced storage (LWW blob)
+
+**Status**: ✅ Active (POC)
+
+**Decision**: Document mode is implemented as a TipTap-based plugin under `packages/plugin-dev/document-mode/`. Per-context document state is persisted as a single JSON blob via `PluginAPI.persistDataSynced`. The blob is keyed by `{ docs: { [contextId]: ProseMirrorJSON } }` plus an `enabledCtxIds` list owned by the background script. Task identity (title, done state, parent/child relationships) continues to live in NgRx and is reached through `PluginAPI.updateTask` and the `ANY_TASK_UPDATE` hook.
 
 **How it works**:
 
-1. Local edits dispatch `updateDocumentBlocksLocal` (non-persistent) for instant UI feedback
-2. After a 30-second debounce, `_flushSync()` computes a delta from the last-persisted snapshot
-3. If nothing changed, the flush is skipped entirely (no operation created)
-4. If blocks changed, `updateDocumentBlocksDelta` is dispatched with only the diff
-5. Reducers apply the delta by merging changed blocks, removing deleted ones, and reordering
+1. The plugin renders each `task` from `getTasks()` as a content-bearing `taskRef` (and `subTaskRef`) node inside an editor doc.
+2. Title edits inside the doc are debounced (~600 ms) and written back via `PluginAPI.updateTask`. The done-toggle writes the same way.
+3. The doc itself is debounced (~5 s) and flushed to `persistDataSynced` as a full blob replacement.
+4. On context switch / app start, the plugin reads the blob, walks `migrateStoredDoc` (schema migration) → `ensureSubtasksInJSON` (backfill subtasks from the host that aren't yet in the doc), and seeds the editor.
+5. External task changes (other clients, regular task list, time tracking) arrive via `ANY_TASK_UPDATE`; the plugin refreshes the affected chip, and only auto-appends a new chip on a transition absent → present in its cache snapshot.
 
-**Conflict behavior**:
+**Conflict behavior** (the tradeoff vs Decision #4):
 
-- Content edits to **different blocks** from two devices are both preserved (block-level merge)
-- Content edits to the **same block** from two devices: last-write-wins on that block
-- Block **ordering**: last-write-wins (the `blockOrder` field replaces the full order)
-- Blocks added by a concurrent remote client but missing from `blockOrder` are appended at the end
+- The doc blob is **last-writer-wins for the entire user's doc-mode state**. Two devices editing different contexts' docs concurrently can lose one device's edits — there is no delta merge.
+- Task fields (`title`, `isDone`, etc.) still flow through `updateTask` and so still benefit from the host's per-field op-log + vector clock model.
+- Document-side subtask ordering may drift from `task.subTaskIds` — the source of truth for hierarchy is NgRx; the doc reflects it on next reseed of a context, but in-place subtask reorders done in the regular task list are not back-merged into an already-open doc.
 
 **Rationale**:
 
-- Dramatically reduces sync payload size (only changed blocks, not the entire array)
-- Skips no-op flushes when nothing changed since last persist
-- Preserves non-conflicting edits from concurrent devices (better than full-array LWW)
-- No new entity type needed — still uses PROJECT/TAG entity types in the op-log
-
-**Key Files**:
-
-- [`document-mode.service.ts`](src/app/features/document-mode/document-mode.service.ts) - Dual-dispatch pattern with delta computation and dirty tracking
-- [`document-block.model.ts`](src/app/features/document-mode/document-block.model.ts) - `computeBlocksDelta()` and `applyDocumentBlocksDelta()` utilities
-- [`document-mode.actions.ts`](src/app/features/document-mode/store/document-mode.actions.ts) - `updateDocumentBlocksDelta` persistent action
+- The plugin runs inside an iframe with a stable, postMessage-based API. Plugin code does not touch NgRx, the op-log encoder, sync wrapper, or meta-reducers — the host's sync invariants stay simple even as the editor surface grows.
+- TipTap / ProseMirror schema decisions are isolated from the host's data model; a future kanban or planner plugin can reuse the same embed-slot pattern without expanding the op-log action-type space.
+- The single-blob LWW model is the most data we lose to a worse sync strategy than Decision #4. It is acceptable for the POC because (a) the doc layout is a _view_, not a primary store, and (b) the meaningful per-task state — what users actually care about preserving — still travels through the host's existing per-field sync.
 
 **When to Revisit**:
 
-- If real-time collaborative editing becomes a requirement (would need CRDT/OT)
-- If block ordering conflicts become a user-facing problem
+- A second consumer of the embed slot lands (kanban, planner). The current `_workContextEmbedPluginId` is a single signal — last-writer-wins for the slot, no claim/release protocol. Generalise then.
+- Reports of doc-state loss from multi-device usage. The first remediation step is per-context storage keys (so concurrent edits to different contexts no longer race on a single blob). A delta API on `PluginAPI` is the second step and would be a breaking API addition for plugins; revisit only if real users hit ordering/loss issues frequently.
+- A `PluginAPI` versioning surface — current bindings are by method name string and break at runtime, not install time.
+
+**Open known limitations** (intentional scope cuts for the POC):
+
+- Doc / `task.subTaskIds` order may drift; only a full reseed of the context heals it.
+- Concurrent local typing + remote title change can silently overwrite the remote within the debounce + echo window (~1.1 s).
+- A corrupted stored blob shows an empty seed; saves are suppressed (`isDocCorrupt` flag) so the original isn't overwritten, but there is no in-app recovery path yet.
+- Plugin unload / `pagehide` flushes the debounce best-effort but can lose up to ~5 s of edits on hard exit.
+
+**Key Files**:
+
+- [`packages/plugin-dev/document-mode/src/ui/editor.ts`](packages/plugin-dev/document-mode/src/ui/editor.ts) — TipTap editor, schema, NodeViews, drag, persistence
+- [`packages/plugin-dev/document-mode/src/background.ts`](packages/plugin-dev/document-mode/src/background.ts) — header button, enabled-context tracking, blob layout
+- [`docs/plans/2026-05-21-document-mode-tiptap-plugin.md`](docs/plans/2026-05-21-document-mode-tiptap-plugin.md) — full design doc
+- [`packages/plugin-api/src/types.ts`](packages/plugin-api/src/types.ts) — `registerWorkContextHeaderButton`, embed slot, hooks
+- [`src/app/plugins/plugin-bridge.service.ts`](src/app/plugins/plugin-bridge.service.ts) — host-side registry + embed slot
 
 ---
 
