@@ -501,67 +501,37 @@ export class JiraApiService {
     jiraCfg: JiraCfg,
     suppressErrorSnack: boolean,
   ): Observable<any> {
-    let promise!: Promise<unknown>;
-    const registerRequest = (): void => {
-      if (promise !== undefined)
-        throw new Error("'registerRequest' was called twice but must only called once!");
+    const useDirectFetch = IS_ANDROID_WEB_VIEW || jiraCfg.allowFetchFallback;
 
-      promise = new Promise<unknown>((promiseResolve, promiseReject) => {
-        // save to request log (also sets up timeout)
-        // since we don't use the requestLog anyway on android web view we can just use the requestId
-        this._requestsLog[requestId] = this._makeJiraRequestLogItem({
-          promiseResolve,
-          promiseReject,
-          requestId,
-          requestInit,
-          transform,
-          jiraCfg,
-        });
+    let promiseResolve!: (value: unknown) => void;
+    let promiseReject!: (reason?: unknown) => void;
+    const promise = new Promise<unknown>((resolve, reject) => {
+      promiseResolve = resolve;
+      promiseReject = reject;
+    });
+
+    // save to request log (also sets up timeout)
+    // since we don't use the requestLog anyway on directFetch we can just use the requestId
+    if (!useDirectFetch) {
+      this._requestsLog[requestId] = this._makeJiraRequestLogItem({
+        promiseResolve,
+        promiseReject,
+        requestId,
+        requestInit,
+        transform,
+        jiraCfg,
       });
-    };
+    }
 
     const requestToSend = { requestId, requestInit, url };
     if (IS_ELECTRON) {
-      registerRequest();
       window.ea.makeJiraRequest({
         ...requestToSend,
         jiraCfg,
       });
-    } else if (IS_ANDROID_WEB_VIEW || jiraCfg.allowFetchFallback) {
-      const abortController = new AbortController();
-      const timeoutId = this._scheduleRequestTimeout(() => abortController.abort());
-
-      return from(
-        fetch(url, { ...requestInit, signal: abortController.signal })
-          .then((response) => this._parseFetchResponse(response))
-          .then((res) => {
-            const resObj = res as Record<string, unknown> | null;
-            if (Array.isArray(resObj?.errorMessages)) {
-              throw new Error((resObj.errorMessages as string[]).join(', '));
-            }
-            return transform ? transform({ response: res }, jiraCfg) : { response: res };
-          })
-          .finally(() => clearTimeout(timeoutId)),
-      ).pipe(
-        catchError((err) => {
-          if ((err as { name?: string })?.name === 'AbortError') {
-            return throwError(() => ({
-              [HANDLED_ERROR_PROP_STR]: 'Jira: Request timed out',
-            }));
-          }
-
-          IssueLog.log(err);
-          IssueLog.log(getErrorTxt(err));
-          const errTxt = `Jira: ${getErrorTxt(err)}`;
-          if (!suppressErrorSnack) {
-            this._snackService.open({ type: 'ERROR', msg: errTxt });
-          }
-          const status = extractHttpStatus(err);
-          return throwError(() => ({ [HANDLED_ERROR_PROP_STR]: errTxt, status }));
-        }),
-      );
+    } else if (useDirectFetch) {
+      return this._directFetch$(url, requestInit, transform, jiraCfg, suppressErrorSnack);
     } else if (this._isExtension) {
-      registerRequest();
       this._chromeExtensionInterfaceService.dispatchEvent(
         'SP_JIRA_REQUEST',
         requestToSend,
@@ -576,14 +546,56 @@ export class JiraApiService {
         IssueLog.log(err);
         IssueLog.log(getErrorTxt(err));
         const errTxt = `Jira: ${getErrorTxt(err)}`;
-        if (!suppressErrorSnack) {
+        const status = extractHttpStatus(err);
+        if (!suppressErrorSnack && !(err as { jiraBlocked?: boolean }).jiraBlocked) {
           this._snackService.open({ type: 'ERROR', msg: errTxt });
         }
-        const status = extractHttpStatus(err);
         return throwError(() => ({ [HANDLED_ERROR_PROP_STR]: errTxt, status }));
       }),
       first(),
       finalize(() => this._globalProgressBarService.countDown()),
+    );
+  }
+
+  private _directFetch$(
+    url: string,
+    requestInit: RequestInit,
+    transform: ((res: any, cfg: JiraCfg) => unknown) | undefined,
+    jiraCfg: JiraCfg,
+    suppressErrorSnack: boolean,
+  ): Observable<unknown> {
+    const abortController = new AbortController();
+    const timeoutId = this._scheduleRequestTimeout(() => abortController.abort(), {
+      suppressSnack: suppressErrorSnack,
+    });
+
+    return from(
+      fetch(url, { ...requestInit, signal: abortController.signal })
+        .then((response) => this._parseFetchResponse(response))
+        .then((res) => {
+          const resObj = res as Record<string, unknown> | null;
+          if (Array.isArray(resObj?.errorMessages)) {
+            throw new Error((resObj.errorMessages as string[]).join(', '));
+          }
+          return transform ? transform({ response: res }, jiraCfg) : { response: res };
+        })
+        .finally(() => clearTimeout(timeoutId)),
+    ).pipe(
+      catchError((err) => {
+        if ((err as { name?: string })?.name === 'AbortError') {
+          return throwError(() => ({
+            [HANDLED_ERROR_PROP_STR]: 'Jira: Request timed out',
+          }));
+        }
+        IssueLog.log(err);
+        IssueLog.log(getErrorTxt(err));
+        const errTxt = `Jira: ${getErrorTxt(err)}`;
+        const status = extractHttpStatus(err);
+        if (!suppressErrorSnack && !(err as { jiraBlocked?: boolean }).jiraBlocked) {
+          this._snackService.open({ type: 'ERROR', msg: errTxt });
+        }
+        return throwError(() => ({ [HANDLED_ERROR_PROP_STR]: errTxt, status }));
+      }),
     );
   }
 
@@ -691,11 +703,10 @@ export class JiraApiService {
       if (!res || res.error) {
         IssueLog.err('JIRA_RESPONSE_ERROR', res, currentRequest);
         // let msg =
-        if (res?.error && isUnauthorizedError(res.error)) {
-          this._blockAccess();
-        }
+        const blocked =
+          res?.error && isUnauthorizedError(res.error) ? this._blockAccess() : undefined;
 
-        currentRequest.reject(res);
+        currentRequest.reject({ ...res, ...blocked });
       } else {
         // IssueLog.log('JIRA_RESPONSE', res);
         if (currentRequest.transform) {
@@ -722,18 +733,21 @@ export class JiraApiService {
     }
   }
 
-  private _scheduleRequestTimeout(onTimeout: () => void): number {
+  private _scheduleRequestTimeout(
+    onTimeout: () => void,
+    { suppressSnack = false } = {},
+  ): number {
     return window.setTimeout(() => {
       IssueLog.log('ERROR', 'Jira Request timed out');
-      this._blockAccess();
-      this._snackService.open({ msg: T.F.JIRA.S.TIMED_OUT, type: 'ERROR' });
+      if (!suppressSnack)
+        this._snackService.open({ msg: T.F.JIRA.S.TIMED_OUT, type: 'ERROR' });
       onTimeout();
     }, JIRA_REQUEST_TIMEOUT_DURATION);
   }
 
   private async _parseFetchResponse(response: Response): Promise<unknown> {
     if (!response.ok) {
-      if (isUnauthorizedError(response)) this._blockAccess();
+      const blocked = isUnauthorizedError(response) ? this._blockAccess() : undefined;
 
       const errorBody = response.body
         ? await streamToJsonIfPossible(response.body).catch(() => null)
@@ -742,17 +756,21 @@ export class JiraApiService {
       throw Object.assign(new Error(`HTTP ${response.status}`), {
         status: response.status,
         error: errorBody,
+        ...blocked,
       });
     }
 
     return response.body ? streamToJsonIfPossible(response.body) : null;
   }
 
-  private _blockAccess(): void {
+  // Called only on auth failures (401/403) to proactively stop further requests before
+  // Jira locks out the account or IP due to repeated bad credentials.
+  private _blockAccess(): { jiraBlocked: true } {
     // TODO also shut down all existing requests
     this._isBlockAccess = true;
     sessionStorage.setItem(BLOCK_ACCESS_KEY, 'true');
     sessionStorage.removeItem(SS.JIRA_WONKY_COOKIE);
+    return { jiraBlocked: true };
   }
 
   private _b64EncodeUnicode(str: string): string {
