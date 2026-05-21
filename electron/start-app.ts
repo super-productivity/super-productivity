@@ -432,7 +432,8 @@ export const startApp = (): void => {
       event.preventDefault();
       const win = getWin();
       if (win && !win.isDestroyed()) {
-        // unset "minimize to tray" make sure window is not just hidden
+        // Ensure the close handler takes the real close path (not the minimize-to-tray
+        // hide branch) so the before-close IPC flow (sync, finish-day) completes.
         setIsMinimizeToTray(false);
         win.close();
       } else {
