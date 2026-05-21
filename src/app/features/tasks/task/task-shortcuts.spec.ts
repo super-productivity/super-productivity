@@ -216,6 +216,31 @@ describe('TaskComponent shortcut handling', () => {
     expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
   });
 
+  it('keeps the empty subtask drop target mounted for childless top-level tasks', () => {
+    fixture.componentRef.setInput('task', createTopLevelTask('Top-level task'));
+    fixture.componentRef.setInput('isInSubTaskList', false);
+
+    expect(component.isEmptySubTaskDropTargetMountable()).toBeTrue();
+    expect(component.isEmptySubTaskDropTargetVisible()).toBeFalse();
+  });
+
+  it('does not mount the empty subtask drop target for tasks with subtasks', () => {
+    fixture.componentRef.setInput('task', {
+      ...createTopLevelTask('Top-level task'),
+      subTaskIds: ['sub-1'],
+    });
+    fixture.componentRef.setInput('isInSubTaskList', false);
+
+    expect(component.isEmptySubTaskDropTargetMountable()).toBeFalse();
+  });
+
+  it('does not mount the empty subtask drop target inside subtask lists', () => {
+    fixture.componentRef.setInput('task', createTopLevelTask('Top-level task'));
+    fixture.componentRef.setInput('isInSubTaskList', true);
+
+    expect(component.isEmptySubTaskDropTargetMountable()).toBeFalse();
+  });
+
   it('persists the typed title before spawning a sibling on Mod+Enter', () => {
     fixture.componentRef.setInput('task', createSubTask(''));
 

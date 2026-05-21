@@ -195,37 +195,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     this._scheduleExternalDragService.setActiveTask(task, event.source._dragRef);
   }
 
-  onDragPrepared(task: TaskWithSubTasks): void {
-    if (this.listModelId() === 'LATER_TODAY') {
-      return;
-    }
-
-    this._scheduleExternalDragService.setActiveTask(task);
-
-    const abortController = new AbortController();
-    const cleanup = (): void => {
-      abortController.abort();
-      window.setTimeout(() => {
-        const activeTask = this._scheduleExternalDragService.activeTask();
-        if (
-          activeTask?.id === task.id &&
-          !this._scheduleExternalDragService.activeDragRef()
-        ) {
-          this._scheduleExternalDragService.setActiveTask(null);
-        }
-      });
-    };
-
-    document.addEventListener('pointerup', cleanup, {
-      once: true,
-      signal: abortController.signal,
-    });
-    document.addEventListener('pointercancel', cleanup, {
-      once: true,
-      signal: abortController.signal,
-    });
-  }
-
   onDragEnded(): void {
     this._scheduleExternalDragService.setActiveTask(null);
   }

@@ -252,11 +252,9 @@
         [progress]="progress()"
       ></progress-bar>
     }
-    @if (t.subTasks?.length || isEmptySubTaskDropTargetVisible()) {
+    @if (t.subTasks?.length || isEmptySubTaskDropTargetMountable()) {
       <div
-        [class.is-empty-drop-target]="
-          !t.subTasks?.length && isEmptySubTaskDropTargetActive()
-        "
+        [class.is-empty-drop-target]="isEmptySubTaskDropTargetActive()"
         [class.is-empty-drop-target-prepared]="
           !t.subTasks?.length && !isEmptySubTaskDropTargetActive()
         "
