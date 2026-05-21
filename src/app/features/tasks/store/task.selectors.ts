@@ -108,7 +108,9 @@ export const selectTaskEntitiesInActiveProjects = createSelector(
     archivedIds.size === 0
       ? entities
       : Object.fromEntries(
-          Object.entries(entities).filter(([, t]) => !t || !archivedIds.has(t.projectId)),
+          Object.entries(entities).filter(
+            ([, t]) => !t || !t.projectId || !archivedIds.has(t.projectId),
+          ),
         ),
 );
 export const selectCurrentTaskId = createSelector(
@@ -180,7 +182,9 @@ export const selectAllTasksInActiveProjects = createSelector(
   selectAllTasks,
   selectArchivedProjectIds,
   (tasks: Task[], archivedIds: Set<string>): Task[] =>
-    archivedIds.size === 0 ? tasks : tasks.filter((t) => !archivedIds.has(t.projectId)),
+    archivedIds.size === 0
+      ? tasks
+      : tasks.filter((t) => !t.projectId || !archivedIds.has(t.projectId)),
 );
 
 export const selectAllTasksWithSubTasksInActiveProjects = createSelector(
