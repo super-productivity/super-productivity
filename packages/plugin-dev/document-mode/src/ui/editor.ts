@@ -42,6 +42,10 @@ let isLoadingDoc = false;
 // back to an empty seed. Gates scheduleSave so the empty seed is not
 // auto-persisted on top of the original (possibly corrupt) blob.
 let isDocCorrupt = false;
+// True when the *whole* stored blob is in a schema version we don't
+// understand (a user synced from a newer build). Gates scheduleSave so
+// we never downgrade-overwrite the original blob with our empty fallback.
+let isStorageUnreadable = false;
 // Monotonic guard for setActiveContext: concurrent calls (rapid context
 // switches) read this to drop after their awaits if a newer call has
 // superseded them.
@@ -627,9 +631,27 @@ const readBlob = async (): Promise<StoredState> => {
     if (!raw) return { version: STORAGE_VERSION, docs: {} };
     const parsed = JSON.parse(raw) as StoredState;
     if (parsed && typeof parsed === 'object') {
+      // Future-version guard: if we encounter a blob whose schema is
+      // ahead of what this build understands (e.g. user synced from a
+      // newer release), don't pretend we can read it — return an empty
+      // shell. flushSave is gated by isDocCorrupt (see setActiveContext)
+      // so we won't clobber the original on disk.
+      const parsedVersion = Number(parsed.version) || STORAGE_VERSION;
+      if (parsedVersion > STORAGE_VERSION) {
+        // Refuse to load AND gate saves so we don't overwrite the
+        // user's newer blob with our empty fallback. Recovery happens
+        // when the user updates to a build that understands the
+        // newer schema.
+        isStorageUnreadable = true;
+        logErr(
+          `Stored doc-mode blob is version ${parsedVersion}; this build understands ${STORAGE_VERSION}. Refusing to load.`,
+        );
+        return { version: STORAGE_VERSION, docs: {} };
+      }
+      isStorageUnreadable = false;
       return {
         ...parsed,
-        version: parsed.version || STORAGE_VERSION,
+        version: parsedVersion,
         docs: parsed.docs || {},
       };
     }
@@ -665,9 +687,9 @@ const flushSave = async (): Promise<void> => {
 const scheduleSave = (): void => {
   if (isLoadingDoc) return;
   // Refuse to persist while the doc is a fallback (loaded from a blob we
-  // couldn't parse). Saving here would overwrite the original blob with
-  // an empty seed.
-  if (isDocCorrupt) return;
+  // couldn't parse, or a future-version blob we don't understand). Saving
+  // here would overwrite the original blob with our empty seed.
+  if (isDocCorrupt || isStorageUnreadable) return;
   if (saveTimer !== null) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     void flushSave();
@@ -1968,13 +1990,22 @@ const openBlockMenu = (anchorRect: DOMRect): void => {
 /* Mount                                                                       */
 /* -------------------------------------------------------------------------- */
 
+// Guards against re-entering mount(). The iframe is rebuilt from scratch
+// when the embed slot is closed and re-opened, but in dev HMR or odd
+// host re-init flows we could land here twice — every listener and
+// body-appended element would then duplicate. One source of truth.
+let isMounted = false;
+
 const mount = async (): Promise<void> => {
+  if (isMounted) return;
+  isMounted = true;
   await loadStoredState();
   const initialCtx = await PluginAPI.getActiveWorkContext();
 
   const root = document.getElementById('editor-root');
   if (!root) {
     logErr('Document mode: #editor-root not found');
+    isMounted = false;
     return;
   }
 
@@ -1999,10 +2030,16 @@ const mount = async (): Promise<void> => {
         element: bubbleEl,
         shouldShow: ({ from, to, state }) => {
           if (from === to) return false;
-          // Don't show on atom node selections (taskRef).
-          const node = state.doc.nodeAt(from);
-          if (node?.isAtom) return false;
-          return true;
+          // A selection that *crosses* an atom (e.g. paragraph → divider
+          // → paragraph) shouldn't show the inline-mark menu either —
+          // toggling bold across the divider would do nothing useful.
+          // Walk the whole range, not just the start, to catch this.
+          let hasAtom = false;
+          state.doc.nodesBetween(from, to, (node) => {
+            if (node.isAtom) hasAtom = true;
+            return !hasAtom;
+          });
+          return !hasAtom;
         },
       }),
     ],
