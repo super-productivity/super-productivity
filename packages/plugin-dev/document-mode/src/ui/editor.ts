@@ -39,6 +39,41 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let editor: Editor | null = null;
 let isLoadingDoc = false;
 
+/**
+ * Safe error log: PluginAPI.log is declared on the type but currently not
+ * wired up in the iframe runtime (see plugin-iframe.util.ts). Calling
+ * PluginAPI.log.err crashes inside Promise catch handlers, which then
+ * surfaces as the user-visible "Cannot read properties of undefined
+ * (reading 'err')". Use this helper everywhere instead.
+ */
+const logErr = (msg: string, err?: unknown): void => {
+  try {
+    (PluginAPI as { log?: { err?: (...args: unknown[]) => void } }).log?.err?.(msg, err);
+  } catch {
+    // ignore — fall through to console
+  }
+  // eslint-disable-next-line no-console
+  console.error('[document-mode]', msg, err);
+};
+
+/**
+ * Tolerant deleteTask: a stale subTaskRef may point at a task that no
+ * longer exists in the host (deleted via sync, or never persisted). In
+ * that case the host rejects with "Task data not found", which is fine —
+ * the user already removed the chip locally. Swallow that specific case;
+ * still log anything else.
+ */
+const deleteTaskTolerant = async (taskId: string): Promise<void> => {
+  if (!taskCache.has(taskId)) return;
+  try {
+    await PluginAPI.deleteTask(taskId);
+  } catch (err) {
+    const msg = (err as Error)?.message ?? String(err);
+    if (/not found/i.test(msg)) return;
+    logErr('deleteTask failed', err);
+  }
+};
+
 /* -------------------------------------------------------------------------- */
 /* taskRef node                                                                */
 /* -------------------------------------------------------------------------- */
@@ -75,7 +110,7 @@ const createTaskAfter = async (insertPos: number): Promise<void> => {
     // Cursor lands inside the new chip's empty title; refresh selection.
     editor.commands.focus(insertPos + 1);
   } catch (err) {
-    PluginAPI.log.err('createTaskAfter failed', err);
+    logErr('createTaskAfter failed', err);
   }
 };
 
@@ -106,7 +141,7 @@ const createSubTaskAfter = async (
       .run();
     editor.commands.focus(insertPos + 1);
   } catch (err) {
-    PluginAPI.log.err('createSubTaskAfter failed', err);
+    logErr('createSubTaskAfter failed', err);
   }
 };
 
@@ -198,13 +233,18 @@ const TaskRefNode = Node.create({
         if (!info) return false;
         if (info.isEmpty) {
           // Empty chip + Enter → convert to paragraph + delete the empty task.
-          if (info.taskId) {
-            PluginAPI.deleteTask(info.taskId).catch((err) =>
-              PluginAPI.log.err('deleteTask failed', err),
-            );
-          }
+          if (info.taskId) void deleteTaskTolerant(info.taskId);
           if (!editor) return false;
-          editor.chain().focus().setNodeSelection(info.nodePos).setParagraph().run();
+          editor
+            .chain()
+            .focus()
+            .setNodeSelection(info.nodePos)
+            .setParagraph()
+            // Drop the NodeSelection: leave a text cursor inside the new
+            // paragraph so a follow-up Enter behaves normally (NodeSelection
+            // on the same block would route Enter through a different path).
+            .setTextSelection(info.nodePos + 1)
+            .run();
           return true;
         }
         if (info.atEnd) {
@@ -224,11 +264,7 @@ const TaskRefNode = Node.create({
         if (!info.atStart) return false;
         if (info.isEmpty) {
           // Empty chip + Backspace at start → delete task + remove chip.
-          if (info.taskId) {
-            PluginAPI.deleteTask(info.taskId).catch((err) =>
-              PluginAPI.log.err('deleteTask failed', err),
-            );
-          }
+          if (info.taskId) void deleteTaskTolerant(info.taskId);
           if (!editor) return false;
           editor.chain().focus().setNodeSelection(info.nodePos).deleteSelection().run();
           return true;
@@ -325,7 +361,7 @@ const TaskRefNode = Node.create({
         if (!task) return;
         const next = !task.isDone;
         PluginAPI.updateTask(taskId, { isDone: next }).catch((err) => {
-          PluginAPI.log.err('updateTask failed', err);
+          logErr('updateTask failed', err);
         });
         taskCache.set(taskId, { ...task, isDone: next });
         // Reflect on attr so undo stack carries it.
@@ -399,13 +435,15 @@ const SubTaskRefNode = Node.create({
         if (!info) return false;
         if (info.isEmpty) {
           // Empty subtask + Enter → outdent to paragraph + delete the empty task.
-          if (info.taskId) {
-            PluginAPI.deleteTask(info.taskId).catch((err) =>
-              PluginAPI.log.err('deleteTask failed', err),
-            );
-          }
+          if (info.taskId) void deleteTaskTolerant(info.taskId);
           if (!editor) return false;
-          editor.chain().focus().setNodeSelection(info.nodePos).setParagraph().run();
+          editor
+            .chain()
+            .focus()
+            .setNodeSelection(info.nodePos)
+            .setParagraph()
+            .setTextSelection(info.nodePos + 1)
+            .run();
           return true;
         }
         if (info.atEnd) {
@@ -424,11 +462,7 @@ const SubTaskRefNode = Node.create({
         if (!info) return false;
         if (!info.atStart) return false;
         if (info.isEmpty) {
-          if (info.taskId) {
-            PluginAPI.deleteTask(info.taskId).catch((err) =>
-              PluginAPI.log.err('deleteTask failed', err),
-            );
-          }
+          if (info.taskId) void deleteTaskTolerant(info.taskId);
           if (!editor) return false;
           editor.chain().focus().setNodeSelection(info.nodePos).deleteSelection().run();
           return true;
@@ -519,7 +553,7 @@ const SubTaskRefNode = Node.create({
         if (!task) return;
         const next = !task.isDone;
         PluginAPI.updateTask(taskId, { isDone: next }).catch((err) => {
-          PluginAPI.log.err('updateTask failed', err);
+          logErr('updateTask failed', err);
         });
         taskCache.set(taskId, { ...task, isDone: next });
         const pos = typeof getPos === 'function' ? getPos() : null;
@@ -566,7 +600,7 @@ const readBlob = async (): Promise<StoredState> => {
       };
     }
   } catch (err) {
-    PluginAPI.log.err('Failed to parse stored doc state', err);
+    logErr('Failed to parse stored doc state', err);
   }
   return { version: STORAGE_VERSION, docs: {} };
 };
@@ -590,7 +624,7 @@ const flushSave = async (): Promise<void> => {
     storedState = merged;
     await PluginAPI.persistDataSynced(JSON.stringify(merged));
   } catch (err) {
-    PluginAPI.log.err('persistDataSynced failed', err);
+    logErr('persistDataSynced failed', err);
   }
 };
 
@@ -738,7 +772,7 @@ const refreshTaskCache = async (): Promise<void> => {
     const tasks = await PluginAPI.getTasks();
     taskCache = new Map(tasks.map((t) => [t.id, t]));
   } catch (err) {
-    PluginAPI.log.err('getTasks failed', err);
+    logErr('getTasks failed', err);
   }
 };
 
@@ -760,7 +794,7 @@ const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> =>
       false,
     );
   } catch (err) {
-    PluginAPI.log.err('setContent failed, seeding fresh', err);
+    logErr('setContent failed, seeding fresh', err);
     editor.commands.setContent(
       buildSeedDoc(ctx) as Parameters<typeof editor.commands.setContent>[0],
       false,
@@ -858,7 +892,7 @@ const writeTitleBack = (taskId: string, newTitle: string): void => {
           if (cached) taskCache.set(taskId, { ...cached, title: newTitle });
         })
         .catch((err) => {
-          PluginAPI.log.err('updateTask (title) failed', err);
+          logErr('updateTask (title) failed', err);
         })
         .finally(() => {
           // Keep the "pending" marker briefly to absorb the echo from our
@@ -1242,6 +1276,36 @@ const hideDropIndicator = (): void => {
   if (dropIndicatorEl) dropIndicatorEl.style.display = 'none';
 };
 
+/**
+ * Range of valid insertion indices for the dragging node. Subtasks must
+ * stay inside their parent's group; top-level tasks can land between
+ * groups (still allowed inside a group for now — out of scope).
+ */
+const validInsertRange = (draggingPos: number): { min: number; max: number } | null => {
+  if (!editor) return null;
+  const doc = editor.state.doc;
+  const dragNode = doc.nodeAt(draggingPos);
+  if (!dragNode || dragNode.type.name !== 'subTaskRef') return null;
+  const dragIdx = doc.resolve(draggingPos).index(0);
+  // Find owning parent: nearest earlier taskRef, walking past sibling subtasks.
+  let parentIdx = -1;
+  for (let i = dragIdx - 1; i >= 0; i--) {
+    const c = doc.child(i);
+    if (c.type.name === 'taskRef') {
+      parentIdx = i;
+      break;
+    }
+    if (c.type.name !== 'subTaskRef') return null;
+  }
+  if (parentIdx < 0) return null;
+  // Walk forward past contiguous subTaskRefs to find the group's end index.
+  let end = parentIdx + 1;
+  while (end < doc.childCount && doc.child(end).type.name === 'subTaskRef') end++;
+  // Insertion gaps that keep the subtask in its group: anywhere between
+  // parent and the first non-subtask sibling.
+  return { min: parentIdx + 1, max: end };
+};
+
 const computeDropTarget = (
   clientY: number,
 ): { targetIdx: number; indicatorY: number; rootRect: DOMRect } | null => {
@@ -1261,6 +1325,25 @@ const computeDropTarget = (
       break;
     }
     indicatorY = r.bottom;
+  }
+  // Clamp into the valid range for the dragging block (e.g. keep a
+  // subtask inside its parent's group). Recompute indicatorY so the
+  // visual drop line follows the clamped target.
+  if (pendingDrag) {
+    const range = validInsertRange(pendingDrag.nodePos);
+    if (range) {
+      const clamped = Math.max(range.min, Math.min(targetIdx, range.max));
+      if (clamped !== targetIdx) {
+        targetIdx = clamped;
+        if (targetIdx === 0) {
+          indicatorY = blocks[0].getBoundingClientRect().top;
+        } else if (targetIdx >= blocks.length) {
+          indicatorY = blocks[blocks.length - 1].getBoundingClientRect().bottom;
+        } else {
+          indicatorY = blocks[targetIdx - 1].getBoundingClientRect().bottom;
+        }
+      }
+    }
   }
   return { targetIdx, indicatorY, rootRect };
 };
@@ -1599,7 +1682,7 @@ const mount = async (): Promise<void> => {
 
   const root = document.getElementById('editor-root');
   if (!root) {
-    PluginAPI.log.err('Document mode: #editor-root not found');
+    logErr('Document mode: #editor-root not found');
     return;
   }
 
