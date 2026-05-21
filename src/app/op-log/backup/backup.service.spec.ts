@@ -9,6 +9,7 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { ArchiveModel } from '../../features/archive/archive.model';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { OpType } from '../core/operation.types';
+import { OpLog } from '../../core/log';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -388,6 +389,28 @@ describe('BackupService', () => {
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
       expect(args.snapshotEntityKeys).toBeDefined();
       expect(Array.isArray(args.snapshotEntityKeys)).toBe(true);
+    });
+
+    it('should surface the original destructive failure when the clientId rollback also fails', async () => {
+      const criticalSpy = spyOn(OpLog, 'critical');
+      mockClientIdService.loadClientId.and.resolveTo('priorClientId');
+      mockOpLogStore.runDestructiveStateReplacement.and.rejectWith(
+        new Error('Atomic replacement failed'),
+      );
+      mockClientIdService.persistClientId.and.rejectWith(
+        new Error('pf write also broken'),
+      );
+
+      await expectAsync(
+        service.importCompleteBackup(createMinimalValidBackup() as any, true, true),
+      ).toBeRejectedWith(
+        jasmine.objectContaining({ message: 'Atomic replacement failed' }),
+      );
+
+      expect(criticalSpy).toHaveBeenCalledWith(
+        jasmine.stringMatching(/[Ff]ailed to roll back clientId/),
+        jasmine.objectContaining({ priorClientId: 'priorClientId' }),
+      );
     });
   });
 });

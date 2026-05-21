@@ -258,6 +258,31 @@ describe('CleanSlateService', () => {
       expect(mockClientIdService.persistClientId).not.toHaveBeenCalled();
     });
 
+    it('should surface the original destructive failure when the clientId rollback also fails', async () => {
+      // If the rollback persistClientId throws, we must still propagate the
+      // ORIGINAL destructive failure to the caller — not the rollback error.
+      // The rollback failure is logged at critical level for forensics.
+      const criticalSpy = spyOn(OpLog, 'critical');
+      mockClientIdService.loadClientId.and.resolveTo('ePrior');
+      mockOpLogStore.runDestructiveStateReplacement.and.rejectWith(
+        new Error('Atomic replacement failed'),
+      );
+      mockClientIdService.persistClientId.and.rejectWith(
+        new Error('pf write also broken'),
+      );
+
+      await expectAsync(
+        service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED'),
+      ).toBeRejectedWith(
+        jasmine.objectContaining({ message: 'Atomic replacement failed' }),
+      );
+
+      expect(criticalSpy).toHaveBeenCalledWith(
+        jasmine.stringMatching(/[Ff]ailed to roll back clientId/),
+        jasmine.objectContaining({ priorClientId: 'ePrior' }),
+      );
+    });
+
     it('should pass snapshotEntityKeys derived from current state', async () => {
       // Without snapshotEntityKeys, the persisted state_cache singleton looks
       // like the "old snapshot format" to remote-ops-processing, which
