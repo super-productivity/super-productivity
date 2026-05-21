@@ -13,10 +13,9 @@ import { devError } from '../../../util/dev-error';
 import { isDBDateStr } from '../../../util/get-db-date-str';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { IssueProvider, isPluginIssueProvider } from '../../issue/issue.model';
-import { Project } from '../../project/project.model';
 import {
-  selectAllProjects,
   selectArchivedProjectIds,
+  selectHiddenProjectIds,
 } from '../../project/store/project.selectors';
 import {
   selectTagFeatureState,
@@ -772,31 +771,10 @@ export const selectAllTaskIssueIdsForIssueProvider = (issueProvider: IssueProvid
 };
 
 export const selectAllTasksWithoutHiddenProjects = createSelector(
-  selectAllTasks,
-  selectAllProjects,
-  (tasks: Task[], projects: Project[]): Task[] => {
-    const projectMap: { [id: string]: Project } = {};
-    projects.forEach((project) => {
-      projectMap[project.id] = project;
-    });
-
-    return tasks.filter((task) => {
-      if (!task) return false;
-      const projectId = task.projectId;
-      if (!projectId) return true;
-
-      const project = projectMap[projectId];
-      if (!project) return true;
-
-      if (project.isHiddenFromMenu || project.isArchived) return false;
-
-      // if (project.backlogTaskIds && project.backlogTaskIds.includes(task.id)) {
-      //   return false;
-      // }
-
-      return true;
-    });
-  },
+  selectAllTasksInActiveProjects,
+  selectHiddenProjectIds,
+  (tasks: Task[], hiddenIds: Set<string>): Task[] =>
+    tasks.filter((t) => !t.projectId || !hiddenIds.has(t.projectId)),
 );
 
 export const selectAllUndoneTasksWithDueDay = createSelector(
