@@ -13,7 +13,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { Router } from '@angular/router';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { T } from '../../../t.const';
-import { Task } from '../task.model';
+import { Task, TaskWithSubTasks } from '../task.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
@@ -245,6 +245,107 @@ describe('TaskUiEffects', () => {
 
     afterEach(() => {
       localStorage.removeItem(LS.ONBOARDING_HINTS_DONE);
+    });
+  });
+
+  describe('snackDelete$', () => {
+    const createMockTaskWithSubTasks = (
+      overrides: Partial<TaskWithSubTasks> = {},
+    ): TaskWithSubTasks => ({
+      ...createMockTask(),
+      subTasks: [],
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      actions$ = new Subject<Action>();
+      snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
+      taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
+      navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
+        'navigate',
+      ]);
+      layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskUiEffects,
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+          provideMockStore({
+            initialState: {},
+            selectors: [{ selector: selectProjectById, value: null }],
+          }),
+          { provide: SnackService, useValue: snackServiceMock },
+          { provide: TaskService, useValue: taskServiceMock },
+          { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
+          { provide: LayoutService, useValue: layoutServiceMock },
+          { provide: WorkContextService, useValue: { mainListTaskIds$: of([]) } },
+          {
+            provide: NotifyService,
+            useValue: jasmine.createSpyObj('NotifyService', ['notify']),
+          },
+          {
+            provide: BannerService,
+            useValue: jasmine.createSpyObj('BannerService', ['open', 'dismiss']),
+          },
+          {
+            provide: GlobalConfigService,
+            useValue: { sound$: of({ doneSound: null }) },
+          },
+          { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
+        ],
+      });
+
+      effects = TestBed.inject(TaskUiEffects);
+    });
+
+    it('should show the undo snack when deleting a task that has a title', () => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(
+        TaskSharedActions.deleteTask({
+          task: createMockTaskWithSubTasks({ title: 'Real task' }),
+        }),
+      );
+
+      expect(snackServiceMock.open).toHaveBeenCalled();
+      const snackParams = snackServiceMock.open.calls.mostRecent().args[0] as SnackParams;
+      expect(snackParams.actionStr).toBe(T.G.UNDO);
+      sub.unsubscribe();
+    });
+
+    it('should NOT show the undo snack when deleting a blank task', () => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(
+        TaskSharedActions.deleteTask({
+          task: createMockTaskWithSubTasks({ title: '' }),
+        }),
+      );
+
+      expect(snackServiceMock.open).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
+    it('should NOT show the undo snack when deleting a blank sub task', () => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(
+        TaskSharedActions.deleteTask({
+          task: createMockTaskWithSubTasks({ title: '  ', parentId: 'parent-1' }),
+        }),
+      );
+
+      expect(snackServiceMock.open).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
+    it('should show the undo snack when deleting a blank-titled task that has data', () => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(
+        TaskSharedActions.deleteTask({
+          task: createMockTaskWithSubTasks({ title: '', timeSpent: 5000 }),
+        }),
+      );
+
+      expect(snackServiceMock.open).toHaveBeenCalled();
+      sub.unsubscribe();
     });
   });
 
