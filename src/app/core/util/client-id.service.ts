@@ -228,27 +228,27 @@ export class ClientIdService {
    * Independent — not delegated to OperationLogStoreService — because that
    * service injects CLIENT_ID_PROVIDER (-> this service), so delegating back
    * would form a DI cycle. Two same-origin connections to one store are safe:
-   * IndexedDB serializes transactions across them.
+   * IndexedDB serializes transactions across them. Collapsing onto a single
+   * shared connection (by breaking that DI cycle) is a tracked follow-up.
    *
-   * Concurrent first callers share a single in-flight open via
-   * `_supOpsDbPromise` — without it, each racing caller would open its own
-   * connection and all but the last would leak. A transient open failure
-   * surfaces as a thrown error (handled per the resolver contract) and clears
-   * the in-flight promise so the next call retries; this open deliberately
-   * omits the heavy retry logic in OperationLogStoreService.
+   * Concurrent first callers share one in-flight open via `_supOpsDbPromise`
+   * (mirrors OperationLogStoreService._ensureInit): without it each racing
+   * caller would open — and leak — its own connection. The in-flight promise
+   * is cleared on open failure so the next call retries, and in the
+   * close/versionchange handlers so a stale handle is never re-handed-out.
    */
   private async _getSupOpsDb(): Promise<IDBPDatabase> {
     if (this._supOpsDb) {
       return this._supOpsDb;
     }
     if (!this._supOpsDbPromise) {
-      this._supOpsDbPromise = this._openSupOpsDb();
+      this._supOpsDbPromise = this._openSupOpsDb().catch((e) => {
+        // A failed open must be retryable — clear so the next call reopens.
+        this._supOpsDbPromise = null;
+        throw e;
+      });
     }
-    try {
-      return await this._supOpsDbPromise;
-    } finally {
-      this._supOpsDbPromise = null;
-    }
+    return this._supOpsDbPromise;
   }
 
   private async _openSupOpsDb(): Promise<IDBPDatabase> {
@@ -257,14 +257,16 @@ export class ClientIdService {
         runDbUpgrade(database, oldVersion, transaction);
       },
     });
-    // Browser closed the connection — drop the handle, reopen on next access.
+    // Browser closed the connection — drop both handles, reopen on next access.
     db.addEventListener('close', () => {
       this._supOpsDb = null;
+      this._supOpsDbPromise = null;
     });
     // Don't block a future (v7) upgrade opened by another connection/tab.
     db.addEventListener('versionchange', () => {
       db.close();
       this._supOpsDb = null;
+      this._supOpsDbPromise = null;
     });
     this._supOpsDb = db;
     return db;

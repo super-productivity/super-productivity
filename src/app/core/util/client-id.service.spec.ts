@@ -153,6 +153,19 @@ describe('ClientIdService', () => {
       expect(a).toBe(b);
       expect(await readSupOps()).toBe(a);
     });
+
+    it('opens the SUP_OPS connection once for concurrent cold-start callers', async () => {
+      // Regression guard: without the in-flight-promise dedup in _getSupOpsDb,
+      // each racing caller opens — and leaks — its own SUP_OPS connection.
+      const openSpy = spyOn(service as any, '_openSupOpsDb').and.callThrough();
+
+      await Promise.all([
+        service.getOrGenerateClientId(),
+        service.getOrGenerateClientId(),
+      ]);
+
+      expect(openSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   // The data-safety core: a transient IndexedDB read failure must NEVER mint a
