@@ -113,7 +113,7 @@ test('should not crash when a repeat config has an invalid startTime in the stor
     // hydrator replays it.
     const idbCorrupted = await page.evaluate(async (): Promise<boolean> => {
       return new Promise<boolean>((resolve) => {
-        const req = indexedDB.open('SUP_OPS', 5);
+        const req = indexedDB.open('SUP_OPS');
         req.onerror = () => resolve(false);
         req.onsuccess = () => {
           const db = req.result;
