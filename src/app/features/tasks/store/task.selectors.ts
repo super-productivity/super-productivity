@@ -180,6 +180,7 @@ export const selectAllTasksWithSubTasks = createSelector(
 export const selectAllTasksInActiveProjects = createSelector(
   selectAllTasks,
   selectArchivedProjectIds,
+  // Fast path returns same `tasks` ref when no projects are archived, keeping memoization stable.
   (tasks: Task[], archivedIds: Set<string>): Task[] =>
     archivedIds.size === 0
       ? tasks
