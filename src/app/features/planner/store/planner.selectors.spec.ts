@@ -341,6 +341,9 @@ describe('Planner Selectors - selectPlannerDays', () => {
     };
   };
 
+  const createTasksMapFromTasksArray = (tasks: Task[]): Map<string, Task> =>
+    new Map(tasks.map((t) => [t.id, t]));
+
   const emptyPlannerState: PlannerState = {
     days: {},
     addPlannedTasksDialogLastShown: undefined,
@@ -363,8 +366,9 @@ describe('Planner Selectors - selectPlannerDays', () => {
   ) => fromSelectors.selectPlannerDays(dayDates, [], [], [], [], todayStr);
 
   it('should return a PlannerDay for each day date', () => {
+    const tasks = createTasksMapFromTasksArray([]);
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector([], emptyPlannerState, defaultScheduleConfig, 0);
+    const result = selector.projector(tasks, emptyPlannerState, defaultScheduleConfig, 0);
 
     expect(result.length).toBe(1);
     expect(result[0].dayDate).toBe(today);
@@ -380,7 +384,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
     };
 
     const selector = fromSelectors.selectPlannerDays([tomorrow], [], [], [], [], today);
-    const result = selector.projector([task], plannerState, defaultScheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, plannerState, defaultScheduleConfig, 0);
 
     expect(result[0].tasks.length).toBe(1);
     expect(result[0].tasks[0].id).toBe('t1');
@@ -391,12 +396,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
 
     // Pass t1 as a todayListTaskId (unplanned since allPlannedTasks is empty)
     const selector = fromSelectors.selectPlannerDays([today], [], ['t1'], [], [], today);
-    const result = selector.projector(
-      [task],
-      emptyPlannerState,
-      defaultScheduleConfig,
-      0,
-    );
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, emptyPlannerState, defaultScheduleConfig, 0);
 
     expect(result[0].tasks.length).toBe(1);
     expect(result[0].tasks[0].id).toBe('t1');
@@ -412,7 +413,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
       lunchBreakEnd: '13:00',
     };
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector([], emptyPlannerState, scheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, scheduleConfig, 0);
 
     // 8 hours = 28800000 ms
     expect(result[0].availableHours).toBe(28800000);
@@ -421,7 +423,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
 
   it('should not set availableHours when schedule is disabled', () => {
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector([], emptyPlannerState, defaultScheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, defaultScheduleConfig, 0);
 
     expect(result[0].availableHours).toBeUndefined();
     expect(result[0].progressPercentage).toBeUndefined();
@@ -436,7 +439,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
     };
 
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector([task], plannerState, defaultScheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, plannerState, defaultScheduleConfig, 0);
 
     // Should include both today (from dayDates) and tomorrow (from planner state)
     expect(result.length).toBe(2);
@@ -452,7 +456,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
     };
 
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector([], plannerState, defaultScheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, plannerState, defaultScheduleConfig, 0);
 
     expect(result[0].tasks.length).toBe(0);
   });
@@ -491,7 +496,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
       [],
       today,
     );
-    const result = selector.projector([], emptyPlannerState, scheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, scheduleConfig, 0);
 
     // timeEstimate should include the timed event duration (7200000 ms = 2 hours)
     expect(result[0].timeEstimate).toBe(7200000);
@@ -536,7 +542,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
       [],
       today,
     );
-    const result = selector.projector([], emptyPlannerState, scheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, scheduleConfig, 0);
 
     // timeEstimate should NOT include all-day events (they use raw 24h duration)
     // so it should be 0 when there are no timed events
@@ -576,7 +583,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
       [],
       today,
     );
-    const result = selector.projector([], emptyPlannerState, scheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, scheduleConfig, 0);
 
     expect(result[0].timeEstimate).toBe(0);
     expect(result[0].progressPercentage).toBe(0);
@@ -629,7 +637,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
       [],
       today,
     );
-    const result = selector.projector([task], plannerState, scheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, plannerState, scheduleConfig, 0);
 
     // timeEstimate = task (3600000) + timed event (7200000) = 10800000 ms = 3 hours
     expect(result[0].timeEstimate).toBe(10800000);

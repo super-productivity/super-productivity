@@ -1,6 +1,9 @@
 import { createFeatureSelector, createSelector } from '@ngrx/store';
 import * as fromPlanner from './planner.reducer';
-import { selectAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
+import {
+  selectActiveTaskMap,
+  selectAllTasksInActiveProjects,
+} from '../../tasks/store/task.selectors';
 import {
   NoStartTimeRepeatProjection,
   PlannerDay,
@@ -104,13 +107,11 @@ export const selectPlannerDays = (
   const unplannedTaskIdsToday = todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
 
   return createSelector(
-    selectAllTasksInActiveProjects,
+    selectActiveTaskMap,
     selectPlannerState,
     selectTimelineConfig,
     selectStartOfNextDayDiffMs,
     (activeTasks, plannerState, scheduleConfig, startOfNextDayDiffMs): PlannerDay[] => {
-      const taskMap = new Map<string, Task>(activeTasks.map((t) => [t.id, t]));
-
       const allDatesWithData = Object.keys(plannerState.days);
       const dayDatesToUse = [
         ...dayDates,
@@ -120,13 +121,16 @@ export const selectPlannerDays = (
       ];
 
       // Pre-compute deadline tasks grouped by day (O(N) once, then O(1) per day)
-      const deadlineMap = groupDeadlineTasksByDay(activeTasks, startOfNextDayDiffMs);
+      const deadlineMap = groupDeadlineTasksByDay(
+        activeTasks.values(),
+        startOfNextDayDiffMs,
+      );
 
       return dayDatesToUse.map((dayDate) =>
         getPlannerDay(
           dayDate,
           todayStr,
-          taskMap,
+          activeTasks,
           plannerState,
           taskRepeatCfgs,
           allPlannedTasks,
@@ -142,10 +146,9 @@ export const selectPlannerDays = (
 };
 
 export const selectPlannerDayMap = createSelector(
-  selectAllTasksInActiveProjects,
+  selectActiveTaskMap,
   selectPlannerState,
-  (activeTasks, plannerState): PlannerDayMap => {
-    const taskMap = new Map<string, Task>(activeTasks.map((t) => [t.id, t]));
+  (taskMap, plannerState): PlannerDayMap => {
     const map: PlannerDayMap = {};
 
     Object.keys(plannerState.days).forEach((dayDate) => {
@@ -380,7 +383,7 @@ const isPlannerAllDayCalendarEvent = (calEv: ScheduleFromCalendarEvent): boolean
  * O(N) single pass — callers can then do O(1) map lookups per day.
  */
 const groupDeadlineTasksByDay = (
-  activeTasks: Task[],
+  activeTasks: Iterable<Task>,
   startOfNextDayDiffMs: number = 0,
 ): Record<string, TaskCopy[]> => {
   const result: Record<string, TaskCopy[]> = {};
