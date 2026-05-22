@@ -4,7 +4,7 @@ import { tap } from 'rxjs/operators';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { DroidLog } from '../../../core/log';
-import { androidInterface } from '../android-interface';
+import { androidInterface, AndroidShareData } from '../android-interface';
 import { TaskService } from '../../tasks/task.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { T } from '../../../t.const';
@@ -23,7 +23,13 @@ export class AndroidEffects {
       () =>
         androidInterface.onShareWithAttachment$.pipe(
           tap((shareData) => {
-            const taskTitle = this._buildTaskTitle(shareData);
+            // Guard against empty payloads (e.g. stale share data persisted by an
+            // older app version) so we never create a blank, attachment-less task.
+            if (!shareData?.path?.trim()) {
+              DroidLog.warn('Ignoring share intent with empty content');
+              return;
+            }
+            const taskTitle = buildTaskTitle(shareData);
             const taskId = this._taskService.add(taskTitle);
             const icon = shareData.type === 'LINK' ? 'link' : 'file_present';
             this._taskAttachmentService.addAttachment(taskId, {
@@ -150,51 +156,6 @@ export class AndroidEffects {
       { dispatch: false },
     );
 
-  private _buildTaskTitle(shareData: {
-    title: string;
-    subject: string;
-    type: string;
-    path: string;
-  }): string {
-    const subject = shareData.subject?.trim() || '';
-    const title = shareData.title?.trim() || '';
-    const path = shareData.path?.trim() || '';
-
-    let taskTitle: string;
-
-    // Prefer subject (page title from browsers), then title, then type-specific fallback
-    if (subject) {
-      taskTitle = subject;
-    } else if (title) {
-      taskTitle = title;
-    } else if (shareData.type === 'LINK') {
-      taskTitle = this._readableUrl(path);
-    } else {
-      const firstLine = path.split('\n')[0].trim();
-      taskTitle = firstLine || 'Shared note';
-    }
-
-    return taskTitle.length > 150 ? taskTitle.substring(0, 147) + '...' : taskTitle;
-  }
-
-  private _readableUrl(url: string): string {
-    try {
-      const parsed = new URL(url);
-      const host = parsed.hostname.replace(/^www\./, '');
-      const pathPart = parsed.pathname.replace(/\/$/, '');
-      if (pathPart && pathPart !== '/') {
-        const decoded = decodeURIComponent(pathPart)
-          .replace(/[/_-]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        return decoded ? `${host}: ${decoded}` : host;
-      }
-      return host;
-    } catch {
-      return url;
-    }
-  }
-
   // Check for pending share data on resume (catches app killed after receiving share)
   checkPendingShareOnResume$ =
     IS_ANDROID_WEB_VIEW &&
@@ -217,3 +178,51 @@ export class AndroidEffects {
       { dispatch: false },
     );
 }
+
+/**
+ * Build a meaningful task title from Android share intent data.
+ * Prefers the page subject (EXTRA_SUBJECT, sent by browsers), then an explicit
+ * title (EXTRA_TITLE), then a type-specific fallback derived from the shared
+ * content itself. Never returns the unhelpful literal "Shared Content".
+ */
+export const buildTaskTitle = (shareData: Partial<AndroidShareData>): string => {
+  const subject = shareData.subject?.trim() || '';
+  const title = shareData.title?.trim() || '';
+  const path = shareData.path?.trim() || '';
+
+  let taskTitle: string;
+
+  if (subject) {
+    taskTitle = subject;
+  } else if (title) {
+    taskTitle = title;
+  } else if (shareData.type === 'LINK') {
+    taskTitle = readableUrl(path);
+  } else {
+    const firstLine = path.split('\n')[0].trim();
+    taskTitle = firstLine || 'Shared note';
+  }
+
+  return taskTitle.length > 150 ? taskTitle.substring(0, 147) + '...' : taskTitle;
+};
+
+/**
+ * Turn a URL into a human-readable "host: path" string for use as a task title.
+ */
+export const readableUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const pathPart = parsed.pathname.replace(/\/$/, '');
+    if (pathPart && pathPart !== '/') {
+      const decoded = decodeURIComponent(pathPart)
+        .replace(/[/_-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return decoded ? `${host}: ${decoded}` : host;
+    }
+    return host;
+  } catch {
+    return url;
+  }
+};

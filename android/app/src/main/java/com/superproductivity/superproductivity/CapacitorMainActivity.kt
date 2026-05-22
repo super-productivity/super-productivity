@@ -223,8 +223,13 @@ class CapacitorMainActivity : BridgeActivity() {
             SyncReminderScheduler.ensureScheduled(this)
         }
 
-        // Handle initial intent (cold start)
-        handleIntent(intent)
+        // Handle initial intent (cold start) only on a fresh launch.
+        // On Activity recreation (config change) savedInstanceState is non-null
+        // and getIntent() still holds the original share/reminder Intent — re-running
+        // handleIntent() there would create a duplicate task from the same share.
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+        }
     }
 
     private fun showWebViewInitFailureOrThrow(message: String, error: Throwable) {
@@ -350,13 +355,20 @@ class CapacitorMainActivity : BridgeActivity() {
         if (Intent.ACTION_SEND == intent.action && intent.type != null) {
             if (intent.type?.startsWith("text/") == true) {
                 val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: "Shared Content"
+                // Leave title/subject empty when absent so the frontend can derive a
+                // meaningful title from the URL or note content. Defaulting to a literal
+                // "Shared Content" here masks that derivation (issue: blank shared tasks).
+                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: ""
+                val sharedSubject = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: ""
                 Log.d("SP_SHARE", "Shared text: $sharedText")
                 Log.d("SP_SHARE", "Shared title: $sharedTitle")
+                Log.d("SP_SHARE", "Shared subject: $sharedSubject")
 
-                if (sharedText != null) {
+                // Ignore empty/blank shares — they only produce useless blank tasks.
+                if (!sharedText.isNullOrBlank()) {
                     val json = JSONObject()
                     json.put("title", sharedTitle)
+                    json.put("subject", sharedSubject)
                     val type = if (sharedText.startsWith("http")) "LINK" else "NOTE"
                     json.put("type", type)
                     json.put("path", sharedText)
