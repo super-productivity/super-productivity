@@ -125,3 +125,14 @@ npm run buildFrontend:stage:es6
 - ✅ **Works Everywhere**: No need for process.env or special webpack config
 - ✅ **Simple**: Just import and use the constants
 - ✅ **Secure**: Secrets stay in `.env` and never in version control
+
+---
+
+## Electron-specific environment variables
+
+These are read directly from `process.env` in the Electron main process. They are not part of the Angular build pipeline and must be set in the shell before launching Electron.
+
+| Variable                      | Description                                                                                                                                                                                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SP_FORCE_LOCAL_REST_API=1`   | Enables the local REST API without changing the persisted user setting. Only takes effect when `NODE_ENV=DEV`. Useful for development scripts: `SP_FORCE_LOCAL_REST_API=1 npm start`.                                                        |
+| `SP_LOCAL_REST_API_HOST=<ip>` | Overrides the IP address the local REST API binds to. Must be a valid IPv4 or IPv6 address (hostnames are rejected with a warning). Overrides both the UI setting and the external-access toggle. Example: `SP_LOCAL_REST_API_HOST=0.0.0.0`. |
