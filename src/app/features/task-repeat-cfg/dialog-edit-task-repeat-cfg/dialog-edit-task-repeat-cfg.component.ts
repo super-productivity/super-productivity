@@ -284,11 +284,8 @@ export class DialogEditTaskRepeatCfgComponent {
       }
     }
 
-    // The form uses `null` as the "(Day of month)" sentinel on the
-    // monthlyWeekOfMonth select. Persisted cfgs use `undefined` for absent
-    // optional fields (project convention). Normalize at the boundary so
-    // existing day-of-month cfgs don't produce spurious change diffs and the
-    // op-log stays consistent with the model type.
+    // Normalize the monthly anchor fields at the boundary: convert the form's
+    // `null` sentinel to `undefined`, and strip a stale `monthlyLastDay` flag.
     const finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
 
     if (this.isEdit()) {
@@ -321,11 +318,29 @@ export class DialogEditTaskRepeatCfgComponent {
     }
   }
 
-  private _normalizeMonthlyAnchor<T extends { monthlyWeekOfMonth?: unknown }>(cfg: T): T {
-    if (cfg.monthlyWeekOfMonth === null) {
-      return { ...cfg, monthlyWeekOfMonth: undefined };
+  private _normalizeMonthlyAnchor<
+    T extends {
+      monthlyWeekOfMonth?: unknown;
+      monthlyLastDay?: boolean;
+      quickSetting?: string;
+    },
+  >(cfg: T): T {
+    let result = cfg;
+    // The form uses `null` as the "(Day of month)" sentinel on the
+    // monthlyWeekOfMonth select. Persisted cfgs use `undefined` for absent
+    // optional fields (project convention). Normalizing here keeps existing
+    // day-of-month cfgs from producing spurious change diffs.
+    if (result.monthlyWeekOfMonth === null) {
+      result = { ...result, monthlyWeekOfMonth: undefined };
     }
-    return cfg;
+    // `monthlyLastDay` has no CUSTOM-mode form control, so a flag left over
+    // from the MONTHLY_LAST_DAY preset would silently override the
+    // day-of-month a CUSTOM cfg shows. It is only ever valid for that
+    // preset — strip it for any other quick setting (#7726).
+    if (result.monthlyLastDay && result.quickSetting !== 'MONTHLY_LAST_DAY') {
+      result = { ...result, monthlyLastDay: undefined };
+    }
+    return result;
   }
 
   remove(): void {

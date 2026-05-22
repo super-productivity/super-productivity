@@ -473,6 +473,40 @@ describe('getNewestPossibleDueDate()', () => {
     );
   });
 
+  describe('MONTHLY monthlyLastDay (issue #7726)', () => {
+    it('returns the last day of the current month', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: '2026-05-31',
+      });
+      testCase(cfg, new Date(2026, 5, 30), new Date(2026, 4, 31), new Date(2026, 5, 30));
+    });
+
+    it('clamps to month-end even when startDate day-of-month is 30', () => {
+      // A recurrence set up in a 30-day month must still hit 31 in long
+      // months — the anchor is decoupled from startDate's day.
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: '2026-06-30',
+      });
+      testCase(cfg, new Date(2026, 6, 31), new Date(2026, 5, 30), new Date(2026, 6, 31));
+    });
+
+    it('returns null when the latest month-end is already created', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: '2026-06-30',
+      });
+      testCase(cfg, new Date(2026, 6, 15), new Date(2026, 4, 31), null);
+    });
+  });
+
   describe('MONTHLY Nth weekday (issue #6040)', () => {
     it('returns the Nth weekday of this month when today equals it', () => {
       // 1st Thursday of Jan 2026 = Jan 1 (Thu). today = Jan 1.

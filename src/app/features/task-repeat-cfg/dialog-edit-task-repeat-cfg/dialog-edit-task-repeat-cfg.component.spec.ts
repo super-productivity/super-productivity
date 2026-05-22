@@ -397,6 +397,35 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
   });
 
+  describe('_normalizeMonthlyAnchor strips stale monthlyLastDay (#7726)', () => {
+    it('clears monthlyLastDay when quickSetting is no longer MONTHLY_LAST_DAY', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'CUSTOM',
+        monthlyLastDay: true,
+      });
+      expect(normalized.monthlyLastDay).toBeUndefined();
+    });
+
+    it('keeps monthlyLastDay for the MONTHLY_LAST_DAY preset', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'MONTHLY_LAST_DAY',
+        monthlyLastDay: true,
+      });
+      expect(normalized.monthlyLastDay).toBe(true);
+    });
+
+    it('still converts the monthlyWeekOfMonth null sentinel to undefined', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'CUSTOM',
+        monthlyWeekOfMonth: null,
+      });
+      expect(normalized.monthlyWeekOfMonth).toBeUndefined();
+    });
+  });
+
   describe('save button disabled state (issue #5828)', () => {
     it('should not allow save while isLoading is true', fakeAsync(async () => {
       const taskWithRepeatCfg = {
