@@ -65,6 +65,9 @@ describe('WorkContextMenuComponent', () => {
       mockWorkContextService.activeWorkContextId = 'project-123';
       await component.archiveProject();
       expect(router.navigateByUrl).toHaveBeenCalledWith('/');
+      expect(mockProjectService.archive).toHaveBeenCalledBefore(
+        router.navigateByUrl as jasmine.Spy,
+      );
     });
 
     it('should NOT navigate when archiving a non-active project', async () => {
