@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
+import { isIP } from 'net';
 import { networkInterfaces } from 'os';
 import { randomUUID } from 'crypto';
 import { IPC } from './shared-with-frontend/ipc-events.const';
@@ -21,11 +22,75 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
 };
 
+// ---------------------------------------------------------------------------
+// Pure helpers — exported for unit tests
+// ---------------------------------------------------------------------------
+
+// Returns true for any "bind to all interfaces" address (IPv4 and IPv6 any).
+export const isAllInterfaces = (host: string): boolean =>
+  host === '0.0.0.0' || host === '::' || host === '::0';
+
+// Builds the Host allowlist for a specific-address bind (e.g. 127.0.0.1).
+export const buildLocalhostAllowedHosts = (host: string): Set<string> =>
+  new Set([
+    `${host}:${LOCAL_REST_API_PORT}`,
+    `localhost:${LOCAL_REST_API_PORT}`,
+    host,
+    'localhost',
+  ]);
+
+// Builds the Host allowlist for all-interfaces mode from the machine's current IPv4
+// addresses. Called per request so new adapters (VPN, WSL vEthernet) are included
+// without a server restart.
+export const buildAllInterfacesAllowedHosts = (): Set<string> => {
+  const hosts = new Set<string>();
+  hosts.add('localhost');
+  hosts.add(`localhost:${LOCAL_REST_API_PORT}`);
+  for (const ifaces of Object.values(networkInterfaces())) {
+    for (const iface of ifaces ?? []) {
+      if (iface.family === 'IPv4') {
+        hosts.add(iface.address);
+        hosts.add(`${iface.address}:${LOCAL_REST_API_PORT}`);
+      }
+    }
+  }
+  return hosts;
+};
+
+export const resolveHost = (cfg: GlobalConfigState): string => {
+  const envHost = process.env['SP_LOCAL_REST_API_HOST'];
+  if (envHost) {
+    if (isIP(envHost) === 0) {
+      warn(
+        `[local-rest-api] SP_LOCAL_REST_API_HOST="${envHost}" is not a valid IP address — ignoring, falling back to ${LOCAL_REST_API_HOST}`,
+      );
+      return LOCAL_REST_API_HOST;
+    }
+    return envHost;
+  }
+  return cfg.misc.isLocalRestApiEnabled && cfg.misc.isLocalRestApiExternalAccessEnabled
+    ? '0.0.0.0'
+    : LOCAL_REST_API_HOST;
+};
+
+// ---------------------------------------------------------------------------
+// Module-level state
+// ---------------------------------------------------------------------------
+
 let server: Server | null = null;
 let isInitialized = false;
-let isEnabled = false;
 let isListening = false;
 let isStopping = false;
+
+// Desired state — written by updateLocalRestApiConfig, consumed by reconcile().
+let desiredEnabled = false;
+let desiredHost = LOCAL_REST_API_HOST;
+
+// Current running state — written only by startServer/stopServer callbacks.
+let currentHost = LOCAL_REST_API_HOST;
+// Memoised allowlist for non-all-interfaces mode; recomputed when currentHost changes.
+let localhostAllowedHosts: Set<string> = buildLocalhostAllowedHosts(LOCAL_REST_API_HOST);
+
 const pendingRequests = new Map<
   string,
   {
@@ -33,6 +98,10 @@ const pendingRequests = new Map<
     timeout: NodeJS.Timeout;
   }
 >();
+
+// ---------------------------------------------------------------------------
+// Request handling
+// ---------------------------------------------------------------------------
 
 const writeJson = (
   res: ServerResponse,
@@ -110,39 +179,12 @@ const handleResponse = (_event: unknown, payload: LocalRestApiResponsePayload): 
   pending.resolve(payload);
 };
 
-let currentHost = LOCAL_REST_API_HOST;
-// Cached allowlist built from local network interfaces when binding to 0.0.0.0.
-// Null when the server is not in all-interfaces mode.
-let allowedHostsCache: Set<string> | null = null;
-
-const buildAllowedHosts = (): Set<string> => {
-  const hosts = new Set<string>();
-  hosts.add('localhost');
-  hosts.add(`localhost:${LOCAL_REST_API_PORT}`);
-  for (const ifaces of Object.values(networkInterfaces())) {
-    for (const iface of ifaces ?? []) {
-      if (iface.family === 'IPv4') {
-        hosts.add(iface.address);
-        hosts.add(`${iface.address}:${LOCAL_REST_API_PORT}`);
-      }
-    }
+export const isAllowedHost = (host: string): boolean => {
+  if (isAllInterfaces(currentHost)) {
+    // Rebuild from current interfaces per request — handles VPN/WSL adapters appearing after start.
+    return buildAllInterfacesAllowedHosts().has(host);
   }
-  return hosts;
-};
-
-const isAllowedHost = (host: string): boolean => {
-  if (currentHost === '0.0.0.0') {
-    // Use the allowlist built from local interfaces at listen time to prevent DNS rebinding
-    // even in all-interfaces mode.
-    return allowedHostsCache?.has(host) ?? false;
-  }
-  const allowedHosts = new Set([
-    `${currentHost}:${LOCAL_REST_API_PORT}`,
-    `localhost:${LOCAL_REST_API_PORT}`,
-    currentHost,
-    'localhost',
-  ]);
-  return allowedHosts.has(host);
+  return localhostAllowedHosts.has(host);
 };
 
 const isForceEnabledForDev = (): boolean =>
@@ -152,7 +194,7 @@ const handleHttpRequest = async (
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> => {
-  // Block DNS rebinding: reject requests with unexpected Host headers
+  // Block DNS rebinding: reject requests with unexpected Host headers.
   const host = req.headers.host;
   if (!host || !isAllowedHost(host)) {
     writeJson(res, 403, {
@@ -257,6 +299,31 @@ const handleHttpRequest = async (
   }
 };
 
+// ---------------------------------------------------------------------------
+// Server lifecycle — desired-state + reconcile model
+// ---------------------------------------------------------------------------
+
+// Brings the running server into alignment with desiredEnabled/desiredHost.
+// Must be called whenever desired state changes or a stop/start completes.
+const reconcile = (): void => {
+  if (isStopping) {
+    // stopServer's callback will call reconcile() once the stop completes.
+    return;
+  }
+
+  if (desiredEnabled && !isListening) {
+    currentHost = desiredHost;
+    localhostAllowedHosts = buildLocalhostAllowedHosts(currentHost);
+    startServer();
+  } else if (!desiredEnabled && isListening) {
+    stopServer();
+  } else if (desiredEnabled && isListening && desiredHost !== currentHost) {
+    // Host changed while running — stop first; reconcile() in the callback restarts.
+    stopServer();
+  }
+  // Otherwise already in the correct state.
+};
+
 export const initLocalRestApi = (): void => {
   if (isInitialized) {
     return;
@@ -269,15 +336,10 @@ export const initLocalRestApi = (): void => {
     void handleHttpRequest(req, res);
   });
 
-  server.on('error', (error) => {
-    isListening = false;
-    warn('[local-rest-api] Server error', error);
-  });
-
   if (isForceEnabledForDev()) {
     warn('[local-rest-api] Enabled by SP_FORCE_LOCAL_REST_API=1 for DEV runtime');
-    isEnabled = true;
-    startServer();
+    desiredEnabled = true;
+    reconcile();
   }
 };
 
@@ -286,10 +348,19 @@ const startServer = (): void => {
     return;
   }
 
+  // One-shot error listener for this particular listen attempt.
+  const onListenError = (error: Error): void => {
+    isListening = false;
+    warn('[local-rest-api] Failed to start server', error);
+    // Single retry after 1 s — covers transient TIME_WAIT / EADDRINUSE after host change.
+    setTimeout(reconcile, 1000);
+  };
+  server.once('error', onListenError);
+
   server.listen(LOCAL_REST_API_PORT, currentHost, () => {
+    server?.removeListener('error', onListenError);
     isListening = true;
-    if (currentHost === '0.0.0.0') {
-      allowedHostsCache = buildAllowedHosts();
+    if (isAllInterfaces(currentHost)) {
       log(`[local-rest-api] Listening on all interfaces, port ${LOCAL_REST_API_PORT}`);
     } else {
       log(`[local-rest-api] Listening on http://${currentHost}:${LOCAL_REST_API_PORT}`);
@@ -304,12 +375,19 @@ const stopServer = (onStopped?: () => void): void => {
   }
 
   isStopping = true;
-  // Close existing keep-alive connections immediately so server.close() resolves promptly.
+
+  // Cancel all in-flight renderer round-trips so their timeouts don't fire after the
+  // sockets are gone.
+  for (const { timeout } of pendingRequests.values()) {
+    clearTimeout(timeout);
+  }
+  pendingRequests.clear();
+
+  // Close keep-alive connections immediately so server.close() resolves promptly.
   server.closeAllConnections();
   server.close((error) => {
     isStopping = false;
     isListening = false;
-    allowedHostsCache = null;
 
     if (error) {
       warn('[local-rest-api] Failed to stop server', error);
@@ -318,50 +396,13 @@ const stopServer = (onStopped?: () => void): void => {
     }
 
     onStopped?.();
+    reconcile();
   });
-};
-
-const resolveHost = (cfg: GlobalConfigState): string => {
-  if (process.env['SP_LOCAL_REST_API_HOST']) {
-    return process.env['SP_LOCAL_REST_API_HOST'];
-  }
-  return cfg.misc.isLocalRestApiEnabled && cfg.misc.isLocalRestApiExternalAccessEnabled
-    ? '0.0.0.0'
-    : LOCAL_REST_API_HOST;
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
   const isForcedForDev = isForceEnabledForDev();
-  const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
-  const nextHost = resolveHost(cfg);
-  const hostChanged = nextHost !== currentHost;
-
-  if (hostChanged && isListening) {
-    stopServer(() => {
-      currentHost = nextHost;
-      isEnabled = nextEnabled;
-      if (nextEnabled) {
-        startServer();
-      }
-    });
-    return;
-  }
-
-  currentHost = nextHost;
-
-  if (nextEnabled === isEnabled) {
-    if (nextEnabled && !isListening) {
-      startServer();
-    } else if (!nextEnabled && isListening) {
-      stopServer();
-    }
-    return;
-  }
-
-  isEnabled = nextEnabled;
-  if (isEnabled) {
-    startServer();
-  } else {
-    stopServer();
-  }
+  desiredEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
+  desiredHost = resolveHost(cfg);
+  reconcile();
 };
