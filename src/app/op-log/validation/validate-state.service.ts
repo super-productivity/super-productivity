@@ -99,10 +99,24 @@ export class ValidateStateService {
       `[ValidateStateService:${context}] Running post-operation validation...`,
     );
 
-    // Use the async snapshot so the REPAIR operation carries archive data.
-    // archiveYoung/archiveOld live in IndexedDB, not NgRx state, and the sync
-    // getStateSnapshot() returns them empty (DEFAULT_ARCHIVE). A REPAIR op built
-    // from the sync snapshot wipes archives on every other client that applies it.
+    // Validate cheaply first using the synchronous snapshot. archiveYoung/
+    // archiveOld live in IndexedDB (not NgRx state), so the sync snapshot omits
+    // them — but Checkpoint D only detects NgRx-entity corruption, so the sync
+    // snapshot is enough to decide whether a repair is needed. This keeps the
+    // common (valid) path off the IndexedDB archive reads that
+    // getStateSnapshotAsync() performs on every sync.
+    const quickState = this.stateSnapshotService.getStateSnapshot();
+    const quickValidation = await this.validateState(
+      quickState as unknown as Record<string, unknown>,
+    );
+    if (quickValidation.isValid) {
+      OpLog.normal(`[ValidateStateService:${context}] State valid`);
+      return true;
+    }
+
+    // State is invalid — load the full snapshot including archives so the REPAIR
+    // operation carries archive data. A REPAIR op built from the sync snapshot
+    // would ship empty archives and wipe them on every client that applies it.
     const currentState = await this.stateSnapshotService.getStateSnapshotAsync();
 
     const result = await this.validateAndRepair(

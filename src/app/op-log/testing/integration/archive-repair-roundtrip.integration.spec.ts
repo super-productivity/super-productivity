@@ -13,10 +13,14 @@ import { PersistentAction } from '../../core/persistent-action.interface';
 import { ArchiveModel } from '../../../features/archive/archive.model';
 
 /**
- * Integration test for archive data surviving the REPAIR-op round-trip.
+ * Integration test for archive data surviving the REPAIR-op round-trip,
+ * exercised against real IndexedDB.
  *
- * Reproduces and guards the bug where a data repair on one client wiped
- * archived tasks on every *other* client:
+ * Guards the *consumer* side of the bug where a data repair on one client
+ * wiped archived tasks on every *other* client. The *producer* side
+ * (`validateAndRepairCurrentState()` calling `getStateSnapshotAsync()`) is
+ * guarded by the unit spec `validate-state.service.spec.ts`; these tests do
+ * not exercise `validateAndRepairCurrentState()` itself. The bug had two parts:
  *
  * 1. `validateAndRepairCurrentState()` built the REPAIR op from the synchronous
  *    `getStateSnapshot()`, which hardcodes empty archives (archiveYoung/archiveOld
@@ -56,7 +60,7 @@ describe('Archive REPAIR round-trip integration', () => {
   const repairApplyAction = (appDataComplete: unknown): PersistentAction =>
     ({
       ...loadAllData({ appDataComplete: appDataComplete as never }),
-      meta: { isRemote: true, opType: OpType.Repair },
+      meta: { isPersistent: true, isRemote: true, opType: OpType.Repair },
     }) as unknown as PersistentAction;
 
   beforeEach(async () => {

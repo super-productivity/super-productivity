@@ -485,9 +485,10 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
           action.meta.opType === OpType.SyncImport ||
           action.meta.opType === OpType.Repair
         ) {
-          // SYNC_IMPORT/REPAIR with empty archives is likely a bug (full-state op built
-          // with the sync getStateSnapshot() instead of getStateSnapshotAsync()).
-          // Preserve local archives - a later full-state op with correct data will reconcile.
+          // SYNC_IMPORT/REPAIR with empty archives is most often a bug (full-state
+          // op built with the sync getStateSnapshot() instead of
+          // getStateSnapshotAsync()). Preserve local archives: discarding non-empty
+          // local data for an empty payload is never the safe choice.
           OpLog.warn(
             `[ArchiveOperationHandler] ${action.meta.opType} has empty archiveYoung but local has ${existingCount} tasks. ` +
               'Preserving local archives (this is likely a bug in the full-state op source).',
@@ -523,9 +524,10 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
           action.meta.opType === OpType.SyncImport ||
           action.meta.opType === OpType.Repair
         ) {
-          // SYNC_IMPORT/REPAIR with empty archives is likely a bug (full-state op built
-          // with the sync getStateSnapshot() instead of getStateSnapshotAsync()).
-          // Preserve local archives - a later full-state op with correct data will reconcile.
+          // SYNC_IMPORT/REPAIR with empty archives is most often a bug (full-state
+          // op built with the sync getStateSnapshot() instead of
+          // getStateSnapshotAsync()). Preserve local archives: discarding non-empty
+          // local data for an empty payload is never the safe choice.
           OpLog.warn(
             `[ArchiveOperationHandler] ${action.meta.opType} has empty archiveOld but local has ${existingCount} tasks. ` +
               'Preserving local archives (this is likely a bug in the full-state op source).',
