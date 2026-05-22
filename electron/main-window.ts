@@ -23,7 +23,12 @@ import {
   showTaskWidget,
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
-import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
+import {
+  getIsMinimizeToTray,
+  getIsQuiting,
+  setIsMinimizeToTray,
+  setIsQuiting,
+} from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
@@ -53,6 +58,18 @@ export const getWin = (): BrowserWindow => {
     throw new Error('No main window');
   }
   return mainWinModule.win;
+};
+
+export const closeWinAndQuit = (quitApp: () => void): void => {
+  if (mainWin && !mainWin.isDestroyed()) {
+    // Ensure the close handler takes the real close path (not the minimize-to-tray
+    // hide branch) so the before-close IPC flow (sync, finish-day) completes.
+    setIsMinimizeToTray(false);
+    mainWin.close();
+  } else {
+    // No window to close — set flag and re-trigger quit directly.
+    quitApp();
+  }
 };
 
 export const getIsAppReady = (): boolean => {
@@ -459,7 +476,7 @@ function createMenu(quitApp: () => void): void {
         {
           label: 'Quit',
           accelerator: 'CmdOrCtrl+Q',
-          click: quitApp,
+          click: () => closeWinAndQuit(quitApp),
         },
       ],
     },

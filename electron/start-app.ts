@@ -13,14 +13,14 @@ import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
 import { initIndicator } from './indicator';
 import { quitApp, showOrFocus } from './various-shared';
-import { createWindow, getWin } from './main-window';
+import { closeWinAndQuit, createWindow } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
 import { destroyTaskWidget } from './task-widget/task-widget';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
 } from './protocol-handler';
-import { getIsQuiting, setIsLocked, setIsMinimizeToTray } from './shared-state';
+import { getIsQuiting, setIsLocked } from './shared-state';
 import { clearStaleLevelDbLocks } from './clear-stale-idb-locks';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
@@ -430,16 +430,7 @@ export const startApp = (): void => {
       // which manages the before-close callback flow (sync, finish-day, etc.)
       // and sets isQuiting=true before re-quitting.
       event.preventDefault();
-      const win = getWin();
-      if (win && !win.isDestroyed()) {
-        // Ensure the close handler takes the real close path (not the minimize-to-tray
-        // hide branch) so the before-close IPC flow (sync, finish-day) completes.
-        setIsMinimizeToTray(false);
-        win.close();
-      } else {
-        // No window to close — set flag and re-trigger quit directly.
-        quitApp();
-      }
+      closeWinAndQuit(quitApp);
       return;
     }
     // isQuiting=true: all before-close IPC work is complete — safe to clean up.
