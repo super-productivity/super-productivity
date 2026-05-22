@@ -99,7 +99,11 @@ export class ValidateStateService {
       `[ValidateStateService:${context}] Running post-operation validation...`,
     );
 
-    const currentState = this.stateSnapshotService.getStateSnapshot();
+    // Use the async snapshot so the REPAIR operation carries archive data.
+    // archiveYoung/archiveOld live in IndexedDB, not NgRx state, and the sync
+    // getStateSnapshot() returns them empty (DEFAULT_ARCHIVE). A REPAIR op built
+    // from the sync snapshot wipes archives on every other client that applies it.
+    const currentState = await this.stateSnapshotService.getStateSnapshotAsync();
 
     const result = await this.validateAndRepair(
       currentState as unknown as Record<string, unknown>,
