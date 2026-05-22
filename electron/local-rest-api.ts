@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
+import { networkInterfaces } from 'os';
 import { randomUUID } from 'crypto';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsAppReady, getWin } from './main-window';
@@ -24,6 +25,7 @@ let server: Server | null = null;
 let isInitialized = false;
 let isEnabled = false;
 let isListening = false;
+let isStopping = false;
 const pendingRequests = new Map<
   string,
   {
@@ -109,13 +111,30 @@ const handleResponse = (_event: unknown, payload: LocalRestApiResponsePayload): 
 };
 
 let currentHost = LOCAL_REST_API_HOST;
+// Cached allowlist built from local network interfaces when binding to 0.0.0.0.
+// Null when the server is not in all-interfaces mode.
+let allowedHostsCache: Set<string> | null = null;
+
+const buildAllowedHosts = (): Set<string> => {
+  const hosts = new Set<string>();
+  hosts.add('localhost');
+  hosts.add(`localhost:${LOCAL_REST_API_PORT}`);
+  for (const ifaces of Object.values(networkInterfaces())) {
+    for (const iface of ifaces ?? []) {
+      if (iface.family === 'IPv4') {
+        hosts.add(iface.address);
+        hosts.add(`${iface.address}:${LOCAL_REST_API_PORT}`);
+      }
+    }
+  }
+  return hosts;
+};
 
 const isAllowedHost = (host: string): boolean => {
-  // When binding to all interfaces, any Host header is acceptable because
-  // the client reaches the server via its own IP (not necessarily localhost).
-  // The Origin-check below still guards against browser-based CSRF.
   if (currentHost === '0.0.0.0') {
-    return true;
+    // Use the allowlist built from local interfaces at listen time to prevent DNS rebinding
+    // even in all-interfaces mode.
+    return allowedHostsCache?.has(host) ?? false;
   }
   const allowedHosts = new Set([
     `${currentHost}:${LOCAL_REST_API_PORT}`,
@@ -151,8 +170,9 @@ const handleHttpRequest = async (
   // Browsers always set Origin on cross-origin POSTs (and on simple POSTs
   // with text/plain bodies, which CORS does not preflight); rejecting here
   // closes that gap on top of the Host-header check above.
+  // Origin: null (from sandboxed iframes or data: URIs) is also rejected.
   const origin = req.headers.origin;
-  if (origin && origin !== 'null') {
+  if (origin) {
     writeJson(res, 403, {
       ok: false,
       error: {
@@ -174,7 +194,8 @@ const handleHttpRequest = async (
     return;
   }
 
-  const requestUrl = new URL(req.url ?? '/', `http://${currentHost}`);
+  // Use localhost as the URL base — we only need pathname and query, not the authority.
+  const requestUrl = new URL(req.url ?? '/', `http://localhost`);
   const method = req.method ?? 'GET';
 
   if (method === 'GET' && requestUrl.pathname === '/health') {
@@ -261,30 +282,41 @@ export const initLocalRestApi = (): void => {
 };
 
 const startServer = (): void => {
-  if (!server || isListening) {
+  if (!server || isListening || isStopping) {
     return;
   }
 
   server.listen(LOCAL_REST_API_PORT, currentHost, () => {
     isListening = true;
-    log(`[local-rest-api] Listening on http://${currentHost}:${LOCAL_REST_API_PORT}`);
+    if (currentHost === '0.0.0.0') {
+      allowedHostsCache = buildAllowedHosts();
+      log(`[local-rest-api] Listening on all interfaces, port ${LOCAL_REST_API_PORT}`);
+    } else {
+      log(`[local-rest-api] Listening on http://${currentHost}:${LOCAL_REST_API_PORT}`);
+    }
   });
 };
 
 const stopServer = (onStopped?: () => void): void => {
-  if (!server || !isListening) {
+  if (!server || !isListening || isStopping) {
     onStopped?.();
     return;
   }
 
+  isStopping = true;
+  // Close existing keep-alive connections immediately so server.close() resolves promptly.
+  server.closeAllConnections();
   server.close((error) => {
+    isStopping = false;
+    isListening = false;
+    allowedHostsCache = null;
+
     if (error) {
       warn('[local-rest-api] Failed to stop server', error);
-      return;
+    } else {
+      log('[local-rest-api] Server stopped');
     }
 
-    isListening = false;
-    log('[local-rest-api] Server stopped');
     onStopped?.();
   });
 };
@@ -293,7 +325,9 @@ const resolveHost = (cfg: GlobalConfigState): string => {
   if (process.env['SP_LOCAL_REST_API_HOST']) {
     return process.env['SP_LOCAL_REST_API_HOST'];
   }
-  return cfg.misc.isLocalRestApiExternalAccessEnabled ? '0.0.0.0' : LOCAL_REST_API_HOST;
+  return cfg.misc.isLocalRestApiEnabled && cfg.misc.isLocalRestApiExternalAccessEnabled
+    ? '0.0.0.0'
+    : LOCAL_REST_API_HOST;
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
@@ -303,9 +337,9 @@ export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
   const hostChanged = nextHost !== currentHost;
 
   if (hostChanged && isListening) {
-    currentHost = nextHost;
-    isEnabled = nextEnabled;
     stopServer(() => {
+      currentHost = nextHost;
+      isEnabled = nextEnabled;
       if (nextEnabled) {
         startServer();
       }
