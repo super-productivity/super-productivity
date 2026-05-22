@@ -436,6 +436,55 @@ describe('selectTaskRepeatCfgsDueOnDay', () => {
       expect(resultIds).toEqual([]);
     });
   });
+
+  // Issue #7724: after the user moves a DAILY config's startDate earlier with no
+  // live instance, rescheduleTaskOnRepeatCfgUpdate$ re-anchors lastTaskCreationDay
+  // to the day BEFORE the new startDate. This verifies the projector then surfaces
+  // the config for the new startDate and every following day (the days the bug
+  // suppressed), and still excludes days on/before the anchor.
+  describe('#7724 - DAILY startDate moved earlier, re-anchored to day before', () => {
+    const reAnchoredCfg = (): TaskRepeatCfg =>
+      dummyRepeatable('R1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2025-06-25',
+        // value written by the fix: the day before the new startDate
+        lastTaskCreationDay: '2025-06-24',
+      });
+
+    ['2025-06-25', '2025-06-26', '2025-06-30', '2025-07-05'].forEach((dayStr) => {
+      it(`projects the config on ${dayStr}`, () => {
+        const result = selectTaskRepeatCfgsForExactDay.projector([reAnchoredCfg()], {
+          dayDate: dateStrToUtcDate(dayStr).getTime(),
+        });
+        expect(result.map((r) => r.id)).toEqual(['R1']);
+      });
+    });
+
+    ['2025-06-24', '2025-06-23'].forEach((dayStr) => {
+      it(`does not project on ${dayStr} (on/before the anchor)`, () => {
+        const result = selectTaskRepeatCfgsForExactDay.projector([reAnchoredCfg()], {
+          dayDate: dateStrToUtcDate(dayStr).getTime(),
+        });
+        expect(result.map((r) => r.id)).toEqual([]);
+      });
+    });
+
+    it('is suppressed by the stale anchor without the fix', () => {
+      // Pre-fix state: lastTaskCreationDay still points at the old startDate,
+      // so a day between the new startDate and the old anchor is suppressed.
+      const staleCfg = dummyRepeatable('R1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2025-06-25',
+        lastTaskCreationDay: '2025-06-30',
+      });
+      const result = selectTaskRepeatCfgsForExactDay.projector([staleCfg], {
+        dayDate: dateStrToUtcDate('2025-06-27').getTime(),
+      });
+      expect(result.map((r) => r.id)).toEqual([]);
+    });
+  });
 });
 
 // -----------------------------------------------------------------------------------
