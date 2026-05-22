@@ -122,7 +122,7 @@ describe('done task operation replay', () => {
       ['trigger'],
     );
     const mockClientIdService = jasmine.createSpyObj<ClientIdService>('ClientIdService', [
-      'loadClientId',
+      'getOrGenerateClientId',
     ]);
     const mockSuperSyncStatusService = jasmine.createSpyObj<SuperSyncStatusService>(
       'SuperSyncStatusService',
@@ -140,7 +140,7 @@ describe('done task operation replay', () => {
     mockCompactionService.compact.and.returnValue(Promise.resolve());
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
     mockOperationCaptureService.dequeue.and.returnValue([]);
-    mockClientIdService.loadClientId.and.returnValue(Promise.resolve('clientA'));
+    mockClientIdService.getOrGenerateClientId.and.returnValue(Promise.resolve('clientA'));
 
     TestBed.configureTestingModule({
       providers: [

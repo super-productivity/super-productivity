@@ -103,8 +103,10 @@ describe('regression #7700: operation-log lock reentry', () => {
     const immediateUploadSpy = jasmine.createSpyObj('ImmediateUploadService', [
       'trigger',
     ]);
-    const clientIdSpy = jasmine.createSpyObj('ClientIdService', ['loadClientId']);
-    clientIdSpy.loadClientId.and.resolveTo('testClient');
+    const clientIdSpy = jasmine.createSpyObj('ClientIdService', [
+      'getOrGenerateClientId',
+    ]);
+    clientIdSpy.getOrGenerateClientId.and.resolveTo('testClient');
 
     const operationCaptureSpy = jasmine.createSpyObj('OperationCaptureService', [
       'dequeue',
