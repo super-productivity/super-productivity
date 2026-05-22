@@ -27,7 +27,10 @@
     @if (filteredProjects().length === 0) {
       <p class="empty-state">{{ T.F.PROJECT.ARCHIVED_PROJECTS.EMPTY | translate }}</p>
     } @else {
-      <ul class="project-list">
+      <ul
+        class="project-list"
+        [attr.aria-label]="T.MH.ARCHIVED_PROJECTS | translate"
+      >
         @for (project of filteredProjects(); track project.id) {
           <li class="project-row">
             <mat-icon

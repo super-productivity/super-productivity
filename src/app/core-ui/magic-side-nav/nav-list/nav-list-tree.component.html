@@ -179,10 +179,12 @@
     >
       <mat-icon>archive</mat-icon>
       <span
-        >{{ T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate }} ({{
-          archivedProjectsCount()
-        }})</span
+        [attr.aria-label]="`${(T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate)} (${archivedProjectsCount()})`"
       >
+        {{ T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate }} ({{
+          archivedProjectsCount()
+        }})
+      </span>
     </button>
   }
 </mat-menu>
