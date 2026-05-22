@@ -1,7 +1,7 @@
 import { createFeatureSelector, createSelector } from '@ngrx/store';
 import * as fromPlanner from './planner.reducer';
 import {
-  selectActiveTaskMap,
+  selectMapOfAllTasksInActiveProjects,
   selectAllTasksInActiveProjects,
 } from '../../tasks/store/task.selectors';
 import {
@@ -107,7 +107,7 @@ export const selectPlannerDays = (
   const unplannedTaskIdsToday = todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
 
   return createSelector(
-    selectActiveTaskMap,
+    selectMapOfAllTasksInActiveProjects,
     selectPlannerState,
     selectTimelineConfig,
     selectStartOfNextDayDiffMs,
@@ -146,7 +146,7 @@ export const selectPlannerDays = (
 };
 
 export const selectPlannerDayMap = createSelector(
-  selectActiveTaskMap,
+  selectMapOfAllTasksInActiveProjects,
   selectPlannerState,
   (taskMap, plannerState): PlannerDayMap => {
     const map: PlannerDayMap = {};

@@ -6,7 +6,7 @@ import {
   selectTagFeatureState,
 } from '../../tag/store/tag.reducer';
 import {
-  selectActiveTaskMap,
+  selectMapOfAllTasksInActiveProjects,
   selectAllTasksInActiveProjects,
   selectTaskEntities,
   selectTaskEntitiesInActiveProjects,
@@ -354,7 +354,7 @@ export const selectUndoneTodayTaskIds = createSelector(
 
 export const selectTimelineTasks = createSelector(
   selectTodayTaskIds,
-  selectActiveTaskMap,
+  selectMapOfAllTasksInActiveProjects,
   (
     todayIds,
     activeTaskMap,

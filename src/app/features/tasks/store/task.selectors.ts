@@ -186,7 +186,7 @@ export const selectAllTasksInActiveProjects = createSelector(
       : tasks.filter((t) => !t.projectId || !archivedIds.has(t.projectId)),
 );
 
-export const selectActiveTaskMap = createSelector(
+export const selectMapOfAllTasksInActiveProjects = createSelector(
   selectAllTasksInActiveProjects,
   (activeTasks): Map<string, Task> => new Map(activeTasks.map((t) => [t.id, t])),
 );
