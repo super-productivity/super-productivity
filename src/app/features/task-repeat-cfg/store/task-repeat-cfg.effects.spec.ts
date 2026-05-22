@@ -332,6 +332,98 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       expect(taskService.update).not.toHaveBeenCalled();
     });
 
+    it('should set dueDay to today when an Inbox task (no dueDay) is made repeatable starting today (#7725)', (done) => {
+      // Scenario from issue #7725: a task added to the Inbox (no dueDay) is
+      // converted to a recurring task via the dialog with start date = today.
+      // It must be scheduled for today instead of staying unscheduled.
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const inboxTask: TaskWithSubTasks = {
+        ...mockTask,
+        subTasks: [],
+        dueDay: undefined, // Inbox task — not scheduled
+        dueWithTime: undefined,
+        created: today.getTime(),
+      };
+
+      const dailyRepeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+      };
+
+      const action = addTaskRepeatCfgToTask({
+        taskRepeatCfg: dailyRepeatCfg,
+        taskId: 'parent-task-id',
+      });
+
+      actions$ = of(action);
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(inboxTask));
+
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      let emitted = false;
+      effects.updateTaskAfterMakingItRepeatable$.subscribe(() => {
+        emitted = true;
+      });
+
+      setTimeout(() => {
+        expect(emitted).toBe(false); // today occurrence = no planTaskForDay
+        expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
+          dueDay: todayStr,
+        });
+        done();
+      }, 0);
+    });
+
+    it('should NOT set dueDay for a non-timed config when the task already has dueWithTime', (done) => {
+      // A task scheduled with a time (dueWithTime, no dueDay) is made
+      // repeatable, but the user cleared the start-time field so the config is
+      // non-timed. dueDay must NOT be set: dueDay/dueWithTime are mutually
+      // exclusive and a plain update would not clear dueWithTime.
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const todayNoon = new Date(today);
+      todayNoon.setHours(12, 0, 0, 0);
+
+      const timedTask: TaskWithSubTasks = {
+        ...mockTask,
+        subTasks: [],
+        dueDay: undefined,
+        dueWithTime: todayNoon.getTime(),
+        created: today.getTime(),
+      };
+
+      const dailyRepeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+      };
+
+      const action = addTaskRepeatCfgToTask({
+        taskRepeatCfg: dailyRepeatCfg,
+        taskId: 'parent-task-id',
+      });
+
+      actions$ = of(action);
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(timedTask));
+
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      effects.updateTaskAfterMakingItRepeatable$.subscribe();
+
+      setTimeout(() => {
+        const dueDayUpdate = taskService.update.calls
+          .allArgs()
+          .find(([, changes]) => 'dueDay' in (changes as object));
+        expect(dueDayUpdate).toBeUndefined();
+        done();
+      }, 0);
+    });
+
     it('should update task created when first occurrence is today but task was created earlier', () => {
       const today = new Date();
       const todayStr = getDbDateStr(today);

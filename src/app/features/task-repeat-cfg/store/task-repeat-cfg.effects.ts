@@ -199,12 +199,17 @@ export class TaskRepeatCfgEffects {
           // TODAY FIRST OCCURRENCE:
           // Keep the stable occurrence identity aligned even if the task was
           // originally created before it became repeatable.
-          const currentDueDay = task.dueDay || getDbDateStr(task.created);
           const update: Partial<TaskCopy> = {};
           if (firstOccurrence && getDbDateStr(task.created) !== firstOccurrenceStr) {
             update.created = firstOccurrence.getTime();
           }
-          if (currentDueDay !== firstOccurrenceStr) {
+          // Schedule the task for its first occurrence day. An Inbox task has
+          // no dueDay, so set it explicitly (#7725); task.created is not a
+          // valid fallback — being created today does not imply it is
+          // scheduled. Skip already time-scheduled tasks: dueDay/dueWithTime
+          // are mutually exclusive and this plain update cannot clear
+          // dueWithTime (timed scheduling: addRepeatCfgToTaskUpdateTask$).
+          if (!isTimedTask && !task.dueWithTime && task.dueDay !== firstOccurrenceStr) {
             update.dueDay = firstOccurrenceStr;
           }
           if (Object.keys(update).length > 0) {
