@@ -2191,6 +2191,9 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
       setTimeout(() => {
         expect(emitted).toBe(false);
+        // #7724 guard: startDate present in changes but not moved earlier
+        // (equal to lastTaskCreationDay) must not re-anchor the config.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
         done();
       }, 0);
     });
@@ -2591,6 +2594,58 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         );
         done();
       });
+    });
+
+    // Issue #7724: moving startDate earlier must re-anchor lastTaskCreationDay
+    // even when no live task instance exists (e.g. the user deleted it). The
+    // stale anchor would otherwise suppress every projected/created instance
+    // between the new startDate and the old anchor.
+    it('should re-anchor lastTaskCreationDay when startDate moved earlier and no live instance exists (#7724)', (done) => {
+      const today = new Date();
+      // lastTaskCreationDay set when the (now deleted) instance was created.
+      const oldStartDateStr = getDbDateStr(addDays(today, 8));
+      const newStartDateStr = getDbDateStr(addDays(today, 3));
+      // The fix anchors to the day before the new first occurrence so the new
+      // startDate itself is created/projected fresh.
+      const expectedAnchorStr = getDbDateStr(addDays(today, 2));
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: oldStartDateStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: newStartDateStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      // No live instance — it was deleted.
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      let emitted = false;
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe(() => {
+        emitted = true;
+      });
+
+      setTimeout(() => {
+        // No live task to reschedule, so no action is dispatched...
+        expect(emitted).toBe(false);
+        // ...but the stale anchor is still corrected.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({
+            lastTaskCreationDay: expectedAnchorStr,
+          }),
+        );
+        done();
+      }, 0);
     });
   });
 });

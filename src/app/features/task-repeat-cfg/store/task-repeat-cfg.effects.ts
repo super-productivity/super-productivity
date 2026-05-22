@@ -273,12 +273,6 @@ export class TaskRepeatCfgEffects {
               first(),
               switchMap((liveInstances) => {
                 const undoneInstances = liveInstances.filter((t) => !t.isDone);
-                if (undoneInstances.length === 0) {
-                  return EMPTY;
-                }
-                const task = undoneInstances.reduce((a, b) =>
-                  a.created > b.created ? a : b,
-                );
 
                 // If the user moved startDate earlier than the existing
                 // lastTaskCreationDay, the anchor is stale — re-anchor on
@@ -298,6 +292,37 @@ export class TaskRepeatCfgEffects {
                 const firstOccurrence = isStartDateMovedEarlier
                   ? getFirstRepeatOccurrence(fullCfg)
                   : getNextRepeatOccurrence(fullCfg, new Date());
+
+                if (undoneInstances.length === 0) {
+                  // No live instance to reschedule. But when startDate moved
+                  // earlier, the stale lastTaskCreationDay would still suppress
+                  // every projected/created instance between the new startDate
+                  // and the old anchor (#7724). Re-anchor to the day before the
+                  // new first occurrence so it — and every following day — is
+                  // created and projected fresh.
+                  // The re-dispatched updateTaskRepeatCfg only touches
+                  // lastTaskCreation* fields, which are absent from
+                  // SCHEDULE_AFFECTING_FIELDS, so it does not re-enter this
+                  // effect.
+                  if (isStartDateMovedEarlier && firstOccurrence) {
+                    const dayBeforeFirstOccurrence = new Date(firstOccurrence);
+                    dayBeforeFirstOccurrence.setDate(
+                      dayBeforeFirstOccurrence.getDate() - 1,
+                    );
+                    this._taskRepeatCfgService.updateTaskRepeatCfg(cfgId, {
+                      lastTaskCreationDay: this._dateService.todayStr(
+                        dayBeforeFirstOccurrence,
+                      ),
+                      lastTaskCreation: dayBeforeFirstOccurrence.getTime(),
+                    });
+                  }
+                  return EMPTY;
+                }
+
+                const task = undoneInstances.reduce((a, b) =>
+                  a.created > b.created ? a : b,
+                );
+
                 const firstOccurrenceStr = firstOccurrence
                   ? this._dateService.todayStr(firstOccurrence)
                   : this._dateService.todayStr();
