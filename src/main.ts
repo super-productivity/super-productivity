@@ -17,6 +17,7 @@ import {
   DEFAULT_LANGUAGE,
   DEFAULT_LOCALE_DATA,
   LocaleImportFns,
+  NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS,
 } from './app/core/locale.constants';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
@@ -329,10 +330,6 @@ bootstrapApplication(AppComponent, {
   registerLocaleData(DEFAULT_LOCALE_DATA, DEFAULT_LANGUAGE);
 
   // Lazily load and register remaining locales during idle time.
-  // The set includes English region variants (en-au, en-ca, en-nz, etc)
-  // not exposed in the UI dropdown — they back the navigator.language
-  // fallback so "System default" gets the right 12/24h + date format on
-  // those systems. See locale.constants.ts for the full list.
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {
@@ -340,6 +337,11 @@ bootstrapApplication(AppComponent, {
           registerLocaleData(m.default, locale);
         });
       }
+    });
+    // Region variants backing the "System default" navigator.language
+    // fallback — not user-selectable (see locale.constants.ts).
+    Object.entries(NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS).forEach(([locale, load]) => {
+      load().then((m) => registerLocaleData(m.default, locale));
     });
   };
 

@@ -10,11 +10,8 @@ export class DateTimeFormatService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private _dateAdapter = inject(DateAdapter);
 
-  // Signal for the locale to use. When the config value is unset
-  // ("System default"), resolve to navigator.language so date/time formatting
-  // follows the OS / browser locale instead of the hardcoded en-GB fallback.
-  // Typed as `string` because the resolved value can be any BCP-47 tag,
-  // not just a member of the curated DateTimeLocale union.
+  // Locale for date/time formatting. "System default" (unset config) follows
+  // the OS / browser locale — see getSystemDefaultLocale().
   readonly currentLocale = computed<string>(() => {
     return (
       this._globalConfigService.localization()?.dateTimeLocale || getSystemDefaultLocale()
@@ -58,9 +55,8 @@ export class DateTimeFormatService {
   });
 
   constructor() {
-    // Use effect to reactively update date adapter locale when config changes.
-    // Read from currentLocale() so "System default" also propagates to the
-    // adapter (via navigator.language) rather than leaving it at en-GB.
+    // Keep the Material DateAdapter's locale in sync with currentLocale() so
+    // "System default" reaches date pickers too, not just Intl formatting.
     effect(() => {
       this.setDateAdapterLocale(this.currentLocale());
     });

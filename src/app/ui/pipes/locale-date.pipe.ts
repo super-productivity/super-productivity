@@ -16,6 +16,13 @@ export class LocaleDatePipe implements PipeTransform {
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _datePipe: DatePipe | null = null;
   private _lastLocale: string | undefined;
+  // Fallback pipe, reused instead of re-allocated on every failed transform.
+  // DEFAULT_LOCALE ('en-gb') resolves to the 'en' data registered statically
+  // at bootstrap, so this path never depends on lazy locale registration.
+  private readonly _fallbackDatePipe = new DatePipe(DEFAULT_LOCALE);
+  // This pipe is impure (runs every change-detection cycle); warn at most
+  // once per unregistered locale instead of flooding the console.
+  private readonly _warnedLocales = new Set<string>();
 
   transform(
     value: Date | string | number | null | undefined,
@@ -39,18 +46,20 @@ export class LocaleDatePipe implements PipeTransform {
     try {
       return this._datePipe.transform(value, format, timezone, effectiveLocale);
     } catch (e) {
-      // Angular throws RuntimeError(701) when locale data isn't registered
-      // (any locale whose language subtag isn't 'en' and isn't in the app's
-      // 24 registered languages). Retry with the default locale so the date
-      // renders instead of going blank in UI. Mirrors safeFormatDate.
-      console.warn('LocaleDatePipe: failed to format value', value, e);
-      try {
-        return new DatePipe(DEFAULT_LOCALE).transform(
-          value,
-          format,
-          timezone,
-          DEFAULT_LOCALE,
+      // Angular throws NG0701 when locale data for `effectiveLocale` isn't
+      // registered — reachable now that "System default" follows
+      // navigator.language. Fall back to the always-registered default
+      // locale so the date still renders. Mirrors safeFormatDate.
+      if (!this._warnedLocales.has(effectiveLocale)) {
+        this._warnedLocales.add(effectiveLocale);
+        console.warn(
+          `LocaleDatePipe: cannot format with locale "${effectiveLocale}", ` +
+            `using "${DEFAULT_LOCALE}"`,
+          e,
         );
+      }
+      try {
+        return this._fallbackDatePipe.transform(value, format, timezone, DEFAULT_LOCALE);
       } catch {
         return null;
       }

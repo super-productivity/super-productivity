@@ -76,6 +76,22 @@ describe('DateTimeFormatService', () => {
       });
     };
 
+    // Re-construct the service after stubbing so the computed picks up the
+    // stubbed navigator.language.
+    const createServiceForSystemLocale = (lang: string): DateTimeFormatService => {
+      stubNavigatorLanguage(lang);
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          provideMockStore({ initialState: { globalConfig: DEFAULT_GLOBAL_CONFIG } }),
+        ],
+      });
+      return TestBed.inject(DateTimeFormatService);
+    };
+
     afterEach(() => {
       // Remove the own property so navigator.language resolves back to the
       // inherited prototype getter — restoring the platform default for any
@@ -83,38 +99,22 @@ describe('DateTimeFormatService', () => {
       delete (navigator as { language?: string }).language;
     });
 
-    it('uses 12-hour format on en-AU systems', () => {
-      stubNavigatorLanguage('en-AU');
-      // Re-construct the service after stubbing so the computed picks up
-      // the new navigator.language.
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        imports: [MatNativeDateModule],
-        providers: [
-          DateTimeFormatService,
-          { provide: DateAdapter, useClass: CustomDateAdapter },
-          provideMockStore({ initialState: { globalConfig: DEFAULT_GLOBAL_CONFIG } }),
-        ],
+    (
+      [
+        { lang: 'en-AU', locale: 'en-au', is24Hour: false },
+        { lang: 'de-DE', locale: 'de-de', is24Hour: true },
+        // Region-less 'en' is pinned to the en-GB default so the Intl- and
+        // DatePipe-based formatting paths stay consistent.
+        { lang: 'en', locale: 'en-gb', is24Hour: true },
+        // Malformed tags fall back to the default locale instead of throwing.
+        { lang: 'C', locale: 'en-gb', is24Hour: true },
+      ] as const
+    ).forEach(({ lang, locale, is24Hour }) => {
+      it(`resolves "${lang}" to ${locale} (24h=${is24Hour})`, () => {
+        const svc = createServiceForSystemLocale(lang);
+        expect(svc.currentLocale()).toBe(locale);
+        expect(svc.is24HourFormat()).toBe(is24Hour);
       });
-      const svc = TestBed.inject(DateTimeFormatService);
-      expect(svc.is24HourFormat()).toBe(false);
-      expect(svc.currentLocale()).toBe('en-au');
-    });
-
-    it('uses 24-hour format on de-DE systems', () => {
-      stubNavigatorLanguage('de-DE');
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        imports: [MatNativeDateModule],
-        providers: [
-          DateTimeFormatService,
-          { provide: DateAdapter, useClass: CustomDateAdapter },
-          provideMockStore({ initialState: { globalConfig: DEFAULT_GLOBAL_CONFIG } }),
-        ],
-      });
-      const svc = TestBed.inject(DateTimeFormatService);
-      expect(svc.is24HourFormat()).toBe(true);
-      expect(svc.currentLocale()).toBe('de-de');
     });
   });
 
