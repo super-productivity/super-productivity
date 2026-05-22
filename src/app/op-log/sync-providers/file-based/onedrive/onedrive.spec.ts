@@ -92,9 +92,8 @@ describe('OneDrive', () => {
     });
   });
 
-  it('should clear credentials and throw AuthFailSPError on 401', async () => {
+  it('should clear credentials and throw MissingRefreshTokenAPIError on 401', async () => {
     cfgStoreSpy.load.and.resolveTo(baseCfg);
-    cfgStoreSpy.setComplete.and.resolveTo();
 
     fetchSpy.and.resolveTo({
       ok: false,
@@ -106,8 +105,10 @@ describe('OneDrive', () => {
       await provider.removeFile('test.json');
       fail('should have thrown');
     } catch (e) {
-      expect((e as Error).name).toBe('AuthFailSPError');
+      expect((e as Error).name).toBe('MissingRefreshTokenAPIError');
     }
+
+    expect(cfgStoreSpy.setComplete).toHaveBeenCalled();
   });
 
   it('should throw MissingRefreshTokenAPIError when token is expired and refresh token is missing', async () => {
@@ -319,16 +320,15 @@ describe('OneDrive', () => {
     ).toBeTrue();
   });
 
-  it('should clear credentials and throw AuthFailSPError when 401 retry also fails', async () => {
+  it('should throw HttpNotOkAPIError when 401 retry also fails with transient error', async () => {
     cfgStoreSpy.load.and.resolveTo(baseCfg);
-    cfgStoreSpy.setComplete.and.resolveTo();
 
     fetchSpy.and.callFake(async (url: string, init?: RequestInit) => {
       if (url.includes('/oauth2/v2.0/token')) {
         return {
           ok: false,
-          status: 400,
-          text: async () => JSON.stringify({ error: 'invalid_request' }),
+          status: 500,
+          text: async () => 'Internal Server Error',
         } as Response;
       }
 
@@ -343,10 +343,17 @@ describe('OneDrive', () => {
       await provider.removeFile('test.json');
       fail('should have thrown');
     } catch (e) {
-      expect((e as Error).name).toBe('AuthFailSPError');
+      // Transient 500 from token endpoint should not clear credentials
+      expect((e as Error).name).toBe('HttpNotOkAPIError');
     }
 
-    expect(cfgStoreSpy.setComplete).toHaveBeenCalled();
+    // Credentials should NOT be cleared for transient failures
+    const clearCalls = cfgStoreSpy.setComplete.calls
+      .all()
+      .filter(
+        (call) => call.args[0]?.accessToken === '' && call.args[0]?.refreshToken === '',
+      );
+    expect(clearCalls.length).toBe(0);
   });
 
   it('should clear credentials on 400 invalid_grant from token endpoint', async () => {

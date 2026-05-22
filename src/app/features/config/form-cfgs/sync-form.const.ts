@@ -153,7 +153,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
-          { label: 'Microsoft 365 (OneDrive)', value: SyncProviderId.OneDrive },
+          ...(IS_ELECTRON || IS_NATIVE_PLATFORM
+            ? [{ label: 'Microsoft 365 (OneDrive)', value: SyncProviderId.OneDrive }]
+            : []),
           { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
           {
             label: 'WebDAV (not recommended / no support)',
@@ -427,35 +429,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           },
         },
       ],
-    },
-
-    {
-      key: 'syncInterval',
-      type: 'duration',
-      // NOTE: we don't hide because model updates don't seem to work properly for this
-      // hideExpression: ((model: DropboxSyncConfig) => !model.accessToken),
-      // Hide for SuperSync (uses fixed interval) and when manual sync only is enabled
-      hideExpression: (m, v, field) =>
-        field?.parent?.model.syncProvider === SyncProviderId.SuperSync ||
-        field?.parent?.model.isManualSyncOnly === true,
-      resetOnHide: true,
-      templateOptions: {
-        required: true,
-        isAllowSeconds: true,
-        label: T.F.SYNC.FORM.L_SYNC_INTERVAL,
-        description: T.G.DURATION_DESCRIPTION,
-      },
-    },
-    {
-      key: 'isManualSyncOnly',
-      type: 'checkbox',
-      // Show for all non-SuperSync providers when one is selected.
-      hideExpression: (m, v, field) =>
-        field?.parent?.model.syncProvider === SyncProviderId.SuperSync ||
-        field?.parent?.model.syncProvider === null,
-      templateOptions: {
-        label: T.F.SYNC.FORM.L_MANUAL_SYNC_ONLY,
-      },
     },
 
     // Encryption status box - shown when encryption is enabled (for any provider)

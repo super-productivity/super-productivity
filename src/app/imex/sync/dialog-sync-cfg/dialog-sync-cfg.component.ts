@@ -383,6 +383,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
             };
           } else if (newProvider === SyncProviderId.OneDrive && privateCfg) {
             providerSpecificUpdate = {
+              oneDrive: privateCfg as any,
               encryptKey: privateCfg.encryptKey || '',
             };
           }

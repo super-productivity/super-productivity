@@ -12,7 +12,7 @@ let pendingUrls: string[] = [];
 
 export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): void => {
   // Redact query params before logging — OAuth code/state are credentials
-  const redactedUrl = url.split('?')[0];
+  const redactedUrl = url.split('?')[0].split('#')[0];
   log('Processing protocol URL:', redactedUrl);
 
   // Only process after window is ready
@@ -128,7 +128,7 @@ export const initializeProtocolHandling = (
   // Handle protocol URL passed as command line argument for testing
   process.argv.forEach((val) => {
     if (val && val.startsWith(PROTOCOL_PREFIX)) {
-      log('Protocol URL from command line:', val.split('?')[0]);
+      log('Protocol URL from command line:', val.split('?')[0].split('#')[0]);
       // Process after app is ready
       appInstance.whenReady().then(() => {
         processProtocolUrl(val, getMainWindow());

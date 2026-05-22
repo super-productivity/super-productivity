@@ -324,7 +324,7 @@ export class SyncConfigService {
       isEnabled: newSettings.isEnabled ?? false,
       isEncryptionEnabled: newSettings.isEncryptionEnabled ?? false,
       isCompressionEnabled: newSettings.isCompressionEnabled ?? false,
-      syncProvider: newSettings.syncProvider ?? SyncProviderId.WebDAV,
+      syncProvider: newSettings.syncProvider ?? null,
       syncInterval: newSettings.syncInterval ?? 300000,
       isManualSyncOnly: newSettings.isManualSyncOnly ?? false,
     };

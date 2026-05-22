@@ -188,6 +188,8 @@ export class OneDrive implements FileSyncProvider<
       headers.set('Content-Type', 'text/plain');
       if (!isForceOverwrite && revToMatch) {
         headers.set('If-Match', revToMatch);
+      } else if (!isForceOverwrite && !revToMatch) {
+        headers.set('If-None-Match', '*');
       }
 
       const response = await this._request({
@@ -226,8 +228,12 @@ export class OneDrive implements FileSyncProvider<
         .filter((item) => !!item.file)
         .map((item) => item.name)
         .filter(Boolean);
-    } catch {
-      return [];
+    } catch (e) {
+      // Treat not-found as empty; rethrow auth/rate-limit/server failures
+      if (e instanceof RemoteFileNotFoundAPIError) {
+        return [];
+      }
+      throw e;
     }
   }
 
@@ -430,7 +436,12 @@ export class OneDrive implements FileSyncProvider<
         const expiresInMs = tokenData.expires_in * 1000;
 
         const currentCfg = await this.privateCfg.load();
-        if (!currentCfg?.refreshToken) {
+        if (
+          !currentCfg?.refreshToken ||
+          currentCfg.refreshToken !== cfg.refreshToken ||
+          currentCfg.clientId !== cfg.clientId ||
+          currentCfg.tenantId !== cfg.tenantId
+        ) {
           this._deps.logger.warn(
             '[OneDrive] Credentials cleared during token refresh, discarding refresh result',
           );
@@ -575,8 +586,15 @@ export class OneDrive implements FileSyncProvider<
             tokenExpiresAt: 0,
           });
           return this._request(options, true);
-        } catch {
-          /* fall through to auth clear */
+        } catch (refreshErr) {
+          // Only clear credentials for permanent auth failures, not transient ones
+          if (
+            refreshErr instanceof MissingRefreshTokenAPIError ||
+            refreshErr instanceof AuthFailSPError
+          ) {
+            await this.clearAuthCredentials();
+          }
+          throw refreshErr;
         }
       }
       await this.clearAuthCredentials();
