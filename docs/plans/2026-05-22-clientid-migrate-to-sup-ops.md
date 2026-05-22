@@ -25,31 +25,31 @@ kept here as explicit decisions so they are not "re-improved" into bugs again.
 2. **Self-healing read, no separate migration service.** The `pf → SUP_OPS`
    copy happens inline in the clientId resolver, triggered lazily by the first
    read. This removes the init-ordering failure mode — the clientId is read very
-   early and is *non-regenerable*, so a self-gating read is safer than call-order
+   early and is _non-regenerable_, so a self-gating read is safer than call-order
    discipline plus an ordering test.
 
-3. **`getOrGenerateClientId()` must never generate on a read *failure*.**
-   *(Reverses an earlier draft.)* An earlier draft made `loadClientId()` "never
+3. **`getOrGenerateClientId()` must never generate on a read _failure_.**
+   _(Reverses an earlier draft.)_ An earlier draft made `loadClientId()` "never
    throw" and had `getOrGenerateClientId()` generate whenever it returned
    `null`. That converts a transient IndexedDB hiccup into a brand-new clientId
    that orphans the device's real, history-bearing id — the exact
    non-regenerable loss this issue exists to prevent. The resolver therefore
-   **propagates IndexedDB read errors**; generation happens *only* when reads
+   **propagates IndexedDB read errors**; generation happens _only_ when reads
    succeed and confirm no id exists anywhere. This matches today's behavior
    (today `getOrGenerateClientId` throws on a DB-open failure rather than
    generating).
 
 4. **`OperationLogMigrationService`'s genesis-op clientId resolution is left
-   unchanged.** *(Reverses an earlier draft.)* An earlier draft routed it
+   unchanged.** _(Reverses an earlier draft.)_ An earlier draft routed it
    through `getOrGenerateClientId()`. That is unsafe: the legacy genesis op is
    built as `{ clientId, vectorClock: meta.vectorClock || { [clientId]: 1 } }`,
-   and `meta.vectorClock` is keyed by the *legacy PFAPI* identity — the `pf`
+   and `meta.vectorClock` is keyed by the _legacy PFAPI_ identity — the `pf`
    `CLIENT_ID` key. The migration must keep resolving the genesis clientId from
    `CLIENT_ID` so the op's `clientId` matches its own `vectorClock` keys.
    `persistClientId` is therefore **kept** (not deleted), and now also seeds the
    new `SUP_OPS` store.
 
-5. **`ClientIdService` is *not* relocated in this PR.** The relocation to
+5. **`ClientIdService` is _not_ relocated in this PR.** The relocation to
    `op-log/util/` is a pure rename touching ~12 import sites for zero behavioral
    benefit (the `core ↔ op-log` coupling already exists via
    `client-id.provider.ts`). Per "minimize changes / stay in scope" it is a
@@ -58,25 +58,25 @@ kept here as explicit decisions so they are not "re-improved" into bugs again.
    no lint rule forbids it and the provider already crosses that boundary).
 
 Net effect: roughly line-neutral versus today's `withRotation` machinery, but a
-clear win in *conceptual* complexity — cross-database two-phase commit is
+clear win in _conceptual_ complexity — cross-database two-phase commit is
 replaced by a single in-transaction `put` plus a one-time idempotent copy.
 
 ## Files touched
 
-| File | Change |
-| --- | --- |
-| `src/app/op-log/persistence/db-keys.const.ts` | `DB_VERSION` 5→6; add `STORE_NAMES.CLIENT_ID` |
-| `src/app/op-log/persistence/db-upgrade.ts` | Version 6 branch: create `client_id` store |
-| `src/app/op-log/persistence/operation-log-store.service.ts` | `OpLogDB` schema entry; `client_id` `put` in `runDestructiveStateReplacement` + post-commit `clearCache()`; `_clearAllDataForTesting` |
-| `src/app/core/util/generate-client-id.ts` | **New** — pure `generateClientId()` + `isValidClientIdFormat()` |
-| `src/app/core/util/client-id.service.ts` | Rewritten in place — `SUP_OPS`-backed, inline one-time `pf` migration, error-aware resolver, no `withRotation` |
-| `src/app/op-log/util/client-id.provider.ts` | Add `clearCache()` to the `ClientIdProvider` interface + factory; doc-note the migration side effect |
-| `src/app/op-log/clean-slate/clean-slate.service.ts` | Rewrite: pure id gen, no `withRotation`, no cache handling |
-| `src/app/op-log/backup/backup.service.ts` | Rewrite: pure id gen, no `withRotation`, no cache handling |
-| `src/app/op-log/capture/operation-log.effects.ts` | `loadClientId() ?? generateNewClientId()` → `getOrGenerateClientId()` |
+| File                                                            | Change                                                                                                                                                               |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/op-log/persistence/db-keys.const.ts`                   | `DB_VERSION` 5→6; add `STORE_NAMES.CLIENT_ID`                                                                                                                        |
+| `src/app/op-log/persistence/db-upgrade.ts`                      | Version 6 branch: create `client_id` store                                                                                                                           |
+| `src/app/op-log/persistence/operation-log-store.service.ts`     | `OpLogDB` schema entry; `client_id` `put` in `runDestructiveStateReplacement` + post-commit `clearCache()`; `_clearAllDataForTesting`                                |
+| `src/app/core/util/generate-client-id.ts`                       | **New** — pure `generateClientId()` + `isValidClientIdFormat()`                                                                                                      |
+| `src/app/core/util/client-id.service.ts`                        | Rewritten in place — `SUP_OPS`-backed, inline one-time `pf` migration, error-aware resolver, no `withRotation`                                                       |
+| `src/app/op-log/util/client-id.provider.ts`                     | Add `clearCache()` to the `ClientIdProvider` interface + factory; doc-note the migration side effect                                                                 |
+| `src/app/op-log/clean-slate/clean-slate.service.ts`             | Rewrite: pure id gen, no `withRotation`, no cache handling                                                                                                           |
+| `src/app/op-log/backup/backup.service.ts`                       | Rewrite: pure id gen, no `withRotation`, no cache handling                                                                                                           |
+| `src/app/op-log/capture/operation-log.effects.ts`               | `loadClientId() ?? generateNewClientId()` → `getOrGenerateClientId()`                                                                                                |
 | `src/app/op-log/persistence/operation-log-migration.service.ts` | `generateNewClientId()` → `getOrGenerateClientId()` for the fallback only; **fix `:249` — stop logging the full clientId**. Clientid resolution otherwise unchanged. |
-| `docs/sync-and-op-log/` | Note the clientId now lives in `SUP_OPS` v6 (per CLAUDE.md: op-log changes need doc updates) |
-| Specs | see Step 6 |
+| `docs/sync-and-op-log/`                                         | Note the clientId now lives in `SUP_OPS` v6 (per CLAUDE.md: op-log changes need doc updates)                                                                         |
+| Specs                                                           | see Step 6                                                                                                                                                           |
 
 `LegacyPfDbService` is **not** modified or used by `ClientIdService` — see Step 4
 for why its error-swallowing `load()` is unsuitable here.
@@ -126,7 +126,7 @@ Keyless store (out-of-line key, like `vector_clock`).
 ```
 
 Add `STORE_NAMES.CLIENT_ID` to the `_clearAllDataForTesting()` store list and a
-matching `.clear()`. (`ArchiveDBSchema` in `archive-store.service.ts` does *not*
+matching `.clear()`. (`ArchiveDBSchema` in `archive-store.service.ts` does _not_
 need the entry — that service never touches the store; the shared `runDbUpgrade`
 still creates it.)
 
@@ -137,10 +137,14 @@ Extract the existing pure generation logic out of `ClientIdService` into
 
 ```ts
 /** Generates a compact client ID: {platform}_{4-char-base62}, e.g. "B_a7Kx". */
-export const generateClientId = (): string => { /* _generateClientId body */ };
+export const generateClientId = (): string => {
+  /* _generateClientId body */
+};
 
 /** True if the id matches a known valid format (legacy length>=10, or new). */
-export const isValidClientIdFormat = (id: unknown): id is string => { /* ... */ };
+export const isValidClientIdFormat = (id: unknown): id is string => {
+  /* ... */
+};
 ```
 
 `_getEnvironmentId` / `_generateBase62` move here as module-private helpers.
@@ -169,9 +173,10 @@ In `operation-log-store.service.ts`, in `runDestructiveStateReplacement` (~line
   handle needed). The rotated id is already on the op — no new parameter.
   **First-in-tx is deliberate:** the interrupt tests inject failure into
   `opsStore.add`; placing the `client_id` `put` first means that injected
-  failure occurs *after* the `client_id` `put` is queued, so the abort genuinely
+  failure occurs _after_ the `client_id` `put` is queued, so the abort genuinely
   exercises "client_id put queued → tx aborts → `client_id` unchanged."
   Atomicity itself is order-independent.
+
 - After `await tx.done` (~line 1654), invalidate the clientId cache so the next
   read sees the rotated value:
 
@@ -180,10 +185,11 @@ In `operation-log-store.service.ts`, in `runDestructiveStateReplacement` (~line
   ```
 
   `OperationLogStoreService` already injects `CLIENT_ID_PROVIDER`. Doing the
-  cache-clear *inside* `runDestructiveStateReplacement`, bound to `tx.done`,
+  cache-clear _inside_ `runDestructiveStateReplacement`, bound to `tx.done`,
   makes it impossible for a future edit to open a window between commit and
   cache-clear. On `catch`/abort, `clearCache()` is not reached and the cache
   correctly keeps the old id.
+
 - Replace the doc-comment paragraph about "Atomicity holds within the `SUP_OPS`
   database only … callers own the clientId rollback" with: the clientId now
   lives in `SUP_OPS` and rotates atomically with `OPS`/`STATE_CACHE`/`VECTOR_CLOCK`.
@@ -208,7 +214,7 @@ relocation — decision 5).
   contract below).
 - **`pf`** — opened **read-only, directly by this service**, per-call
   (open-read-close, no cached handle). It is **not** routed through
-  `LegacyPfDbService`: that service's `load()`/`loadClientId()` *swallow*
+  `LegacyPfDbService`: that service's `load()`/`loadClientId()` _swallow_
   IndexedDB errors and return `null`, which makes "key genuinely absent"
   indistinguishable from "read failed" — and that distinction is exactly what
   decision 3 depends on. `ClientIdService`'s own `pf` read lets IndexedDB errors
@@ -256,10 +262,10 @@ private async _resolve(): Promise<string | null> {
 ```
 
 - `_readSupOps()` — open `SUP_OPS`, `get(client_id, SINGLETON_KEY)`,
-  `isValidClientIdFormat`-gate (invalid → `null`, never throw on bad *format* —
-  issue #6197). IndexedDB *errors* propagate.
+  `isValidClientIdFormat`-gate (invalid → `null`, never throw on bad _format_ —
+  issue #6197). IndexedDB _errors_ propagate.
 - `_readPf()` — open `pf` read-only, read `__client_id_` then `CLIENT_ID`,
-  format-gate, return first valid or `null`. IndexedDB *errors* propagate.
+  format-gate, return first valid or `null`. IndexedDB _errors_ propagate.
 
 > **`pf` key precedence.** `__client_id_` is the key `ClientIdService` has always
 > operated on (every current `loadClientId()` reads it); on an op-log-era device
@@ -287,9 +293,9 @@ private async _putClientIdIfAbsent(factory: () => string | null): Promise<string
 The in-tx re-check is load-bearing: IndexedDB serializes same-store transactions
 across same-origin connections, so a write that committed first (another tab's
 generate, or a rotation) is observed by `raced` and **wins** — the helper never
-clobbers it. Comment it as a *multi-tab / rotation* guard. `persistClientId` and
-`runDestructiveStateReplacement` are the two *unconditional* writers (they know
-the exact intended value); `_putClientIdIfAbsent` is the *establish-if-absent*
+clobbers it. Comment it as a _multi-tab / rotation_ guard. `persistClientId` and
+`runDestructiveStateReplacement` are the two _unconditional_ writers (they know
+the exact intended value); `_putClientIdIfAbsent` is the _establish-if-absent_
 writer — that asymmetry is deliberate.
 
 ### `loadClientId()` — swallowing reader
@@ -345,9 +351,11 @@ The rewrite — no `withRotation`, no try/catch, no cache handling:
 ```ts
 import { generateClientId } from '../../core/util/generate-client-id';
 
-const newClientId = generateClientId();        // pure — persisted only inside the tx
-const syncImportOp: Operation = { /* ...clientId: newClientId... */ };
-await this.opLogStore.runDestructiveStateReplacement({ syncImportOp, /* ... */ });
+const newClientId = generateClientId(); // pure — persisted only inside the tx
+const syncImportOp: Operation = {
+  /* ...clientId: newClientId... */
+};
+await this.opLogStore.runDestructiveStateReplacement({ syncImportOp /* ... */ });
 // runDestructiveStateReplacement committed the new clientId and cleared the
 // cache; nothing else to do. On throw, the tx aborted and the old id stands.
 ```
@@ -370,9 +378,9 @@ Clientid resolution is **unchanged** (decision 4) — keep `:239`
   (`generateNewClientId` is deleted; the fallback only fires when there is no
   legacy identity to preserve, so generating is correct).
 - `:249`: stop logging the literal clientId
-  (`OpLog.normal(\`...Using client ID: ${clientId}\`)` — a CLAUDE.md sync-rule-9
-  violation, log history is user-exportable). Log a 3-char suffix only,
-  consistent with `clean-slate.service.ts`. Audit the remaining `OpLog` calls in
+  (`OpLog.normal(\`...Using client ID: ${clientId}\`)`— a CLAUDE.md sync-rule-9
+violation, log history is user-exportable). Log a 3-char suffix only,
+consistent with`clean-slate.service.ts`. Audit the remaining `OpLog` calls in
   every touched file (spot-checked: the rest are already value-free).
 
 ## Step 6 — Tests
@@ -381,20 +389,20 @@ Clientid resolution is **unchanged** (decision 4) — keep `:239`
 
 Drop all `withRotation` tests. Behavioral matrix:
 
-| Case | Expectation |
-| --- | --- |
-| `SUP_OPS.client_id` populated | returned directly; `pf` not opened |
-| `SUP_OPS` empty, `pf.__client_id_` valid | migrated into `SUP_OPS`; id unchanged |
-| `SUP_OPS` empty, only `pf.CLIENT_ID` | migrated; covers the bridge-ordering gap |
-| `SUP_OPS` empty, both `pf` keys valid and differ | `__client_id_` wins |
-| `SUP_OPS` invalid format, `pf` valid | `pf` value wins, overwrites `SUP_OPS` |
-| nothing anywhere | `loadClientId()` → `null`; `getOrGenerateClientId()` generates |
-| multi-tab fresh generate | two `getOrGenerateClientId()` over one fake-IDB converge on one id |
-| **`SUP_OPS` read throws** | `loadClientId()` → `null` (no throw); `getOrGenerateClientId()` **throws, does not generate** |
-| **`pf` read throws** | same — `loadClientId()` → `null`; `getOrGenerateClientId()` throws, no generation |
-| **migration copy-forward write fails (quota)** | `loadClientId()` & `getOrGenerateClientId()` return the `pf` id; no throw, no generation |
-| `persistClientId` | unconditional `SUP_OPS` write; cache set; rejects invalid format |
-| `generateClientId` / `isValidClientIdFormat` util | pure; correct format / guard |
+| Case                                              | Expectation                                                                                   |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `SUP_OPS.client_id` populated                     | returned directly; `pf` not opened                                                            |
+| `SUP_OPS` empty, `pf.__client_id_` valid          | migrated into `SUP_OPS`; id unchanged                                                         |
+| `SUP_OPS` empty, only `pf.CLIENT_ID`              | migrated; covers the bridge-ordering gap                                                      |
+| `SUP_OPS` empty, both `pf` keys valid and differ  | `__client_id_` wins                                                                           |
+| `SUP_OPS` invalid format, `pf` valid              | `pf` value wins, overwrites `SUP_OPS`                                                         |
+| nothing anywhere                                  | `loadClientId()` → `null`; `getOrGenerateClientId()` generates                                |
+| multi-tab fresh generate                          | two `getOrGenerateClientId()` over one fake-IDB converge on one id                            |
+| **`SUP_OPS` read throws**                         | `loadClientId()` → `null` (no throw); `getOrGenerateClientId()` **throws, does not generate** |
+| **`pf` read throws**                              | same — `loadClientId()` → `null`; `getOrGenerateClientId()` throws, no generation             |
+| **migration copy-forward write fails (quota)**    | `loadClientId()` & `getOrGenerateClientId()` return the `pf` id; no throw, no generation      |
+| `persistClientId`                                 | unconditional `SUP_OPS` write; cache set; rejects invalid format                              |
+| `generateClientId` / `isValidClientIdFormat` util | pure; correct format / guard                                                                  |
 
 The three **bold** rows are the data-safety core — they prove a transient
 IndexedDB failure cannot mint a new clientId. They must use a fake-IDB that can
@@ -440,7 +448,7 @@ audited.
 ## Risks & mitigations
 
 1. **Non-regenerable clientId (lead risk).** `pf` is never deleted or written.
-   `_resolve()` only ever *copies*; a failed copy still returns the valid `pf`
+   `_resolve()` only ever _copies_; a failed copy still returns the valid `pf`
    id. `getOrGenerateClientId()` generates **only** after reads succeed and
    confirm absence everywhere — a transient failure throws, never generates.
    Worst case is a redundant copy.
@@ -462,12 +470,17 @@ audited.
 
 ## Out of scope / follow-ups
 
+The first three are tracked together in **#7735**:
+
 - Relocating `ClientIdService` to `op-log/util/` (a pure rename, ~12 import
   sites) — separate PR.
 - Adding `versionchange` handlers to `OperationLogStoreService` /
   `ArchiveStoreService`.
 - Breaking the `OperationLogStoreService` ↔ `CLIENT_ID_PROVIDER` DI cycle to
   collapse onto one shared `SUP_OPS` connection.
+
+Not yet tracked:
+
 - Tightening `isValidClientIdFormat` (the legacy `length >= 10` branch accepts
   almost any string) — pre-existing, not this PR.
 - Deleting the `pf` database — it remains a read-only fallback.

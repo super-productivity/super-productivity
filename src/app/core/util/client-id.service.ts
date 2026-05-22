@@ -229,7 +229,7 @@ export class ClientIdService {
    * service injects CLIENT_ID_PROVIDER (-> this service), so delegating back
    * would form a DI cycle. Two same-origin connections to one store are safe:
    * IndexedDB serializes transactions across them. Collapsing onto a single
-   * shared connection (by breaking that DI cycle) is a tracked follow-up.
+   * shared connection (by breaking that DI cycle) is tracked in #7735.
    *
    * Concurrent first callers share one in-flight open via `_supOpsDbPromise`
    * (mirrors OperationLogStoreService._ensureInit): without it each racing
