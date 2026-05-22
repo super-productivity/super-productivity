@@ -335,12 +335,8 @@ describe('workContext selectors', () => {
         isDone: true,
       } as Partial<TaskCopy> as TaskCopy;
 
-      const taskState = fakeEntityStateFromArray([P, SUB1, SUB_S]) as any;
-      const result = selectTimelineTasks.projector([SUB1.id, SUB_S.id], taskState, [
-        P,
-        SUB1,
-        SUB_S,
-      ]);
+      const activeTaskMap = new Map([P, SUB1, SUB_S].map((t) => [t.id, t]));
+      const result = selectTimelineTasks.projector([SUB1.id, SUB_S.id], activeTaskMap);
       expect(result).toEqual({
         unPlanned: [],
         planned: [],
@@ -357,19 +353,14 @@ describe('workContext selectors', () => {
         isDone: false,
       } as Partial<TaskCopy> as TaskCopy;
 
-      // Create task state with only one task but multiple IDs
-      const taskState = {
-        ids: ['existing', 'missing1', 'missing2'],
-        entities: {
-          existing: existingTask,
-          // missing1 and missing2 are not in entities
-        },
-      } as any;
+      // Map contains only existing task; missing1/missing2 absent (simulating filtered state)
+      const activeTaskMap = new Map([[existingTask.id, existingTask]]);
 
       // This should not throw "Cannot read properties of undefined"
-      const result = selectTimelineTasks.projector(['existing', 'missing1'], taskState, [
-        existingTask,
-      ]);
+      const result = selectTimelineTasks.projector(
+        ['existing', 'missing1'],
+        activeTaskMap,
+      );
 
       // Should only include the existing task, not crash on missing ones
       expect(result.unPlanned.length).toBe(1);
@@ -386,18 +377,11 @@ describe('workContext selectors', () => {
         dueWithTime: Date.now(),
       } as Partial<TaskCopy> as TaskCopy;
 
-      const taskState = {
-        ids: ['withDueTime', 'missingTask'],
-        entities: {
-          withDueTime: taskWithDueTime,
-          // missingTask is not in entities
-        },
-      } as any;
+      // Map contains only taskWithDueTime; missingTask absent
+      const activeTaskMap = new Map([[taskWithDueTime.id, taskWithDueTime]]);
 
       // This should not throw "Cannot read properties of undefined (reading 'dueWithTime')"
-      const result = selectTimelineTasks.projector(['missingTask'], taskState, [
-        taskWithDueTime,
-      ]);
+      const result = selectTimelineTasks.projector(['missingTask'], activeTaskMap);
 
       expect(result.planned.length).toBe(1);
       expect(result.planned[0].id).toBe('withDueTime');
@@ -412,19 +396,9 @@ describe('workContext selectors', () => {
         projectId: 'activeProject',
         dueWithTime: Date.now(),
       } as Partial<TaskCopy> as TaskCopy;
-      const archivedTask = {
-        id: 'archived',
-        subTaskIds: [],
-        tagIds: [],
-        isDone: false,
-        projectId: 'archivedProject',
-        dueWithTime: Date.now(),
-      } as Partial<TaskCopy> as TaskCopy;
-
-      const taskState = fakeEntityStateFromArray([activeTask, archivedTask]) as any;
-
-      // activeProjectTasks excludes archivedTask (simulating selectAllTasksInActiveProjects)
-      const result = selectTimelineTasks.projector([], taskState, [activeTask]);
+      // Map excludes archived task (simulating selectActiveTaskMap filtering archived projects)
+      const activeTaskMap = new Map([[activeTask.id, activeTask]]);
+      const result = selectTimelineTasks.projector([], activeTaskMap);
 
       expect(result.planned.length).toBe(1);
       expect(result.planned[0].id).toBe('active');

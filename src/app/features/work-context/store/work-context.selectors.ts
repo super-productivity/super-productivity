@@ -6,7 +6,7 @@ import {
   selectTagFeatureState,
 } from '../../tag/store/tag.reducer';
 import {
-  mapSubTasksToTask,
+  selectActiveTaskMap,
   selectAllTasksInActiveProjects,
   selectTaskEntities,
   selectTaskEntitiesInActiveProjects,
@@ -354,18 +354,16 @@ export const selectUndoneTodayTaskIds = createSelector(
 
 export const selectTimelineTasks = createSelector(
   selectTodayTaskIds,
-  selectTaskFeatureState,
-  selectAllTasksInActiveProjects,
+  selectActiveTaskMap,
   (
     todayIds,
-    s,
-    activeProjectTasks,
+    activeTaskMap,
   ): {
     planned: TaskWithDueTime[];
     unPlanned: TaskWithSubTasks[];
   } => {
     const allPlannedTasks: TaskWithDueTime[] = [];
-    activeProjectTasks.forEach((t) => {
+    activeTaskMap.forEach((t) => {
       if (!t.isDone && t.dueWithTime) {
         allPlannedTasks.push(t as TaskWithDueTime);
       }
@@ -373,12 +371,20 @@ export const selectTimelineTasks = createSelector(
     // Use Set for O(1) lookup instead of O(n) .includes() in filter
     const allPlannedIdSet = new Set(allPlannedTasks.map((t) => t.id));
 
+    // Helper used to convert an array of taskIds to their Task counterpart removing
+    // tasks not found in the task map
+    const taskIdsToTasks = (taskIds: string[]): Task[] =>
+      taskIds.map((id) => activeTaskMap.get(id)).filter((t): t is Task => !!t);
+
     return {
       planned: allPlannedTasks,
-      unPlanned: todayIds
-        .map((id) => s.entities[id])
-        .filter((t): t is Task => !!t)
-        .map((t) => mapSubTasksToTask(t, s) as TaskWithSubTasks)
+      unPlanned: taskIdsToTasks(todayIds)
+        .map(
+          (t): TaskWithSubTasks => ({
+            ...t,
+            subTasks: taskIdsToTasks(t.subTaskIds),
+          }),
+        )
         .filter((t) => !t.isDone && !allPlannedIdSet.has(t.id)),
     };
   },
