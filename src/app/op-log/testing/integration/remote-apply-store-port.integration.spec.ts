@@ -11,6 +11,7 @@ describe('RemoteOperationApplyStorePort Integration', () => {
   const mockClientIdProvider: ClientIdProvider = {
     loadClientId: () => Promise.resolve('testClient'),
     getOrGenerateClientId: () => Promise.resolve('testClient'),
+    clearCache: () => {},
   };
 
   const createOperation = (

@@ -30,6 +30,7 @@ describe('OperationLogStoreService', () => {
   const mockClientIdProvider: ClientIdProvider = {
     loadClientId: () => Promise.resolve('testClient'),
     getOrGenerateClientId: () => Promise.resolve('testClient'),
+    clearCache: () => {},
   };
 
   // Helper to create test operations
@@ -1711,6 +1712,62 @@ describe('OperationLogStoreService', () => {
       expect((await db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY)).data).toEqual(
         priorArchiveOld,
       );
+    });
+
+    it('writes the rotated clientId into the client_id store and clears the cache', async () => {
+      const clearCacheSpy = spyOn(mockClientIdProvider, 'clearCache');
+
+      await service.runDestructiveStateReplacement({
+        syncImportOp: createTestOperation({
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+          clientId: 'rotatedClient',
+          vectorClock: { rotatedClient: 1 },
+          payload: { task: { ids: [], entities: {} } },
+        }),
+        snapshotEntityKeys: [],
+      });
+
+      const db = (service as any).db;
+      expect(await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY)).toBe('rotatedClient');
+      // Cache-clear runs after a committed tx.done so the next clientId read
+      // sees the rotated value.
+      expect(clearCacheSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the client_id store and cache untouched when the destructive tx aborts', async () => {
+      const db = (service as any).db;
+      // Seed a prior clientId — the aborted put must roll back to this.
+      await db.put(STORE_NAMES.CLIENT_ID, 'priorClient', SINGLETON_KEY);
+      const clearCacheSpy = spyOn(mockClientIdProvider, 'clearCache');
+
+      const realTransaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake((stores: any, mode: any) => {
+        const tx = realTransaction(stores, mode);
+        if (Array.isArray(stores) && stores.includes(STORE_NAMES.OPS)) {
+          const opsStore = tx.objectStore(STORE_NAMES.OPS);
+          opsStore.add = async () => {
+            throw new Error('Simulated interrupt inside destructive tx');
+          };
+        }
+        return tx;
+      });
+
+      await expectAsync(
+        service.runDestructiveStateReplacement({
+          syncImportOp: createTestOperation({
+            opType: OpType.SyncImport,
+            entityType: 'ALL' as EntityType,
+            clientId: 'abortClient',
+            vectorClock: { abortClient: 1 },
+          }),
+          snapshotEntityKeys: [],
+        }),
+      ).toBeRejected();
+
+      expect(await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY)).toBe('priorClient');
+      expect(clearCacheSpy).not.toHaveBeenCalled();
     });
   });
 

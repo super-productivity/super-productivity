@@ -158,6 +158,15 @@ interface OpLogDB extends DBSchema {
     key: string; // profile ID
     value: ProfileDataStoreEntry;
   };
+  /**
+   * Stores the sync clientId (device identity). Consolidated from legacy 'pf'
+   * in version 6 so destructive-flow rotation joins the atomic transaction in
+   * runDestructiveStateReplacement. See issue #7732.
+   */
+  [STORE_NAMES.CLIENT_ID]: {
+    key: string; // SINGLETON_KEY ('current')
+    value: string; // the clientId
+  };
 }
 
 type OpLogStoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES];
@@ -1207,6 +1216,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         STORE_NAMES.ARCHIVE_YOUNG,
         STORE_NAMES.ARCHIVE_OLD,
         STORE_NAMES.PROFILE_DATA,
+        STORE_NAMES.CLIENT_ID,
       ],
       'readwrite',
     );
@@ -1217,6 +1227,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
     await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
     await tx.objectStore(STORE_NAMES.PROFILE_DATA).clear();
+    await tx.objectStore(STORE_NAMES.CLIENT_ID).clear();
     await tx.done;
     // Invalidate all caches
     this._appliedOpIdsCache = null;
@@ -1568,12 +1579,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * `isWhollyFreshClient + meaningful store data` branch on next launch.
    *
    * If any step throws, the IndexedDB transaction aborts and no committed
-   * change to OPS / STATE_CACHE / VECTOR_CLOCK survives.
+   * change to OPS / STATE_CACHE / VECTOR_CLOCK / CLIENT_ID survives.
    *
-   * Atomicity holds within the `SUP_OPS` database only. Callers that rotate
-   * the clientId (stored in the separate `pf` database) own that rollback —
-   * including the no-prior-clientId edge case, where the rotated id is
-   * intentionally left in `pf` on failure (see ClientIdService.withRotation).
+   * The clientId now lives in `SUP_OPS` (`client_id` store, since schema v6),
+   * so the rotated id on `syncImportOp.clientId` is written inside this same
+   * transaction and rotates atomically with OPS / STATE_CACHE / VECTOR_CLOCK.
+   * No cross-database two-phase commit is needed (issue #7732).
    *
    * The new baseline is taken entirely from `syncImportOp`: its `payload` is
    * written to OPS (the snapshot the uploader sends) and re-used as the
@@ -1598,6 +1609,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       STORE_NAMES.OPS,
       STORE_NAMES.STATE_CACHE,
       STORE_NAMES.VECTOR_CLOCK,
+      // Unconditional: both callers (clean-slate, backup-restore) always rotate
+      // the clientId. Unlike the archive stores it is never conditional.
+      STORE_NAMES.CLIENT_ID,
     ];
     if (archiveYoung != null) {
       storeNames.push(STORE_NAMES.ARCHIVE_YOUNG);
@@ -1611,6 +1625,15 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       const opsStore = tx.objectStore(STORE_NAMES.OPS);
       const stateCacheStore = tx.objectStore(STORE_NAMES.STATE_CACHE);
       const vcStore = tx.objectStore(STORE_NAMES.VECTOR_CLOCK);
+
+      // Rotate the clientId first, inside this same atomic transaction. Writing
+      // it before opsStore.clear() means an interrupt injected into a later
+      // step still aborts this queued put — exercising the genuine
+      // "queued -> tx aborts -> client_id unchanged" path. Atomicity itself is
+      // order-independent.
+      await tx
+        .objectStore(STORE_NAMES.CLIENT_ID)
+        .put(syncImportOp.clientId, SINGLETON_KEY);
 
       await opsStore.clear();
 
@@ -1657,6 +1680,11 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       this._cacheLastSeq = 0;
       this._invalidateUnsyncedCache();
       this._vectorClockCache = newVectorClock;
+      // The clientId rotated atomically with the stores above. Invalidate the
+      // ClientIdService cache so the next read sees the rotated value. Bound to
+      // a committed `tx.done`: on catch/abort this is not reached, so the cache
+      // correctly keeps the old id.
+      this.clientIdProvider.clearCache();
     } catch (e) {
       // idb auto-aborts the tx on any rejected request, but a spy that
       // throws synchronously instead of rejecting the IDB request (used by

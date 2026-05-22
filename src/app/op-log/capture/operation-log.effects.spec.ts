@@ -72,8 +72,7 @@ describe('OperationLogEffects', () => {
       'trigger',
     ]);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
-      'loadClientId',
-      'generateNewClientId',
+      'getOrGenerateClientId',
     ]);
     mockOperationCaptureService = jasmine.createSpyObj('OperationCaptureService', [
       'dequeue',
@@ -92,9 +91,8 @@ describe('OperationLogEffects', () => {
     mockCompactionService.compact.and.returnValue(Promise.resolve());
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
     mockStore.select.and.returnValue(of({})); // Return empty state observable
-    mockClientIdService.loadClientId.and.returnValue(Promise.resolve('testClient'));
-    mockClientIdService.generateNewClientId.and.returnValue(
-      Promise.resolve('generatedClient'),
+    mockClientIdService.getOrGenerateClientId.and.returnValue(
+      Promise.resolve('testClient'),
     );
     mockOperationCaptureService.dequeue.and.returnValue([]);
 
@@ -198,7 +196,7 @@ describe('OperationLogEffects', () => {
           return fn();
         },
       );
-      mockClientIdService.loadClientId.and.callFake(async () => {
+      mockClientIdService.getOrGenerateClientId.and.callFake(async () => {
         callOrder.push('clientId');
         return 'testClient';
       });
@@ -219,11 +217,11 @@ describe('OperationLogEffects', () => {
     });
 
     it('should capture the post-rotation clientId when a destructive replacement rotates it while this op is queued (#7709)', (done) => {
-      // Simulates the race the fix at operation-log.effects.ts:163-171 closes:
-      // a clean-slate / backup-import is already holding the operation-log lock
-      // and rotates the clientId via ClientIdService.withRotation. A queued op
-      // waiting behind that lock must read the rotated id, not the pre-rotation
-      // id captured before lock acquisition.
+      // Simulates the race the fix at operation-log.effects.ts closes: a
+      // clean-slate / backup-import is already holding the operation-log lock
+      // and rotates the clientId inside runDestructiveStateReplacement. A
+      // queued op waiting behind that lock must read the rotated id, not the
+      // pre-rotation id captured before lock acquisition.
       let persistedClientId = 'oldClient';
 
       mockLockService.request.and.callFake(
@@ -234,7 +232,9 @@ describe('OperationLogEffects', () => {
           return fn();
         },
       );
-      mockClientIdService.loadClientId.and.callFake(async () => persistedClientId);
+      mockClientIdService.getOrGenerateClientId.and.callFake(
+        async () => persistedClientId,
+      );
 
       const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
       actions$ = of(action);
@@ -448,9 +448,10 @@ describe('OperationLogEffects', () => {
             mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
           expect(firstOp.clientId).toBe('testClient');
 
-          // Simulate backup import generating a new client ID
-          // (BackupService calls generateNewClientId which updates the cached value)
-          mockClientIdService.loadClientId.and.returnValue(
+          // Simulate a backup import rotating the client ID (BackupService's
+          // destructive replacement persists a fresh id; the next read of
+          // getOrGenerateClientId() picks it up after the cache is cleared).
+          mockClientIdService.getOrGenerateClientId.and.returnValue(
             Promise.resolve('newImportClient'),
           );
 

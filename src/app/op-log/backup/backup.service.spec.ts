@@ -4,7 +4,6 @@ import { BackupService } from './backup.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { StateSnapshotService } from './state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { ClientIdService } from '../../core/util/client-id.service';
 import { ArchiveModel } from '../../features/archive/archive.model';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { OpType } from '../core/operation.types';
@@ -18,7 +17,6 @@ describe('BackupService', () => {
   let mockImexViewService: jasmine.SpyObj<ImexViewService>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
-  let mockClientIdService: jasmine.SpyObj<ClientIdService>;
   let mockOperationWriteFlushService: jasmine.SpyObj<OperationWriteFlushService>;
   let mockLockService: jasmine.SpyObj<LockService>;
 
@@ -107,7 +105,6 @@ describe('BackupService', () => {
       'saveImportBackup',
       'runDestructiveStateReplacement',
     ]);
-    mockClientIdService = jasmine.createSpyObj('ClientIdService', ['withRotation']);
     mockOperationWriteFlushService = jasmine.createSpyObj('OperationWriteFlushService', [
       'flushPendingWrites',
     ]);
@@ -119,12 +116,6 @@ describe('BackupService', () => {
     );
     mockOpLogStore.saveImportBackup.and.resolveTo();
     mockOpLogStore.runDestructiveStateReplacement.and.resolveTo();
-    // ClientIdService.withRotation owns the rollback semantics (see its own
-    // spec); here we just invoke the callback with a fresh id.
-    mockClientIdService.withRotation.and.callFake(
-      async (_logPrefix: string, fn: (newClientId: string) => Promise<any>) =>
-        fn('newClientId'),
-    );
     mockOperationWriteFlushService.flushPendingWrites.and.resolveTo();
     mockLockService.request.and.callFake(async (_lockName, fn) => fn());
 
@@ -135,7 +126,6 @@ describe('BackupService', () => {
         { provide: ImexViewService, useValue: mockImexViewService },
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
-        { provide: ClientIdService, useValue: mockClientIdService },
         {
           provide: OperationWriteFlushService,
           useValue: mockOperationWriteFlushService,
@@ -308,21 +298,22 @@ describe('BackupService', () => {
 
       const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.syncImportOp.vectorClock).toEqual({ newClientId: 1 });
+      // The clientId is freshly minted (generateClientId) — new compact format.
+      const op = args.syncImportOp;
+      expect(op.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
+      expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
     });
 
     it('should pass a fresh clock to the atomic helper on force-import', async () => {
-      mockClientIdService.withRotation.and.callFake(
-        async (_logPrefix: string, fn: (newClientId: string) => Promise<any>) =>
-          fn('newForceClient'),
-      );
       const backupData = createMinimalValidBackup();
 
       await service.importCompleteBackup(backupData as any, true, true, true);
 
       const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.syncImportOp.vectorClock).toEqual({ newForceClient: 1 });
+      const op = args.syncImportOp;
+      expect(op.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
+      expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
     });
 
     /**
@@ -349,17 +340,14 @@ describe('BackupService', () => {
     });
 
     it('should produce fresh { [clientId]: 1 } clock on import', async () => {
-      mockClientIdService.withRotation.and.callFake(
-        async (_logPrefix: string, fn: (newClientId: string) => Promise<any>) =>
-          fn('newForceClient'),
-      );
       const backupData = createMinimalValidBackup();
 
       await service.importCompleteBackup(backupData as any, true, true, true);
 
       const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.syncImportOp.vectorClock).toEqual({ newForceClient: 1 });
+      const op = args.syncImportOp;
+      expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
     });
 
     it('should abort the import (and not dispatch loadAllData) when the pre-import backup fails', async () => {
@@ -391,19 +379,6 @@ describe('BackupService', () => {
 
       expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
       expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(currentState);
-    });
-
-    it('should delegate cross-DB clientId rollback to ClientIdService.withRotation', async () => {
-      // ClientIdService.withRotation owns the rollback semantics — capture
-      // prior id, run callback, restore on failure, log critical if rollback
-      // also fails. Tested directly in client-id.service.spec.ts; here we
-      // only verify BackupService routes through it with the right log tag.
-      await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
-
-      expect(mockClientIdService.withRotation).toHaveBeenCalledWith(
-        'BackupService:',
-        jasmine.any(Function),
-      );
     });
 
     it('should pass snapshotEntityKeys derived from the imported data', async () => {

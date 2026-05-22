@@ -196,6 +196,7 @@ interface StateCache {
 │  │ meta                 - Vector clocks, sync state         │       │
 │  │ archive_young        - Recent archived tasks             │       │
 │  │ archive_old          - Old archived tasks                │       │
+│  │ client_id            - Sync device identity (v6)         │       │
 │  └──────────────────────────────────────────────────────────┘       │
 │                                                                      │
 │  ALL model data persisted here                                       │
@@ -1840,6 +1841,17 @@ What if data exists in both `pf` AND `SUP_OPS` databases?
 3. For app downgrades: Show clear error that downgrade may lose data, require explicit confirmation
 
 **Mitigation (current):** Genesis migration is a one-time event. Once SUP_OPS is established, all writes go there. Risk is limited to the migration moment itself.
+
+**Sync `clientId` (SUP_OPS schema v6, issue #7732):** The sync `clientId` —
+the device's stable sync identity — lives in the `SUP_OPS` `client_id` store
+(key `current`). It used to live in the legacy `pf` database; storing it in
+`SUP_OPS` lets destructive flows (clean-slate, backup-restore) rotate it
+atomically inside `runDestructiveStateReplacement`'s transaction, instead of a
+hand-rolled cross-database two-phase commit. `pf` remains a read-only, one-time
+migration source: the first read on a not-yet-migrated device copies the id
+forward (`ClientIdService`). The clientId is non-regenerable (it keys the vector
+clock), so a transient IndexedDB read failure propagates rather than minting a
+fresh id.
 
 ### Compaction During Active Sync
 

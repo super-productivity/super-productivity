@@ -2,7 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { CleanSlateService } from './clean-slate.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { ClientIdService } from '../../core/util/client-id.service';
 import { OpType, OperationLogEntry } from '../core/operation.types';
 import { ActionType } from '../core/action-types.enum';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
@@ -15,7 +14,6 @@ describe('CleanSlateService', () => {
   let service: CleanSlateService;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
-  let mockClientIdService: jasmine.SpyObj<ClientIdService>;
   let mockOperationWriteFlushService: jasmine.SpyObj<OperationWriteFlushService>;
   let mockLockService: jasmine.SpyObj<LockService>;
 
@@ -35,7 +33,6 @@ describe('CleanSlateService', () => {
       'getVectorClock',
       'getUnsynced',
     ]);
-    mockClientIdService = jasmine.createSpyObj('ClientIdService', ['withRotation']);
     mockOperationWriteFlushService = jasmine.createSpyObj('OperationWriteFlushService', [
       'flushPendingWrites',
     ]);
@@ -46,7 +43,6 @@ describe('CleanSlateService', () => {
         CleanSlateService,
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
-        { provide: ClientIdService, useValue: mockClientIdService },
         {
           provide: OperationWriteFlushService,
           useValue: mockOperationWriteFlushService,
@@ -59,13 +55,6 @@ describe('CleanSlateService', () => {
 
     // Setup default mock responses
     mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
-    // Default: withRotation invokes its callback with the new clientId and
-    // propagates whatever the callback returns or throws. ClientIdService's
-    // own spec covers the rollback semantics.
-    mockClientIdService.withRotation.and.callFake(
-      async (_logPrefix: string, fn: (newClientId: string) => Promise<any>) =>
-        fn('eNewC'),
-    );
     mockOpLogStore.runDestructiveStateReplacement.and.resolveTo();
     mockOpLogStore.getVectorClock.and.resolveTo(null);
     mockOpLogStore.getUnsynced.and.resolveTo([]);
@@ -80,13 +69,7 @@ describe('CleanSlateService', () => {
       // Should get current state (async version to include archives)
       expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
 
-      // Should rotate client ID via the shared helper
-      expect(mockClientIdService.withRotation).toHaveBeenCalledWith(
-        '[CleanSlate]',
-        jasmine.any(Function),
-      );
-
-      // Should route through the atomic helper (issue #7709)
+      // Should route through the atomic helper (issues #7709, #7732)
       expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
       const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
@@ -96,8 +79,10 @@ describe('CleanSlateService', () => {
       expect(appendedOp.opType).toBe(OpType.SyncImport);
       expect(appendedOp.entityType).toBe('ALL');
       expect(appendedOp.payload).toBe(mockState);
-      expect(appendedOp.clientId).toBe('eNewC');
-      expect(appendedOp.vectorClock).toEqual({ eNewC: 1 });
+      // The clientId is freshly minted (generateClientId) — new compact format.
+      // runDestructiveStateReplacement persists it inside its atomic tx.
+      expect(appendedOp.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
+      expect(appendedOp.vectorClock).toEqual({ [appendedOp.clientId]: 1 });
       expect(appendedOp.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     });
 
@@ -199,7 +184,8 @@ describe('CleanSlateService', () => {
 
       const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.syncImportOp.vectorClock).toEqual({ eNewC: 1 });
+      const op = args.syncImportOp;
+      expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
     });
 
     it('should create operation with valid UUIDv7', async () => {
@@ -223,25 +209,10 @@ describe('CleanSlateService', () => {
       ).toBeRejectedWith(jasmine.objectContaining({ message: 'State error' }));
     });
 
-    it('should propagate errors from withRotation', async () => {
-      // ClientIdService.withRotation owns the cross-DB rollback semantics
-      // (see its own spec). Here we only verify that CleanSlateService
-      // surfaces failures from the rotation/replacement chain to its caller.
-      mockClientIdService.withRotation.and.rejectWith(
-        new Error('Atomic replacement failed'),
-      );
-
-      await expectAsync(
-        service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED'),
-      ).toBeRejectedWith(
-        jasmine.objectContaining({ message: 'Atomic replacement failed' }),
-      );
-    });
-
-    it('should propagate errors from runDestructiveStateReplacement through withRotation', async () => {
-      // The destructive helper runs inside the withRotation callback.
-      // withRotation must re-throw whatever the callback throws so the
-      // caller sees the real failure.
+    it('should propagate errors from runDestructiveStateReplacement', async () => {
+      // The clientId now rotates inside runDestructiveStateReplacement's atomic
+      // transaction; a failure there aborts the whole replacement and the
+      // caller must see the real error.
       mockOpLogStore.runDestructiveStateReplacement.and.rejectWith(
         new Error('Atomic replacement failed'),
       );

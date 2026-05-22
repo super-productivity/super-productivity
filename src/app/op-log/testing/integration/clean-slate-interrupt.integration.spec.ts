@@ -2,12 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { CleanSlateService } from '../../clean-slate/clean-slate.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
-import { ClientIdService } from '../../../core/util/client-id.service';
 import { SyncLocalStateService } from '../../sync/sync-local-state.service';
 import { TranslateService } from '@ngx-translate/core';
 import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.service';
 import { Operation } from '../../core/operation.types';
-import { STORE_NAMES } from '../../persistence/db-keys.const';
+import { SINGLETON_KEY, STORE_NAMES } from '../../persistence/db-keys.const';
 
 /**
  * Integration tests for issue #7709 — `createCleanSlate` / `BackupService` import
@@ -30,7 +29,6 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
   let syncLocalState: SyncLocalStateService;
   let cleanSlate: CleanSlateService;
   let mockStateSnapshot: jasmine.SpyObj<StateSnapshotService>;
-  let mockClientId: jasmine.SpyObj<ClientIdService>;
   let mockTranslate: jasmine.SpyObj<TranslateService>;
 
   const meaningfulState = {
@@ -53,14 +51,6 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
     mockStateSnapshot.getStateSnapshot.and.returnValue(meaningfulState as any);
     mockStateSnapshot.getStateSnapshotAsync.and.resolveTo(meaningfulState as any);
 
-    mockClientId = jasmine.createSpyObj('ClientIdService', ['withRotation']);
-    // Default: invoke the rotation callback with a fresh id. Rollback
-    // semantics are exercised in ClientIdService's own spec.
-    mockClientId.withRotation.and.callFake(
-      async (_logPrefix: string, fn: (newClientId: string) => Promise<any>) =>
-        fn('cNew1'),
-    );
-
     mockTranslate = jasmine.createSpyObj('TranslateService', ['instant']);
     mockTranslate.instant.and.callFake((k: string) => k);
 
@@ -70,7 +60,6 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
         SyncLocalStateService,
         CleanSlateService,
         { provide: StateSnapshotService, useValue: mockStateSnapshot },
-        { provide: ClientIdService, useValue: mockClientId },
         { provide: TranslateService, useValue: mockTranslate },
       ],
     });
@@ -94,6 +83,13 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
       expect(cache).not.toBeNull();
       expect(cache!.state).toEqual(meaningfulState as any);
       expect(await syncLocalState.isWhollyFreshClient()).toBe(false);
+
+      // The clientId rotated atomically inside the destructive replacement.
+      const rotatedId = await (storeService as any).db.get(
+        STORE_NAMES.CLIENT_ID,
+        SINGLETON_KEY,
+      );
+      expect(rotatedId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
     });
   });
 
@@ -108,8 +104,8 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
         entityType: 'TASK' as any,
         entityId: `t${i}`,
         payload: { id: `t${i}` },
-        clientId: 'cPrior',
-        vectorClock: { cPrior: i + 1 },
+        clientId: 'cPriorClient',
+        vectorClock: { cPriorClient: i + 1 },
         timestamp: Date.now() + i,
         schemaVersion: CURRENT_SCHEMA_VERSION,
       }));
@@ -119,11 +115,15 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
       await storeService.saveStateCache({
         state: { sentinel: 'prior-state' } as any,
         lastAppliedOpSeq: 0,
-        vectorClock: { cPrior: 3 },
+        vectorClock: { cPriorClient: 3 },
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
       });
-      await storeService.setVectorClock({ cPrior: 3 });
+      await storeService.setVectorClock({ cPriorClient: 3 });
+
+      // Seed a prior clientId in SUP_OPS — the aborted rotation must not touch
+      // it. This is the property withRotation used to provide by hand (#7732).
+      await (storeService as any).db.put(STORE_NAMES.CLIENT_ID, 'B_seed', SINGLETON_KEY);
 
       const seqBefore = await storeService.getLastSeq();
       const cacheBefore = await storeService.loadStateCache();
@@ -159,6 +159,11 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
       expect((cacheAfter!.state as any).sentinel).toBe('prior-state');
       expect(cacheAfter!.vectorClock).toEqual(cacheBefore!.vectorClock);
       expect(await storeService.getVectorClock()).toEqual(clockBefore);
+      // The rotated clientId was queued first inside the tx; the abort unwinds
+      // it — SUP_OPS.client_id still holds the prior id.
+      expect(
+        await (storeService as any).db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY),
+      ).toBe('B_seed');
     });
   });
 
@@ -172,8 +177,8 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
         entityType: 'TASK' as any,
         entityId: `t${i}`,
         payload: { id: `t${i}` },
-        clientId: 'cPrior',
-        vectorClock: { cPrior: i + 1 },
+        clientId: 'cPriorClient',
+        vectorClock: { cPriorClient: i + 1 },
         timestamp: Date.now() + i,
         schemaVersion: CURRENT_SCHEMA_VERSION,
       }));
