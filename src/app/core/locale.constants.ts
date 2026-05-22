@@ -75,6 +75,21 @@ export const DateTimeLocales = {
   ro_ro: `${LanguageCode.ro}-ro`,
   ro_md: `${LanguageCode.ro}-md`,
   pl_pl: `${LanguageCode.pl}-pl`,
+  // English region variants below are NOT exposed in the dropdown —
+  // they exist so `LocaleImportFns` registers Angular locale data for
+  // common navigator.language values when the user picks "System
+  // default". Without these, Angular's DatePipe falls back through 'en'
+  // (bound to en-GB data) and shows 24h for en-AU/en-CA/en-NZ users.
+  // Scope: English variants only; other languages (es-MX, fr-CA, …)
+  // already fall back to their language code which is locale-correct.
+  en_au: `${LanguageCode.en}-au`,
+  en_ca: `${LanguageCode.en}-ca`,
+  en_ie: `${LanguageCode.en}-ie`,
+  en_in: `${LanguageCode.en}-in`,
+  en_nz: `${LanguageCode.en}-nz`,
+  en_ph: `${LanguageCode.en}-ph`,
+  en_sg: `${LanguageCode.en}-sg`,
+  en_za: `${LanguageCode.en}-za`,
 } as const;
 
 export type DateTimeLocale = (typeof DateTimeLocales)[keyof typeof DateTimeLocales];
@@ -132,6 +147,16 @@ export const LocaleImportFns: Record<
   ro_ro: () => import('@angular/common/locales/ro'),
   ro_md: () => import('@angular/common/locales/ro-MD'),
   vi: () => import('@angular/common/locales/vi'),
+  // English region variants for navigator.language fallback (not in
+  // the UI dropdown — see DateTimeLocales comment).
+  en_au: () => import('@angular/common/locales/en-AU'),
+  en_ca: () => import('@angular/common/locales/en-CA'),
+  en_ie: () => import('@angular/common/locales/en-IE'),
+  en_in: () => import('@angular/common/locales/en-IN'),
+  en_nz: () => import('@angular/common/locales/en-NZ'),
+  en_ph: () => import('@angular/common/locales/en-PH'),
+  en_sg: () => import('@angular/common/locales/en-SG'),
+  en_za: () => import('@angular/common/locales/en-ZA'),
 };
 
 /** Default locale data, statically imported for instant availability */
@@ -140,3 +165,23 @@ export const DEFAULT_LOCALE_DATA = localeEnGB;
 export const DEFAULT_LANGUAGE = LanguageCode.en;
 export const DEFAULT_LOCALE = DateTimeLocales.en_gb;
 export const DEFAULT_FIRST_DAY_OF_WEEK = 1; // monday
+
+/**
+ * Returns the system-reported locale as a lowercase BCP-47 string
+ * (e.g. `en-au`, `de-de`), suitable for `Intl.DateTimeFormat` and the
+ * Material `DateAdapter`. Falls back to {@link DEFAULT_LOCALE} when
+ * `navigator.language` is unavailable (e.g. SSR or unit tests).
+ *
+ * In Electron, `navigator.language` reflects `app.getLocale()` which is
+ * resolved from the OS. In browsers, it reflects the browser's UI
+ * language. In Capacitor WebViews, it reflects the device locale.
+ *
+ * Return type is `string` rather than `DateTimeLocale` because the value
+ * is an arbitrary BCP-47 tag — only a subset matches the curated union.
+ */
+export const getSystemDefaultLocale = (): string => {
+  if (typeof navigator !== 'undefined' && navigator.language) {
+    return navigator.language.toLowerCase();
+  }
+  return DEFAULT_LOCALE;
+};

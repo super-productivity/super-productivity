@@ -1,7 +1,7 @@
 import { computed, effect, inject, Injectable } from '@angular/core';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { DateAdapter } from '@angular/material/core';
-import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
+import { getSystemDefaultLocale } from 'src/app/core/locale.constants';
 
 @Injectable({
   providedIn: 'root',
@@ -10,9 +10,15 @@ export class DateTimeFormatService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private _dateAdapter = inject(DateAdapter);
 
-  // Signal for the locale to use
-  readonly currentLocale = computed<DateTimeLocale>(() => {
-    return this._globalConfigService.localization()?.dateTimeLocale || DEFAULT_LOCALE;
+  // Signal for the locale to use. When the config value is unset
+  // ("System default"), resolve to navigator.language so date/time formatting
+  // follows the OS / browser locale instead of the hardcoded en-GB fallback.
+  // Typed as `string` because the resolved value can be any BCP-47 tag,
+  // not just a member of the curated DateTimeLocale union.
+  readonly currentLocale = computed<string>(() => {
+    return (
+      this._globalConfigService.localization()?.dateTimeLocale || getSystemDefaultLocale()
+    );
   });
 
   /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */
@@ -52,15 +58,16 @@ export class DateTimeFormatService {
   });
 
   constructor() {
-    // Use effect to reactively update date adapter locale when config changes
+    // Use effect to reactively update date adapter locale when config changes.
+    // Read from currentLocale() so "System default" also propagates to the
+    // adapter (via navigator.language) rather than leaving it at en-GB.
     effect(() => {
-      const cfgValue = this._globalConfigService.localization()?.dateTimeLocale;
-      if (cfgValue) this.setDateAdapterLocale(cfgValue);
+      this.setDateAdapterLocale(this.currentLocale());
     });
   }
 
   /** Set the locale for the date adapter formatting */
-  setDateAdapterLocale(locale: DateTimeLocale): void {
+  setDateAdapterLocale(locale: string): void {
     this._dateAdapter.setLocale(locale);
   }
 
@@ -74,7 +81,7 @@ export class DateTimeFormatService {
    * // For en-GB locale
    * formatTime(new Date(2000, 11, 31, 13, 0, 0).getTime()); // 13:00
    */
-  formatTime(timestamp: number, locale: DateTimeLocale = this.currentLocale()): string {
+  formatTime(timestamp: number, locale: string = this.currentLocale()): string {
     return new Date(timestamp).toLocaleTimeString(locale, {
       hour: 'numeric',
       minute: 'numeric',
@@ -91,7 +98,7 @@ export class DateTimeFormatService {
    * // For en-GB locale
    * formatDate(new Date(2000, 11, 31), 'en-GB'); // 31/12/2000
    */
-  formatDate(date: Date, locale: DateTimeLocale = this.currentLocale()): string {
+  formatDate(date: Date, locale: string = this.currentLocale()): string {
     const formatter = new Intl.DateTimeFormat(locale, {
       year: 'numeric',
       month: '2-digit',

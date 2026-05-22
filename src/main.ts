@@ -328,7 +328,11 @@ bootstrapApplication(AppComponent, {
   // Register default locale immediately (statically imported, no network fetch)
   registerLocaleData(DEFAULT_LOCALE_DATA, DEFAULT_LANGUAGE);
 
-  // Lazily load and register remaining locales during idle time
+  // Lazily load and register remaining locales during idle time.
+  // The set includes English region variants (en-au, en-ca, en-nz, etc)
+  // not exposed in the UI dropdown — they back the navigator.language
+  // fallback so "System default" gets the right 12/24h + date format on
+  // those systems. See locale.constants.ts for the full list.
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {

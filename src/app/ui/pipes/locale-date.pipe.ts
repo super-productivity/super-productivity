@@ -1,6 +1,7 @@
 import { inject, Pipe, PipeTransform } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { DEFAULT_LOCALE } from '../../core/locale.constants';
 
 /**
  * Custom date pipe that respects the user's configured locale
@@ -38,8 +39,21 @@ export class LocaleDatePipe implements PipeTransform {
     try {
       return this._datePipe.transform(value, format, timezone, effectiveLocale);
     } catch (e) {
+      // Angular throws RuntimeError(701) when locale data isn't registered
+      // (any locale whose language subtag isn't 'en' and isn't in the app's
+      // 24 registered languages). Retry with the default locale so the date
+      // renders instead of going blank in UI. Mirrors safeFormatDate.
       console.warn('LocaleDatePipe: failed to format value', value, e);
-      return null;
+      try {
+        return new DatePipe(DEFAULT_LOCALE).transform(
+          value,
+          format,
+          timezone,
+          DEFAULT_LOCALE,
+        );
+      } catch {
+        return null;
+      }
     }
   }
 }

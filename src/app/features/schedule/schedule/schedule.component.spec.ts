@@ -112,7 +112,10 @@ describe('ScheduleComponent', () => {
           useValue: mockGlobalTrackingIntervalService,
         },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
-        { provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 1 } },
+        {
+          provide: DateAdapter,
+          useValue: { getFirstDayOfWeek: () => 1, setLocale: () => undefined },
+        },
       ],
     }).compileComponents();
 

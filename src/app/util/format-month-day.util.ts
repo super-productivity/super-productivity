@@ -1,6 +1,5 @@
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { Log } from '../core/log';
-import { DateTimeLocale } from '../core/locale.constants';
 import { dateTimeFormatter } from './datetime-formatter';
 
 /**
@@ -17,7 +16,7 @@ import { dateTimeFormatter } from './datetime-formatter';
  * @param locale The locale string (e.g., 'en-US', 'de-DE')
  * @returns Formatted month/day string, or empty string if formatting fails
  */
-export const formatMonthDay = (date: Date, locale: DateTimeLocale): string => {
+export const formatMonthDay = (date: Date, locale: string): string => {
   try {
     // Validate the date first
     if (!date || isNaN(date.getTime())) return '';
