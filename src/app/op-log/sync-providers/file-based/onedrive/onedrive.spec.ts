@@ -225,9 +225,11 @@ describe('OneDrive', () => {
   it('should avoid repeated folder existence checks after first successful upload', async () => {
     cfgStoreSpy.load.and.resolveTo(baseCfg);
 
+    let getCount = 0;
     let postCount = 0;
     fetchSpy.and.callFake(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'GET') {
+        getCount++;
         return {
           ok: true,
           status: 200,
@@ -268,7 +270,8 @@ describe('OneDrive', () => {
       provider.uploadFile('file-2.json', '{"a":2}', null, true),
     ).toBeResolved();
 
-    // The GET probe succeeds so no POST folder creation is needed
+    // First upload probes the folder; second upload hits the cache
+    expect(getCount).toBe(1);
     expect(postCount).toBe(0);
   });
 
@@ -354,7 +357,6 @@ describe('OneDrive', () => {
     };
     // load() returns expired cfg; clearAuthCredentials also calls load() before setComplete
     cfgStoreSpy.load.and.resolveTo(expiredCfg);
-    cfgStoreSpy.setComplete.and.resolveTo();
 
     fetchSpy.and.callFake(async (url: string) => {
       if (url.includes('/oauth2/v2.0/token')) {

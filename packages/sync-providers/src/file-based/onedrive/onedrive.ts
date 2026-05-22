@@ -90,7 +90,10 @@ export class OneDrive implements FileSyncProvider<
     }
     // Null without awaiting: clearAuthCredentials can be called from inside
     // the refresh IIFE (invalid_grant path), so awaiting would deadlock.
-    // The IIFE's currentCfg.refreshToken guard already prevents stale writes.
+    // NOTE: an external concurrent call (e.g. user disconnect) has a narrow
+    // TOCTOU window — the in-flight IIFE may still overwrite cleared creds
+    // if its refresh succeeds. Risk is low in practice and would self-correct
+    // on the next sync cycle.
     this._tokenRefreshInFlightPromise = null;
     await this.privateCfg.setComplete({
       ...cfg,
@@ -141,7 +144,7 @@ export class OneDrive implements FileSyncProvider<
     } catch (e) {
       this._mapAndThrow(e);
     }
-    throw new RemoteFileNotFoundAPIError(targetPath);
+    throw new RemoteFileNotFoundAPIError();
   }
 
   async downloadFile(targetPath: string): Promise<{ rev: string; dataStr: string }> {
@@ -169,7 +172,7 @@ export class OneDrive implements FileSyncProvider<
     } catch (e) {
       this._mapAndThrow(e);
     }
-    throw new RemoteFileNotFoundAPIError(targetPath);
+    throw new RemoteFileNotFoundAPIError();
   }
 
   async uploadFile(
@@ -198,7 +201,7 @@ export class OneDrive implements FileSyncProvider<
     } catch (e) {
       this._mapAndThrow(e);
     }
-    throw new UploadRevToMatchMismatchAPIError(targetPath);
+    throw new UploadRevToMatchMismatchAPIError();
   }
 
   async removeFile(targetPath: string): Promise<void> {
@@ -509,6 +512,13 @@ export class OneDrive implements FileSyncProvider<
           throw new MissingRefreshTokenAPIError();
         }
       }
+      if (response.status === 401) {
+        this._deps.logger.warn(
+          '[OneDrive] Token endpoint returned 401, clearing credentials',
+        );
+        await this.clearAuthCredentials();
+        throw new MissingRefreshTokenAPIError();
+      }
       const redactedBody = this._redactTokenBody(body);
       throw new HttpNotOkAPIError(response, redactedBody);
     }
@@ -568,7 +578,7 @@ export class OneDrive implements FileSyncProvider<
         }
       }
       await this.clearAuthCredentials();
-      throw new AuthFailSPError('OneDrive 401', options.path, responseBody);
+      throw new AuthFailSPError('OneDrive 401');
     }
 
     if (response.status === 403) {
