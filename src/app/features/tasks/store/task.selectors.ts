@@ -191,11 +191,6 @@ export const selectActiveTaskMap = createSelector(
   (activeTasks): Map<string, Task> => new Map(activeTasks.map((t) => [t.id, t])),
 );
 
-export const selectAllTasksWithSubTasksInActiveProjects = createSelector(
-  selectAllTasksInActiveProjects,
-  mapSubTasksToTasks,
-);
-
 export const selectOverdueTasks = createSelector(
   selectAllTasksInActiveProjects,
   selectTodayStr,
