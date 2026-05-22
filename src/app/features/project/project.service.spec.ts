@@ -24,6 +24,7 @@ describe('ProjectService', () => {
   let service: ProjectService;
   let store: MockStore;
   let taskService: jasmine.SpyObj<TaskService>;
+  let snackService: jasmine.SpyObj<SnackService>;
   let workContextService: jasmine.SpyObj<WorkContextService>;
   let timeTrackingService: jasmine.SpyObj<TimeTrackingService>;
 
@@ -131,7 +132,10 @@ describe('ProjectService', () => {
           },
         },
         { provide: WorkContextService, useValue: workContextService },
-        { provide: SnackService, useValue: { open: () => {} } },
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
         {
           provide: TaskRepeatCfgService,
           useValue: { getTaskRepeatCfgsWithLabels$: () => of([]) },
@@ -153,6 +157,7 @@ describe('ProjectService', () => {
     });
     (timeTrackingService.state$ as any) = of({});
     service = TestBed.inject(ProjectService);
+    snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
     store = TestBed.inject(Store) as MockStore<any>;
     store.overrideSelector(selectTaskFeatureState, initialTaskState);
     store.overrideSelector(selectNoteFeatureState, initialNoteState);
@@ -274,5 +279,61 @@ describe('ProjectService', () => {
       expect(addNoteCalls.length).toBe(1);
       expect((addNoteCalls[0][0] as any).note.isPinnedToToday).toBe(false);
     }));
+  });
+
+  describe('archive', () => {
+    it('should dispatch archiveProject action', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.archive('project-1');
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Archive Project');
+    });
+
+    it('should show snack with archive icon and UNDO action', () => {
+      service.archive('project-1');
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          ico: 'archive',
+          msg: T.F.PROJECT.S.ARCHIVED,
+          actionStr: T.G.UNDO,
+        }),
+      );
+    });
+
+    it('should call unarchive when snack actionFn is triggered', () => {
+      spyOn(service, 'unarchive');
+      service.archive('project-1');
+      const callArgs = snackService.open.calls.mostRecent().args[0] as any;
+      callArgs.actionFn();
+      expect(service.unarchive).toHaveBeenCalledWith('project-1');
+    });
+  });
+
+  describe('unarchive', () => {
+    it('should dispatch unarchiveProject action', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.unarchive('project-1');
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Unarchive Project');
+    });
+
+    it('should show snack with unarchive icon and UNDO action', () => {
+      service.unarchive('project-1');
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          ico: 'unarchive',
+          msg: T.F.PROJECT.S.UNARCHIVED,
+          actionStr: T.G.UNDO,
+        }),
+      );
+    });
+
+    it('should call archive when snack actionFn is triggered', () => {
+      spyOn(service, 'archive');
+      service.unarchive('project-1');
+      const callArgs = snackService.open.calls.mostRecent().args[0] as any;
+      callArgs.actionFn();
+      expect(service.archive).toHaveBeenCalledWith('project-1');
+    });
   });
 });

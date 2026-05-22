@@ -130,12 +130,6 @@ export class WorkContextMenuComponent implements OnInit {
     if (activeId === this.contextId) {
       await this._router.navigateByUrl('/');
     }
-    this._snackService.open({
-      ico: 'archive',
-      msg: T.F.PROJECT.S.ARCHIVED,
-      actionStr: T.G.UNDO,
-      actionFn: () => this._projectService.unarchive(this.contextId),
-    });
   }
 
   async duplicateProject(): Promise<void> {

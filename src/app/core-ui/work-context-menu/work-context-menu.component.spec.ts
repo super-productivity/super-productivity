@@ -10,7 +10,6 @@ import { WorkContextMarkdownService } from '../../features/work-context/work-con
 import { ShareService } from '../../core/share/share.service';
 import { Store } from '@ngrx/store';
 import { TranslateModule } from '@ngx-translate/core';
-import { T } from '../../t.const';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 
 describe('WorkContextMenuComponent', () => {
@@ -18,7 +17,6 @@ describe('WorkContextMenuComponent', () => {
   let mockProjectService: jasmine.SpyObj<ProjectService>;
   let mockWorkContextService: { activeWorkContextId: string | undefined };
   let router: Router;
-  let mockSnackService: jasmine.SpyObj<SnackService>;
 
   beforeEach(() => {
     mockProjectService = jasmine.createSpyObj('ProjectService', [
@@ -27,7 +25,6 @@ describe('WorkContextMenuComponent', () => {
       'getByIdOnce$',
     ]);
     mockWorkContextService = { activeWorkContextId: undefined };
-    mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
     const mockShareService = jasmine.createSpyObj('ShareService', ['getShareSupport']);
     mockShareService.getShareSupport.and.returnValue(Promise.resolve('none'));
@@ -38,7 +35,7 @@ describe('WorkContextMenuComponent', () => {
         provideRouter([]),
         { provide: ProjectService, useValue: mockProjectService },
         { provide: WorkContextService, useValue: mockWorkContextService },
-        { provide: SnackService, useValue: mockSnackService },
+        { provide: SnackService, useValue: { open: () => {} } },
         { provide: MatDialog, useValue: jasmine.createSpyObj('MatDialog', ['open']) },
         {
           provide: TagService,
@@ -64,24 +61,6 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.archive).toHaveBeenCalledWith('project-123');
     });
 
-    it('should show a snack notification after archiving', async () => {
-      await component.archiveProject();
-      expect(mockSnackService.open).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          ico: 'archive',
-          msg: T.F.PROJECT.S.ARCHIVED,
-          actionStr: T.G.UNDO,
-        }),
-      );
-    });
-
-    it('should call projectService.unarchive when undo action is triggered', async () => {
-      await component.archiveProject();
-      const callArgs = mockSnackService.open.calls.mostRecent().args[0];
-      callArgs['actionFn']();
-      expect(mockProjectService.unarchive).toHaveBeenCalledWith('project-123');
-    });
-
     it('should navigate away when archiving the currently active project', async () => {
       mockWorkContextService.activeWorkContextId = 'project-123';
       await component.archiveProject();
@@ -98,7 +77,6 @@ describe('WorkContextMenuComponent', () => {
       mockWorkContextService.activeWorkContextId = undefined;
       await component.archiveProject();
       expect(mockProjectService.archive).toHaveBeenCalledWith('project-123');
-      expect(mockSnackService.open).toHaveBeenCalled();
       expect(router.navigateByUrl).not.toHaveBeenCalled();
     });
   });
