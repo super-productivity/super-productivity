@@ -1009,6 +1009,28 @@ describe('Task Selectors', () => {
         expect(dueDays[i - 1].localeCompare(dueDays[i])).toBeLessThanOrEqual(0);
       }
     });
+
+    it('should include subtasks with dueDay', () => {
+      const subtaskWithDueDay: Task = {
+        id: 'subtaskWithDue',
+        title: 'Subtask with Due',
+        created: Date.now(),
+        isDone: false,
+        subTaskIds: [],
+        tagIds: [],
+        projectId: 'project1',
+        parentId: 'task1',
+        timeSpentOnDay: {},
+        dueDay: tomorrow,
+        timeEstimate: 0,
+        timeSpent: 0,
+        attachments: [],
+      };
+      const tasksWithSubtask = [...Object.values(mockTasks), subtaskWithDueDay];
+      const result =
+        fromSelectors.selectAllUndoneTasksWithDueDay.projector(tasksWithSubtask);
+      expect(result.map((t) => t.id)).toContain('subtaskWithDue');
+    });
   });
 
   describe('selectAllUndoneTasksWithDeadlineSorted', () => {

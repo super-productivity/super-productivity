@@ -827,6 +827,16 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
       expect(result.length).toBe(0);
     });
 
+    it('should handle missing entity references in planner days with empty task state gracefully', () => {
+      const mockState = createMockState(
+        { ids: [], entities: {} },
+        { days: { [today]: ['nonexistent'] } },
+      );
+
+      expect(() => fromSelectors.selectAllTasksDueToday(mockState)).not.toThrow();
+      expect(fromSelectors.selectAllTasksDueToday(mockState)).toEqual([]);
+    });
+
     it('should handle missing entity references in planner gracefully', () => {
       // Planner references a task that doesn't exist in taskState
       const mockState = createMockState(
