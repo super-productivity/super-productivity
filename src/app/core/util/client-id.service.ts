@@ -45,6 +45,7 @@ const PF_LEGACY_CLIENT_ID_KEY = 'CLIENT_ID';
 })
 export class ClientIdService {
   private _supOpsDb: IDBPDatabase | null = null;
+  private _supOpsDbPromise: Promise<IDBPDatabase> | null = null;
   private _cachedClientId: string | null = null;
 
   /**
@@ -212,14 +213,13 @@ export class ClientIdService {
     const db = await this._getSupOpsDb();
     const tx = db.transaction(STORE_NAMES.CLIENT_ID, 'readwrite');
     const raced = await tx.store.get(SINGLETON_KEY);
-    if (isValidClientIdFormat(raced)) {
-      await tx.done;
-      return raced;
+    // A valid id already there (another tab, a rotation) wins — never clobbered.
+    const resolved = isValidClientIdFormat(raced) ? raced : factory();
+    if (resolved !== raced) {
+      await tx.store.put(resolved, SINGLETON_KEY);
     }
-    const next = factory();
-    await tx.store.put(next, SINGLETON_KEY);
     await tx.done;
-    return next;
+    return resolved;
   }
 
   /**
@@ -230,14 +230,28 @@ export class ClientIdService {
    * would form a DI cycle. Two same-origin connections to one store are safe:
    * IndexedDB serializes transactions across them.
    *
-   * A transient open failure surfaces as a thrown error (handled per the
-   * resolver contract); this open deliberately omits the heavy retry logic in
-   * OperationLogStoreService.
+   * Concurrent first callers share a single in-flight open via
+   * `_supOpsDbPromise` — without it, each racing caller would open its own
+   * connection and all but the last would leak. A transient open failure
+   * surfaces as a thrown error (handled per the resolver contract) and clears
+   * the in-flight promise so the next call retries; this open deliberately
+   * omits the heavy retry logic in OperationLogStoreService.
    */
   private async _getSupOpsDb(): Promise<IDBPDatabase> {
     if (this._supOpsDb) {
       return this._supOpsDb;
     }
+    if (!this._supOpsDbPromise) {
+      this._supOpsDbPromise = this._openSupOpsDb();
+    }
+    try {
+      return await this._supOpsDbPromise;
+    } finally {
+      this._supOpsDbPromise = null;
+    }
+  }
+
+  private async _openSupOpsDb(): Promise<IDBPDatabase> {
     const db = await openDB(SUP_OPS_DB_NAME, SUP_OPS_DB_VERSION, {
       upgrade: (database, oldVersion, _newVersion, transaction) => {
         runDbUpgrade(database, oldVersion, transaction);
@@ -253,6 +267,6 @@ export class ClientIdService {
       this._supOpsDb = null;
     });
     this._supOpsDb = db;
-    return this._supOpsDb;
+    return db;
   }
 }

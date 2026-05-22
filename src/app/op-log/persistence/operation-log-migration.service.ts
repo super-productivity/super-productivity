@@ -235,11 +235,12 @@ export class OperationLogMigrationService {
       OpLog.normal('OperationLogMigrationService: Data repair successful');
     }
 
-    // 3. Get client ID (inherit from legacy or generate new).
+    // 3. Get client ID (inherit from legacy or resolve via ClientIdService).
     // The genesis op's clientId MUST come from the legacy PFAPI `CLIENT_ID`
     // key, because meta.vectorClock below is keyed by that same identity.
-    // getOrGenerateClientId() is only the fallback for a legacy device with no
-    // CLIENT_ID at all — there is no identity to preserve, so generating fits.
+    // getOrGenerateClientId() is the fallback only when `CLIENT_ID` is absent:
+    // it resolves whatever id this device already has (e.g. pf `__client_id_`)
+    // and generates a fresh one only when no id exists anywhere.
     const meta = await this.legacyPfDb.loadMetaModel();
     const legacyClientId = await this.legacyPfDb.loadClientId();
     const clientId =
