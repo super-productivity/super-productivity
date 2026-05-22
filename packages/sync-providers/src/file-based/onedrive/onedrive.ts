@@ -505,14 +505,16 @@ export class OneDrive implements FileSyncProvider<
           /* not JSON */
         }
         if (parsed?.error === 'invalid_grant') {
-          this._deps.logger.warn(
-            '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
-          );
-          await this.clearAuthCredentials();
-          throw new MissingRefreshTokenAPIError();
+          if (req.grantType === 'refresh_token') {
+            this._deps.logger.warn(
+              '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
+            );
+            await this.clearAuthCredentials();
+            throw new MissingRefreshTokenAPIError();
+          }
         }
       }
-      if (response.status === 401) {
+      if (response.status === 401 && req.grantType === 'refresh_token') {
         this._deps.logger.warn(
           '[OneDrive] Token endpoint returned 401, clearing credentials',
         );

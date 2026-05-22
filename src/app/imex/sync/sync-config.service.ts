@@ -321,12 +321,12 @@ export class SyncConfigService {
     // to maintain security boundaries - credentials never go to global config
     const superSync = newSettings.superSync;
     let globalConfig: SyncPublicConfig = {
-      isEnabled: newSettings.isEnabled,
-      isEncryptionEnabled: newSettings.isEncryptionEnabled,
-      isCompressionEnabled: newSettings.isCompressionEnabled,
-      syncProvider: newSettings.syncProvider,
-      syncInterval: newSettings.syncInterval,
-      isManualSyncOnly: newSettings.isManualSyncOnly,
+      isEnabled: newSettings.isEnabled ?? false,
+      isEncryptionEnabled: newSettings.isEncryptionEnabled ?? false,
+      isCompressionEnabled: newSettings.isCompressionEnabled ?? false,
+      syncProvider: newSettings.syncProvider ?? SyncProviderId.WebDAV,
+      syncInterval: newSettings.syncInterval ?? 300000,
+      isManualSyncOnly: newSettings.isManualSyncOnly ?? false,
     };
     // Provider-specific settings (URLs, credentials) must be stored securely
     if (providerId) {

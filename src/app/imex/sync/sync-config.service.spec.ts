@@ -102,10 +102,10 @@ describe('SyncConfigService', () => {
       expect(globalConfigService.updateSection).toHaveBeenCalledWith('sync', {
         isEnabled: true,
         isEncryptionEnabled: true,
-        isCompressionEnabled: undefined,
+        isCompressionEnabled: false,
         syncProvider: SyncProviderId.WebDAV,
         syncInterval: 300000,
-        isManualSyncOnly: undefined,
+        isManualSyncOnly: false,
       });
     });
 

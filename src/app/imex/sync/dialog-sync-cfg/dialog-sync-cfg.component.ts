@@ -381,6 +381,10 @@ export class DialogSyncCfgComponent implements AfterViewInit {
             providerSpecificUpdate = {
               encryptKey: privateCfg.encryptKey || '',
             };
+          } else if (newProvider === SyncProviderId.OneDrive && privateCfg) {
+            providerSpecificUpdate = {
+              encryptKey: privateCfg.encryptKey || '',
+            };
           }
 
           // Update the model, preserving non-provider-specific fields
