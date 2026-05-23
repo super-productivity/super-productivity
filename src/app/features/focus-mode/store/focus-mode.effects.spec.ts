@@ -1004,22 +1004,6 @@ describe('FocusModeEffects', () => {
       expect(metricServiceMock.logFocusSession).toHaveBeenCalledWith(25 * 60 * 1000);
     });
 
-    it('should call metricService.logFocusSession with duration on offerFlowtimeBreak', () => {
-      actions$ = of(
-        actions.offerFlowtimeBreak({
-          duration: 5 * 60 * 1000,
-          isLongBreak: false,
-          pausedTaskId: 'task-123',
-        }),
-      );
-      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
-      store.refreshState();
-
-      effects.logFocusSession$.subscribe();
-
-      expect(metricServiceMock.logFocusSession).toHaveBeenCalledWith(25 * 60 * 1000);
-    });
-
     it('should NOT log when duration is 0', () => {
       actions$ = of(actions.completeFocusSession({ isManual: false }));
       store.overrideSelector(selectors.selectLastSessionDuration, 0);
@@ -1353,9 +1337,33 @@ describe('FocusModeEffects', () => {
       }, 50);
     });
 
-    it('should dispatch pauseFocusSession during break when tracking stops (Bug #5954)', (done) => {
+    it('should dispatch pauseFocusSession during break when tracking stops and isPauseTrackingDuringBreak is false (Bug #5954)', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
+        isPauseTrackingDuringBreak: false,
+      });
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({ isRunning: true, purpose: 'break' }),
+      );
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.syncTrackingStopToSession$.pipe(take(1)).subscribe((action) => {
+        expect(action.type).toBe('[FocusMode] Pause Session');
+        expect((action as any).pausedTaskId).toBe('task-123');
+        done();
+      });
+
+      currentTaskId$.next('task-123');
+      currentTaskId$.next(null);
+    });
+
+    it('should NOT dispatch during break when isPauseTrackingDuringBreak is true (Bug #5954)', (done) => {
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isPauseTrackingDuringBreak: true,
       });
       store.overrideSelector(
         selectors.selectTimer,
@@ -1366,22 +1374,17 @@ describe('FocusModeEffects', () => {
       effects = TestBed.inject(FocusModeEffects);
 
       let dispatched = false;
-      effects.syncTrackingStopToSession$.subscribe((action) => {
-        expect(action.type).toBe('[FocusMode] Pause Session');
-        expect((action as any).pausedTaskId).toBe('task-123');
+      effects.syncTrackingStopToSession$.subscribe(() => {
         dispatched = true;
       });
 
       currentTaskId$.next('task-123');
+      currentTaskId$.next(null);
 
       setTimeout(() => {
-        currentTaskId$.next(null);
-      }, 10);
-
-      setTimeout(() => {
-        expect(dispatched).toBe(true);
+        expect(dispatched).toBe(false);
         done();
-      }, 100);
+      }, 50);
     });
 
     it('should NOT dispatch when switching to different task (not stopping)', (done) => {
@@ -2530,96 +2533,6 @@ describe('FocusModeEffects', () => {
           expect(action.type).toEqual('[FocusMode] Show Overlay');
           done();
         });
-      });
-    });
-
-    describe('syncTrackingStopToSession$ edge cases (break handling)', () => {
-      it('should NOT dispatch when break timer is paused (not running)', (done) => {
-        store.overrideSelector(selectFocusModeConfig, {
-          isSkipPreparation: false,
-        });
-        // Break is paused - timer not running
-        store.overrideSelector(
-          selectors.selectTimer,
-          createMockTimer({ isRunning: false, purpose: 'break' }),
-        );
-        store.refreshState();
-
-        effects = TestBed.inject(FocusModeEffects);
-
-        currentTaskId$.next('task-123');
-
-        setTimeout(() => {
-          currentTaskId$.next(null);
-        }, 10);
-
-        setTimeout(() => {
-          // Should not dispatch when break timer is already paused
-          done();
-        }, 50);
-      });
-
-      it('should handle Pomodoro mode break correctly', (done) => {
-        store.overrideSelector(selectFocusModeConfig, {
-          isSkipPreparation: false,
-        });
-        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-        store.overrideSelector(
-          selectors.selectTimer,
-          createMockTimer({ isRunning: true, purpose: 'break', duration: 5 * 60 * 1000 }),
-        );
-        store.refreshState();
-
-        effects = TestBed.inject(FocusModeEffects);
-
-        let dispatched = false;
-        effects.syncTrackingStopToSession$.subscribe((action) => {
-          expect(action.type).toBe('[FocusMode] Pause Session');
-          expect((action as any).pausedTaskId).toBe('task-123');
-          dispatched = true;
-        });
-
-        currentTaskId$.next('task-123');
-
-        setTimeout(() => {
-          currentTaskId$.next(null);
-        }, 10);
-
-        setTimeout(() => {
-          expect(dispatched).toBe(true);
-          done();
-        }, 100);
-      });
-
-      it('should dispatch clearStartingBreakFlag instead of pauseFocusSession when isStartingBreak is true', (done) => {
-        store.overrideSelector(selectFocusModeConfig, {
-          isSkipPreparation: false,
-        });
-        store.overrideSelector(
-          selectors.selectTimer,
-          createMockTimer({ isRunning: true, purpose: 'break' }),
-        );
-        store.overrideSelector(selectors.selectIsStartingBreak, true);
-        store.refreshState();
-
-        effects = TestBed.inject(FocusModeEffects);
-
-        let dispatchedAction: any = null;
-        effects.syncTrackingStopToSession$.subscribe((action) => {
-          dispatchedAction = action;
-        });
-
-        currentTaskId$.next('task-123');
-
-        setTimeout(() => {
-          currentTaskId$.next(null);
-        }, 10);
-
-        setTimeout(() => {
-          expect(dispatchedAction).toBeDefined();
-          expect(dispatchedAction.type).toBe('[FocusMode] Clear Starting Break Flag');
-          done();
-        }, 100);
       });
     });
 

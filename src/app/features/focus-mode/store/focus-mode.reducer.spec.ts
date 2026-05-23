@@ -300,26 +300,6 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(true);
     });
 
-    it('should not unpause a BreakOffer state', () => {
-      const pausedBreakOfferState = {
-        ...initialState,
-        timer: {
-          isRunning: false,
-          startedAt: null,
-          elapsed: 0,
-          duration: 300000,
-          purpose: 'break' as const,
-        },
-        mainState: FocusMainUIState.BreakOffer,
-        currentScreen: FocusScreen.Break,
-      };
-
-      const action = a.unPauseFocusSession();
-      const result = focusModeReducer(pausedBreakOfferState, action);
-
-      expect(result).toBe(pausedBreakOfferState);
-    });
-
     it('should not unpause sessions with no purpose (idle)', () => {
       const idleState = {
         ...initialState,
@@ -429,21 +409,6 @@ describe('FocusModeReducer', () => {
       expect(result.currentScreen).toBe(initialState.currentScreen);
     });
 
-    it('offerFlowtimeBreak should switch currentScreen to Break and set break timer', () => {
-      const action = a.offerFlowtimeBreak({
-        duration: 5000,
-        isLongBreak: false,
-      });
-      const result = focusModeReducer(initialState, action);
-
-      expect(result.currentScreen).toBe(FocusScreen.Break);
-      expect(result.mainState).toBe(FocusMainUIState.BreakOffer);
-      expect(result.timer.isRunning).toBe(false);
-      expect(result.timer.elapsed).toBe(0);
-      expect(result.timer.purpose).toBe('break');
-      expect(result.timer.duration).toBe(5000);
-    });
-
     it('should start break with default duration', () => {
       const action = a.startBreak({});
       const result = focusModeReducer(initialState, action);
@@ -454,18 +419,6 @@ describe('FocusModeReducer', () => {
       expect(result.timer.purpose).toBe('break');
       expect(result.timer.duration).toBe(FOCUS_MODE_DEFAULTS.SHORT_BREAK_DURATION);
       expect(result.timer.isLongBreak).toBe(false);
-      expect(result._isStartingBreak).toBe(true);
-    });
-
-    it('should clear _isStartingBreak flag', () => {
-      const startingBreakState = {
-        ...initialState,
-        _isStartingBreak: true,
-      };
-      const action = a.clearStartingBreakFlag();
-      const result = focusModeReducer(startingBreakState, action);
-
-      expect(result._isStartingBreak).toBe(false);
     });
 
     it('should start long break', () => {

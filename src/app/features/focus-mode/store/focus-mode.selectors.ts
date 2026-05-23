@@ -98,12 +98,6 @@ export const selectIsResumingBreak = createSelector(
   (state) => state._isResumingBreak,
 );
 
-// Internal flag for break start tracking
-export const selectIsStartingBreak = createSelector(
-  selectFocusModeState,
-  (state) => state._isStartingBreak,
-);
-
 // Overtime selectors
 export const selectIsOvertimeEnabled = createSelector(
   selectFocusModeState,

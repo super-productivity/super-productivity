@@ -12,7 +12,6 @@ export enum FocusMainUIState {
   Preparation = 'Preparation',
   Countdown = 'Countdown',
   InProgress = 'InProgress',
-  BreakOffer = 'BreakOffer',
 }
 
 // UI screens enum
@@ -51,9 +50,6 @@ export interface FocusModeState {
 
   // Internal flag: tracks if break resume is in progress
   _isResumingBreak: boolean;
-
-  // Internal flag: tracks if break is starting (to prevent pause race condition)
-  _isStartingBreak: boolean;
 
   // Internal flag: when true, tick reducer won't auto-stop work timer at duration
   _isOvertimeEnabled: boolean;

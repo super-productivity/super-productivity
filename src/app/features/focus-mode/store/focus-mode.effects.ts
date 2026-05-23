@@ -150,24 +150,27 @@ export class FocusModeEffects {
       withLatestFrom(
         this.store.select(selectors.selectTimer),
         this.store.select(selectIsFocusModeEnabled),
-        this.store.select(selectors.selectIsStartingBreak),
+        this.store.select(selectFocusModeConfig),
       ),
-      filter(
-        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled, isStartingBreak]) =>
+      filter(([[prevTaskId, currTaskId], timer, isFocusModeEnabled, config]) => {
+        const isTrackingStopped = !!prevTaskId && !currTaskId;
+        const isFocusSessionActive =
           isFocusModeEnabled &&
-          (timer.purpose === 'work' || timer.purpose === 'break') &&
           timer.isRunning &&
-          !!prevTaskId &&
-          !currTaskId, // Was tracking (prevTaskId exists) and now stopped (currTaskId is null)
-      ),
-      switchMap(
-        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled, isStartingBreak]) => {
-          if (isStartingBreak) {
-            return of(actions.clearStartingBreakFlag());
-          }
-          return of(actions.pauseFocusSession({ pausedTaskId: prevTaskId }));
-        },
-      ),
+          (timer.purpose === 'work' || timer.purpose === 'break');
+
+        if (!isFocusSessionActive || !isTrackingStopped) {
+          return false;
+        }
+
+        // Bug #5954 fix: only pause breaks if tracking is NOT automatically paused during breaks
+        if (timer.purpose === 'break') {
+          return config.isPauseTrackingDuringBreak === false;
+        }
+
+        return true;
+      }),
+      map(([[prevTaskId]]) => actions.pauseFocusSession({ pausedTaskId: prevTaskId })),
     ),
   );
 
@@ -626,9 +629,7 @@ export class FocusModeEffects {
   logFocusSession$ = createEffect(
     () =>
       this.actions$.pipe(
-        // Flowtime sessions are logged when the break is offered, even if the
-        // user declines the break and never starts it.
-        ofType(actions.completeFocusSession, actions.offerFlowtimeBreak),
+        ofType(actions.completeFocusSession),
         withLatestFrom(this.store.select(selectors.selectLastSessionDuration)),
         tap(([, duration]) => {
           if (duration > 0) {

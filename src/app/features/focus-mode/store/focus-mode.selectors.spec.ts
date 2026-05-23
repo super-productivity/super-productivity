@@ -29,7 +29,6 @@ describe('FocusModeSelectors', () => {
     lastCompletedDuration: 0,
     pausedTaskId: null,
     _isResumingBreak: false,
-    _isStartingBreak: false,
     _isOvertimeEnabled: false,
     ...overrides,
   });
@@ -442,14 +441,6 @@ describe('FocusModeSelectors', () => {
     it('should select selectIsResumingBreak', () => {
       const focusModeState = createMockFocusModeState({ _isResumingBreak: true });
       const result = selectors.selectIsResumingBreak.projector(focusModeState);
-      expect(result).toBe(true);
-    });
-  });
-
-  describe('selectIsStartingBreak', () => {
-    it('should select selectIsStartingBreak', () => {
-      const focusModeState = createMockFocusModeState({ _isStartingBreak: true });
-      const result = selectors.selectIsStartingBreak.projector(focusModeState);
       expect(result).toBe(true);
     });
   });
