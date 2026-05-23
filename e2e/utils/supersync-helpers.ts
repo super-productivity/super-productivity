@@ -22,6 +22,11 @@ import {
   TASK_WAIT_TIMEOUT,
   UI_VISIBLE_TIMEOUT_SHORT,
 } from './e2e-constants';
+import {
+  assertNoRuntimeBrowserErrors,
+  attachPageErrorCollector,
+  type RuntimeBrowserError,
+} from './runtime-errors';
 
 /**
  * SuperSync server URL for E2E tests.
@@ -50,6 +55,7 @@ export interface SimulatedE2EClient {
   workView: WorkViewPage;
   sync: SuperSyncPage;
   clientName: string;
+  runtimeErrors: RuntimeBrowserError[];
 }
 
 /**
@@ -216,6 +222,7 @@ export const createSimulatedClient = async (
   });
 
   const page = await context.newPage();
+  const runtimeErrors = attachPageErrorCollector(page, `Client ${clientName}`);
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
@@ -224,11 +231,6 @@ export const createSimulatedClient = async (
     localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
     localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
     localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-  });
-
-  // Set up error logging
-  page.on('pageerror', (error) => {
-    console.error(`[Client ${clientName}] Page error:`, error.message);
   });
 
   page.on('console', (msg) => {
@@ -278,6 +280,7 @@ export const createSimulatedClient = async (
     workView,
     sync,
     clientName,
+    runtimeErrors,
   };
 };
 
@@ -286,6 +289,13 @@ export const createSimulatedClient = async (
  * Safely handles already-closed contexts.
  */
 export const closeClient = async (client: SimulatedE2EClient): Promise<void> => {
+  let runtimeError: Error | null = null;
+  try {
+    assertNoRuntimeBrowserErrors(client.runtimeErrors, `Client ${client.clientName}`);
+  } catch (error) {
+    runtimeError = error instanceof Error ? error : new Error(String(error));
+  }
+
   try {
     // Check if page is still open before trying to close context
     if (!client.page.isClosed()) {
@@ -318,6 +328,10 @@ export const closeClient = async (client: SimulatedE2EClient): Promise<void> => 
     console.warn(
       `[closeClient] Cleanup error (ignored): ${error instanceof Error ? error.message : String(error)}`,
     );
+  }
+
+  if (runtimeError) {
+    throw runtimeError;
   }
 };
 

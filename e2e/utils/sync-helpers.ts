@@ -7,6 +7,10 @@ import {
 import { expect } from '@playwright/test';
 import { waitForAppReady } from './waits';
 import type { SyncPage } from '../pages/sync.page';
+import {
+  attachPageErrorCollector,
+  guardContextCloseWithRuntimeErrorCheck,
+} from './runtime-errors';
 
 /**
  * WebDAV configuration interface
@@ -102,6 +106,8 @@ export const setupSyncClient = async (
 ): Promise<{ context: BrowserContext; page: Page }> => {
   const context = await browser.newContext({ baseURL });
   const page = await context.newPage();
+  const pageErrors = attachPageErrorCollector(page, 'WebDAV sync client');
+  guardContextCloseWithRuntimeErrorCheck(context, pageErrors, 'WebDAV sync client');
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
