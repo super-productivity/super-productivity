@@ -140,19 +140,35 @@ export const migrateToKeyedPersistence = async (api: PluginAPI): Promise<void> =
   );
 
   const docs = parsed.docs ?? {};
+  // One oversized legacy doc must not block migration of every other context.
+  // The host throws a synchronous Error from persistDataSynced when a payload
+  // exceeds MAX_PLUGIN_DATA_SIZE; catch per-doc and skip — the original bytes
+  // stay in the legacy blob (we suppress the tombstone below) so a future
+  // build with a larger cap (or the user pruning the doc) can recover them.
+  let anyDocSkipped = false;
   for (const [ctxId, doc] of Object.entries(docs)) {
-    await api.persistDataSynced(JSON.stringify(doc), docKey(ctxId));
+    try {
+      await api.persistDataSynced(JSON.stringify(doc), docKey(ctxId));
+    } catch {
+      anyDocSkipped = true;
+    }
   }
 
   const enabledCtxIds = Array.isArray(parsed.enabledCtxIds) ? parsed.enabledCtxIds : [];
   await api.persistDataSynced(JSON.stringify({ enabledCtxIds }), META_KEY);
 
-  // Tombstone the legacy entry: an empty payload is a plugin-side
-  // convention for "ignore". This gives LWW a winning side against any
-  // offline device that still writes the old shape.
-  await api.persistDataSynced('');
-
-  await api.persistDataSynced(JSON.stringify({ migrated: 1 }), MIGRATION_STAMP_KEY);
+  if (!anyDocSkipped) {
+    // Tombstone the legacy entry: an empty payload is a plugin-side
+    // convention for "ignore". This gives LWW a winning side against any
+    // offline device that still writes the old shape. Skipped when any
+    // doc was too big to migrate — preserving the legacy bytes for recovery.
+    await api.persistDataSynced('');
+    await api.persistDataSynced(JSON.stringify({ migrated: 1 }), MIGRATION_STAMP_KEY);
+  }
+  // If anyDocSkipped: leave the stamp at {migrated: 0}. The next session
+  // will retry, which is a no-op for already-written docs (content-idempotent)
+  // and another skip for the oversized one. Stable failure mode without
+  // data loss.
 };
 
 /**

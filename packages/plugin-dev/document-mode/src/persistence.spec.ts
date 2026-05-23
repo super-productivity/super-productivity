@@ -175,6 +175,57 @@ test('migration: refuses to tombstone a corrupt legacy blob (preserves data for 
   assert.equal(sawAttemptedStamp, false);
 });
 
+test('migration: skips an oversized legacy doc and leaves legacy intact for recovery', async () => {
+  // One context's stored doc is so big that the keyed write throws (mock
+  // simulates the host's MAX_PLUGIN_DATA_SIZE check). The migration must
+  // not abort the whole run — the other docs must still land — and must
+  // NOT tombstone or stamp success, so a future build with a larger cap
+  // (or after the user prunes the doc) can recover.
+  const { store, writes } = createMockApi();
+  const api = {
+    persistDataSynced: async (data: string, key?: string): Promise<void> => {
+      // Simulate host-side cap: throw for the oversized doc.
+      if (data.length > 10_000) {
+        throw new Error('Plugin data exceeds maximum size');
+      }
+      writes.push({ key, data });
+      store.set(key ?? '', data);
+    },
+    loadSyncedData: async (key?: string): Promise<string | null> => {
+      const v = store.get(key ?? '');
+      return v === undefined ? null : v;
+    },
+  } as unknown as PluginAPI;
+  const big = 'x'.repeat(20_000);
+  store.set(
+    '',
+    JSON.stringify({
+      docs: { small: { type: 'doc' }, big: { type: 'doc', text: big } },
+      enabledCtxIds: ['small'],
+    }),
+  );
+
+  await migrateToKeyedPersistence(api);
+
+  // Small doc migrated; big doc absent.
+  assert.equal(store.get('doc:small'), JSON.stringify({ type: 'doc' }));
+  assert.equal(store.has('doc:big'), false);
+  // Meta lands (it's small).
+  assert.equal(store.get('meta'), JSON.stringify({ enabledCtxIds: ['small'] }));
+  // Legacy NOT tombstoned — original bytes preserved.
+  assert.equal(
+    store.get(''),
+    JSON.stringify({
+      docs: { small: { type: 'doc' }, big: { type: 'doc', text: big } },
+      enabledCtxIds: ['small'],
+    }),
+  );
+  // Migration NOT stamped successful — next session retries.
+  const stampRaw = store.get('__meta__');
+  const stamp = stampRaw ? (JSON.parse(stampRaw) as { migrated: number }) : null;
+  assert.notEqual(stamp?.migrated, 1);
+});
+
 test('migration: idempotent re-run after crash mid-loop', async () => {
   const { api, store } = createMockApi();
   store.set('', JSON.stringify({ docs: { p1: { type: 'doc' } }, enabledCtxIds: ['p1'] }));
