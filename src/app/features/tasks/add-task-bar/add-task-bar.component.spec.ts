@@ -199,10 +199,14 @@ describe('AddTaskBarComponent', () => {
       'AddTaskBarIssueSearchService',
       ['getFilteredIssueSuggestions$', 'addTaskFromExistingTaskOrIssue'],
     );
-    mockDateService = jasmine.createSpyObj('DateService', ['todayStr'], {
-      startOfNextDayDiff: 0,
-    });
+    mockDateService = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+      'getLogicalTodayDate',
+    ]);
     mockDateService.todayStr.and.callFake(() => getDbDateStr(new Date()));
+    mockDateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    mockDateService.getLogicalTodayDate.and.callFake(() => new Date());
     // Setup method returns
     mockAddTaskBarIssueSearchService.getFilteredIssueSuggestions$.and.returnValue(of([]));
 
