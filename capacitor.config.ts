@@ -17,12 +17,21 @@ const config: CapacitorConfig = {
       // and uses JavaScriptInterface for keyboard visibility instead.
       // 'native' resizes the WKWebView so 100vh fits above the keyboard.
       resize: 'native',
-      resizeOnFullScreen: true,
+      // false is required when paired with @capawesome/capacitor-android-edge-
+      // to-edge-support; ignored on iOS where this key has no effect.
+      resizeOnFullScreen: false,
     },
     StatusBar: {
       // iOS: overlay the status bar so content can sit beneath it.
       // No-op on Android 15+ (targetSdk 36).
       overlaysWebView: true,
+    },
+    SystemBars: {
+      // Disable Capacitor's built-in inset handling so the edge-to-edge plugin
+      // can own it. With targetSdk 36 (Android 16) edge-to-edge is mandatory,
+      // and the two layers both applying insets fight each other — visible
+      // as fixed-position elements scrolling with content when the IME is up.
+      insetsHandling: 'disable',
     },
   },
   android: {
@@ -38,6 +47,7 @@ const config: CapacitorConfig = {
       '@capacitor/local-notifications',
       '@capacitor/share',
       '@capawesome/capacitor-android-dark-mode-support',
+      '@capawesome/capacitor-android-edge-to-edge-support',
       '@capawesome/capacitor-background-task',
     ],
   },
