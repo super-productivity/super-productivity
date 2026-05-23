@@ -47,6 +47,7 @@ import {
   type WebdavPrivateCfg,
 } from '@sp/sync-providers/webdav';
 import { testWebdavConnection } from '../../../op-log/sync-providers/file-based/webdav/test-webdav-connection';
+import type { OneDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/onedrive/onedrive.model';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -425,12 +426,32 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     }
     const oneDriveProvider = await this._providerManager.getProviderById(providerId);
     if (oneDriveProvider) {
-      const existingCfg = await oneDriveProvider.privateCfg.load();
+      const existingCfg = (await oneDriveProvider.privateCfg.load()) as
+        | OneDrivePrivateCfg
+        | null
+        | undefined;
       const formOneDriveCfg = this._tmpUpdatedCfg.oneDrive || {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
+      // If useCustomApp / clientId / tenantId changed, existing tokens are
+      // bound to the old identity — clear them to force a fresh OAuth flow.
+      let identityChanged = !existingCfg;
+      if (existingCfg && !identityChanged) {
+        const formClientId = formOneDriveCfg.clientId ?? existingCfg.clientId;
+        const formTenantId = formOneDriveCfg.tenantId ?? existingCfg.tenantId;
+        const formUseCustomApp = formOneDriveCfg.useCustomApp ?? existingCfg.useCustomApp;
+
+        identityChanged =
+          formUseCustomApp !== existingCfg.useCustomApp ||
+          formClientId !== existingCfg.clientId ||
+          formTenantId !== existingCfg.tenantId;
+      }
+
       await oneDriveProvider.privateCfg.setComplete({
         ...(existingCfg || {}),
         ...formOneDriveCfg,
+        ...(identityChanged
+          ? { accessToken: '', refreshToken: '', tokenExpiresAt: 0 }
+          : {}),
       } as any);
     }
   }

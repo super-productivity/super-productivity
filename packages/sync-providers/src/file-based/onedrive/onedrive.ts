@@ -103,6 +103,17 @@ export class OneDrive implements FileSyncProvider<
     });
   }
 
+  private async _clearIfConfigMatches(cfg: Partial<OneDrivePrivateCfg>): Promise<void> {
+    const currentCfg = await this.privateCfg.load();
+    if (
+      currentCfg?.refreshToken === cfg.refreshToken &&
+      currentCfg?.clientId === cfg.clientId &&
+      currentCfg?.tenantId === cfg.tenantId
+    ) {
+      await this.clearAuthCredentials();
+    }
+  }
+
   async getAuthHelper(): Promise<SyncProviderAuthHelper> {
     const cfg = await this._cfgOrError();
     const codeVerifier = generateCodeVerifier();
@@ -186,15 +197,19 @@ export class OneDrive implements FileSyncProvider<
       await this._ensureSyncFolderExistsCached(cfg);
       const headers = new Headers();
       headers.set('Content-Type', 'text/plain');
+      let uploadPath = `${this._getDriveItemPath(targetPath, cfg)}/content`;
       if (!isForceOverwrite && revToMatch) {
         headers.set('If-Match', revToMatch);
       } else if (!isForceOverwrite && !revToMatch) {
-        headers.set('If-None-Match', '*');
+        // Microsoft documents conflictBehavior=fail as the way to prevent
+        // overwriting existing items on the small-upload endpoint.
+        // https://learn.microsoft.com/en-gb/onedrive/developer/rest-api/api/driveitem_put_content
+        uploadPath += '?@microsoft.graph.conflictBehavior=fail';
       }
 
       const response = await this._request({
         method: 'PUT',
-        path: `${this._getDriveItemPath(targetPath, cfg)}/content`,
+        path: uploadPath,
         headers,
         body: dataStr,
       });
@@ -324,8 +339,12 @@ export class OneDrive implements FileSyncProvider<
     try {
       await this._request({ method: 'GET', path: fullPath });
       return;
-    } catch {
-      // 404 means we need to create the folder chain; fall through.
+    } catch (e) {
+      if (e instanceof HttpNotOkAPIError && e.response.status === 404) {
+        // Folder not found — fall through to create the folder chain.
+      } else {
+        throw e;
+      }
     }
 
     const segments = folderPath.split('/').filter(Boolean);
@@ -523,35 +542,27 @@ export class OneDrive implements FileSyncProvider<
         }
         if (parsed?.error === 'invalid_grant') {
           if (req.grantType === 'refresh_token') {
-            // Only clear if the stored config still matches the failed refresh
-            // — otherwise a newer re-auth already replaced the credentials.
-            const currentCfg = await this.privateCfg.load();
-            if (
-              currentCfg?.refreshToken === req.refreshToken &&
-              currentCfg?.clientId === cfg.clientId &&
-              currentCfg?.tenantId === cfg.tenantId
-            ) {
-              this._deps.logger.warn(
-                '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
-              );
-              await this.clearAuthCredentials();
-            }
+            this._deps.logger.warn(
+              '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
+            );
+            await this._clearIfConfigMatches({
+              refreshToken: req.refreshToken,
+              clientId: cfg.clientId,
+              tenantId: cfg.tenantId,
+            });
             throw new MissingRefreshTokenAPIError();
           }
         }
       }
       if (response.status === 401 && req.grantType === 'refresh_token') {
-        const currentCfg = await this.privateCfg.load();
-        if (
-          currentCfg?.refreshToken === req.refreshToken &&
-          currentCfg?.clientId === cfg.clientId &&
-          currentCfg?.tenantId === cfg.tenantId
-        ) {
-          this._deps.logger.warn(
-            '[OneDrive] Token endpoint returned 401, clearing credentials',
-          );
-          await this.clearAuthCredentials();
-        }
+        this._deps.logger.warn(
+          '[OneDrive] Token endpoint returned 401, clearing credentials',
+        );
+        await this._clearIfConfigMatches({
+          refreshToken: req.refreshToken,
+          clientId: cfg.clientId,
+          tenantId: cfg.tenantId,
+        });
         throw new MissingRefreshTokenAPIError();
       }
       const redactedBody = this._redactTokenBody(body);
@@ -615,28 +626,19 @@ export class OneDrive implements FileSyncProvider<
             refreshErr instanceof MissingRefreshTokenAPIError ||
             refreshErr instanceof AuthFailSPError
           ) {
-            // Guard: only clear if the stored config still matches the refresh
-            // attempt — a concurrent re-auth may have already replaced them.
-            const currentCfg = await this.privateCfg.load();
-            if (
-              currentCfg?.refreshToken === cfg.refreshToken &&
-              currentCfg?.clientId === cfg.clientId &&
-              currentCfg?.tenantId === cfg.tenantId
-            ) {
-              await this.clearAuthCredentials();
-            }
+            await this._clearIfConfigMatches(cfg);
           }
           throw refreshErr;
         }
       }
-      await this.clearAuthCredentials();
+      await this._clearIfConfigMatches(cfg);
       throw new AuthFailSPError('OneDrive 401');
     }
 
     if (response.status === 403) {
       const parsed = this._parseGraphError(responseBody);
       if (parsed.code === 'InvalidAuthenticationToken') {
-        await this.clearAuthCredentials();
+        await this._clearIfConfigMatches(cfg);
       }
     }
 

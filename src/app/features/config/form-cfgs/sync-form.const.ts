@@ -28,7 +28,10 @@ import {
   openEncryptionPasswordChangeDialog,
   openEncryptionPasswordChangeDialogForFileBased,
 } from '../../../imex/sync/encryption-password-dialog-opener.service';
-import { HAS_OFFICIAL_ONEDRIVE_CLIENT_ID } from '../../../imex/sync/onedrive-auth-mode.const';
+import {
+  HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+  IS_ONEDRIVE_SUPPORTED,
+} from '../../../imex/sync/onedrive-auth-mode.const';
 
 /**
  * Creates form fields for WebDAV-based sync providers.
@@ -153,7 +156,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
-          ...(IS_ELECTRON || IS_NATIVE_PLATFORM
+          ...(IS_ONEDRIVE_SUPPORTED
             ? [{ label: 'Microsoft 365 (OneDrive)', value: SyncProviderId.OneDrive }]
             : []),
           { label: 'Nextcloud', value: SyncProviderId.Nextcloud },

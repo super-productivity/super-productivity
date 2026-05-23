@@ -3,6 +3,7 @@ import { SyncProviderBase } from './provider.interface';
 import { DROPBOX_APP_KEY } from '../../imex/sync/dropbox/dropbox.const';
 import { IS_ELECTRON } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_ONEDRIVE_SUPPORTED } from '../../imex/sync/onedrive-auth-mode.const';
 import { environment } from '../../../environments/environment';
 
 let _providersPromise: Promise<SyncProviderBase<SyncProviderId>[]> | null = null;
@@ -53,13 +54,18 @@ const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> =
       appKey: DROPBOX_APP_KEY,
       basePath: environment.production ? `/` : `/DEV/`,
     }) as SyncProviderBase<SyncProviderId>,
-    createOneDriveProvider({
-      devPath: extraPath,
-    }) as SyncProviderBase<SyncProviderId>,
     createWebdavProvider(extraPath) as SyncProviderBase<SyncProviderId>,
     createSuperSyncProvider() as SyncProviderBase<SyncProviderId>,
     createNextcloudProvider(extraPath) as SyncProviderBase<SyncProviderId>,
   ];
+
+  if (IS_ONEDRIVE_SUPPORTED) {
+    providers.push(
+      createOneDriveProvider({
+        devPath: extraPath,
+      }) as SyncProviderBase<SyncProviderId>,
+    );
+  }
 
   if (IS_ELECTRON) {
     const { createLocalFileSyncElectron } =
