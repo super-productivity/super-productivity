@@ -31,3 +31,30 @@ export const composeId = (pluginId: string, key?: string): string => {
  */
 export const isPluginIdMatch = (entityId: string, pluginId: string): boolean =>
   entityId === pluginId || entityId.startsWith(pluginId + ':');
+
+/**
+ * Bound on a single plugin's persistence key length. Generous for any
+ * realistic per-plugin keyspace (e.g. document-mode uses `doc:<uuid>`,
+ * well under 100 chars). Prevents a compromised iframe from passing a
+ * multi-megabyte `key` that would be stored verbatim in NgRx state,
+ * IndexedDB, the op-log, and on the sync wire — bypassing the
+ * MAX_PLUGIN_DATA_SIZE cap which only constrains the `data` arg.
+ */
+export const MAX_PLUGIN_PERSISTENCE_KEY_LENGTH = 256;
+
+/**
+ * Type + length guard for the plugin-supplied `key` arg at the bridge
+ * boundary. Throws on non-string or oversized input. `undefined` is the
+ * legacy form (no key) and is allowed.
+ */
+export const assertPluginPersistenceKey = (key: unknown): void => {
+  if (key === undefined) return;
+  if (typeof key !== 'string') {
+    throw new Error('Plugin persistence key must be a string or undefined');
+  }
+  if (key.length > MAX_PLUGIN_PERSISTENCE_KEY_LENGTH) {
+    throw new Error(
+      `Plugin persistence key exceeds maximum length of ${MAX_PLUGIN_PERSISTENCE_KEY_LENGTH} characters`,
+    );
+  }
+};

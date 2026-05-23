@@ -1,4 +1,9 @@
-import { composeId, isPluginIdMatch } from './plugin-persistence-key.util';
+import {
+  assertPluginPersistenceKey,
+  composeId,
+  isPluginIdMatch,
+  MAX_PLUGIN_PERSISTENCE_KEY_LENGTH,
+} from './plugin-persistence-key.util';
 
 describe('composeId', () => {
   it('returns pluginId unchanged when no key is provided', () => {
@@ -24,6 +29,42 @@ describe('composeId', () => {
   it('throws synchronously when pluginId contains ":"', () => {
     expect(() => composeId('bad:plugin')).toThrowError(/must not contain ':'/);
     expect(() => composeId('bad:plugin', 'k')).toThrowError(/must not contain ':'/);
+  });
+});
+
+describe('assertPluginPersistenceKey', () => {
+  it('accepts undefined (legacy keyless form)', () => {
+    expect(() => assertPluginPersistenceKey(undefined)).not.toThrow();
+  });
+
+  it('accepts ordinary strings', () => {
+    expect(() => assertPluginPersistenceKey('')).not.toThrow();
+    expect(() => assertPluginPersistenceKey('doc-1')).not.toThrow();
+    expect(() => assertPluginPersistenceKey('a'.repeat(100))).not.toThrow();
+  });
+
+  it('accepts a key at exactly the length cap', () => {
+    expect(() =>
+      assertPluginPersistenceKey('a'.repeat(MAX_PLUGIN_PERSISTENCE_KEY_LENGTH)),
+    ).not.toThrow();
+  });
+
+  it('throws on a key over the length cap', () => {
+    expect(() =>
+      assertPluginPersistenceKey('a'.repeat(MAX_PLUGIN_PERSISTENCE_KEY_LENGTH + 1)),
+    ).toThrowError(/exceeds maximum length/);
+  });
+
+  it('throws on non-string input', () => {
+    expect(() => assertPluginPersistenceKey(null)).toThrowError(
+      /must be a string or undefined/,
+    );
+    expect(() => assertPluginPersistenceKey(42)).toThrowError(
+      /must be a string or undefined/,
+    );
+    expect(() => assertPluginPersistenceKey({ toString: () => 'x' })).toThrowError(
+      /must be a string or undefined/,
+    );
   });
 });
 

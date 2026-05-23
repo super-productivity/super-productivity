@@ -21,7 +21,10 @@ import {
   Task,
 } from './plugin-api.model';
 import { toActiveWorkContext } from './util/active-work-context.util';
-import { composeId } from './util/plugin-persistence-key.util';
+import {
+  assertPluginPersistenceKey,
+  composeId,
+} from './util/plugin-persistence-key.util';
 
 import {
   BatchTaskCreate,
@@ -1041,6 +1044,7 @@ export class PluginBridgeService implements OnDestroy {
     key?: string,
   ): Promise<void> {
     typia.assert<string>(dataStr);
+    assertPluginPersistenceKey(key);
 
     try {
       // Validates the pluginId synchronously; bubbles through the try/catch
@@ -1049,7 +1053,7 @@ export class PluginBridgeService implements OnDestroy {
       this._pluginUserPersistenceService.persistPluginUserData(entityId, dataStr);
       console.log('PluginBridge: Plugin data persisted successfully', {
         pluginId,
-        key,
+        keyLen: key?.length ?? 0,
         dataSize: new Blob([dataStr]).size,
       });
     } catch (error) {
@@ -1066,13 +1070,19 @@ export class PluginBridgeService implements OnDestroy {
 
   /**
    * Internal method to load persisted plugin data.
+   *
+   * `composeId` runs outside the try/catch so a bad pluginId throws to the
+   * caller symmetrically with the persist path — silently returning `null`
+   * for "your pluginId is malformed" would look indistinguishable from "no
+   * data yet" and could mask a misconfiguration.
    */
   private async _loadPersistedData(
     pluginId: string,
     key?: string,
   ): Promise<string | null> {
+    assertPluginPersistenceKey(key);
+    const entityId = composeId(pluginId, key);
     try {
-      const entityId = composeId(pluginId, key);
       return await this._pluginUserPersistenceService.loadPluginUserData(entityId);
     } catch (error) {
       PluginLog.err('PluginBridge: Failed to get persisted plugin data:', error);
