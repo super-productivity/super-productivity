@@ -8,8 +8,18 @@ import { SnackService } from '../../core/snack/snack.service';
 import { TranslateService } from '@ngx-translate/core';
 import { ArchiveModel } from '../../features/archive/archive.model';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
+import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
+import { AppDataComplete } from '../../op-log/model/model-config';
 
 const BACKUP_INTERVAL = 5 * 60 * 1000;
+
+type LocalBackupServiceWithPrivate = {
+  _backup: () => Promise<void>;
+};
+
+type LocalBackupServiceWithBackupIos = {
+  _backupIOS: (data: AppDataComplete) => Promise<void>;
+};
 
 describe('LocalBackupService', () => {
   let service: LocalBackupService;
@@ -18,6 +28,7 @@ describe('LocalBackupService', () => {
   let backupServiceSpy: jasmine.SpyObj<BackupService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let translateServiceSpy: jasmine.SpyObj<TranslateService>;
+  let platformServiceSpy: jasmine.SpyObj<CapacitorPlatformService>;
 
   const DEFAULT_ARCHIVE: ArchiveModel = {
     task: { ids: [], entities: {} },
@@ -68,6 +79,8 @@ describe('LocalBackupService', () => {
     backupServiceSpy = jasmine.createSpyObj('BackupService', ['importCompleteBackup']);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     translateServiceSpy = jasmine.createSpyObj('TranslateService', ['instant']);
+    platformServiceSpy = jasmine.createSpyObj('CapacitorPlatformService', ['isIOS']);
+    platformServiceSpy.isIOS.and.returnValue(false);
 
     // Mock sync method to return empty archives (current buggy behavior)
     stateSnapshotServiceSpy.getAllSyncModelDataFromStore.and.returnValue({
@@ -103,6 +116,7 @@ describe('LocalBackupService', () => {
         { provide: BackupService, useValue: backupServiceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: TranslateService, useValue: translateServiceSpy },
+        { provide: CapacitorPlatformService, useValue: platformServiceSpy },
       ],
     });
 
@@ -115,7 +129,7 @@ describe('LocalBackupService', () => {
       // which loads archives from IndexedDB, not the sync method which returns empty archives.
 
       // Call the internal backup method via reflection (it's private)
-      await (service as any)._backup();
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
 
       // Verify the ASYNC method was called (which includes real archives)
       expect(
@@ -127,14 +141,35 @@ describe('LocalBackupService', () => {
     });
 
     it('should include archive data in backup (not empty DEFAULT_ARCHIVE)', async () => {
-      // This test shows that the async method returns real archive data
-      const backupData =
-        await stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync();
+      (
+        service as unknown as {
+          _platformService: Pick<CapacitorPlatformService, 'isIOS'>;
+        }
+      )._platformService = { isIOS: () => true };
+      const backupIosSpy = spyOn(
+        service as unknown as LocalBackupServiceWithBackupIos,
+        '_backupIOS',
+      ).and.resolveTo();
 
-      expect(backupData.archiveYoung.task.ids.length).toBeGreaterThan(0);
-      expect(backupData.archiveOld.task.ids.length).toBeGreaterThan(0);
-      expect(backupData.archiveYoung.task.entities['archivedTask1']).toBeDefined();
-      expect(backupData.archiveOld.task.entities['oldArchivedTask1']).toBeDefined();
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(backupIosSpy).toHaveBeenCalledTimes(1);
+      const backupData = backupIosSpy.calls.mostRecent().args[0];
+
+      expect(backupData.archiveYoung.task.ids).toEqual(['archivedTask1']);
+      expect(backupData.archiveOld.task.ids).toEqual(['oldArchivedTask1']);
+      expect(backupData.archiveYoung.task.entities['archivedTask1']).toEqual(
+        jasmine.objectContaining({
+          id: 'archivedTask1',
+          title: 'Archived Task',
+        }),
+      );
+      expect(backupData.archiveOld.task.entities['oldArchivedTask1']).toEqual(
+        jasmine.objectContaining({
+          id: 'oldArchivedTask1',
+          title: 'Old Archived Task',
+        }),
+      );
     });
   });
 
@@ -156,20 +191,28 @@ describe('LocalBackupService', () => {
           { provide: BackupService, useValue: backupServiceSpy },
           { provide: SnackService, useValue: snackServiceSpy },
           { provide: TranslateService, useValue: translateServiceSpy },
+          { provide: CapacitorPlatformService, useValue: platformServiceSpy },
         ],
       });
       service = TestBed.inject(LocalBackupService);
-      spyOn(service as any, '_backup').and.resolveTo();
+      spyOn(
+        service as unknown as LocalBackupServiceWithPrivate,
+        '_backup',
+      ).and.resolveTo();
 
       service.init();
       tick(BACKUP_INTERVAL);
 
-      expect((service as any)._backup).toHaveBeenCalledTimes(1);
+      expect(
+        (service as unknown as LocalBackupServiceWithPrivate)._backup,
+      ).toHaveBeenCalledTimes(1);
 
       cfg$.next({ localBackup: { isEnabled: false } });
       tick(BACKUP_INTERVAL);
 
-      expect((service as any)._backup).toHaveBeenCalledTimes(1);
+      expect(
+        (service as unknown as LocalBackupServiceWithPrivate)._backup,
+      ).toHaveBeenCalledTimes(1);
     }));
   });
 

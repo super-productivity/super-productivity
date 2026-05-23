@@ -26,7 +26,7 @@ import {
 import { testRoutes } from './test-routes';
 
 // HTML escape to prevent XSS in generated HTML
-const escapeHtml = (unsafe: string): string => {
+export const escapeHtml = (unsafe: string): string => {
   return unsafe
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -51,6 +51,22 @@ const SENSITIVE_QUERY_PARAM_PATTERN = new RegExp(
   `([?&](?:${SENSITIVE_QUERY_PARAMS.join('|')})=)[^&\\s]*`,
   'gi',
 );
+
+export const SERVER_HELMET_CONFIG = {
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"], // Inline styles for HTML pages
+      imgSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"], // Prevent clickjacking
+      formAction: ["'self'"],
+      baseUri: ["'self'"],
+    },
+  },
+};
 
 /**
  * Picks the log level for a Fastify-handled error. 5xx → error (with stack);
@@ -192,21 +208,7 @@ export const createServer = (
       });
 
       // Security Headers
-      await fastifyServer.register(helmet, {
-        contentSecurityPolicy: {
-          directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"], // Inline styles for HTML pages
-            imgSrc: ["'self'", 'data:'],
-            fontSrc: ["'self'"],
-            objectSrc: ["'none'"],
-            frameAncestors: ["'none'"], // Prevent clickjacking
-            formAction: ["'self'"],
-            baseUri: ["'self'"],
-          },
-        },
-      });
+      await fastifyServer.register(helmet, SERVER_HELMET_CONFIG);
 
       // Rate Limiting (prevent brute force)
       if (!fullConfig.testMode?.enabled) {

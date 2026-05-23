@@ -186,13 +186,13 @@ describe('ProjectService', () => {
       );
     });
 
-    it('should throw an error if the template project is not found', fakeAsync(() => {
+    it('should throw an error if the template project is not found', async () => {
       spyOn(service, 'getByIdOnce$').and.returnValue(of(undefined as any));
-      service.duplicateProject('non-existing-project').catch((e) => {
-        expect(e.message).toBe('Template project not found');
-      });
-      tick();
-    }));
+
+      await expectAsync(
+        service.duplicateProject('non-existing-project'),
+      ).toBeRejectedWithError('Template project not found');
+    });
 
     it('should create a new project with copied settings', fakeAsync(() => {
       spyOn(service, 'getByIdOnce$').and.returnValue(

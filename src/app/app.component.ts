@@ -60,7 +60,10 @@ import { NoteStartupBannerService } from './features/note/note-startup-banner.se
 import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
-import { WorkContextType } from './features/work-context/work-context.model';
+import {
+  WorkContextType,
+  type WorkContextThemeCfg,
+} from './features/work-context/work-context.model';
 import { SectionService } from './features/section/section.service';
 import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
 import { TODAY_TAG } from './features/tag/tag.const';
@@ -87,6 +90,21 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
+
+type WorkContextThemeSource =
+  | {
+      theme?: WorkContextThemeCfg | null;
+    }
+  | null
+  | undefined;
+
+export const getBackgroundOverlayOpacity = (context: WorkContextThemeSource): number => {
+  const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
+  return baseOpacity * 0.01;
+};
+
+export const getBackgroundImageBlur = (context: WorkContextThemeSource): number =>
+  normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
 
 @Component({
   selector: 'app-root',
@@ -427,16 +445,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   readonly bgOverlayOpacity = computed((): number => {
-    const context = this._activeWorkContext();
-    const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
-
-    return baseOpacity * 0.01;
+    return getBackgroundOverlayOpacity(this._activeWorkContext());
   });
 
   readonly bgImageBlur = computed((): number => {
-    const context = this._activeWorkContext();
-
-    return normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
+    return getBackgroundImageBlur(this._activeWorkContext());
   });
 
   readonly bgImageBlurFilter = computed((): string => {

@@ -1653,7 +1653,7 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.gapDetected).toBeFalsy();
     });
 
-    it('should detect gap when mixed old/new ops and oldestOpSyncVersion > sinceSeq', async () => {
+    it('should disable gap detection when the oldest op has no sync version', async () => {
       // First op has sv=undefined (old), second has sv=3 — oldestOpSyncVersion from first = undefined
       // This tests backward compat: if head op lacks sv, gap detection is disabled
       const maxOps = FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;

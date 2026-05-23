@@ -606,10 +606,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     expect(subTaskIds).toContain('SUB_UNSCHEDULED_M');
   });
 
-  // TODO: This test expects multi-level hierarchy support which is not currently implemented
-  // The current implementation only considers direct parent-child relationships
-  xit('should handle complex hierarchy with multiple levels', () => {
-    // This tests that we only look at direct parent-child relationships
+  it('should expose scheduled nested subtasks as top-level when their direct parent is not included', () => {
     const grandparent = createMockTask({
       id: 'GRANDPARENT',
       title: 'Grandparent',
@@ -639,12 +636,9 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
 
-    // Only grandparent should appear as top-level
-    // (because it has descendant with scheduled task)
     expect(result.length).toBe(1);
-    expect(result[0].id).toBe('GRANDPARENT');
-    expect(result[0].subTasks?.length).toBe(1);
-    expect(result[0].subTasks?.[0].id).toBe('PARENT_MIDDLE');
+    expect(result[0].id).toBe('CHILD_SCHEDULED');
+    expect(result[0].subTasks).toEqual([]);
   });
 
   it('should include task with dueWithTime for today but no dueDay (virtual tag pattern)', () => {

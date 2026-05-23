@@ -40,7 +40,7 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
 
     // Locators
     const focusModeOverlay = page.locator('focus-mode-overlay');
-    const mainFocusButton = page.locator('focus-button button');
+    const mainFocusButton = page.locator('main-header focus-button button');
 
     // Mode selector buttons - using the segmented button group
     const flowtimeButton = page.locator('segmented-button-group button', {
@@ -166,7 +166,7 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
     const workViewPage = new WorkViewPage(page, testPrefix);
 
     const focusModeOverlay = page.locator('focus-mode-overlay');
-    const mainFocusButton = page.locator('focus-button button');
+    const mainFocusButton = page.locator('main-header focus-button button');
     const flowtimeButton = page.locator('segmented-button-group button', {
       hasText: 'Flowtime',
     });

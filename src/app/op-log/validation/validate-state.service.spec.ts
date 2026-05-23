@@ -97,56 +97,6 @@ describe('ValidateStateService', () => {
     spyOn(store, 'dispatch');
   });
 
-  // This test requires a complete AppDataComplete object that passes Typia validation
-  // first before cross-model validation runs. The empty state used here fails Typia
-  // validation before reaching cross-model checks, so crossModelError is undefined.
-  xit('should handle isRelatedModelDataValid throwing errors gracefully', async () => {
-    // Force non-production environment to ensure devError throws
-    const originalEnvProduction = environment.production;
-    (environment as any).production = false;
-
-    // Stub alert and confirm to prevent blocking tests
-    // devError shows alert, then confirm - we want confirm to return false to avoid throwing
-    // Check if already spied (may be globally mocked in test setup)
-    if (jasmine.isSpy(window.alert)) {
-      (window.alert as jasmine.Spy).and.stub();
-    } else {
-      spyOn(window, 'alert').and.stub();
-    }
-    if (jasmine.isSpy(window.confirm)) {
-      (window.confirm as jasmine.Spy).and.returnValue(false);
-    } else {
-      spyOn(window, 'confirm').and.returnValue(false);
-    }
-
-    try {
-      const state = createEmptyState();
-
-      // Introduce an orphaned project reference in menuTree
-      // This triggers isRelatedModelDataValid -> devError -> sets lastValidityError
-      state.menuTree = {
-        ...(state.menuTree as MenuTreeState),
-        projectTree: [
-          {
-            id: 'NON_EXISTENT_PROJECT_ID',
-            k: MenuTreeKind.PROJECT,
-          },
-        ],
-      };
-
-      // Should not throw
-      const result = await service.validateState(state);
-
-      expect(result.isValid).toBeFalse();
-      expect(result.crossModelError).toBeDefined();
-      // The error message comes from devError/isRelatedModelDataValid
-      expect(result.crossModelError).toContain('Orphaned project reference');
-    } finally {
-      (environment as any).production = originalEnvProduction;
-      // Spies are automatically restored by Jasmine after each test
-    }
-  });
-
   it('should repair orphaned menu tree nodes when user confirms', async () => {
     // Force non-production environment to ensure devError throws
     const originalEnvProduction = environment.production;
