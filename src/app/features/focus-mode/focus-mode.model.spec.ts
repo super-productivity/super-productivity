@@ -205,6 +205,7 @@ describe('FocusModeModel', () => {
         lastCompletedDuration: 0,
         pausedTaskId: null,
         _isResumingBreak: false,
+        _isStartingBreak: false,
         _isOvertimeEnabled: false,
       };
 

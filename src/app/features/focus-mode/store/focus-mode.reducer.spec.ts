@@ -454,6 +454,18 @@ describe('FocusModeReducer', () => {
       expect(result.timer.purpose).toBe('break');
       expect(result.timer.duration).toBe(FOCUS_MODE_DEFAULTS.SHORT_BREAK_DURATION);
       expect(result.timer.isLongBreak).toBe(false);
+      expect(result._isStartingBreak).toBe(true);
+    });
+
+    it('should clear _isStartingBreak flag', () => {
+      const startingBreakState = {
+        ...initialState,
+        _isStartingBreak: true,
+      };
+      const action = a.clearStartingBreakFlag();
+      const result = focusModeReducer(startingBreakState, action);
+
+      expect(result._isStartingBreak).toBe(false);
     });
 
     it('should start long break', () => {

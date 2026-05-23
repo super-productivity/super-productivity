@@ -34,6 +34,9 @@ export const unPauseFocusSession = createAction('[FocusMode] Resume Session');
 export const clearResumingBreakFlag = createAction(
   '[FocusMode] Clear Resuming Break Flag',
 );
+export const clearStartingBreakFlag = createAction(
+  '[FocusMode] Clear Starting Break Flag',
+);
 
 export const completeFocusSession = createAction(
   '[FocusMode] Complete Session',

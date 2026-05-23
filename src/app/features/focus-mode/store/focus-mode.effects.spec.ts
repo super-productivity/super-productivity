@@ -669,7 +669,7 @@ describe('FocusModeEffects', () => {
     });
 
     describe('offerFlowtimeBreakOnSessionEnd$', () => {
-      it('should dispatch offerFlowtimeBreak when mode is Flowtime, timer is work, and breakInfo is present', (done) => {
+      it('should dispatch completeFocusSession and startBreak when mode is Flowtime, timer is work, and breakInfo is present', (done) => {
         actions$ = of(actions.endFlowtimeSession({ pausedTaskId: 'task-123' }));
         store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
         store.overrideSelector(
@@ -683,16 +683,22 @@ describe('FocusModeEffects', () => {
           getBreakDuration: () => ({ duration: 300000, isLong: false }),
         });
 
-        effects.offerFlowtimeBreakOnSessionEnd$.pipe(take(1)).subscribe((action) => {
-          expect(action).toEqual(
-            actions.offerFlowtimeBreak({
-              duration: 300000,
-              isLongBreak: false,
-              pausedTaskId: 'task-123',
-            }),
-          );
-          done();
-        });
+        effects.offerFlowtimeBreakOnSessionEnd$
+          .pipe(toArray())
+          .subscribe((actionsArr) => {
+            expect(actionsArr.length).toBe(2);
+            expect(actionsArr[0]).toEqual(
+              actions.completeFocusSession({ isManual: true }),
+            );
+            expect(actionsArr[1]).toEqual(
+              actions.startBreak({
+                duration: 300000,
+                isLongBreak: false,
+                pausedTaskId: 'task-123',
+              }),
+            );
+            done();
+          });
       });
 
       it('should dispatch completeFocusSession when mode is Flowtime, timer is work, but breakInfo is null', (done) => {
@@ -2581,6 +2587,37 @@ describe('FocusModeEffects', () => {
 
         setTimeout(() => {
           expect(dispatched).toBe(true);
+          done();
+        }, 100);
+      });
+
+      it('should dispatch clearStartingBreakFlag instead of pauseFocusSession when isStartingBreak is true', (done) => {
+        store.overrideSelector(selectFocusModeConfig, {
+          isSkipPreparation: false,
+        });
+        store.overrideSelector(
+          selectors.selectTimer,
+          createMockTimer({ isRunning: true, purpose: 'break' }),
+        );
+        store.overrideSelector(selectors.selectIsStartingBreak, true);
+        store.refreshState();
+
+        effects = TestBed.inject(FocusModeEffects);
+
+        let dispatchedAction: any = null;
+        effects.syncTrackingStopToSession$.subscribe((action) => {
+          dispatchedAction = action;
+        });
+
+        currentTaskId$.next('task-123');
+
+        setTimeout(() => {
+          currentTaskId$.next(null);
+        }, 10);
+
+        setTimeout(() => {
+          expect(dispatchedAction).toBeDefined();
+          expect(dispatchedAction.type).toBe('[FocusMode] Clear Starting Break Flag');
           done();
         }, 100);
       });

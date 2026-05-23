@@ -34,6 +34,7 @@ export const initialState: FocusModeState = {
   lastCompletedDuration: 0,
   pausedTaskId: null,
   _isResumingBreak: false,
+  _isStartingBreak: false,
   _isOvertimeEnabled: false,
 };
 
@@ -171,6 +172,11 @@ export const focusModeReducer = createReducer(
     _isResumingBreak: false,
   })),
 
+  on(a.clearStartingBreakFlag, (state) => ({
+    ...state,
+    _isStartingBreak: false,
+  })),
+
   on(a.completeFocusSession, (state, { completedDuration }) => {
     const duration = completedDuration ?? state.timer.elapsed;
 
@@ -229,6 +235,7 @@ export const focusModeReducer = createReducer(
       currentScreen: FocusScreen.Break,
       mainState: FocusMainUIState.Preparation,
       pausedTaskId: pausedTaskId ?? state.pausedTaskId,
+      _isStartingBreak: true,
     };
   }),
 
@@ -268,6 +275,7 @@ export const focusModeReducer = createReducer(
       mainState: FocusMainUIState.BreakOffer,
       pausedTaskId: pausedTaskId ?? state.pausedTaskId,
       _isResumingBreak: false,
+      _isStartingBreak: false,
       _isOvertimeEnabled: false,
     };
   }),
@@ -285,23 +293,25 @@ export const focusModeReducer = createReducer(
       if (updatedTimer.purpose === 'work') {
         // Flowtime work sessions have no fixed duration and never auto-complete via tick.
         if (state.mode === FocusModeMode.Flowtime) {
-          return { ...state, timer: updatedTimer };
+          return { ...state, timer: updatedTimer, _isStartingBreak: false };
         }
         // When overtime is enabled, keep the timer running past duration
         if (state._isOvertimeEnabled) {
-          return { ...state, timer: updatedTimer };
+          return { ...state, timer: updatedTimer, _isStartingBreak: false };
         }
         // Work session completed - stop timer and mark duration, but don't change screen yet
         return {
           ...state,
           timer: { ...updatedTimer, isRunning: false }, // Stop the timer but preserve state
           lastCompletedDuration: updatedTimer.elapsed,
+          _isStartingBreak: false,
         };
       } else if (updatedTimer.purpose === 'break') {
         // Break completed - stop timer but stay on break screen for user confirmation
         return {
           ...state,
           timer: { ...updatedTimer, isRunning: false },
+          _isStartingBreak: false,
         };
       }
     }
@@ -310,6 +320,7 @@ export const focusModeReducer = createReducer(
     return {
       ...state,
       timer: updatedTimer,
+      _isStartingBreak: false,
     };
   }),
 

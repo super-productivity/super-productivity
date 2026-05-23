@@ -150,16 +150,24 @@ export class FocusModeEffects {
       withLatestFrom(
         this.store.select(selectors.selectTimer),
         this.store.select(selectIsFocusModeEnabled),
+        this.store.select(selectors.selectIsStartingBreak),
       ),
       filter(
-        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled]) =>
+        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled, isStartingBreak]) =>
           isFocusModeEnabled &&
           (timer.purpose === 'work' || timer.purpose === 'break') &&
           timer.isRunning &&
           !!prevTaskId &&
           !currTaskId, // Was tracking (prevTaskId exists) and now stopped (currTaskId is null)
       ),
-      map(([[prevTaskId]]) => actions.pauseFocusSession({ pausedTaskId: prevTaskId })),
+      switchMap(
+        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled, isStartingBreak]) => {
+          if (isStartingBreak) {
+            return of(actions.clearStartingBreakFlag());
+          }
+          return of(actions.pauseFocusSession({ pausedTaskId: prevTaskId }));
+        },
+      ),
     ),
   );
 
@@ -428,7 +436,8 @@ export class FocusModeEffects {
         }
 
         return [
-          actions.offerFlowtimeBreak({
+          actions.completeFocusSession({ isManual: true }),
+          actions.startBreak({
             duration: breakInfo.duration,
             isLongBreak: breakInfo.isLong,
             pausedTaskId: action.pausedTaskId,
