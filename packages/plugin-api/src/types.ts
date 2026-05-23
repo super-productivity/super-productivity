@@ -552,9 +552,16 @@ export interface PluginAPI {
   };
 
   // persistence
-  persistDataSynced(dataStr: string): Promise<void>;
+  //
+  // The optional `key` splits a plugin's synced data into multiple
+  // independently-LWW-resolved entries. Calls without a key target the
+  // legacy single-blob entry. `key` must not contain ':' beyond what the
+  // plugin chooses (the host reserves ':' only as the pluginId/key
+  // delimiter and only enforces that the pluginId itself is clean).
+  // Empty-string keys are equivalent to omitting the argument.
+  persistDataSynced(dataStr: string, key?: string): Promise<void>;
 
-  loadSyncedData(): Promise<string | null>;
+  loadSyncedData(key?: string): Promise<string | null>;
 
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
 

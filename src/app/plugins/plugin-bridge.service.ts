@@ -21,6 +21,7 @@ import {
   Task,
 } from './plugin-api.model';
 import { toActiveWorkContext } from './util/active-work-context.util';
+import { composeId } from './util/plugin-persistence-key.util';
 
 import {
   BatchTaskCreate,
@@ -192,8 +193,8 @@ export class PluginBridgeService implements OnDestroy {
     pluginId: string,
     manifest?: PluginManifest,
   ): {
-    persistDataSynced: (dataStr: string) => Promise<void>;
-    loadPersistedData: () => Promise<string | null>;
+    persistDataSynced: (dataStr: string, key?: string) => Promise<void>;
+    loadPersistedData: (key?: string) => Promise<string | null>;
     getConfig: () => Promise<unknown>;
     downloadFile: (filename: string, data: string) => Promise<void>;
     registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
@@ -236,8 +237,9 @@ export class PluginBridgeService implements OnDestroy {
   } {
     return {
       // Data persistence
-      persistDataSynced: (dataStr: string) => this._persistDataSynced(pluginId, dataStr),
-      loadPersistedData: () => this._loadPersistedData(pluginId),
+      persistDataSynced: (dataStr: string, key?: string) =>
+        this._persistDataSynced(pluginId, dataStr, key),
+      loadPersistedData: (key?: string) => this._loadPersistedData(pluginId, key),
       getConfig: () => this._getConfig(pluginId),
       downloadFile: (filename: string, data: string) =>
         this._downloadFile(filename, data),
@@ -1028,20 +1030,30 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
-   * Internal method to persist plugin data
-   * Includes size and rate limit validation
+   * Internal method to persist plugin data.
+   * Includes size and rate limit validation; composeId enforces the
+   * `pluginId` keyspace contract at this transport boundary so the throw
+   * covers both iframe and direct API callers.
    */
-  private async _persistDataSynced(pluginId: string, dataStr: string): Promise<void> {
+  private async _persistDataSynced(
+    pluginId: string,
+    dataStr: string,
+    key?: string,
+  ): Promise<void> {
     typia.assert<string>(dataStr);
 
     try {
-      this._pluginUserPersistenceService.persistPluginUserData(pluginId, dataStr);
+      // Validates the pluginId synchronously; bubbles through the try/catch
+      // below as a normal Error.
+      const entityId = composeId(pluginId, key);
+      this._pluginUserPersistenceService.persistPluginUserData(entityId, dataStr);
       console.log('PluginBridge: Plugin data persisted successfully', {
         pluginId,
+        key,
         dataSize: new Blob([dataStr]).size,
       });
     } catch (error) {
-      // Log the specific error (rate limit or size exceeded)
+      // Log the specific error (rate limit, size, or composeId)
       PluginLog.err('PluginBridge: Failed to persist plugin data:', error);
 
       // Rethrow with the original error message for better debugging
@@ -1053,11 +1065,15 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
-   * Internal method to load persisted plugin data
+   * Internal method to load persisted plugin data.
    */
-  private async _loadPersistedData(pluginId: string): Promise<string | null> {
+  private async _loadPersistedData(
+    pluginId: string,
+    key?: string,
+  ): Promise<string | null> {
     try {
-      return await this._pluginUserPersistenceService.loadPluginUserData(pluginId);
+      const entityId = composeId(pluginId, key);
+      return await this._pluginUserPersistenceService.loadPluginUserData(entityId);
     } catch (error) {
       PluginLog.err('PluginBridge: Failed to get persisted plugin data:', error);
       return null;

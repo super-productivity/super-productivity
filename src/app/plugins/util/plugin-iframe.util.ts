@@ -361,10 +361,10 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           closeWorkContextView: () => callApi('closeWorkContextView'),
           getActiveWorkContext: () => callApi('getActiveWorkContext'),
 
-          // Persistence methods
-          persistDataSynced: (data) => callApi('persistDataSynced', [data]),
-          loadPersistedData: () => callApi('loadPersistedData'),
-          loadSyncedData: () => callApi('loadPersistedData'), // Alias
+          // Persistence methods (optional second arg = key, forwarded by callApi)
+          persistDataSynced: (data, key) => callApi('persistDataSynced', [data, key]),
+          loadPersistedData: (key) => callApi('loadPersistedData', [key]),
+          loadSyncedData: (key) => callApi('loadPersistedData', [key]), // Alias
 
           // Registration methods
           registerHook: (hook, handler) => callApi('registerHook', [hook, handler]),
