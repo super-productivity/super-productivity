@@ -7,6 +7,7 @@ import { unique } from '../../../util/unique';
 import { ProjectCopy } from '../../project/project.model';
 import { TagCopy } from '../../tag/tag.model';
 import { WorklogTask } from '../../tasks/task.model';
+import { resolveDisplayTagIds } from '../../tasks/util/resolve-display-tag-ids.util';
 import { WorklogExportSettingsCopy, WorklogGrouping } from '../worklog.model';
 import { Log } from '../../../core/log';
 import {
@@ -204,14 +205,10 @@ const getTaskFields = (task: WorklogTask, data: WorklogExportData): TaskFields =
       ]
     : [];
 
-  // Sub-tasks may carry their own tags (#7756). Prefer those when present;
-  // fall back to the parent's tags only when the sub-task has none so the row
-  // still shows useful context.
-  const subTaskHasOwnTags = !!task.parentId && (task.tagIds?.length ?? 0) > 0;
-  const sourceTagIds = parentTask && !subTaskHasOwnTags ? parentTask.tagIds : task.tagIds;
-  const tags = sourceTagIds.map(
-    (tagId) => (data.tags.find((tag) => tag.id === tagId) as TagCopy).title,
-  );
+  const tags = resolveDisplayTagIds(
+    task,
+    typeof parentTask === 'object' ? parentTask : undefined,
+  ).map((tagId) => (data.tags.find((tag) => tag.id === tagId) as TagCopy).title);
 
   const tasks = [task];
   return { tasks, titlesWithSub, titles, notes, projects, tags };

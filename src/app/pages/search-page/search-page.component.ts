@@ -17,6 +17,7 @@ import { Tag } from '../../features/tag/tag.model';
 import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
 import { Task } from '../../features/tasks/task.model';
+import { resolveDisplayTagIds } from '../../features/tasks/util/resolve-display-tag-ids.util';
 import { SearchItem } from './search-page.model';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
 import { AsyncPipe } from '@angular/common';
@@ -101,11 +102,8 @@ export class SearchPageComponent implements OnInit {
     const tagMap = new Map(tags.map((t) => [t.id, t]));
 
     return tasks.map((task) => {
-      // Sub-tasks may carry their own tags (#7756). Prefer the sub-task's own
-      // first tag for the context chip; fall back to the parent's first tag so
-      // sub-tasks without explicit tags still show their parent's context.
       const parent = task.parentId ? taskMap.get(task.parentId) : undefined;
-      const tagId = task.tagIds?.[0] ?? parent?.tagIds?.[0];
+      const tagId = resolveDisplayTagIds(task, parent)[0];
       const taskNotes = task.notes || '';
 
       return {
