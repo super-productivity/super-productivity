@@ -146,11 +146,14 @@ if telemetry shows the blob is still too fat.
 > Tracked as
 > [super-productivity/super-productivity#7749](https://github.com/super-productivity/super-productivity/issues/7749) —
 > Stage A (keyed plugin-persistence API for per-context sync entities).
+> Multi-reviewed design lives in
+> [`2026-05-23-stage-a-keyed-plugin-persistence.md`](./2026-05-23-stage-a-keyed-plugin-persistence.md).
 > The summary below remains accurate for problem 3's host-side scope.
 
-This is the fix for **problem 3**. Deferred, not scheduled: document mode is an
-opt-in POC plugin, not bundled by default, so cross-context concurrent edits are
-rare. Pick this up when the plugin ships widely or the conflict is observed.
+This is the fix for **problem 3**. Deferred, not scheduled: document mode is
+opt-in (users enable it per context) and Stage 0 already shipped, so the
+size pressure is gone. Pick this up when cross-context conflicts are
+observed in practice — see the linked plan for the full phased design.
 
 It is **larger than "add a `key` parameter"** — the multi-review surfaced the
 full scope:

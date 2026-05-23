@@ -1142,6 +1142,68 @@ describe('ConflictResolutionService', () => {
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-reminder']);
       });
 
+      // Regression test: PLUGIN_USER_DATA was previously registered as
+      // `'virtual'` and silently bypassed LWW. The migration to `'array'`
+      // (entity-registry.ts:325-330) wired it through the array branch;
+      // this test asserts the wiring actually fires for real conflicts.
+      it('should handle PLUGIN_USER_DATA entity conflicts', async () => {
+        const now = Date.now();
+        const conflicts: EntityConflict[] = [
+          {
+            entityType: 'PLUGIN_USER_DATA',
+            entityId: 'document-mode',
+            localOps: [
+              {
+                id: 'local-plugin-data',
+                clientId: 'clientA',
+                actionType: '[Plugin] Upsert User Data' as ActionType,
+                opType: OpType.Update,
+                entityType: 'PLUGIN_USER_DATA',
+                entityId: 'document-mode',
+                payload: { id: 'document-mode', data: 'local-blob' },
+                vectorClock: { clientA: 1 },
+                timestamp: now - 500,
+                schemaVersion: 1,
+              },
+            ],
+            remoteOps: [
+              {
+                id: 'remote-plugin-data',
+                clientId: 'clientB',
+                actionType: '[Plugin] Upsert User Data' as ActionType,
+                opType: OpType.Update,
+                entityType: 'PLUGIN_USER_DATA',
+                entityId: 'document-mode',
+                payload: { id: 'document-mode', data: 'remote-blob' },
+                vectorClock: { clientB: 1 },
+                timestamp: now,
+                schemaVersion: 1,
+              },
+            ],
+            suggestedResolution: 'manual',
+          },
+        ];
+
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: conflicts[0].remoteOps,
+        });
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        // Remote wins (newer timestamp). Whole-blob LWW: this is the
+        // gap Stage A closes — fine for same-entity, lossy across
+        // different sub-keys of the same blob. The acceptance is in the
+        // re-bundling decision, not in this test.
+        expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+          jasmine.arrayContaining([
+            jasmine.objectContaining({ id: 'remote-plugin-data' }),
+          ]),
+          'remote',
+          jasmine.any(Object),
+        );
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-plugin-data']);
+      });
+
       it('should handle mixed entity types in conflicts batch', async () => {
         const now = Date.now();
         const conflicts: EntityConflict[] = [
