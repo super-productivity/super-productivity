@@ -28,6 +28,11 @@ import {
   taskRefWithSubtasksJSON,
   type TaskLookup,
 } from '../doc-transform';
+import {
+  loadContextDoc,
+  migrateToKeyedPersistence,
+  saveContextDoc,
+} from '../persistence';
 import { iconSvg } from './icons';
 import * as docNav from './doc-nav';
 import { createTaskRefNode, type TaskRefNodeDeps } from './task-ref-node';
@@ -45,7 +50,6 @@ declare const PluginAPI: PluginAPI;
 // firing. Kept above the host's 1 s persist rate limit
 // (MIN_PLUGIN_PERSIST_INTERVAL_MS) so saves aren't rejected.
 const SAVE_THROTTLE_MS = 30_000;
-const STORAGE_VERSION = 1;
 
 // Action type the host emits for an in-place single-task update (NgRx
 // `createActionGroup`, source 'Task Shared'). `onAnyTaskUpdate` uses it to
@@ -54,14 +58,7 @@ const STORAGE_VERSION = 1;
 // always-correct full refresh runs instead.
 const UPDATE_TASK_ACTION = '[Task Shared] Update Task';
 
-interface StoredState {
-  version: number;
-  docs: Record<string, unknown>;
-  [key: string]: unknown; // preserve fields owned by background script
-}
-
 let currentCtx: ActiveWorkContext | null = null;
-let storedState: StoredState = { version: STORAGE_VERSION, docs: {} };
 let taskCache = new Map<string, Task>();
 /**
  * Stable task lookup handed to the pure `doc-transform` helpers. Defined as
@@ -82,10 +79,6 @@ let isLoadingDoc = false;
 // back to an empty seed. Gates scheduleSave so the empty seed is not
 // auto-persisted on top of the original (possibly corrupt) blob.
 let isDocCorrupt = false;
-// True when the *whole* stored blob is in a schema version we don't
-// understand (a user synced from a newer build). Gates scheduleSave so
-// we never downgrade-overwrite the original blob with our empty fallback.
-let isStorageUnreadable = false;
 // Monotonic guard for setActiveContext: concurrent calls (rapid context
 // switches) read this to drop after their awaits if a newer call has
 // superseded them.
@@ -235,46 +228,6 @@ const createSubTaskAfter = async (
 /* Persistence                                                                 */
 /* -------------------------------------------------------------------------- */
 
-const readBlob = async (): Promise<StoredState> => {
-  try {
-    const raw = await PluginAPI.loadSyncedData();
-    if (!raw) return { version: STORAGE_VERSION, docs: {} };
-    const parsed = JSON.parse(raw) as StoredState;
-    if (parsed && typeof parsed === 'object') {
-      // Future-version guard: if we encounter a blob whose schema is
-      // ahead of what this build understands (e.g. user synced from a
-      // newer release), don't pretend we can read it — return an empty
-      // shell. flushSave is gated by isDocCorrupt (see setActiveContext)
-      // so we won't clobber the original on disk.
-      const parsedVersion = Number(parsed.version) || STORAGE_VERSION;
-      if (parsedVersion > STORAGE_VERSION) {
-        // Refuse to load AND gate saves so we don't overwrite the
-        // user's newer blob with our empty fallback. Recovery happens
-        // when the user updates to a build that understands the
-        // newer schema.
-        isStorageUnreadable = true;
-        logErr(
-          `Stored doc-mode blob is version ${parsedVersion}; this build understands ${STORAGE_VERSION}. Refusing to load.`,
-        );
-        return { version: STORAGE_VERSION, docs: {} };
-      }
-      isStorageUnreadable = false;
-      return {
-        ...parsed,
-        version: parsedVersion,
-        docs: parsed.docs || {},
-      };
-    }
-  } catch (err) {
-    logErr('Failed to parse stored doc state', err);
-  }
-  return { version: STORAGE_VERSION, docs: {} };
-};
-
-const loadStoredState = async (): Promise<void> => {
-  storedState = await readBlob();
-};
-
 const flushSave = async (): Promise<void> => {
   if (saveTimer !== null) {
     clearTimeout(saveTimer);
@@ -283,13 +236,11 @@ const flushSave = async (): Promise<void> => {
   if (!currentCtx || !editor) return;
   saveInFlight = true;
   try {
-    const latest = await readBlob();
-    const merged: StoredState = {
-      ...latest,
-      docs: { ...latest.docs, [currentCtx.id]: stripChipContent(editor.getJSON()) },
-    };
-    storedState = merged;
-    await PluginAPI.persistDataSynced(JSON.stringify(merged));
+    // Keyed storage (Stage A): write only this context's doc. No need to
+    // read+merge any sibling state — the meta entry (enabledCtxIds) lives
+    // in its own LWW-resolved entity owned by background.ts, and sibling
+    // contexts each have their own `doc:${ctxId}` entry.
+    await saveContextDoc(PluginAPI, currentCtx.id, stripChipContent(editor.getJSON()));
   } catch (err) {
     logErr('persistDataSynced failed', err);
   } finally {
@@ -300,45 +251,33 @@ const flushSave = async (): Promise<void> => {
 /**
  * Teardown-safe save. The work-context embed iframe is destroyed
  * *synchronously* whenever the active context changes (the host's work-view
- * drops `<plugin-index>` from the DOM while the context is switching), so the
- * async `flushSave` is unusable on the way out: its `await readBlob()` never
- * receives a reply — the iframe is gone before the host responds — and the
- * `persistDataSynced` call after it never runs. The doc blob is then lost, and
- * because top-level chips are rebuilt from the host's task list on reload, the
- * loss only shows as vanished *text* blocks (paragraphs, headings, dividers).
+ * drops `<plugin-index>` from the DOM while the context is switching), so an
+ * awaited save is unusable on the way out: its `persistDataSynced` call may
+ * never leave the iframe before it dies. The doc blob is then lost, and
+ * because top-level chips are rebuilt from the host's task list on reload,
+ * the loss only shows as vanished *text* blocks (paragraphs, headings,
+ * dividers).
  *
- * This variant skips the round-trip: it builds the blob from the in-memory
- * `storedState` and dispatches `persistDataSynced` synchronously, so the
- * postMessage leaves the iframe before it dies. The host transparently
- * compresses the payload on its end (see `plugin-data-codec.ts`), so this
- * path still benefits from the size win.
- *
- * Trade-off: an `enabledCtxIds` change made by background.ts since our last
- * `readBlob` would be written back stale. That field only changes on an
- * explicit doc-mode toggle — which itself tears this iframe down — so the
- * window is effectively nil, and losing the whole doc is the worse outcome.
+ * Keyed storage (Stage A) means we no longer need to read+merge before
+ * writing — each `doc:${ctxId}` entry stands alone, so the sync path is just
+ * "stringify the doc and dispatch". The host transparently compresses the
+ * payload on its end (see `plugin-data-codec.ts`).
  */
 const flushSaveSync = (): void => {
   // Dirty signal: a timer is pending (edits queued for the throttle window)
-  // OR an async flushSave is mid-flight (its readBlob round-trip is awaiting
-  // a response that may never arrive if teardown is now). Skipping when
-  // neither is true avoids a full stringify + gzip on every blur (which
-  // fires on any focus shift inside the page).
+  // OR an async flushSave is mid-flight (its dispatch may not have left
+  // the iframe yet). Skipping when neither is true avoids a full stringify
+  // + gzip on every blur (which fires on any focus shift inside the page).
   if (saveTimer === null && !saveInFlight) return;
   if (saveTimer !== null) {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
   if (!currentCtx || !editor) return;
-  // Same guard as scheduleSave — never overwrite a blob we couldn't read.
-  if (isDocCorrupt || isStorageUnreadable) return;
+  // Same guard as scheduleSave — never overwrite a doc we couldn't read.
+  if (isDocCorrupt) return;
   try {
-    const merged: StoredState = {
-      ...storedState,
-      docs: { ...storedState.docs, [currentCtx.id]: stripChipContent(editor.getJSON()) },
-    };
-    storedState = merged;
-    void PluginAPI.persistDataSynced(JSON.stringify(merged));
+    void saveContextDoc(PluginAPI, currentCtx.id, stripChipContent(editor.getJSON()));
   } catch (err) {
     logErr('persistDataSynced (sync flush) failed', err);
   }
@@ -346,10 +285,10 @@ const flushSaveSync = (): void => {
 
 const scheduleSave = (): void => {
   if (isLoadingDoc) return;
-  // Refuse to persist while the doc is a fallback (loaded from a blob we
-  // couldn't parse, or a future-version blob we don't understand). Saving
-  // here would overwrite the original blob with our empty seed.
-  if (isDocCorrupt || isStorageUnreadable) return;
+  // Refuse to persist while the doc is a fallback (loaded from an entry we
+  // couldn't parse). Saving here would overwrite the original entry with
+  // our empty seed.
+  if (isDocCorrupt) return;
   // Throttle: if a save is already pending, leave it — do NOT reschedule.
   // A debounce (reset-on-every-keystroke) would never fire for a continuous
   // typist, and the iframe can be torn down at any moment. This guarantees
@@ -384,14 +323,10 @@ const refreshTaskCache = async (): Promise<void> => {
 let bannerEl: HTMLDivElement | null = null;
 
 const updateDocStatusBanner = (): void => {
-  const message = isStorageUnreadable
-    ? 'This document was saved by a newer version of Super Productivity. ' +
-      'It is shown read-only and your data is left untouched — update the ' +
-      'app to edit it here.'
-    : isDocCorrupt
-      ? 'This document could not be loaded, so a blank one is shown. Your ' +
-        'saved data is untouched; editing is disabled here to protect it.'
-      : null;
+  const message = isDocCorrupt
+    ? 'This document could not be loaded, so a blank one is shown. Your ' +
+      'saved data is untouched; editing is disabled here to protect it.'
+    : null;
   if (!message) {
     bannerEl?.remove();
     bannerEl = null;
@@ -442,7 +377,11 @@ const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> =>
   // (a task gaining the TODAY tag, a dueDay being set, etc.).
   lastSeenTaskIds = snapshotInContextTaskIds(taskCache.values(), ctx);
 
-  const stored = storedState.docs[ctx.id];
+  const stored = await loadContextDoc(PluginAPI, ctx.id);
+  if (seq !== activeContextSeq) {
+    isLoadingDoc = false;
+    return;
+  }
   const docJson = stored
     ? prepareStoredDoc(stored, ctx, lookupTask)
     : buildSeedDoc(ctx, lookupTask);
@@ -1829,7 +1768,14 @@ let isMounted = false;
 const mount = async (): Promise<void> => {
   if (isMounted) return;
   isMounted = true;
-  await loadStoredState();
+  // Run the legacy → keyed migration in case background.ts hasn't finished
+  // it before the user opened the editor for the first time. The migration
+  // is idempotent and stamp-guarded, so a duplicate call here is free.
+  try {
+    await migrateToKeyedPersistence(PluginAPI);
+  } catch (err) {
+    logErr('document-mode: migration failed', err);
+  }
   updateDocStatusBanner();
   const initialCtx = await PluginAPI.getActiveWorkContext();
 
