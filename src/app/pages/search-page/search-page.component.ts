@@ -101,11 +101,11 @@ export class SearchPageComponent implements OnInit {
     const tagMap = new Map(tags.map((t) => [t.id, t]));
 
     return tasks.map((task) => {
-      // By design subtasks cannot have tags.
-      // If a subtask does not belong to a project, it will neither have a project nor a tag.
-      // Therefore, we need to use the parent's tag.
+      // Sub-tasks may carry their own tags (#7756). Prefer the sub-task's own
+      // first tag for the context chip; fall back to the parent's first tag so
+      // sub-tasks without explicit tags still show their parent's context.
       const parent = task.parentId ? taskMap.get(task.parentId) : undefined;
-      const tagId = parent ? parent.tagIds?.[0] : task.tagIds?.[0];
+      const tagId = task.tagIds?.[0] ?? parent?.tagIds?.[0];
       const taskNotes = task.notes || '';
 
       return {

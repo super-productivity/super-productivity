@@ -204,9 +204,12 @@ const getTaskFields = (task: WorklogTask, data: WorklogExportData): TaskFields =
       ]
     : [];
 
-  // by design subtasks don't have tags, so we must set its parent's tags
-  let tags = parentTask ? parentTask.tagIds : task.tagIds;
-  tags = tags.map(
+  // Sub-tasks may carry their own tags (#7756). Prefer those when present;
+  // fall back to the parent's tags only when the sub-task has none so the row
+  // still shows useful context.
+  const subTaskHasOwnTags = !!task.parentId && (task.tagIds?.length ?? 0) > 0;
+  const sourceTagIds = parentTask && !subTaskHasOwnTags ? parentTask.tagIds : task.tagIds;
+  const tags = sourceTagIds.map(
     (tagId) => (data.tags.find((tag) => tag.id === tagId) as TagCopy).title,
   );
 
