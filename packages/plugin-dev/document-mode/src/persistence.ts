@@ -35,7 +35,6 @@ interface MetaEntry {
 
 interface MigrationStamp {
   migrated: 0 | 1;
-  attemptedAt?: number;
 }
 
 interface LegacyBlob {
@@ -97,16 +96,13 @@ export const saveContextDoc = async (
  * One-shot migration from the legacy single-blob shape to keyed entries.
  *
  * Idempotent and crash-safe: a `__meta__` stamp guards re-runs after the
- * full sweep completes. If a previous run set `attemptedAt` but never
- * reached `migrated: 1` (process killed mid-way), the next call re-runs the
- * loop — each upsert is content-idempotent (same context → same doc), so
- * re-running costs op-log budget but doesn't corrupt state.
+ * full sweep completes. If a previous run wrote `migrated: 0` but never
+ * reached `migrated: 1` (process killed mid-way), the next call re-runs
+ * the loop — each upsert is content-idempotent (same context → same doc),
+ * so re-running costs op-log budget but doesn't corrupt state.
  *
  * Two devices migrating the same legacy data concurrently both write
- * identical keyed entries; LWW resolves deterministically per entity. A
- * stale device that writes to the legacy blob after migration is detected
- * downstream by the plugin (a non-empty legacy read after `migrated: 1`
- * means "older app on another device").
+ * identical keyed entries; LWW resolves deterministically per entity.
  */
 export const migrateToKeyedPersistence = async (api: PluginAPI): Promise<void> => {
   const stampRaw = await api.loadSyncedData(MIGRATION_STAMP_KEY);
@@ -131,13 +127,9 @@ export const migrateToKeyedPersistence = async (api: PluginAPI): Promise<void> =
   }
 
   // Stamp the attempt FIRST so a crash before the split is detectable on
-  // resume. attemptedAt is informational; the practical recovery is "if
-  // stamp.migrated !== 1, re-run the loop" — re-writes are content-
-  // idempotent.
-  await api.persistDataSynced(
-    JSON.stringify({ migrated: 0, attemptedAt: Date.now() }),
-    MIGRATION_STAMP_KEY,
-  );
+  // resume — `migrated: 0` means "we tried, retry the loop." Recovery is
+  // simply re-running the loop; each upsert below is content-idempotent.
+  await api.persistDataSynced(JSON.stringify({ migrated: 0 }), MIGRATION_STAMP_KEY);
 
   const docs = parsed.docs ?? {};
   // One oversized legacy doc must not block migration of every other context.
@@ -169,17 +161,4 @@ export const migrateToKeyedPersistence = async (api: PluginAPI): Promise<void> =
   // will retry, which is a no-op for already-written docs (content-idempotent)
   // and another skip for the oversized one. Stable failure mode without
   // data loss.
-};
-
-/**
- * Detect a post-migration write to the legacy entry — symptomatic of an
- * older device still running a pre-Stage-A build. Caller (background.ts)
- * can surface a "update all devices" notice; the data itself isn't lost
- * but won't be visible until the older device upgrades.
- */
-export const detectStaleLegacyWrite = async (api: PluginAPI): Promise<boolean> => {
-  const stamp = safeParse<MigrationStamp>(await api.loadSyncedData(MIGRATION_STAMP_KEY));
-  if (stamp?.migrated !== 1) return false;
-  const legacy = await api.loadSyncedData();
-  return Boolean(legacy);
 };

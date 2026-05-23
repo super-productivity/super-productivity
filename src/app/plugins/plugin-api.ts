@@ -290,13 +290,18 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   persistDataSynced(dataStr: string, key?: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to persist data`, { key });
+    // Log keyLen, not key — plugins may use user-supplied content as keys
+    // (search queries, document titles), and the log history is exportable.
+    // CLAUDE.md rule 9: only ids, never user content.
+    PluginLog.log(`Plugin ${this._pluginId} requested to persist data`, {
+      keyLen: key?.length ?? 0,
+    });
     return this._boundMethods.persistDataSynced(dataStr, key);
   }
 
   loadSyncedData(key?: string): Promise<string | null> {
     PluginLog.log(`Plugin ${this._pluginId} requested to load persisted data`, {
-      key,
+      keyLen: key?.length ?? 0,
     });
     return this._boundMethods.loadPersistedData(key);
   }

@@ -9,7 +9,6 @@ import assert from 'node:assert/strict';
 import type { PluginAPI } from '@super-productivity/plugin-api';
 import {
   docKey,
-  detectStaleLegacyWrite,
   loadContextDoc,
   loadEnabledCtxIds,
   migrateToKeyedPersistence,
@@ -229,9 +228,9 @@ test('migration: skips an oversized legacy doc and leaves legacy intact for reco
 test('migration: idempotent re-run after crash mid-loop', async () => {
   const { api, store } = createMockApi();
   store.set('', JSON.stringify({ docs: { p1: { type: 'doc' } }, enabledCtxIds: ['p1'] }));
-  // Simulate a previous attempt that stamped attemptedAt but never reached
+  // Simulate a previous attempt that stamped intent but never reached
   // success — e.g. the iframe was torn down mid-loop.
-  store.set('__meta__', JSON.stringify({ migrated: 0, attemptedAt: 100 }));
+  store.set('__meta__', JSON.stringify({ migrated: 0 }));
 
   await migrateToKeyedPersistence(api);
 
@@ -259,8 +258,8 @@ test('migration: re-running after success is a no-op even with replayed legacy d
   );
 });
 
-test('migration: stamps attempted FIRST, then splits, then tombstones, then stamps success', async () => {
-  // Order matters for crash recovery: the attempted stamp must be the first
+test('migration: stamps intent FIRST, then splits, then tombstones, then stamps success', async () => {
+  // Order matters for crash recovery: the intent stamp must be the first
   // write so that a crash between "stamp" and "split" still leaves the
   // marker that says "we tried; retry on resume."
   const { api, store, writes } = createMockApi();
@@ -269,7 +268,7 @@ test('migration: stamps attempted FIRST, then splits, then tombstones, then stam
   await migrateToKeyedPersistence(api);
 
   const order = writes.map((w) => w.key ?? '<legacy>');
-  // First write: attempted stamp.
+  // First write: intent stamp.
   assert.equal(order[0], '__meta__');
   assert.match(writes[0].data, /"migrated":0/);
   // Last write: success stamp.
@@ -282,27 +281,4 @@ test('migration: stamps attempted FIRST, then splits, then tombstones, then stam
   );
   assert.ok(tombstoneIdx > 0, 'expected a tombstone write');
   assert.ok(successIdx > tombstoneIdx, 'success stamp must come after tombstone');
-});
-
-/* -------------------------------------------------------------------------- */
-/* Stale-legacy detection                                                      */
-/* -------------------------------------------------------------------------- */
-
-test('detectStaleLegacyWrite: false when migration not stamped', async () => {
-  const { api } = createMockApi();
-  assert.equal(await detectStaleLegacyWrite(api), false);
-});
-
-test('detectStaleLegacyWrite: false after a fresh tombstone (empty legacy)', async () => {
-  const { api, store } = createMockApi();
-  store.set('__meta__', JSON.stringify({ migrated: 1 }));
-  store.set('', '');
-  assert.equal(await detectStaleLegacyWrite(api), false);
-});
-
-test('detectStaleLegacyWrite: true when a stale device writes legacy after migration', async () => {
-  const { api, store } = createMockApi();
-  store.set('__meta__', JSON.stringify({ migrated: 1 }));
-  store.set('', JSON.stringify({ docs: { p1: { type: 'doc' } } }));
-  assert.equal(await detectStaleLegacyWrite(api), true);
 });
