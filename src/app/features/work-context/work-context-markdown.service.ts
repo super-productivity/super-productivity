@@ -75,8 +75,15 @@ export class WorkContextMarkdownService {
         .pipe(first())
         .toPromise()) || [];
 
+    // Drop sub-tasks whose parent is also in the requested ids; otherwise the
+    // sub-task is rendered twice — once nested under the parent, once at the
+    // top level. Matches the tag-view selector dedup (tag.reducer.ts:121-127).
+    const idSet = new Set(ids);
     return {
-      tasks: tasks.filter((task): task is TaskWithSubTasks => !!task),
+      tasks: tasks.filter(
+        (task): task is TaskWithSubTasks =>
+          !!task && (!task.parentId || !idSet.has(task.parentId)),
+      ),
       contextTitle,
     };
   }
