@@ -13,8 +13,11 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry failed tests to handle flakiness */
-  retries: process.env.CI ? 2 : 1,
+  /*
+   * Keep retries disabled so E2E failures expose determinism problems instead
+   * of being hidden by a later passing attempt.
+   */
+  retries: 0,
   // Reduce worker count to avoid resource contention causing flakiness
   // Lower worker count improves stability by reducing parallel execution stress
   workers:

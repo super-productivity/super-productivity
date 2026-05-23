@@ -68,12 +68,15 @@ export const createSyncFolder = async (
       },
     });
     if (!response.ok() && response.status() !== 405) {
-      console.warn(
-        `Failed to create WebDAV folder: ${response.status()} ${response.statusText()}`,
+      throw new Error(
+        `Failed to create WebDAV folder "${folderName}": ${response.status()} ${response.statusText()}`,
       );
     }
   } catch (e) {
-    console.warn('Error creating WebDAV folder:', e);
+    const message = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Error creating WebDAV folder "${folderName}" at ${mkcolUrl}: ${message}`,
+    );
   }
 };
 

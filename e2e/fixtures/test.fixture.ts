@@ -1,4 +1,5 @@
-import { BrowserContext, test as base } from '@playwright/test';
+import { test as base } from '@playwright/test';
+import type { BrowserContext, ConsoleMessage } from '@playwright/test';
 import { WorkViewPage } from '../pages/work-view.page';
 import { ProjectPage } from '../pages/project.page';
 import { TaskPage } from '../pages/task.page';
@@ -27,18 +28,82 @@ type TestFixtures = {
   testPrefix: string;
 };
 
+type RuntimeBrowserError = {
+  type: 'pageerror' | 'console';
+  message: string;
+};
+
+const formatRuntimeBrowserErrors = (errors: RuntimeBrowserError[]): string =>
+  errors
+    .map((error, index) => `${index + 1}. ${error.type}: ${error.message}`)
+    .join('\n');
+
 export const test = base.extend<TestFixtures>({
   // Create isolated context for each test
-  isolatedContext: async ({ browser, baseURL }, use, testInfo) => {
+  isolatedContext: async (
+    {
+      browser,
+      baseURL,
+      acceptDownloads,
+      actionTimeout,
+      bypassCSP,
+      clientCertificates,
+      colorScheme,
+      contextOptions,
+      deviceScaleFactor,
+      extraHTTPHeaders,
+      geolocation,
+      hasTouch,
+      httpCredentials,
+      ignoreHTTPSErrors,
+      isMobile,
+      javaScriptEnabled,
+      locale,
+      offline,
+      permissions,
+      proxy,
+      navigationTimeout,
+      serviceWorkers,
+      timezoneId,
+      userAgent,
+      viewport,
+    },
+    use,
+    testInfo,
+  ) => {
     const url = baseURL || testInfo.project.use.baseURL || 'http://localhost:4242';
+
     // Create a new context with isolated storage
     const context = await browser.newContext({
+      ...contextOptions,
+      acceptDownloads,
       // Each test gets its own storage state
       storageState: undefined,
       // Preserve the base userAgent and add worker index for debugging
-      userAgent: `PLAYWRIGHT PLAYWRIGHT-WORKER-${testInfo.workerIndex}`,
+      userAgent: `${userAgent ?? 'PLAYWRIGHT'} PLAYWRIGHT-WORKER-${testInfo.workerIndex}`,
       baseURL: url,
+      bypassCSP,
+      clientCertificates,
+      colorScheme,
+      deviceScaleFactor,
+      extraHTTPHeaders,
+      geolocation,
+      hasTouch,
+      httpCredentials,
+      ignoreHTTPSErrors,
+      isMobile,
+      javaScriptEnabled,
+      locale,
+      offline,
+      permissions,
+      proxy,
+      serviceWorkers,
+      timezoneId,
+      viewport,
     });
+
+    context.setDefaultTimeout(actionTimeout);
+    context.setDefaultNavigationTimeout(navigationTimeout);
 
     await use(context);
 
@@ -49,23 +114,30 @@ export const test = base.extend<TestFixtures>({
   // Override page to use isolated context
   page: async ({ isolatedContext }, use) => {
     const page = await isolatedContext.newPage();
+    const runtimeErrors: RuntimeBrowserError[] = [];
 
     // Skip onboarding, hints, and example tasks before the app boots.
     // This runs before any page JavaScript, so Angular sees the flags immediately.
     await page.addInitScript(skipOnboardingForE2E);
 
     try {
-      // Always log uncaught page errors — they are almost always test-relevant
       page.on('pageerror', (error) => {
-        console.error('Page error:', error.message);
+        runtimeErrors.push({
+          type: 'pageerror',
+          message: error.stack ?? error.message,
+        });
       });
 
-      // Only log verbose console messages when E2E_VERBOSE is set
-      if (process.env.E2E_VERBOSE) {
-        page.on('console', (msg) => {
+      page.on('console', (msg: ConsoleMessage) => {
+        if (msg.type() === 'error') {
+          runtimeErrors.push({
+            type: 'console',
+            message: msg.text(),
+          });
+        } else if (process.env.E2E_VERBOSE) {
           console.log(`Console ${msg.type()}:`, msg.text());
-        });
-      }
+        }
+      });
 
       // Navigate to the app with retry logic
       let navigationSuccess = false;
@@ -85,7 +157,19 @@ export const test = base.extend<TestFixtures>({
 
       await waitForAppReady(page);
 
-      await use(page);
+      let testFailed = false;
+      try {
+        await use(page);
+      } catch (error) {
+        testFailed = true;
+        throw error;
+      } finally {
+        if (!testFailed && runtimeErrors.length > 0) {
+          throw new Error(
+            `Browser runtime errors were emitted during the test:\n${formatRuntimeBrowserErrors(runtimeErrors)}`,
+          );
+        }
+      }
     } finally {
       // Cleanup - make sure context is still available
       if (!page.isClosed()) {
