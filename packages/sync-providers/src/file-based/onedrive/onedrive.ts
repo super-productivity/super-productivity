@@ -229,8 +229,12 @@ export class OneDrive implements FileSyncProvider<
         .map((item) => item.name)
         .filter(Boolean);
     } catch (e) {
-      // Treat not-found as empty; rethrow auth/rate-limit/server failures
+      // Treat not-found as empty; rethrow auth/rate-limit/server failures.
+      // _requestJson throws HttpNotOkAPIError for 404 — map it here.
       if (e instanceof RemoteFileNotFoundAPIError) {
+        return [];
+      }
+      if (e instanceof HttpNotOkAPIError && e.response.status === 404) {
         return [];
       }
       throw e;
@@ -443,9 +447,11 @@ export class OneDrive implements FileSyncProvider<
           currentCfg.tenantId !== cfg.tenantId
         ) {
           this._deps.logger.warn(
-            '[OneDrive] Credentials cleared during token refresh, discarding refresh result',
+            '[OneDrive] Credentials changed during token refresh, discarding refresh result',
           );
-          throw new MissingRefreshTokenAPIError();
+          // Throw a plain Error — MissingRefreshTokenAPIError would trigger
+          // clearAuthCredentials() in the 401-retry path, wiping the *newer* creds.
+          throw new Error('OneDrive: stale refresh discarded');
         }
 
         const updatedCfg: OneDrivePrivateCfg = {
@@ -517,19 +523,35 @@ export class OneDrive implements FileSyncProvider<
         }
         if (parsed?.error === 'invalid_grant') {
           if (req.grantType === 'refresh_token') {
-            this._deps.logger.warn(
-              '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
-            );
-            await this.clearAuthCredentials();
+            // Only clear if the stored config still matches the failed refresh
+            // — otherwise a newer re-auth already replaced the credentials.
+            const currentCfg = await this.privateCfg.load();
+            if (
+              currentCfg?.refreshToken === req.refreshToken &&
+              currentCfg?.clientId === cfg.clientId &&
+              currentCfg?.tenantId === cfg.tenantId
+            ) {
+              this._deps.logger.warn(
+                '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
+              );
+              await this.clearAuthCredentials();
+            }
             throw new MissingRefreshTokenAPIError();
           }
         }
       }
       if (response.status === 401 && req.grantType === 'refresh_token') {
-        this._deps.logger.warn(
-          '[OneDrive] Token endpoint returned 401, clearing credentials',
-        );
-        await this.clearAuthCredentials();
+        const currentCfg = await this.privateCfg.load();
+        if (
+          currentCfg?.refreshToken === req.refreshToken &&
+          currentCfg?.clientId === cfg.clientId &&
+          currentCfg?.tenantId === cfg.tenantId
+        ) {
+          this._deps.logger.warn(
+            '[OneDrive] Token endpoint returned 401, clearing credentials',
+          );
+          await this.clearAuthCredentials();
+        }
         throw new MissingRefreshTokenAPIError();
       }
       const redactedBody = this._redactTokenBody(body);
@@ -587,12 +609,22 @@ export class OneDrive implements FileSyncProvider<
           });
           return this._request(options, true);
         } catch (refreshErr) {
-          // Only clear credentials for permanent auth failures, not transient ones
+          // Only clear credentials for permanent auth failures, not transient ones.
+          // Stale-refresh (plain Error) is ignored — newer creds may exist.
           if (
             refreshErr instanceof MissingRefreshTokenAPIError ||
             refreshErr instanceof AuthFailSPError
           ) {
-            await this.clearAuthCredentials();
+            // Guard: only clear if the stored config still matches the refresh
+            // attempt — a concurrent re-auth may have already replaced them.
+            const currentCfg = await this.privateCfg.load();
+            if (
+              currentCfg?.refreshToken === cfg.refreshToken &&
+              currentCfg?.clientId === cfg.clientId &&
+              currentCfg?.tenantId === cfg.tenantId
+            ) {
+              await this.clearAuthCredentials();
+            }
           }
           throw refreshErr;
         }
