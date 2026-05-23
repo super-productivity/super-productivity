@@ -221,16 +221,11 @@ test.describe.serial('Plugin Loading', () => {
     await page.click('text=Today'); // Click on Today navigation
     await expect(page).toHaveURL(/\/#\/tag\/TODAY/, { timeout: 10000 });
 
-    // Check if menu entry is back (gracefully handle if not visible)
+    // Menu entry should reappear after re-enable
     const pluginNavItemReEnabled = page
       .locator(PLUGIN_NAV_ENTRIES)
       .filter({ hasText: 'API Test Plugin' });
-    const pluginMenuVisible = await pluginNavItemReEnabled.isVisible().catch(() => false);
-    if (pluginMenuVisible) {
-      await expect(pluginNavItemReEnabled).toContainText('API Test Plugin');
-      console.log('Plugin menu entry verified after re-enable');
-    } else {
-      console.log('Plugin menu not visible after re-enable - may not be implemented');
-    }
+    await expect(pluginNavItemReEnabled).toBeVisible({ timeout: 15000 });
+    await expect(pluginNavItemReEnabled).toContainText('API Test Plugin');
   });
 });

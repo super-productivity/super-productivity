@@ -11,6 +11,10 @@ import { TagPage } from '../pages/tag.page';
 import { NotePage } from '../pages/note.page';
 import { SideNavPage } from '../pages/side-nav.page';
 import { skipOnboardingForE2E, waitForAppReady } from '../utils/waits';
+import {
+  assertNoRuntimeBrowserErrors,
+  attachPageErrorCollector,
+} from '../utils/runtime-errors';
 
 type TestFixtures = {
   workViewPage: WorkViewPage;
@@ -28,82 +32,32 @@ type TestFixtures = {
   testPrefix: string;
 };
 
-type RuntimeBrowserError = {
-  type: 'pageerror' | 'console';
-  message: string;
-};
-
-const formatRuntimeBrowserErrors = (errors: RuntimeBrowserError[]): string =>
-  errors
-    .map((error, index) => `${index + 1}. ${error.type}: ${error.message}`)
-    .join('\n');
-
 export const test = base.extend<TestFixtures>({
-  // Create isolated context for each test
+  // Create isolated context for each test.
+  // We use Playwright's merged `contextOptions` fixture so future option additions
+  // propagate automatically instead of requiring this list to stay in sync by hand.
   isolatedContext: async (
-    {
-      browser,
-      baseURL,
-      acceptDownloads,
-      actionTimeout,
-      bypassCSP,
-      clientCertificates,
-      colorScheme,
-      contextOptions,
-      deviceScaleFactor,
-      extraHTTPHeaders,
-      geolocation,
-      hasTouch,
-      httpCredentials,
-      ignoreHTTPSErrors,
-      isMobile,
-      javaScriptEnabled,
-      locale,
-      offline,
-      permissions,
-      proxy,
-      navigationTimeout,
-      serviceWorkers,
-      timezoneId,
-      userAgent,
-      viewport,
-    },
+    { browser, contextOptions, baseURL, actionTimeout, navigationTimeout },
     use,
     testInfo,
   ) => {
     const url = baseURL || testInfo.project.use.baseURL || 'http://localhost:4242';
+    const baseUserAgent = contextOptions.userAgent ?? 'PLAYWRIGHT';
 
-    // Create a new context with isolated storage
     const context = await browser.newContext({
       ...contextOptions,
-      acceptDownloads,
       // Each test gets its own storage state
       storageState: undefined,
       // Preserve the base userAgent and add worker index for debugging
-      userAgent: `${userAgent ?? 'PLAYWRIGHT'} PLAYWRIGHT-WORKER-${testInfo.workerIndex}`,
+      userAgent: `${baseUserAgent} PLAYWRIGHT-WORKER-${testInfo.workerIndex}`,
       baseURL: url,
-      bypassCSP,
-      clientCertificates,
-      colorScheme,
-      deviceScaleFactor,
-      extraHTTPHeaders,
-      geolocation,
-      hasTouch,
-      httpCredentials,
-      ignoreHTTPSErrors,
-      isMobile,
-      javaScriptEnabled,
-      locale,
-      offline,
-      permissions,
-      proxy,
-      serviceWorkers,
-      timezoneId,
-      viewport,
     });
 
-    context.setDefaultTimeout(actionTimeout);
-    context.setDefaultNavigationTimeout(navigationTimeout);
+    // Use !== undefined so a configured `0` (Playwright's "no timeout") is honored.
+    if (actionTimeout !== undefined) context.setDefaultTimeout(actionTimeout);
+    if (navigationTimeout !== undefined) {
+      context.setDefaultNavigationTimeout(navigationTimeout);
+    }
 
     await use(context);
 
@@ -114,30 +68,22 @@ export const test = base.extend<TestFixtures>({
   // Override page to use isolated context
   page: async ({ isolatedContext }, use) => {
     const page = await isolatedContext.newPage();
-    const runtimeErrors: RuntimeBrowserError[] = [];
+    // Page errors are uncaught JS exceptions in the app — almost always test-relevant.
+    // Each error is logged via console.error as it arrives (so it stays visible even
+    // when the test fails for another reason), then aggregated and thrown at teardown
+    // if the test otherwise passed.
+    const runtimeErrors = attachPageErrorCollector(page, 'page');
 
     // Skip onboarding, hints, and example tasks before the app boots.
     // This runs before any page JavaScript, so Angular sees the flags immediately.
     await page.addInitScript(skipOnboardingForE2E);
 
     try {
-      page.on('pageerror', (error) => {
-        runtimeErrors.push({
-          type: 'pageerror',
-          message: error.stack ?? error.message,
-        });
-      });
-
-      page.on('console', (msg: ConsoleMessage) => {
-        if (msg.type() === 'error') {
-          runtimeErrors.push({
-            type: 'console',
-            message: msg.text(),
-          });
-        } else if (process.env.E2E_VERBOSE) {
+      if (process.env.E2E_VERBOSE) {
+        page.on('console', (msg: ConsoleMessage) => {
           console.log(`Console ${msg.type()}:`, msg.text());
-        }
-      });
+        });
+      }
 
       // Navigate to the app with retry logic
       let navigationSuccess = false;
@@ -164,10 +110,8 @@ export const test = base.extend<TestFixtures>({
         testFailed = true;
         throw error;
       } finally {
-        if (!testFailed && runtimeErrors.length > 0) {
-          throw new Error(
-            `Browser runtime errors were emitted during the test:\n${formatRuntimeBrowserErrors(runtimeErrors)}`,
-          );
+        if (!testFailed) {
+          assertNoRuntimeBrowserErrors(runtimeErrors, 'page');
         }
       }
     } finally {

@@ -289,13 +289,6 @@ export const createSimulatedClient = async (
  * Safely handles already-closed contexts.
  */
 export const closeClient = async (client: SimulatedE2EClient): Promise<void> => {
-  let runtimeError: Error | null = null;
-  try {
-    assertNoRuntimeBrowserErrors(client.runtimeErrors, `Client ${client.clientName}`);
-  } catch (error) {
-    runtimeError = error instanceof Error ? error : new Error(String(error));
-  }
-
   try {
     // Check if page is still open before trying to close context
     if (!client.page.isClosed()) {
@@ -330,9 +323,9 @@ export const closeClient = async (client: SimulatedE2EClient): Promise<void> => 
     );
   }
 
-  if (runtimeError) {
-    throw runtimeError;
-  }
+  // Assert AFTER close so pageerrors emitted during teardown (Angular destroy
+  // hooks, late RxJS errors) are still captured before we throw.
+  assertNoRuntimeBrowserErrors(client.runtimeErrors, `Client ${client.clientName}`);
 };
 
 /**
