@@ -2242,6 +2242,7 @@
       "L_AUTO_START_FOCUS_ON_PLAY": "Start a focus session when I start tracking a task",
       "L_FOCUS_MODE_SOUND": "Ambient sound during focus sessions",
       "L_MANUAL_BREAK_START": "Enable Pomodoro overtime (keep timer running until manually ended)",
+      "L_AUTO_COMPLETE_BREAK": "Auto-complete break and start next session (Pomodoro only)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
       "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",
       "TITLE": "Focus Mode"

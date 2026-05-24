@@ -278,26 +278,31 @@ export class FocusModeEffects {
   );
 
   // Detect when break timer completes and show notification (no auto-complete)
-  detectBreakTimeUp$ = createEffect(
-    () =>
-      this.store.select(selectors.selectTimer).pipe(
-        skipWhileApplyingRemoteOps(),
-        filter(
-          (timer) =>
-            timer.purpose === 'break' &&
-            !timer.isRunning &&
-            timer.startedAt !== null &&
-            timer.elapsed >= timer.duration,
-        ),
-        distinctUntilChanged(
-          (prev, curr) =>
-            prev.elapsed === curr.elapsed && prev.startedAt === curr.startedAt,
-        ),
-        tap(() => {
-          this._notifyUser();
-        }),
+  detectBreakTimeUp$ = createEffect(() =>
+    this.store.select(selectors.selectTimer).pipe(
+      skipWhileApplyingRemoteOps(),
+      filter(
+        (timer) =>
+          timer.purpose === 'break' &&
+          !timer.isRunning &&
+          timer.startedAt !== null &&
+          timer.elapsed >= timer.duration,
       ),
-    { dispatch: false },
+      distinctUntilChanged(
+        (prev, curr) =>
+          prev.elapsed === curr.elapsed && prev.startedAt === curr.startedAt,
+      ),
+      withLatestFrom(
+        this.store.select(selectors.selectPausedTaskId),
+        this.store.select(selectFocusModeConfig),
+        this.store.select(selectors.selectMode),
+      ),
+      filter(
+        ([, , focusCfg, mode]) =>
+          !!focusCfg?.isAutoCompleteBreak && mode === FocusModeMode.Pomodoro,
+      ),
+      map(([, pausedTaskId]) => actions.completeBreak({ pausedTaskId })),
+    ),
   );
 
   // Session completion effects - split into separate concerns for better maintainability

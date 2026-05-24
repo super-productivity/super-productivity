@@ -280,6 +280,8 @@ export type FocusModeConfig = Readonly<{
   isStartInBackground?: boolean;
   /** Note: Controls Pomodoro overtime only (keeps timer running until manually ended) */
   isManualBreakStart?: boolean;
+  /** When true, break timer auto-completes and cycles to next focus session in Pomodoro mode */
+  isAutoCompleteBreak?: boolean;
 }>;
 
 export type TaskWidgetConfig = Readonly<{
