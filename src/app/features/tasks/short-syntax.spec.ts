@@ -413,6 +413,37 @@ describe('shortSyntax', () => {
       expect(r).toEqual(undefined);
     });
 
+    it('should not parse issue references (e.g. "fixes #1234") as tags for issue tasks', async () => {
+      const t = {
+        ...TASK,
+        issueId: '42',
+        title: '#42 Fix regression from #1234',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+
+      expect(r).toEqual(undefined);
+    });
+
+    it('should still parse non-numeric existing #tags in issue task titles', async () => {
+      const t = {
+        ...TASK,
+        issueId: '42',
+        title: '#42 Some title #blu',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        projectId: undefined,
+        attachments: [],
+        taskChanges: {
+          title: '#42 Some title',
+          tagIds: ['blu_id'],
+        },
+      });
+    });
+
     it('should not trigger for tasks with starting # (e.g. github issues) when adding tags', async () => {
       const t = {
         ...TASK,

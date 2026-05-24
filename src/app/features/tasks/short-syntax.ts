@@ -320,8 +320,8 @@ const parseTagChanges = (
           return (
             newTagTitle.length >= 1 &&
             tagStartIndex !== -1 &&
-            // NOTE: only block tags at the beginning if they are numeric (e.g. "#123 task")
-            (!isNumericOnly || tagStartIndex > 0)
+            // NOTE: block numeric tags at the start, and any numeric tag on issue tasks
+            (!isNumericOnly || (tagStartIndex > 0 && !task.issueId))
           );
         });
 
