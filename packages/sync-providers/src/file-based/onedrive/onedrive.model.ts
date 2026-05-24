@@ -19,6 +19,8 @@ export interface OneDriveItem {
 
 export interface OneDriveListResponse {
   value?: OneDriveItem[];
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '@odata.nextLink'?: string;
 }
 
 export interface OneDriveTokenResponse {

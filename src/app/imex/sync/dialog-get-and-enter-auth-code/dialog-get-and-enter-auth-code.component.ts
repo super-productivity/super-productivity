@@ -129,10 +129,18 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
       codeFromInput = parsedUrl.searchParams.get('code') ?? undefined;
 
       // Validate state parameter when present (CSRF protection for manual paste).
-      // State validation is a defense-in-depth measure; PKCE already ensures an
-      // attacker-supplied code cannot be exchanged for a token.
+      // For OneDrive full-URL paste, state is required — missing state means the
+      // callback URL is malformed or attacker-crafted. Raw code-only paste (no URL)
+      // is fine: it won't match the PKCE verifier on token exchange.
       const stateFromUrl = parsedUrl.searchParams.get('state');
-      if (stateFromUrl && this.data.providerName.toLowerCase() === 'onedrive') {
+      if (this.data.providerName.toLowerCase() === 'onedrive') {
+        if (!stateFromUrl) {
+          this._snackService.open({
+            type: 'ERROR',
+            msg: 'OAuth state missing from callback URL. Please try again.',
+          });
+          return undefined;
+        }
         if (!validateOAuthState('onedrive', stateFromUrl)) {
           this._snackService.open({
             type: 'ERROR',

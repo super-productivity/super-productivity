@@ -446,13 +446,14 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           formTenantId !== existingCfg.tenantId;
       }
 
-      await oneDriveProvider.privateCfg.setComplete({
+      const mergedCfg: OneDrivePrivateCfg = {
         ...(existingCfg || {}),
         ...formOneDriveCfg,
         ...(identityChanged
           ? { accessToken: '', refreshToken: '', tokenExpiresAt: 0 }
           : {}),
-      } as any);
+      } as OneDrivePrivateCfg;
+      await oneDriveProvider.privateCfg.setComplete(mergedCfg);
     }
   }
 

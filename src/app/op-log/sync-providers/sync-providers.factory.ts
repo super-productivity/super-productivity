@@ -35,13 +35,11 @@ export interface LocalFileSyncPicker {
 const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> => {
   const [
     { createDropboxProvider },
-    { createOneDriveProvider },
     { createWebdavProvider },
     { createSuperSyncProvider },
     { createNextcloudProvider },
   ] = await Promise.all([
     import('./file-based/dropbox/dropbox'),
-    import('./file-based/onedrive/onedrive'),
     import('./file-based/webdav/webdav'),
     import('./super-sync/super-sync'),
     import('./file-based/webdav/nextcloud'),
@@ -60,6 +58,7 @@ const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> =
   ];
 
   if (IS_ONEDRIVE_SUPPORTED) {
+    const { createOneDriveProvider } = await import('./file-based/onedrive/onedrive');
     providers.push(
       createOneDriveProvider({
         devPath: extraPath,

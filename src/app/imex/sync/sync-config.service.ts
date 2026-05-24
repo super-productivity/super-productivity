@@ -320,13 +320,21 @@ export class SyncConfigService {
     // Split settings into public (global config) and private (credentials/secrets)
     // to maintain security boundaries - credentials never go to global config
     const superSync = newSettings.superSync;
+    // Only include optional booleans when explicitly set, so partial form
+    // updates don't silently overwrite prior true values with undefined.
     let globalConfig: SyncPublicConfig = {
       isEnabled: newSettings.isEnabled ?? false,
-      isEncryptionEnabled: newSettings.isEncryptionEnabled ?? false,
-      isCompressionEnabled: newSettings.isCompressionEnabled ?? false,
       syncProvider: newSettings.syncProvider ?? null,
       syncInterval: newSettings.syncInterval ?? 300000,
-      isManualSyncOnly: newSettings.isManualSyncOnly ?? false,
+      ...(newSettings.isEncryptionEnabled !== undefined
+        ? { isEncryptionEnabled: newSettings.isEncryptionEnabled }
+        : {}),
+      ...(newSettings.isCompressionEnabled !== undefined
+        ? { isCompressionEnabled: newSettings.isCompressionEnabled }
+        : {}),
+      ...(newSettings.isManualSyncOnly !== undefined
+        ? { isManualSyncOnly: newSettings.isManualSyncOnly }
+        : {}),
     };
     // Provider-specific settings (URLs, credentials) must be stored securely
     if (providerId) {

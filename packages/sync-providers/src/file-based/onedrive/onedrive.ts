@@ -7,6 +7,7 @@ import {
   AuthFailSPError,
   HttpNotOkAPIError,
   MissingRefreshTokenAPIError,
+  NoRevAPIError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
@@ -214,7 +215,10 @@ export class OneDrive implements FileSyncProvider<
         body: dataStr,
       });
       const result = (await response.json()) as { eTag?: string };
-      return { rev: result.eTag || '' };
+      if (!result.eTag) {
+        throw new NoRevAPIError('OneDrive upload missing eTag');
+      }
+      return { rev: result.eTag };
     } catch (e) {
       this._mapAndThrow(e);
     }
@@ -235,17 +239,29 @@ export class OneDrive implements FileSyncProvider<
 
   async listFiles(dirPath: string): Promise<string[]> {
     const cfg = await this._cfgOrError();
+    const names: string[] = [];
+    // Graph /children paginates by ~200 items; follow @odata.nextLink
+    // to collect the full listing. Missing entries would cause replay drift
+    // when the op-log folder grows beyond a single page.
+    let nextUrl: string | undefined = `${this._getDriveItemPath(dirPath, cfg)}/children`;
     try {
-      const result = await this._requestJson<OneDriveListResponse>(
-        `${this._getDriveItemPath(dirPath, cfg)}/children`,
-      );
-      return (result.value || [])
-        .filter((item) => !!item.file)
-        .map((item) => item.name)
-        .filter(Boolean);
+      while (nextUrl) {
+        const result: OneDriveListResponse =
+          await this._requestJson<OneDriveListResponse>(nextUrl);
+        for (const item of result.value || []) {
+          if (item.file && item.name) {
+            names.push(item.name);
+          }
+        }
+        // @odata.nextLink is a full URL — strip the Graph base prefix
+        // so _request can re-add it without doubling.
+        const raw: string | undefined = result['@odata.nextLink'];
+        nextUrl = raw?.startsWith(ONEDRIVE_PROTOCOL.graphApiBaseUrl)
+          ? raw.slice(ONEDRIVE_PROTOCOL.graphApiBaseUrl.length)
+          : raw;
+      }
+      return names;
     } catch (e) {
-      // Treat not-found as empty; rethrow auth/rate-limit/server failures.
-      // _requestJson throws HttpNotOkAPIError for 404 — map it here.
       if (e instanceof RemoteFileNotFoundAPIError) {
         return [];
       }
@@ -584,10 +600,10 @@ export class OneDrive implements FileSyncProvider<
     const accessToken = await this._refreshAccessTokenIfNeeded(cfg);
     const isUploadRequest = options.method === 'PUT' && options.path.endsWith('/content');
 
-    this._deps.logger.log({
+    this._deps.logger.normal('OneDrive.request', {
       method: options.method,
       isUpload: isUploadRequest,
-    } as unknown as string);
+    });
 
     const requestHeaders = new Headers(options.headers);
     requestHeaders.set('Authorization', `Bearer ${accessToken}`);
@@ -605,10 +621,10 @@ export class OneDrive implements FileSyncProvider<
 
     if (!response.ok) {
       const parsed = this._parseGraphError(responseBody);
-      this._deps.logger.log({
+      this._deps.logger.normal('OneDrive request error', {
         status: response.status,
         code: parsed.code || undefined,
-      } as unknown as string);
+      });
     }
 
     if (response.status === 401) {
@@ -712,7 +728,13 @@ export class OneDrive implements FileSyncProvider<
   private _redactSensitiveFields(body: string): string {
     try {
       const parsed = JSON.parse(body) as Record<string, unknown>;
-      const sensitiveKeys = ['code', 'code_verifier', 'refresh_token', 'access_token'];
+      const sensitiveKeys = [
+        'code',
+        'code_verifier',
+        'refresh_token',
+        'access_token',
+        'id_token',
+      ];
       let changed = false;
       for (const key of sensitiveKeys) {
         if (key in parsed) {
