@@ -261,7 +261,7 @@ export class SyncPage extends BasePage {
    */
   async waitForSyncReady(): Promise<void> {
     // Wait for sync button to show the check icon (indicates provider is ready)
-    // The sync button shows sync_disabled when not ready, and check/done_all when ready
+    // The sync button shows a plain sync icon when not ready, and check/done_all when ready
     await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
   }
 

@@ -38,6 +38,7 @@ import { formatMonthDay } from '../../../util/format-month-day.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
+import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { MatButton } from '@angular/material/button';
@@ -50,6 +51,18 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
+
+// Fields whose change requires offering "Update all task instances?" — covers
+// what propagates to existing tasks (vs. schedule fields, which only affect
+// future occurrences).
+const RELEVANT_KEYS_FOR_UPDATE_ALL_TASKS: (keyof TaskRepeatCfgCopy)[] = [
+  'title',
+  'defaultEstimate',
+  'remindAt',
+  'startTime',
+  'notes',
+  'tagIds',
+];
 
 // TASK_REPEAT_CFG_FORM_CFG
 @Component({
@@ -87,6 +100,7 @@ export class DialogEditTaskRepeatCfgComponent {
   }>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
+  isHeatmapExpanded = false;
 
   repeatCfgInitial = signal<TaskRepeatCfgCopy | undefined>(undefined);
   repeatCfg = signal<Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg>(
@@ -114,9 +128,9 @@ export class DialogEditTaskRepeatCfgComponent {
   formGroup2 = signal(new UntypedFormGroup({}));
   tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
   canRemoveInstance = signal<boolean>(false);
-  removeInstanceButtonText = computed(() => {
+  skipInstanceButtonText = computed(() => {
     if (!this._data.targetDate) {
-      return this._translateService.instant(T.F.TASK_REPEAT.F.REMOVE_INSTANCE);
+      return this._translateService.instant(T.F.TASK_REPEAT.F.SKIP_INSTANCE);
     }
 
     // Format date using same logic as ShortDate2Pipe
@@ -129,7 +143,7 @@ export class DialogEditTaskRepeatCfgComponent {
       this._dateTimeFormatService.currentLocale(),
     );
 
-    return this._translateService.instant(T.F.TASK_REPEAT.F.REMOVE_FOR_DATE, {
+    return this._translateService.instant(T.F.TASK_REPEAT.F.SKIP_FOR_DATE, {
       date: formattedDate,
     });
   });
@@ -178,6 +192,7 @@ export class DialogEditTaskRepeatCfgComponent {
             this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
             DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!)
           : undefined,
+        shouldInheritSubtasks: this._data.task.subTaskIds.length > 0,
         title: this._data.task.title,
         notes: this._data.task.notes || undefined,
         tagIds: unique(this._data.task.tagIds),
@@ -269,24 +284,27 @@ export class DialogEditTaskRepeatCfgComponent {
       }
     }
 
-    const finalRepeatCfg = this.repeatCfg();
+    // Normalize the monthly anchor fields at the boundary: convert the form's
+    // `null` sentinel to `undefined`, and strip a stale `monthlyLastDay` flag.
+    const finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
 
     if (this.isEdit()) {
       const initial = this.repeatCfgInitial();
       if (!initial) {
         throw new Error('Initial task repeat cfg missing (code error)');
       }
-      const isRelevantChangesForUpdateAllTasks =
-        initial.title !== finalRepeatCfg.title ||
-        initial.defaultEstimate !== finalRepeatCfg.defaultEstimate ||
-        initial.remindAt !== finalRepeatCfg.remindAt ||
-        initial.startTime !== finalRepeatCfg.startTime ||
-        initial.notes !== finalRepeatCfg.notes ||
-        JSON.stringify(initial.tagIds) !== JSON.stringify(finalRepeatCfg.tagIds);
+      // Pass only the fields that actually changed. Sending the whole config
+      // would make rescheduleTaskOnRepeatCfgUpdate$ fire on every save (its
+      // filter checks `field in changes`), pushing today's task to tomorrow
+      // when only the time was edited (issue #7373).
+      const changes = getTaskRepeatCfgChanges(initial, finalRepeatCfg);
+      const isRelevantChangesForUpdateAllTasks = RELEVANT_KEYS_FOR_UPDATE_ALL_TASKS.some(
+        (k) => k in changes,
+      );
 
       this._taskRepeatCfgService.updateTaskRepeatCfg(
         exists((finalRepeatCfg as TaskRepeatCfg).id),
-        finalRepeatCfg,
+        changes,
         isRelevantChangesForUpdateAllTasks,
       );
       this.close();
@@ -298,6 +316,31 @@ export class DialogEditTaskRepeatCfgComponent {
       );
       this.close();
     }
+  }
+
+  private _normalizeMonthlyAnchor<
+    T extends {
+      monthlyWeekOfMonth?: unknown;
+      monthlyLastDay?: boolean;
+      quickSetting?: string;
+    },
+  >(cfg: T): T {
+    let result = cfg;
+    // The form uses `null` as the "(Day of month)" sentinel on the
+    // monthlyWeekOfMonth select. Persisted cfgs use `undefined` for absent
+    // optional fields (project convention). Normalizing here keeps existing
+    // day-of-month cfgs from producing spurious change diffs.
+    if (result.monthlyWeekOfMonth === null) {
+      result = { ...result, monthlyWeekOfMonth: undefined };
+    }
+    // `monthlyLastDay` has no CUSTOM-mode form control, so a flag left over
+    // from the MONTHLY_LAST_DAY preset would silently override the
+    // day-of-month a CUSTOM cfg shows. It is only ever valid for that
+    // preset — strip it for any other quick setting (#7726).
+    if (result.monthlyLastDay && result.quickSetting !== 'MONTHLY_LAST_DAY') {
+      result = { ...result, monthlyLastDay: undefined };
+    }
+    return result;
   }
 
   remove(): void {
@@ -320,12 +363,12 @@ export class DialogEditTaskRepeatCfgComponent {
       .open(DialogConfirmComponent, {
         restoreFocus: true,
         data: {
-          message: this._translateService.instant(T.F.TASK_REPEAT.D_DELETE_INSTANCE.MSG, {
+          message: this._translateService.instant(T.F.TASK_REPEAT.D_SKIP_INSTANCE.MSG, {
             date: new Date(targetDate).toLocaleDateString(
               this._dateTimeFormatService.currentLocale(),
             ),
           }),
-          okTxt: this._translateService.instant(T.F.TASK_REPEAT.D_DELETE_INSTANCE.OK),
+          okTxt: this._translateService.instant(T.F.TASK_REPEAT.D_SKIP_INSTANCE.OK),
         },
       })
       .afterClosed()

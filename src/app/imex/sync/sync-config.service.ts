@@ -3,7 +3,7 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { combineLatest, from, Observable, of } from 'rxjs';
 import { SyncConfig } from '../../features/config/global-config.model';
-import { switchMap, tap } from 'rxjs/operators';
+import { shareReplay, switchMap, tap } from 'rxjs/operators';
 import {
   CurrentProviderPrivateCfg,
   PrivateCfgByProviderId,
@@ -11,8 +11,8 @@ import {
 } from '../../op-log/sync-exports';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncLog } from '../../core/log';
-import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import { clearSessionKeyCache } from '@sp/sync-core';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncWrapperService } from './sync-wrapper.service';
 
 // Maps sync providers to their corresponding form field in SyncConfig
@@ -21,13 +21,21 @@ const PROP_MAP_TO_FORM: Record<SyncProviderId, keyof SyncConfig | null> = {
   [SyncProviderId.LocalFile]: 'localFileSync',
   [SyncProviderId.WebDAV]: 'webDav',
   [SyncProviderId.SuperSync]: 'superSync',
+  [SyncProviderId.Nextcloud]: 'nextcloud',
   [SyncProviderId.Dropbox]: null,
 };
 
 // Ensures all required fields have empty string defaults to prevent undefined/null errors
 // when providers expect string values (e.g., WebDAV API calls fail with undefined URLs)
 // Fields that should never be logged, even in development
-const SENSITIVE_FIELDS = ['password', 'encryptKey', 'accessToken', 'refreshToken'];
+const SENSITIVE_FIELDS = [
+  'password',
+  'encryptKey',
+  'accessToken',
+  'refreshToken',
+  'loginName',
+  'userName',
+];
 
 /**
  * Redacts sensitive fields from an object for safe logging.
@@ -74,6 +82,14 @@ const PROVIDER_FIELD_DEFAULTS: Record<
     syncFolderPath: '',
     encryptKey: '',
     isEncryptionEnabled: false,
+  },
+  [SyncProviderId.Nextcloud]: {
+    serverUrl: '',
+    loginName: '',
+    userName: '',
+    password: '',
+    syncFolderPath: '',
+    encryptKey: '',
   },
   [SyncProviderId.LocalFile]: {
     syncFolderPath: '',
@@ -154,6 +170,10 @@ export class SyncConfigService {
           ...DEFAULT_GLOBAL_CONFIG.sync.localFileSync,
           ...syncCfg?.localFileSync,
         },
+        nextcloud: {
+          ...DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
+          ...syncCfg?.nextcloud,
+        },
       };
 
       // If no provider is active, return base config with empty encryption key
@@ -206,6 +226,7 @@ export class SyncConfigService {
         localFileSync: DEFAULT_GLOBAL_CONFIG.sync.localFileSync,
         webDav: DEFAULT_GLOBAL_CONFIG.sync.webDav,
         superSync: DEFAULT_GLOBAL_CONFIG.sync.superSync,
+        nextcloud: DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
       };
 
       // Add current provider config if applicable
@@ -221,6 +242,11 @@ export class SyncConfigService {
       this._lastSettings = v;
       SyncLog.log('syncSettingsForm$', redactSensitiveFields(v));
     }),
+    // Cache the latest emission across all subscribers (refCount:false) so a
+    // dialog opened later from the header — when the settings page is not
+    // mounted — can replay without re-running combineLatest and re-fetching
+    // /assets/sync-config-default-override.json.
+    shareReplay({ bufferSize: 1, refCount: false }),
   );
 
   async updateEncryptionPassword(
@@ -273,7 +299,8 @@ export class SyncConfigService {
     // Split settings into public (global config) and private (credentials/secrets)
     // to maintain security boundaries - credentials never go to global config
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { encryptKey, webDav, localFileSync, superSync, ...globalConfig } = newSettings;
+    const { encryptKey, webDav, localFileSync, superSync, nextcloud, ...globalConfig } =
+      newSettings;
     // Provider-specific settings (URLs, credentials) must be stored securely
     if (providerId) {
       await this._updatePrivateConfig(providerId, newSettings);
@@ -323,6 +350,12 @@ export class SyncConfigService {
     // Empty credentials should be cleared by disabling the provider, not by form state
     const nonEmptyFormValues = Object.entries(providerCfgAsRecord).reduce(
       (acc, [key, value]) => {
+        if (providerId === SyncProviderId.Nextcloud && key === 'loginName') {
+          if (value !== undefined && value !== null) {
+            acc[key] = typeof value === 'string' ? value : '';
+          }
+          return acc;
+        }
         // Only include values that are truthy OR explicitly false/0
         // Skip: undefined, null, empty string
         if (value !== undefined && value !== null && value !== '') {

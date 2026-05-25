@@ -21,7 +21,10 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
+import { INBOX_PROJECT } from '../../../features/project/project.const';
+import { RECREATE_FALLBACK } from '../../../op-log/core/recreate-fallback.const';
 import { OpLog } from '../../../core/log';
+import { filterTaskIdArraysFromTagOrProjectPayload } from '../../../op-log/apply/bulk-archive-filter.util';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
@@ -359,51 +362,31 @@ const syncParentSubTaskIds = (
  *
  * This is necessary because LWW conflict resolution replaces entire entities
  * without checking whether referenced tasks still exist locally.
+ *
+ * Wraps the shared `filterTaskIdArraysFromTagOrProjectPayload` helper. The
+ * sibling filter for in-batch archives is `stripBatchArchivedTaskIdsFromLwwPayload`
+ * in op-log/apply/bulk-archive-filter.util.ts — the two run at different
+ * layers because their predicates resolve at different times.
  */
 const filterOrphanedTaskIdsFromEntityData = (
   entityData: Record<string, unknown>,
   entityType: string,
   rootState: RootState,
 ): Record<string, unknown> => {
-  if (entityType !== 'TAG' && entityType !== 'PROJECT') {
-    return entityData;
-  }
-
   const taskState = rootState[TASK_FEATURE_NAME];
-  if (!taskState) {
-    return entityData;
-  }
+  if (!taskState) return entityData;
   const existingTaskIds = new Set(taskState.ids as string[]);
-
-  let filtered = entityData;
-
-  if (Array.isArray(entityData['taskIds'])) {
-    const original = entityData['taskIds'] as string[];
-    const cleaned = original.filter((id) => existingTaskIds.has(id));
-    if (cleaned.length !== original.length) {
-      const removed = original.filter((id) => !existingTaskIds.has(id));
-      OpLog.warn(
-        `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
-        { entityId: entityData['id'], removed },
-      );
-      filtered = { ...filtered, taskIds: cleaned };
-    }
-  }
-
-  if (entityType === 'PROJECT' && Array.isArray(entityData['backlogTaskIds'])) {
-    const original = entityData['backlogTaskIds'] as string[];
-    const cleaned = original.filter((id) => existingTaskIds.has(id));
-    if (cleaned.length !== original.length) {
-      const removed = original.filter((id) => !existingTaskIds.has(id));
-      OpLog.warn(
-        `lwwUpdateMetaReducer: Filtered orphaned backlogTaskIds from PROJECT LWW Update`,
-        { entityId: entityData['id'], removed },
-      );
-      filtered = { ...filtered, backlogTaskIds: cleaned };
-    }
-  }
-
-  return filtered;
+  const cleaned = filterTaskIdArraysFromTagOrProjectPayload(
+    entityData,
+    entityType,
+    (id) => !existingTaskIds.has(id),
+    {
+      warnMessage: `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
+      entityId:
+        typeof entityData['id'] === 'string' ? (entityData['id'] as string) : undefined,
+    },
+  );
+  return cleaned ?? entityData;
 };
 
 /**
@@ -503,6 +486,11 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       return reducer(state, action);
     }
 
+    // Note (#7330): backfill of payload.id for adapter LWW Updates lives in
+    // convertOpToAction at the apply boundary — every applied op has its id
+    // set from op.entityId before reaching this reducer. Producers also
+    // force the canonical id on-disk. The check below remains as a hard
+    // guard for actions arriving with no usable id at all.
     if (!entityData['id']) {
       OpLog.warn('lwwUpdateMetaReducer: Entity data has no id');
       return reducer(state, action);
@@ -529,7 +517,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       }
     ).entities?.[entityId];
 
-    let updatedFeatureState;
+    let updatedFeatureState: unknown;
 
     if (!existingEntity) {
       // Entity was deleted locally but UPDATE won via LWW.
@@ -538,18 +526,64 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       OpLog.log(
         `lwwUpdateMetaReducer: Entity ${entityType}:${entityId} not found, recreating from LWW update`,
       );
+
+      // Issue #7330: An LWW Update payload from a partial-delta producer
+      // (e.g. _convertToLWWUpdatesIfNeeded fallback) can lack required fields.
+      // Calling adapter.addOne with such a payload creates an entity that fails
+      // Typia validation (e.g. task with undefined `title` / `timeSpentOnDay`),
+      // which dataRepair has no rule for, leaving the user stuck on the
+      // "Repair attempted but failed" dialog. For TASK entities we merge with
+      // DEFAULT_TASK so the recreated entity is always schema-valid.
+      //
+      // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
+      // Rationale:
+      // - Vector clocks are the authoritative conflict resolution mechanism, not `modified`
+      // - The `modified` field is used for UI display ("last edited X minutes ago")
+      // - Setting it to local time reflects when THIS client applied the winning state
+      // - The original timestamp from the winning client is preserved in entityData but
+      //   gets overwritten here because local display should show local application time
+      let entityToAdd: Record<string, unknown>;
+      const fallback = RECREATE_FALLBACK[entityType];
+      if (fallback) {
+        // null and undefined both count as "missing": producers that emit
+        // explicit `null` for a required field would otherwise slip past the
+        // warn AND have `null` overwrite the default in the spread below.
+        const partialKeys = fallback.requiredKeys.filter((k) => entityData[k] == null);
+        if (partialKeys.length > 0) {
+          OpLog.warn(
+            `lwwUpdateMetaReducer: ${entityType} LWW Update payload missing required ` +
+              `fields [${partialKeys.join(', ')}] for ${entityId} — backfilling from ` +
+              `defaults. Likely cause: the local DELETE op carried only {id} ` +
+              `(or a similarly minimal payload), so _convertToLWWUpdatesIfNeeded ` +
+              `produced a partial merged entity on its happy path.`,
+          );
+        }
+        // Spread does not skip null/undefined-valued keys; strip them so they
+        // can't clobber a backfilled default.
+        const stripped: Record<string, unknown> = { modified: Date.now() };
+        for (const k of Object.keys(entityData)) {
+          if (entityData[k] != null) stripped[k] = entityData[k];
+        }
+        entityToAdd = { ...fallback.defaults, ...stripped };
+
+        // INBOX_PROJECT may legitimately be missing from state (corrupted
+        // import, partial migration). Mirror normalizeRestoredTask's guard at
+        // task-shared-lifecycle.reducer.ts:110 so the recreated task points
+        // at a project that actually exists.
+        if (entityType === 'TASK' && entityToAdd['projectId'] === INBOX_PROJECT.id) {
+          const projectEntities =
+            (state[PROJECT_FEATURE_NAME] as { entities?: Record<string, unknown> })
+              ?.entities ?? {};
+          if (!projectEntities[INBOX_PROJECT.id]) {
+            const firstProjectId = Object.keys(projectEntities)[0];
+            if (firstProjectId) entityToAdd['projectId'] = firstProjectId;
+          }
+        }
+      } else {
+        entityToAdd = { ...entityData, modified: Date.now() };
+      }
       updatedFeatureState = (adapter as EntityAdapter<any>).addOne(
-        {
-          ...entityData,
-          // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
-          // Rationale:
-          // - Vector clocks are the authoritative conflict resolution mechanism, not `modified`
-          // - The `modified` field is used for UI display ("last edited X minutes ago")
-          // - Setting it to local time reflects when THIS client applied the winning state
-          // - The original timestamp from the winning client is preserved in entityData but
-          //   gets overwritten here because local display should show local application time
-          modified: Date.now(),
-        } as any,
+        entityToAdd as any,
         featureState as any,
       );
     } else {

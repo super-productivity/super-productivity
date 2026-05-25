@@ -8,11 +8,15 @@
       class="expand-tasks-btn"
       mat-button
     >
-      <!--TODO translate -->
-      <em
-        >+ {{ isHideDone() ? doneTasksLength() + ' done ' : allTasksLength() }} sub
-        tasks</em
-      >
+      <em>
+        @if (isHideDone()) {
+          {{
+            T.F.TASK.CMP.SHOW_HIDDEN_DONE_SUB_TASKS | translate: { nr: doneTasksLength() }
+          }}
+        } @else {
+          {{ T.F.TASK.CMP.SHOW_HIDDEN_SUB_TASKS | translate: { nr: allTasksLength() } }}
+        }
+      </em>
       <mat-icon>expand_more</mat-icon>
     </button>
   </div>
@@ -37,7 +41,8 @@
       [isBacklog]="isBacklog()"
       [task]="task"
       cdkDrag
-      [cdkDragStartDelay]="IS_TOUCH_PRIMARY ? DRAG_DELAY_FOR_TOUCH : 0"
+      [cdkDragStartDelay]="dragDelayForTouch()"
+      [cdkDragLockAxis]="isXs() ? 'y' : ''"
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY'"
       [cdkDragData]="task"
       (cdkDragStarted)="onDragStarted(task, $event)"

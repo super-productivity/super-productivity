@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { verifyEmail, verifyLoginMagicLink } from './auth';
+import { verifyEmail } from './auth';
 import { Logger } from './logger';
 
 // Error response helper
@@ -14,17 +14,6 @@ const escapeHtml = (unsafe: string): string => {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-};
-
-/**
- * Safely serialize a value for embedding in a <script> tag.
- * Uses JSON.stringify and escapes sequences that could break out of script context.
- */
-const safeJsonForScript = (value: unknown): string => {
-  return JSON.stringify(value)
-    .replace(/</g, '\\u003c') // Escape < to prevent </script> injection
-    .replace(/>/g, '\\u003e') // Escape > for completeness
-    .replace(/&/g, '\\u0026'); // Escape & to prevent &lt; from being decoded
 };
 
 interface VerifyEmailQuery {
@@ -82,7 +71,7 @@ export async function pageRoutes(fastify: FastifyInstance) {
             .requirements { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
           </style>
         </head>
-        <body>
+        <body data-token="${escapeHtml(token)}">
           <div class="container">
             <h1>Reset Password</h1>
             <form id="resetForm">
@@ -100,56 +89,7 @@ export async function pageRoutes(fastify: FastifyInstance) {
             <p class="error" id="error"></p>
             <p class="success" id="success"></p>
           </div>
-          <script>
-            const form = document.getElementById('resetForm');
-            const errorEl = document.getElementById('error');
-            const successEl = document.getElementById('success');
-            const submitBtn = document.getElementById('submitBtn');
-
-            form.addEventListener('submit', async (e) => {
-              e.preventDefault();
-              errorEl.style.display = 'none';
-              successEl.style.display = 'none';
-
-              const password = document.getElementById('password').value;
-              const confirmPassword = document.getElementById('confirmPassword').value;
-
-              if (password !== confirmPassword) {
-                errorEl.textContent = 'Passwords do not match';
-                errorEl.style.display = 'block';
-                return;
-              }
-
-              submitBtn.disabled = true;
-              submitBtn.textContent = 'Resetting...';
-
-              try {
-                const response = await fetch('/api/reset-password', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token: ${safeJsonForScript(token)}, password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                  successEl.textContent = data.message || 'Password reset successfully!';
-                  successEl.style.display = 'block';
-                  form.style.display = 'none';
-                } else {
-                  errorEl.textContent = data.error || 'Failed to reset password';
-                  errorEl.style.display = 'block';
-                  submitBtn.disabled = false;
-                  submitBtn.textContent = 'Reset Password';
-                }
-              } catch (err) {
-                errorEl.textContent = 'An error occurred. Please try again.';
-                errorEl.style.display = 'block';
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Reset Password';
-              }
-            });
-          </script>
+          <script src="/reset-password.js"></script>
         </body>
       </html>
     `);
@@ -209,7 +149,7 @@ export async function pageRoutes(fastify: FastifyInstance) {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -239,7 +179,7 @@ export async function pageRoutes(fastify: FastifyInstance) {
             .info { font-size: 0.875rem; color: #64748b; margin-top: 1rem; }
           </style>
         </head>
-        <body>
+        <body data-token="${escapeHtml(token)}">
           <div class="container">
             <h1>Recover Your Passkey</h1>
             <p>Click the button below to register a new passkey for your account. This will replace your existing passkey.</p>
@@ -248,83 +188,24 @@ export async function pageRoutes(fastify: FastifyInstance) {
             <p class="success" id="success"></p>
             <p class="info" id="info"></p>
           </div>
-          <script>
-            const recoverBtn = document.getElementById('recoverBtn');
-            const errorEl = document.getElementById('error');
-            const successEl = document.getElementById('success');
-            const infoEl = document.getElementById('info');
-            const token = ${safeJsonForScript(token)};
-
-            recoverBtn.addEventListener('click', async () => {
-              errorEl.style.display = 'none';
-              successEl.style.display = 'none';
-              infoEl.textContent = '';
-              recoverBtn.disabled = true;
-              recoverBtn.textContent = 'Preparing...';
-
-              try {
-                // Step 1: Get registration options from server
-                const optionsRes = await fetch('/api/recover/passkey/options', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token })
-                });
-
-                if (!optionsRes.ok) {
-                  const data = await optionsRes.json();
-                  throw new Error(data.error || 'Failed to get registration options');
-                }
-
-                const { options } = await optionsRes.json();
-
-                // Step 2: Create passkey using browser API
-                infoEl.textContent = 'Please follow your browser/device prompt to create a new passkey...';
-                recoverBtn.textContent = 'Waiting for passkey...';
-
-                const credential = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
-
-                // Step 3: Send credential to server for verification
-                recoverBtn.textContent = 'Verifying...';
-                infoEl.textContent = '';
-
-                const completeRes = await fetch('/api/recover/passkey/complete', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token, credential })
-                });
-
-                const completeData = await completeRes.json();
-
-                if (completeRes.ok) {
-                  successEl.textContent = completeData.message || 'Passkey registered successfully!';
-                  successEl.style.display = 'block';
-                  recoverBtn.style.display = 'none';
-                  infoEl.innerHTML = '<a href="/" style="color: #3b82f6;">Return to Login</a>';
-                } else {
-                  throw new Error(completeData.error || 'Failed to complete recovery');
-                }
-              } catch (err) {
-                console.error('Passkey recovery error:', err);
-                errorEl.textContent = err.message || 'An error occurred. Please try again.';
-                errorEl.style.display = 'block';
-                recoverBtn.disabled = false;
-                recoverBtn.textContent = 'Register New Passkey';
-              }
-            });
-          </script>
+          <script src="/recover-passkey.js"></script>
         </body>
       </html>
     `);
     },
   );
 
-  // Magic link login page - verifies token and displays JWT
+  // Magic link login page - renders a confirmation page with a "Log In" button.
+  // The GET request does NOT consume the single-use token. Instead, the button
+  // triggers a POST to /api/login/magic-link/verify which verifies the token.
+  // This two-step flow prevents email client link prefetchers (Outlook SafeLinks,
+  // Gmail link preview, etc.) from consuming the token before the user clicks.
   fastify.get<{ Querystring: MagicLoginQuery }>(
     '/magic-login',
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -335,48 +216,39 @@ export async function pageRoutes(fastify: FastifyInstance) {
         return reply.status(400).send('Token is required');
       }
 
-      try {
-        // Verify the magic link token and get JWT
-        const result = await verifyLoginMagicLink(token);
-
-        // Redirect to main page with token in sessionStorage
-        // Uses external script to avoid CSP inline script issues
-        return reply.type('text/html').send(`
+      // Render confirmation page — token is passed to the external script
+      // via a data attribute. The script handles verification via POST.
+      return reply.type('text/html').send(`
         <html>
           <head>
-            <title>Login Successful</title>
-          </head>
-          <body data-token="${escapeHtml(result.token)}">
-            <script src="/magic-login-redirect.js"></script>
-          </body>
-        </html>
-        `);
-      } catch (err) {
-        Logger.error(`Magic link login error: ${errorMessage(err)}`);
-        const safeError = escapeHtml(errorMessage(err));
-        return reply.type('text/html').send(`
-        <html>
-          <head>
-            <title>Login Failed</title>
+            <title>Complete Login</title>
             <style>
               body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #0f172a; color: white; margin: 0; }
               .container { text-align: center; padding: 2rem; background: rgba(30, 41, 59, 0.7); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); max-width: 400px; width: 90%; }
-              h1 { color: #ef4444; margin-bottom: 1rem; }
+              h1 { color: #3b82f6; margin-bottom: 1rem; }
               p { color: #94a3b8; margin-bottom: 1.5rem; }
+              button { width: 100%; padding: 0.75rem 1.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.5rem; font-size: 1rem; cursor: pointer; }
+              button:hover { background: #2563eb; }
+              button:disabled { background: #475569; cursor: not-allowed; }
+              .error { color: #ef4444; margin-top: 1rem; display: none; }
+              .success { color: #10b981; margin-top: 1rem; display: none; }
               a { color: #3b82f6; text-decoration: none; }
               a:hover { text-decoration: underline; }
             </style>
           </head>
-          <body>
+          <body data-token="${escapeHtml(token)}">
             <div class="container">
-              <h1>Login Failed</h1>
-              <p>${safeError}</p>
-              <p><a href="/">Request a new login link</a></p>
+              <h1>Complete Your Login</h1>
+              <p>Click the button below to finish logging in to SuperSync.</p>
+              <button id="login-btn">Log In</button>
+              <p class="error" id="error"></p>
+              <p class="success" id="success">Login successful! Redirecting...</p>
+              <p style="margin-top: 1.5rem;"><a href="/">Request a new login link</a></p>
             </div>
+            <script src="/magic-login-confirm.js"></script>
           </body>
         </html>
-        `);
-      }
+      `);
     },
   );
 }

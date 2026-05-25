@@ -24,7 +24,7 @@ export class AppStateEffects {
       map((todayStr) =>
         AppStateActions.setTodayString({
           todayStr,
-          startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
+          startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         }),
       ),
     );

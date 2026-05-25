@@ -23,7 +23,21 @@ export interface SuperSyncConfig {
    * The password is entered and "Retry Decrypt" is clicked to proceed.
    */
   decryptionFailedPassword?: string;
+  /**
+   * If true, allows the WebSocket connection for real-time push notifications.
+   * Default is false: the WS endpoint is blocked so tests have controlled,
+   * sequential sync via syncAndWait(). Set to true only for tests that
+   * specifically verify the WebSocket push flow.
+   */
+  enableWebSocket?: boolean;
 }
+
+type SyncCompletionSnapshot = {
+  checkVisible: boolean;
+  spinnerVisible: boolean;
+  errorVisible: boolean;
+  unsyncedCount: number | null;
+};
 
 /**
  * Page object for SuperSync configuration and sync operations.
@@ -169,6 +183,32 @@ export class SuperSyncPage extends BasePage {
    * @param config - SuperSync configuration (includes optional waitForInitialSync flag)
    */
   async setupSuperSync(config: SuperSyncConfig): Promise<void> {
+    // Block WebSocket connections and immediate uploads by default so tests have
+    // controlled, sequential sync via syncAndWait() only.
+    // Only the realtime-push test opts in with enableWebSocket: true.
+    if (!config.enableWebSocket) {
+      // 1. Block WebSocket: page.route() does NOT intercept WebSocket connections
+      //    in Playwright 1.48+. We use page.routeWebSocket() instead. Closing
+      //    immediately prevents the "open" event, so isConnected stays false.
+      await this.page.routeWebSocket('**/api/sync/ws**', (ws) => {
+        ws.close();
+      });
+
+      // 2. Block ImmediateUploadService: It uploads ops via POST and receives
+      //    piggybacked ops in the response, causing data to sync between clients
+      //    outside of explicit syncAndWait(). Set here (not in createSimulatedClient)
+      //    so tests using enableWebSocket:true still get immediate uploads.
+      // 3. Block WsTriggeredDownloadService: Even when routeWebSocket() closes the
+      //    connection, a WS notification can slip through the moment the connection
+      //    opens (before it's closed). Setting __SP_E2E_BLOCK_WS_DOWNLOAD ensures
+      //    WsTriggeredDownloadService ignores any such notifications, preventing
+      //    uncontrolled background syncs that race with explicit syncAndWait() calls.
+      await this.page.evaluate(() => {
+        (globalThis as any).__SP_E2E_BLOCK_IMMEDIATE_UPLOAD = true;
+        (globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = true;
+      });
+    }
+
     // Extract waitForInitialSync from config, defaulting to true
     const waitForInitialSync = config.waitForInitialSync ?? true;
     // Auto-accept native browser confirm dialogs (window.confirm used for fresh client sync confirmation)
@@ -298,7 +338,7 @@ export class SuperSyncPage extends BasePage {
     await this.page.waitForTimeout(1000);
 
     // Define locators for dialogs we might see
-    const configDialog = this.page.locator('dialog-sync-initial-cfg');
+    const configDialog = this.page.locator('dialog-sync-cfg');
     const passwordDialog = this.page.locator('dialog-enter-encryption-password');
     const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
 
@@ -870,7 +910,7 @@ export class SuperSyncPage extends BasePage {
         }
 
         // Client B: legacy password dialog (dialog-enter-encryption-password vs
-        // dialog-sync-initial-cfg password prompt)
+        // dialog-sync-cfg password prompt)
         const legacyPwVisible = await passwordDialog.isVisible().catch(() => false);
         if (legacyPwVisible) {
           console.log('[SuperSyncPage] Password dialog — entering password');
@@ -1126,6 +1166,15 @@ export class SuperSyncPage extends BasePage {
           config.password || 'e2e-default-encryption-pw',
         );
       }
+    }
+
+    // Block auto-sync after setup so tests have full control over when sync runs.
+    // The sync button click calls sync() directly (not through the effect),
+    // so manual syncAndWait() still works.
+    if (!config.enableWebSocket) {
+      await this.page.evaluate(() => {
+        (globalThis as any).__SP_E2E_BLOCK_AUTO_SYNC = true;
+      });
     }
   }
 
@@ -1434,6 +1483,7 @@ export class SuperSyncPage extends BasePage {
    * @internal Use syncAndWait() instead for most cases
    */
   async triggerSync(): Promise<void> {
+    // Allow uploads during explicit sync
     await this.syncBtn.click();
 
     const spinnerAppeared = await this.syncSpinner
@@ -1582,6 +1632,99 @@ export class SuperSyncPage extends BasePage {
     return false;
   }
 
+  private async _getUnsyncedOperationCount(): Promise<number | null> {
+    return this.page
+      .evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('SUP_OPS');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+
+        try {
+          if (!db.objectStoreNames.contains('ops')) {
+            return null;
+          }
+
+          const entries = await new Promise<{ syncedAt?: number; rejectedAt?: number }[]>(
+            (resolve, reject) => {
+              const tx = db.transaction('ops', 'readonly');
+              const request = tx.objectStore('ops').getAll();
+              request.onsuccess = () =>
+                resolve(request.result as { syncedAt?: number; rejectedAt?: number }[]);
+              request.onerror = () => reject(request.error);
+              tx.onabort = () => reject(tx.error);
+            },
+          );
+
+          return entries.filter((entry) => !entry.syncedAt && !entry.rejectedAt).length;
+        } finally {
+          db.close();
+        }
+      })
+      .catch((err) => {
+        console.log(`[syncAndWait] Could not read SUP_OPS pending state: ${String(err)}`);
+        return null;
+      });
+  }
+
+  private async _getSyncCompletionSnapshot(): Promise<SyncCompletionSnapshot> {
+    const [checkVisible, spinnerVisible, errorVisible, unsyncedCount] = await Promise.all(
+      [
+        this.syncCheckIcon.isVisible().catch(() => false),
+        this.syncSpinner.isVisible().catch(() => false),
+        this.syncErrorIcon.isVisible().catch(() => false),
+        this._getUnsyncedOperationCount(),
+      ],
+    );
+
+    return { checkVisible, spinnerVisible, errorVisible, unsyncedCount };
+  }
+
+  private async _waitForSyncCompletion(options: {
+    timeout: number;
+    useLocal: boolean;
+  }): Promise<void> {
+    const startTime = Date.now();
+    let lastSnapshot: SyncCompletionSnapshot | undefined;
+
+    while (Date.now() - startTime < options.timeout) {
+      const handledDialog = await this._handleSyncDialogs(options.useLocal);
+      if (handledDialog) {
+        await this.page.waitForTimeout(500);
+        continue;
+      }
+
+      lastSnapshot = await this._getSyncCompletionSnapshot();
+
+      if (lastSnapshot.errorVisible) {
+        await this.page.waitForTimeout(500);
+        const handledErrorDialog = await this._handleSyncDialogs(options.useLocal);
+        if (handledErrorDialog) {
+          continue;
+        }
+        throw new Error('Sync failed with error state during syncAndWait()');
+      }
+
+      if (lastSnapshot.checkVisible) {
+        return;
+      }
+
+      if (!lastSnapshot.spinnerVisible && lastSnapshot.unsyncedCount === 0) {
+        console.log(
+          '[syncAndWait] Sync check icon not visible, but SUP_OPS has no pending operations',
+        );
+        return;
+      }
+
+      await this.page.waitForTimeout(250);
+    }
+
+    throw new Error(
+      `syncAndWait timed out waiting for completion indicator after ${options.timeout}ms. Last state: ${JSON.stringify(lastSnapshot)}`,
+    );
+  }
+
   /**
    * Trigger a manual sync and wait for it to complete, handling any dialogs that appear.
    * This is the main method to use for syncing in tests.
@@ -1634,76 +1777,95 @@ export class SuperSyncPage extends BasePage {
       // Handle any pre-existing dialog (e.g., from auto-sync) before clicking sync
       await this._handleSyncDialogs(useLocal);
 
-      // Click sync button
+      // Record whether the check icon is already visible BEFORE clicking sync.
+      // This is crucial: if it's visible from a previous sync, we must wait for
+      // it to disappear (indicating the new sync cycle started) before we can
+      // wait for it to reappear (indicating the new sync completed).
+      const checkVisibleBeforeClick = await this.syncCheckIcon
+        .isVisible()
+        .catch(() => false);
+
+      // Click sync button to initiate the sync cycle.
       await this.syncBtn.click();
 
-      // Check if sync already completed (for very fast syncs)
-      const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+      if (checkVisibleBeforeClick) {
+        // The check icon is stale from a previous sync. Wait for it to disappear
+        // (sync started) or the spinner to appear. This prevents returning early
+        // when the check icon never disappears (e.g., download-only syncs where
+        // hasNoPendingOps stays true).
+        try {
+          await Promise.race([
+            this.syncCheckIcon.waitFor({ state: 'hidden', timeout: 5000 }),
+            this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 }),
+          ]);
+        } catch {
+          // Neither happened within 5s - the sync may have been a true no-op.
+          // Fall through to the spinner/check logic below.
+        }
+      }
 
-      if (!checkAlreadyVisible) {
-        // Sync not yet complete, wait for it to start or complete
-        const spinnerAppeared = await this.syncSpinner
-          .waitFor({ state: 'visible', timeout: 2000 })
-          .then(() => true)
-          .catch(() => false);
+      // Wait for spinner or check icon to determine sync state
+      const spinnerAppeared = await this.syncSpinner
+        .waitFor({ state: 'visible', timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
 
-        if (spinnerAppeared) {
-          // Wait for sync to complete, continuously checking for blocking dialogs.
-          // Previously we checked dialogs once then blocked on spinner - but dialogs
-          // can appear at any point during sync (especially after server round-trips).
-          const startTime = Date.now();
+      if (spinnerAppeared) {
+        // Wait for sync to complete, continuously checking for blocking dialogs.
+        // Previously we checked dialogs once then blocked on spinner - but dialogs
+        // can appear at any point during sync (especially after server round-trips).
+        const startTime = Date.now();
 
-          while (Date.now() - startTime < timeout) {
-            // Handle any visible dialog first
-            const handledDialog = await this._handleSyncDialogs(useLocal);
-            if (handledDialog) {
-              // Encryption/password dialogs trigger re-sync via afterClosed() → sync().
-              // Wait briefly so the new sync has time to start (spinner appears).
-              await this.page.waitForTimeout(2000);
-              continue;
-            }
-
-            // Wait for spinner to hide with short timeout to allow periodic dialog checks
-            const remaining = Math.max(timeout - (Date.now() - startTime), 1000);
-            const waitChunk = Math.min(3000, remaining);
-
-            try {
-              await this.syncSpinner.waitFor({ state: 'hidden', timeout: waitChunk });
-              break; // Spinner hidden - sync complete
-            } catch {
-              // Spinner still visible - check for error state
-              const hasError = await this.syncErrorIcon.isVisible().catch(() => false);
-              if (hasError) {
-                // Before throwing, give encryption dialogs a chance to appear.
-                // DecryptNoPasswordError sets ERROR status THEN opens the dialog
-                // asynchronously (lazy import), so the dialog may not be visible yet.
-                await this.page.waitForTimeout(500);
-                const handledEncryptionDialog = await this._handleSyncDialogs(useLocal);
-                if (handledEncryptionDialog) {
-                  continue; // Dialog handled — re-sync will start, re-enter loop
-                }
-                throw new Error('Sync failed with error state during syncAndWait()');
-              }
-              // Continue loop to re-check for dialogs
-            }
+        while (Date.now() - startTime < timeout) {
+          // Handle any visible dialog first
+          const handledDialog = await this._handleSyncDialogs(useLocal);
+          if (handledDialog) {
+            // Encryption/password dialogs trigger re-sync via afterClosed() → sync().
+            // Wait briefly so the new sync has time to start (spinner appears).
+            await this.page.waitForTimeout(2000);
+            continue;
           }
 
-          // Final check
-          const isStillSpinning = await this.syncSpinner.isVisible().catch(() => false);
-          if (isStillSpinning) {
-            throw new Error(
-              `syncAndWait timed out after ${timeout}ms - spinner still visible`,
-            );
+          // Wait for spinner to hide with short timeout to allow periodic dialog checks
+          const remaining = Math.max(timeout - (Date.now() - startTime), 1000);
+          const waitChunk = Math.min(3000, remaining);
+
+          try {
+            await this.syncSpinner.waitFor({ state: 'hidden', timeout: waitChunk });
+            break; // Spinner hidden - sync complete
+          } catch {
+            // Spinner still visible - check for error state
+            const hasError = await this.syncErrorIcon.isVisible().catch(() => false);
+            if (hasError) {
+              // Before throwing, give encryption dialogs a chance to appear.
+              // DecryptNoPasswordError sets ERROR status THEN opens the dialog
+              // asynchronously (lazy import), so the dialog may not be visible yet.
+              await this.page.waitForTimeout(500);
+              const handledEncryptionDialog = await this._handleSyncDialogs(useLocal);
+              if (handledEncryptionDialog) {
+                continue; // Dialog handled — re-sync will start, re-enter loop
+              }
+              throw new Error('Sync failed with error state during syncAndWait()');
+            }
+            // Continue loop to re-check for dialogs
           }
         }
 
-        // Check for encryption dialogs before waiting for check icon.
-        // The sync may have ended with ERROR status and opened a dialog.
-        await this._handleSyncDialogs(useLocal);
-
-        // Now wait for check icon to appear (whether spinner appeared or not)
-        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+        // Final check
+        const isStillSpinning = await this.syncSpinner.isVisible().catch(() => false);
+        if (isStillSpinning) {
+          throw new Error(
+            `syncAndWait timed out after ${timeout}ms - spinner still visible`,
+          );
+        }
       }
+
+      // Check for encryption dialogs before waiting for check icon.
+      // The sync may have ended with ERROR status and opened a dialog.
+      await this._handleSyncDialogs(useLocal);
+
+      // Now wait for sync to settle (whether spinner appeared or not)
+      await this._waitForSyncCompletion({ timeout: 10000, useLocal });
 
       // Post-sync dialog check: _promptSuperSyncEncryptionIfNeeded() runs AFTER
       // sync completes (check icon visible) and may open enable_encryption or
@@ -1724,7 +1886,7 @@ export class SuperSyncPage extends BasePage {
         if (reSpinner) {
           await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
         }
-        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+        await this._waitForSyncCompletion({ timeout: 10000, useLocal });
 
         // Check for another dialog after re-sync (e.g., enter_password after enable_encryption)
         await this.page.waitForTimeout(1500);
@@ -1740,7 +1902,7 @@ export class SuperSyncPage extends BasePage {
           if (reSpinner2) {
             await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
           }
-          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+          await this._waitForSyncCompletion({ timeout: 10000, useLocal });
         }
       }
     } finally {
@@ -1773,6 +1935,15 @@ export class SuperSyncPage extends BasePage {
    * @param newPassword - The new encryption password
    */
   async changeEncryptionPassword(newPassword: string): Promise<void> {
+    // Capture the sync check icon state BEFORE we start. If a previous
+    // syncAndWait() left the check icon visible, the final wait at the end of
+    // this method would see a stale icon and return before the server wipe +
+    // re-upload completes — causing a race where the next client starts
+    // syncing against partially-uploaded server state.
+    const checkVisibleBeforeOperation = await this.syncCheckIcon
+      .isVisible()
+      .catch(() => false);
+
     // Open sync settings via right-click
     // Use noWaitAfter to prevent blocking on Angular hash navigation
     await this.syncBtn.click({ button: 'right', noWaitAfter: true });
@@ -1878,18 +2049,32 @@ export class SuperSyncPage extends BasePage {
       }
     }
 
-    // Wait for password change operation to complete (server wipe + re-upload)
-    const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
-    if (!checkAlreadyVisible) {
-      const spinnerVisible = await this.syncSpinner
-        .waitFor({ state: 'visible', timeout: 5000 })
-        .then(() => true)
-        .catch(() => false);
-      if (spinnerVisible) {
-        await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
-      }
-      await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+    // Wait for password change operation to complete (server wipe + re-upload).
+    //
+    // If the check icon was visible BEFORE we opened the settings dialog, it's
+    // stale from a previous sync — we must first wait for it to disappear (new
+    // sync cycle started) or the spinner to appear, before waiting for the
+    // check icon to reappear (new sync completed). Without this, we'd return
+    // immediately against a stale icon and race the server re-upload.
+    if (checkVisibleBeforeOperation) {
+      await Promise.race([
+        this.syncCheckIcon.waitFor({ state: 'hidden', timeout: 5000 }),
+        this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 }),
+      ]).catch(() => {
+        // Neither happened within 5s — the password change may not have
+        // triggered a re-sync (rare). Fall through and rely on the final
+        // check-icon wait below.
+      });
     }
+
+    const spinnerVisible = await this.syncSpinner
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    if (spinnerVisible) {
+      await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
+    }
+    await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
   }
 
   /**

@@ -9,7 +9,6 @@ export enum BannerId {
   TimeEstimateExceeded = 'TimeEstimateExceeded',
   CalendarEvent = 'CalendarEvent',
   ReminderCountdown = 'ReminderCountdown',
-  FocusMode = 'FocusMode',
   SimpleCounterCountdownComplete = 'SimpleCounterCountdownComplete',
   StartupNote = 'StartupNote',
   DeadlinesToday = 'DeadlinesToday',
@@ -25,7 +24,6 @@ export const BANNER_SORT_PRIO_MAP = {
   [BannerId.TimeEstimateExceeded]: 3,
   [BannerId.StartTrackingReminder]: 2,
   [BannerId.StartupNote]: 2,
-  [BannerId.FocusMode]: 1,
   [BannerId.Offline]: 0,
   [BannerId.InstallWebApp]: 0,
 } as const;
@@ -45,6 +43,7 @@ export interface Banner {
   action?: BannerAction;
   action2?: BannerAction;
   action3?: BannerAction;
+  isKeepVisibleAfterAction?: boolean;
   isHideDismissBtn?: boolean;
   progress$?: Observable<number>;
   timer$?: Observable<number>;

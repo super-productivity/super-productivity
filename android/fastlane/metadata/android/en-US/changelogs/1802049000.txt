@@ -1,0 +1,7 @@
+- harden LWW archive and encryption password-change tests
+- increase IndexedDB retry window for session-restart locks (#7220)
+- clear selectOverdue/LaterToday selector overrides across specs (#7274)
+- extend Snap+Wayland GPU research with PR #7273 follow-up (#7275)
+- keep task selected when group/filter shows cross-context tasks (#7272)
+- Implement task parsing with sub-tasks (#7184)
+- extend default start page to projects, planner, schedule, boards

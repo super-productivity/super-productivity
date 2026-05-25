@@ -26,7 +26,7 @@ test.describe('Project', () => {
     // Mark first task as done
     const firstTask = page.locator('task').first();
     await firstTask.hover();
-    const doneBtn = firstTask.locator('.done-toggle');
+    const doneBtn = firstTask.locator('done-toggle');
     await doneBtn.waitFor({ state: 'visible' });
     await doneBtn.click();
 

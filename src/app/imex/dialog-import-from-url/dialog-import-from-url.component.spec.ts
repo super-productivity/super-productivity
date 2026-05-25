@@ -46,7 +46,7 @@ describe('DialogImportFromUrlComponent', () => {
 
   describe('component initialization', () => {
     it('should initialize with empty URL', () => {
-      expect(component.url).toBe('');
+      expect(component.url()).toBe('');
     });
 
     it('should have T constant available', () => {
@@ -56,7 +56,7 @@ describe('DialogImportFromUrlComponent', () => {
     it('should emit urlEntered event', () => {
       spyOn(component.urlEntered, 'emit');
       const testUrl = 'https://example.com/test.json';
-      component.url = testUrl;
+      component.url.set(testUrl);
 
       component.submit();
 
@@ -78,7 +78,7 @@ describe('DialogImportFromUrlComponent', () => {
       urlInput.dispatchEvent(new Event('input'));
       fixture.detectChanges();
 
-      expect(component.url).toBe(testUrl);
+      expect(component.url()).toBe(testUrl);
     });
 
     it('should show URL input field with correct properties', () => {
@@ -113,7 +113,7 @@ describe('DialogImportFromUrlComponent', () => {
   describe('submit functionality', () => {
     it('should close dialog with URL when valid URL is submitted', () => {
       const testUrl = 'https://example.com/backup.json';
-      component.url = testUrl;
+      component.url.set(testUrl);
 
       component.submit();
 
@@ -123,7 +123,7 @@ describe('DialogImportFromUrlComponent', () => {
     it('should close dialog with trimmed URL', () => {
       const testUrl = '  https://example.com/backup.json  ';
       const trimmedUrl = 'https://example.com/backup.json';
-      component.url = testUrl;
+      component.url.set(testUrl);
 
       component.submit();
 
@@ -134,7 +134,7 @@ describe('DialogImportFromUrlComponent', () => {
       spyOn(component.urlEntered, 'emit');
       const testUrl = '  https://example.com/backup.json  ';
       const trimmedUrl = 'https://example.com/backup.json';
-      component.url = testUrl;
+      component.url.set(testUrl);
 
       component.submit();
 
@@ -142,7 +142,7 @@ describe('DialogImportFromUrlComponent', () => {
     });
 
     it('should not close dialog when URL is empty', () => {
-      component.url = '';
+      component.url.set('');
 
       component.submit();
 
@@ -150,7 +150,7 @@ describe('DialogImportFromUrlComponent', () => {
     });
 
     it('should not close dialog when URL is only whitespace', () => {
-      component.url = '   ';
+      component.url.set('   ');
 
       component.submit();
 
@@ -159,7 +159,7 @@ describe('DialogImportFromUrlComponent', () => {
 
     it('should log error when URL is empty', () => {
       spyOn(Log, 'err');
-      component.url = '';
+      component.url.set('');
 
       component.submit();
 
@@ -191,14 +191,14 @@ describe('DialogImportFromUrlComponent', () => {
     });
 
     it('should disable submit button when URL is empty', () => {
-      component.url = '';
+      component.url.set('');
       fixture.detectChanges();
 
       expect(submitButton.disabled).toBe(true);
     });
 
     it('should disable submit button when URL is only whitespace', () => {
-      component.url = '   ';
+      component.url.set('   ');
       fixture.detectChanges();
 
       expect(submitButton.disabled).toBe(true);
@@ -214,15 +214,19 @@ describe('DialogImportFromUrlComponent', () => {
       expect(submitButton.disabled).toBe(false);
     });
 
-    it('should have button disable logic based on URL validity in template', () => {
-      // Note: Testing HTML5 form validation in unit tests is complex because
-      // browser validation behavior differs from test environment.
-      // We verify the template has the correct disable condition structure.
-      const submitButtonElement = fixture.debugElement.query(
-        By.css('button[color="primary"]'),
-      );
-      expect(submitButtonElement).toBeDefined();
-      expect(submitButtonElement.nativeElement.disabled).toBeDefined();
+    it('should disable and enable the submit button from template state', async () => {
+      const urlInput = fixture.debugElement.query(By.css('input[name="urlInput"]'));
+
+      component.url.set('');
+      fixture.detectChanges();
+      expect(submitButton.disabled).toBe(true);
+
+      urlInput.nativeElement.value = 'https://example.com/backup.json';
+      urlInput.nativeElement.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(submitButton.disabled).toBe(false);
     });
 
     it('should always enable cancel button', () => {
@@ -235,7 +239,7 @@ describe('DialogImportFromUrlComponent', () => {
       spyOn(component, 'submit');
 
       // Set valid URL and update form
-      component.url = 'https://example.com/test.json';
+      component.url.set('https://example.com/test.json');
       const urlInput = fixture.debugElement.query(By.css('input[name="urlInput"]'));
       urlInput.nativeElement.value = 'https://example.com/test.json';
       urlInput.nativeElement.dispatchEvent(new Event('input'));
@@ -291,7 +295,7 @@ describe('DialogImportFromUrlComponent', () => {
   describe('edge cases and comprehensive scenarios', () => {
     it('should handle very long URLs', () => {
       const longUrl = 'https://example.com/' + 'a'.repeat(2000) + '/backup.json';
-      component.url = longUrl;
+      component.url.set(longUrl);
 
       component.submit();
 
@@ -301,7 +305,7 @@ describe('DialogImportFromUrlComponent', () => {
     it('should handle URLs with special characters', () => {
       const urlWithSpecialChars =
         'https://example.com/backup%20file.json?param=value&other=test';
-      component.url = urlWithSpecialChars;
+      component.url.set(urlWithSpecialChars);
 
       component.submit();
 
@@ -310,7 +314,7 @@ describe('DialogImportFromUrlComponent', () => {
 
     it('should handle URLs with different protocols', () => {
       const httpUrl = 'http://example.com/backup.json';
-      component.url = httpUrl;
+      component.url.set(httpUrl);
 
       component.submit();
 
@@ -320,7 +324,7 @@ describe('DialogImportFromUrlComponent', () => {
     it('should handle whitespace at beginning and end correctly', () => {
       const urlWithWhitespace = '  \t https://example.com/backup.json \n ';
       const expectedTrimmed = 'https://example.com/backup.json';
-      component.url = urlWithWhitespace;
+      component.url.set(urlWithWhitespace);
 
       component.submit();
 
@@ -328,7 +332,7 @@ describe('DialogImportFromUrlComponent', () => {
     });
 
     it('should not submit when URL is null', () => {
-      component.url = null as any;
+      component.url.set(null as any);
 
       component.submit();
 
@@ -336,7 +340,7 @@ describe('DialogImportFromUrlComponent', () => {
     });
 
     it('should not submit when URL is undefined', () => {
-      component.url = undefined as any;
+      component.url.set(undefined as any);
 
       component.submit();
 
@@ -350,9 +354,15 @@ describe('DialogImportFromUrlComponent', () => {
       const descElement = fixture.debugElement.query(By.css('mat-dialog-content p'));
       const labelElement = fixture.debugElement.query(By.css('mat-label'));
 
-      expect(titleElement.nativeElement.textContent).toContain(''); // Will be empty in test but pipe should be there
-      expect(descElement.nativeElement.textContent).toContain('');
-      expect(labelElement.nativeElement.textContent).toContain('');
+      expect(titleElement.nativeElement.textContent.trim()).toBe(
+        T.FILE_IMEX.IMPORT_FROM_URL_DIALOG_TITLE,
+      );
+      expect(descElement.nativeElement.textContent.trim()).toBe(
+        T.FILE_IMEX.IMPORT_FROM_URL_DIALOG_DESCRIPTION,
+      );
+      expect(labelElement.nativeElement.textContent.trim()).toBe(
+        T.FILE_IMEX.URL_PLACEHOLDER,
+      );
     });
 
     it('should have proper accessibility attributes', () => {

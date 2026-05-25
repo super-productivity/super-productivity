@@ -4,6 +4,7 @@ import { BehaviorSubject } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
+import { parseNativeTrackingData } from './android-foreground-tracking.effects';
 
 // We need to test the effect logic by reimplementing it in tests since
 // the actual effects are conditionally created based on IS_ANDROID_WEB_VIEW
@@ -244,6 +245,279 @@ describe('AndroidForegroundTrackingEffects - safeNativeCall error handling', () 
       msg: 'Native call failed',
       type: 'ERROR',
     });
+  });
+});
+
+describe('AndroidForegroundTrackingEffects - cold start tracking recovery', () => {
+  type NativeTrackingData = { taskId: string; elapsedMs: number };
+
+  const handleNoCurrentTask = (
+    prevTask: { id: string } | null,
+    nativeData: NativeTrackingData | null,
+    recoverTracking: (data: NativeTrackingData) => void,
+    stopTrackingService: () => void,
+  ): void => {
+    if (!prevTask && nativeData) {
+      recoverTracking(nativeData);
+      return;
+    }
+
+    stopTrackingService();
+  };
+
+  const recoverTrackingFromNative = async (
+    nativeData: NativeTrackingData,
+    syncElapsedTime: (taskId: string, nativeData: NativeTrackingData) => Promise<boolean>,
+    setCurrentId: (taskId: string) => void,
+    flushPendingOps: () => Promise<void>,
+    stopTrackingService: () => void,
+  ): Promise<void> => {
+    const didSync = await syncElapsedTime(nativeData.taskId, nativeData);
+    if (!didSync) {
+      stopTrackingService();
+      return;
+    }
+
+    setCurrentId(nativeData.taskId);
+    await flushPendingOps();
+  };
+
+  let recoverTrackingSpy: jasmine.Spy;
+  let stopTrackingServiceSpy: jasmine.Spy;
+  let syncElapsedTimeSpy: jasmine.Spy;
+  let setCurrentIdSpy: jasmine.Spy;
+  let flushPendingOpsSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    recoverTrackingSpy = jasmine.createSpy('recoverTrackingFromNative');
+    stopTrackingServiceSpy = jasmine.createSpy('stopTrackingService');
+    syncElapsedTimeSpy = jasmine.createSpy('syncElapsedTime').and.resolveTo(true);
+    setCurrentIdSpy = jasmine.createSpy('setCurrentId');
+    flushPendingOpsSpy = jasmine.createSpy('flushPendingOps').and.resolveTo(undefined);
+  });
+
+  it('should recover native tracking on initial null currentTask after cold start', () => {
+    const nativeData = { taskId: 'task-1', elapsedMs: 900000 };
+
+    handleNoCurrentTask(null, nativeData, recoverTrackingSpy, stopTrackingServiceSpy);
+
+    expect(recoverTrackingSpy).toHaveBeenCalledWith(nativeData);
+    expect(stopTrackingServiceSpy).not.toHaveBeenCalled();
+  });
+
+  it('should stop native tracking when currentTask was intentionally unset', () => {
+    const nativeData = { taskId: 'task-1', elapsedMs: 900000 };
+
+    handleNoCurrentTask(
+      { id: 'task-1' },
+      nativeData,
+      recoverTrackingSpy,
+      stopTrackingServiceSpy,
+    );
+
+    expect(recoverTrackingSpy).not.toHaveBeenCalled();
+    expect(stopTrackingServiceSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should restore current task after syncing native elapsed time', async () => {
+    const nativeData = { taskId: 'task-1', elapsedMs: 900000 };
+    const callOrder: string[] = [];
+
+    syncElapsedTimeSpy.and.callFake(async () => {
+      callOrder.push('sync');
+      return true;
+    });
+    setCurrentIdSpy.and.callFake(() => callOrder.push('setCurrent'));
+    flushPendingOpsSpy.and.callFake(async () => {
+      callOrder.push('flush');
+    });
+
+    await recoverTrackingFromNative(
+      nativeData,
+      syncElapsedTimeSpy,
+      setCurrentIdSpy,
+      flushPendingOpsSpy,
+      stopTrackingServiceSpy,
+    );
+
+    expect(syncElapsedTimeSpy).toHaveBeenCalledWith('task-1', nativeData);
+    expect(setCurrentIdSpy).toHaveBeenCalledWith('task-1');
+    expect(flushPendingOpsSpy).toHaveBeenCalledTimes(1);
+    expect(stopTrackingServiceSpy).not.toHaveBeenCalled();
+    expect(callOrder).toEqual(['sync', 'setCurrent', 'flush']);
+  });
+
+  it('should stop stale native tracking when recovery sync fails', async () => {
+    const nativeData = { taskId: 'missing-task', elapsedMs: 900000 };
+    syncElapsedTimeSpy.and.resolveTo(false);
+
+    await recoverTrackingFromNative(
+      nativeData,
+      syncElapsedTimeSpy,
+      setCurrentIdSpy,
+      flushPendingOpsSpy,
+      stopTrackingServiceSpy,
+    );
+
+    expect(setCurrentIdSpy).not.toHaveBeenCalled();
+    expect(flushPendingOpsSpy).not.toHaveBeenCalled();
+    expect(stopTrackingServiceSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// These tests exercise the real production parser (not a re-implementation),
+// which is safe to import outside the IS_ANDROID_WEB_VIEW gate.
+describe('parseNativeTrackingData', () => {
+  it('returns parsed data for valid JSON', () => {
+    const result = parseNativeTrackingData(
+      JSON.stringify({ taskId: 'task-1', elapsedMs: 900000 }),
+    );
+    expect(result).toEqual({ taskId: 'task-1', elapsedMs: 900000 });
+  });
+
+  it('preserves zero elapsedMs', () => {
+    const result = parseNativeTrackingData(
+      JSON.stringify({ taskId: 'task-1', elapsedMs: 0 }),
+    );
+    expect(result).toEqual({ taskId: 'task-1', elapsedMs: 0 });
+  });
+
+  it('returns null for null input', () => {
+    expect(parseNativeTrackingData(null)).toBeNull();
+  });
+
+  it('returns null for undefined input', () => {
+    expect(parseNativeTrackingData(undefined)).toBeNull();
+  });
+
+  it('returns null for empty string', () => {
+    expect(parseNativeTrackingData('')).toBeNull();
+  });
+
+  it('returns null for the literal string "null"', () => {
+    // Native side may stringify a null pointer as 'null'.
+    expect(parseNativeTrackingData('null')).toBeNull();
+  });
+
+  it('returns null for malformed JSON without throwing', () => {
+    expect(parseNativeTrackingData('{broken')).toBeNull();
+  });
+
+  it('returns null when JSON parses to a non-object (e.g. array)', () => {
+    expect(parseNativeTrackingData('[1,2,3]')).toBeNull();
+  });
+
+  it('returns null when JSON parses to a primitive', () => {
+    expect(parseNativeTrackingData('42')).toBeNull();
+    expect(parseNativeTrackingData('"hello"')).toBeNull();
+  });
+
+  it('returns null when taskId is missing', () => {
+    expect(parseNativeTrackingData(JSON.stringify({ elapsedMs: 5 }))).toBeNull();
+  });
+
+  it('returns null when elapsedMs is missing', () => {
+    expect(parseNativeTrackingData(JSON.stringify({ taskId: 'a' }))).toBeNull();
+  });
+
+  it('returns null when taskId is not a string', () => {
+    expect(
+      parseNativeTrackingData(JSON.stringify({ taskId: 123, elapsedMs: 5 })),
+    ).toBeNull();
+  });
+
+  it('returns null when elapsedMs is not a number', () => {
+    expect(
+      parseNativeTrackingData(JSON.stringify({ taskId: 'a', elapsedMs: '5' })),
+    ).toBeNull();
+  });
+
+  // No test for NaN/Infinity in elapsedMs: JSON has no literal for either,
+  // so any such payload would already fail JSON.parse and return null via
+  // the catch branch — the Number.isFinite guard is unreachable in practice.
+});
+
+describe('AndroidForegroundTrackingEffects - null→task transition with native data', () => {
+  // After recovery dispatches setCurrentId, the syncTrackingToService$ tap
+  // re-runs with currentTask transitioning from null to the recovered task.
+  // It must NOT call startTrackingService (which resets accumulatedMs on the
+  // native side) — instead it should call updateTrackingService so the native
+  // counter, just reconciled by recovery, stays intact.
+
+  const handleNullToTask = (
+    prevTask: { id: string } | null,
+    currentTask: { id: string; timeSpent: number },
+    nativeData: { taskId: string } | null,
+    startTrackingService: (id: string, ts: number) => void,
+    updateTrackingService: (ts: number) => void,
+  ): void => {
+    if (!prevTask && nativeData?.taskId === currentTask.id) {
+      updateTrackingService(currentTask.timeSpent);
+      return;
+    }
+    startTrackingService(currentTask.id, currentTask.timeSpent);
+  };
+
+  let startTrackingServiceSpy: jasmine.Spy;
+  let updateTrackingServiceSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    startTrackingServiceSpy = jasmine.createSpy('startTrackingService');
+    updateTrackingServiceSpy = jasmine.createSpy('updateTrackingService');
+  });
+
+  it('calls updateTrackingService when native already tracks the same task', () => {
+    handleNullToTask(
+      null,
+      { id: 't1', timeSpent: 900000 },
+      { taskId: 't1' },
+      startTrackingServiceSpy,
+      updateTrackingServiceSpy,
+    );
+
+    expect(startTrackingServiceSpy).not.toHaveBeenCalled();
+    expect(updateTrackingServiceSpy).toHaveBeenCalledWith(900000);
+  });
+
+  it('calls startTrackingService when native tracks a different task', () => {
+    handleNullToTask(
+      null,
+      { id: 't2', timeSpent: 0 },
+      { taskId: 't1' },
+      startTrackingServiceSpy,
+      updateTrackingServiceSpy,
+    );
+
+    expect(startTrackingServiceSpy).toHaveBeenCalledWith('t2', 0);
+    expect(updateTrackingServiceSpy).not.toHaveBeenCalled();
+  });
+
+  it('calls startTrackingService when native is not tracking anything', () => {
+    handleNullToTask(
+      null,
+      { id: 't1', timeSpent: 0 },
+      null,
+      startTrackingServiceSpy,
+      updateTrackingServiceSpy,
+    );
+
+    expect(startTrackingServiceSpy).toHaveBeenCalledWith('t1', 0);
+    expect(updateTrackingServiceSpy).not.toHaveBeenCalled();
+  });
+
+  it('calls startTrackingService for normal task→task switch (prevTask non-null)', () => {
+    handleNullToTask(
+      { id: 't1' },
+      { id: 't2', timeSpent: 5000 },
+      // Even if native happens to report the new task, the start path runs
+      // because the check is gated on prevTask being null (cold-start window).
+      { taskId: 't2' },
+      startTrackingServiceSpy,
+      updateTrackingServiceSpy,
+    );
+
+    expect(startTrackingServiceSpy).toHaveBeenCalledWith('t2', 5000);
+    expect(updateTrackingServiceSpy).not.toHaveBeenCalled();
   });
 });
 

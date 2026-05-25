@@ -3,9 +3,7 @@
 .markdown-preview,
 .markdown {
   @include scroll.scrollY;
-  word-wrap: break-word;
-  word-break: break-word;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   hyphens: auto;
 
   *:first-child {

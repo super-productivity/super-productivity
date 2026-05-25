@@ -34,9 +34,11 @@ import { MatIconButton } from '@angular/material/button';
 import { MatOption } from '@angular/material/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AsyncPipe } from '@angular/common';
+import { TagComponent } from '../../features/tag/tag/tag.component';
 
 const DEFAULT_SEPARATOR_KEY_CODES: number[] = [ENTER, COMMA];
 
+// Items render via <tag>, so non-tag callers get a colorless circle + title (graceful degradation).
 interface Suggestion {
   id: string;
   title: string;
@@ -66,6 +68,7 @@ interface Suggestion {
     MatOption,
     TranslatePipe,
     AsyncPipe,
+    TagComponent,
   ],
 })
 export class ChipListInputComponent implements OnDestroy {

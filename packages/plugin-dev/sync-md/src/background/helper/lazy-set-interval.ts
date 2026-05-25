@@ -1,19 +1,30 @@
-// avoids the performance issues caused by normal set interval, when the user
-// is not at the computer for some time
+// Avoids the performance issues caused by normal setInterval when the user
+// is not at the computer for some time. Schedules the next tick only after
+// the current callback (sync or async) completes, preventing overlapping
+// invocations.
 export const lazySetInterval = (
-  func: () => void,
+  func: () => void | Promise<void>,
   intervalDuration: number,
 ): (() => void) => {
-  let lastTimeoutId: any;
+  let lastTimeoutId: ReturnType<typeof setTimeout>;
+  let stopped = false;
 
-  const interval = (): void => {
-    lastTimeoutId = setTimeout(interval, intervalDuration);
-    func.call(null);
+  const tick = async (): Promise<void> => {
+    try {
+      await func();
+    } catch (err) {
+      console.error('[lazy-set-interval] callback error:', err);
+    } finally {
+      if (!stopped) {
+        lastTimeoutId = setTimeout(tick, intervalDuration);
+      }
+    }
   };
 
-  lastTimeoutId = setTimeout(interval, intervalDuration);
+  lastTimeoutId = setTimeout(tick, intervalDuration);
 
   return () => {
+    stopped = true;
     clearTimeout(lastTimeoutId);
   };
 };

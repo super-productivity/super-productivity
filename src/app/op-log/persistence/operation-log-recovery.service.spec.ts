@@ -6,6 +6,7 @@ import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { ActionType, OpType } from '../core/operation.types';
 import { PENDING_OPERATION_EXPIRY_MS } from '../core/operation-log.const';
+import { ValidateStateService } from '../validation/validate-state.service';
 
 describe('OperationLogRecoveryService', () => {
   let service: OperationLogRecoveryService;
@@ -13,6 +14,7 @@ describe('OperationLogRecoveryService', () => {
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockLegacyPfDb: jasmine.SpyObj<LegacyPfDbService>;
   let mockClientIdService: jasmine.SpyObj<ClientIdService>;
+  let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
 
   beforeEach(() => {
     mockStore = jasmine.createSpyObj('Store', ['dispatch']);
@@ -32,6 +34,13 @@ describe('OperationLogRecoveryService', () => {
       'loadAllEntityData',
     ]);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', ['loadClientId']);
+    mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
+      'validateState',
+    ]);
+    mockValidateStateService.validateState.and.resolveTo({
+      isValid: true,
+      typiaErrors: [],
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -40,6 +49,7 @@ describe('OperationLogRecoveryService', () => {
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
         { provide: LegacyPfDbService, useValue: mockLegacyPfDb },
         { provide: ClientIdService, useValue: mockClientIdService },
+        { provide: ValidateStateService, useValue: mockValidateStateService },
       ],
     });
     service = TestBed.inject(OperationLogRecoveryService);
@@ -148,6 +158,22 @@ describe('OperationLogRecoveryService', () => {
       await service.recoverFromLegacyData(legacyData);
 
       expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith({ testClient: 1 });
+    });
+
+    it('should reject invalid legacy data before writing or dispatching it', async () => {
+      mockValidateStateService.validateState.and.resolveTo({
+        isValid: false,
+        typiaErrors: [{ path: '$input.task', expected: 'TaskState' }],
+      });
+
+      await expectAsync(
+        service.recoverFromLegacyData({ task: null }),
+      ).toBeRejectedWithError(/Legacy recovery data validation failed/);
+
+      expect(mockOpLogStore.append).not.toHaveBeenCalled();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.setVectorClock).not.toHaveBeenCalled();
+      expect(mockStore.dispatch).not.toHaveBeenCalled();
     });
   });
 

@@ -531,7 +531,11 @@ async function registerWithPasskey() {
     setTimeout(() => {
       switchTab('login');
       document.getElementById('login-email').value = email;
-      showMessage('Please verify your email, then login with your passkey.', 'success');
+      showMessage(
+        'Important: You must click the verification link in your email BEFORE logging in. ' +
+          'Login will NOT work until your email is verified.',
+        'success',
+      );
     }, 3000);
   } catch (err) {
     console.error('Passkey registration error:', err);
@@ -587,7 +591,8 @@ async function registerWithMagicLink() {
       switchTab('login');
       document.getElementById('login-email').value = email;
       showMessage(
-        'Please verify your email, then use "Send Login Link" to log in.',
+        'Important: You must click the verification link in your email BEFORE using "Send Login Link". ' +
+          'The login link will NOT work until your email is verified.',
         'success',
       );
     }, 3000);

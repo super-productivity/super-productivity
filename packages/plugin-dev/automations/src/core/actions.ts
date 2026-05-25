@@ -1,4 +1,13 @@
-import { IAutomationAction } from './definitions';
+import { AutomationContext, IAutomationAction } from './definitions';
+
+const resolveTagId = async (ctx: AutomationContext, value: string): Promise<string | null> => {
+  const tag = (await ctx.dataCache.getTags()).find((t) => t.id === value || t.title === value);
+  if (!tag) {
+    ctx.plugin.log.warn(`[Automation] Tag "${value}" not found.`);
+    return null;
+  }
+  return tag.id;
+};
 
 export const ActionCreateTask: IAutomationAction = {
   id: 'createTask',
@@ -13,6 +22,20 @@ export const ActionCreateTask: IAutomationAction = {
   },
 };
 
+export const ActionDeleteTask: IAutomationAction = {
+  id: 'deleteTask',
+  name: 'Delete Task',
+  execute: async (ctx, event) => {
+    if (!event.task?.id) {
+      ctx.plugin.log.warn('[Automation] Cannot delete task without task context.');
+      return;
+    }
+
+    await ctx.plugin.deleteTask(event.task.id);
+    ctx.plugin.log.info(`[Automation] Action: Deleted task "${event.task.title}"`);
+  },
+};
+
 export const ActionAddTag: IAutomationAction = {
   id: 'addTag',
   name: 'Add Tag',
@@ -21,19 +44,63 @@ export const ActionAddTag: IAutomationAction = {
       ctx.plugin.log.warn(`[Automation] Cannot add tag "${value}" without task context.`);
       return;
     }
-    const tags = await ctx.dataCache.getTags();
-    let tagId = tags.find((t) => t.title === value)?.id;
-
-    if (!tagId) {
-      ctx.plugin.log.warn(`[Automation] Tag "${value}" not found.`);
-      return;
-    }
+    const tagId = await resolveTagId(ctx, value);
+    if (!tagId) return;
     if (event.task.tagIds.includes(tagId)) return;
 
     await ctx.plugin.updateTask(event.task.id, {
       tagIds: [...event.task.tagIds, tagId],
     });
     ctx.plugin.log.info(`[Automation] Action: Added tag "${value}"`);
+  },
+};
+
+export const ActionRemoveTag: IAutomationAction = {
+  id: 'removeTag',
+  name: 'Remove Tag',
+  execute: async (ctx, event, value) => {
+    if (!event.task || !value) {
+      ctx.plugin.log.warn(`[Automation] Cannot remove tag "${value}" without task context.`);
+      return;
+    }
+    const tagId = await resolveTagId(ctx, value);
+    if (!tagId) return;
+    if (!event.task.tagIds.includes(tagId)) return;
+
+    await ctx.plugin.updateTask(event.task.id, {
+      tagIds: event.task.tagIds.filter((id) => id !== tagId),
+    });
+    ctx.plugin.log.info(`[Automation] Action: Removed tag "${value}"`);
+  },
+};
+
+export const ActionMoveToProject: IAutomationAction = {
+  id: 'moveToProject',
+  name: 'Move to Project',
+  execute: async (ctx, event, value) => {
+    if (!event.task || !value) {
+      ctx.plugin.log.warn(
+        `[Automation] Cannot move task to project "${value}" without task context.`,
+      );
+      return;
+    }
+    const projects = await ctx.dataCache.getProjects();
+    const project = projects.find((p) => p.id === value || p.title === value);
+
+    if (!project) {
+      ctx.plugin.log.warn(
+        `[Automation] Project "${value}" not found in: ${projects.map((p) => p.title).join(', ')}`,
+      );
+      return;
+    }
+
+    if (event.task.projectId === project.id) {
+      ctx.plugin.log.info(`[Automation] Task already in project "${project.title}"`);
+      return;
+    }
+
+    await ctx.plugin.updateTask(event.task.id, { projectId: project.id });
+    ctx.plugin.log.info(`[Automation] Action: Moved task to project "${project.title}"`);
   },
 };
 

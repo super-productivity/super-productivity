@@ -1,3 +1,9 @@
+# NOTE: docker-compose.yml healthcheck probes the Caddy admin API at
+# 127.0.0.1:2019 (Caddy's default admin listen is `localhost:2019`, i.e.
+# IPv4 loopback; the probe uses the literal IP so busybox wget can't try
+# ::1 first). Do NOT add a global `{ admin off }` block or rebind admin
+# without also updating the healthcheck, or Caddy will restart-loop.
+
 {$DOMAIN} {
     reverse_proxy supersync:1900 {
         # Allow up to 85 seconds for long-running operations

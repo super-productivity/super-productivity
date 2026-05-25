@@ -16,7 +16,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { MentionConfig, MentionItem, MentionModule } from '../../../ui/mentions';
+import { MentionModule } from '../../../ui/mentions';
 import { MatInput } from '@angular/material/input';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -28,7 +28,7 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { TaskCopy, TaskReminderOptionId } from '../task.model';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
-import { WorkContextType } from '../../work-context/work-context.model';
+import { WorkContext, WorkContextType } from '../../work-context/work-context.model';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -63,11 +63,10 @@ import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
-import { Mentions } from '../../../ui/mentions/mention-config';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { unique } from '../../../util/unique';
-import { CHRONO_SUGGESTIONS } from './add-task-bar.const';
+import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
@@ -250,41 +249,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     startWith([]),
   );
 
-  mentionCfg$ = combineLatest([
-    this._globalConfigService.shortSyntax$,
-    this._tagService.tagsNoMyDayAndNoListSorted$,
-    this._projectService.listSortedForUI$,
-  ]).pipe(
-    map(([cfg, tagSuggestions, projectSuggestions]) => {
-      const mentions: Mentions[] = [];
-      if (cfg.isEnableTag) {
-        mentions.push({
-          items: (tagSuggestions as unknown as MentionItem[]) || [],
-          labelKey: 'title',
-          triggerChar: '#',
-        });
-      }
-      if (cfg.isEnableDue) {
-        mentions.push({
-          items: CHRONO_SUGGESTIONS,
-          labelKey: 'title',
-          triggerChar: '@',
-        });
-      }
-      if (cfg.isEnableProject) {
-        mentions.push({
-          items: (projectSuggestions as unknown as MentionItem[]) || [],
-          labelKey: 'title',
-          triggerChar: '+',
-        });
-      }
-      const mentionCfg: MentionConfig = {
-        mentions,
-        triggerChar: undefined,
-      };
-      return mentionCfg;
-    }),
-  );
+  mentionCfg$ = inject(MentionConfigService).mentionConfig$;
 
   // View children
   inputEl = viewChild<ElementRef>('inputEl');
@@ -295,6 +260,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private _autocompleteTimeout?: number;
   private _processingAutocompleteSelection = false;
   private _isAddingTask = false;
+  private _defaultTagIds: string[] = [];
 
   ngOnInit(): void {
     this._setProjectInitially();
@@ -320,6 +286,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // Setup methods
   private _setProjectInitially(): void {
+    const additionalProjectId = this.additionalFields()?.projectId;
+    if (additionalProjectId) {
+      this.stateService.updateProjectId(additionalProjectId);
+      return;
+    }
     this.defaultProject$
       .pipe(first(), takeUntilDestroyed(this._destroyRef))
       .subscribe((defaultProject) => {
@@ -337,11 +308,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this._workContextService.activeWorkContext$
       .pipe(first(), takeUntilDestroyed(this._destroyRef))
       .subscribe((workContext) => {
-        if (
-          workContext?.type === WorkContextType.TAG &&
-          workContext.id !== TODAY_TAG.id
-        ) {
-          this.stateService.updateTagIds([workContext.id]);
+        this._defaultTagIds = this._getDefaultTagIdsForWorkContext(workContext);
+        if (this._defaultTagIds.length > 0) {
+          this.stateService.updateTagIds(this._defaultTagIds);
         }
       });
   }
@@ -423,7 +392,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
 
     const currentState = this.stateService.state();
-    const title = currentState.cleanText || this.stateService.inputTxt().trim();
+    const rawInput = this.stateService.inputTxt().trim();
+    if (!rawInput) return;
+
+    const title = currentState.cleanText || rawInput;
     if (!title) return;
 
     this._isAddingTask = true;
@@ -712,7 +684,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
 
     // Handle Enter key
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       if (!this.isSearchMode() && !event.repeat) {
         void this.addTask();
@@ -827,8 +799,21 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private _resetAfterAdd(): void {
     this.stateService.resetAfterAdd();
+    if (this._defaultTagIds.length > 0) {
+      this.stateService.updateTagIds(this._defaultTagIds);
+    }
     // Reset parser state but don't reset project/date/estimate
     this._parserService.resetPreviousResult();
+  }
+
+  private _getDefaultTagIdsForWorkContext(
+    workContext: WorkContext | null | undefined,
+  ): string[] {
+    return !this.isNoDefaults() &&
+      workContext?.type === WorkContextType.TAG &&
+      workContext.id !== TODAY_TAG.id
+      ? [workContext.id]
+      : [];
   }
 
   focusInput(selectAll: boolean = false): void {

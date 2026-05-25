@@ -1,8 +1,10 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
+import type { DeferredLocalActionsPort } from '@sp/sync-core';
 import { ALL_ACTIONS } from '../../util/local-actions.token';
 import { concatMap, filter } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
+import { LockAcquisitionTimeoutError } from '../core/errors/sync-errors';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   isPersistentAction,
@@ -26,9 +28,13 @@ import {
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { OperationCaptureService } from './operation-capture.service';
 import { ImmediateUploadService } from '../sync/immediate-upload.service';
-import { getDeferredActions } from './operation-capture.meta-reducer';
+import { getDeferredActions, isDeferredAction } from './operation-capture.meta-reducer';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { SuperSyncStatusService } from '../sync/super-sync-status.service';
+
+interface WriteOperationOptions {
+  callerHoldsOperationLogLock?: boolean;
+}
 
 /**
  * NgRx Effects for persisting application state changes as operations to the
@@ -39,7 +45,7 @@ import { SuperSyncStatusService } from '../sync/super-sync-status.service';
  * are not re-logged.
  */
 @Injectable()
-export class OperationLogEffects {
+export class OperationLogEffects implements DeferredLocalActionsPort {
   private compactionFailures = 0;
   /** Circuit breaker: prevents recursive quota exceeded handling */
   private isHandlingQuotaExceeded = false;
@@ -51,6 +57,15 @@ export class OperationLogEffects {
    * Initialized lazily from persisted value on first operation.
    */
   private inMemoryCompactionCounter: number | null = null;
+  /**
+   * Dedupe timestamp for the storage-quota snackbar. #7700: when quota fires
+   * inside the deferred-action retry loop, the retry loop calls handleQuotaExceeded
+   * up to MAX_RETRIES times — without dedupe the user would see 3 identical
+   * STORAGE_QUOTA_EXCEEDED snacks plus the final DEFERRED_ACTION_FAILED.
+   */
+  private lastStorageQuotaSnackAt = 0;
+  /** Suppression window for duplicate storage-quota snackbars. */
+  private readonly STORAGE_QUOTA_SNACK_DEDUPE_MS = 5000;
   // Uses ALL_ACTIONS because this effect captures all persistent actions and handles isRemote filtering internally
   private actions$ = inject(ALL_ACTIONS);
   private lockService = inject(LockService);
@@ -69,39 +84,36 @@ export class OperationLogEffects {
    * Filters out:
    * 1. Non-persistent actions (actions without PersistentActionMeta)
    * 2. Remote actions (actions replayed from sync, marked with isRemote: true)
+   * 3. Deferred actions (buffered during sync, processed later by processDeferredActions)
    *
-   * Note: We intentionally do NOT filter by `isApplyingRemoteOps()` here.
-   * The meta-reducer handles sync timing by BUFFERING actions during sync
-   * (not enqueueing them). If an action reaches this effect and was enqueued,
-   * it means the meta-reducer determined it should be processed.
-   *
-   * Previously there was a filter here that caused a race condition:
-   * 1. Meta-reducer enqueues action (isApplyingRemoteOps = false)
-   * 2. Before effect runs, sync starts (isApplyingRemoteOps = true)
-   * 3. Effect filters out action, but it's already in queue
-   * 4. flushPendingWrites() times out waiting for queue to drain
+   * Note: We do NOT filter by `isApplyingRemoteOps()` here because of a race
+   * condition: the meta-reducer may enqueue an action before sync starts, but
+   * the effect processes it after sync starts. Filtering by isApplyingRemoteOps
+   * would skip the action while its queue entry remains, causing flushPendingWrites
+   * to time out. Instead, we use isDeferredAction() which precisely identifies
+   * actions that were buffered (not enqueued) by the meta-reducer.
    */
   persistOperation$ = createEffect(
     () =>
       this.actions$.pipe(
-        filter((action) => isPersistentAction(action)),
-        filter((action) => !(action as PersistentAction).meta.isRemote),
+        filter(
+          (action): action is PersistentAction =>
+            isPersistentAction(action) &&
+            !action.meta.isRemote &&
+            !isDeferredAction(action),
+        ),
         // Use concatMap for sequential processing to maintain FIFO queue order
-        concatMap((action) => this.writeOperation(action as PersistentAction)),
+        concatMap((action) => this.writeOperation(action)),
       ),
     { dispatch: false },
   );
 
-  private async writeOperation(action: PersistentAction): Promise<void> {
-    // Always read from ClientIdService (which has its own in-memory cache).
-    // Do NOT cache locally — BackupService.generateNewClientId() updates the
-    // service cache, and a local cache here would go stale after backup import.
-    const clientId =
-      (await this.clientIdService.loadClientId()) ??
-      (await this.clientIdService.generateNewClientId());
-    if (!clientId) {
-      throw new Error('Failed to load or generate clientId - cannot persist operation');
-    }
+  private async writeOperation(
+    action: PersistentAction,
+    skipDequeue = false,
+    options: WriteOperationOptions = {},
+  ): Promise<void> {
+    const operationTimestamp = Date.now();
 
     // Validate that at least one entity identifier exists for non-bulk operations
     // Bulk operations with entityType 'ALL' don't need specific entity IDs
@@ -119,7 +131,9 @@ export class OperationLogEffects {
       );
     if (!isBulkAllOperation && !hasValidEntityId && !hasValidEntityIds) {
       // IMPORTANT: Dequeue first to prevent queue from getting stuck
-      this.operationCaptureService.dequeue();
+      if (!skipDequeue) {
+        this.operationCaptureService.dequeue();
+      }
       devError(
         `[OperationLogEffects] Action ${action.type} has invalid entityId/entityIds (${action.meta.entityId}) - skipping persistence`,
       );
@@ -128,7 +142,7 @@ export class OperationLogEffects {
 
     // Extract payload (everything except type and meta)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { type, meta, ...actionPayload } = action;
+    const { type, meta, ...rawActionPayload } = action;
 
     // Use the action's declared opType from meta. We don't derive from entity changes because
     // some operations have different semantic meaning than their state changes suggest.
@@ -146,15 +160,16 @@ export class OperationLogEffects {
     }
 
     try {
-      // CRITICAL: Acquire lock BEFORE dequeuing to prevent race condition with flushPendingWrites().
-      // Previously, dequeue happened before lock acquisition, which caused a race:
-      // 1. dequeue() runs, queue becomes 0
-      // 2. flushPendingWrites() polls, sees queue = 0, tries to acquire lock
-      // 3. If flush wins the lock, it returns before this effect writes to IndexedDB
-      // 4. Sync uploads with "No pending operations" even though operations were dispatched
-      //
-      // By acquiring the lock first, flushPendingWrites() must wait for us to finish writing.
-      await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+      const writeInsideOperationLogLock = async (): Promise<void> => {
+        // Always read from ClientIdService while holding the write lock.
+        // Clean-slate and backup import rotate the clientId while holding this
+        // same lock; reading here prevents a queued operation from capturing
+        // the old id before waiting behind a destructive replacement.
+        // getOrGenerateClientId() throws on a transient IndexedDB read failure
+        // rather than minting a fresh id — the catch below treats that as a
+        // retryable persistence failure.
+        const clientId = await this.clientIdService.getOrGenerateClientId();
+
         // MULTI-TAB SAFETY: Clear vector clock cache to ensure fresh read after other tabs
         // may have written while we were waiting for the lock. Each tab has its own in-memory
         // cache, so Tab B's cache could be stale if Tab A wrote while Tab B was waiting.
@@ -163,7 +178,15 @@ export class OperationLogEffects {
         // Get entity changes from the FIFO queue (for TIME_TRACKING and TASK time sync)
         // For most actions, this returns empty array since action payloads are sufficient.
         // IMPORTANT: This MUST happen inside the lock to prevent race with flushPendingWrites.
-        const entityChanges = this.operationCaptureService.dequeue();
+        // Deferred actions skip dequeue because the meta-reducer buffers them without
+        // enqueueing — there's no matching queue entry to dequeue.
+        const entityChanges = skipDequeue ? [] : this.operationCaptureService.dequeue();
+
+        const actionPayload = this.addReplayDateFieldsToActionPayload(
+          action,
+          rawActionPayload,
+          operationTimestamp,
+        );
 
         // Create multi-entity payload with action payload and computed changes
         const multiEntityPayload: MultiEntityPayload = {
@@ -196,7 +219,7 @@ export class OperationLogEffects {
           payload: multiEntityPayload,
           clientId: clientId,
           vectorClock: newClock,
-          timestamp: Date.now(),
+          timestamp: operationTimestamp,
           schemaVersion: CURRENT_SCHEMA_VERSION,
         };
 
@@ -262,10 +285,38 @@ export class OperationLogEffects {
           // Counter is reset in compaction service on success
           this.triggerCompaction();
         }
-      });
+      };
+
+      if (options.callerHoldsOperationLogLock) {
+        await writeInsideOperationLogLock();
+      } else {
+        // CRITICAL: Acquire lock BEFORE dequeuing to prevent race condition with flushPendingWrites().
+        // Previously, dequeue happened before lock acquisition, which caused a race:
+        // 1. dequeue() runs, queue becomes 0
+        // 2. flushPendingWrites() polls, sees queue = 0, tries to acquire lock
+        // 3. If flush wins the lock, it returns before this effect writes to IndexedDB
+        // 4. Sync uploads with "No pending operations" even though operations were dispatched
+        //
+        // By acquiring the lock first, flushPendingWrites() must wait for us to finish writing.
+        await this.lockService.request(
+          LOCK_NAMES.OPERATION_LOG,
+          writeInsideOperationLogLock,
+        );
+      }
     } catch (e) {
       // 4.1.1 Error Handling for Optimistic Updates
       OpLog.err('OperationLogEffects: Failed to persist operation', e);
+      if (e instanceof LockAcquisitionTimeoutError) {
+        // #7700: do NOT silently swallow lock timeouts. Pre-fix, a reentrant
+        // sp_op_log timeout was caught here, the user got a snackbar, and the
+        // deferred action vanished from the op log. Re-throw after notifying so
+        // processDeferredActions's retry loop retries and persistOperation$'s
+        // concatMap surfaces the failure upstream. Defense in depth: even if a
+        // future caller forgets to pass callerHoldsOperationLogLock, the bug is
+        // loud instead of silent.
+        this.notifyUserAndTriggerRollback();
+        throw e;
+      }
       if (this.isQuotaExceededError(e)) {
         // Circuit breaker: prevent recursive quota handling
         if (this.isHandlingQuotaExceeded) {
@@ -274,7 +325,7 @@ export class OperationLogEffects {
           );
           this.notifyUserAndTriggerRollback();
         } else {
-          await this.handleQuotaExceeded(action);
+          await this.handleQuotaExceeded(action, skipDequeue, options);
         }
       } else {
         this.notifyUserAndTriggerRollback();
@@ -350,6 +401,46 @@ export class OperationLogEffects {
     return false;
   }
 
+  private addReplayDateFieldsToActionPayload(
+    action: PersistentAction,
+    actionPayload: Record<string, unknown>,
+    operationTimestamp: number,
+  ): Record<string, unknown> {
+    if (action.type !== ActionType.TASK_SHARED_UPDATE) {
+      return actionPayload;
+    }
+
+    const task = actionPayload['task'];
+    if (typeof task !== 'object' || task === null) {
+      return actionPayload;
+    }
+
+    const taskUpdate = task as Record<string, unknown>;
+    const changes = taskUpdate['changes'];
+    if (typeof changes !== 'object' || changes === null) {
+      return actionPayload;
+    }
+
+    const taskChanges = changes as Record<string, unknown>;
+    if (taskChanges['isDone'] !== true) {
+      return actionPayload;
+    }
+
+    return {
+      ...actionPayload,
+      task: {
+        ...taskUpdate,
+        changes: {
+          ...taskChanges,
+          doneOn:
+            typeof taskChanges['doneOn'] === 'number'
+              ? taskChanges['doneOn']
+              : operationTimestamp,
+        },
+      },
+    };
+  }
+
   /**
    * Handles storage quota exceeded by triggering emergency compaction
    * and retrying the failed operation.
@@ -358,13 +449,34 @@ export class OperationLogEffects {
    * handles quota exceeded at a time. Uses instance flag to prevent
    * recursive calls within the same tab.
    */
-  private async handleQuotaExceeded(action: PersistentAction): Promise<void> {
+  private async handleQuotaExceeded(
+    action: PersistentAction,
+    skipDequeue = false,
+    options: WriteOperationOptions = {},
+  ): Promise<void> {
     OpLog.err(
       'OperationLogEffects: Storage quota exceeded, attempting emergency compaction',
     );
 
     // Use lock for cross-tab coordination - only one tab handles quota at a time
+    let bailReason: Error | null = null;
     await this.lockService.request('sp_quota_exceeded', async () => {
+      if (options.callerHoldsOperationLogLock) {
+        OpLog.err(
+          'OperationLogEffects: Skipping emergency compaction because operation-log lock is already held',
+        );
+        this.showStorageQuotaExceededError();
+        // Bail loud: we cannot recover here (compaction would deadlock).
+        // Capture the failure and re-throw OUTSIDE the cross-tab lock so the
+        // deferred-action retry loop surfaces DEFERRED_ACTION_FAILED rather
+        // than treating the dropped write as a success. Throwing from inside
+        // a LockService callback is fine, but we keep it outside for clarity.
+        bailReason = new Error(
+          'Storage quota exceeded while operation-log lock is held — emergency compaction skipped',
+        );
+        return;
+      }
+
       const compactionSucceeded = await this.compactionService.emergencyCompact();
 
       if (compactionSucceeded) {
@@ -372,7 +484,7 @@ export class OperationLogEffects {
           // Set circuit breaker before retry to prevent recursive handling
           this.isHandlingQuotaExceeded = true;
           // Retry the failed operation after compaction freed space
-          await this.writeOperation(action);
+          await this.writeOperation(action, skipDequeue, options);
           this.snackService.open({
             type: 'SUCCESS',
             msg: T.F.SYNC.S.STORAGE_RECOVERED_AFTER_COMPACTION,
@@ -389,14 +501,26 @@ export class OperationLogEffects {
       }
 
       // Compaction failed or retry failed - show error with action
-      this.snackService.open({
-        type: 'ERROR',
-        msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
-        actionStr: T.PS.RELOAD,
-        actionFn: (): void => {
-          window.location.reload();
-        },
-      });
+      this.showStorageQuotaExceededError();
+    });
+    if (bailReason !== null) {
+      throw bailReason;
+    }
+  }
+
+  private showStorageQuotaExceededError(): void {
+    const now = Date.now();
+    if (now - this.lastStorageQuotaSnackAt < this.STORAGE_QUOTA_SNACK_DEDUPE_MS) {
+      return;
+    }
+    this.lastStorageQuotaSnackAt = now;
+    this.snackService.open({
+      type: 'ERROR',
+      msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+      actionStr: T.PS.RELOAD,
+      actionFn: (): void => {
+        window.location.reload();
+      },
     });
   }
 
@@ -419,9 +543,9 @@ export class OperationLogEffects {
    * Includes retry logic with exponential backoff to handle transient failures
    * (e.g., IndexedDB quota temporarily exceeded).
    *
-   * Called by OperationApplierService after sync operations are applied.
+   * Called after sync operations are applied and remote op bookkeeping is complete.
    */
-  async processDeferredActions(): Promise<void> {
+  async processDeferredActions(options: WriteOperationOptions = {}): Promise<void> {
     const deferredActions = getDeferredActions();
     if (deferredActions.length === 0) {
       return;
@@ -441,7 +565,8 @@ export class OperationLogEffects {
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-          await this.writeOperation(action);
+          // skipDequeue=true: deferred actions were buffered, not enqueued
+          await this.writeOperation(action, true, options);
           success = true;
           break;
         } catch (e) {

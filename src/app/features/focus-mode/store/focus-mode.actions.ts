@@ -37,9 +37,14 @@ export const clearResumingBreakFlag = createAction(
 
 export const completeFocusSession = createAction(
   '[FocusMode] Complete Session',
-  props<{ isManual?: boolean }>(),
+  props<{ isManual?: boolean; completedDuration?: number }>(),
 );
 export const cancelFocusSession = createAction('[FocusMode] Cancel Session');
+
+export const endFlowtimeSession = createAction(
+  '[FocusMode] End Flowtime Session',
+  props<{ pausedTaskId?: string | null }>(),
+);
 
 export const startBreak = createAction(
   '[FocusMode] Start Break',
@@ -57,6 +62,15 @@ export const completeBreak = createAction(
 export const exitBreakToPlanning = createAction(
   '[FocusMode] Exit Break To Planning',
   props<{ pausedTaskId?: string | null }>(),
+);
+
+export const offerFlowtimeBreak = createAction(
+  '[FocusMode] Offer Flowtime Break',
+  props<{
+    duration: number;
+    isLongBreak?: boolean;
+    pausedTaskId?: string | null;
+  }>(),
 );
 
 export const incrementCycle = createAction('[FocusMode] Next Cycle');

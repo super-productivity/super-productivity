@@ -121,7 +121,6 @@ describe('FocusMode Bug #6064: Without break timer reset on break start', () => 
     // Set up default selectors
     store.overrideSelector(selectFocusModeConfig, {
       isSkipPreparation: false,
-      isSyncSessionWithTracking: true,
       isPauseTrackingDuringBreak: false,
       isManualBreakStart: false,
     });
@@ -160,7 +159,6 @@ describe('FocusMode Bug #6064: Without break timer reset on break start', () => 
       // Configure with isPauseTrackingDuringBreak = false (default)
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
-        isSyncSessionWithTracking: true,
         isPauseTrackingDuringBreak: false, // Task tracking continues during breaks
         isManualBreakStart: false,
       });
@@ -188,7 +186,6 @@ describe('FocusMode Bug #6064: Without break timer reset on break start', () => 
       // Configure with isPauseTrackingDuringBreak = true
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
-        isSyncSessionWithTracking: true,
         isPauseTrackingDuringBreak: true, // Task tracking pauses during breaks
         isManualBreakStart: false,
       });
@@ -311,7 +308,6 @@ describe('FocusMode Bug #6064: Without break timer reset on break start', () => 
       // Manually started break (user clicks "Start Break" button)
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
-        isSyncSessionWithTracking: true,
         isPauseTrackingDuringBreak: false,
         isManualBreakStart: true, // Manual break mode
       });

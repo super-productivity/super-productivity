@@ -90,6 +90,13 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
       },
     },
     {
+      key: 'toggleSideNavMode',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TOGGLE_SIDE_NAV_MODE,
+      },
+    },
+    {
       key: 'openProjectNotes',
       type: 'keyboard',
       templateOptions: {
@@ -247,6 +254,13 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
       type: 'keyboard',
       templateOptions: {
         label: T.GCF.KEYBOARD.TASK_TOGGLE_DETAIL_PANEL_OPEN,
+      },
+    },
+    {
+      key: 'taskOpenNotesPanel',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TASK_OPEN_NOTES_PANEL,
       },
     },
     {

@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
-import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { MatDialog } from '@angular/material/dialog';
+import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { ExecBeforeCloseService } from '../../core/electron/exec-before-close.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import {
@@ -14,26 +16,26 @@ import {
 import { IS_ELECTRON } from '../../app.constants';
 import { combineLatest, EMPTY, Observable } from 'rxjs';
 import { WorkContextService } from '../work-context/work-context.service';
+import { Task } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
-import { Router } from '@angular/router';
-import { TODAY_TAG } from '../tag/tag.const';
-import { TranslateService } from '@ngx-translate/core';
-import { T } from '../../t.const';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
-import { confirmDialog } from '../../util/native-dialogs';
+import {
+  DialogFinishDayBeforeCloseComponent,
+  FinishDayBeforeCloseChoice,
+  FinishDayBeforeCloseDialogData,
+} from './dialog-finish-day-before-close/dialog-finish-day-before-close.component';
 
 const EXEC_BEFORE_CLOSE_ID = 'FINISH_DAY_BEFORE_CLOSE_EFFECT';
 
 @Injectable()
 export class FinishDayBeforeCloseEffects {
-  private actions$ = inject(LOCAL_ACTIONS);
   private _execBeforeCloseService = inject(ExecBeforeCloseService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dataInitStateService = inject(DataInitStateService);
   private _taskService = inject(TaskService);
   private _workContextService = inject(WorkContextService);
+  private _matDialog = inject(MatDialog);
   private _router = inject(Router);
-  private _translateService = inject(TranslateService);
 
   isEnabled$: Observable<boolean> =
     this._dataInitStateService.isAllDataLoadedInitially$.pipe(
@@ -81,26 +83,41 @@ export class FinishDayBeforeCloseEffects {
             ),
           ),
           tap((todayMainTasks) => {
-            const doneTasks = todayMainTasks.filter((t) => t.isDone);
-            if (doneTasks.length) {
-              if (
-                !confirmDialog(
-                  this._translateService.instant(
-                    T.F.FINISH_DAY_BEFORE_EXIT.C.FINISH_DAY_BEFORE_EXIT,
-                    {
-                      nr: doneTasks.length,
-                    },
-                  ),
-                )
-              ) {
-                // User wants to finish day first - navigate them there
-                this._router.navigate([`tag/${TODAY_TAG.id}/daily-summary`]);
-                return; // Don't signal done — keep app open
-              }
-            }
-            this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+            this._handleCloseDecision(todayMainTasks).catch(() => {
+              // Don't let a dialog/router failure trap the user in close-pending state
+              this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+            });
           }),
         ),
       { dispatch: false },
     );
+
+  async _handleCloseDecision(todayMainTasks: Task[]): Promise<void> {
+    const doneCount = todayMainTasks.filter((t) => t.isDone).length;
+    if (doneCount === 0) {
+      this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+      return;
+    }
+
+    const choice = await this._showDialog(doneCount);
+    if (choice === 'quit') {
+      this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+    } else if (choice === 'finish-day') {
+      this._router.navigateByUrl('/daily-summary');
+    }
+  }
+
+  async _showDialog(doneTaskCount: number): Promise<FinishDayBeforeCloseChoice> {
+    const dialogRef = this._matDialog.open<
+      DialogFinishDayBeforeCloseComponent,
+      FinishDayBeforeCloseDialogData,
+      FinishDayBeforeCloseChoice
+    >(DialogFinishDayBeforeCloseComponent, {
+      data: { doneTaskCount },
+      autoFocus: true,
+      restoreFocus: true,
+    });
+    const result = await firstValueFrom(dialogRef.afterClosed());
+    return result ?? 'cancel';
+  }
 }

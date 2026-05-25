@@ -21,6 +21,8 @@ import {
   MatMenuItem,
   MatMenuTrigger,
 } from '@angular/material/menu';
+import { MatDivider } from '@angular/material/divider';
+import { ESTIMATE_OPTIONS } from '../../add-task-bar/add-task-bar.const';
 import { Task, TaskCopy, TaskWithSubTasks } from '../../task.model';
 import { EMPTY, forkJoin, from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
@@ -31,6 +33,7 @@ import {
   map,
   switchMap,
   take,
+  takeUntil,
   tap,
 } from 'rxjs/operators';
 import { Project } from '../../../project/project.model';
@@ -38,7 +41,6 @@ import { TaskService } from '../../task.service';
 import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
-import { TaskAttachmentService } from '../../task-attachment/task-attachment.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { ProjectService } from '../../../project/project.service';
 import { _MISSING_PROJECT_ } from '../../../project/project.const';
@@ -48,11 +50,10 @@ import { KeyboardConfig } from '../../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { DialogTimeEstimateComponent } from '../../dialog-time-estimate/dialog-time-estimate.component';
-import { DialogEditTaskAttachmentComponent } from '../../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { throttle } from '../../../../util/decorators';
 import { DialogConfirmComponent } from '../../../../ui/dialog-confirm/dialog-confirm.component';
 import { Update } from '@ngrx/entity';
-import { IS_TOUCH_PRIMARY } from 'src/app/util/is-mouse-primary';
+import { isTouchActive } from 'src/app/util/input-intent';
 import { T } from 'src/app/t.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Store } from '@ngrx/store';
@@ -87,6 +88,7 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
     MatMenu,
     MatMenuContent,
     MatMenuItem,
+    MatDivider,
     TranslateModule,
     MatMenuTrigger,
     MatIconButton,
@@ -105,7 +107,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
-  private readonly _attachmentService = inject(TaskAttachmentService);
   private readonly _elementRef = inject(ElementRef);
   private readonly _snackService = inject(SnackService);
   private readonly _projectService = inject(ProjectService);
@@ -118,8 +119,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
 
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
+  readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
 
   isAdvancedControls = input<boolean>(false);
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
@@ -217,7 +219,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       ev.stopPropagation();
       ev.stopImmediatePropagation();
 
-      if (!IS_TOUCH_PRIMARY && (ev instanceof MouseEvent || isTouchEventInstance(ev))) {
+      if (!isTouchActive() && (ev instanceof MouseEvent || isTouchEventInstance(ev))) {
         const clientX = 'touches' in ev ? ev.touches[0].clientX : ev.clientX;
         const clientY = 'touches' in ev ? ev.touches[0].clientY : ev.clientY;
         this.contextMenuPosition.x = clientX + 10 + 'px';
@@ -235,8 +237,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
     this._isOpenedFromKeyboard = isOpenedFromKeyBoard;
     this.contextMenuTrigger()?.openMenu();
+    this._taskFocusService.isTaskContextMenuOpen.set(true);
 
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       this._touchMenuTimeout = setTimeout(() => {
         const boxes = document.querySelectorAll(
           '.cdk-overlay-connected-position-bounding-box',
@@ -245,11 +248,16 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         if (!boundingBox) {
           return;
         }
+        // Layout only — CDK backdrop handles scrim + click-to-close
+        // pointer-events: none so taps pass through to the backdrop sibling
         boundingBox.style.position = 'fixed';
         boundingBox.style.inset = '0';
+        boundingBox.style.width = '';
+        boundingBox.style.height = '';
         boundingBox.style.display = 'flex';
         boundingBox.style.justifyContent = 'center';
         boundingBox.style.alignItems = 'flex-end';
+        boundingBox.style.pointerEvents = 'none';
 
         const pane = boundingBox.querySelector('.cdk-overlay-pane') as HTMLElement;
         if (pane) {
@@ -257,32 +265,31 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           pane.style.width = '100%';
           pane.style.display = 'flex';
           pane.style.justifyContent = 'center';
+          pane.style.pointerEvents = 'none';
         }
-
-        boundingBox.addEventListener(
-          'click',
-          (e: Event) => {
-            if (e.target === boundingBox || e.target === pane) {
-              this.contextMenuTrigger()?.closeMenu();
-            }
-          },
-          { once: true },
-        );
 
         const menuPanel = boundingBox.querySelector('.mat-mdc-menu-panel') as HTMLElement;
         if (menuPanel) {
+          // Re-enable pointer events on the menu panel itself
+          menuPanel.style.pointerEvents = 'auto';
           menuPanel.style.maxWidth = '300px';
           menuPanel.style.width = '100%';
           menuPanel.style.borderRadius =
             'var(--card-border-radius) var(--card-border-radius) 0 0';
           menuPanel.style.maxHeight = '80vh';
-          menuPanel.style.transform = 'translateY(100%)';
-          menuPanel.style.transition = 'transform 200ms ease-out';
+          menuPanel.style.animation = 'none';
+          menuPanel.style.transform = 'translateY(24px)';
+          menuPanel.style.opacity = '0';
+          void menuPanel.offsetHeight;
+          menuPanel.style.transition =
+            'transform 250ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms ease-out';
           this._touchMenuRafId = requestAnimationFrame(() => {
             menuPanel.style.transform = 'translateY(0)';
+            menuPanel.style.opacity = '1';
           });
         }
       });
+      this._highlightSourceTask();
     }
   }
 
@@ -290,7 +297,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     // Focus the task element after context menu closes
     // Use setTimeout to ensure menu has fully closed and DOM is settled
     setTimeout(() => {
-      const taskElement = document.querySelector(`#t-${this.task.id}`) as HTMLElement;
+      const taskElement = document.getElementById(`t-${this.task.id}`);
       if (taskElement) {
         taskElement.focus();
         // Ensure focusedTaskId is set even if focus event doesn't fire
@@ -302,12 +309,13 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   onClose(): void {
     // Don't manually set focusedTaskId to null here - let the task component's
     // focus/blur handlers manage it automatically to avoid race conditions
+    this._taskFocusService.isTaskContextMenuOpen.set(false);
     this.focusRelatedTaskOrNext();
     this.close.emit();
   }
 
   get kb(): KeyboardConfig {
-    if (IS_TOUCH_PRIMARY || !this.isAdvancedControls()) {
+    if (isTouchActive() || !this.isAdvancedControls()) {
       return {} as any;
     }
     return (this._globalConfigService.cfg()?.keyboard as KeyboardConfig) || {};
@@ -424,24 +432,16 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this._matDialog
       .open(DialogTimeEstimateComponent, {
         data: { task: this.task },
-        autoFocus: !IS_TOUCH_PRIMARY,
       })
       .afterClosed()
       .subscribe(() => this.focusRelatedTaskOrNext());
   }
 
-  addAttachment(): void {
-    this._matDialog
-      .open(DialogEditTaskAttachmentComponent, {
-        data: {},
-      })
-      .afterClosed()
-      .subscribe((result) => {
-        if (result) {
-          this._attachmentService.addAttachment(this.task.id, result);
-        }
-        this.focusRelatedTaskOrNext();
-      });
+  setEstimate(ms: number): void {
+    if (ms === this.task.timeEstimate) {
+      return;
+    }
+    this._taskService.update(this.task.id, { timeEstimate: ms });
   }
 
   addSubTask(): void {
@@ -511,6 +511,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: [this.task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         parentTaskMap: { [this.task.id]: this.task.parentId },
         isShowSnack: true,
       }),
@@ -679,6 +681,19 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   trackByProjectId(i: number, project: Project): string {
     return project.id;
+  }
+
+  private _highlightSourceTask(): void {
+    const taskEl = document.getElementById(`t-${this.task.id}`);
+    if (!taskEl) {
+      return;
+    }
+    taskEl.classList.add('context-menu-highlight');
+    this.contextMenu()
+      ?.closed.pipe(takeUntil(this._destroy$), first())
+      .subscribe(() => {
+        taskEl.classList.remove('context-menu-highlight');
+      });
   }
 
   private async _getTaskWithSubtasks(): Promise<TaskWithSubTasks> {

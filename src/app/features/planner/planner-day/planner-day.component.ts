@@ -32,6 +32,8 @@ import { ShortTimeHtmlPipe } from '../../../ui/pipes/short-time-html.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { ShortDate2Pipe } from '../../../ui/pipes/short-date2.pipe';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
+import { dragDelayForTouch } from '../../../util/input-intent';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
   selector: 'planner-day',
@@ -62,6 +64,7 @@ export class PlannerDayComponent {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _dateService = inject(DateService);
+  private _layoutService = inject(LayoutService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -74,6 +77,10 @@ export class PlannerDayComponent {
 
   protected readonly T = T;
   protected readonly SCHEDULE_ITEM_TYPE = ScheduleItemType;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
+  // Lock Y-axis on small screens only — on wider screens the planner uses a
+  // multi-column grid where cross-column dragging requires horizontal movement.
+  protected readonly isXs = this._layoutService.isXs;
 
   getProgressBarClass(percentage: number | undefined): string {
     if (!percentage) return 'bg-success';

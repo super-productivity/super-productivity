@@ -19,6 +19,13 @@ import { Store } from '@ngrx/store';
 import { GlobalConfigService } from 'src/app/features/config/global-config.service';
 import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
 
+const expectedLocaleTime = (timeStr: string, locale: string): string => {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  const d = new Date();
+  d.setHours(hours, minutes, 0, 0);
+  return d.toLocaleTimeString(locale, { hour: 'numeric', minute: 'numeric' });
+};
+
 describe('AddTaskBarActionsComponent', () => {
   let component: AddTaskBarActionsComponent;
   let fixture: ComponentFixture<AddTaskBarActionsComponent>;
@@ -65,9 +72,19 @@ describe('AddTaskBarActionsComponent', () => {
       localization: () => ({ timeLocale: locale }),
     });
   };
-  const mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', ['-'], {
-    currentLocale: () => 'en-US',
-  });
+  const mockDateTimeFormatService = jasmine.createSpyObj(
+    'DateTimeFormatService',
+    ['formatTime'],
+    {
+      currentLocale: () => 'en-US',
+    },
+  );
+  mockDateTimeFormatService.formatTime.and.callFake((timestamp: number) =>
+    new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: 'numeric',
+    }),
+  );
 
   beforeEach(async () => {
     // Create proper signal mocks
@@ -227,8 +244,9 @@ describe('AddTaskBarActionsComponent', () => {
       (mockStateService as any)._mockStateSignal.set(stateWithTime);
 
       fixture.detectChanges();
-      // When today has a time, it shows the time instead of "Today"
-      expect(component.dateDisplay()).toBe('14:30');
+      const expected = expectedLocaleTime(time, 'en-US');
+      // When today has a time, it shows the locale-formatted time instead of "Today"
+      expect(component.dateDisplay()).toBe(expected);
     });
 
     it('should compute dateDisplay for tomorrow', () => {
@@ -298,7 +316,7 @@ describe('AddTaskBarActionsComponent', () => {
       fixture.detectChanges();
 
       const result = component.dateDisplay();
-      expect(result).toContain('10:00');
+      expect(result).toContain(expectedLocaleTime('10:00', 'en-US'));
     });
 
     it('should handle auto-detected state correctly', () => {
@@ -392,7 +410,7 @@ describe('AddTaskBarActionsComponent', () => {
       fixture.detectChanges();
       // With time, it should show the formatted date with time, not just "Tomorrow"
       const result = component.dateDisplay();
-      expect(result).toContain('15:30');
+      expect(result).toContain(expectedLocaleTime('15:30', 'en-US'));
     });
   });
 
@@ -860,10 +878,11 @@ describe('AddTaskBarActionsComponent', () => {
 
       // Should still be today if the date string represents today
       const result = component.dateDisplay();
+      const expectedTime = expectedLocaleTime('23:45', 'en-US');
       if (lateTonightStr === getDbDateStr(new Date())) {
-        expect(result).toBe('23:45'); // Shows time when it's today with time
+        expect(result).toBe(expectedTime); // Shows time when it's today with time
       } else {
-        expect(result).toContain('23:45'); // Shows date with time
+        expect(result).toContain(expectedTime); // Shows date with time
       }
     });
 
@@ -901,7 +920,7 @@ describe('AddTaskBarActionsComponent', () => {
       const result = component.dateDisplay();
       expect(result).toContain('Dec'); // Should show month
       expect(result).toContain('31'); // Should show day
-      expect(result).toContain('23:30'); // Should show time
+      expect(result).toContain(expectedLocaleTime('23:30', 'en-US')); // Should show time
     });
 
     it('should format dates consistently regardless of timezone', () => {
@@ -920,7 +939,7 @@ describe('AddTaskBarActionsComponent', () => {
       const result = component.dateDisplay();
       expect(result).toContain('Jun'); // Month should be June
       expect(result).toContain('15'); // Day should be 15
-      expect(result).toContain('12:00'); // Time should be preserved
+      expect(result).toContain(expectedLocaleTime('12:00', 'en-US')); // Time should be preserved
     });
   });
 

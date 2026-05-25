@@ -29,6 +29,7 @@ export class PluginIssueProviderRegistryService {
     issueProviderKey?: string;
     useAgendaView?: boolean;
     defaultAutoAddToBacklog?: boolean;
+    allowPrivateNetwork?: boolean;
   }): void {
     const key = opts.issueProviderKey ?? `plugin:${opts.pluginId}`;
     if (this._providers.has(key)) {
@@ -48,6 +49,7 @@ export class PluginIssueProviderRegistryService {
       issueStrings: opts.issueStrings,
       useAgendaView: opts.useAgendaView,
       defaultAutoAddToBacklog: opts.defaultAutoAddToBacklog,
+      allowPrivateNetwork: opts.allowPrivateNetwork,
     });
     this._pluginIdToKey.set(opts.pluginId, key);
     this.registrationVersion.update((v) => v + 1);

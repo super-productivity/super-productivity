@@ -28,7 +28,7 @@ test.describe.serial('Finish Day Quick History', () => {
     await page.waitForSelector(TASK_SEL, { state: 'visible' });
     const task = page.locator(TASK_SEL).first();
     await task.hover();
-    const doneBtn = page.locator(`${TASK_SEL} .done-toggle`).first();
+    const doneBtn = page.locator(`${TASK_SEL} done-toggle`).first();
     await doneBtn.waitFor({ state: 'visible' });
     await doneBtn.click();
 

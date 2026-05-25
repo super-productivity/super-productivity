@@ -5,7 +5,8 @@
     <mat-label>{{ T.FILE_IMEX.URL_PLACEHOLDER | translate }}</mat-label>
     <input
       matInput
-      [(ngModel)]="url"
+      [ngModel]="url()"
+      (ngModelChange)="url.set($event)"
       name="urlInput"
       type="url"
       placeholder="{{ T.FILE_IMEX.URL_PLACEHOLDER | translate }}"
@@ -30,7 +31,7 @@
     mat-raised-button
     color="primary"
     (click)="submit()"
-    [disabled]="!url || url.trim() === '' || urlCtrl.invalid"
+    [disabled]="!url() || url().trim() === '' || urlCtrl.invalid"
   >
     {{ T.G.SUBMIT | translate }}
   </button>

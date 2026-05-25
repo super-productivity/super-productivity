@@ -37,12 +37,15 @@
     class="normal-tasks-items"
     cdkDropList
     [cdkDropListData]="day.dayDate"
+    [cdkDropListAutoScrollStep]="8"
     (cdkDropListDropped)="drop('TODO', day.tasks, $event)"
   >
     @for (task of day.tasks; track task.id) {
       <planner-task
         cdkDrag
         [cdkDragData]="task"
+        [cdkDragStartDelay]="dragDelayForTouch()"
+        [cdkDragLockAxis]="isXs() ? 'y' : ''"
         [task]="task"
         [day]="day.dayDate"
       ></planner-task>
@@ -93,6 +96,7 @@
     cdkDropList
     cdkDropListSortingDisabled
     [cdkDropListData]="day.dayDate"
+    [cdkDropListAutoScrollStep]="8"
     (cdkDropListDropped)="drop('SCHEDULED', day.scheduledIItems, $event)"
   >
     @for (scheduledItem of day.scheduledIItems; track scheduledItem.id) {
@@ -126,6 +130,8 @@
               [task]="scheduledItem.task"
               [day]="day.dayDate"
               [cdkDragData]="scheduledItem.task"
+              [cdkDragStartDelay]="dragDelayForTouch()"
+              [cdkDragLockAxis]="isXs() ? 'y' : ''"
             ></planner-task>
           }
           @case (SCHEDULE_ITEM_TYPE.CalEvent) {

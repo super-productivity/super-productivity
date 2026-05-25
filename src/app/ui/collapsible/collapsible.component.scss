@@ -2,6 +2,10 @@
   display: block;
 }
 
+:host(.is-group) .collapsible-header {
+  padding: calc(var(--s) / 2) var(--s);
+}
+
 .collapsible-header {
   cursor: pointer;
   user-select: none;
@@ -9,8 +13,9 @@
   flex-direction: row;
   align-items: center;
 
-  &:focus {
-    outline: none;
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 
   :host.isInline & {
@@ -25,6 +30,10 @@
 
 .collapsible-title {
   flex-grow: 1;
+
+  &.is-drag-handle {
+    cursor: move;
+  }
 
   :host.isInline & {
     //display: inline-block;

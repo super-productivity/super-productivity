@@ -66,7 +66,7 @@ export class TaskTrackingInfoComponent {
     const task = this.currentTask();
     if (!task) return 0;
     const todayStr = getTodayStr();
-    return task.timeSpentOnDay[todayStr] || 0;
+    return task.timeSpentOnDay?.[todayStr] || 0;
   });
 
   // Click handler to pause the current task

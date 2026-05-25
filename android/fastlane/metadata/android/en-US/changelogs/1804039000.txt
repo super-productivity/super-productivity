@@ -1,0 +1,4 @@
+- run snapcraft from canonical container instead of snap install
+- restore recognition cues in CLAUDE.md sync rules
+- trim CLAUDE.md and split E2E reference into e2e/CLAUDE.md
+- require wiki updates for user-facing changes in CLAUDE.md

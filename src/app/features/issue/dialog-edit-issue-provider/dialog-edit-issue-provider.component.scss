@@ -61,6 +61,41 @@
   }
 }
 
+.action-row {
+  margin-bottom: var(--s2);
+}
+
+.connected-status {
+  margin-left: var(--s);
+  color: var(--palette-accent);
+}
+
+.connected-status-icon,
+.error-status-icon {
+  vertical-align: middle;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.error-status {
+  margin-left: var(--s);
+  color: var(--palette-warn);
+}
+
 .success-info {
   margin: 0 var(--s2);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }

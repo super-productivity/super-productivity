@@ -57,7 +57,7 @@ test.describe('Drag Task to change project and labels', () => {
 
     // find drag handle of task
     const firstTask = page.locator('task').first();
-    const dragHandle = firstTask.locator('.done-toggle').first();
+    const dragHandle = firstTask.locator('done-toggle').first();
     const tagList = firstTask.locator('tag-list');
 
     // Drag and drop to first project - wait for tag to appear
@@ -131,7 +131,7 @@ test.describe('Drag Task to change project and labels', () => {
 
     // find drag handle of task
     const firstTask = page.locator('task').first();
-    const dragHandle = firstTask.locator('.done-toggle').first();
+    const dragHandle = firstTask.locator('done-toggle').first();
     const tagList = firstTask.locator('tag-list');
 
     // Drag and drop to first tag - wait for tag to appear

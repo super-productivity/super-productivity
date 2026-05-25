@@ -250,7 +250,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
             .first();
           await taskLocator1.waitFor({ state: 'visible', timeout: 10000 });
           await taskLocator1.hover();
-          const doneBtn1 = taskLocator1.locator('.done-toggle');
+          const doneBtn1 = taskLocator1.locator('done-toggle');
           await doneBtn1.waitFor({ state: 'visible', timeout: 5000 });
           await doneBtn1.click();
           await expect(taskLocator1).toHaveClass(/isDone/, { timeout: 5000 });
@@ -395,7 +395,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
               .first();
             await taskLoc.waitFor({ state: 'visible', timeout: 10000 });
             await taskLoc.hover();
-            const doneBtn = taskLoc.locator('.done-toggle');
+            const doneBtn = taskLoc.locator('done-toggle');
             await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
             await doneBtn.click();
             // Wait for done state to be applied
@@ -543,7 +543,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       // Client B: Mark as done (concurrent with deletion)
       const taskLocatorB = clientB.page.locator(`task:has-text("${taskName}")`);
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.done-toggle').click();
+      await taskLocatorB.locator('done-toggle').click();
 
       // 4. Client A syncs (delete goes to server first)
       await clientA.sync.syncAndWait();
@@ -767,7 +767,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
         .locator(`task:not(.ng-animating):has-text("${task1Name}")`)
         .first();
       await taskLocatorA.hover();
-      await taskLocatorA.locator('.done-toggle').click();
+      await taskLocatorA.locator('done-toggle').click();
       await expect(taskLocatorA).toHaveClass(/isDone/, { timeout: 5000 });
 
       // Client B also marks done (concurrent change, will conflict)
@@ -775,7 +775,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
         .locator(`task:not(.ng-animating):has-text("${task1Name}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.done-toggle').click();
+      await taskLocatorB.locator('done-toggle').click();
       await expect(taskLocatorB).toHaveClass(/isDone/, { timeout: 5000 });
 
       // 4. Client A syncs first (succeeds)

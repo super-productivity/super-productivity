@@ -1,0 +1,12 @@
+apiVersion: v2
+name: supersync
+description: Helm chart for SuperSync - Super Productivity sync server
+type: application
+version: 0.1.0
+appVersion: '1.0.0'
+home: https://super-productivity.com
+sources:
+  - https://github.com/super-productivity/super-productivity
+maintainers:
+  - name: johannesjo
+    url: https://github.com/johannesjo

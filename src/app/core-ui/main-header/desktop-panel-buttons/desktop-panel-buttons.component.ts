@@ -43,7 +43,7 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
           kb()?.toggleIssuePanel ? '[' + kb()?.toggleIssuePanel + ']' : ''
         }}"
       >
-        <mat-icon>dashboard_customize</mat-icon>
+        <mat-icon>webhook</mat-icon>
       </button>
     }
 

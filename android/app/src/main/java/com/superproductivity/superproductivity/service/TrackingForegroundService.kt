@@ -71,16 +71,41 @@ class TrackingForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
 
+        // Android documents successful startForeground() as the safe path
+        // after startForegroundService(). Promote before handling actions so
+        // newly started services satisfy that contract.
+        if (!ensureForegroundNotification()) {
+            reportForegroundFailure()
+            stopAfterForegroundFailure(startId)
+            return START_NOT_STICKY
+        }
+
         when (intent?.action) {
             ACTION_START -> {
-                val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: return START_NOT_STICKY
+                val taskId = intent.getStringExtra(EXTRA_TASK_ID)
+                if (taskId == null) {
+                    Log.w(TAG, "ACTION_START without taskId")
+                    if (!isTracking) {
+                        stopForegroundAndSelf()
+                    }
+                    return START_NOT_STICKY
+                }
                 val title = intent.getStringExtra(EXTRA_TASK_TITLE) ?: "Task"
                 val timeSpentMs = intent.getLongExtra(EXTRA_TIME_SPENT, 0L)
 
-                startTracking(taskId, title, timeSpentMs)
+                if (!startTracking(taskId, title, timeSpentMs)) {
+                    reportForegroundFailure()
+                    stopAfterForegroundFailure(startId)
+                    return START_NOT_STICKY
+                }
             }
 
             ACTION_UPDATE -> {
+                if (!isTracking) {
+                    Log.d(TAG, "Ignoring ACTION_UPDATE - service not tracking")
+                    stopForegroundAndSelf()
+                    return START_NOT_STICKY
+                }
                 val timeSpentMs = intent.getLongExtra(EXTRA_TIME_SPENT, accumulatedMs)
                 updateTimeSpent(timeSpentMs)
             }
@@ -90,20 +115,74 @@ class TrackingForegroundService : Service() {
                     stopTracking()
                 } else {
                     Log.d(TAG, "Ignoring STOP action - service not tracking")
+                    stopForegroundAndSelf()
                 }
             }
 
             else -> {
-                // Service restarted by system - we have no state to restore
                 Log.d(TAG, "Service started without action, stopping")
-                stopSelf()
+                stopForegroundAndSelf()
             }
         }
 
         return START_NOT_STICKY
     }
 
-    private fun startTracking(taskId: String, title: String, timeSpentMs: Long) {
+    private fun ensureForegroundNotification(): Boolean {
+        val notification = try {
+            if (isTracking && taskTitle.isNotEmpty()) {
+                TrackingNotificationHelper.buildNotification(
+                    this,
+                    taskTitle,
+                    getElapsedMs()
+                )
+            } else {
+                // A content title is required on some OEM skins (notably Samsung
+                // One UI) - a title-less notification can render blank or cause
+                // startForeground() to throw IllegalArgumentException on a few
+                // Android 14 builds, which would re-trigger the FGS timeout.
+                androidx.core.app.NotificationCompat.Builder(
+                    this,
+                    TrackingNotificationHelper.CHANNEL_ID
+                )
+                    .setSmallIcon(com.superproductivity.superproductivity.R.drawable.ic_stat_sp)
+                    .setContentTitle(getString(com.superproductivity.superproductivity.R.string.app_name))
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    .setSilent(true)
+                    .build()
+            }
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "ensureForegroundNotification: failed to build notification", e)
+            return false
+        }
+        return startForegroundSpecialUse(TrackingNotificationHelper.NOTIFICATION_ID, notification)
+    }
+
+    private fun stopForegroundAndSelf() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun stopAfterForegroundFailure(startId: Int) {
+        isTracking = false
+        handler.removeCallbacks(updateRunnable)
+        currentTaskId = null
+        startTimestamp = 0
+        accumulatedMs = 0
+        taskTitle = ""
+        stopSelf(startId)
+    }
+
+    private fun reportForegroundFailure() {
+        ForegroundServiceFailure.send(
+            this,
+            ForegroundServiceFailure.SERVICE_TRACKING,
+            ForegroundServiceFailure.REASON_PROMOTION_FAILED
+        )
+    }
+
+    private fun startTracking(taskId: String, title: String, timeSpentMs: Long): Boolean {
         Log.d(TAG, "Starting tracking: taskId=$taskId, title=$title, timeSpentMs=$timeSpentMs")
 
         currentTaskId = taskId
@@ -112,17 +191,17 @@ class TrackingForegroundService : Service() {
         startTimestamp = System.currentTimeMillis()
         isTracking = true
 
-        // Start foreground immediately to avoid ANR
-        val notification = TrackingNotificationHelper.buildNotification(
-            this,
-            taskTitle,
-            getElapsedMs()
-        )
-        startForeground(TrackingNotificationHelper.NOTIFICATION_ID, notification)
+        // The foreground-service start token was already satisfied at the top
+        // of onStartCommand(). Replace the placeholder notification without
+        // risking a second startForeground() failure resetting tracking state.
+        if (!updateNotification()) {
+            return false
+        }
 
         // Start update loop
         handler.removeCallbacks(updateRunnable)
         handler.post(updateRunnable)
+        return true
     }
 
     private fun updateTimeSpent(timeSpentMs: Long) {
@@ -155,10 +234,10 @@ class TrackingForegroundService : Service() {
         stopSelf()
     }
 
-    private fun updateNotification() {
-        if (!isTracking) return
+    private fun updateNotification(): Boolean {
+        if (!isTracking) return true
 
-        try {
+        return try {
             val notification = TrackingNotificationHelper.buildNotification(
                 this,
                 taskTitle,
@@ -168,8 +247,10 @@ class TrackingForegroundService : Service() {
                 TrackingNotificationHelper.NOTIFICATION_ID,
                 notification
             )
-        } catch (e: SecurityException) {
-            Log.w(TAG, "No permission to post notification", e)
+            true
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Unable to update tracking notification", e)
+            false
         }
     }
 

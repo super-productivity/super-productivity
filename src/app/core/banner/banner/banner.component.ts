@@ -55,9 +55,10 @@ export class BannerComponent {
   dismiss(bannerId: string): void {
     this.bannerService.dismiss(bannerId as BannerId);
   }
-
-  action(bannerId: string, bannerAction: BannerAction): void {
-    this.dismiss(bannerId);
+  action(banner: Banner, bannerAction: BannerAction): void {
+    if (!banner.isKeepVisibleAfterAction) {
+      this.dismiss(banner.id);
+    }
     bannerAction.fn();
   }
 

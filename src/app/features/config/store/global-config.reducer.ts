@@ -11,6 +11,7 @@ import {
   LocalizationConfig,
   MiscConfig,
   PomodoroConfig,
+  FlowtimeConfig,
   ReminderConfig,
   ScheduleConfig,
   ShortSyntaxConfig,
@@ -19,9 +20,45 @@ import {
   TakeABreakConfig,
   TasksConfig,
 } from '../global-config.model';
+import type { KeyboardConfig } from '../keyboard-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
+import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
+
+/**
+ * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
+ * rework) to the new `autoStartFocusOnPlay` opt-in. Users who had sync enabled
+ * relied on play→spawn behavior; without this, the upgrade would silently turn
+ * auto-spawn off for them.
+ *
+ * Important: this runs on the RAW incoming config (before defaults are merged)
+ * so `autoStartFocusOnPlay` is genuinely absent on pre-rework data — otherwise
+ * the default `false` would short-circuit the `??` backfill below.
+ */
+const migrateFocusModeConfig = (
+  cfg: Partial<FocusModeConfig> | undefined,
+): Partial<FocusModeConfig> => {
+  if (!cfg) {
+    return {};
+  }
+  const legacy = cfg as Partial<FocusModeConfig> & {
+    isSyncSessionWithTracking?: boolean;
+  };
+  // `hasOwnProperty.call` rather than `in` to avoid prototype-chain false positives.
+  const hasLegacyKey = Object.prototype.hasOwnProperty.call(
+    legacy,
+    'isSyncSessionWithTracking',
+  );
+  if (!hasLegacyKey) {
+    return cfg;
+  }
+  const { isSyncSessionWithTracking, ...rest } = legacy;
+  // Only backfill when the user has not explicitly set the new key.
+  const autoStartFocusOnPlay =
+    rest.autoStartFocusOnPlay ?? isSyncSessionWithTracking === true;
+  return { ...rest, autoStartFocusOnPlay };
+};
 
 export const CONFIG_FEATURE_NAME = 'globalConfig';
 export const selectConfigFeatureState =
@@ -86,6 +123,10 @@ export const selectPomodoroConfig = createSelector(
   selectConfigFeatureState,
   (cfg): PomodoroConfig => cfg?.pomodoro ?? DEFAULT_GLOBAL_CONFIG.pomodoro,
 );
+export const selectFlowtimeConfig = createSelector(
+  selectConfigFeatureState,
+  (cfg): FlowtimeConfig => cfg?.flowtime ?? DEFAULT_GLOBAL_CONFIG.flowtime,
+);
 export const selectReminderConfig = createSelector(
   selectConfigFeatureState,
   (cfg): ReminderConfig => cfg?.reminder ?? DEFAULT_GLOBAL_CONFIG.reminder,
@@ -103,6 +144,26 @@ export const selectIsFocusModeEnabled = createSelector(
 
 export const initialGlobalConfigState: GlobalConfigState = {
   ...DEFAULT_GLOBAL_CONFIG,
+};
+
+const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig => {
+  const keyboard: KeyboardConfig = {
+    ...DEFAULT_GLOBAL_CONFIG.keyboard,
+    ...cfg,
+  };
+
+  if (
+    cfg?.addNewNote === 'N' &&
+    (cfg.taskOpenNotesPanel === undefined || cfg.taskOpenNotesPanel === null)
+  ) {
+    return {
+      ...keyboard,
+      addNewNote: DEFAULT_GLOBAL_CONFIG.keyboard.addNewNote,
+      taskOpenNotesPanel: DEFAULT_GLOBAL_CONFIG.keyboard.taskOpenNotesPanel,
+    };
+  }
+
+  return keyboard;
 };
 
 export const globalConfigReducer = createReducer<GlobalConfigState>(
@@ -137,8 +198,18 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       ? oldState.sync.isEncryptionEnabled
       : incomingSyncConfig.isEncryptionEnabled;
 
-    return {
+    const incomingGlobalConfig = {
+      ...DEFAULT_GLOBAL_CONFIG,
       ...appDataComplete.globalConfig,
+      misc: {
+        ...DEFAULT_GLOBAL_CONFIG.misc,
+        ...appDataComplete.globalConfig.misc,
+        ...normalizeStartOfNextDayConfig(appDataComplete.globalConfig.misc ?? {}),
+      },
+    };
+
+    return {
+      ...incomingGlobalConfig,
       // Merge defaults for tasks config to fill missing fields.
       // This handles data from older app versions or synced snapshots that
       // predate newly added fields (e.g., isAutoMarkParentAsDone, notesTemplate).
@@ -154,15 +225,11 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
       },
-      overlayIndicator: {
-        ...DEFAULT_GLOBAL_CONFIG.overlayIndicator,
-        ...appDataComplete.globalConfig.overlayIndicator,
-        // Migrate deprecated misc.isOverlayIndicatorEnabled
-        ...(appDataComplete.globalConfig.misc?.isOverlayIndicatorEnabled !== undefined &&
-        appDataComplete.globalConfig.overlayIndicator?.isEnabled === undefined
-          ? { isEnabled: appDataComplete.globalConfig.misc.isOverlayIndicatorEnabled }
-          : {}),
+      focusMode: {
+        ...DEFAULT_GLOBAL_CONFIG.focusMode,
+        ...migrateFocusModeConfig(appDataComplete.globalConfig.focusMode),
       },
+      keyboard: migrateKeyboardConfig(appDataComplete.globalConfig.keyboard),
       sync: {
         ...incomingSyncConfig,
         syncProvider,
@@ -172,13 +239,20 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     };
   }),
 
-  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => ({
-    ...state,
-    [sectionKey]: {
-      ...state[sectionKey],
-      ...sectionCfg,
-    },
-  })),
+  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => {
+    const normalizedSectionCfg =
+      sectionKey === 'misc'
+        ? normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>)
+        : sectionCfg;
+
+    return {
+      ...state,
+      [sectionKey]: {
+        ...state[sectionKey],
+        ...normalizedSectionCfg,
+      },
+    };
+  }),
 );
 
 export const selectTimelineWorkStartEndHours = createSelector(

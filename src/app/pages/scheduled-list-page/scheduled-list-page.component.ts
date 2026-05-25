@@ -65,7 +65,6 @@ export class ScheduledListPageComponent {
   private _translateService = inject(TranslateService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
-
   T: typeof T = T;
   TODAY_TAG: Tag = TODAY_TAG;
   taskRepeatCfgs$ = this._store.select(selectTaskRepeatCfgsSortedByTitleAndProject);

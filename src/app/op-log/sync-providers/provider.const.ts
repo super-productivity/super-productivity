@@ -4,7 +4,17 @@ export enum SyncProviderId {
   'WebDAV' = 'WebDAV',
   'LocalFile' = 'LocalFile',
   'SuperSync' = 'SuperSync',
+  'Nextcloud' = 'Nextcloud',
 }
+
+/**
+ * Providers that authenticate via OAuth and expose `getAuthHelper()` on the
+ * runtime provider. Listed here so UI gates (e.g. Re-authenticate button)
+ * stay in lockstep with the provider implementations without an async probe.
+ */
+export const OAUTH_SYNC_PROVIDERS: ReadonlySet<SyncProviderId> = new Set([
+  SyncProviderId.Dropbox,
+]);
 
 /**
  * Type-safe conversion from string-based sync provider value to SyncProviderId.

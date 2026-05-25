@@ -1,11 +1,10 @@
 # How to Rate ***Super Productivity***
 
-### Why only 5-star reviews help (unfortunately)
+## How ratings affect app discoverability
 
-Most app store algorithms and ranking systems heavily weight 5-star ratings when calculating overall visibility and trustworthiness.
-Lower ratings, even if positive, dilute the average score and reduce how often the app is recommended or featured.
+App store ranking algorithms favor apps with higher average ratings. For a small project, even a few low ratings can have an outsized effect on the average and on how often the app is recommended or featured.
 
-This leads to the weird situation that a well-intentioned and fair 4-star rating (after all, who is perfect?), *does* actually hurt.
+If you've found Super Productivity useful, an honest rating or short review helps the project reach more people.
 
 ## 🪟 Windows (Microsoft Store)
 
@@ -28,25 +27,21 @@ This leads to the weird situation that a well-intentioned and fair 4-star rating
 
 ## 🖥️ macOS (Mac App Store)
 
-1. Open the **App Store** on your Mac
-2. Search for **Super Productivity**
-3. Click the Super Productivity result to view its page
-4. Scroll to **Ratings & Reviews**
-5. Click the number of ⭐ stars you want to give
-6. (Optional) Write a review
-7. Click **Send**
+1. Open the [App Store page](https://apps.apple.com/app/id1482572463) on your Mac
+2. Scroll to **Ratings & Reviews**
+3. Click the number of ⭐ stars you want to give
+4. (Optional) Write a review
+5. Click **Send**
 
 ---
 
 ## 🍎 iOS (App Store)
 
-1. Open the **App Store** on your iPhone or iPad
-2. Search for **Super Productivity**
-3. Tap the Super Productivity result to view its page
-4. Scroll to **Ratings & Reviews**
-5. Tap the number of ⭐ stars you want to give
-6. (Optional) Tap **Write a Review**
-7. Tap **Send**
+1. Open the [App Store page](https://apps.apple.com/app/id1482572463) on your iPhone or iPad
+2. Scroll to **Ratings & Reviews**
+3. Tap the number of ⭐ stars you want to give
+4. (Optional) Tap **Write a Review**
+5. Tap **Send**
 
 ---
 
@@ -74,9 +69,9 @@ This leads to the weird situation that a well-intentioned and fair 4-star rating
 
 ---
 
-# alternativeto.net
+## 🌐 alternativeto.net
 
-1. Go to [webpage](https://alternativeto.net/software/super-productivity/about/)
+1. Go to [the AlternativeTo page](https://alternativeto.net/software/super-productivity/about/)
 2. Scroll to "Comments and Reviews"
 3. Click on "Post comment/review"
 4. Write a review
@@ -84,7 +79,8 @@ This leads to the weird situation that a well-intentioned and fair 4-star rating
 
 ---
 
-# Other places to leave reviews
+## Other places that help the project
 
+- ⭐ Star us on GitHub: https://github.com/super-productivity/super-productivity
 - https://www.producthunt.com/products/super-productivity
 - https://www.pling.com/p/1352584/

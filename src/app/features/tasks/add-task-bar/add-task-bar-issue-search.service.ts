@@ -145,7 +145,7 @@ export class AddTaskBarIssueSearchService {
       return item.taskId;
     } else if (item.taskId) {
       if (!item.projectId) {
-        TaskLog.log(item);
+        TaskLog.log('Weird add task case1', { taskId: item.taskId });
         throw new Error('Weird add task case1');
       }
       this._projectService.moveTaskToTodayList(item.taskId, item.projectId);

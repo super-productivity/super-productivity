@@ -323,9 +323,9 @@ Vector clock pruning remains for bandwidth efficiency, but pruning errors no lon
 
 ## Relationship to Other Plans
 
-- **Builds on:** [Server-Side Prune-Aware Comparison](./server-side-prune-aware-comparison.md) -- can be implemented in either order; prune-aware comparison improves the vector clock fallback path
+- **Builds on:** Server-Side Prune-Aware Comparison (plan doc removed in `985e839747`; view it with `git show 669f2d7874:docs/long-term-plans/server-side-prune-aware-comparison.md`) -- can be implemented in either order; prune-aware comparison improves the vector clock fallback path
 - **Related:** Current client-side fix (commit `f9be1c8500`) remains as defense-in-depth for the vector clock fallback path
-- **Related:** [E2E Encryption Plan](../sync-and-op-log/long-term-plans/e2e-encryption-plan.md) -- entity versions are not sensitive data and do not need encryption
+- **Related:** [SuperSync Encryption Architecture](../sync-and-op-log/supersync-encryption-architecture.md) -- entity versions are not sensitive data and do not need encryption
 
 ## Implementation Order
 

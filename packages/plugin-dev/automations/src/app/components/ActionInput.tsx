@@ -7,7 +7,15 @@ interface ActionInputProps {
 }
 
 export function ActionInput(props: ActionInputProps) {
-  const types: ActionType[] = ['createTask', 'addTag'];
+  const types: ActionType[] = [
+    'createTask',
+    'deleteTask',
+    'addTag',
+    'moveToProject',
+    'displaySnack',
+    'displayDialog',
+    'webhook',
+  ];
 
   return (
     <div class="grid" style={{ 'margin-bottom': '0.5rem' }}>

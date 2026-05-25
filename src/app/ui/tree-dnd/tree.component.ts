@@ -38,8 +38,7 @@ import { TreeIndicatorService } from './tree-indicator.service';
 import { TREE_CONSTANTS } from './tree-constants';
 import { assertTreeId } from './tree-guards';
 import { expandCollapseAni } from './tree.animations';
-import { DRAG_DELAY_FOR_TOUCH } from '../../app.constants';
-import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
+import { dragDelayForTouch } from '../../util/input-intent';
 
 @Component({
   selector: 'tree-dnd',
@@ -74,8 +73,7 @@ export class TreeDndComponent<TData = unknown> {
   readonly isDragInvalid = signal<boolean>(false);
   readonly isRootOver = signal<boolean>(false);
   readonly indicatorStyle = this._indicatorService.indicatorStyle;
-  protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
 
   // === PRIVATE STATE ===
   /**
@@ -91,10 +89,12 @@ export class TreeDndComponent<TData = unknown> {
   private _rootDropEl: HTMLElement | null = null;
   private _dropHandled = false;
   private _dropFlashTimer?: number;
+  private _dragMoveRafId: number | null = null;
 
   constructor() {
     this._destroyRef.onDestroy(() => {
       if (this._dropFlashTimer) clearTimeout(this._dropFlashTimer);
+      if (this._dragMoveRafId !== null) cancelAnimationFrame(this._dragMoveRafId);
       this._indicatorService.clear();
     });
   }
@@ -130,6 +130,10 @@ export class TreeDndComponent<TData = unknown> {
 
   // === EVENT HANDLERS ===
   onDrop(event: CdkDragDrop<DropListContext<TData>>): void {
+    if (this._dragMoveRafId !== null) {
+      cancelAnimationFrame(this._dragMoveRafId);
+      this._dragMoveRafId = null;
+    }
     const dragId = this._extractDragId(event.item.data);
     this.draggingId.set(null);
     this._dropHandled = true;
@@ -176,16 +180,20 @@ export class TreeDndComponent<TData = unknown> {
     const pointer = event.pointerPosition;
     if (!pointer) return;
 
-    this._treeRootEl ??= this._host.nativeElement.querySelector('.tree');
-    this._rootDropEl ??= this._host.nativeElement.querySelector('.root-drop');
+    if (this._dragMoveRafId !== null) return;
+    this._dragMoveRafId = requestAnimationFrame(() => {
+      this._dragMoveRafId = null;
+      this._treeRootEl ??= this._host.nativeElement.querySelector('.tree');
+      this._rootDropEl ??= this._host.nativeElement.querySelector('.root-drop');
 
-    const target = this._findHoverTarget(pointer);
-    this._updateHover(dragId, target);
+      const target = this._findHoverTarget(pointer);
+      this._updateHover(dragId, target);
 
-    // Clear hover if dragged outside tree boundaries
-    if (!target && this._hoverTarget) {
-      this._setHoverTarget(null);
-    }
+      // Clear hover if dragged outside tree boundaries
+      if (!target && this._hoverTarget) {
+        this._setHoverTarget(null);
+      }
+    });
   }
 
   onDragEnded(event: CdkDragEnd<TreeId>): void {
@@ -202,6 +210,10 @@ export class TreeDndComponent<TData = unknown> {
       this._scheduleItemReset(event.source);
     }
 
+    if (this._dragMoveRafId !== null) {
+      cancelAnimationFrame(this._dragMoveRafId);
+      this._dragMoveRafId = null;
+    }
     this.draggingId.set(null);
     this.isDragInvalid.set(false);
     this._dropHandled = false;

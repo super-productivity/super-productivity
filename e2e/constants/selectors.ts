@@ -39,7 +39,7 @@ export const cssSelectors = {
   FIRST_TASK: 'task:first-child',
   SECOND_TASK: 'task:nth-child(2)',
   TASK_TITLE: 'task task-title',
-  TASK_DONE_BTN: '.done-toggle',
+  TASK_DONE_BTN: 'done-toggle',
   TASK_LIST: 'task-list',
   TASK_TEXTAREA: 'task textarea',
   SUB_TASKS_CONTAINER: '.sub-tasks',

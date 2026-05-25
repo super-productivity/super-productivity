@@ -22,7 +22,7 @@ import * as fs from 'fs';
 
 // Selectors
 const TASK_SEL = 'task';
-const TASK_DONE_BTN = '.done-toggle';
+const TASK_DONE_BTN = 'done-toggle';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const SAVE_AND_GO_HOME_BTN = 'button[mat-flat-button][color="primary"]:last-of-type';
 

@@ -34,6 +34,7 @@ export class FocusModeService {
   // Session signals
   isSessionRunning = this._store.selectSignal(selectors.selectIsSessionRunning);
   isSessionPaused = this._store.selectSignal(selectors.selectIsSessionPaused);
+  isSessionCompleted = this._store.selectSignal(selectors.selectIsSessionCompleted);
 
   // Break signals
   isBreakActive = this._store.selectSignal(selectors.selectIsBreakActive);
@@ -73,5 +74,10 @@ export class FocusModeService {
         takeUntilDestroyed(),
       )
       .subscribe();
+  }
+
+  /** Open the rich focus-mode overlay. Used by the header button. */
+  openOverlay(): void {
+    this._store.dispatch(actions.showFocusOverlay());
   }
 }

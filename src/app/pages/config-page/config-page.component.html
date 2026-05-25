@@ -1,8 +1,6 @@
 <div class="page-settings page-wrapper">
   @if (globalCfg) {
     <div class="settings-container">
-      <h1 class="mat-h1 settings-title">{{ T.PS.GLOBAL_SETTINGS | translate }}</h1>
-
       <mat-tab-group
         class="settings-tabs"
         [(selectedIndex)]="selectedTabIndex"
@@ -186,14 +184,60 @@
             <h2 class="mat-h2 section-title">
               {{ 'PS.TABS.SYNC_BACKUP' | translate }}
             </h2>
-            <section class="config-section tour-syncSection">
-              @let syncSettingsForm = syncSettingsService.syncSettingsForm$ | async;
-              @if (syncSettingsForm && globalSyncConfigFormCfg(); as syncCfg) {
-                <config-section
-                  (save)="syncSettingsService.updateSettingsFromForm($event.config)"
-                  [cfg]="syncSettingsForm"
-                  [section]="syncCfg"
-                ></config-section>
+            <section class="config-section sync-summary">
+              @let status = syncStatus();
+              @if (!status.providerId) {
+                <p class="sync-summary__intro">
+                  {{ 'PS.SYNC.EMPTY_STATE_HINT' | translate }}
+                </p>
+                <div class="sync-summary__actions">
+                  <button
+                    (click)="openSyncCfgDialog()"
+                    color="primary"
+                    mat-raised-button
+                    type="button"
+                  >
+                    <mat-icon>cloud_sync</mat-icon>
+                    {{ 'PS.SYNC.SET_UP_SYNC' | translate }}
+                  </button>
+                </div>
+              } @else {
+                <div class="sync-summary__status">
+                  <span class="sync-summary__provider">
+                    <mat-icon>cloud_sync</mat-icon>
+                    {{ status.providerId }}
+                  </span>
+                  @if (status.needsAuth) {
+                    <span class="sync-summary__pill sync-summary__pill--warn">
+                      {{ 'PS.SYNC.NEEDS_AUTH' | translate }}
+                    </span>
+                  }
+                  @if (status.isEncrypted) {
+                    <span class="sync-summary__pill">
+                      <mat-icon>lock</mat-icon>
+                      {{ 'PS.SYNC.ENCRYPTED' | translate }}
+                    </span>
+                  }
+                </div>
+                <div class="sync-summary__actions">
+                  <button
+                    (click)="triggerSync()"
+                    color="primary"
+                    mat-raised-button
+                    type="button"
+                  >
+                    <mat-icon>sync</mat-icon>
+                    {{ 'F.SYNC.BTN_SYNC_NOW' | translate }}
+                  </button>
+                  <button
+                    (click)="openSyncCfgDialog()"
+                    mat-stroked-button
+                    type="button"
+                  >
+                    <mat-icon>tune</mat-icon>
+                    {{ 'PS.SYNC.CONFIGURE' | translate }}
+                  </button>
+                </div>
               }
             </section>
 
@@ -235,7 +279,7 @@
   >
   –
   <a
-    (click)="downloadLogs(); $event?.preventDefault()"
+    (click)="showLogs(); $event?.preventDefault()"
     href="#"
     >Logs</a
   >

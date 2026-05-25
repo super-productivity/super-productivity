@@ -8,6 +8,7 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { first } from 'rxjs/operators';
 import { SyncWrapperService } from './sync-wrapper.service';
+import { SyncLog } from '../../core/log';
 
 describe('SyncConfigService', () => {
   let service: SyncConfigService;
@@ -177,6 +178,126 @@ describe('SyncConfigService', () => {
           syncFolderPath: '',
           encryptKey: 'test-key',
         },
+      );
+    });
+
+    it('should save Nextcloud login name separately from the file username', async () => {
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(null),
+      );
+
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: SyncProviderId.Nextcloud,
+        syncInterval: 300000,
+        nextcloud: {
+          serverUrl: 'https://cloud.example.com',
+          loginName: 'alice@example.com',
+          userName: 'alice',
+          password: 'app-password',
+          syncFolderPath: 'super-productivity',
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.Nextcloud,
+        jasmine.objectContaining({
+          serverUrl: 'https://cloud.example.com',
+          loginName: 'alice@example.com',
+          userName: 'alice',
+          password: 'app-password',
+          syncFolderPath: 'super-productivity',
+        }),
+      );
+    });
+
+    it('should allow clearing optional Nextcloud login name to fall back to file username', async () => {
+      const mockProvider = {
+        id: SyncProviderId.Nextcloud,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              serverUrl: 'https://cloud.example.com',
+              loginName: 'alice@example.com',
+              userName: 'alice',
+              password: 'app-password',
+              syncFolderPath: 'super-productivity',
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
+
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: SyncProviderId.Nextcloud,
+        syncInterval: 300000,
+        nextcloud: {
+          serverUrl: 'https://cloud.example.com',
+          loginName: '',
+          userName: 'alice',
+          password: '',
+          syncFolderPath: 'super-productivity',
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.Nextcloud,
+        jasmine.objectContaining({
+          loginName: '',
+          userName: 'alice',
+          password: 'app-password',
+        }),
+      );
+    });
+
+    it('should preserve saved Nextcloud login name when form model has null', async () => {
+      const mockProvider = {
+        id: SyncProviderId.Nextcloud,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              serverUrl: 'https://cloud.example.com',
+              loginName: 'alice@example.com',
+              userName: 'alice',
+              password: 'app-password',
+              syncFolderPath: 'super-productivity',
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
+
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: SyncProviderId.Nextcloud,
+        syncInterval: 300000,
+        nextcloud: {
+          serverUrl: 'https://cloud.example.com',
+          loginName: null,
+          userName: 'alice',
+          password: '',
+          syncFolderPath: 'super-productivity',
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.Nextcloud,
+        jasmine.objectContaining({
+          loginName: 'alice@example.com',
+          userName: 'alice',
+          password: 'app-password',
+        }),
       );
     });
 
@@ -687,6 +808,34 @@ describe('SyncConfigService', () => {
           encryptKey: 'new-key',
         },
       );
+    });
+  });
+
+  describe('syncSettingsForm$', () => {
+    it('should redact Nextcloud account identifiers when logging form settings', async () => {
+      const logSpy = spyOn(SyncLog, 'log');
+      mockSyncConfig$.next({
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: true,
+        syncProvider: SyncProviderId.Nextcloud,
+      });
+      mockCurrentProviderPrivateCfg$.next({
+        providerId: SyncProviderId.Nextcloud,
+        privateCfg: {
+          serverUrl: 'https://cloud.example.com',
+          loginName: 'alice@example.com',
+          userName: 'alice',
+          password: 'app-password',
+          syncFolderPath: 'super-productivity',
+        },
+      });
+
+      await service.syncSettingsForm$.pipe(first()).toPromise();
+
+      const loggedSettings = logSpy.calls.mostRecent().args[1] as SyncConfig;
+      expect(loggedSettings.nextcloud?.loginName).toBe('[REDACTED]');
+      expect(loggedSettings.nextcloud?.userName).toBe('[REDACTED]');
+      expect(loggedSettings.nextcloud?.password).toBe('[REDACTED]');
     });
   });
 

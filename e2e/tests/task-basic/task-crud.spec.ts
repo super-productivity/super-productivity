@@ -4,7 +4,7 @@ const TASK = 'task';
 const TASK_TITLE = 'task task-title';
 const FIRST_TASK = 'task:first-child';
 const SECOND_TASK = 'task:nth-child(2)';
-const TASK_DONE_BTN = '.done-toggle';
+const TASK_DONE_BTN = 'done-toggle';
 
 test.describe('Task CRUD Operations', () => {
   test('should create, edit and delete tasks', async ({ page, workViewPage }) => {

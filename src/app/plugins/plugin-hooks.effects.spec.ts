@@ -1,18 +1,18 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { Observable, of } from 'rxjs';
+import { EMPTY, Observable, of } from 'rxjs';
 import { PluginHooksEffects } from './plugin-hooks.effects';
+import { WorkContextService } from '../features/work-context/work-context.service';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { PluginService } from './plugin.service';
 import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../features/planner/store/planner.actions';
-import { Task, TaskCopy } from '../features/tasks/task.model';
+import { TaskWithSubTasks } from '../features/tasks/task.model';
 import { PluginHooks } from './plugin-api.model';
 import {
   selectCurrentTask,
   selectTaskById,
 } from '../features/tasks/store/task.selectors';
-import { setCurrentTask, unsetCurrentTask } from '../features/tasks/store/task.actions';
 
 describe('PluginHooksEffects', () => {
   let effects: PluginHooksEffects;
@@ -20,13 +20,14 @@ describe('PluginHooksEffects', () => {
   let pluginServiceMock: jasmine.SpyObj<PluginService>;
   let store: MockStore;
 
-  const createMockTask = (overrides: Partial<Task> = {}): Task =>
+  const createMockTask = (overrides: Partial<TaskWithSubTasks> = {}): TaskWithSubTasks =>
     ({
       id: 'task-123',
       title: 'Test Task',
       projectId: null,
       tagIds: [],
       subTaskIds: [],
+      subTasks: [],
       parentId: null,
       timeSpentOnDay: {},
       timeSpent: 0,
@@ -48,9 +49,9 @@ describe('PluginHooksEffects', () => {
       created: Date.now(),
       _showSubTasksMode: 2,
       ...overrides,
-    }) as Task;
+    }) as TaskWithSubTasks;
 
-  let mockTask: Task;
+  let mockTask: TaskWithSubTasks;
 
   beforeEach(() => {
     mockTask = createMockTask();
@@ -72,6 +73,9 @@ describe('PluginHooksEffects', () => {
           },
         }),
         { provide: PluginService, useValue: pluginServiceMock },
+        // workContextChange$ reads activeWorkContext$ at construction; an
+        // empty stream keeps that effect inert for the other effects' tests.
+        { provide: WorkContextService, useValue: { activeWorkContext$: EMPTY } },
       ],
     });
 
@@ -170,11 +174,32 @@ describe('PluginHooksEffects', () => {
       });
     });
 
+    it('should dispatch TASK_UPDATE hook on moveToOtherProject action', (done) => {
+      const targetProjectId = 'project-456';
+      actions$ = of(
+        TaskSharedActions.moveToOtherProject({
+          task: mockTask,
+          targetProjectId,
+        }),
+      );
+
+      effects.taskUpdate$.subscribe(() => {
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.TASK_UPDATE,
+          jasmine.objectContaining({
+            taskId: mockTask.id,
+            changes: { projectId: targetProjectId },
+          }),
+        );
+        done();
+      });
+    });
+
     it('should dispatch TASK_UPDATE hook on planTaskForDay action', (done) => {
       const day = '2024-01-15';
       actions$ = of(
         PlannerActions.planTaskForDay({
-          task: mockTask as TaskCopy,
+          task: mockTask,
           day,
         }),
       );
@@ -195,7 +220,7 @@ describe('PluginHooksEffects', () => {
       const newDay = '2024-01-16';
       actions$ = of(
         PlannerActions.transferTask({
-          task: mockTask as TaskCopy,
+          task: mockTask,
           prevDay: '2024-01-15',
           newDay,
           targetIndex: 0,
@@ -217,30 +242,107 @@ describe('PluginHooksEffects', () => {
   });
 
   describe('onCurrentTaskChange$', () => {
-    it('should dispatch CURRENT_TASK_CHANGE hook with the full task object on setCurrentTask', (done) => {
-      store.overrideSelector(selectCurrentTask, mockTask);
-      actions$ = of(setCurrentTask({ id: mockTask.id }));
+    it('should dispatch CURRENT_TASK_CHANGE with { current, previous: null } when a task becomes active from idle', (done) => {
+      store.overrideSelector(selectCurrentTask, null);
+      actions$ = of();
 
-      effects.onCurrentTaskChange$.subscribe(() => {
+      const sub = effects.onCurrentTaskChange$.subscribe();
+      store.overrideSelector(selectCurrentTask, mockTask);
+      store.refreshState();
+
+      // give microtasks a tick to flush
+      setTimeout(() => {
         expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
           PluginHooks.CURRENT_TASK_CHANGE,
-          mockTask,
+          { current: mockTask, previous: null },
         );
+        sub.unsubscribe();
         done();
-      });
+      }, 0);
     });
 
-    it('should dispatch CURRENT_TASK_CHANGE hook with null on unsetCurrentTask', (done) => {
-      store.overrideSelector(selectCurrentTask, null);
-      actions$ = of(unsetCurrentTask());
+    it('should dispatch CURRENT_TASK_CHANGE with { current: null, previous } when the active task is stopped', (done) => {
+      store.overrideSelector(selectCurrentTask, mockTask);
+      actions$ = of();
 
-      effects.onCurrentTaskChange$.subscribe(() => {
+      const sub = effects.onCurrentTaskChange$.subscribe();
+      store.overrideSelector(selectCurrentTask, null);
+      store.refreshState();
+
+      setTimeout(() => {
         expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
           PluginHooks.CURRENT_TASK_CHANGE,
-          null,
+          { current: null, previous: mockTask },
         );
+        sub.unsubscribe();
         done();
-      });
+      }, 0);
+    });
+
+    it('should emit both previous and current when switching between tasks', (done) => {
+      const otherTask = createMockTask({ id: 'task-other', title: 'Other Task' });
+      store.overrideSelector(selectCurrentTask, mockTask);
+      actions$ = of();
+
+      const sub = effects.onCurrentTaskChange$.subscribe();
+      store.overrideSelector(selectCurrentTask, otherTask);
+      store.refreshState();
+
+      setTimeout(() => {
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.CURRENT_TASK_CHANGE,
+          { current: otherTask, previous: mockTask },
+        );
+        sub.unsubscribe();
+        done();
+      }, 0);
+    });
+
+    it('should not re-emit when the same task is updated in place', (done) => {
+      store.overrideSelector(selectCurrentTask, null);
+      actions$ = of();
+
+      const sub = effects.onCurrentTaskChange$.subscribe();
+      store.overrideSelector(selectCurrentTask, mockTask);
+      store.refreshState();
+      // Same id, different object reference (e.g. title change while running).
+      store.overrideSelector(selectCurrentTask, { ...mockTask, title: 'Renamed' });
+      store.refreshState();
+
+      setTimeout(() => {
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledTimes(1);
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.CURRENT_TASK_CHANGE,
+          { current: mockTask, previous: null },
+        );
+        sub.unsubscribe();
+        done();
+      }, 0);
+    });
+
+    it('should carry the latest snapshot of the running task into the stop event', (done) => {
+      // Simulates: start task → plugin mutates task (addTag) → stop. The stop
+      // payload's `previous` must reflect the post-mutation task state so a
+      // taskStopped handler can read the freshly-added field.
+      store.overrideSelector(selectCurrentTask, mockTask);
+      actions$ = of();
+
+      const sub = effects.onCurrentTaskChange$.subscribe();
+
+      const mutatedTask = createMockTask({ ...mockTask, tagIds: ['in-progress'] });
+      store.overrideSelector(selectCurrentTask, mutatedTask);
+      store.refreshState();
+      store.overrideSelector(selectCurrentTask, null);
+      store.refreshState();
+
+      setTimeout(() => {
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.CURRENT_TASK_CHANGE,
+          { current: null, previous: mutatedTask },
+        );
+        sub.unsubscribe();
+        done();
+      }, 0);
     });
   });
 });

@@ -8,6 +8,7 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
 } from '../../utils/sync-helpers';
+import { openTaskDetailPanel } from '../../utils/schedule-task-helper';
 
 test.describe('@webdav WebDAV Sync Advanced Features', () => {
   // Run sync tests serially to avoid WebDAV server contention
@@ -103,20 +104,15 @@ test.describe('@webdav WebDAV Sync Advanced Features', () => {
     await workViewPageA.addTask(taskName);
     const taskA = pageA.locator('task', { hasText: taskName }).first();
 
-    // Add Attachment
-    // Use context menu which is more reliable
-    await taskA.click({ button: 'right' });
+    // The attach-dialog entry point lives in the detail panel as of #7314.
+    await openTaskDetailPanel(pageA, taskA);
 
-    // Click "Attach file or link" in context menu
-    // The menu is in a portal, so we query the page
-    const attachBtn = pageA.locator('.mat-mdc-menu-content button', {
-      hasText: 'Attach',
-    });
-    await attachBtn.waitFor({ state: 'visible' });
-    await attachBtn.click();
+    const addAttachmentItem = pageA.locator(
+      'task-detail-panel task-detail-item.input-item:has(mat-icon:text("attachment"))',
+    );
+    await addAttachmentItem.waitFor({ state: 'visible' });
+    await addAttachmentItem.click();
 
-    // Dialog opens (direct attachment dialog or via side panel?)
-    // The context menu action calls `addAttachment()`, which usually opens the dialog.
     const dialog = pageA.locator('dialog-edit-task-attachment');
     await expect(dialog).toBeVisible();
 

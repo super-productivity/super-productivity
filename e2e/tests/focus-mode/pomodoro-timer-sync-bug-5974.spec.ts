@@ -139,7 +139,7 @@ test.describe('Bug #5974: Pomodoro timer break sync issues', () => {
       await expect(task).toHaveClass(/isCurrent/, { timeout: 5000 });
     });
 
-    test('should show banner when focus mode overlay is closed during session', async ({
+    test('should show focus button countdown when overlay is closed during session', async ({
       page,
       testPrefix,
     }) => {
@@ -151,13 +151,10 @@ test.describe('Bug #5974: Pomodoro timer break sync issues', () => {
       // Close overlay
       await closeFocusOverlay(page);
 
-      // Banner should be visible
-      const banner = page.locator('banner');
-      await expect(banner).toBeVisible({ timeout: 5000 });
-
-      // Banner should have action buttons
-      const bannerButtons = banner.locator('button');
-      await expect(bannerButtons.first()).toBeVisible({ timeout: 2000 });
+      // The header focus-button now shows the running countdown — the
+      // banner-based focus-session surface was removed.
+      const focusRunningLabel = page.locator('focus-button .focus-running-label');
+      await expect(focusRunningLabel).toBeVisible({ timeout: 5000 });
     });
 
     test('should show break screen after completing session', async ({
@@ -177,35 +174,15 @@ test.describe('Bug #5974: Pomodoro timer break sync issues', () => {
       const sessionDoneScreen = page.locator('focus-mode-session-done');
       await expect(breakScreen.or(sessionDoneScreen)).toBeVisible({ timeout: 5000 });
 
-      // Close overlay and verify banner appears
+      // Close overlay and verify the focus-button countdown surfaces.
       await closeFocusOverlay(page);
 
-      const banner = page.locator('banner');
-      await expect(banner).toBeVisible({ timeout: 5000 });
+      const focusRunningLabel = page.locator('focus-button .focus-running-label');
+      await expect(focusRunningLabel).toBeVisible({ timeout: 5000 });
     });
   });
 
-  test.describe('Typo fix verification', () => {
-    test('should show "Sync focus sessions with time tracking" (plural)', async ({
-      page,
-    }) => {
-      // Navigate to settings
-      await page.goto('/#/config');
-      await page.waitForLoadState('networkidle');
-
-      // Expand Focus Mode section by clicking on it
-      const focusModeHeader = page.locator('text=Focus Mode').first();
-      if (await focusModeHeader.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await focusModeHeader.click();
-        await page.waitForTimeout(500);
-      }
-
-      // Look for the setting label - should have "sessions" (plural) not "session"
-      const settingLabel = page.getByText('Sync focus sessions with time tracking');
-      const count = await settingLabel.count();
-      if (count > 0) {
-        await expect(settingLabel.first()).toBeVisible({ timeout: 5000 });
-      }
-    });
-  });
+  // Note: a previous "Typo fix verification" test for the
+  // "Sync focus sessions with time tracking" label was removed along with the
+  // setting itself in the focus-mode rework — sync is now always on.
 });

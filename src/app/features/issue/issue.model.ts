@@ -214,6 +214,8 @@ export interface IssueProviderState extends EntityState<IssueProvider> {
 
 // export type IssueProviderState = EntityState<IssueProvider>;
 
+export type IssueProviderPollingMode = 'whenProjectOpen' | 'always';
+
 export interface IssueProviderBase extends BaseIssueProviderCfg {
   id: string;
   isEnabled: boolean;
@@ -225,6 +227,7 @@ export interface IssueProviderBase extends BaseIssueProviderCfg {
   isAutoPoll?: boolean;
   isAutoAddToBacklog?: boolean;
   isIntegratedAddTaskBar?: boolean;
+  pollingMode?: IssueProviderPollingMode;
   defaultTagIds?: string[];
   defaultNote?: string | null;
 }

@@ -7,12 +7,20 @@ import {
 } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
 import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
+import {
+  getDistChannel,
+  ElectronDistChannel,
+} from './shared-with-frontend/get-dist-channel';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
   PluginManifest,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
 } from '../packages/plugin-api/src/types';
+import {
+  LocalRestApiRequestPayload,
+  LocalRestApiResponsePayload,
+} from './shared-with-frontend/local-rest-api.model';
 
 const _send: (channel: IPCEventValue, ...args: unknown[]) => void = (channel, ...args) =>
   ipcRenderer.send(channel, ...args);
@@ -20,6 +28,25 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
   channel,
   ...args
 ) => ipcRenderer.invoke(channel, ...args);
+
+const isGnomeDesktop = (): boolean => {
+  if (process.platform !== 'linux') {
+    return false;
+  }
+
+  const desktopValues = [
+    process.env.XDG_CURRENT_DESKTOP,
+    process.env.XDG_SESSION_DESKTOP,
+    process.env.DESKTOP_SESSION,
+    process.env.GNOME_SHELL_SESSION_MODE,
+  ]
+    .filter((value): value is string => !!value)
+    .map((value) => value.toLowerCase());
+
+  return desktopValues.some(
+    (value) => value.includes('gnome') || value.includes('ubuntu'),
+  );
+};
 
 const ea: ElectronAPI = {
   on: (
@@ -29,6 +56,10 @@ const ea: ElectronAPI = {
     // NOTE: there is no proper way to unsubscribe apart from unsubscribing all
     ipcRenderer.on(channel, listener);
   },
+  // SYNC
+  // ----
+  getDistChannel: (): ElectronDistChannel | null => getDistChannel(),
+
   // INVOKE
   // ------
   getUserDataPath: () => _invoke('GET_PATH', 'userData') as Promise<string>,
@@ -45,8 +76,8 @@ const ea: ElectronAPI = {
       dataStr: string | undefined;
     }>,
   fileSyncRemove: (filePath) => _invoke('FILE_SYNC_REMOVE', filePath) as Promise<void>,
-  fileSyncListFiles: ({ dirPath }) =>
-    _invoke('FILE_SYNC_LIST_FILES', dirPath) as Promise<string[] | Error>,
+  fileSyncListFiles: (args) =>
+    _invoke('FILE_SYNC_LIST_FILES', args) as Promise<string[] | Error>,
   checkDirExists: (dirPath) =>
     _invoke('CHECK_DIR_EXISTS', dirPath) as Promise<true | Error>,
 
@@ -56,7 +87,12 @@ const ea: ElectronAPI = {
     properties: string[];
     title?: string;
     defaultPath?: string;
+    filters?: { name: string; extensions: string[] }[];
   }) => _invoke('SHOW_OPEN_DIALOG', options) as Promise<string[] | undefined>,
+
+  toFileUrl: (filePath: string) => ipcRenderer.invoke(IPC.TO_FILE_URL, filePath),
+  readLocalImageAsDataUrl: (filePathOrUrl: string) =>
+    _invoke('READ_LOCAL_IMAGE_AS_DATA_URL', filePathOrUrl) as Promise<string | null>,
   // STANDARD
   // --------
   setZoomFactor: (zoomFactor: number) => {
@@ -64,7 +100,9 @@ const ea: ElectronAPI = {
   },
   getZoomFactor: () => webFrame.getZoomFactor(),
   isLinux: () => process.platform === 'linux',
+  isGnomeDesktop,
   isMacOS: () => process.platform === 'darwin',
+  isAppleSilicon: () => process.platform === 'darwin' && process.arch === 'arm64',
   isSnap: () => process && process.env && !!process.env.SNAP,
   isFlatpak: () => process && process.env && !!process.env.FLATPAK_ID,
 
@@ -169,6 +207,7 @@ const ea: ElectronAPI = {
   sendAppSettingsToElectron: (globalCfg) =>
     _send('TRANSFER_SETTINGS_TO_ELECTRON', globalCfg),
   sendSettingsUpdate: (globalCfg) => _send('UPDATE_SETTINGS', globalCfg),
+  updateTaskWidgetSettings: (cfg) => _send('UPDATE_TASK_WIDGET_SETTINGS', cfg),
   updateTitleBarDarkMode: (isDarkMode: boolean) =>
     _send('UPDATE_TITLE_BAR_DARK_MODE', isDarkMode),
   registerGlobalShortcuts: (keyboardCfg) =>
@@ -222,6 +261,7 @@ const ea: ElectronAPI = {
     ) as Promise<PluginNodeScriptResult>,
 
   // Plugin OAuth
+  pluginOAuthPrepare: () => _invoke('PLUGIN_OAUTH_PREPARE') as Promise<{ port: number }>,
   pluginOAuthStart: (url: string) => _send('PLUGIN_OAUTH_START', { url }),
   onPluginOAuthCb: (
     listener: (data: { code?: string; error?: string; state?: string }) => void,
@@ -232,6 +272,14 @@ const ea: ElectronAPI = {
         listener(data),
     );
   },
+
+  onLocalRestApiRequest: (listener: (payload: LocalRestApiRequestPayload) => void) => {
+    ipcRenderer.on(IPC.LOCAL_REST_API_REQUEST, (_event, payload) =>
+      listener(payload as LocalRestApiRequestPayload),
+    );
+  },
+  sendLocalRestApiResponse: (payload: LocalRestApiResponsePayload) =>
+    _send(IPC.LOCAL_REST_API_RESPONSE, payload),
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

@@ -18,6 +18,7 @@ interface GithubConfig {
   token?: string;
   filterUsername?: string;
   backlogQuery?: string;
+  includePullRequests?: boolean;
 }
 
 interface GithubUser {
@@ -104,6 +105,13 @@ const isAuthOrNotFoundError = (err: unknown): boolean => {
   return false;
 };
 
+// GitHub's search API requires parentheses percent-encoded, but
+// encodeURIComponent leaves them intact (they're unreserved per RFC 3986).
+// Unencoded parens cause HTTP 422 on queries like "(author:@me OR assignee:@me)".
+// See https://github.com/super-productivity/super-productivity/issues/4913
+const encodeGithubQuery = (query: string): string =>
+  encodeURIComponent(query).replace(/\(/g, '%28').replace(/\)/g, '%29');
+
 PluginAPI.registerIssueProvider({
   configFields: [
     {
@@ -138,6 +146,12 @@ PluginAPI.registerIssueProvider({
       required: false,
       advanced: true,
     },
+    {
+      key: 'includePullRequests',
+      type: 'checkbox' as const,
+      label: t('CFG.INCLUDE_PULL_REQUESTS'),
+      advanced: true,
+    },
   ],
 
   getHeaders(config: Record<string, unknown>): Record<string, string> {
@@ -158,12 +172,13 @@ PluginAPI.registerIssueProvider({
   ): Promise<PluginSearchResult[]> {
     const cfg = config as unknown as GithubConfig;
     const { owner, repo } = parseRepo(cfg);
-    // Ensure we only search issues (not PRs) unless user explicitly specifies
+    // Ensure we only search issues (not PRs) unless the user opted in via
+    // config or explicitly typed an is: filter in their search term.
     const hasTypeFilter =
       searchTerm.includes('is:issue') || searchTerm.includes('is:pull-request');
-    const typeFilter = hasTypeFilter ? '' : ' is:issue';
-    const q = encodeURIComponent(`repo:${owner}/${repo}${typeFilter} ${searchTerm}`);
-    const url = `${API_BASE}/search/issues?q=${q}&per_page=50`;
+    const typeFilter = hasTypeFilter || cfg.includePullRequests ? '' : ' is:issue';
+    const q = encodeGithubQuery(`repo:${owner}/${repo}${typeFilter} ${searchTerm}`);
+    const url = `${API_BASE}/search/issues?q=${q}&per_page=50&advanced_search=true`;
     const response = await http.get<GithubSearchResponse>(url);
     return (response.items || []).map(mapSearchResult);
   },
@@ -261,9 +276,15 @@ PluginAPI.registerIssueProvider({
   ): Promise<PluginSearchResult[]> {
     const cfg = config as unknown as GithubConfig;
     const { owner, repo } = parseRepo(cfg);
-    const query = cfg.backlogQuery || 'sort:updated state:open assignee:@me';
-    const q = encodeURIComponent(`repo:${owner}/${repo} is:issue ${query}`);
-    const url = `${API_BASE}/search/issues?q=${q}&per_page=50`;
+    // `assignee:@me` requires an authenticated request; without a token the
+    // GitHub Search API returns 422. Fall back to a token-less default so
+    // public-repo auto-import works without credentials.
+    const query =
+      cfg.backlogQuery ||
+      (cfg.token ? 'sort:updated state:open assignee:@me' : 'sort:updated state:open');
+    const typeFilter = cfg.includePullRequests ? '' : ' is:issue';
+    const q = encodeGithubQuery(`repo:${owner}/${repo}${typeFilter} ${query}`);
+    const url = `${API_BASE}/search/issues?q=${q}&per_page=50&advanced_search=true`;
     const response = await http.get<GithubSearchResponse>(url);
     return (response.items || []).map(mapSearchResult);
   },

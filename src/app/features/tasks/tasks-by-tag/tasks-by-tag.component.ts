@@ -74,9 +74,9 @@ export class TasksByTagComponent {
       timeSpentToday: this.flatTasks
         .filter((task) => task.tagIds.includes(tag.id))
         .reduce((acc, task) => {
-          let v: number = task.timeSpentOnDay[this.dayStr()] || 0;
+          let v: number = task.timeSpentOnDay?.[this.dayStr()] || 0;
           if (this.isShowYesterday() && this.isForToday()) {
-            v = v + (task.timeSpentOnDay[yesterdayDayStr] || 0);
+            v = v + (task.timeSpentOnDay?.[yesterdayDayStr] || 0);
           }
           return acc + v;
         }, 0),

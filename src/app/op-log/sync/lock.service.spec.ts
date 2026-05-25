@@ -260,6 +260,114 @@ describe('LockService', () => {
 
       expect(order).toEqual(['outer-start', 'inner', 'outer-end']);
     });
+
+    // Issue #7700: SuperSync deadlock after switching providers.
+    //
+    // The Electron / Android-WebView path uses the Promise-chain fallback
+    // mutex (request() short-circuits to _fallbackRequest before reaching
+    // navigator.locks). That fallback is intentionally non-reentrant for
+    // the SAME lock name. If a holder calls back into request() with the
+    // same name (e.g. processDeferredActions -> writeOperation while
+    // RemoteOpsProcessingService still holds sp_op_log), the inner
+    // waiter must time out — it must NOT silently run inside the outer's
+    // window. We call _fallbackRequest directly because Karma runs in
+    // headless Chrome where navigator.locks is available, so request()
+    // would otherwise use the Web Locks API path and not exercise the
+    // code that runs in production.
+    type FallbackAccess = {
+      _fallbackRequest: (
+        name: string,
+        cb: () => Promise<void>,
+        timeoutMs: number,
+      ) => Promise<void>;
+    };
+    const fallback = (s: LockService): FallbackAccess => s as unknown as FallbackAccess;
+
+    it('rejects a same-lock reentrant request from inside an active holder (fallback path)', async () => {
+      const events: string[] = [];
+      let innerError: unknown = null;
+
+      const SHORT_TIMEOUT_MS = 100;
+      // Hold the outer lock long enough for the inner to definitely race
+      // past its timeout — 3x SHORT_TIMEOUT_MS leaves no flake margin.
+      const OUTER_WORK_MS = SHORT_TIMEOUT_MS * 3;
+
+      await fallback(service)._fallbackRequest(
+        'reentrant_lock',
+        async () => {
+          events.push('outer-start');
+          try {
+            await fallback(service)._fallbackRequest(
+              'reentrant_lock',
+              async () => {
+                // This should never execute — the inner acquisition must
+                // time out before it gets here.
+                events.push('inner-callback-ran');
+              },
+              SHORT_TIMEOUT_MS,
+            );
+          } catch (e) {
+            innerError = e;
+          }
+          // Outer keeps running after inner times out.
+          await new Promise((r) => setTimeout(r, OUTER_WORK_MS));
+          events.push('outer-end');
+        },
+        OUTER_WORK_MS * 2,
+      );
+
+      expect(innerError).toBeInstanceOf(LockAcquisitionTimeoutError);
+      expect((innerError as LockAcquisitionTimeoutError).lockName).toBe('reentrant_lock');
+      expect((innerError as LockAcquisitionTimeoutError).timeoutMs).toBe(
+        SHORT_TIMEOUT_MS,
+      );
+      // The deadlock signature: the inner callback NEVER ran.
+      expect(events).toEqual(['outer-start', 'outer-end']);
+    });
+
+    // Follow-up to the reentrant-deadlock test: even after the outer
+    // releases, a subsequent fallback acquisition on the same lock must
+    // succeed without waiting. i.e. the failed inner attempt must not
+    // poison the _fallbackLocks map. This pins down the "lock-state
+    // corruption after the inner timeout" hypothesis from #7700 — if
+    // this test ever starts failing/timing out, the map cleanup is
+    // broken and a fix needs to repair it.
+    it('cleans up _fallbackLocks after a reentrant timeout so later acquisitions succeed', async () => {
+      const SHORT_TIMEOUT_MS = 50;
+
+      await fallback(service)._fallbackRequest(
+        'cleanup_lock',
+        async () => {
+          await expectAsync(
+            fallback(service)._fallbackRequest(
+              'cleanup_lock',
+              async () => {
+                // never runs
+              },
+              SHORT_TIMEOUT_MS,
+            ),
+          ).toBeRejectedWithError(LockAcquisitionTimeoutError);
+        },
+        500,
+      );
+
+      // After the outer releases, a fresh acquisition must run promptly.
+      let ran = false;
+      const start = Date.now();
+      await fallback(service)._fallbackRequest(
+        'cleanup_lock',
+        async () => {
+          ran = true;
+        },
+        500,
+      );
+      expect(ran).toBe(true);
+      // If the _fallbackLocks map is poisoned, this would block for a
+      // full 500ms (or longer). Real cleanup runs in microtasks once
+      // the chained promise resolves, so it should be effectively
+      // immediate.
+      expect(Date.now() - start).toBeLessThan(200);
+    });
   });
 
   describe('high contention scenarios', () => {
@@ -745,6 +853,53 @@ describe('LockService', () => {
         5000,
       );
       expect(executed).toBe(true);
+    });
+
+    it('should recover after a timed-out fallback waiter once the holder finishes', async () => {
+      const originalLocks = navigator.locks;
+      Object.defineProperty(navigator, 'locks', {
+        value: undefined,
+        configurable: true,
+      });
+
+      const fallbackService = new LockService();
+      const SHORT_TIMEOUT = 30;
+      let recovered = false;
+
+      try {
+        const holder = fallbackService.request(
+          'recover_after_timeout_lock',
+          async () => {
+            await new Promise((r) => setTimeout(r, 80));
+          },
+          SHORT_TIMEOUT,
+        );
+
+        await expectAsync(
+          fallbackService.request(
+            'recover_after_timeout_lock',
+            async () => {},
+            SHORT_TIMEOUT,
+          ),
+        ).toBeRejectedWithError(/Timed out waiting.*to acquire lock/);
+
+        await holder;
+
+        await fallbackService.request(
+          'recover_after_timeout_lock',
+          async () => {
+            recovered = true;
+          },
+          SHORT_TIMEOUT,
+        );
+
+        expect(recovered).toBeTrue();
+      } finally {
+        Object.defineProperty(navigator, 'locks', {
+          value: originalLocks,
+          configurable: true,
+        });
+      }
     });
 
     it('should preserve mutex invariant after timeout (no concurrent execution)', async () => {

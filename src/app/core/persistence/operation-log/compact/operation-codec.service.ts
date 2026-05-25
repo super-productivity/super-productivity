@@ -4,6 +4,7 @@ import {
   OpType,
   EntityType,
   ActionType,
+  SyncImportReason,
 } from '../../../../op-log/core/operation.types';
 import { CompactOperation, CompactOperationLogEntry } from './compact-operation.types';
 import { encodeActionType, decodeActionType } from './action-type-codes';
@@ -30,6 +31,9 @@ export const encodeOperation = (op: Operation): CompactOperation => {
   }
   if (op.entityIds !== undefined) {
     compact.ds = op.entityIds;
+  }
+  if (op.syncImportReason !== undefined) {
+    compact.r = op.syncImportReason;
   }
 
   return compact;
@@ -58,6 +62,9 @@ export const decodeOperation = (compact: CompactOperation): Operation => {
   }
   if (compact.ds !== undefined) {
     op.entityIds = compact.ds;
+  }
+  if (compact.r !== undefined) {
+    op.syncImportReason = compact.r as SyncImportReason;
   }
 
   return op;

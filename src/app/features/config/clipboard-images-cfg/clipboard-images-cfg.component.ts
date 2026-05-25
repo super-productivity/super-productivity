@@ -15,7 +15,7 @@ import { T } from '../../../t.const';
 import {
   ClipboardImagesConfig,
   ConfigFormSection,
-  GlobalConfigSectionKey,
+  GlobalConfigFormSectionKey,
 } from '../global-config.model';
 import { ProjectCfgFormKey } from '../../project/project.model';
 import { IS_ELECTRON } from '../../../app.constants';
@@ -58,7 +58,7 @@ export class ClipboardImagesCfgComponent implements OnInit {
   @Input() section?: ConfigFormSection<ClipboardImagesConfig>;
 
   readonly save = output<{
-    sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey;
+    sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey;
     config: ClipboardImagesConfig;
   }>();
 

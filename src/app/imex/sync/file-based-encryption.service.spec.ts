@@ -10,7 +10,10 @@ import {
 import { FileBasedSyncAdapterService } from '../../op-log/sync-providers/file-based/file-based-sync-adapter.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { SyncProviderServiceInterface } from '../../op-log/sync-providers/provider.interface';
+import {
+  FileSyncProvider,
+  SyncProviderBase,
+} from '../../op-log/sync-providers/provider.interface';
 
 describe('FileBasedEncryptionService', () => {
   let service: FileBasedEncryptionService;
@@ -20,7 +23,7 @@ describe('FileBasedEncryptionService', () => {
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
   let mockFileBasedAdapter: jasmine.SpyObj<FileBasedSyncAdapterService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
-  let mockProvider: SyncProviderServiceInterface<SyncProviderId>;
+  let mockProvider: FileSyncProvider<SyncProviderId>;
   let mockAdapter: {
     uploadSnapshot: jasmine.Spy;
     setLastServerSeq: jasmine.Spy;
@@ -41,7 +44,7 @@ describe('FileBasedEncryptionService', () => {
       maxConcurrentRequests: 1,
       privateCfg: {
         load: jasmine.createSpy('load').and.resolveTo(mockExistingCfg),
-      } as unknown as SyncProviderServiceInterface<SyncProviderId>['privateCfg'],
+      } as unknown as FileSyncProvider<SyncProviderId>['privateCfg'],
       isReady: jasmine.createSpy('isReady').and.resolveTo(true),
       setPrivateCfg: jasmine.createSpy('setPrivateCfg').and.resolveTo(),
       getFileRev: jasmine.createSpy('getFileRev'),
@@ -81,8 +84,12 @@ describe('FileBasedEncryptionService', () => {
     ]);
     mockVectorClockService.getCurrentVectorClock.and.resolveTo({ testClient: 1 });
 
-    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
+    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', [
+      'loadClientId',
+      'getOrGenerateClientId',
+    ]);
     mockClientIdProvider.loadClientId.and.resolveTo('testClient');
+    mockClientIdProvider.getOrGenerateClientId.and.resolveTo('testClient');
 
     mockFileBasedAdapter = jasmine.createSpyObj('FileBasedSyncAdapterService', [
       'createAdapter',
@@ -124,16 +131,12 @@ describe('FileBasedEncryptionService', () => {
     });
 
     it('should throw for non-file-based provider (SuperSync)', async () => {
-      const superSyncProvider: SyncProviderServiceInterface<SyncProviderId> = {
+      const superSyncProvider: SyncProviderBase<SyncProviderId> = {
         id: SyncProviderId.SuperSync,
         maxConcurrentRequests: 1,
         privateCfg: {} as never,
         isReady: jasmine.createSpy('isReady').and.resolveTo(true),
         setPrivateCfg: jasmine.createSpy('setPrivateCfg'),
-        getFileRev: jasmine.createSpy('getFileRev'),
-        downloadFile: jasmine.createSpy('downloadFile'),
-        uploadFile: jasmine.createSpy('uploadFile'),
-        removeFile: jasmine.createSpy('removeFile'),
       };
       mockProviderManager.getActiveProvider.and.returnValue(superSyncProvider);
 
@@ -150,12 +153,12 @@ describe('FileBasedEncryptionService', () => {
       );
     });
 
-    it('should throw when client ID is not available', async () => {
-      mockClientIdProvider.loadClientId.and.resolveTo(null);
+    it('should use getOrGenerateClientId from the provider', async () => {
+      mockClientIdProvider.getOrGenerateClientId.and.resolveTo('B_regen');
 
-      await expectAsync(service.enableEncryption('my-password')).toBeRejectedWithError(
-        'Client ID not available',
-      );
+      // Should NOT throw — getOrGenerateClientId handles null/invalid IDs internally
+      await expectAsync(service.enableEncryption('my-password')).toBeResolved();
+      expect(mockClientIdProvider.getOrGenerateClientId).toHaveBeenCalled();
     });
 
     it('should upload encrypted snapshot before saving config', async () => {

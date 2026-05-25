@@ -61,7 +61,7 @@ describe('DatePickerInputComponent', () => {
       const date = new Date(2026, 2, 18);
       component.onValueChange(date);
       expect(spy).toHaveBeenCalledWith(date);
-      expect(component.innerValue).toEqual(date);
+      expect(component.innerValue()).toEqual(date);
     });
 
     it('should emit null when value is null', () => {
@@ -69,7 +69,7 @@ describe('DatePickerInputComponent', () => {
       component.registerOnChange(spy);
       component.onValueChange(null);
       expect(spy).toHaveBeenCalledWith(null);
-      expect(component.innerValue).toBeNull();
+      expect(component.innerValue()).toBeNull();
     });
 
     it('should NOT convert valid dates to epoch (issue #6860)', () => {
@@ -88,26 +88,26 @@ describe('DatePickerInputComponent', () => {
   describe('writeValue', () => {
     it('should set innerValue to null for falsy values', () => {
       component.writeValue(null);
-      expect(component.innerValue).toBeNull();
+      expect(component.innerValue()).toBeNull();
     });
 
     it('should set innerValue for Date objects', () => {
       const date = new Date(2026, 2, 18);
       component.writeValue(date);
-      expect(component.innerValue).toEqual(date);
+      expect(component.innerValue()).toEqual(date);
     });
 
     it('should parse valid date strings', () => {
       component.writeValue('2026-03-18');
-      expect(component.innerValue).toBeTruthy();
-      expect(component.innerValue!.getFullYear()).toBe(2026);
-      expect(component.innerValue!.getMonth()).toBe(2);
-      expect(component.innerValue!.getDate()).toBe(18);
+      expect(component.innerValue()).toBeTruthy();
+      expect(component.innerValue()!.getFullYear()).toBe(2026);
+      expect(component.innerValue()!.getMonth()).toBe(2);
+      expect(component.innerValue()!.getDate()).toBe(18);
     });
 
     it('should set innerValue to null for non-string non-Date values', () => {
       component.writeValue(12345);
-      expect(component.innerValue).toBeNull();
+      expect(component.innerValue()).toBeNull();
     });
   });
 });

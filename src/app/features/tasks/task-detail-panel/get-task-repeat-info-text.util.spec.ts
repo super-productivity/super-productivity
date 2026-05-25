@@ -195,4 +195,36 @@ describe('getTaskRepeatInfoText()', () => {
       ).toEqual([translationKey, translateParams]);
     });
   });
+
+  describe('invalid startTime (bug #7067)', () => {
+    it('should not throw when startTime is an invalid clock string', () => {
+      expect(() =>
+        getTaskRepeatInfoText(
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'IDDD',
+            repeatEvery: 1,
+            repeatCycle: 'DAILY',
+            startTime: 'INVALID_CLOCK_STRING',
+          },
+          'en-US',
+        ),
+      ).not.toThrow();
+    });
+
+    it('should fall back to no-time label when startTime is invalid', () => {
+      const [key, params] = getTaskRepeatInfoText(
+        {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          id: 'IDDD',
+          repeatEvery: 1,
+          repeatCycle: 'DAILY',
+          startTime: 'INVALID_CLOCK_STRING',
+        },
+        'en-US',
+      );
+      expect(key).toBe(T.F.TASK_REPEAT.ADD_INFO_PANEL.DAILY);
+      expect(params).toEqual({ timeStr: '' });
+    });
+  });
 });

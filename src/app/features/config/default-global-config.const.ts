@@ -47,9 +47,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
     isMinimizeToTray: false,
+    isLocalRestApiEnabled: false,
     isTrayShowCurrentCountdown: true,
     startOfNextDay: 0,
+    startOfNextDayTime: '00:00',
     isDisableAnimations: false,
+    isVerticalActionBar: false,
     isDisableCelebration: false,
     isShowProductivityTipLonger: false,
     customTheme: 'default',
@@ -92,14 +95,16 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
   focusMode: {
     isSkipPreparation: false,
     isPlayTick: false,
-    isPauseTrackingDuringBreak: false,
-    isSyncSessionWithTracking: false,
-    isStartInBackground: false,
+    focusModeSound: 'off',
+    isPauseTrackingDuringBreak: true,
+    autoStartFocusOnPlay: false,
+    isManualBreakStart: false,
   },
-  overlayIndicator: {
-    isEnabled: false,
-    isAlwaysShow: false,
-    opacity: 95,
+  flowtime: {
+    isBreakEnabled: false,
+    breakMode: 'ratio',
+    breakPercentage: 20,
+    breakRules: [],
   },
   clipboardImages: {
     imagePath: null,
@@ -117,11 +122,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     globalAddTask: null,
     addNewTask: 'Shift+A',
     addNewProject: 'Shift+P',
-    addNewNote: 'N',
+    addNewNote: 'Alt+N',
     openProjectNotes: 'Shift+N',
     toggleTaskViewCustomizerPanel: 'C',
     toggleIssuePanel: 'P',
     focusSideNav: 'Shift+D',
+    toggleSideNavMode: 'Ctrl+B',
     showHelp: '?',
     showSearchBar: 'Shift+F',
     toggleBacklog: 'B',
@@ -139,6 +145,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     triggerSync: 'Ctrl+S',
     taskEditTitle: null,
     taskToggleDetailPanelOpen: 'I',
+    taskOpenNotesPanel: 'N',
     taskOpenNotesFullscreen: null,
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
@@ -230,6 +237,14 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
 
     localFileSync: {
       syncFolderPath: '',
+    },
+
+    nextcloud: {
+      serverUrl: null,
+      loginName: null,
+      userName: null,
+      password: null,
+      syncFolderPath: 'super-productivity',
     },
   },
 } as const;

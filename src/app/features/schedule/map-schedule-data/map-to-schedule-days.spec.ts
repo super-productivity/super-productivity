@@ -967,10 +967,11 @@ describe('mapToScheduleDays()', () => {
         },
         {
           data: jasmine.any(Object),
-          duration: h(0.5),
           id: 'FD2',
           start: dhTz(1, 16.5),
+          duration: h(0.5),
           type: 'SplitTaskPlannedForDay',
+          isBeyondBudget: true,
         },
       ],
       isToday: false,
@@ -1005,20 +1006,6 @@ describe('mapToScheduleDays()', () => {
         },
         {
           data: {
-            id: 'FD2',
-            plannedForDay: '1970-01-02',
-            subTaskIds: [],
-            tagIds: [],
-            timeEstimate: 7200000,
-            timeSpent: 0,
-          },
-          duration: h(1.5),
-          id: 'FD2_1970-01-02_0',
-          start: dhTz(2, 9),
-          type: 'SplitTaskContinuedLast',
-        },
-        {
-          data: {
             defaultEstimate: 7200000,
             friday: true,
             id: 'R2',
@@ -1034,11 +1021,10 @@ describe('mapToScheduleDays()', () => {
             tuesday: true,
             wednesday: true,
           },
-          duration: 5400000,
+          duration: h(2),
           id: 'R2_1970-01-03',
-          // start: dhTz(2, 9),
-          start: 207000000,
-          type: 'RepeatProjectionSplit',
+          start: dhTz(2, 9),
+          type: 'RepeatProjection',
           plannedForDay: '1970-01-03',
         },
         {
@@ -1049,33 +1035,38 @@ describe('mapToScheduleDays()', () => {
           start: dhTz(2, 12),
           type: 'LunchBreak',
         },
-        {
-          data: {
-            defaultEstimate: 7200000,
-            friday: true,
-            id: 'R2',
-            lastTaskCreationDay: jasmine.any(String),
-            monday: true,
-            repeatCycle: 'DAILY',
-            repeatEvery: 1,
-            saturday: true,
-            startDate: '1969-01-01',
-            startTime: undefined,
-            sunday: true,
-            thursday: true,
-            tuesday: true,
-            wednesday: true,
-          },
-          duration: h(0.5),
-          id: 'R2_1970-01-03_0',
-          splitIndex: 0,
-          start: dhTz(2, 13),
-          type: 'RepeatProjectionSplitContinuedLast',
-          plannedForDay: '1970-01-03',
-        },
       ],
       isToday: false,
     } as any);
+  });
+
+  it('should show recurring tasks for future weeks even if they match current day of week', () => {
+    if (maybeSkipTimezoneDependent('should show recurring tasks for future weeks')) {
+      pending('Skipping timezone-dependent test');
+      return;
+    }
+    const oneWeekInMs = 7 * 24 * 60 * 60 * 1000;
+    const futureThursdayTs = N + oneWeekInMs;
+    const futureThursdayStr = getDbDateStr(futureThursdayTs);
+
+    const r = mapToScheduleDays(
+      futureThursdayTs,
+      [futureThursdayStr],
+      [],
+      [],
+      [fakeRepeatCfg('R1', '10:00', { defaultEstimate: h(1) })], // A recurring task
+      [],
+      [],
+      null,
+      {},
+      undefined,
+      undefined,
+      N,
+    );
+
+    expect(r[0].entries.length).toBe(1);
+    expect(r[0].entries[0].id).toBe('R1_1970-01-08');
+    expect(r[0].dayDate).toBe(futureThursdayStr);
   });
 
   // TODO we can use this for testing the beyond budget tasks mode

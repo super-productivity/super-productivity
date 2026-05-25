@@ -15,6 +15,7 @@ export type KeyboardConfig = Readonly<{
   showSearchBar?: string | null;
   addNewNote?: string | null;
   focusSideNav?: string | null;
+  toggleSideNavMode?: string | null;
   openProjectNotes?: string | null;
   toggleTaskViewCustomizerPanel?: string | null;
   toggleIssuePanel?: string | null;
@@ -26,6 +27,7 @@ export type KeyboardConfig = Readonly<{
 
   taskEditTitle?: string | null;
   taskToggleDetailPanelOpen?: string | null;
+  taskOpenNotesPanel?: string | null;
   taskOpenNotesFullscreen?: string | null;
   taskOpenEstimationDialog?: string | null;
   taskToggleDone?: string | null;

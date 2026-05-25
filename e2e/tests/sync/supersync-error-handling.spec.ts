@@ -306,7 +306,7 @@ test.describe('@supersync SuperSync Error Handling', () => {
         .locator(`task:not(.ng-animating):has-text("${task1}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.done-toggle').click();
+      await taskLocatorB.locator('done-toggle').click();
       await expect(taskLocatorB).toHaveClass(/isDone/);
 
       // 5. Client C just syncs (no modification, but will pick up B's change)

@@ -7,14 +7,11 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
   let harness: FileBasedSyncTestHarness;
 
   beforeEach(() => {
-    // Eliminate real retry delays to prevent slow tests and timer accumulation
-    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 0;
     harness = FileBasedSyncTestHarness.create({});
   });
 
   afterEach(() => {
     harness.reset();
-    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 500;
   });
 
   describe('syncVersion Mismatch', () => {
@@ -172,6 +169,46 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       const freshDownload = await clientB.downloadOps(0);
       expect(freshDownload.snapshotState).toBeDefined();
     });
+
+    it('should keep firing snapshot-replacement gap detection on every sync from a non-writing client (issue #7339 reproducer)', async () => {
+      // Reproduces the iOS loop. The adapter's snapshotReplacement heuristic
+      // uses `syncData.clientId !== excludeClient` when excludeClient is set,
+      // which is true forever for any client that hasn't uploaded its own
+      // snapshot. Without an "I already applied this snapshot" memory upstream,
+      // the conflict path re-fires every sync.
+      const clientA = harness.createClient('windows-client');
+      const clientB = harness.createClient('ios-client');
+
+      // Windows uploads the only snapshot. recentOps stays empty.
+      await clientA.adapter.uploadSnapshot(
+        { task: { ids: [], entities: {} } },
+        'windows-client',
+        'initial',
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        { 'windows-client': 1 },
+        1,
+        undefined,
+        'snap-op-issue-7339',
+      );
+
+      // iOS does its first fresh-bootstrap download.
+      const first = await clientB.downloadOps(0);
+      expect(first.snapshotState).toBeDefined();
+      expect(first.gapDetected).toBeFalsy();
+
+      // iOS now believes it's caught up at sinceSeq = latestSeq. Subsequent
+      // downloads MUST keep returning gapDetected=true because the snapshot
+      // file is still authored by `windows-client` and recentOps is still
+      // empty — that's the behavior that traps the conflict dialog upstream.
+      const second = await clientB.downloadOps(first.latestSeq);
+      expect(second.gapDetected).toBe(true);
+
+      const third = await clientB.downloadOps(second.latestSeq);
+      expect(third.gapDetected).toBe(true);
+      // No actual ops are ever returned — the loop has nothing to apply,
+      // it just keeps signalling "there's a snapshot you need to resolve".
+      expect(third.ops).toEqual([]);
+    });
   });
 
   describe('Partial Trimming Gap Detection', () => {
@@ -279,10 +316,19 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
         title: 'Task B',
       });
 
-      // Client A uploads first
+      // Client A uploads first (changes the rev)
       await clientA.uploadOps([opA]);
 
-      // Client B uploads (should merge without conflict)
+      // Client B's upload throws: genuine concurrent upload detected
+      // (A changed the rev, so B's cached rev is now stale)
+      await expectAsync(clientB.uploadOps([opB])).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
+
+      // Client B downloads (next sync cycle: picks up A's new op and fresh rev)
+      await clientB.downloadOps();
+
+      // Client B retries upload with the fresh state — succeeds
       const responseB = await clientB.uploadOps([opB]);
       expect(responseB.results[0].accepted).toBe(true);
 

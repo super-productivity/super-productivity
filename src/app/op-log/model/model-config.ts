@@ -26,6 +26,8 @@ import { initialMetricState } from '../../features/metric/store/metric.reducer';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
 import { initialTagState } from '../../features/tag/store/tag.reducer';
 import { initialSimpleCounterState } from '../../features/simple-counter/store/simple-counter.reducer';
+import { initialSectionState } from '../../features/section/store/section.reducer';
+import { SectionState } from '../../features/section/section.model';
 import { initialTaskRepeatCfgState } from '../../features/task-repeat-cfg/store/task-repeat-cfg.reducer';
 import {
   ArchiveModel,
@@ -55,6 +57,7 @@ export type AllModelConfig = {
   task: ModelCfg<TaskState>;
   tag: ModelCfg<TagState>;
   simpleCounter: ModelCfg<SimpleCounterState>;
+  section: ModelCfg<SectionState>;
   taskRepeatCfg: ModelCfg<TaskRepeatCfgState>;
   reminders: ModelCfg<Reminder[]>;
   timeTracking: ModelCfg<TimeTrackingState>;
@@ -88,6 +91,11 @@ export const MODEL_CONFIGS: AllModelConfig = {
   },
   simpleCounter: {
     defaultData: initialSimpleCounterState,
+    isMainFileModel: true,
+    repair: fixEntityStateConsistency,
+  },
+  section: {
+    defaultData: initialSectionState,
     isMainFileModel: true,
     repair: fixEntityStateConsistency,
   },

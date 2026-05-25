@@ -1,0 +1,202 @@
+/**
+ * Lines Theme for Super Productivity
+ * Builds on the Zen theme: horizontal separator lines between tasks for a list-style aesthetic.
+ * Tasks have only top/bottom borders — no side borders, no shadows, no backgrounds.
+ * Works with both light and dark modes.
+ */
+
+@import url('./zen.css');
+
+/* === Horizontal separator lines between top-level tasks === */
+body task {
+  border-top: 1px solid var(--separator-color);
+}
+
+body task:last-of-type {
+  border-bottom: 1px solid var(--separator-color);
+}
+
+/* Subtasks get separator lines between them.
+   Suppress only the boundaries so the indented block reads as part of its parent:
+   no top line on the first subtask (header → block flows together), no bottom line
+   on the last subtask (parent's bottom border or next parent's top closes it). */
+body .sub-tasks task:first-of-type {
+  border-top: none;
+}
+
+body .sub-tasks task:last-of-type {
+  border-bottom: none;
+}
+
+/* Sharp corners — lines run edge-to-edge */
+body task .box {
+  border-radius: 0 !important;
+}
+
+/* === Selection: zen uses a pill border; we use a subtle tint (corners are sharp) === */
+body task.isSelected .box {
+  background: var(--c-dark-10) !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+body.isDarkTheme task.isSelected .box {
+  background: var(--c-light-05) !important;
+}
+
+/* Don't apply selection style to subtask boxes */
+body task.isSelected .sub-tasks .box {
+  background: transparent !important;
+}
+
+/* === Planner & Boards: tight list with horizontal separator lines === */
+
+/* Remove the per-row gap so lines act as the only separator.
+   `.task-items` is the board column list — same treatment. */
+body .normal-tasks-items > *,
+body .deadline-items > *,
+body .scheduled-items > *,
+body .task-items > planner-task {
+  margin-bottom: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Strip box-style chrome from every planner/board item host */
+body planner-task,
+body planner-deadline-task,
+body planner-repeat-projection,
+body planner-calendar-event {
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Inner wrapper divs (deadline/repeat have their own bordered pill) */
+body planner-deadline-task > div,
+body planner-repeat-projection > div {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* Top separator on every direct child of the normal/deadline/board lists */
+body .normal-tasks-items > *,
+body .deadline-items > *,
+body .task-items > planner-task {
+  border-top: 1px solid var(--separator-color) !important;
+}
+
+body .normal-tasks-items > *:last-child,
+body .deadline-items > *:last-child,
+body .task-items > planner-task:last-child {
+  border-bottom: 1px solid var(--separator-color) !important;
+}
+
+/* Scheduled items wrap each row in `.scheduled-item` (time bubble + content).
+   Put the line on the wrapper so it spans the full row width. */
+body .scheduled-items > .scheduled-item {
+  border-top: 1px solid var(--separator-color);
+}
+
+body .scheduled-items > .scheduled-item:last-child {
+  border-bottom: 1px solid var(--separator-color);
+}
+
+/* === Row hover: subtle tint so the list feels responsive === */
+
+/* Wrap in @media (hover: hover) — on touch, :hover sticks on the last-tapped row. */
+@media (hover: hover) {
+  /* Use :has() so hovering a subtask doesn't also highlight its parent row.
+     The .box is the absolute-positioned background layer of a task. */
+  body task:hover:not(:has(task:hover)) > swipe-block > .inner-wrapper > .box {
+    background: rgba(0, 0, 0, 0.04) !important;
+  }
+
+  body.isDarkTheme
+    task:hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background: rgba(255, 255, 255, 0.03) !important;
+  }
+
+  body planner-task:hover {
+    background: rgba(0, 0, 0, 0.04) !important;
+  }
+
+  body.isDarkTheme planner-task:hover {
+    background: rgba(255, 255, 255, 0.03) !important;
+  }
+
+  /* Selection wins over hover */
+  body task.isSelected:hover > swipe-block > .inner-wrapper > .box {
+    background: var(--c-dark-10) !important;
+  }
+
+  body.isDarkTheme task.isSelected:hover > swipe-block > .inner-wrapper > .box {
+    background: var(--c-light-05) !important;
+  }
+}
+
+/* === Current task: suppress inherited border === */
+
+/* The base theme paints a dashed accent border around the current task's box —
+   too noisy for a hairline-only list. The task component already renders a
+   progress bar below the title, which is enough indication. */
+body task.isCurrent .box,
+body task.isCurrent.isCurrent.isCurrent.isCurrent.isCurrent .box {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Planner/board tasks don't render a progress bar — without an indicator the
+   running task disappears. Use a faint accent tint instead of a border. */
+body planner-task.isCurrent {
+  border: none !important;
+  background: color-mix(in srgb, var(--c-accent) 10%, transparent) !important;
+}
+
+/* === Drop indicator: ghost slot with an accent top line === */
+
+/* Default opacity is 0.1 — too faint between hairlines. Bump to 0.3 so the
+   ghost is visible and add a 2px accent top line marking the drop position. */
+body task.cdk-drag-placeholder,
+body planner-task.cdk-drag-placeholder {
+  opacity: 0.3 !important;
+  border-top: 2px solid var(--c-accent) !important;
+}
+
+/* === Keyboard focus: explicit outline so focus is never invisible === */
+
+body task:focus-visible {
+  outline: 2px solid var(--palette-primary-400) !important;
+  outline-offset: -2px;
+}
+
+body planner-task:focus-visible {
+  outline: 2px solid var(--palette-primary-400) !important;
+  outline-offset: -2px;
+}
+
+/* === Worklog: switch dashed dividers to solid for visual consistency === */
+body worklog .year,
+body worklog .month {
+  border-top-style: solid;
+}
+
+/* === Issue panel suggestions: hairline-separated list === */
+
+body issue-provider-tab .item-list {
+  gap: 0 !important;
+}
+
+body issue-preview-item {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border-top: 1px solid var(--separator-color);
+}
+
+body issue-preview-item:last-of-type {
+  border-bottom: 1px solid var(--separator-color);
+}

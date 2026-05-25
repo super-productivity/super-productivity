@@ -9,7 +9,7 @@ import {
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { BodyClass, IS_ELECTRON } from '../../app.constants';
+import { BodyClass, IS_ELECTRON, IS_GNOME_DESKTOP } from '../../app.constants';
 import { IS_MAC } from '../../util/is-mac';
 import { distinctUntilChanged, map, startWith, switchMap, take } from 'rxjs/operators';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
@@ -25,7 +25,13 @@ import { WorkContextService } from '../../features/work-context/work-context.ser
 import { combineLatest, fromEvent, Observable, of } from 'rxjs';
 import { IS_FIREFOX } from '../../util/is-firefox';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
-import { IS_MOUSE_PRIMARY, IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
+import {
+  IS_HYBRID_DEVICE,
+  IS_MOUSE_PRIMARY,
+  IS_TOUCH_PRIMARY,
+} from '../../util/is-mouse-primary';
+// Injected to ensure constructor runs and registers global pointer event listeners
+import { InputIntentService } from '../input-intent/input-intent.service';
 import { ipcEnterFullScreen$, ipcLeaveFullScreen$ } from '../ipc-events';
 
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
@@ -38,7 +44,6 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { SafeArea } from 'capacitor-plugin-safe-area';
 import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
-import { CustomThemeService } from './custom-theme.service';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 
@@ -49,6 +54,15 @@ interface NavigationBarPlugin {
 const NavigationBar = registerPlugin<NavigationBarPlugin>('NavigationBar');
 
 export type DarkModeCfg = 'dark' | 'light' | 'system';
+
+const CSS_VAR_KEYBOARD_HEIGHT = '--keyboard-height';
+const CSS_VAR_KEYBOARD_OVERLAY_OFFSET = '--keyboard-overlay-offset';
+const CSS_VAR_VISUAL_VIEWPORT_HEIGHT = '--visual-viewport-height';
+const CSS_VAR_SAFE_AREA_TOP = '--safe-area-inset-top';
+const CSS_VAR_SAFE_AREA_BOTTOM = '--safe-area-inset-bottom';
+const CSS_VAR_SAFE_AREA_LEFT = '--safe-area-inset-left';
+const CSS_VAR_SAFE_AREA_RIGHT = '--safe-area-inset-right';
+const VIEWPORT_RESIZE_EPSILON_PX = 1;
 
 @Injectable({ providedIn: 'root' })
 export class GlobalThemeService {
@@ -64,13 +78,22 @@ export class GlobalThemeService {
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _imexMetaService = inject(ImexViewService);
   private _http = inject(HttpClient);
-  private _customThemeService = inject(CustomThemeService);
   private _platformService = inject(CapacitorPlatformService);
   private _environmentInjector = inject(EnvironmentInjector);
   private _destroyRef = inject(DestroyRef);
+  private _inputIntentService = inject(InputIntentService);
   private _hasInitialized = false;
   private _keyboardListenerHandles: PluginListenerHandle[] = [];
   private _focusinListener: ((event: FocusEvent) => void) | null = null;
+  private _visualViewportResizeListener: (() => void) | null = null;
+  private _iosKeyboardHeight = 0;
+  private _iosViewportHeightBeforeKeyboard = 0;
+  private _iosViewportChangeRaf: number | null = null;
+
+  private _isCustomWindowTitleBarEnabled(): boolean {
+    const misc = this._globalConfigService.misc();
+    return misc?.isUseCustomWindowTitleBar ?? !IS_GNOME_DESKTOP;
+  }
 
   darkMode = signal<DarkModeCfg>(
     (localStorage.getItem(LS.DARK_MODE) as DarkModeCfg) || 'system',
@@ -126,9 +149,6 @@ export class GlobalThemeService {
         const darkMode = this.darkMode();
         localStorage.setItem(LS.DARK_MODE, darkMode);
       });
-
-      // Set up reactive custom theme updates
-      this._setupCustomThemeEffect();
     });
   }
 
@@ -175,17 +195,12 @@ export class GlobalThemeService {
       ['calendar', 'assets/icons/calendar.svg'],
       ['open_project', 'assets/icons/open-project.svg'],
       ['remove_today', 'assets/icons/remove-today-48px.svg'],
-      ['working_today', 'assets/icons/working-today.svg'],
-      ['repeat', 'assets/icons/repeat.svg'],
       ['gitea', 'assets/icons/gitea.svg'],
       ['redmine', 'assets/icons/redmine.svg'],
       ['linear', 'assets/icons/linear.svg'],
       ['clickup', 'assets/icons/clickup.svg'],
       // trello icon
       ['trello', 'assets/icons/trello.svg'],
-      ['tomorrow', 'assets/icons/tomorrow.svg'],
-      ['next_week', 'assets/icons/next-week.svg'],
-      ['habit', 'assets/icons/habit.svg'],
       ['azure_devops', 'assets/icons/azure_devops.svg'],
       ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
     ];
@@ -262,10 +277,12 @@ export class GlobalThemeService {
     if (IS_ELECTRON && !IS_MAC) {
       effect(() => {
         const isDark = this.isDarkTheme();
-        // Use untracked to prevent reading misc from creating a dependency
-        const misc = untracked(() => this._globalConfigService.misc());
+        // Use untracked to prevent creating additional dependencies in this effect
+        const isCustomWindowTitleBarEnabled = untracked(() =>
+          this._isCustomWindowTitleBarEnabled(),
+        );
         // Only update if custom window title bar is enabled
-        if (misc?.isUseCustomWindowTitleBar !== false) {
+        if (isCustomWindowTitleBarEnabled) {
           window.ea.updateTitleBarDarkMode(isDark);
         }
       });
@@ -341,6 +358,14 @@ export class GlobalThemeService {
         });
     }
 
+    // VisualViewport keyboard-height tracking covers every non-iOS touch
+    // build: Capacitor Android, the legacy F-Droid build, and Android
+    // mobile-web. iOS uses _initIOSKeyboardHandling above; its Capacitor
+    // plugin already drives the same CSS variable and the two would race.
+    if (IS_TOUCH_ONLY && !this._platformService.isIOS()) {
+      this._initVisualViewportKeyboardTracking();
+    }
+
     // Use effect to reactively update animation class
     effect(() => {
       const misc = this._globalConfigService.misc();
@@ -352,11 +377,19 @@ export class GlobalThemeService {
     });
 
     effect(() => {
-      const misc = this._globalConfigService.misc();
-      if (misc?.isUseCustomWindowTitleBar !== false) {
+      if (this._isCustomWindowTitleBarEnabled()) {
         this.document.body.classList.add(BodyClass.isObsidianStyleHeader);
       } else {
         this.document.body.classList.remove(BodyClass.isObsidianStyleHeader);
+      }
+    });
+
+    effect(() => {
+      const misc = this._globalConfigService.misc();
+      if (misc?.isVerticalActionBar) {
+        this.document.body.classList.add(BodyClass.isVerticalActionBar);
+      } else {
+        this.document.body.classList.remove(BodyClass.isVerticalActionBar);
       }
     });
 
@@ -397,10 +430,13 @@ export class GlobalThemeService {
       this.document.body.classList.add(BodyClass.isNoTouchOnly);
     }
 
-    if (IS_MOUSE_PRIMARY) {
-      this.document.body.classList.add(BodyClass.isMousePrimary);
-    } else if (IS_TOUCH_PRIMARY) {
-      this.document.body.classList.add(BodyClass.isTouchPrimary);
+    // On hybrid devices, InputIntentService dynamically toggles these classes
+    if (!IS_HYBRID_DEVICE) {
+      if (IS_MOUSE_PRIMARY) {
+        this.document.body.classList.add(BodyClass.isMousePrimary);
+      } else if (IS_TOUCH_PRIMARY) {
+        this.document.body.classList.add(BodyClass.isTouchPrimary);
+      }
     }
   }
 
@@ -437,47 +473,59 @@ export class GlobalThemeService {
     chartThemeService.setColorschemesOptions(overrides);
   }
 
-  private _setupCustomThemeEffect(): void {
-    // Track previous theme to avoid unnecessary reloads
-    let previousThemeId: string | null = null;
-
-    // Set up effect to reactively update custom theme when config changes
-    effect(() => {
-      const misc = this._globalConfigService.misc();
-      const themeId = misc?.customTheme || 'default';
-
-      // Only load theme if it has changed
-      if (themeId !== previousThemeId) {
-        this._customThemeService.loadTheme(themeId);
-        previousThemeId = themeId;
-      }
-    });
-  }
-
   /**
    * Initialize iOS keyboard visibility tracking using Capacitor Keyboard plugin.
    * Adds/removes CSS classes when keyboard shows/hides.
    */
   private _initIOSKeyboardHandling(): void {
+    // Hide the native iOS accessory bar (prev/next/Done) — no multi-field forms
+    // benefit from it, and Done is redundant with the system dismiss gesture.
+    Keyboard.setAccessoryBarVisible({ isVisible: false });
+    this._updateIOSKeyboardViewportVars();
+
+    if (window.visualViewport) {
+      this._visualViewportResizeListener = (): void => {
+        this._updateIOSKeyboardViewportVars();
+      };
+      window.visualViewport.addEventListener(
+        'resize',
+        this._visualViewportResizeListener,
+        { passive: true },
+      );
+    }
+
     Keyboard.addListener('keyboardWillShow', (info: KeyboardInfo) => {
       Log.log('iOS keyboard will show', info);
+      if (!this.document.body.classList.contains(BodyClass.isKeyboardVisible)) {
+        this._iosViewportHeightBeforeKeyboard = window.innerHeight;
+      }
+      this._iosKeyboardHeight = info.keyboardHeight;
       this.document.body.classList.add(BodyClass.isKeyboardVisible);
       // Set CSS variable for keyboard height to adjust layout
       this.document.documentElement.style.setProperty(
-        '--keyboard-height',
+        CSS_VAR_KEYBOARD_HEIGHT,
         `${info.keyboardHeight}px`,
       );
+      this._updateIOSKeyboardViewportVars();
     }).then((handle) => this._keyboardListenerHandles.push(handle));
 
     // Use keyboardDidShow for scroll (after animation completes)
     Keyboard.addListener('keyboardDidShow', () => {
+      this._updateIOSKeyboardViewportVars();
       this._scrollActiveInputIntoView();
     }).then((handle) => this._keyboardListenerHandles.push(handle));
 
     Keyboard.addListener('keyboardWillHide', () => {
       Log.log('iOS keyboard will hide');
+      this._iosKeyboardHeight = 0;
+      this._iosViewportHeightBeforeKeyboard = 0;
       this.document.body.classList.remove(BodyClass.isKeyboardVisible);
-      this.document.documentElement.style.setProperty('--keyboard-height', '0px');
+      this.document.documentElement.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, '0px');
+      this.document.documentElement.style.setProperty(
+        CSS_VAR_KEYBOARD_OVERLAY_OFFSET,
+        '0px',
+      );
+      this._updateIOSKeyboardViewportVars();
     }).then((handle) => this._keyboardListenerHandles.push(handle));
 
     // Also handle focus changes while keyboard is already visible
@@ -500,9 +548,117 @@ export class GlobalThemeService {
     // Cleanup listeners on destroy
     this._destroyRef.onDestroy(() => {
       this._keyboardListenerHandles.forEach((handle) => handle.remove());
+      if (this._visualViewportResizeListener && window.visualViewport) {
+        window.visualViewport.removeEventListener(
+          'resize',
+          this._visualViewportResizeListener,
+        );
+      }
+      if (this._iosViewportChangeRaf !== null) {
+        window.cancelAnimationFrame(this._iosViewportChangeRaf);
+      }
       if (this._focusinListener) {
         this.document.removeEventListener('focusin', this._focusinListener);
       }
+    });
+  }
+
+  private _updateIOSKeyboardViewportVars(): void {
+    const root = this.document.documentElement;
+    const visualViewportHeight = window.visualViewport?.height;
+    const baseHeight = this._iosViewportHeightBeforeKeyboard || window.innerHeight;
+    const isKeyboardVisible = this._iosKeyboardHeight > 0;
+    const isVisualViewportAlreadyResized = this._isVisualViewportResizedForKeyboard(
+      isKeyboardVisible,
+      baseHeight,
+      visualViewportHeight,
+    );
+    const height = isKeyboardVisible
+      ? this._getKeyboardAdjustedViewportHeight(baseHeight, visualViewportHeight)
+      : (visualViewportHeight ?? window.innerHeight);
+
+    root.style.setProperty(CSS_VAR_VISUAL_VIEWPORT_HEIGHT, `${Math.max(0, height)}px`);
+    root.style.setProperty(
+      CSS_VAR_KEYBOARD_OVERLAY_OFFSET,
+      `${isKeyboardVisible && !isVisualViewportAlreadyResized ? this._iosKeyboardHeight : 0}px`,
+    );
+    this._notifyIOSViewportChange();
+  }
+
+  private _getKeyboardAdjustedViewportHeight(
+    baseHeight: number,
+    visualViewportHeight?: number,
+  ): number {
+    const keyboardAdjustedHeight = baseHeight - this._iosKeyboardHeight;
+
+    if (
+      this._isVisualViewportResizedForKeyboard(true, baseHeight, visualViewportHeight)
+    ) {
+      return visualViewportHeight;
+    }
+
+    return keyboardAdjustedHeight;
+  }
+
+  private _isVisualViewportResizedForKeyboard(
+    isKeyboardVisible: boolean,
+    baseHeight: number,
+    visualViewportHeight?: number,
+  ): visualViewportHeight is number {
+    return (
+      isKeyboardVisible &&
+      visualViewportHeight !== undefined &&
+      visualViewportHeight < baseHeight - VIEWPORT_RESIZE_EPSILON_PX
+    );
+  }
+
+  private _notifyIOSViewportChange(): void {
+    if (this._iosViewportChangeRaf !== null) {
+      return;
+    }
+
+    this._iosViewportChangeRaf = window.requestAnimationFrame(() => {
+      this._iosViewportChangeRaf = null;
+      // Connected CDK overlays listen to viewport resize events via ViewportRuler.
+      window.dispatchEvent(new Event('resize'));
+    });
+  }
+
+  /**
+   * Keyboard-height tracking via VisualViewport — the fallback path for any
+   * non-iOS touch build (Capacitor Android, F-Droid, mobile-web).
+   *
+   * Android's `adjustResize` is supposed to shrink the WebView when the IME
+   * appears, in which case `position: fixed; bottom: 0` would naturally sit
+   * above the keyboard. In practice it's inconsistent — depending on Chrome
+   * version, transient transitions, and edge-to-edge insets, the layout
+   * viewport sometimes does not shrink in step with the keyboard, leaving
+   * fixed-position UI hidden behind it.
+   *
+   * VisualViewport always reflects the actual visible area. The difference
+   * `window.innerHeight - visualViewport.height` is the obscured area —
+   * which is zero when adjustResize already handled it, and equals the
+   * keyboard height otherwise. Either way, `--keyboard-height` ends up
+   * correct without needing to know which path Android took.
+   */
+  private _initVisualViewportKeyboardTracking(): void {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = this.document.documentElement;
+    // Filter out small differences that come from URL bar / overlay UI
+    // rather than the IME — keeps us from setting a phantom keyboard offset.
+    const KEYBOARD_THRESHOLD_PX = 100;
+
+    const update = (): void => {
+      const obscured = window.innerHeight - vv.height;
+      const keyboardHeight = obscured > KEYBOARD_THRESHOLD_PX ? obscured : 0;
+      root.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, `${keyboardHeight}px`);
+    };
+
+    update();
+    vv.addEventListener('resize', update, { passive: true });
+    this._destroyRef.onDestroy(() => {
+      vv.removeEventListener('resize', update);
     });
   }
 
@@ -534,8 +690,7 @@ export class GlobalThemeService {
    */
   /**
    * Read native safe area insets and set CSS variables.
-   * Works around Capacitor 7's broken adjustMarginsForEdgeToEdge and
-   * Android WebView's unreliable env(safe-area-inset-*) values.
+   * Works around Android WebView's unreliable env(safe-area-inset-*) values.
    */
   private _initSafeAreaInsets(): void {
     const applyInsets = (insets: {
@@ -545,10 +700,10 @@ export class GlobalThemeService {
       left: number;
     }): void => {
       const root = this.document.documentElement;
-      root.style.setProperty('--safe-area-inset-top', `${insets.top}px`);
-      root.style.setProperty('--safe-area-inset-bottom', `${insets.bottom}px`);
-      root.style.setProperty('--safe-area-inset-left', `${insets.left}px`);
-      root.style.setProperty('--safe-area-inset-right', `${insets.right}px`);
+      root.style.setProperty(CSS_VAR_SAFE_AREA_TOP, `${insets.top}px`);
+      root.style.setProperty(CSS_VAR_SAFE_AREA_BOTTOM, `${insets.bottom}px`);
+      root.style.setProperty(CSS_VAR_SAFE_AREA_LEFT, `${insets.left}px`);
+      root.style.setProperty(CSS_VAR_SAFE_AREA_RIGHT, `${insets.right}px`);
     };
 
     SafeArea.getSafeAreaInsets().then(({ insets }) => applyInsets(insets));
@@ -557,9 +712,9 @@ export class GlobalThemeService {
   }
 
   /**
-   * Monkey-patch CDK's viewport rect calculation to include safe area insets.
-   * This makes connected overlays (menus, selects) stay within the safe area
-   * instead of extending behind the status bar or home indicator.
+   * Monkey-patch CDK's viewport rect calculation to include native mobile insets.
+   * This keeps connected overlays (menus, selects, autocomplete panels) above
+   * the safe areas and the iOS keyboard when the WebView does not shrink.
    */
   private _patchCdkViewportForSafeArea(): void {
     const proto = FlexibleConnectedPositionStrategy.prototype as any;
@@ -575,14 +730,20 @@ export class GlobalThemeService {
     } {
       const rect = original.call(this);
       const style = getComputedStyle(doc.documentElement);
-      const safeTop = parseInt(style.getPropertyValue('--safe-area-inset-top'), 10) || 0;
+      const safeTop = parseInt(style.getPropertyValue(CSS_VAR_SAFE_AREA_TOP), 10) || 0;
       const safeBottom =
-        parseInt(style.getPropertyValue('--safe-area-inset-bottom'), 10) || 0;
+        parseInt(style.getPropertyValue(CSS_VAR_SAFE_AREA_BOTTOM), 10) || 0;
+      const keyboardOverlayOffset =
+        doc.body.classList.contains(BodyClass.isIOS) &&
+        doc.body.classList.contains(BodyClass.isKeyboardVisible)
+          ? parseInt(style.getPropertyValue(CSS_VAR_KEYBOARD_OVERLAY_OFFSET), 10) || 0
+          : 0;
+      const bottomInset = safeBottom + keyboardOverlayOffset;
       return {
         ...rect,
         top: rect.top + safeTop,
-        bottom: rect.bottom - safeBottom,
-        height: rect.height - safeTop - safeBottom,
+        bottom: rect.bottom - bottomInset,
+        height: rect.height - safeTop - bottomInset,
       };
     };
   }

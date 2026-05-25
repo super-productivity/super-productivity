@@ -7,7 +7,6 @@
   display: flex;
   align-items: stretch;
   @include grabCursor();
-
   color: var(--text-color);
   background: var(--task-c-bg);
   box-shadow: var(--task-shadow);
@@ -30,13 +29,17 @@
   }
 }
 
-:host-context(.isLightTheme).isCurrent {
-  border-color: var(--c-accent) !important;
-  border-width: 1px !important;
-  border-style: dashed;
+:host.isDragReady:not(.cdk-drag-placeholder) {
+  background: var(--bg-lighter);
+  box-shadow: var(--whiteframe-shadow-8dp);
+  z-index: 1;
+  position: relative;
+  transition:
+    background 150ms ease-out,
+    box-shadow 150ms ease-out;
 }
 
-:host-context(.isDarkTheme).isCurrent {
+:host.isCurrent {
   background: var(--task-c-current-bg);
   box-shadow: var(--task-current-shadow);
 }
@@ -61,14 +64,24 @@
   }
 }
 
-.play-icon-indicator {
-  color: var(--c-accent);
-  // NOTE: we do this since change detection does not immediately pick up on _taskService.currentTaskId
-  display: none;
+swipe-block {
+  flex-grow: 1;
+  min-width: 0;
+}
 
-  :host.isCurrent & {
-    display: block;
-  }
+.task-content {
+  display: flex;
+  align-items: stretch;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+done-toggle {
+  --done-toggle-size: 30px;
+
+  margin-left: var(--s-half);
+  align-self: center;
+  cursor: pointer;
 }
 
 .wrap {
@@ -86,7 +99,8 @@
 
   line-height: 1.5;
   position: relative;
-  @include truncateText();
+  overflow: hidden;
+  overflow-wrap: anywhere;
   flex-grow: 1;
   flex-shrink: 1;
 
@@ -100,7 +114,8 @@
   padding-right: var(--s-half);
   padding-top: var(--s-half);
   padding-bottom: var(--s-half);
-  @include truncateText();
+  overflow: hidden;
+  overflow-wrap: anywhere;
   line-height: 1.1;
   font-size: var(--planner-font-size-smaller-mobile);
 
@@ -110,60 +125,42 @@
 }
 
 .planner-time-remaining-shared {
-  // we overwrite since we need to move down styles to inline-input
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
   padding: 0;
+  padding-right: var(--s);
   border: 1px solid transparent;
 
   &.hasNoTimeSpentOrEstimate {
     text-align: center;
   }
 
-  mat-icon {
-    display: inline-flex;
-  }
-
   inline-input {
-    padding-top: 12px;
-    padding-bottom: 12px;
     min-width: 44px;
     text-align: right;
-    padding-left: var(--s-half);
-    padding-right: var(--s);
   }
 
   inline-input ::ng-deep input {
     line-height: 1.5;
   }
-}
 
-.drag-handle {
-  width: 32px;
-  height: 32px;
-  margin-left: var(--s-half);
-  min-width: 32px;
-  z-index: var(--z-drag-handle);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-  // fixes drag and drop on mobile
-  touch-action: none;
-  align-self: center;
+  .sub-task-count {
+    font-style: italic;
+    white-space: nowrap;
+    line-height: 1;
+    margin-top: var(--s-quarter);
 
-  mat-ico {
-    font-size: 20px;
-  }
-
-  .drag-handle-ico {
-    opacity: 0.4;
-
-    @include mq(xs) {
-      opacity: 0.15;
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+      vertical-align: middle;
+      margin-right: 1px;
     }
-  }
-
-  > * {
-    @include center;
   }
 }
 

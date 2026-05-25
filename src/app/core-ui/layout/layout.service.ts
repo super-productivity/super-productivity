@@ -24,7 +24,6 @@ import {
 import { map } from 'rxjs/operators';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { TaskService } from '../../features/tasks/task.service';
 
 const XS_BREAKPOINT = 600;
 const XXXS_BREAKPOINT = 398;
@@ -36,15 +35,23 @@ const initialXsMatch =
   providedIn: 'root',
 })
 export class LayoutService {
+  private static readonly _TASK_ACTION_DELAY = 50;
+  private static readonly _TASK_FOCUS_RETRY_DELAY = 250;
+  private static readonly _TASK_FOCUS_MAX_RETRIES = 16;
+
   private _store$ = inject<Store<LayoutState>>(Store);
   private _breakPointObserver = inject(BreakpointObserver);
-  private _taskService = inject(TaskService);
   private _previouslyFocusedElement: HTMLElement | null = null;
   private _pendingFocusTaskId: string | null = null; // store new task id until user closes the bar
+  private _pendingTaskRevealTimeout?: number;
 
   // Signal to trigger sidebar focus
   private _focusSideNavTrigger = signal(0);
   readonly focusSideNavTrigger = this._focusSideNavTrigger.asReadonly();
+
+  // Signal to trigger sidebar compact/full mode toggle
+  private _toggleSideNavModeTrigger = signal(0);
+  readonly toggleSideNavModeTrigger = this._toggleSideNavModeTrigger.asReadonly();
 
   // Observable versions (needed for shepherd)
   readonly isShowAddTaskBar$: Observable<boolean> = this._store$.pipe(
@@ -119,32 +126,146 @@ export class LayoutService {
     this._store$.dispatch(hideAddTaskBar());
     const focusTaskId = newTaskId ?? this._pendingFocusTaskId ?? undefined;
     this._pendingFocusTaskId = null;
-    // Wait a moment so the DOM can render the new task before we try to focus anything.
-    window.setTimeout(() => {
-      if (focusTaskId) {
-        const newTaskElement = document.getElementById(`t-${focusTaskId}`);
-        if (newTaskElement) {
-          // Highest priority: focus the task that was just created (either passed explicitly
-          // or remembered via setPendingFocusTaskId).
-          this._taskService.focusTaskIfPossible(focusTaskId);
+
+    // Focus the last-created (or previously-focused) task with preventScroll
+    // so keyboard navigation works without causing a scroll jump.
+    // The actual scroll already happened when the task was added (see
+    // scrollToNewTask).
+    if (focusTaskId) {
+      this._runForTaskElement(
+        focusTaskId,
+        (newTaskElement) => {
+          newTaskElement.focus({ preventScroll: true });
           this._previouslyFocusedElement = null;
-          return;
-        }
-      }
+        },
+        () => this._focusPreviousTaskOrFallback(),
+      );
+      return;
+    }
 
+    window.setTimeout(() => {
+      this._focusPreviousTaskOrFallback();
+    }, LayoutService._TASK_ACTION_DELAY);
+  }
+
+  scrollToNewTask(taskId: string): void {
+    this._runForTaskElement(taskId, (el) => {
+      this._scrollTaskElementIntoView(el);
+    });
+  }
+
+  focusTaskInViewIfPossible(taskId: string): HTMLElement | null {
+    const el = document.getElementById(`t-${taskId}`);
+    if (!el || !this._isTaskElementReady(el)) {
+      return null;
+    }
+
+    this._scrollTaskElementIntoView(el);
+    el.focus({ preventScroll: true });
+    return el;
+  }
+
+  focusTaskInViewWhenReady(
+    taskId: string,
+    onSuccess?: (el: HTMLElement) => void,
+    retriesLeft: number = LayoutService._TASK_FOCUS_MAX_RETRIES,
+  ): void {
+    if (this._pendingTaskRevealTimeout) {
+      window.clearTimeout(this._pendingTaskRevealTimeout);
+      this._pendingTaskRevealTimeout = undefined;
+    }
+
+    const el = this.focusTaskInViewIfPossible(taskId);
+    if (el) {
+      onSuccess?.(el);
+      return;
+    }
+
+    if (retriesLeft <= 0) {
+      return;
+    }
+
+    this._pendingTaskRevealTimeout = window.setTimeout(() => {
+      this._pendingTaskRevealTimeout = undefined;
+      this.focusTaskInViewWhenReady(taskId, onSuccess, retriesLeft - 1);
+    }, LayoutService._TASK_FOCUS_RETRY_DELAY);
+  }
+
+  private _runForTaskElement(
+    taskId: string,
+    cb: (el: HTMLElement) => void,
+    onNotFound?: () => void,
+  ): void {
+    window.setTimeout(() => {
+      const el = document.getElementById(`t-${taskId}`);
+      if (el && this._isTaskElementReady(el)) {
+        cb(el);
+      } else {
+        onNotFound?.();
+      }
+    }, LayoutService._TASK_ACTION_DELAY);
+  }
+
+  private _isTaskElementReady(el: HTMLElement): boolean {
+    return (
+      document.body.contains(el) &&
+      el.getClientRects().length > 0 &&
+      el.getBoundingClientRect().height > 0
+    );
+  }
+
+  private _scrollTaskElementIntoView(el: HTMLElement): void {
+    const scrollContainer = this._getNearestScrollableAncestor(el);
+    if (!scrollContainer) {
+      el.scrollIntoView({
+        behavior: 'auto',
+        block: 'center',
+        inline: 'nearest',
+      });
+      return;
+    }
+
+    const elementRect = el.getBoundingClientRect();
+    const relativeTop = el.offsetTop - scrollContainer.offsetTop;
+    const containerCenterOffset = scrollContainer.clientHeight / 2;
+    const elementCenterOffset = elementRect.height / 2;
+    const centeredTop = relativeTop - containerCenterOffset + elementCenterOffset;
+    scrollContainer.scrollTop = Math.max(centeredTop, 0);
+  }
+
+  private _getNearestScrollableAncestor(el: HTMLElement): HTMLElement | null {
+    let current: HTMLElement | null = el.parentElement;
+
+    while (current) {
+      const style = window.getComputedStyle(current);
+      const overflowY = style.overflowY;
       if (
-        this._previouslyFocusedElement &&
-        document.body.contains(this._previouslyFocusedElement)
+        (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+        current.scrollHeight > current.clientHeight
       ) {
-        // Fallback: restore the element that had focus before opening the add-task bar.
-        this._previouslyFocusedElement.focus();
-        this._previouslyFocusedElement = null;
-        return;
+        return current;
       }
+      current = current.parentElement;
+    }
 
-      // Final fallback to keep keyboard navigation working even if nothing else is focusable.
-      this._taskService.focusFirstTaskIfVisible();
-    }, 50);
+    return null;
+  }
+
+  private _focusPreviousTaskOrFallback(): void {
+    if (
+      this._previouslyFocusedElement &&
+      document.body.contains(this._previouslyFocusedElement)
+    ) {
+      this._previouslyFocusedElement.focus({ preventScroll: true });
+      this._previouslyFocusedElement = null;
+      return;
+    }
+
+    // Final fallback to keep keyboard navigation working.
+    const tEl = document.getElementsByTagName('task');
+    if (tEl && tEl[0]) {
+      (tEl[0] as HTMLElement).focus({ preventScroll: true });
+    }
   }
 
   toggleNotes(): void {
@@ -174,6 +295,10 @@ export class LayoutService {
   focusSideNav(): void {
     // Trigger the focus signal - components listening to this signal will handle the focus
     this._focusSideNavTrigger.update((value) => value + 1);
+  }
+
+  toggleSideNavMode(): void {
+    this._toggleSideNavModeTrigger.update((value) => value + 1);
   }
 
   // Schedule Day Panel controls

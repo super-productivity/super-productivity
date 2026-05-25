@@ -1,0 +1,28 @@
+<svg
+  class="done-toggle-svg"
+  viewBox="0 0 24 24"
+  fill="none"
+>
+  <!-- Background shape (always visible) -->
+  <rect
+    class="done-shape"
+    x="2.5"
+    y="2.5"
+    width="19"
+    height="19"
+    rx="5.5"
+    ry="5.5"
+  />
+  @if (isCurrent() && !isDone() && !showDoneAnimation()) {
+    <!-- Play triangle (only rendered for current task) -->
+    <polygon
+      class="play-indicator"
+      points="10,7 10,17 17,12"
+    />
+  }
+  <!-- Checkmark (shown when done) -->
+  <polyline
+    class="done-check"
+    points="6,12 10.5,16.5 18,8"
+  />
+</svg>

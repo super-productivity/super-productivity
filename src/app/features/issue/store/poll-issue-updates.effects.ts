@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { EMPTY, merge, Observable, timer } from 'rxjs';
-import { first, map, switchMap, tap } from 'rxjs/operators';
+import { EMPTY, from, merge, Observable, timer } from 'rxjs';
+import { catchError, first, map, switchMap } from 'rxjs/operators';
 import { IssueService } from '../issue.service';
 import { Task, TaskWithSubTasks } from '../../tasks/task.model';
 import { WorkContextService } from '../../work-context/work-context.service';
@@ -12,7 +12,11 @@ import { Store } from '@ngrx/store';
 import { IssueProvider } from '../issue.model';
 import { selectEnabledIssueProviders } from './issue-provider.selectors';
 import { DELAY_BEFORE_ISSUE_POLLING, ICAL_TYPE } from '../issue.const';
-import { selectAllCalendarIssueTasks } from '../../tasks/store/task.selectors';
+import { isPluginIssueProvider } from '../issue.model';
+import {
+  selectAllCalendarIssueTasks,
+  selectAllTasks,
+} from '../../tasks/store/task.selectors';
 import { IssueLog } from '../../../core/log';
 
 @Injectable()
@@ -25,54 +29,31 @@ export class PollIssueUpdatesEffects {
   pollIssueTaskUpdatesActions$: Observable<unknown> = this._actions$.pipe(
     ofType(setActiveWorkContext, loadAllData),
   );
-  pollIssueChangesForCurrentContext$: Observable<any> = createEffect(
+
+  /**
+   * Polls issue updates for providers scoped to the current work context.
+   * Restarts on every context switch or data load.
+   */
+  pollIssueChangesForCurrentContext$: Observable<unknown> = createEffect(
     () =>
       this.pollIssueTaskUpdatesActions$.pipe(
         switchMap(() => this._store.select(selectEnabledIssueProviders).pipe(first())),
-        // Get the list of enabled issue providers
         switchMap((enabledProviders: IssueProvider[]) => {
-          const providers = enabledProviders
-            // only for providers that have auto-polling enabled
-            .filter((provider) => provider.isAutoPoll)
-            // filter out providers with 0 poll interval (no polling)
-            .filter(
-              (provider) =>
-                this._issueService.getPollInterval(provider.issueProviderKey) > 0,
-            );
+          const providers = enabledProviders.filter(
+            (provider) =>
+              provider.isAutoPoll &&
+              // Exclude 'always' providers (handled by pollIssueChangesAlways$), keep ICAL
+              (provider.pollingMode !== 'always' ||
+                provider.issueProviderKey === ICAL_TYPE) &&
+              this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+          );
 
-          // Handle empty providers case
           if (providers.length === 0) {
             return EMPTY;
           }
 
-          // Use merge instead of forkJoin so each timer can emit independently
-          // (forkJoin waits for all observables to complete, but timer never completes)
           return merge(
-            ...providers.map((provider) =>
-              timer(
-                DELAY_BEFORE_ISSUE_POLLING,
-                this._issueService.getPollInterval(provider.issueProviderKey),
-              ).pipe(
-                // => whenever the provider specific poll timer ticks:
-                // ---------------------------------------------------
-                // Get tasks to refresh based on provider type
-                switchMap(() => this._getTasksForProvider(provider)),
-                // Refresh issue tasks for the current provider
-                // Use try-catch to prevent errors from killing the polling stream
-                tap((issueTasks: Task[]) => {
-                  if (issueTasks.length > 0) {
-                    try {
-                      this._issueService.refreshIssueTasks(issueTasks, provider);
-                    } catch (err) {
-                      IssueLog.error(
-                        'Error polling issue updates for ' + provider.id,
-                        err,
-                      );
-                    }
-                  }
-                }),
-              ),
-            ),
+            ...providers.map((provider) => this._createUpdatePollTimer(provider)),
           );
         }),
       ),
@@ -80,24 +61,87 @@ export class PollIssueUpdatesEffects {
   );
 
   /**
+   * Polls issue updates for providers with pollingMode 'always'.
+   * Starts once on the first trigger and runs continuously, reacting
+   * only to provider configuration changes -- not to context switches.
+   */
+  pollIssueChangesAlways$: Observable<unknown> = createEffect(
+    () =>
+      this.pollIssueTaskUpdatesActions$.pipe(
+        first(),
+        switchMap(() =>
+          this._store.select(selectEnabledIssueProviders).pipe(
+            switchMap((enabledProviders: IssueProvider[]) => {
+              const alwaysProviders = enabledProviders.filter(
+                (provider) =>
+                  provider.isAutoPoll &&
+                  provider.pollingMode === 'always' &&
+                  provider.issueProviderKey !== ICAL_TYPE &&
+                  this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+              );
+
+              if (alwaysProviders.length === 0) {
+                return EMPTY;
+              }
+
+              return merge(
+                ...alwaysProviders.map((provider) =>
+                  this._createUpdatePollTimer(provider),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    { dispatch: false },
+  );
+
+  private _createUpdatePollTimer(provider: IssueProvider): Observable<unknown> {
+    return timer(
+      DELAY_BEFORE_ISSUE_POLLING,
+      this._issueService.getPollInterval(provider.issueProviderKey),
+    ).pipe(
+      switchMap(() => this._getTasksForProvider(provider)),
+      switchMap((issueTasks: Task[]) => {
+        if (issueTasks.length === 0) {
+          return EMPTY;
+        }
+        return from(this._issueService.refreshIssueTasks(issueTasks, provider)).pipe(
+          catchError((err) => {
+            IssueLog.error('Error polling issue updates for ' + provider.id, err);
+            return EMPTY;
+          }),
+        );
+      }),
+    );
+  }
+
+  /**
    * Gets tasks to refresh for a provider.
-   * For calendar (ICAL) providers, returns ALL calendar tasks across all projects
-   * since calendar events can be assigned to any project.
+   * For calendar (ICAL) providers or providers with pollingMode 'always',
+   * returns ALL matching tasks across all projects.
    * For other providers, returns only tasks in the current work context.
    */
   private _getTasksForProvider(provider: IssueProvider): Observable<Task[]> {
-    if (provider.issueProviderKey === ICAL_TYPE) {
-      // For calendar providers, poll ALL calendar tasks across all projects
-      // This ensures calendar event updates are synced regardless of which project is active
+    if (
+      provider.issueProviderKey === ICAL_TYPE ||
+      isPluginIssueProvider(provider.issueProviderKey)
+    ) {
+      // For calendar/plugin providers, poll ALL calendar tasks across all projects
       return this._store.select(selectAllCalendarIssueTasks).pipe(
         first(),
         map((tasks) =>
-          tasks.filter(
-            (task) =>
-              task.issueProviderId === provider.id &&
-              // Safety: ensure task has valid issueId to prevent errors in refreshIssueTasks
-              !!task.issueId,
-          ),
+          tasks.filter((task) => task.issueProviderId === provider.id && !!task.issueId),
+        ),
+      );
+    }
+
+    if (provider.pollingMode === 'always') {
+      // Poll ALL tasks for this provider across all projects
+      return this._store.select(selectAllTasks).pipe(
+        first(),
+        map((tasks: Task[]) =>
+          tasks.filter((task) => task.issueProviderId === provider.id && !!task.issueId),
         ),
       );
     }
@@ -106,12 +150,7 @@ export class PollIssueUpdatesEffects {
     return this._workContextService.allTasksForCurrentContext$.pipe(
       first(),
       map((tasks: TaskWithSubTasks[]) =>
-        tasks.filter(
-          (task) =>
-            task.issueProviderId === provider.id &&
-            // Safety: ensure task has valid issueId
-            !!task.issueId,
-        ),
+        tasks.filter((task) => task.issueProviderId === provider.id && !!task.issueId),
       ),
     );
   }

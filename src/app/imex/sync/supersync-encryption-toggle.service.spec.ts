@@ -5,16 +5,16 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import {
   OperationSyncCapable,
-  SyncProviderServiceInterface,
+  SyncProviderBase,
 } from '../../op-log/sync-providers/provider.interface';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 
 describe('SuperSyncEncryptionToggleService', () => {
   let service: SuperSyncEncryptionToggleService;
   let mockSnapshotUploadService: jasmine.SpyObj<SnapshotUploadService>;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockSyncProvider: jasmine.SpyObj<
-    SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+    SyncProviderBase<SyncProviderId> & OperationSyncCapable
   >;
 
   const mockExistingCfg: SuperSyncPrivateCfg = {
@@ -35,7 +35,8 @@ describe('SuperSyncEncryptionToggleService', () => {
     mockSyncProvider.privateCfg = {
       load: jasmine.createSpy('load').and.resolveTo(mockExistingCfg),
     } as any;
-    (mockSyncProvider as any).supportsOperationSync = true;
+    mockSyncProvider.supportsOperationSync = true;
+    mockSyncProvider.providerMode = 'superSyncOps';
 
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'getActiveProvider',
@@ -95,6 +96,9 @@ describe('SuperSyncEncryptionToggleService', () => {
         isEncryptionEnabled: true,
         logPrefix: 'SuperSyncEncryptionToggleService',
       });
+      // clearSessionKeyCache() is called directly on success (module-level
+      // function, not spyable). Matches the pattern in
+      // file-based-encryption.service.ts and encryption-password-change.service.ts.
     });
 
     it('should revert config on failure using pre-captured config (preserving auth credentials)', async () => {
@@ -156,6 +160,9 @@ describe('SuperSyncEncryptionToggleService', () => {
         isEncryptionEnabled: false,
         logPrefix: 'SuperSyncEncryptionToggleService',
       });
+      // clearSessionKeyCache() is called directly on success (module-level
+      // function, not spyable). Matches the pattern in
+      // file-based-encryption.service.ts and encryption-password-change.service.ts.
     });
 
     it('should revert config to original state (including encryption key) on failure', async () => {

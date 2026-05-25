@@ -22,10 +22,6 @@ test.describe.serial('Plugin Iframe', () => {
     // Ensure plugin assets are available
     const assetsAvailable = await waitForPluginAssets(page);
     if (!assetsAvailable) {
-      if (process.env.CI) {
-        test.skip(true, 'Plugin assets not available in CI - skipping test');
-        return;
-      }
       throw new Error('Plugin assets not available - cannot proceed with test');
     }
 
@@ -60,7 +56,6 @@ test.describe.serial('Plugin Iframe', () => {
     if (!pluginInMenu) {
       throw new Error('API Test Plugin not found in menu after enabling');
     }
-
   });
 
   test('open plugin iframe view', async ({ page }) => {

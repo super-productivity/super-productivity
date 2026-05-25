@@ -1,6 +1,17 @@
 name: Build and Push SuperSync Docker Image
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.dockerignore'
+      - '.github/workflows/supersync-docker.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'packages/shared-schema/**'
+      - 'packages/sync-core/**'
+      - 'packages/super-sync-server/**'
   workflow_dispatch:
     inputs:
       no_cache:
@@ -19,7 +30,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -32,6 +43,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Reconfigure git to use HTTP authentication
@@ -40,13 +52,13 @@ jobs:
           ssh://git@github.com/
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v2
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
+      - name: Extract metadata (tags)
         id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf
         with:
@@ -58,14 +70,33 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
+      - name: Resolve image source revision
+        id: source-ref
+        shell: bash
+        run: |
+          revision="$(git log -1 --format=%H -- \
+            .dockerignore \
+            .github/workflows/supersync-docker.yml \
+            package.json \
+            package-lock.json \
+            packages/shared-schema \
+            packages/sync-core \
+            packages/super-sync-server)"
+          if [ -z "$revision" ]; then
+            echo "Could not resolve SuperSync image source revision" >&2
+            exit 1
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: ./packages/super-sync-server/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VCS_REF=${{ steps.source-ref.outputs.revision }}
           no-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.no_cache || false }}
           platforms: linux/amd64
           cache-from: type=gha

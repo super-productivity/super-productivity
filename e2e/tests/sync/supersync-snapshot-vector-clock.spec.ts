@@ -357,7 +357,7 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
         .locator(`task:not(.ng-animating):has-text("${sharedTask}")`)
         .first();
       await taskLocatorA.hover();
-      await taskLocatorA.locator('.done-toggle').click();
+      await taskLocatorA.locator('done-toggle').click();
       await expect(taskLocatorA).toHaveClass(/isDone/, { timeout: 5000 });
       console.log('[ConcurrentFresh] Client A marked shared task done');
 
@@ -366,7 +366,7 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
         .locator(`task:not(.ng-animating):has-text("${sharedTask}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.done-toggle').click();
+      await taskLocatorB.locator('done-toggle').click();
       await expect(taskLocatorB).toHaveClass(/isDone/, { timeout: 5000 });
       console.log('[ConcurrentFresh] Client B marked shared task done (concurrent)');
 

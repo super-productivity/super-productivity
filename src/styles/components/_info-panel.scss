@@ -1,0 +1,31 @@
+@use '../_globals.scss' as *;
+
+// Reusable info panel: soft primary-tinted fill with a material-icon prefix.
+// Use the base class on its own (`info` icon) or with a modifier for a
+// different glyph. Add new modifiers here when a new use case shows up.
+//
+// Usage:
+//   <div class="info-panel">…</div>
+//   <div class="info-panel info-panel--encryption">…</div>
+.info-panel {
+  position: relative;
+  padding: 12px 12px 12px 44px;
+  margin: 8px 0 16px;
+  background: color-mix(in srgb, var(--c-primary) 10%, transparent);
+  border-radius: var(--card-border-radius);
+  line-height: 1.4;
+  font-size: 13px;
+
+  &::before {
+    @include materialIcon('info');
+    color: var(--c-primary);
+    font-size: 20px;
+    position: absolute;
+    left: 12px;
+    top: 11px;
+  }
+
+  &--encryption::before {
+    content: 'enhanced_encryption';
+  }
+}

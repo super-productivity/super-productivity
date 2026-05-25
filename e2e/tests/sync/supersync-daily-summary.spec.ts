@@ -68,8 +68,10 @@ test.describe('@supersync Daily Summary Sync', () => {
       await expect(panel).toBeVisible();
 
       // 2. Click time item to open dialog
-      // Look for the item with the timer icon
-      const timeItem = panel.locator('task-detail-item:has(mat-icon:text("timer"))');
+      // Look for the item with the time-estimate icon
+      const timeItem = panel.locator(
+        'task-detail-item:has(mat-icon:text("hourglass_empty"))',
+      );
       await timeItem.click();
 
       // 3. Wait for dialog
@@ -95,10 +97,10 @@ test.describe('@supersync Daily Summary Sync', () => {
 
       // Mark both done
       await taskALocator.hover();
-      await taskALocator.locator('.done-toggle').click();
+      await taskALocator.locator('done-toggle').click();
 
       await taskBLocator.hover();
-      await taskBLocator.locator('.done-toggle').click();
+      await taskBLocator.locator('done-toggle').click();
 
       // Archive Tasks (Finish Day)
       const finishDayBtn = clientA.page.locator('.e2e-finish-day');
@@ -115,8 +117,9 @@ test.describe('@supersync Daily Summary Sync', () => {
       await saveAndGoHomeBtn.click();
 
       // Wait for Work View (Archived)
-      // Accept either active/tasks or tag/TODAY (with or without /tasks suffix)
-      await clientA.page.waitForURL(/(active\/tasks|tag\/TODAY)/);
+      // Use negative lookahead so we don't match the CURRENT /daily-summary URL —
+      // /(active\/tasks|tag\/TODAY)/ would match tag/TODAY/daily-summary immediately.
+      await clientA.page.waitForURL(/(active\/tasks|tag\/TODAY(?!\/daily-summary))/);
       console.log('Client A archived tasks.');
 
       // Sync A (upload archive)
@@ -217,7 +220,7 @@ test.describe('@supersync Daily Summary Sync', () => {
       for (const taskName of tasks) {
         const taskLocator = client.page.locator(`task:has-text("${taskName}")`);
         await taskLocator.hover();
-        await taskLocator.locator('.done-toggle').click();
+        await taskLocator.locator('done-toggle').click();
       }
 
       // Click finish day - wait for button to be visible and stable
@@ -236,7 +239,8 @@ test.describe('@supersync Daily Summary Sync', () => {
       await saveAndGoHomeBtn.click();
 
       // Wait for navigation back to work view
-      await client.page.waitForURL(/(active\/tasks|tag\/TODAY)/);
+      // Use negative lookahead so we don't match the CURRENT /daily-summary URL.
+      await client.page.waitForURL(/(active\/tasks|tag\/TODAY(?!\/daily-summary))/);
 
       // Wait a moment for any async effects to complete
       await client.page.waitForTimeout(1000);

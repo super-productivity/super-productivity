@@ -14,7 +14,7 @@ import { expandAnimation } from '../../../ui/animations/expand.ani';
 import {
   ConfigFormSection,
   CustomCfgSection,
-  GlobalConfigSectionKey,
+  GlobalConfigFormSectionKey,
 } from '../global-config.model';
 import { ProjectCfgFormKey } from '../../project/project.model';
 import { Subscription } from 'rxjs';
@@ -57,7 +57,7 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
   @Input() section?: ConfigFormSection<Record<string, unknown>>;
   @Input() isExpanded: boolean = false;
   readonly save = output<{
-    sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey | TagCfgFormKey;
+    sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey | TagCfgFormKey;
     config: Record<string, unknown>;
   }>();
   readonly customFormRef = viewChild('customForm', { read: ViewContainerRef });
@@ -125,7 +125,7 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
   }
 
   onSave($event: {
-    sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey | TagCfgFormKey;
+    sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey | TagCfgFormKey;
     config: Record<string, unknown>;
   }): void {
     this.save.emit($event);
@@ -157,7 +157,7 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
         instance.save.subscribe((v: Record<string, unknown>) => {
           this.onSave(
             v as {
-              sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey | TagCfgFormKey;
+              sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey | TagCfgFormKey;
               config: Record<string, unknown>;
             },
           );

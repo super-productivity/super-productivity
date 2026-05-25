@@ -1,4 +1,37 @@
-import { MatMenuTrigger, MatMenuItem } from '@angular/material/menu';
+import { Component, ViewChild } from '@angular/core';
+import {
+  MatMenu,
+  MatMenuItem,
+  MatMenuModule,
+  MatMenuTrigger,
+} from '@angular/material/menu';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+
+type MatMenuWithInternalItems = MatMenu & {
+  _allItems?: {
+    toArray: () => MatMenuItem[];
+  };
+};
+
+type MatMenuItemWithElementRef = {
+  _elementRef: {
+    nativeElement: HTMLElement;
+  };
+};
+
+@Component({
+  imports: [MatMenuModule],
+  template: `
+    <button [matMenuTriggerFor]="menu">Open</button>
+    <mat-menu #menu="matMenu">
+      <button mat-menu-item>First item</button>
+    </mat-menu>
+  `,
+})
+class MatMenuTouchPatchHostComponent {
+  @ViewChild(MatMenuTrigger) trigger?: MatMenuTrigger;
+}
 
 /**
  * These tests verify that the Angular Material internal APIs we depend on
@@ -10,6 +43,17 @@ import { MatMenuTrigger, MatMenuItem } from '@angular/material/menu';
  * Related issue: https://github.com/super-productivity/super-productivity/issues/4436
  */
 describe('Mat Menu Touch Monkey Patch API Compatibility', () => {
+  let fixture: ComponentFixture<MatMenuTouchPatchHostComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [MatMenuTouchPatchHostComponent, NoopAnimationsModule],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(MatMenuTouchPatchHostComponent);
+    fixture.detectChanges();
+  });
+
   describe('MatMenuItem internal API', () => {
     it('should have _checkDisabled method on prototype', () => {
       // This is the method we override to add touch protection
@@ -45,17 +89,13 @@ describe('Mat Menu Touch Monkey Patch API Compatibility', () => {
   });
 
   describe('MatMenu internal API (via trigger)', () => {
-    it('should document expected _allItems property', () => {
-      // Note: We can't easily test _allItems without a full component setup,
-      // but this test documents that we depend on it.
-      // The monkey patch checks: (this.menu as any)._allItems
-      //
-      // If the menu items access pattern changes, update the monkey patch:
-      // - Current pattern: this.menu._allItems.toArray()
-      // - Items have: item._elementRef.nativeElement
-      //
-      // This is a documentation test - the actual runtime check is in the patch
-      expect(true).toBe(true);
+    it('should expose _allItems with item element refs on a real menu instance', () => {
+      const menu = fixture.componentInstance.trigger?.menu as MatMenuWithInternalItems;
+      const items = menu._allItems?.toArray() ?? [];
+      const firstItem = items[0] as unknown as MatMenuItemWithElementRef | undefined;
+
+      expect(items.length).toBe(1);
+      expect(firstItem?._elementRef.nativeElement.textContent).toContain('First item');
     });
   });
 

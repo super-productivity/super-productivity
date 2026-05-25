@@ -8,7 +8,7 @@
   flex-flow: row;
   position: relative;
   margin-left: var(--s);
-  margin-right: var(--s);
+  margin-right: var(--s-half);
   align-items: stretch;
 
   //@include verySmallMainContainer {
@@ -207,6 +207,15 @@
   //}
 }
 
+// Hide the time-wrapper while hover-controls are mounted: they're absolutely
+// positioned over .time-wrapper and would let its digits ghost through on
+// translucent themes (velvet, glass) and paint redundantly on solid ones.
+// Angular only renders task-hover-controls on hover (non-touch), so :has()
+// exactly matches the visibility intent without needing :hover guards.
+.first-line:has(task-hover-controls) .time-wrapper {
+  visibility: hidden;
+}
+
 .additional-info {
   display: block;
   // required as sort of a clearfix (fixes padding issue)
@@ -223,40 +232,6 @@
   font-weight: bold;
   display: flex;
   z-index: var(--z-drag-over-msg);
-}
-
-// SWIPE BLOCKS
-.block-left,
-.block-right {
-  pointer-events: none;
-  color: var(--palette-primary-contrast-500);
-  position: absolute;
-  bottom: 2px;
-  top: 1px;
-  width: 0;
-  z-index: var(--z-swipe-block);
-  transition: var(--transition-standard);
-  border-radius: var(--task-border-radius);
-  overflow: hidden;
-
-  &.isActive {
-    background-color: var(--c-accent);
-  }
-
-  mat-icon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scaleX(1);
-  }
-}
-
-.block-left {
-  left: 0;
-}
-
-.block-right {
-  right: 0;
 }
 
 progress-bar {
@@ -298,149 +273,16 @@ progress-bar {
   }
 }
 
-// approximate length of checkmark polyline
-$check-len: 16;
+done-toggle {
+  --done-toggle-size: 34px;
 
-@keyframes draw-check {
-  from {
-    stroke-dashoffset: $check-len;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-// circumference of r=10 circle: 2 * π * 10 ≈ 62.83
-$circle-circumference: 62.83;
-
-@keyframes circle-draw {
-  0% {
-    stroke-dashoffset: $circle-circumference;
-  }
-  35% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: 0;
-  }
-}
-
-.done-toggle {
   margin-left: var(--s);
   margin-right: 0;
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  z-index: var(--z-drag-handle);
-  position: relative;
-  touch-action: none;
-  pointer-events: all;
-  cursor: pointer;
 
   @include verySmallMainContainer {
     width: 8px;
     min-width: 0;
     opacity: 0;
-  }
-
-  > * {
-    pointer-events: none;
-    @include center;
-  }
-
-  .done-toggle-svg {
-    width: 24px;
-    height: 24px;
-    opacity: 0.3;
-    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
-  }
-
-  .done-circle {
-    stroke: currentColor;
-    stroke-width: 2;
-    fill: none;
-  }
-
-  .done-check {
-    stroke: currentColor;
-    stroke-width: 2;
-    fill: none;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-dasharray: $check-len;
-    stroke-dashoffset: $check-len;
-  }
-
-  .progress-ring {
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    fill: none;
-    stroke-dasharray: $circle-circumference;
-    stroke-dashoffset: 0;
-    transform-origin: center;
-    transform: rotate(-90deg);
-    animation: circle-draw 6s ease-in-out infinite;
-    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
-  }
-
-  .play-indicator {
-    fill: currentColor;
-    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
-  }
-
-  &.is-done {
-    .done-toggle-svg {
-      opacity: 0.5;
-    }
-
-    .done-check {
-      animation: draw-check 150ms ease-out forwards;
-    }
-  }
-
-  &.is-current:not(.is-done) {
-    .done-circle {
-      opacity: 0;
-    }
-
-    &:hover {
-      .done-circle {
-        opacity: 1;
-      }
-
-      .progress-ring,
-      .play-indicator {
-        opacity: 0;
-      }
-    }
-  }
-
-  &:hover {
-    .done-toggle-svg {
-      opacity: 0.6;
-    }
-
-    &.is-done .done-toggle-svg {
-      opacity: 0.8;
-    }
-  }
-
-  // hit area
-  &:after {
-    content: '';
-    position: absolute;
-    top: calc(-1 * var(--s-quarter));
-    bottom: calc(-1 * var(--s-quarter));
-    left: calc(-1 * var(--s-quarter));
-    right: calc(-1 * var(--s-quarter));
-
-    @include mq(xs) {
-      top: calc(-1 * var(--s));
-      bottom: calc(-1 * var(--s));
-      left: calc(-1 * var(--s));
-      right: calc(-1 * var(--s-half));
-    }
   }
 }
 
@@ -495,24 +337,19 @@ $circle-circumference: 62.83;
 
 .toggle-sub-tasks-btn.toggle-sub-tasks-btn {
   position: absolute !important;
-  // overwrite any lower values set elsewhere
-  opacity: 1;
   transform: translateY(-50%);
-  left: -24px;
+  left: -20px;
   top: 50%;
   z-index: var(--z-toggle-sub-task-btn) !important;
   min-width: 0;
   min-height: 0;
-  width: 32px !important;
-  height: 32px !important;
+  width: 24px !important;
+  height: 24px !important;
   margin-top: -1px !important;
   transform-origin: left top;
-  transition-property: all;
-  box-shadow: var(--whiteframe-shadow-1dp);
-
-  :host-context(.isNoTouchOnly) & {
-    //opacity: 0;
-  }
+  transition-property: opacity, transform, background, box-shadow;
+  box-shadow: none;
+  background: var(--bg-lighter) !important;
 
   :host:hover & {
     opacity: 1;
@@ -520,7 +357,9 @@ $circle-circumference: 62.83;
 
   mat-icon {
     transition: var(--transition-standard);
-    opacity: var(--task-icon-default-opacity);
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
 
     &.isHideDoneTasks {
       transform: rotate(-45deg);
@@ -538,14 +377,6 @@ $circle-circumference: 62.83;
 .start-task-btn {
   :host-context(.isHidePlayBtn) & {
     display: none !important;
-  }
-}
-
-.isPreventPointerEventsWhilePanning {
-  * {
-    user-select: none !important;
-    pointer-events: none !important;
-    transition: none !important;
   }
 }
 
@@ -570,11 +401,23 @@ $circle-circumference: 62.83;
   }
 }
 
+:host.hasTimeConflict {
+  .schedule-btn mat-icon,
+  .schedule-btn .time-badge {
+    color: var(--text-color-muted);
+    border-color: color-mix(in srgb, var(--text-color-muted) 45%, transparent);
+  }
+}
+
 .deadline-btn {
   position: relative;
 
   &.mat-warn mat-icon {
     color: var(--c-warn) !important;
+  }
+
+  &.mat-accent mat-icon {
+    color: var(--c-accent) !important;
   }
 }
 
@@ -590,7 +433,7 @@ $circle-circumference: 62.83;
   @include extraBorder();
   border-radius: var(--card-border-radius);
   white-space: nowrap;
-  background: #fff;
+  background: var(--card-bg);
 
   // avoid affecting done toggle
   pointer-events: none;

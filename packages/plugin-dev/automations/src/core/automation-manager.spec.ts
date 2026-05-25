@@ -111,6 +111,110 @@ describe('AutomationManager', () => {
   });
 
   describe('onTaskEvent', () => {
+    it('should match a taskCreated event with a titleStartsWith condition', async () => {
+      // 1. Setup Rule
+      const rule = {
+        id: 'r1',
+        name: 'Move Rule',
+        trigger: { type: 'taskCreated' },
+        conditions: [{ type: 'titleStartsWith', value: 'MoveMe' }],
+        actions: [{ type: 'moveToProject', value: 'Project B' }],
+      };
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([rule]);
+
+      // 2. Setup trigger mock
+      const mockTrigger = { matches: vi.fn().mockImplementation((e) => e.type === 'taskCreated') };
+      (globalRegistry.getTrigger as any).mockReturnValue(mockTrigger);
+
+      // 3. Setup condition evaluator mock (real behavior)
+      mockConditionEvaluator.allConditionsMatch.mockImplementation(
+        async (conditions: any, event: any) => {
+          for (const cond of conditions) {
+            if (cond.type === 'titleStartsWith') {
+              if (!event.task?.title.toLowerCase().startsWith(cond.value.toLowerCase()))
+                return false;
+            }
+          }
+          return true;
+        },
+      );
+
+      // 4. Fire event
+      const event = { type: 'taskCreated', task: { id: 't1', title: 'MoveMe task' } } as TaskEvent;
+      await manager.onTaskEvent(event);
+
+      // 5. Verify action called
+      expect(mockActionExecutor.executeAll).toHaveBeenCalledWith(rule.actions, event);
+    });
+
+    it('should not match a taskCreated rule on taskUpdated event after creation', async () => {
+      const rule = {
+        id: 'r1',
+        name: 'Move Rule',
+        trigger: { type: 'taskCreated' },
+        conditions: [{ type: 'titleStartsWith', value: 'MoveMe' }],
+        actions: [{ type: 'moveToProject', value: 'Project B' }],
+      };
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([rule]);
+
+      const mockTrigger = { matches: vi.fn().mockImplementation((e) => e.type === 'taskCreated') };
+      (globalRegistry.getTrigger as any).mockReturnValue(mockTrigger);
+
+      mockConditionEvaluator.allConditionsMatch.mockImplementation(
+        async (_conditions: any, event: any) => {
+          return event.task?.title.startsWith('MoveMe');
+        },
+      );
+
+      const event1 = { type: 'taskCreated', task: { id: 't1', title: '' } } as TaskEvent;
+      await manager.onTaskEvent(event1);
+      expect(mockActionExecutor.executeAll).not.toHaveBeenCalled();
+
+      const event2 = {
+        type: 'taskUpdated',
+        task: { id: 't1', title: 'MoveMe task' },
+        changes: { title: 'MoveMe task' },
+      } as TaskEvent;
+      await manager.onTaskEvent(event2);
+
+      expect(mockActionExecutor.executeAll).not.toHaveBeenCalled();
+    });
+
+    it('should match a taskUpdated event with a taskUpdated trigger', async () => {
+      // 1. Setup Rule with taskUpdated trigger
+      const rule = {
+        id: 'r1',
+        name: 'Update Rule',
+        trigger: { type: 'taskUpdated' },
+        conditions: [{ type: 'titleStartsWith', value: 'UpdateMe' }],
+        actions: [{ type: 'moveToProject', value: 'Project B' }],
+      };
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([rule]);
+
+      // 2. Setup trigger mock
+      const mockTrigger = {
+        matches: vi.fn().mockImplementation((e) => e.type === 'taskUpdated'),
+      };
+      (globalRegistry.getTrigger as any).mockReturnValue(mockTrigger);
+
+      // 3. Setup condition evaluator mock
+      mockConditionEvaluator.allConditionsMatch.mockImplementation(
+        async (conditions: any, event: any) => {
+          return event.task?.title.startsWith('UpdateMe');
+        },
+      );
+
+      // 4. Fire taskUpdated event
+      const event = {
+        type: 'taskUpdated',
+        task: { id: 't1', title: 'UpdateMe task' },
+      } as TaskEvent;
+      await manager.onTaskEvent(event);
+
+      // 5. Verify action called
+      expect(mockActionExecutor.executeAll).toHaveBeenCalledWith(rule.actions, event);
+    });
+
     it('should warn if event has no task', async () => {
       await manager.onTaskEvent({ type: 'taskCreated' } as TaskEvent);
       expect(mockPlugin.log.warn).toHaveBeenCalledWith(

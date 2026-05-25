@@ -130,7 +130,8 @@ export class DialogTrackTimeComponent implements OnDestroy {
     this.timeLogged = this.data.timeLogged;
     this.started = formatLocalIsoWithoutSeconds(this.data.task.created);
     this.comment = this.data.task.parentId ? this.data.task.title : '';
-    this.timeSpentToday = this.data.task.timeSpentOnDay[this._dateService.todayStr()];
+    this.timeSpentToday =
+      this.data.task.timeSpentOnDay?.[this._dateService.todayStr()] ?? 0;
     this.timeSpentLoggedDelta = Math.max(0, this.data.task.timeSpent - this.timeLogged);
 
     if (this.data.timeLoggedUpdate$) {

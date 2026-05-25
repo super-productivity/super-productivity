@@ -1,3 +1,4 @@
+import { initialSectionState } from '../../features/section/store/section.reducer';
 import { initialProjectState } from '../../features/project/store/project.reducer';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
 import { initialTagState } from '../../features/tag/store/tag.reducer';
@@ -67,6 +68,7 @@ export const DEFAULT_APP_BASE_DATA: AppBaseData = {
   },
   taskRepeatCfg: initialTaskRepeatCfgState,
   note: initialNoteState,
+  section: initialSectionState,
 
   metric: initialMetricState,
 };

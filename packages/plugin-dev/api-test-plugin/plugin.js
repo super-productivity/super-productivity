@@ -235,8 +235,8 @@ PluginAPI.registerHook(PluginAPI.Hooks.TASK_DELETE, (taskData) => {
   console.log('API Test - TASK_DELETE hook fired:', taskData);
 });
 
-PluginAPI.registerHook(PluginAPI.Hooks.CURRENT_TASK_CHANGE, (taskData) => {
-  console.log('API Test - CURRENT_TASK_CHANGE hook fired:', taskData);
+PluginAPI.registerHook(PluginAPI.Hooks.CURRENT_TASK_CHANGE, (payload) => {
+  console.log('API Test - CURRENT_TASK_CHANGE hook fired:', payload);
 });
 
 // Register UI elements

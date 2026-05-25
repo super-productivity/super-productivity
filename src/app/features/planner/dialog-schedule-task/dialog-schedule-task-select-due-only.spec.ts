@@ -16,10 +16,14 @@ import { WorkContextService } from '../../../features/work-context/work-context.
 import { of } from 'rxjs';
 import { PlannerService } from '../planner.service';
 import { RootState } from '../../../root-store/root-state';
-import { CONFIG_FEATURE_NAME } from '../../config/store/global-config.reducer';
+import {
+  CONFIG_FEATURE_NAME,
+  selectTimelineConfig,
+} from '../../config/store/global-config.reducer';
 import { TaskReminderOptionId } from '../../tasks/task.model';
 import { ReminderService } from '../../reminder/reminder.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 
 describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
   let component: DialogScheduleTaskComponent;
@@ -73,6 +77,10 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
               },
             } as any,
           },
+          selectors: [
+            { selector: selectAllTasksWithDueTimeSorted, value: [] },
+            { selector: selectTimelineConfig, value: null },
+          ],
         }),
         { provide: MatDialogRef, useValue: dialogRefSpy },
         { provide: SnackService, useValue: snackServiceSpy },

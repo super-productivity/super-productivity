@@ -1,4 +1,11 @@
-import { Component, EventEmitter, Output, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  EventEmitter,
+  Output,
+  inject,
+  signal,
+} from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -13,7 +20,8 @@ import { Log } from '../../core/log';
   selector: 'dialog-import-from-url',
   templateUrl: './dialog-import-from-url.component.html',
   styleUrls: ['./dialog-import-from-url.component.scss'],
-  standalone: true, // Mark as standalone
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
     MatFormFieldModule,
@@ -27,21 +35,19 @@ import { Log } from '../../core/log';
 export class DialogImportFromUrlComponent {
   @Output() urlEntered = new EventEmitter<string>();
 
-  url: string = '';
-  T = T; // For translations in template, if needed
+  url = signal('');
+  T = T;
 
   private _dialogRef = inject(MatDialogRef<DialogImportFromUrlComponent>);
 
   constructor() {}
 
   submit(): void {
-    if (this.url && this.url.trim() !== '') {
-      this.urlEntered.emit(this.url.trim());
-      this._dialogRef.close(this.url.trim());
+    const urlVal = (this.url() || '').trim();
+    if (urlVal !== '') {
+      this.urlEntered.emit(urlVal);
+      this._dialogRef.close(urlVal);
     } else {
-      // Basic validation: show error or prevent closing if URL is empty
-      // For now, we rely on the required attribute in HTML and button disable
-      // Or handle with a snackbar if more sophisticated feedback is needed
       Log.err('URL is required.');
     }
   }

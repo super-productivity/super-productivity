@@ -89,7 +89,8 @@
     width: 32px;
     height: 4px;
     border-radius: 2px;
-    background: var(--text-muted, rgba(255, 255, 255, 0.3));
+    background: currentColor;
+    opacity: 0.3;
   }
 }
 

@@ -1,20 +1,16 @@
-import { ENTITY_TYPES, EntityType, ActionType } from './operation.types';
+// LWW helper instance for Super Productivity. The lib at @sp/sync-core exposes
+// a factory; the app supplies its own entity-type list (ENTITY_TYPES) so the lib
+// stays domain-agnostic.
 
-const LWW_UPDATE_SUFFIX = '] LWW Update';
+import { createLwwUpdateActionTypeHelpers } from '@sp/sync-core';
+import { ENTITY_TYPES } from '@sp/shared-schema';
+import type { EntityType } from './operation.types';
+import type { ActionType } from './action-types.enum';
 
-export const LWW_UPDATE_ACTION_TYPES: ReadonlySet<string> = new Set(
-  ENTITY_TYPES.map((et) => `[${et}${LWW_UPDATE_SUFFIX}`),
-);
+const helpers = createLwwUpdateActionTypeHelpers<EntityType>(ENTITY_TYPES);
 
-const LWW_ENTITY_MAP: ReadonlyMap<string, EntityType> = new Map(
-  ENTITY_TYPES.map((et) => [`[${et}${LWW_UPDATE_SUFFIX}`, et]),
-);
-
-export const isLwwUpdateActionType = (actionType: string): boolean =>
-  LWW_UPDATE_ACTION_TYPES.has(actionType);
-
-export const getLwwEntityType = (actionType: string): EntityType | undefined =>
-  LWW_ENTITY_MAP.get(actionType);
-
+export const LWW_UPDATE_ACTION_TYPES = helpers.LWW_UPDATE_ACTION_TYPES;
+export const isLwwUpdateActionType = helpers.isLwwUpdateActionType;
+export const getLwwEntityType = helpers.getLwwEntityType;
 export const toLwwUpdateActionType = (entityType: EntityType): ActionType =>
-  `[${entityType}${LWW_UPDATE_SUFFIX}` as ActionType;
+  helpers.toLwwUpdateActionType(entityType) as ActionType;

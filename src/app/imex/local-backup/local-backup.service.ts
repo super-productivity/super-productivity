@@ -1,9 +1,9 @@
 import { DestroyRef, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { interval, Observable } from 'rxjs';
+import { EMPTY, interval, Observable } from 'rxjs';
 import { LocalBackupConfig } from '../../features/config/global-config.model';
-import { filter, map, switchMap, tap } from 'rxjs/operators';
+import { map, switchMap, tap } from 'rxjs/operators';
 import { LocalBackupMeta } from './local-backup.model';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../app.constants';
@@ -41,8 +41,7 @@ export class LocalBackupService {
     map((cfg) => cfg.localBackup),
   );
   private _triggerBackupSave$: Observable<unknown> = this._cfg$.pipe(
-    filter((cfg) => cfg.isEnabled),
-    switchMap(() => interval(DEFAULT_BACKUP_INTERVAL)),
+    switchMap((cfg) => (cfg.isEnabled ? interval(DEFAULT_BACKUP_INTERVAL) : EMPTY)),
     tap(() => this._backup()),
   );
 
@@ -111,7 +110,7 @@ export class LocalBackupService {
         )
       ) {
         const backupData = await this.loadBackupElectron(backupMeta.path);
-        Log.log('backupData', backupData);
+        Log.log('backupData loaded from Electron backup');
         await this._importBackup(backupData);
       }
 
@@ -124,9 +123,9 @@ export class LocalBackupService {
         )
       ) {
         const backupData = await this.loadBackupAndroid();
-        Log.log('backupData', backupData);
+        Log.log('backupData loaded from Android, length: ' + backupData.length);
         const lineBreaksReplaced = backupData.replace(/\n/g, '\\n');
-        Log.log('lineBreaksReplaced', lineBreaksReplaced);
+        Log.log('lineBreaksReplaced, length: ' + lineBreaksReplaced.length);
         await this._importBackup(lineBreaksReplaced);
       }
 

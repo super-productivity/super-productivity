@@ -10,14 +10,6 @@
       }
     },
     {
-      "name": "assets",
-      "installMode": "lazy",
-      "updateMode": "prefetch",
-      "resources": {
-        "files": ["/assets/**"]
-      }
-    },
-    {
       "name": "criticalAssets",
       "installMode": "prefetch",
       "updateMode": "prefetch",
@@ -27,9 +19,17 @@
           "/assets/icons/icon-*.png",
           "/assets/icons/favicon-*.png",
           "/assets/i18n/en.json",
-          "/assets/fonts/MaterialIcons-Regular.ttf",
+          "/assets/fonts/material-symbols-outlined.woff2",
           "/*.(otf|ttf|woff|woff2)"
         ]
+      }
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": ["/assets/**"]
       }
     },
     {

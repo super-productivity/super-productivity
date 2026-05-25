@@ -38,11 +38,15 @@
       transition: var(--transition-standard);
 
       &:hover {
-        background: rgba(0, 0, 0, 0.02);
+        // Migrated to state token: was `rgba(0,0,0,0.02)` — now mode-aware
+        // and theme-tunable via `--state-hover-alpha`.
+        background: var(--state-hover);
       }
 
       &.active-profile {
         border-color: var(--c-accent);
+        // Selected lift — accent-tinted (intentionally not migrated to
+        // `--state-selected`, which is ink-on-surface). Kept as-is.
         background: rgba(var(--c-accent-rgb), 0.05);
       }
 

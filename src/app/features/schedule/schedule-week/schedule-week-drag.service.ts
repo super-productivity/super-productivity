@@ -14,11 +14,12 @@ import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { calculateTimeFromYPosition } from '../schedule-utils';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { isTouchActive } from '../../../util/input-intent';
 import type { DragPreviewContext } from './schedule-week-drag.types';
 import type { ScheduleEvent } from '../schedule.model';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { first } from 'rxjs/operators';
+import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 
 interface PointerPosition {
   x: number;
@@ -27,6 +28,7 @@ interface PointerPosition {
 
 const DRAG_CLONE_CLASS = 'drag-clone';
 const DRAG_OVER_CLASS = 'drag-over';
+const HOUR_IN_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class ScheduleWeekDragService {
@@ -127,7 +129,7 @@ export class ScheduleWeekDragService {
 
     // Show shift key tooltip on non-touch devices to educate users about the feature,
     // then auto-hide after 3 seconds to avoid cluttering the interface.
-    if (!IS_TOUCH_PRIMARY) {
+    if (!isTouchActive()) {
       this._showShiftKeyInfo.set(true);
       this._shiftInfoTimeoutId = window.setTimeout(() => {
         this._showShiftKeyInfo.set(false);
@@ -139,6 +141,7 @@ export class ScheduleWeekDragService {
 
     // Hide the original drag-preview element so only our custom preview is visible
     nativeEl.style.opacity = '0';
+    nativeEl.style.pointerEvents = 'none';
 
     const cloneEl = this._dragCloneEl;
     if (cloneEl) {
@@ -196,9 +199,9 @@ export class ScheduleWeekDragService {
 
     this._isDragging.set(false);
     const nativeEl = ev.source.element.nativeElement;
+    const { columnTarget, scheduleEventTarget } = this._resolveDropTargets(ev, dropPoint);
 
     this._dragPreviewContext.set(null);
-    this._currentDragEvent.set(null);
     this._dragPreviewStyle.set(null);
     this._dragOverTaskId.set(null);
 
@@ -206,7 +209,6 @@ export class ScheduleWeekDragService {
     nativeEl.style.opacity = '';
     nativeEl.style.pointerEvents = '';
 
-    const { columnTarget, scheduleEventTarget } = this._resolveDropTargets(ev);
     const sourceEvent = ev.source.data;
     const task = this._pluckTaskFromEvent(sourceEvent);
     const sourceTaskId = nativeEl.id.replace(T_ID_PREFIX, '');
@@ -221,6 +223,7 @@ export class ScheduleWeekDragService {
 
     // Guard: nothing to do without a task
     if (!task) {
+      this._currentDragEvent.set(null);
       this._resetDragRelatedVars();
       nativeEl.style.transform = 'translate3d(0, 0, 0)';
       ev.source.reset();
@@ -256,6 +259,7 @@ export class ScheduleWeekDragService {
     }
 
     // Clear timestamp and other drag-related vars AFTER drop is processed
+    this._currentDragEvent.set(null);
     this._resetDragRelatedVars();
     // reset to original (now new) position
     nativeEl.style.transform = 'translate3d(0, 0, 0)';
@@ -394,38 +398,44 @@ export class ScheduleWeekDragService {
   ): void {
     this._lastCalculatedTimestamp = null;
 
-    if (isWithinGrid) {
-      // Create preview (we don't use the timestamp in shift mode, but still create the visual)
-      this._createDragPreview(targetDay, pointer.y, gridRect);
-
-      if (targetEl.classList.contains('col')) {
-        this._dragPreviewContext.set({
-          kind: 'shift-column',
-          day: targetDay,
-          isEndOfDay: targetEl.classList.contains('end-of-day'),
-        });
-        this._dragOverTaskId.set(null);
-      } else {
-        this._dragPreviewContext.set(null);
-        // Extract task ID from hovered schedule event element
-        const isTaskElement =
-          targetEl.classList.contains(SVEType.Task) ||
-          targetEl.classList.contains(SVEType.SplitTask) ||
-          targetEl.classList.contains(SVEType.SplitTaskPlannedForDay) ||
-          targetEl.classList.contains(SVEType.TaskPlannedForDay);
-
-        if (isTaskElement && targetEl.id.startsWith(T_ID_PREFIX)) {
-          const taskId = targetEl.id.replace(T_ID_PREFIX, '');
-          this._dragOverTaskId.set(taskId);
-          this._dragPreviewContext.set({ kind: 'shift-task', taskId });
-        } else {
-          this._dragOverTaskId.set(null);
-        }
-      }
-    } else {
+    if (!isWithinGrid) {
       this._dragPreviewStyle.set(null);
       this._dragPreviewContext.set(null);
       this._dragOverTaskId.set(null);
+      const prevEl = this._prevDragOverEl;
+      if (prevEl) {
+        prevEl.classList.remove(DRAG_OVER_CLASS);
+        this._prevDragOverEl = null;
+      }
+      return;
+    }
+
+    // Create preview (we don't use the timestamp in shift mode, but still create the visual)
+    this._createDragPreview(targetDay, pointer.y, gridRect);
+
+    if (targetEl.classList.contains('col')) {
+      this._dragPreviewContext.set({
+        kind: 'shift-column',
+        day: targetDay,
+        isEndOfDay: targetEl.classList.contains('end-of-day'),
+      });
+      this._dragOverTaskId.set(null);
+    } else {
+      this._dragPreviewContext.set(null);
+      // Extract task ID from hovered schedule event element
+      const isTaskElement =
+        targetEl.classList.contains(SVEType.Task) ||
+        targetEl.classList.contains(SVEType.SplitTask) ||
+        targetEl.classList.contains(SVEType.SplitTaskPlannedForDay) ||
+        targetEl.classList.contains(SVEType.TaskPlannedForDay);
+
+      if (isTaskElement && targetEl.id.startsWith(T_ID_PREFIX)) {
+        const taskId = targetEl.id.replace(T_ID_PREFIX, '');
+        this._dragOverTaskId.set(taskId);
+        this._dragPreviewContext.set({ kind: 'shift-task', taskId });
+      } else {
+        this._dragOverTaskId.set(null);
+      }
     }
 
     const prevEl = this._prevDragOverEl;
@@ -531,8 +541,7 @@ export class ScheduleWeekDragService {
     if (!event) {
       return 6;
     }
-    // Use timeLeftInHours which already accounts for timeSpent
-    return Math.max(Math.round(event.timeLeftInHours * FH), 1);
+    return Math.max(Math.round(getDragPreviewHours(event) * FH), 1);
   }
 
   private _getDayUnderPointer(x: number, y: number): string {
@@ -551,12 +560,35 @@ export class ScheduleWeekDragService {
     return days.length ? days[0] : '';
   }
 
-  private _resolveDropTargets(ev: CdkDragRelease): {
+  private _resolveDropTargets(
+    ev: CdkDragRelease,
+    dropPoint: PointerPosition | null,
+  ): {
     columnTarget: HTMLElement | null;
     scheduleEventTarget: HTMLElement | null;
   } {
     let columnTarget = this._lastDropCol;
     let scheduleEventTarget = this._lastDropScheduleEvent;
+
+    if ((!columnTarget || !scheduleEventTarget) && dropPoint) {
+      const interactiveElements = document
+        .elementsFromPoint(dropPoint.x, dropPoint.y)
+        .filter(
+          (el): el is HTMLElement =>
+            el instanceof HTMLElement && !this._isPreviewElement(el),
+        );
+
+      if (!columnTarget) {
+        columnTarget =
+          interactiveElements.find((el) => el.classList.contains('col')) || null;
+      }
+      if (!scheduleEventTarget) {
+        scheduleEventTarget =
+          interactiveElements
+            .map((el) => el.closest('schedule-event'))
+            .find((el): el is HTMLElement => el instanceof HTMLElement) || null;
+      }
+    }
 
     if (
       (!columnTarget || !scheduleEventTarget) &&
@@ -782,3 +814,21 @@ export class ScheduleWeekDragService {
     }
   }
 }
+
+const getDragPreviewHours = (event: ScheduleEvent): number => {
+  const data = event.data;
+  if (
+    event.isBeyondBudget &&
+    data &&
+    typeof (data as Partial<TaskCopy>).timeEstimate === 'number' &&
+    typeof (data as Partial<TaskCopy>).timeSpent === 'number' &&
+    Array.isArray((data as Partial<TaskCopy>).subTaskIds)
+  ) {
+    return Math.max(
+      event.timeLeftInHours,
+      getTimeLeftForTask(data as TaskCopy) / HOUR_IN_MS,
+    );
+  }
+
+  return event.timeLeftInHours;
+};

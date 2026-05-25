@@ -81,6 +81,56 @@ const wouldCreateCircularReference = (
   return false;
 };
 
+// Normalize timeSpentOnDay at the data boundary so all consumers can trust the
+// invariant: timeSpentOnDay is always a valid object, never undefined. This mirrors
+// normalizeCountOnDay in simple-counter.reducer.ts. Fixing it here (rather than
+// adding optional-chaining guards at every access site) is correct because:
+//   1. The TypeScript type says timeSpentOnDay is required — the compiler won't catch
+//      unguarded accesses, so individual guards are invisible and get reverted.
+//   2. The undefined comes from legacy persisted data written before the field existed.
+//      It is a data-integrity issue, not a valid domain state; the type is correct.
+//   3. Normalizing once at load time is cheaper and more reliable than N guards.
+const normalizeTimeSpentOnDay = (state: TaskState): TaskState => {
+  let hasUndefined = false;
+  for (const id of state.ids as string[]) {
+    if (state.entities[id] && !state.entities[id]!.timeSpentOnDay) {
+      hasUndefined = true;
+      break;
+    }
+  }
+  if (!hasUndefined) return state;
+  const entities: TaskState['entities'] = {};
+  for (const id of state.ids as string[]) {
+    const task = state.entities[id];
+    entities[id] = task && !task.timeSpentOnDay ? { ...task, timeSpentOnDay: {} } : task;
+  }
+  return { ...state, entities };
+};
+
+const normalizeSubTaskIds = (state: TaskState): TaskState => {
+  const parentIdsWithDuplicates: string[] = [];
+  for (const id of state.ids as string[]) {
+    const task = state.entities[id];
+    if (task?.subTaskIds && new Set(task.subTaskIds).size !== task.subTaskIds.length) {
+      parentIdsWithDuplicates.push(id);
+    }
+  }
+  if (parentIdsWithDuplicates.length === 0) return state;
+
+  const entities: TaskState['entities'] = { ...state.entities };
+  for (const id of parentIdsWithDuplicates) {
+    const task = state.entities[id];
+    if (task) {
+      entities[id] = {
+        ...task,
+        subTaskIds: unique(task.subTaskIds),
+      };
+    }
+  }
+
+  return { ...state, entities };
+};
+
 // REDUCER
 // -------
 export const initialTaskState: TaskState = taskAdapter.getInitialState({
@@ -106,13 +156,18 @@ export const taskReducer = createReducer<TaskState>(
     if (hasOrphans) {
       devError('loadAllData: Found orphaned task IDs in loaded state — sanitizing');
     }
-    return {
-      ...(hasOrphans ? { ...task, ids: ids.filter((id) => !!task.entities[id]) } : task),
-      currentTaskId: null,
-      selectedTaskId: null,
-      lastCurrentTaskId: task.currentTaskId,
-      isDataLoaded: true,
-    };
+    const sanitized = hasOrphans
+      ? { ...task, ids: ids.filter((id) => !!task.entities[id]) }
+      : task;
+    return normalizeSubTaskIds(
+      normalizeTimeSpentOnDay({
+        ...sanitized,
+        currentTaskId: null,
+        selectedTaskId: null,
+        lastCurrentTaskId: task.currentTaskId,
+        isDataLoaded: true,
+      } as TaskState),
+    );
   }),
 
   on(TaskSharedActions.deleteProject, (state, { allTaskIds }) => {
@@ -126,6 +181,13 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(TimeTrackingActions.addTimeSpent, (state, { task, date, duration }) => {
+    // NaN/Infinity → JSON.stringify → null → auto-fix zeroes the day. Catch source.
+    if (!Number.isFinite(duration)) {
+      devError(
+        `addTimeSpent: non-finite duration for task ${task.id} on ${date}: ${duration}`,
+      );
+      return state;
+    }
     const currentTimeSpentForTickDay =
       (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
     return updateTimeSpentForTask(
@@ -151,6 +213,12 @@ export const taskReducer = createReducer<TaskState>(
     const task = state.entities[taskId];
     if (!task) {
       TaskLog.warn(`[syncTimeSpent] Task ${taskId} not found, skipping`);
+      return state;
+    }
+    if (!Number.isFinite(duration)) {
+      devError(
+        `syncTimeSpent (remote): non-finite duration for task ${taskId} on ${date}: ${duration}`,
+      );
       return state;
     }
 
@@ -200,7 +268,12 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(unsetCurrentTask, (state) => {
-    return { ...state, currentTaskId: null, lastCurrentTaskId: state.currentTaskId };
+    // Preserve lastCurrentTaskId when currentTaskId is already null (no-op unset).
+    return {
+      ...state,
+      currentTaskId: null,
+      lastCurrentTaskId: state.currentTaskId ?? state.lastCurrentTaskId,
+    };
   }),
 
   on(setSelectedTask, (state, { id, taskDetailTargetPanel, isSkipToggle }) => {
@@ -223,6 +296,19 @@ export const taskReducer = createReducer<TaskState>(
         selectedTaskId: id,
       };
     }
+
+    const isExplicitTargetPanel =
+      !!taskDetailTargetPanel &&
+      taskDetailTargetPanel !== TaskDetailTargetPanel.Default &&
+      taskDetailTargetPanel !== TaskDetailTargetPanel.DONT_OPEN_PANEL;
+
+    if (id && id === state.selectedTaskId && isExplicitTargetPanel) {
+      return {
+        ...state,
+        taskDetailTargetPanel,
+      };
+    }
+
     return {
       ...state,
       taskDetailTargetPanel:
@@ -290,6 +376,24 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {
+    // Guard against invalid moves (e.g. 'UNDONE' passed as ID) that may
+    // appear in older op-log entries. Also reject self-moves where the
+    // task being moved is its own src/target — that would put a task into
+    // its own subTaskIds.
+    if (
+      !state.entities[srcTaskId] ||
+      !state.entities[targetTaskId] ||
+      taskId === srcTaskId ||
+      taskId === targetTaskId
+    ) {
+      TaskLog.warn('Ignoring invalid moveSubTask action', {
+        taskId,
+        srcTaskId,
+        targetTaskId,
+      });
+      return state;
+    }
+
     // Prevent circular references (task becoming subtask of its own descendant)
     if (wouldCreateCircularReference(state, taskId, targetTaskId)) {
       TaskLog.err(
@@ -469,8 +573,9 @@ export const taskReducer = createReducer<TaskState>(
       {
         ...task,
         // update timeSpent if first sub task and non present
+        // Guard timeSpentOnDay: legacy/imported tasks may have undefined here
         ...(parentTask.subTaskIds.length === 0 &&
-        Object.keys(task.timeSpentOnDay).length === 0
+        Object.keys(task.timeSpentOnDay || {}).length === 0
           ? {
               timeSpentOnDay: parentTask.timeSpentOnDay,
               timeSpent: calcTotalTimeSpent(parentTask.timeSpentOnDay),
@@ -489,7 +594,13 @@ export const taskReducer = createReducer<TaskState>(
       state,
     );
 
-    return {
+    // Keep this guard at the reducer boundary: normal creators generate fresh IDs,
+    // but op-log replay/import or direct action dispatch can replay the same task ID.
+    const parentSubTaskIds = parentTask.subTaskIds.includes(task.id)
+      ? parentTask.subTaskIds
+      : [...parentTask.subTaskIds, task.id];
+
+    const stateWithParentTask: TaskState = {
       ...stateCopy,
       // update current task to new sub task if parent was current before
       ...(state.currentTaskId === parentId ? { currentTaskId: task.id } : {}),
@@ -498,10 +609,12 @@ export const taskReducer = createReducer<TaskState>(
         ...stateCopy.entities,
         [parentId]: {
           ...parentTask,
-          subTaskIds: [...parentTask.subTaskIds, task.id],
+          subTaskIds: parentSubTaskIds,
         },
       },
     };
+
+    return reCalcTimesForParentIfParent(parentId, stateWithParentTask);
   }),
 
   on(toggleStart, (state) => {
@@ -532,7 +645,8 @@ export const taskReducer = createReducer<TaskState>(
     );
 
     const updateSubsAndMainWithoutSubs: Update<Task>[] = idsToUpdateDirectly.map((id) => {
-      const spentOnDayBefore = getTaskById(id, state).timeSpentOnDay;
+      // Guard timeSpentOnDay: legacy/imported tasks may have undefined here
+      const spentOnDayBefore = getTaskById(id, state).timeSpentOnDay || {};
       const timeSpentOnDayUpdated = {
         ...spentOnDayBefore,
         [day]: roundDurationVanilla(spentOnDayBefore[day], roundTo, isRoundUp),
@@ -692,6 +806,15 @@ export const taskReducer = createReducer<TaskState>(
     return {
       ...state,
       // we do this to maintain the order of tasks when they are moved to overdue
+      ids: [...validTaskIds, ...state.ids.filter((id) => !taskIds.includes(id))],
+    };
+  }),
+
+  // Same reordering for the non-persistent variant (#6992)
+  on(TaskSharedActions.localRemoveOverdueFromToday, (state, { taskIds }) => {
+    const validTaskIds = taskIds.filter((id) => !!state.entities[id]);
+    return {
+      ...state,
       ids: [...validTaskIds, ...state.ids.filter((id) => !taskIds.includes(id))],
     };
   }),

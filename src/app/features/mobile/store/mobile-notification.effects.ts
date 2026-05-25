@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
-import { switchMap, tap } from 'rxjs/operators';
-import { combineLatest, timer } from 'rxjs';
+import { distinctUntilChanged, map, switchMap, tap } from 'rxjs/operators';
+import { combineLatest, Observable, timer } from 'rxjs';
 import { SnackService } from '../../../core/snack/snack.service';
 import { Log } from '../../../core/log';
 import { T } from '../../../t.const';
@@ -9,11 +9,13 @@ import { generateNotificationId } from '../../android/android-notification-id.ut
 import { Store } from '@ngrx/store';
 import {
   selectAllTasksWithReminder,
+  selectAllTasksWithDeadlineReminder,
   selectUndoneTasksWithDueDayNoReminder,
 } from '../../tasks/store/task.selectors';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
 import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { ReminderConfig } from '../../config/global-config.model';
 
 const DELAY_PERMISSIONS = 2000;
 const DELAY_SCHEDULE = 5000;
@@ -31,6 +33,18 @@ export class MobileNotificationEffects {
   private _scheduledReminderIds = new Set<string>();
   // Track scheduled due-date notification IDs separately
   private _scheduledDueDateIds = new Set<string>();
+  // Track scheduled deadline reminder IDs separately
+  private _scheduledDeadlineIds = new Set<string>();
+
+  // Narrowed cfg slice so the scheduling effects only re-run on reminder-config
+  // changes, not on every unrelated global-config edit (theme, sync, etc.).
+  // Reference equality is sufficient: NgRx reducers preserve slice references
+  // when that slice is untouched.
+  private _reminderCfg$: Observable<ReminderConfig | undefined> =
+    this._globalConfigService.cfg$.pipe(
+      map((c) => c?.reminder),
+      distinctUntilChanged(),
+    );
 
   /**
    * Check notification permissions on startup for mobile platforms.
@@ -78,15 +92,33 @@ export class MobileNotificationEffects {
    * - We WANT notifications scheduled for synced tasks (user-facing functionality)
    * - Native scheduling calls are idempotent - rescheduling the same reminder is harmless
    * - Cancellation of removed reminders correctly handles tasks deleted via sync
+   * - Reacts to reminder-config changes (disableReminders) so the master toggle
+   *   takes effect immediately; unrelated cfg changes are filtered via _reminderCfg$
    */
   scheduleNotifications$ =
     this._platformService.isNative &&
     createEffect(
       () =>
         timer(DELAY_SCHEDULE).pipe(
-          switchMap(() => this._store.select(selectAllTasksWithReminder)),
-          tap(async (tasksWithReminders) => {
+          switchMap(() =>
+            combineLatest([
+              this._store.select(selectAllTasksWithReminder),
+              this._reminderCfg$,
+            ]),
+          ),
+          tap(async ([tasksWithReminders, reminderCfg]) => {
             try {
+              // Without this, alarms scheduled on prior ticks keep firing on Android
+              // via AlarmManager even after the user disables reminders.
+              if (reminderCfg?.disableReminders) {
+                for (const previousId of this._scheduledReminderIds) {
+                  const notificationId = generateNotificationId(previousId);
+                  await this._reminderService.cancelReminder(notificationId);
+                }
+                this._scheduledReminderIds.clear();
+                return;
+              }
+
               const currentReminderIds = new Set(
                 (tasksWithReminders || []).map((t) => t.id),
               );
@@ -169,18 +201,20 @@ export class MobileNotificationEffects {
           switchMap(() =>
             combineLatest([
               this._store.select(selectUndoneTasksWithDueDayNoReminder),
-              this._globalConfigService.cfg$,
+              this._reminderCfg$,
             ]),
           ),
-          tap(async ([tasks, cfg]) => {
+          tap(async ([tasks, reminderCfg]) => {
             try {
-              const notifyOnDueDate = cfg?.reminder?.notifyOnDueDate ?? true;
+              const notifyOnDueDate = reminderCfg?.notifyOnDueDate ?? true;
+              const disableReminders = reminderCfg?.disableReminders ?? false;
               const dueDateHour = Math.floor(
-                Math.max(0, Math.min(23, cfg?.reminder?.dueDateNotificationHour ?? 9)),
+                Math.max(0, Math.min(23, reminderCfg?.dueDateNotificationHour ?? 9)),
               );
 
-              // If disabled, cancel all previously scheduled due-date notifications
-              if (!notifyOnDueDate) {
+              // If disabled (by master switch or per-category), cancel previously
+              // scheduled due-date notifications and short-circuit.
+              if (disableReminders || !notifyOnDueDate) {
                 for (const previousId of this._scheduledDueDateIds) {
                   const notificationId = generateNotificationId(previousId + '_dueday');
                   await this._reminderService.cancelReminder(notificationId);
@@ -236,6 +270,93 @@ export class MobileNotificationEffects {
               this._scheduledDueDateIds = currentDueDateIds;
 
               Log.log('MobileEffects: scheduled due-date notifications', {
+                count: tasks.length,
+              });
+            } catch (error) {
+              Log.err(error);
+            }
+          }),
+        ),
+      {
+        dispatch: false,
+      },
+    );
+
+  /**
+   * Schedule explicit deadline reminders on iOS.
+   *
+   * SYNC-SAFE: Same rationale as scheduleNotifications$ above — dispatch:false
+   * (no store mutations), idempotent native scheduling, and we deliberately want
+   * deadline reminders scheduled for synced tasks. Cancellations are driven by
+   * the selector diff against `_scheduledDeadlineIds`.
+   */
+  scheduleDeadlineNotifications$ =
+    this._platformService.isNative &&
+    this._platformService.isIOS() &&
+    createEffect(
+      () =>
+        timer(DELAY_SCHEDULE).pipe(
+          switchMap(() =>
+            combineLatest([
+              this._store.select(selectAllTasksWithDeadlineReminder),
+              this._reminderCfg$,
+            ]),
+          ),
+          tap(async ([tasks, reminderCfg]) => {
+            try {
+              if (reminderCfg?.disableReminders) {
+                for (const previousId of this._scheduledDeadlineIds) {
+                  const notificationId = generateNotificationId(previousId + '_deadline');
+                  await this._reminderService.cancelReminder(notificationId);
+                }
+                this._scheduledDeadlineIds.clear();
+                return;
+              }
+
+              const currentDeadlineIds = new Set((tasks || []).map((t) => t.id));
+
+              for (const previousId of this._scheduledDeadlineIds) {
+                if (!currentDeadlineIds.has(previousId)) {
+                  const notificationId = generateNotificationId(previousId + '_deadline');
+                  await this._reminderService.cancelReminder(notificationId);
+                }
+              }
+
+              if (!tasks || tasks.length === 0) {
+                this._scheduledDeadlineIds.clear();
+                return;
+              }
+
+              const hasPermission = await this._reminderService.ensurePermissions();
+              if (!hasPermission) {
+                return;
+              }
+
+              const now = Date.now();
+              for (const task of tasks) {
+                if (!task.deadlineRemindAt || task.deadlineRemindAt <= now) {
+                  if (this._scheduledDeadlineIds.has(task.id)) {
+                    await this._reminderService.cancelReminder(
+                      generateNotificationId(task.id + '_deadline'),
+                    );
+                  }
+                  continue;
+                }
+
+                const id = generateNotificationId(task.id + '_deadline');
+                await this._reminderService.scheduleReminder({
+                  notificationId: id,
+                  reminderId: task.id + '_deadline',
+                  relatedId: task.id,
+                  title: task.title,
+                  reminderType: 'DEADLINE',
+                  triggerAtMs: task.deadlineRemindAt,
+                });
+              }
+
+              this._scheduledDeadlineIds = currentDeadlineIds;
+
+              Log.log('MobileEffects: scheduled deadline reminders', {
                 count: tasks.length,
               });
             } catch (error) {

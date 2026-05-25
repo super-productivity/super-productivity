@@ -8,6 +8,7 @@ import {
   linkedSignal,
   OnDestroy,
   OnInit,
+  signal,
   Signal,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -29,6 +30,7 @@ import {
   switchMap,
   take,
   takeUntil,
+  tap,
   timeout,
   withLatestFrom,
 } from 'rxjs/operators';
@@ -65,7 +67,6 @@ import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
 import { InlineInputComponent } from '../../ui/inline-input/inline-input.component';
 import { InlineMarkdownComponent } from '../../ui/inline-markdown/inline-markdown.component';
 import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
-import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
 import { getPluralKey } from '../../util/get-plural-key';
 import { shareReplayUntil } from '../../util/share-replay-until';
 import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-in-markdown-txt';
@@ -75,8 +76,7 @@ import {
   SimpleCounterSummaryItemComponent,
 } from './simple-counter-summary-item/simple-counter-summary-item.component';
 import { MetricService } from '../../features/metric/metric.service';
-
-const MAGIC_YESTERDAY_MARGIN = 4 * 60 * 60 * 1000;
+import { isWithinYesterdayMargin } from './is-include-yesterday.util';
 
 @Component({
   selector: 'daily-summary',
@@ -169,6 +169,8 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     shareReplay(1),
   );
 
+  isArchiveLoaded = signal(false);
+
   hasTasksForToday$: Observable<boolean> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
     map((tasks) => tasks && !!tasks.length),
   );
@@ -207,12 +209,12 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
             if (
               task.subTaskIds?.length ||
               !task.timeSpentOnDay ||
-              !(task.timeSpentOnDay[dayStr] > 0)
+              !(task.timeSpentOnDay?.[dayStr] > 0)
             ) {
               return acc;
             }
             const remainingEstimate =
-              task.timeEstimate + task.timeSpentOnDay[dayStr] - task.timeSpent;
+              task.timeEstimate + (task.timeSpentOnDay?.[dayStr] ?? 0) - task.timeSpent;
             return remainingEstimate > 0 ? acc + remainingEstimate : acc;
           }, 0),
       ),
@@ -229,8 +231,8 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           }
           return (
             acc +
-            (task.timeSpentOnDay && +task.timeSpentOnDay[dayStr]
-              ? +task.timeSpentOnDay[dayStr]
+            (task.timeSpentOnDay && +task.timeSpentOnDay?.[dayStr]
+              ? +task.timeSpentOnDay?.[dayStr]
               : 0)
           );
         }, 0),
@@ -265,9 +267,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
   constructor() {
     this._taskService.setSelectedId(null);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    this.isIncludeYesterday = Date.now() - todayStart.getTime() <= MAGIC_YESTERDAY_MARGIN;
+    this.isIncludeYesterday = isWithinYesterdayMargin(
+      Date.now(),
+      this._dateService.getStartOfNextDayDiffMs(),
+    );
 
     const cfg = this.configService.cfg();
     if (
@@ -311,12 +314,16 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
-    this._startCelebrationTimeout = window.setTimeout(
-      () => {
-        this._celebrate();
-      },
-      IS_TOUCH_ONLY ? 1500 : 500,
-    );
+    this.tasksWorkedOnOrDoneOrRepeatableFlat$
+      .pipe(
+        first((tasks) => tasks.length > 0),
+        takeUntil(this._onDestroy$),
+      )
+      .subscribe(() => {
+        this._startCelebrationTimeout = window.setTimeout(() => {
+          this._celebrate();
+        }, 300);
+      });
   }
 
   ngOnDestroy(): void {
@@ -493,7 +500,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private _getDailySummaryTasksFlat$(dayStr: string): Observable<Task[]> {
-    // TODO make more performant!!
+    this.isArchiveLoaded.set(false);
     const _isWorkedOnDoneOrDueToday = (() => {
       if (this.isIncludeYesterday) {
         const yesterday = new Date();
@@ -502,11 +509,11 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
         return (t: Task) =>
           (t.timeSpentOnDay &&
-            t.timeSpentOnDay[dayStr] &&
-            t.timeSpentOnDay[dayStr] > 0) ||
+            t.timeSpentOnDay?.[dayStr] &&
+            t.timeSpentOnDay?.[dayStr] > 0) ||
           (t.timeSpentOnDay &&
-            t.timeSpentOnDay[yesterdayStr] &&
-            t.timeSpentOnDay[yesterdayStr] > 0) ||
+            t.timeSpentOnDay?.[yesterdayStr] &&
+            t.timeSpentOnDay?.[yesterdayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
           (t.isDone &&
             t.doneOn &&
@@ -515,8 +522,8 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       } else {
         return (t: Task) =>
           (t.timeSpentOnDay &&
-            t.timeSpentOnDay[dayStr] &&
-            t.timeSpentOnDay[dayStr] > 0) ||
+            t.timeSpentOnDay?.[dayStr] &&
+            t.timeSpentOnDay?.[dayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
           (t.isDone && t.doneOn && this._dateService.isToday(t.doneOn));
       }
@@ -614,6 +621,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       withLatestFrom(this.workContextService.activeWorkContextTypeAndId$),
       map(_mapEntities),
       map(_mapFilterToFlatToday),
+      tap(() => this.isArchiveLoaded.set(true)),
     );
 
     const todayTasks: Observable<TaskWithSubTasks[]> =
@@ -623,9 +631,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
         map(_mapFilterToFlatOrRepeatToday),
       );
 
-    return combineLatest([todayTasks, archiveTasks]).pipe(
-      map(([t1, t2]) => t1.concat(t2)),
-    );
+    return combineLatest([
+      todayTasks,
+      archiveTasks.pipe(startWith([] as TaskWithSubTasks[])),
+    ]).pipe(map(([today, archive]) => today.concat(archive)));
   }
 
   private _celebrate(): void {

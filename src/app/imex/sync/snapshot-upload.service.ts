@@ -11,7 +11,7 @@ import {
 } from '../../op-log/util/client-id.provider';
 import { isOperationSyncCapable } from '../../op-log/sync/operation-sync.util';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migration.service';
 import { SyncLog } from '../../core/log';
 import { uuidv7 } from '../../util/uuid-v7';
@@ -21,7 +21,7 @@ import {
 } from '../../op-log/sync-providers/provider.interface';
 import { VectorClock } from '../../core/util/vector-clock';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
-import { isCryptoSubtleAvailable } from '../../op-log/encryption/encryption';
+import { isCryptoSubtleAvailable } from '@sp/sync-core';
 import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
 
 /**
@@ -106,7 +106,7 @@ export class SnapshotUploadService {
    * - Client ID
    *
    * @param logPrefix - Optional prefix for log messages
-   * @throws Error if validation fails or client ID is not available
+   * @throws Error if provider validation fails
    */
   async gatherSnapshotData(logPrefix?: string): Promise<SnapshotUploadData> {
     const prefix = logPrefix ? `${logPrefix}: ` : '';
@@ -120,11 +120,7 @@ export class SnapshotUploadService {
     SyncLog.normal(`${prefix}Getting current state...`);
     const state = await this._stateSnapshotService.getStateSnapshotAsync();
     const vectorClock = await this._vectorClockService.getCurrentVectorClock();
-    const clientId = await this._clientIdProvider.loadClientId();
-
-    if (!clientId) {
-      throw new Error('Client ID not available');
-    }
+    const clientId = await this._clientIdProvider.getOrGenerateClientId();
 
     return {
       syncProvider,

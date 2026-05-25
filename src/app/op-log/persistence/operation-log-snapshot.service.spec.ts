@@ -10,6 +10,7 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
+import { ValidateStateService } from '../validation/validate-state.service';
 
 describe('OperationLogSnapshotService', () => {
   let service: OperationLogSnapshotService;
@@ -18,6 +19,7 @@ describe('OperationLogSnapshotService', () => {
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockSchemaMigrationService: jasmine.SpyObj<SchemaMigrationService>;
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
+  let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -38,6 +40,13 @@ describe('OperationLogSnapshotService', () => {
     ]);
     mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
     mockClientIdProvider.loadClientId.and.resolveTo('test-client');
+    mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
+      'validateState',
+    ]);
+    mockValidateStateService.validateState.and.resolveTo({
+      isValid: true,
+      typiaErrors: [],
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -47,6 +56,7 @@ describe('OperationLogSnapshotService', () => {
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
         { provide: SchemaMigrationService, useValue: mockSchemaMigrationService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        { provide: ValidateStateService, useValue: mockValidateStateService },
       ],
     });
     service = TestBed.inject(OperationLogSnapshotService);
@@ -119,6 +129,21 @@ describe('OperationLogSnapshotService', () => {
 
     it('should return false when lastAppliedOpSeq is not a number', () => {
       const snapshot = createValidSnapshot({ lastAppliedOpSeq: '5' as any });
+      expect(service.isValidSnapshot(snapshot)).toBe(false);
+    });
+
+    it('should return false when compactedAt is missing', () => {
+      const snapshot = createValidSnapshot({ compactedAt: undefined as any });
+      expect(service.isValidSnapshot(snapshot)).toBe(false);
+    });
+
+    it('should return false when vectorClock is missing', () => {
+      const snapshot = createValidSnapshot({ vectorClock: undefined as any });
+      expect(service.isValidSnapshot(snapshot)).toBe(false);
+    });
+
+    it('should return false when vectorClock is an array', () => {
+      const snapshot = createValidSnapshot({ vectorClock: [] as any });
       expect(service.isValidSnapshot(snapshot)).toBe(false);
     });
   });
@@ -383,6 +408,66 @@ describe('OperationLogSnapshotService', () => {
       ).toBeRejectedWithError('Save failed');
 
       expect(mockOpLogStore.restoreStateCacheFromBackup).toHaveBeenCalled();
+    });
+
+    it('should validate migrated snapshot before saving and clearing backup', async () => {
+      const snapshot = createSnapshot();
+      const migratedSnapshot = { ...snapshot, schemaVersion: CURRENT_SCHEMA_VERSION };
+      mockOpLogStore.saveStateCacheBackup.and.resolveTo(undefined);
+      mockSchemaMigrationService.migrateStateIfNeeded.and.returnValue(migratedSnapshot);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+      mockOpLogStore.clearStateCacheBackup.and.resolveTo(undefined);
+
+      await service.migrateSnapshotWithBackup(snapshot);
+
+      expect(mockValidateStateService.validateState).toHaveBeenCalledWith(
+        migratedSnapshot.state as Record<string, unknown>,
+      );
+      expect(mockValidateStateService.validateState).toHaveBeenCalledBefore(
+        mockOpLogStore.saveStateCache,
+      );
+    });
+
+    it('should restore backup and not save when migrated state fails validation', async () => {
+      const snapshot = createSnapshot();
+      const migratedSnapshot = { ...snapshot, schemaVersion: CURRENT_SCHEMA_VERSION };
+      mockOpLogStore.saveStateCacheBackup.and.resolveTo(undefined);
+      mockSchemaMigrationService.migrateStateIfNeeded.and.returnValue(migratedSnapshot);
+      mockValidateStateService.validateState.and.resolveTo({
+        isValid: false,
+        typiaErrors: [{ path: '$input.task', expected: 'TaskState' }],
+      });
+      mockOpLogStore.restoreStateCacheFromBackup.and.resolveTo(undefined);
+
+      await expectAsync(
+        service.migrateSnapshotWithBackup(snapshot),
+      ).toBeRejectedWithError(/Migrated snapshot validation failed/);
+
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.restoreStateCacheFromBackup).toHaveBeenCalled();
+      expect(mockOpLogStore.clearStateCacheBackup).not.toHaveBeenCalled();
+    });
+
+    it('should restore backup and not save when migrated metadata is invalid', async () => {
+      const snapshot = createSnapshot();
+      // Drop a required field so isValidSnapshot rejects it
+      const migratedSnapshot = {
+        ...snapshot,
+        lastAppliedOpSeq: undefined as any,
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+      };
+      mockOpLogStore.saveStateCacheBackup.and.resolveTo(undefined);
+      mockSchemaMigrationService.migrateStateIfNeeded.and.returnValue(migratedSnapshot);
+      mockOpLogStore.restoreStateCacheFromBackup.and.resolveTo(undefined);
+
+      await expectAsync(
+        service.migrateSnapshotWithBackup(snapshot),
+      ).toBeRejectedWithError(/Migrated snapshot metadata validation failed/);
+
+      expect(mockValidateStateService.validateState).not.toHaveBeenCalled();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.restoreStateCacheFromBackup).toHaveBeenCalled();
+      expect(mockOpLogStore.clearStateCacheBackup).not.toHaveBeenCalled();
     });
   });
 });

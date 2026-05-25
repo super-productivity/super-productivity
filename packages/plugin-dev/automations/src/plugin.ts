@@ -1,11 +1,10 @@
 import {
-  AnyTaskUpdatePayload,
+  CurrentTaskChangePayload,
   PluginAPI,
   TaskCompletePayload,
   TaskUpdatePayload,
   TaskCreatedPayload,
 } from '@super-productivity/plugin-api';
-import type { PluginHooks } from '@super-productivity/plugin-api';
 
 declare const plugin: PluginAPI;
 
@@ -47,12 +46,29 @@ plugin.registerHook('taskUpdate' as any, (payload: TaskUpdatePayload) => {
     plugin.log.warn('Received taskUpdate hook without task data');
     return;
   }
-  // We no longer need to heuristically detect creation here
   automationManager.onTaskEvent({
     type: 'taskUpdated',
     task: payload.task,
+    changes: payload.changes,
     previousTaskState: undefined, // TODO: How to get previous state? Payload changes only has partial.
   });
+});
+
+// The host provides both the new current task and the previous one on every
+// transition, so we don't need to track state locally. A switch between two
+// tasks arrives as { current: B, previous: A } and fires both stop+start.
+plugin.registerHook('currentTaskChange' as any, (payload: CurrentTaskChangePayload) => {
+  if (!payload) {
+    plugin.log.warn('Received currentTaskChange hook without payload');
+    return;
+  }
+  const { current, previous } = payload;
+  if (previous) {
+    automationManager.onTaskEvent({ type: 'taskStopped', task: previous });
+  }
+  if (current) {
+    automationManager.onTaskEvent({ type: 'taskStarted', task: current });
+  }
 });
 
 // Register UI commands
@@ -75,6 +91,9 @@ if (plugin.onMessage) {
         };
       case 'saveRule':
         await automationManager.getRegistry().addOrUpdateRule(message.payload);
+        return { success: true };
+      case 'addRules':
+        await automationManager.getRegistry().addRules(message.payload);
         return { success: true };
       case 'deleteRule':
         await automationManager.getRegistry().deleteRule(message.payload.id);

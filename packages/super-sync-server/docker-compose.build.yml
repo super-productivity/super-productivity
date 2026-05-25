@@ -1,11 +1,13 @@
 # Local build override for development
 #
 # Usage:
-#   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#   ./scripts/deploy.sh --build
 
 services:
   supersync:
     build:
       context: ../..
       dockerfile: packages/super-sync-server/Dockerfile
+      args:
+        VCS_REF: ${SUPERSYNC_BUILD_SHA:-local}
     image: supersync:local

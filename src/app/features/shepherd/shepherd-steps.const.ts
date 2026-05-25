@@ -1,4 +1,5 @@
-import Step from 'shepherd.js/src/types/step';
+import type Shepherd from 'shepherd.js';
+type StepOptions = Shepherd.Step.StepOptions;
 import { nextOnObs, twoWayObs } from './shepherd-helper';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskService } from '../tasks/task.service';
@@ -34,7 +35,7 @@ export const SHEPHERD_STEPS = (
   layoutService: LayoutService,
   taskService: TaskService,
   workContextService: WorkContextService,
-): Array<Step.StepOptions> => {
+): Array<StepOptions> => {
   const KEY_COMBO = (action: keyof KeyboardConfig): string =>
     `<kbd>${cfg.keyboard[action]}</kbd>`;
 

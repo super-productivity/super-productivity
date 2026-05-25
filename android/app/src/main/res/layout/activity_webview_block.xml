@@ -48,5 +48,16 @@
             android:text="@string/webview_block_close"
             android:textAllCaps="false"
             android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/webview_block_try_anyway"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:backgroundTint="#1a1a1a"
+            android:text="@string/webview_block_try_anyway"
+            android:textAllCaps="false"
+            android:textColor="#888888"
+            android:textSize="12sp" />
     </LinearLayout>
 </ScrollView>

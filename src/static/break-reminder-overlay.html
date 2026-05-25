@@ -78,7 +78,10 @@
       .map((v) => v.split('='))
       .reduce((pre, [key, value]) => ({ ...pre, [key]: value }), {});
     const msg = hashObj.msg;
-    document.getElementById('msg').innerHTML = decodeURI(msg);
+    // textContent (not innerHTML): the message comes from user settings and is
+    // not trusted as HTML. decodeURIComponent matches encodeURIComponent on the
+    // sender side; decodeURI would leave reserved chars (& = #) encoded.
+    document.getElementById('msg').textContent = msg ? decodeURIComponent(msg) : '';
     const imgUrl = hashObj.img;
     const time = hashObj.time;
 

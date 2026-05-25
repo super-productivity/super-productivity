@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { AutomationRegistry } from './registry';
 import { IAutomationAction, IAutomationCondition, IAutomationTrigger } from './definitions';
 

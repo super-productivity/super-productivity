@@ -292,18 +292,17 @@ describe('Vector Clock Import Reset Integration', () => {
         const numClients = MAX_VECTOR_CLOCK_SIZE;
         const clients = createClients(numClients, storeService);
 
-        // Phase 1: Build up vector clocks to MAX by having all clients create tasks and sync
-        for (let round = 0; round < 2; round++) {
-          for (let i = 0; i < numClients; i++) {
-            await clients[i].createLocalOp(
-              'TASK',
-              `task-round${round}-${i}`,
-              OpType.Create,
-              '[Task] Add Task',
-              createMinimalTaskPayload(`task-round${round}-${i}`),
-            );
-            await clients[i].sync(server);
-          }
+        // Phase 1: Build vector clocks to MAX. One op per client is sufficient:
+        // after the convergence pass every client has merged all MAX client IDs.
+        for (let i = 0; i < numClients; i++) {
+          await clients[i].createLocalOp(
+            'TASK',
+            `task-pre-import-${i}`,
+            OpType.Create,
+            '[Task] Add Task',
+            createMinimalTaskPayload(`task-pre-import-${i}`),
+          );
+          await clients[i].sync(server);
         }
 
         // Final sync pass to ensure all clients have downloaded everything
@@ -376,11 +375,11 @@ describe('Vector Clock Import Reset Integration', () => {
     );
 
     /**
-     * Verify that pre-import ops from unknown clients (never communicated with import
-     * client) are KEPT. The import has no knowledge of these clients, so it can't
-     * claim to supersede their ops (independent timelines).
+     * Verify that pre-import ops from unknown clients are filtered, while
+     * post-import ops with minimal clocks are kept by the import-client-counter
+     * exception.
      */
-    it('should keep pre-import ops from clients unknown to the import', async () => {
+    it('should filter pre-import unknown-client ops and keep post-import minimal-clock ops', async () => {
       const clientA = new SimulatedClient('client-aaa', storeService);
       const clientB = new SimulatedClient('client-bbb', storeService);
       const clientC = new SimulatedClient('client-ccc', storeService);
@@ -476,11 +475,13 @@ describe('Vector Clock Import Reset Integration', () => {
         postImportOpB,
       ]);
 
-      // Pre-import op from C should be KEPT (unknown client - import has no entry for C)
-      // Post-import op from B should also be kept (import-client-counter exception)
-      expect(result.invalidatedOps.length).toBe(0);
-      expect(result.validOps.length).toBe(2);
-      expect(result.validOps.find((op) => op.entityId === 'taskC-pre')).toBeDefined();
+      // Pre-import op from C is filtered because it lacks import knowledge.
+      // Post-import op from B is kept by the import-client-counter exception.
+      expect(result.invalidatedOps.length).toBe(1);
+      expect(result.validOps.length).toBe(1);
+      expect(
+        result.invalidatedOps.find((op) => op.entityId === 'taskC-pre'),
+      ).toBeDefined();
       expect(result.validOps.find((op) => op.entityId === 'taskB-post')).toBeDefined();
     });
   });
@@ -612,19 +613,19 @@ describe('Vector Clock Import Reset Integration', () => {
         const clients = createClients(numClients, storeService);
 
         // === Phase 1: Build up clocks to MAX ===
-        for (let round = 0; round < 3; round++) {
-          for (let i = 0; i < numClients; i++) {
-            await clients[i].createLocalOp(
-              'TASK',
-              `task-r${round}-c${i}`,
-              OpType.Create,
-              '[Task] Add Task',
-              createMinimalTaskPayload(`task-r${round}-c${i}`, {
-                title: `Round ${round} Client ${i}`,
-              }),
-            );
-            await clients[i].sync(server);
-          }
+        // One op per client gives the import client causal knowledge of all
+        // MAX client IDs after the convergence pass.
+        for (let i = 0; i < numClients; i++) {
+          await clients[i].createLocalOp(
+            'TASK',
+            `task-pre-c${i}`,
+            OpType.Create,
+            '[Task] Add Task',
+            createMinimalTaskPayload(`task-pre-c${i}`, {
+              title: `Pre-import client ${i}`,
+            }),
+          );
+          await clients[i].sync(server);
         }
         // Final convergence sync
         for (let i = 0; i < numClients; i++) {
@@ -633,7 +634,7 @@ describe('Vector Clock Import Reset Integration', () => {
 
         // Snapshot: count server ops before import
         const preImportServerOpCount = server.getAllOps().length;
-        expect(preImportServerOpCount).toBe(numClients * 3);
+        expect(preImportServerOpCount).toBe(numClients);
 
         // === Phase 2: Client 0 imports ===
         const importOp = await clients[0].createLocalOp(

@@ -107,7 +107,7 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorA.hover();
-      await taskLocatorA.locator('.done-toggle').click();
+      await taskLocatorA.locator('done-toggle').click();
       await expect(taskLocatorA).toHaveClass(/isDone/);
       console.log('[EncryptConflict] Client A marked task done');
 
@@ -119,7 +119,7 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.done-toggle').click();
+      await taskLocatorB.locator('done-toggle').click();
       await expect(taskLocatorB).toHaveClass(/isDone/);
       console.log('[EncryptConflict] Client B marked task done (later timestamp)');
 
@@ -237,7 +237,7 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${task1}")`)
         .first();
       await task1LocatorA.hover();
-      await task1LocatorA.locator('.done-toggle').click();
+      await task1LocatorA.locator('done-toggle').click();
       console.log('[MultiTask] Client A marked task1 done');
 
       // Wait for timestamp gap
@@ -248,13 +248,13 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${task1}")`)
         .first();
       await task1LocatorB.hover();
-      await task1LocatorB.locator('.done-toggle').click();
+      await task1LocatorB.locator('done-toggle').click();
 
       const task2LocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${task2}")`)
         .first();
       await task2LocatorB.hover();
-      await task2LocatorB.locator('.done-toggle').click();
+      await task2LocatorB.locator('done-toggle').click();
       console.log('[MultiTask] Client B marked task1 and task2 done (later timestamp)');
 
       // Sync sequence
@@ -461,19 +461,19 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorA.hover();
-      await taskLocatorA.locator('.done-toggle').click();
+      await taskLocatorA.locator('done-toggle').click();
 
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorB.hover();
-      await taskLocatorB.locator('.done-toggle').click();
+      await taskLocatorB.locator('done-toggle').click();
 
       const taskLocatorC = clientC.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
       await taskLocatorC.hover();
-      await taskLocatorC.locator('.done-toggle').click();
+      await taskLocatorC.locator('done-toggle').click();
 
       console.log('[ThreeWay] All three clients made concurrent changes');
 

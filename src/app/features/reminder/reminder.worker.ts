@@ -33,7 +33,11 @@ const reInitCheckInterval = (reminders: ReminderCopy[]): void => {
             [oldest];
 
       postMessage(remindersToSend);
-      Log.log('Worker postMessage', remindersToSend);
+      Log.log('Worker postMessage', {
+        count: remindersToSend.length,
+        ids: remindersToSend.map((r) => r.id),
+        type: remindersToSend[0]?.type,
+      });
     }
   }, CHECK_INTERVAL_DURATION);
 };

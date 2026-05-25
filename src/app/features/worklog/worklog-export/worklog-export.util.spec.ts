@@ -264,6 +264,31 @@ describe('createRows', () => {
       expect(rows[2].tags).toEqual([tagId2]);
     });
 
+    it('should use sub-task own tags when present, not parent tags (#7756)', () => {
+      // Mirrors #7756 follow-up: sub-tasks may now own tags distinct from the
+      // parent. Worklog rows for the sub-task should report what the sub-task
+      // actually carries, not silently swap in the parent's tags.
+      const pId = 'PT_OWN',
+        sId = 'ST_OWN',
+        parentTagId = 'TagParent',
+        subOwnTagId = 'TagOwn';
+      const parent = createTask({ id: pId });
+      const sub = createSubTask({ id: sId }, parent);
+      const parentTag = createTag(parentTagId, parent);
+      const subOwnTag = createTag(subOwnTagId, sub);
+      const ownData = createWorklogData({
+        tasks: [parent, sub],
+        tags: [parentTag, subOwnTag],
+      });
+
+      const rows = createRows(ownData, WorklogGrouping.WORKLOG);
+      // Parent row gets parent's tag, sub-task row gets its own tag.
+      const parentRow = rows.find((r) => r.titlesWithSub[0] === pId);
+      const subRow = rows.find((r) => r.titlesWithSub[0] === sId);
+      expect(parentRow?.tags).toEqual([parentTagId]);
+      expect(subRow?.tags).toEqual([subOwnTagId]);
+    });
+
     it('should have today tags', () => {
       const todayTaskId = 'T1',
         todayTagId = 'Tag1';

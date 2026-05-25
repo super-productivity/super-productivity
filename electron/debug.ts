@@ -106,8 +106,8 @@ export const initDebug = (
   }
 
   app.on('browser-window-created', (event, win) => {
-    // Skip dev tools for overlay window
-    if (win.title === 'Super Productivity Overlay') {
+    // Skip dev tools for task widget window
+    if (win.title === 'Super Productivity Task Widget') {
       return;
     }
 

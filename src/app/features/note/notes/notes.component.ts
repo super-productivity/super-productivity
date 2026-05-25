@@ -15,14 +15,14 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { Note } from '../note.model';
 import { T } from '../../../t.const';
 import { WorkContextService } from '../../work-context/work-context.service';
-import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { moveItemInArray } from '../../../util/move-item-in-array';
 import { MatIcon } from '@angular/material/icon';
 import { NoteComponent } from '../note/note.component';
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
-import { DRAG_DELAY_FOR_TOUCH, HISTORY_STATE } from '../../../app.constants';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { HISTORY_STATE } from '../../../app.constants';
+import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from 'src/app/core-ui/layout/layout.service';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
 
@@ -40,7 +40,6 @@ import { IS_MOBILE } from 'src/app/util/is-mobile';
     NoteComponent,
     AsyncPipe,
     TranslatePipe,
-    CdkDragHandle,
   ],
 })
 export class NotesComponent implements OnInit {
@@ -116,6 +115,5 @@ export class NotesComponent implements OnInit {
     });
   }
 
-  protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
 }

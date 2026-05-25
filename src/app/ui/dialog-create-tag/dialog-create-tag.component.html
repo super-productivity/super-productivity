@@ -44,15 +44,11 @@
       </mat-autocomplete>
     </mat-form-field>
 
-    <mat-form-field>
-      <mat-label>{{ T.F.TAG.FORM_BASIC.L_COLOR | translate }}</mat-label>
-      <input
-        [(ngModel)]="color"
-        name="color"
-        matInput
-        type="color"
-      />
-    </mat-form-field>
+    <input-color-picker
+      [label]="T.F.TAG.FORM_BASIC.L_COLOR | translate"
+      [value]="color"
+      (valueChange)="color = $event"
+    />
   </form>
 </mat-dialog-content>
 

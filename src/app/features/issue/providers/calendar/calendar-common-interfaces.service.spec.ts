@@ -49,6 +49,7 @@ describe('CalendarCommonInterfacesService', () => {
         start: new Date('2025-01-15T00:00:00Z').getTime(),
         duration: 0,
         isAllDay: true,
+        issueProviderKey: 'ICAL',
       };
 
       const result = service.getAddTaskData(allDayEvent);
@@ -68,6 +69,7 @@ describe('CalendarCommonInterfacesService', () => {
         start: new Date('2025-01-15T14:30:00Z').getTime(),
         duration: 3600000, // 1 hour
         isAllDay: false,
+        issueProviderKey: 'ICAL',
       };
 
       const result = service.getAddTaskData(timedEvent);
@@ -85,6 +87,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Regular Event',
         start: new Date('2025-01-15T10:00:00Z').getTime(),
         duration: 1800000, // 30 minutes
+        issueProviderKey: 'ICAL',
       };
 
       const result = service.getAddTaskData(eventWithoutAllDayFlag);
@@ -102,6 +105,7 @@ describe('CalendarCommonInterfacesService', () => {
         start: new Date('2025-02-20T00:00:00Z').getTime(),
         duration: 86400000, // 24 hours
         isAllDay: true,
+        issueProviderKey: 'ICAL',
       };
 
       const result = service.getAddTaskData(allDayEvent);
@@ -123,11 +127,59 @@ describe('CalendarCommonInterfacesService', () => {
         start: new Date('2025-01-15T09:00:00Z').getTime(),
         duration: 3600000,
         isAllDay: true,
+        issueProviderKey: 'ICAL',
       };
 
       const result = service.getAddTaskData(eventWithoutDescription);
 
       expect(result.notes).toBe('');
+    });
+  });
+
+  describe('searchIssues', () => {
+    it('should apply calendar regex filters', async () => {
+      const mockCalendarCfg = {
+        id: 'provider-1',
+        isEnabled: true,
+        icalUrl: 'https://example.com/calendar.ics',
+        filterIncludeRegex: 'Meeting|Lunch',
+        filterExcludeRegex: 'Lunch',
+      };
+      const calendarEvents: CalendarIntegrationEvent[] = [
+        {
+          id: 'meeting-event',
+          calProviderId: 'provider-1',
+          title: 'Team Meeting',
+          start: new Date('2025-01-15T10:00:00Z').getTime(),
+          duration: 3600000,
+          issueProviderKey: 'ICAL',
+        },
+        {
+          id: 'lunch-event',
+          calProviderId: 'provider-1',
+          title: 'Lunch',
+          start: new Date('2025-01-15T12:00:00Z').getTime(),
+          duration: 3600000,
+          issueProviderKey: 'ICAL',
+        },
+        {
+          id: 'focus-event',
+          calProviderId: 'provider-1',
+          title: 'Focus Block',
+          start: new Date('2025-01-15T14:00:00Z').getTime(),
+          duration: 3600000,
+          issueProviderKey: 'ICAL',
+        },
+      ];
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(mockCalendarCfg as any));
+      calendarIntegrationServiceSpy.requestEventsForSchedule$.and.returnValue(
+        of(calendarEvents),
+      );
+
+      const result = await service.searchIssues('', 'provider-1');
+
+      expect(result.map((item) => item.title)).toEqual(['Team Meeting']);
+      expect(result[0].issueData.id).toBe('meeting-event');
     });
   });
 
@@ -158,6 +210,7 @@ describe('CalendarCommonInterfacesService', () => {
       title: 'Original Title',
       start: new Date('2025-01-15T10:00:00Z').getTime(),
       duration: 3600000,
+      issueProviderKey: 'ICAL',
       ...overrides,
     });
 
@@ -319,6 +372,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Same Title',
         start: new Date('2025-01-15T10:00:00Z').getTime(),
         duration: 3600000,
+        issueProviderKey: 'ICAL',
       };
 
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(mockCalendarCfg as any));
@@ -358,6 +412,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Same Title',
         start: new Date('2025-01-15T10:00:00Z').getTime(),
         duration: 3600000,
+        issueProviderKey: 'ICAL',
       };
 
       const calendarEvent2: CalendarIntegrationEvent = {
@@ -366,6 +421,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'New Title',
         start: new Date('2025-01-15T11:00:00Z').getTime(),
         duration: 3600000,
+        issueProviderKey: 'ICAL',
       };
 
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(mockCalendarCfg as any));
@@ -430,6 +486,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'New Title 1',
         start: new Date('2025-01-15T10:00:00Z').getTime(),
         duration: 3600000,
+        issueProviderKey: 'ICAL',
       };
 
       const calendarEvent2: CalendarIntegrationEvent = {
@@ -438,6 +495,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'New Title 2',
         start: new Date('2025-01-15T11:00:00Z').getTime(),
         duration: 3600000,
+        issueProviderKey: 'ICAL',
       };
 
       const calendarEvent3: CalendarIntegrationEvent = {
@@ -446,6 +504,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'New Title 3',
         start: new Date('2025-01-15T12:00:00Z').getTime(),
         duration: 3600000,
+        issueProviderKey: 'ICAL',
       };
 
       // Setup spies to return different configs for different providers
@@ -518,6 +577,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'New Title',
         start: new Date('2025-01-15T10:00:00Z').getTime(),
         duration: 3600000,
+        issueProviderKey: 'ICAL',
       };
 
       issueProviderServiceSpy.getCfgOnce$.and.callFake((providerId: string) => {
@@ -586,6 +646,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'New Title',
         start: new Date('2025-01-16T14:00:00Z').getTime(), // Different day and time
         duration: 7200000, // 2 hours
+        issueProviderKey: 'ICAL',
       };
 
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(mockCalendarCfg as any));

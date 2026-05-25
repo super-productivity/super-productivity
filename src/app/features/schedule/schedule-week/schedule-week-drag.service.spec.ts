@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { CdkDragRelease } from '@angular/cdk/drag-drop';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -7,6 +8,9 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { signal } from '@angular/core';
 import { GlobalConfigState } from '../../config/global-config.model';
+import { ScheduleEvent } from '../schedule.model';
+import { FH, SVEType, T_ID_PREFIX } from '../schedule.const';
+import { PlannerActions } from '../../planner/store/planner.actions';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -55,6 +59,92 @@ describe('ScheduleWeekDragService', () => {
 
   afterEach(() => {
     TestBed.resetTestingModule();
+  });
+
+  const createTaskEvent = (
+    task: Partial<{ id: string; title: string; dueWithTime: number }> = {},
+  ): ScheduleEvent =>
+    ({
+      id: task.id ?? 'task-1',
+      type: SVEType.ScheduledTask,
+      style: '',
+      startHours: 10,
+      timeLeftInHours: 0.5,
+      data: {
+        id: task.id ?? 'task-1',
+        title: task.title ?? 'Test Task',
+        timeEstimate: THIRTY_MINUTES_MS,
+        dueWithTime: task.dueWithTime,
+      },
+    }) as ScheduleEvent;
+
+  describe('drag release reorder behavior', () => {
+    const createReleaseEvent = (
+      sourceEvent: ScheduleEvent,
+      sourceEl: HTMLElement,
+    ): CdkDragRelease<ScheduleEvent> =>
+      ({
+        source: {
+          data: sourceEvent,
+          element: {
+            nativeElement: sourceEl,
+          },
+          reset: jasmine.createSpy('reset'),
+        },
+        event: new MouseEvent('mouseup', { clientX: 10, clientY: 120 }),
+      }) as unknown as CdkDragRelease<ScheduleEvent>;
+
+    const createScheduleEventElement = (
+      taskId: string,
+      className = SVEType.TaskPlannedForDay,
+    ): HTMLElement => {
+      const el = document.createElement('schedule-event');
+      el.id = `${T_ID_PREFIX}${taskId}`;
+      el.classList.add(className);
+      return el;
+    };
+
+    beforeEach(() => {
+      setupTestBed();
+    });
+
+    it('should still reorder when shift-dropping over a normal schedule task', () => {
+      const sourceEl = createScheduleEventElement('source', SVEType.ScheduledTask);
+      const targetEl = createScheduleEventElement('target');
+      spyOn(document, 'elementsFromPoint').and.returnValue([targetEl]);
+
+      service.setShiftMode(true);
+      service.handleDragReleased(
+        createReleaseEvent(createTaskEvent({ id: 'source' }), sourceEl),
+      );
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: PlannerActions.moveBeforeTask.type,
+          toTaskId: 'target',
+        }),
+      );
+    });
+  });
+
+  describe('drag preview sizing', () => {
+    beforeEach(() => {
+      setupTestBed();
+    });
+
+    it('should use the full remaining task time for clipped beyond-budget events', () => {
+      const event = createTaskEvent();
+      event.isBeyondBudget = true;
+      event.timeLeftInHours = 0.25;
+      event.data = {
+        ...event.data,
+        subTaskIds: [],
+        timeEstimate: TWO_HOURS_MS,
+        timeSpent: THIRTY_MINUTES_MS,
+      } as ScheduleEvent['data'];
+
+      expect((service as any)._calculateRowSpan(event)).toBe(1.5 * FH);
+    });
   });
 
   describe('_scheduleTask reminder behavior (via scheduleTaskWithTime action)', () => {

@@ -360,8 +360,8 @@ describe('ValidationService', () => {
       expect(result.errorCode).toBe(SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE);
     });
 
-    it('should accept timestamps in the future (clamping handled by SyncService)', () => {
-      // Future timestamp validation removed - clamping is handled in SyncService.processOperation()
+    it('should accept timestamps in the future (clamping handled during upload)', () => {
+      // Future timestamp validation removed - clamping is handled in OperationUploadService.
       const futureTime = Date.now() + 10 * 60 * 1000; // 10 minutes in future
       const op = createValidOp({ timestamp: futureTime });
       const result = validationService.validateOp(op, clientId);
@@ -466,6 +466,7 @@ describe('ValidationService', () => {
         'MENU_TREE',
         'METRIC',
         'BOARD',
+        'SECTION',
         'REMINDER',
         'MIGRATION',
         'RECOVERY',
@@ -480,7 +481,7 @@ describe('ValidationService', () => {
     });
 
     it('should have exactly the expected number of entity types', () => {
-      expect(ALLOWED_ENTITY_TYPES.size).toBe(20);
+      expect(ALLOWED_ENTITY_TYPES.size).toBe(21);
     });
   });
 });

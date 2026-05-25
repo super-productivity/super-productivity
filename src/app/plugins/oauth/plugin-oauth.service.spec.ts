@@ -442,14 +442,14 @@ describe('PluginOAuthService', () => {
       expect(code).toBe('the-code');
     });
 
-    it('should ignore handleRedirectError with missing state', async () => {
+    it('should reject handleRedirectError with missing state (local error)', async () => {
+      // Errors without a state originate locally (e.g. main-process
+      // failed_to_open_browser). They are not CSRF-relevant, so we still
+      // reject the pending redirect rather than wait for a 5-minute timeout.
       const promise = service.waitForRedirectCode('plugin-1', 'test-state');
-      service.handleRedirectError('user_denied');
+      service.handleRedirectError('failed_to_open_browser');
 
-      // Promise should still be pending (not rejected) since state is undefined
-      service.handleRedirectCode('the-code', 'test-state');
-      const code = await promise;
-      expect(code).toBe('the-code');
+      await expectAsync(promise).toBeRejectedWithError(/failed_to_open_browser/);
     });
 
     it('should only resolve the most recent pending flow', async () => {

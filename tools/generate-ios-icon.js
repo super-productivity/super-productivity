@@ -7,7 +7,16 @@
  * This script resizes the existing logo and ensures it has no alpha channel.
  */
 
-const sharp = require('sharp');
+let sharp;
+try {
+  sharp = require('sharp');
+} catch {
+  console.log('sharp not found, installing...');
+  require('child_process').execSync('npm install --no-save --no-package-lock sharp', {
+    stdio: 'inherit',
+  });
+  sharp = require('sharp');
+}
 const fs = require('fs');
 const path = require('path');
 

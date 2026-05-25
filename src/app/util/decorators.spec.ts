@@ -231,12 +231,14 @@ describe('Decorators', () => {
     });
 
     it('should maintain correct this context', () => {
+      const spy = jasmine.createSpy('method');
+
       class TestClass {
         value = 42;
 
         @debounce(100)
-        method(): number {
-          return this.value;
+        method(): void {
+          spy(this.value);
         }
       }
 
@@ -244,11 +246,14 @@ describe('Decorators', () => {
       instance.method();
       jasmine.clock().tick(100);
 
-      // Verify the method was called with correct context
-      // (We can't directly check the return value since it's async)
+      expect(spy).toHaveBeenCalledOnceWith(42);
+
       instance.value = 100;
       instance.method();
       jasmine.clock().tick(100);
+
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy.calls.mostRecent().args).toEqual([100]);
     });
 
     it('should use last arguments when trailing', () => {

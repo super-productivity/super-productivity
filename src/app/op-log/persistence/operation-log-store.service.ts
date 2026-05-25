@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import type { RemoteOperationApplyStorePort } from '@sp/sync-core';
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
 import {
   Operation,
@@ -28,11 +29,13 @@ import {
 import {
   DUPLICATE_OPERATION_ERROR_MSG,
   OPERATION_LOG_STORE_NOT_INITIALIZED,
+  isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { runDbUpgrade } from './db-upgrade';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
+  IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
@@ -155,7 +158,18 @@ interface OpLogDB extends DBSchema {
     key: string; // profile ID
     value: ProfileDataStoreEntry;
   };
+  /**
+   * Stores the sync clientId (device identity). Consolidated from legacy 'pf'
+   * in version 6 so destructive-flow rotation joins the atomic transaction in
+   * runDestructiveStateReplacement. See issue #7732.
+   */
+  [STORE_NAMES.CLIENT_ID]: {
+    key: string; // SINGLETON_KEY ('current')
+    value: string; // the clientId
+  };
 }
+
+type OpLogStoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES];
 
 /**
  * Manages the persistence of operations and state snapshots in IndexedDB.
@@ -168,7 +182,7 @@ interface OpLogDB extends DBSchema {
 @Injectable({
   providedIn: 'root',
 })
-export class OperationLogStoreService {
+export class OperationLogStoreService implements RemoteOperationApplyStorePort<Operation> {
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
@@ -193,35 +207,75 @@ export class OperationLogStoreService {
       this._db = undefined;
       this._initPromise = undefined;
     });
+    // A newer tab is upgrading SUP_OPS (a future schema bump). Close now so this
+    // connection does not block the upgrade; the next access reopens
+    // transparently via _ensureInit().
+    db.addEventListener('versionchange', () => {
+      db.close();
+      this._db = undefined;
+      this._initPromise = undefined;
+    });
     this._db = db;
+  }
+
+  /**
+   * Wraps a single `openDB` call. Exists as a testing seam so specs can
+   * `spyOn(service as any, '_openDbOnce')` to inject failures without mocking
+   * the `idb` module import. Not intended to be called directly outside the
+   * retry loop.
+   */
+  private _openDbOnce(): Promise<IDBPDatabase<OpLogDB>> {
+    return openDB<OpLogDB>(DB_NAME, DB_VERSION, {
+      upgrade: (db, oldVersion, _newVersion, transaction) => {
+        runDbUpgrade(db, oldVersion, transaction);
+      },
+    });
   }
 
   /**
    * Opens IndexedDB with retry logic and exponential backoff.
    * Transient failures (file locks, temporary I/O issues) may resolve on retry.
    *
-   * Total attempts = 1 initial + IDB_OPEN_RETRIES retries.
-   * With IDB_OPEN_RETRIES=3: attempts at 0ms, 500ms, 1500ms, 3500ms (total ~3.5s worst case).
+   * The retry budget depends on the error:
+   * - Lock-related errors (InvalidStateError, "backing store"): use the full
+   *   IDB_OPEN_RETRIES window (~31s) to outlast stale LevelDB locks from a
+   *   previous session. See issue #7191.
+   * - Other errors: fall back to IDB_OPEN_RETRIES_NON_LOCK (~7s). Every op-log
+   *   read/write awaits `_ensureInit()`, so a 31s retry window on a non-lock
+   *   error blocks the entire op-log subsystem for 31s before the hydrator's
+   *   alert dialog reaches the user. There's no expectation that waiting
+   *   helps for non-lock errors, so fail fast.
    *
    * @throws IndexedDBOpenError if all retry attempts fail
    * @see https://github.com/johannesjo/super-productivity/issues/6255
+   * @see https://github.com/super-productivity/super-productivity/issues/7191
    */
   private async _openDbWithRetry(): Promise<IDBPDatabase<OpLogDB>> {
-    const totalAttempts = 1 + IDB_OPEN_RETRIES;
+    let maxRetries = IDB_OPEN_RETRIES;
+    let attempt = 1;
     let lastError: unknown;
 
-    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    // Loop until either openDB succeeds or we exhaust the retry budget for the
+    // observed error class. `maxRetries` may shrink after the first failure if
+    // the error doesn't look lock-related.
+    while (attempt <= 1 + maxRetries) {
       try {
-        return await openDB<OpLogDB>(DB_NAME, DB_VERSION, {
-          upgrade: (db, oldVersion, _newVersion, transaction) => {
-            runDbUpgrade(db, oldVersion, transaction);
-          },
-        });
+        return await this._openDbOnce();
       } catch (e) {
         lastError = e;
 
+        // Classify the error on the first failure. If it doesn't look
+        // lock-related, shrink the retry budget so we fail fast and let the
+        // hydrator surface the error instead of hanging for the full window.
+        if (attempt === 1 && !isLockRelatedIdbOpenError(e)) {
+          maxRetries = IDB_OPEN_RETRIES_NON_LOCK;
+        }
+
+        const totalAttempts = 1 + maxRetries;
         if (attempt < totalAttempts) {
-          // Exponential backoff: 500ms, 1000ms, 2000ms for retries 1, 2, 3
+          // Exponential backoff: BASE * 2^(attempt-1). Lock errors retry up to
+          // IDB_OPEN_RETRIES times (~31s total); non-lock errors truncate at
+          // IDB_OPEN_RETRIES_NON_LOCK (~7s total).
           const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
           Log.warn(
             `[OpLogStore] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
@@ -229,11 +283,21 @@ export class OperationLogStoreService {
           );
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
+
+        attempt++;
       }
     }
 
-    // All retries exhausted - throw custom error with context
-    throw new IndexedDBOpenError(lastError);
+    // All retries exhausted - log original error details (name + message)
+    // explicitly before wrapping, so future bug reports include the underlying
+    // cause and we can distinguish Chromium LevelDB locks from WebKit's iOS
+    // "Connection to Indexed Database server lost" (WebKit bug 273827, see
+    // issue #7415), quota errors, etc. The wrapper's `.message` already
+    // carries the formatted original detail, so logging the wrapper exposes
+    // everything we need.
+    const err = new IndexedDBOpenError(lastError);
+    Log.err('[OpLogStore] IndexedDB open failed after all retries.', err);
+    throw err;
   }
 
   private get db(): IDBPDatabase<OpLogDB> {
@@ -1160,6 +1224,7 @@ export class OperationLogStoreService {
         STORE_NAMES.ARCHIVE_YOUNG,
         STORE_NAMES.ARCHIVE_OLD,
         STORE_NAMES.PROFILE_DATA,
+        STORE_NAMES.CLIENT_ID,
       ],
       'readwrite',
     );
@@ -1170,6 +1235,7 @@ export class OperationLogStoreService {
     await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
     await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
     await tx.objectStore(STORE_NAMES.PROFILE_DATA).clear();
+    await tx.objectStore(STORE_NAMES.CLIENT_ID).clear();
     await tx.done;
     // Invalidate all caches
     this._appliedOpIdsCache = null;
@@ -1380,11 +1446,24 @@ export class OperationLogStoreService {
       if (mergedClock[importClientId] !== undefined) {
         clockToStore[importClientId] = mergedClock[importClientId];
       }
-      if (
-        currentClientId !== importClientId &&
-        mergedClock[currentClientId] !== undefined
-      ) {
-        clockToStore[currentClientId] = mergedClock[currentClientId];
+      if (currentClientId !== importClientId) {
+        // Preserve our own counter using the maximum of:
+        // - mergedClock[currentClientId]: from any of the incoming remote ops
+        // - currentClock[currentClientId]: our own counter BEFORE the merge
+        //
+        // This matters when our own ops (e.g. GLOBAL_CONFIG) created a counter
+        // that is NOT reflected in the incoming full-state op's clock (because the
+        // full-state op was created by another client and doesn't know about our ops).
+        // Without this, the reset would drop our own counter, causing subsequent ops
+        // to reuse the same counter value and appear as EQUAL (duplicate) to remote
+        // clients that have already seen our earlier op with that counter.
+        const myCounter = Math.max(
+          mergedClock[currentClientId] ?? 0,
+          currentClock[currentClientId] ?? 0,
+        );
+        if (myCounter > 0) {
+          clockToStore[currentClientId] = myCounter;
+        }
       }
       Log.log(
         `[OpLogStore] mergeRemoteOpClocks: RESET clock to minimal after ${fullStateOp.opType}\n` +
@@ -1492,6 +1571,137 @@ export class OperationLogStoreService {
         this._appliedOpIdsCache = null;
         this._cacheLastSeq = 0;
         throw new Error(DUPLICATE_OPERATION_ERROR_MSG);
+      }
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        throw new StorageQuotaExceededError();
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Atomically replace local op-log + state_cache + vector_clock with a new
+   * full-state baseline. Used by destructive flows (clean-slate, backup-restore)
+   * to fix issue #7709 — interrupted destructive sequences could otherwise
+   * leave OPS empty and state_cache stale, tripping the
+   * `isWhollyFreshClient + meaningful store data` branch on next launch.
+   *
+   * If any step throws, the IndexedDB transaction aborts and no committed
+   * change to OPS / STATE_CACHE / VECTOR_CLOCK / CLIENT_ID survives.
+   *
+   * The clientId now lives in `SUP_OPS` (`client_id` store, since schema v6),
+   * so the rotated id on `syncImportOp.clientId` is written inside this same
+   * transaction and rotates atomically with OPS / STATE_CACHE / VECTOR_CLOCK.
+   * No cross-database two-phase commit is needed (issue #7732).
+   *
+   * The new baseline is taken entirely from `syncImportOp`: its `payload` is
+   * written to OPS (the snapshot the uploader sends) and re-used as the
+   * STATE_CACHE state (what `isWhollyFreshClient` reads next launch); its
+   * `vectorClock` and `schemaVersion` populate both stores. A single source
+   * object makes it impossible for OPS and STATE_CACHE to disagree.
+   */
+  async runDestructiveStateReplacement(opts: {
+    syncImportOp: Operation;
+    snapshotEntityKeys: string[];
+    archiveYoung?: ArchiveStoreEntry['data'];
+    archiveOld?: ArchiveStoreEntry['data'];
+  }): Promise<void> {
+    await this._ensureInit();
+
+    const { syncImportOp, snapshotEntityKeys, archiveYoung, archiveOld } = opts;
+    const newState = syncImportOp.payload;
+    const newVectorClock = syncImportOp.vectorClock;
+    const compactedAt = Date.now();
+    const compactOp = encodeOperation(syncImportOp);
+    const storeNames: OpLogStoreName[] = [
+      STORE_NAMES.OPS,
+      STORE_NAMES.STATE_CACHE,
+      STORE_NAMES.VECTOR_CLOCK,
+      // Unconditional: both callers (clean-slate, backup-restore) always rotate
+      // the clientId. Unlike the archive stores it is never conditional.
+      STORE_NAMES.CLIENT_ID,
+    ];
+    if (archiveYoung != null) {
+      storeNames.push(STORE_NAMES.ARCHIVE_YOUNG);
+    }
+    if (archiveOld != null) {
+      storeNames.push(STORE_NAMES.ARCHIVE_OLD);
+    }
+    const tx = this.db.transaction(storeNames, 'readwrite');
+
+    try {
+      const opsStore = tx.objectStore(STORE_NAMES.OPS);
+      const stateCacheStore = tx.objectStore(STORE_NAMES.STATE_CACHE);
+      const vcStore = tx.objectStore(STORE_NAMES.VECTOR_CLOCK);
+
+      // Rotate the clientId first, inside this same atomic transaction. Writing
+      // it before opsStore.clear() means an interrupt injected into a later
+      // step still aborts this queued put — exercising the genuine
+      // "queued -> tx aborts -> client_id unchanged" path. Atomicity itself is
+      // order-independent.
+      await tx
+        .objectStore(STORE_NAMES.CLIENT_ID)
+        .put(syncImportOp.clientId, SINGLETON_KEY);
+
+      await opsStore.clear();
+
+      const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+        op: compactOp,
+        appliedAt: Date.now(),
+        source: 'local',
+        syncedAt: undefined,
+        applicationStatus: undefined,
+      };
+      const seq = (await opsStore.add(entry as StoredOperationLogEntry)) as number;
+
+      await vcStore.put({ clock: newVectorClock, lastUpdate: Date.now() }, SINGLETON_KEY);
+
+      await stateCacheStore.put({
+        id: SINGLETON_KEY,
+        state: newState,
+        lastAppliedOpSeq: seq,
+        vectorClock: newVectorClock,
+        compactedAt,
+        schemaVersion: syncImportOp.schemaVersion,
+        snapshotEntityKeys,
+      });
+
+      if (archiveYoung != null) {
+        await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).put({
+          id: SINGLETON_KEY,
+          data: archiveYoung,
+          lastModified: compactedAt,
+        });
+      }
+
+      if (archiveOld != null) {
+        await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).put({
+          id: SINGLETON_KEY,
+          data: archiveOld,
+          lastModified: compactedAt,
+        });
+      }
+
+      await tx.done;
+
+      this._appliedOpIdsCache = null;
+      this._cacheLastSeq = 0;
+      this._invalidateUnsyncedCache();
+      this._vectorClockCache = newVectorClock;
+      // The clientId rotated atomically with the stores above. Invalidate the
+      // ClientIdService cache so the next read sees the rotated value. Bound to
+      // a committed `tx.done`: on catch/abort this is not reached, so the cache
+      // correctly keeps the old id.
+      this.clientIdProvider.clearCache();
+    } catch (e) {
+      // idb auto-aborts the tx on any rejected request, but a spy that
+      // throws synchronously instead of rejecting the IDB request (used by
+      // the interrupt integration tests) leaves the tx open with queued
+      // writes — explicit abort is what unwinds them in that case.
+      try {
+        tx.abort();
+      } catch {
+        // Already aborted/committed — InvalidStateError; nothing to do.
       }
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
         throw new StorageQuotaExceededError();

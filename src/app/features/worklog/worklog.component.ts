@@ -155,7 +155,7 @@ export class WorklogComponent implements AfterViewInit, OnDestroy {
               .filter((v) => !!v);
           }
 
-          Log.log('RESTORE', task, subTasks);
+          Log.log('RESTORE', { taskId: task.id, subTaskCount: subTasks?.length });
           this._taskService.restoreTask(task, (subTasks || []) as Task[]);
           this._router.navigate(['/active/tasks']);
         }

@@ -14,7 +14,7 @@ import { FileBasedSyncAdapterService } from '../../op-log/sync-providers/file-ba
 import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migration.service';
 import { uuidv7 } from '../../util/uuid-v7';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
+import { clearSessionKeyCache } from '@sp/sync-core';
 
 const LOG_PREFIX = 'FileBasedEncryptionService';
 
@@ -74,11 +74,7 @@ export class FileBasedEncryptionService {
 
     const state = await this._stateSnapshotService.getStateSnapshotAsync();
     const vectorClock = await this._vectorClockService.getCurrentVectorClock();
-    const clientId = await this._clientIdProvider.loadClientId();
-
-    if (!clientId) {
-      throw new Error('Client ID not available');
-    }
+    const clientId = await this._clientIdProvider.getOrGenerateClientId();
 
     const existingCfg = await fileProvider.privateCfg.load();
 

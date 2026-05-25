@@ -25,6 +25,8 @@ import { StateSnapshotService } from '../../backup/state-snapshot.service';
  * Tests use real IndexedDB for realistic performance measurements.
  */
 describe('Performance Integration', () => {
+  const LARGE_OPERATION_LOG_TIMEOUT_MS = 40000;
+
   let storeService: OperationLogStoreService;
   let compactionService: OperationLogCompactionService;
   let vectorClockService: VectorClockService;
@@ -63,44 +65,50 @@ describe('Performance Integration', () => {
   });
 
   describe('Large operation log handling', () => {
-    it('should handle 500 operations efficiently', async () => {
-      const client = new TestClient('client-test');
-      const operationCount = 500;
+    it(
+      'should handle 500 operations efficiently',
+      async () => {
+        const client = new TestClient('client-test');
+        const operationCount = 500;
 
-      const writeStartTime = Date.now();
+        const writeStartTime = Date.now();
 
-      // Write operations
-      for (let i = 0; i < operationCount; i++) {
-        await storeService.append(
-          createTaskOperation(client, `task-${i}`, OpType.Create, { title: `Task ${i}` }),
-          'local',
+        // Write operations
+        for (let i = 0; i < operationCount; i++) {
+          await storeService.append(
+            createTaskOperation(client, `task-${i}`, OpType.Create, {
+              title: `Task ${i}`,
+            }),
+            'local',
+          );
+        }
+
+        const writeEndTime = Date.now();
+        const writeDuration = writeEndTime - writeStartTime;
+
+        // Read operations
+        const readStartTime = Date.now();
+        const ops = await storeService.getOpsAfterSeq(0);
+        const readEndTime = Date.now();
+        const readDuration = readEndTime - readStartTime;
+
+        // Verify all operations stored
+        expect(ops.length).toBe(operationCount);
+
+        // Performance assertions (generous thresholds for CI environments)
+        expect(writeDuration).toBeLessThan(30000); // Write < 30s
+        expect(readDuration).toBeLessThan(5000); // Read < 5s
+
+        // Log performance metrics
+        console.log(
+          `Performance: ${operationCount} ops - Write: ${writeDuration}ms, Read: ${readDuration}ms`,
         );
-      }
-
-      const writeEndTime = Date.now();
-      const writeDuration = writeEndTime - writeStartTime;
-
-      // Read operations
-      const readStartTime = Date.now();
-      const ops = await storeService.getOpsAfterSeq(0);
-      const readEndTime = Date.now();
-      const readDuration = readEndTime - readStartTime;
-
-      // Verify all operations stored
-      expect(ops.length).toBe(operationCount);
-
-      // Performance assertions (generous thresholds for CI environments)
-      expect(writeDuration).toBeLessThan(30000); // Write < 30s
-      expect(readDuration).toBeLessThan(5000); // Read < 5s
-
-      // Log performance metrics
-      console.log(
-        `Performance: ${operationCount} ops - Write: ${writeDuration}ms, Read: ${readDuration}ms`,
-      );
-      console.log(
-        `Throughput: ${Math.round(operationCount / (writeDuration / 1000))} writes/sec`,
-      );
-    });
+        console.log(
+          `Throughput: ${Math.round(operationCount / (writeDuration / 1000))} writes/sec`,
+        );
+      },
+      LARGE_OPERATION_LOG_TIMEOUT_MS,
+    );
 
     it('should maintain sequence integrity under load', async () => {
       const client = new TestClient('client-test');

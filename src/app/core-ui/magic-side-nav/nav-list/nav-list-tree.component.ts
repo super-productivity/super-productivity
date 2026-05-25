@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   input,
+  OnDestroy,
   output,
   signal,
   viewChild,
@@ -13,6 +14,7 @@ import { CommonModule, NgStyle } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MatDivider } from '@angular/material/divider';
 import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TreeDndComponent } from '../../../ui/tree-dnd/tree.component';
@@ -32,6 +34,9 @@ import { MenuTreeService } from '../../../features/menu-tree/menu-tree.service';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { DEFAULT_PROJECT_ICON } from '../../../features/project/project.const';
 import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
+import { Router } from '@angular/router';
+
+const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
 
 @Component({
   selector: 'nav-list-tree',
@@ -46,15 +51,18 @@ import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
     TranslatePipe,
     TreeDndComponent,
     NavItemComponent,
+    MatDivider,
   ],
   templateUrl: './nav-list-tree.component.html',
   styleUrls: ['./nav-list-tree.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [expandCollapseAni],
 })
-export class NavListTreeComponent {
+export class NavListTreeComponent implements OnDestroy {
   private readonly _navConfigService = inject(MagicNavConfigService);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private readonly _router = inject(Router);
+  private _expandAnimationTimeoutId: number | null = null;
 
   item = input.required<NavTreeItem>();
   showLabels = input<boolean>(true);
@@ -70,12 +78,14 @@ export class NavListTreeComponent {
 
   // Access to service methods and data for visibility menu (includes Inbox for unhiding)
   readonly allUnarchivedProjects = this._navConfigService.allUnarchivedProjects;
+  readonly archivedProjectsCount = this._navConfigService.archivedProjectsCount;
 
   // ViewChild for visibility menu trigger to close menu after toggling
   visibilityMenuTrigger = viewChild('visibilityBtn', { read: MatMenuTrigger });
 
   readonly treeNodes = signal<TreeNode<MenuTreeViewNode>[]>([]);
   readonly treeKind = computed<MenuTreeKind>(() => this.item().treeKind);
+  readonly shouldAnimateExpandCollapse = signal(false);
 
   constructor() {
     effect(() => {
@@ -85,7 +95,15 @@ export class NavListTreeComponent {
   }
 
   onHeaderClick(): void {
+    this._enableExpandAnimationTemporarily();
     this.itemClick.emit(this.item());
+  }
+
+  ngOnDestroy(): void {
+    if (this._expandAnimationTimeoutId != null) {
+      window.clearTimeout(this._expandAnimationTimeoutId);
+      this._expandAnimationTimeoutId = null;
+    }
   }
 
   onChildClick(node: TreeNode<MenuTreeViewNode>): void {
@@ -118,6 +136,11 @@ export class NavListTreeComponent {
     this.visibilityMenuTrigger()?.closeMenu();
   }
 
+  goToArchivedProjects(): void {
+    this.visibilityMenuTrigger()?.closeMenu();
+    this._router.navigateByUrl('/archived-projects');
+  }
+
   onFolderMoreButton(event: MouseEvent, node: TreeNode<MenuTreeViewNode>): void {
     event.preventDefault();
     event.stopPropagation();
@@ -128,6 +151,18 @@ export class NavListTreeComponent {
     event.preventDefault();
     event.stopPropagation();
     this._openFolderContextMenu(event, node);
+  }
+
+  private _enableExpandAnimationTemporarily(): void {
+    if (this._expandAnimationTimeoutId != null) {
+      window.clearTimeout(this._expandAnimationTimeoutId);
+    }
+
+    this.shouldAnimateExpandCollapse.set(true);
+    this._expandAnimationTimeoutId = window.setTimeout(() => {
+      this.shouldAnimateExpandCollapse.set(false);
+      this._expandAnimationTimeoutId = null;
+    }, EXPAND_ANIMATION_RESET_DELAY_MS);
   }
 
   private _openFolderContextMenu(

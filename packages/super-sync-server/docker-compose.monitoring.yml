@@ -1,5 +1,10 @@
 # Monitoring stack for SuperSync Server
 #
+# Attaches to the external `super-sync-server_internal` network created by
+# the base docker-compose.yml — the base stack must be brought up first
+# (or merged into the same `up` invocation as below). Running this file
+# standalone will fail with "network not found".
+#
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 #
@@ -23,6 +28,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - DOZZLE_NO_ANALYTICS=true
+    networks:
+      - internal
+    mem_limit: 64m
 
   # Uptime monitoring + alerts (~120MB RAM)
   # Provides health check monitoring and notifications
@@ -34,6 +42,16 @@ services:
       - '127.0.0.1:3001:3001'
     volumes:
       - uptime-kuma-data:/app/data
+    networks:
+      - internal
+    mem_limit: 192m
+
+# Attach to the internal network defined in docker-compose.yml so Kuma can
+# probe http://supersync:1900/health by service name (not just public URL).
+networks:
+  internal:
+    external: true
+    name: super-sync-server_internal
 
 volumes:
   uptime-kuma-data:

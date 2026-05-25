@@ -280,7 +280,6 @@ export class ServerMigrationService {
       const dialogRef = this._matDialog.open(DialogServerMigrationConfirmComponent, {
         disableClose: true,
         restoreFocus: true,
-        autoFocus: false,
       });
 
       const result = await firstValueFrom(dialogRef.afterClosed());

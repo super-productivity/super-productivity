@@ -25,8 +25,13 @@ describe('moveItemAfterAnchor()', () => {
     expect(result).toEqual(['A', 'B', 'C', 'x']);
   });
 
-  it('should handle anchor not found by appending to end', () => {
+  it('should preserve current position when anchor not found (no-op)', () => {
     const result = moveItemAfterAnchor('x', 'missing', ['A', 'x', 'B', 'C']);
+    expect(result).toEqual(['A', 'x', 'B', 'C']);
+  });
+
+  it('should append to end when anchor not found and item not in list (cross-list move)', () => {
+    const result = moveItemAfterAnchor('x', 'missing', ['A', 'B', 'C']);
     expect(result).toEqual(['A', 'B', 'C', 'x']);
   });
 

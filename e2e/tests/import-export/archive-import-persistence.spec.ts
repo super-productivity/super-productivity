@@ -87,7 +87,6 @@ test.describe('@archive-import Archive Import Persistence', () => {
     await expect(page).toHaveURL(/.*tag.*TODAY.*tasks/);
     console.log('[Archive Import Test] Import completed');
 
-
     // Step 2: Export immediately to verify archive is present
     console.log('[Archive Import Test] Step 2: Exporting immediately after import...');
     await page.waitForTimeout(2000); // Wait for IndexedDB writes

@@ -36,7 +36,6 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { swirlAnimation } from '../../../ui/animations/swirl-in-out.ani';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
 import { MatDialog } from '@angular/material/dialog';
-import { isTouchOnly } from '../../../util/is-touch-only';
 import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
@@ -54,8 +53,12 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
+import { MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Store } from '@ngrx/store';
 import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
+import { IssueLog } from '../../../core/log';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
 import { TaskListComponent } from '../task-list/task-list.component';
@@ -90,6 +93,8 @@ import { checkKeyCombo } from '../../../util/check-key-combo';
     TaskTitleComponent,
     TaskDetailItemComponent,
     MatIcon,
+    MatIconButton,
+    MatTooltip,
     TaskListComponent,
     MatButton,
     ProgressBarComponent,
@@ -129,6 +134,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   // View children
   itemEls = viewChildren(TaskDetailItemComponent);
   attachmentPanelElRef = viewChild<TaskDetailItemComponent>('attachmentPanelElRef');
+  noteWrapperElRef = viewChild<TaskDetailItemComponent>('noteWrapperElRef');
 
   // Constants
   IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
@@ -146,6 +152,12 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   // Observable conversions
   private _task$ = toObservable(this.task);
+  private _taskDetailTargetPanel = toSignal(
+    this.taskService.taskDetailPanelTargetPanel$,
+    {
+      initialValue: null,
+    },
+  );
 
   @HostListener('keydown', ['$event'])
   onKeydown(ev: KeyboardEvent): void {
@@ -266,6 +278,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   });
 
   isExpandedNotesPanel = computed(() => {
+    if (this._taskDetailTargetPanel() === TaskDetailTargetPanel.Notes) {
+      return true;
+    }
+
     const task = this.task();
     return IS_MOBILE
       ? this.isMarkdownChecklist()
@@ -366,9 +382,17 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
           distinctUntilChanged(),
           switchMap((issueProviderId) =>
             issueProviderId
-              ? this._store.select(
-                  selectIssueProviderById<IssueProviderJira>(issueProviderId, 'JIRA'),
-                )
+              ? this._store
+                  .select(
+                    selectIssueProviderById<IssueProviderJira>(issueProviderId, 'JIRA'),
+                  )
+                  .pipe(
+                    // Orphan issueProviderId — see #7135.
+                    catchError((err: unknown) => {
+                      IssueLog.warn('Jira header setup skipped', err);
+                      return of(null);
+                    }),
+                  )
               : of(null),
           ),
           takeUntilDestroyed(this._destroyRef),
@@ -441,6 +465,15 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
             } else {
               this.focusItem(attachmentPanelElRef);
             }
+          } else if (v === TaskDetailTargetPanel.Notes) {
+            const noteWrapperElRef = this.noteWrapperElRef();
+            this.panelState.isFocusNotes.set(true);
+            if (!noteWrapperElRef) {
+              devError('this.noteWrapperElRef not ready');
+              this._focusFirst();
+            } else {
+              this.focusItem(noteWrapperElRef);
+            }
           } else {
             this._focusFirst();
           }
@@ -466,7 +499,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   estimateTime(): void {
     this._matDialog.open(DialogTimeEstimateComponent, {
       data: { task: this.task() },
-      autoFocus: !isTouchOnly(),
     });
   }
 
@@ -484,6 +516,11 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       restoreFocus: true,
       data: { task: this.task() },
     });
+  }
+
+  removeDeadline(ev: Event): void {
+    ev.stopPropagation();
+    this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: this.task().id }));
   }
 
   editTaskRepeatCfg(): void {

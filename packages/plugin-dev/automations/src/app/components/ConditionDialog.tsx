@@ -1,4 +1,4 @@
-import { createSignal, onMount, createEffect } from 'solid-js';
+import { createSignal, createEffect, createMemo, Show } from 'solid-js';
 import { Condition, ConditionType } from '../../types';
 import { Dialog } from './Dialog';
 
@@ -7,26 +7,61 @@ interface ConditionDialogProps {
   onClose: () => void;
   onSave: (condition: Condition) => void;
   initialCondition?: Condition;
-  projects?: any[];
-  tags?: any[];
+  projects?: { id: string; title: string }[];
+  tags?: { id: string; title: string }[];
   allowedTypes?: ConditionType[];
 }
 
-export function ConditionDialog(props: ConditionDialogProps) {
-  const [condition, setCondition] = createSignal<Condition>({ type: 'titleContains', value: '' });
+const supportsRegex = (type: ConditionType): boolean =>
+  type === 'titleContains' || type === 'titleStartsWith';
 
-  const allTypes: ConditionType[] = ['titleContains', 'projectIs', 'hasTag'];
+const getDefaultCondition = (type: ConditionType): Condition => ({
+  type,
+  value: '',
+  isRegex: false,
+});
+
+export function ConditionDialog(props: ConditionDialogProps) {
+  const [condition, setCondition] = createSignal<Condition>(getDefaultCondition('titleContains'));
+
+  const allTypes: ConditionType[] = [
+    'titleContains',
+    'titleStartsWith',
+    'projectIs',
+    'hasTag',
+    'weekdayIs',
+  ];
   const availableTypes = () =>
     props.allowedTypes ? allTypes.filter((t) => props.allowedTypes!.includes(t)) : allTypes;
+
+  const regexError = createMemo((): string => {
+    const currentCondition = condition();
+    if (
+      !supportsRegex(currentCondition.type) ||
+      !currentCondition.isRegex ||
+      !currentCondition.value
+    ) {
+      return '';
+    }
+
+    try {
+      new RegExp(currentCondition.value, 'i');
+      return '';
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Invalid regular expression';
+    }
+  });
 
   createEffect(() => {
     if (props.isOpen) {
       if (props.initialCondition) {
-        setCondition({ ...props.initialCondition });
+        setCondition({
+          ...props.initialCondition,
+          isRegex: Boolean(props.initialCondition.isRegex),
+        });
       } else {
-        // Default to first available type
         const firstType = availableTypes()[0] || 'titleContains';
-        setCondition({ type: firstType, value: '' });
+        setCondition(getDefaultCondition(firstType));
       }
     }
   });
@@ -41,7 +76,11 @@ export function ConditionDialog(props: ConditionDialogProps) {
           <button class="btn-outline" onClick={props.onClose}>
             Cancel
           </button>
-          <button class="btn-primary" onClick={() => props.onSave(condition())}>
+          <button
+            class="btn-primary"
+            disabled={Boolean(regexError())}
+            onClick={() => props.onSave(condition())}
+          >
             Save
           </button>
         </div>
@@ -51,9 +90,14 @@ export function ConditionDialog(props: ConditionDialogProps) {
         Type
         <select
           value={condition().type}
-          onChange={(e) =>
-            setCondition({ ...condition(), type: e.currentTarget.value as ConditionType })
-          }
+          onChange={(e) => {
+            const nextType = e.currentTarget.value as ConditionType;
+            setCondition({
+              ...condition(),
+              type: nextType,
+              isRegex: supportsRegex(nextType) ? Boolean(condition().isRegex) : false,
+            });
+          }}
         >
           {availableTypes().map((t) => (
             <option value={t}>{t}</option>
@@ -69,7 +113,7 @@ export function ConditionDialog(props: ConditionDialogProps) {
           >
             <option value="">Select Project</option>
             {props.projects.map((p) => (
-              <option value={p.title}>{p.title}</option>
+              <option value={p.id}>{p.title}</option>
             ))}
           </select>
         ) : condition().type === 'hasTag' && props.tags ? (
@@ -79,22 +123,47 @@ export function ConditionDialog(props: ConditionDialogProps) {
           >
             <option value="">Select Tag</option>
             {props.tags.map((t) => (
-              <option value={t.title}>{t.title}</option>
+              <option value={t.id}>{t.title}</option>
             ))}
           </select>
         ) : (
-          <input
-            type="text"
-            value={condition().value}
-            onInput={(e) => setCondition({ ...condition(), value: e.currentTarget.value })}
-            placeholder={
-              condition().type === 'titleContains'
-                ? 'e.g. "bug"'
-                : condition().type === 'projectIs'
-                  ? 'e.g. "Project A"'
-                  : 'e.g. "urgent"'
-            }
-          />
+          <>
+            <div class="input-with-toggle">
+              <input
+                type="text"
+                value={condition().value}
+                onInput={(e) => setCondition({ ...condition(), value: e.currentTarget.value })}
+                placeholder={
+                  condition().type === 'titleContains' || condition().type === 'titleStartsWith'
+                    ? condition().isRegex
+                      ? 'e.g. "^bug(\\s|:)"'
+                      : 'e.g. "bug"'
+                    : condition().type === 'projectIs'
+                      ? 'e.g. "Project A"'
+                      : condition().type === 'weekdayIs'
+                        ? 'e.g. "Monday"'
+                        : 'e.g. "urgent"'
+                }
+              />
+              {supportsRegex(condition().type) && (
+                <button
+                  type="button"
+                  class={
+                    condition().isRegex ? 'btn-primary regex-toggle' : 'btn-outline regex-toggle'
+                  }
+                  aria-pressed={condition().isRegex ? 'true' : 'false'}
+                  onClick={() => setCondition({ ...condition(), isRegex: !condition().isRegex })}
+                >
+                  Regex
+                </button>
+              )}
+            </div>
+            <Show when={regexError()}>
+              <small class="field-error" role="alert">
+                Invalid regex: {regexError()}
+              </small>
+            </Show>
+          </>
         )}
       </label>
     </Dialog>

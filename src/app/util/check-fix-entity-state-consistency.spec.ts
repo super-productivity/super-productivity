@@ -64,19 +64,25 @@ describe('check-fix-entity-state-consistency', () => {
 
     it('should return false if data is missing', () => {
       expect(isEntityStateConsistent(null as any)).toBeFalse();
-      expect(logLogSpy).toHaveBeenCalledWith(null);
+      expect(logLogSpy).toHaveBeenCalledWith(
+        'Inconsistent entity state "": ids=undefined, entities=0',
+      );
     });
 
     it('should return false if entities are missing', () => {
       const state = { ids: ['1'] } as any;
       expect(isEntityStateConsistent(state)).toBeFalse();
-      expect(logLogSpy).toHaveBeenCalledWith(state);
+      expect(logLogSpy).toHaveBeenCalledWith(
+        'Inconsistent entity state "": ids=1, entities=0',
+      );
     });
 
     it('should return false if ids are missing', () => {
       const state = { entities: { 1: {} } } as any;
       expect(isEntityStateConsistent(state)).toBeFalse();
-      expect(logLogSpy).toHaveBeenCalledWith(state);
+      expect(logLogSpy).toHaveBeenCalledWith(
+        'Inconsistent entity state "": ids=undefined, entities=1',
+      );
     });
 
     it('should return false if lengths do not match', () => {
@@ -88,7 +94,9 @@ describe('check-fix-entity-state-consistency', () => {
         },
       };
       expect(isEntityStateConsistent(state)).toBeFalse();
-      expect(logLogSpy).toHaveBeenCalledWith(state);
+      expect(logLogSpy).toHaveBeenCalledWith(
+        'Inconsistent entity state "": ids=1, entities=2',
+      );
     });
 
     it('should return false if ids do not match entities keys', () => {
@@ -99,7 +107,9 @@ describe('check-fix-entity-state-consistency', () => {
         },
       };
       expect(isEntityStateConsistent(state)).toBeFalse();
-      expect(logLogSpy).toHaveBeenCalledWith(state);
+      expect(logLogSpy).toHaveBeenCalledWith(
+        'Inconsistent entity state "": ids=1, entities=1',
+      );
     });
   });
 
@@ -130,7 +140,7 @@ describe('check-fix-entity-state-consistency', () => {
       expect(result.ids).toContain('1');
       expect(result.ids).toContain('2');
       expect(result.ids.length).toBe(2);
-      expect(logErrSpy).toHaveBeenCalledWith('FIXING ENTITY STATE', jasmine.any(Object));
+      expect(logErrSpy).toHaveBeenCalledWith('FIXING ENTITY STATE: ids=2, entities=2');
     });
   });
 

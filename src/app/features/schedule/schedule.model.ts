@@ -13,6 +13,7 @@ export interface ScheduleEvent {
   plannedForDay?: string;
   data?: SVE['data'];
   overlap?: { count: number; offset: number };
+  isBeyondBudget?: boolean;
 }
 
 export interface ScheduleDay {
@@ -28,6 +29,7 @@ interface SVEBase {
   start: number;
   duration: number;
   plannedForDay?: string;
+  isBeyondBudget?: boolean;
 }
 
 export interface SVETask extends SVEBase {

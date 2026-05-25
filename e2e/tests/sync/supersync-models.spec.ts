@@ -36,20 +36,21 @@ const createTagReliably = async (page: Page, tagName: string): Promise<void> => 
   const tagsTree = page.locator('nav-list-tree').filter({ hasText: 'Tags' }).first();
   await tagsTree.waitFor({ state: 'visible' });
 
-  // The "Create Tag" button is an additional-btn with an 'add' icon
-  const addBtn = tagsTree.locator('.additional-btn mat-icon:has-text("add")').first();
+  // Hover the group header to make additional buttons visible and clickable
+  // (buttons have pointer-events: none by default, only enabled on hover)
+  const groupNavItem = tagsTree.locator('nav-item').first();
+  await groupNavItem.hover();
+  await page.waitForTimeout(200);
 
-  if (await addBtn.isVisible()) {
+  // Target the button element (not the mat-icon inside it)
+  const addBtn = tagsTree.locator(
+    '.additional-btns button[mat-icon-button]:has(mat-icon:text("add"))',
+  );
+  try {
+    await addBtn.waitFor({ state: 'visible', timeout: 5000 });
     await addBtn.click();
-  } else {
-    const groupNavItem = tagsTree.locator('nav-item').first();
-    await groupNavItem.hover();
-    await page.waitForTimeout(200);
-    if (await addBtn.isVisible()) {
-      await addBtn.click();
-    } else {
-      throw new Error('Could not find Create Tag button');
-    }
+  } catch {
+    await addBtn.click({ force: true });
   }
 
   // Dialog

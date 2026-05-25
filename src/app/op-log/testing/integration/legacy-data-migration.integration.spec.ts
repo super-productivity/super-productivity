@@ -38,7 +38,7 @@ describe('Legacy Data Migration Integration', () => {
       'loadClientId',
     ]);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
-      'generateNewClientId',
+      'getOrGenerateClientId',
     ]);
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockTranslateService = jasmine.createSpyObj('TranslateService', [

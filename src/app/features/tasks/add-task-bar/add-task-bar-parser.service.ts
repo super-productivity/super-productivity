@@ -24,6 +24,7 @@ interface PreviousParseResult {
 export class AddTaskBarParserService {
   private readonly _stateService = inject(AddTaskBarStateService);
   private _previousParseResult: PreviousParseResult | null = null;
+  private _parseRunId = 0;
 
   private _arraysEqual<T>(a: T[], b: T[]): boolean {
     return a.length === b.length && a.every((val, i) => val === b[i]);
@@ -44,6 +45,8 @@ export class AddTaskBarParserService {
     defaultDate?: string,
     defaultTime?: string,
   ): Promise<void> {
+    const parseRunId = ++this._parseRunId;
+
     if (!text || !config) {
       this._previousParseResult = null;
       return;
@@ -59,6 +62,10 @@ export class AddTaskBarParserService {
       undefined,
       'replace',
     );
+
+    if (parseRunId !== this._parseRunId) {
+      return;
+    }
 
     // Create current parse result data structure
     let currentResult: PreviousParseResult;
@@ -181,8 +188,9 @@ export class AddTaskBarParserService {
     }
 
     if (
-      !this._previousParseResult ||
-      this._previousParseResult.timeEstimate !== currentResult.timeEstimate
+      (!this._previousParseResult && currentResult.timeEstimate !== null) ||
+      (this._previousParseResult &&
+        this._previousParseResult.timeEstimate !== currentResult.timeEstimate)
     ) {
       this._stateService.updateEstimate(currentResult.timeEstimate);
     }
@@ -208,6 +216,7 @@ export class AddTaskBarParserService {
   }
 
   resetPreviousResult(): void {
+    this._parseRunId++;
     this._previousParseResult = null;
   }
 

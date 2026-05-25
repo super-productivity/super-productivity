@@ -90,6 +90,95 @@ describe('GlobalConfigReducer', () => {
       expect(result.tasks.notesTemplate).toBe(DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate);
     });
 
+    describe('keyboard migration', () => {
+      const legacyKeyboardWithoutTaskNotesShortcut = (
+        overrides: Record<string, unknown>,
+      ): Record<string, unknown> => {
+        const keyboard = {
+          ...initialGlobalConfigState.keyboard,
+          ...overrides,
+        } as Record<string, unknown>;
+        delete keyboard.taskOpenNotesPanel;
+        return keyboard;
+      };
+
+      it('should migrate old default addNewNote=N to Alt+N and add taskOpenNotesPanel=N', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          keyboard: legacyKeyboardWithoutTaskNotesShortcut({ addNewNote: 'N' }),
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.keyboard.addNewNote).toBe('Alt+N');
+        expect(result.keyboard.taskOpenNotesPanel).toBe('N');
+      });
+
+      it('should migrate old default addNewNote=N when taskOpenNotesPanel is null', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          keyboard: {
+            ...initialGlobalConfigState.keyboard,
+            addNewNote: 'N',
+            taskOpenNotesPanel: null,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as AppDataComplete,
+          }),
+        );
+
+        expect(result.keyboard.addNewNote).toBe('Alt+N');
+        expect(result.keyboard.taskOpenNotesPanel).toBe('N');
+      });
+
+      it('should preserve a custom addNewNote shortcut while adding missing keyboard defaults', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          keyboard: legacyKeyboardWithoutTaskNotesShortcut({ addNewNote: 'Ctrl+N' }),
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.keyboard.addNewNote).toBe('Ctrl+N');
+        expect(result.keyboard.taskOpenNotesPanel).toBe('N');
+      });
+
+      it('should preserve custom note shortcuts when taskOpenNotesPanel already exists', () => {
+        const customConfig: GlobalConfigState = {
+          ...initialGlobalConfigState,
+          keyboard: {
+            ...initialGlobalConfigState.keyboard,
+            addNewNote: 'N',
+            taskOpenNotesPanel: 'Alt+Shift+N',
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: customConfig } as AppDataComplete,
+          }),
+        );
+
+        expect(result.keyboard.addNewNote).toBe('N');
+        expect(result.keyboard.taskOpenNotesPanel).toBe('Alt+Shift+N');
+      });
+    });
+
     it('should use syncProvider from snapshot when oldState has null (initial load)', () => {
       // This simulates app startup: oldState is initialGlobalConfigState with null syncProvider
       const oldState = initialGlobalConfigState; // syncProvider is null
@@ -173,6 +262,129 @@ describe('GlobalConfigReducer', () => {
 
       // syncProvider should be preserved from oldState, not overwritten
       expect(result.sync.syncProvider).toBe(SyncProviderId.WebDAV);
+    });
+
+    it('should normalize startOfNextDayTime with minutes into startOfNextDay hour', () => {
+      const snapshotConfig: GlobalConfigState = {
+        ...initialGlobalConfigState,
+        misc: {
+          ...initialGlobalConfigState.misc,
+          startOfNextDayTime: '02:30',
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.misc.startOfNextDay).toBe(2);
+    });
+
+    it('should synthesize startOfNextDayTime for legacy numeric hour values', () => {
+      const snapshotConfig: any = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          startOfNextDay: 4,
+          startOfNextDayTime: undefined,
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.misc.startOfNextDayTime).toBe('04:00');
+    });
+
+    it('should repair invalid startOfNextDayTime to the default day boundary', () => {
+      const snapshotConfig: any = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          startOfNextDay: 0,
+          startOfNextDayTime: '24:00',
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.misc.startOfNextDay).toBe(0);
+      expect(result.misc.startOfNextDayTime).toBe('00:00');
+    });
+
+    it('should repair invalid startOfNextDayTime with a valid legacy fallback', () => {
+      const snapshotConfig: any = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          startOfNextDay: 4,
+          startOfNextDayTime: '24:00',
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.misc.startOfNextDay).toBe(4);
+      expect(result.misc.startOfNextDayTime).toBe('04:00');
+    });
+
+    it('should repair fully invalid startOfNextDay config to the default day boundary', () => {
+      const snapshotConfig: any = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          startOfNextDay: 111,
+          startOfNextDayTime: '111',
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.misc.startOfNextDay).toBe(0);
+      expect(result.misc.startOfNextDayTime).toBe('00:00');
+    });
+
+    it('should repair invalid legacy numeric startOfNextDay to the default day boundary', () => {
+      const snapshotConfig: any = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          startOfNextDay: 111,
+          startOfNextDayTime: undefined,
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.misc.startOfNextDay).toBe(0);
+      expect(result.misc.startOfNextDayTime).toBe('00:00');
     });
 
     it('should update other sync config properties while preserving syncProvider', () => {
@@ -323,6 +535,122 @@ describe('GlobalConfigReducer', () => {
         expect(result.sync.isEnabled).toBe(true);
       });
     });
+
+    describe('focusMode migration: isSyncSessionWithTracking → autoStartFocusOnPlay', () => {
+      // Real persisted JSON never carries `autoStartFocusOnPlay` (it didn't
+      // exist pre-rework). Constructing the fixture as an Object.assign so the
+      // key is genuinely absent — using `{ autoStartFocusOnPlay: undefined }`
+      // would mask the regression this test exists to prevent.
+      const legacyFocusMode = (overrides: object): object => {
+        const base = { ...initialGlobalConfigState.focusMode } as Record<string, unknown>;
+        delete base.autoStartFocusOnPlay;
+        return Object.assign(base, overrides);
+      };
+
+      it('should backfill autoStartFocusOnPlay=true from legacy isSyncSessionWithTracking=true (real persisted shape)', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          focusMode: legacyFocusMode({ isSyncSessionWithTracking: true }),
+        };
+        // Sanity check: the fixture must NOT carry autoStartFocusOnPlay,
+        // otherwise the test wouldn't exercise the regression.
+        expect(
+          Object.prototype.hasOwnProperty.call(
+            legacyConfig.focusMode,
+            'autoStartFocusOnPlay',
+          ),
+        ).toBe(false);
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(true);
+        expect('isSyncSessionWithTracking' in (result.focusMode as object)).toBe(false);
+      });
+
+      it('should leave autoStartFocusOnPlay=false when legacy isSyncSessionWithTracking=false', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          focusMode: legacyFocusMode({ isSyncSessionWithTracking: false }),
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
+        expect('isSyncSessionWithTracking' in (result.focusMode as object)).toBe(false);
+      });
+
+      it('should not overwrite an explicit autoStartFocusOnPlay value', () => {
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          focusMode: legacyFocusMode({
+            isSyncSessionWithTracking: true,
+            autoStartFocusOnPlay: false,
+          }),
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
+      });
+
+      it('should leave fresh configs (no legacy key) untouched', () => {
+        const freshConfig = {
+          ...initialGlobalConfigState,
+          focusMode: {
+            ...initialGlobalConfigState.focusMode,
+            autoStartFocusOnPlay: true,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: freshConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(true);
+      });
+
+      it('should not be tricked by a polluted prototype carrying isSyncSessionWithTracking', () => {
+        // Defensive: `in` on a plain object can match prototype keys. We use
+        // hasOwnProperty.call to avoid that — verify here.
+        const focusMode: Record<string, unknown> = Object.create({
+          isSyncSessionWithTracking: true,
+        });
+        focusMode.isSkipPreparation = false;
+
+        const legacyConfig = {
+          ...initialGlobalConfigState,
+          focusMode,
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: legacyConfig } as unknown as AppDataComplete,
+          }),
+        );
+
+        // Migration must NOT have backfilled — the prototype key is not "owned".
+        expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
+      });
+    });
   });
 
   describe('Selectors', () => {
@@ -447,6 +775,12 @@ describe('GlobalConfigReducer', () => {
     });
 
     describe('selectFocusModeConfig', () => {
+      // Bug #7181: break time was being counted as task work time because the default
+      // was false, so currentTask was never unset when a Pomodoro break started.
+      it('should default isPauseTrackingDuringBreak to true so break time is not counted', () => {
+        expect(DEFAULT_GLOBAL_CONFIG.focusMode.isPauseTrackingDuringBreak).toBe(true);
+      });
+
       it('should return default config when state is undefined', () => {
         const result = selectFocusModeConfig.projector(undefined as any);
         expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.focusMode);

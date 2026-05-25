@@ -9,7 +9,7 @@
   } @else if (error()) {
     <div class="error">
       <mat-icon>error</mat-icon>
-      <p>{{ error() }}</p>
+      <p>{{ error() | translate }}</p>
     </div>
   } @else if (restorePoints().length === 0) {
     <div class="empty">
@@ -56,7 +56,7 @@
     [disabled]="isRestoring()"
     (click)="cancel()"
   >
-    {{ 'G.CANCEL' | translate }}
+    {{ T.G.CANCEL | translate }}
   </button>
   <button
     mat-flat-button

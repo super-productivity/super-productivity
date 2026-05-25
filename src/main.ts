@@ -29,6 +29,8 @@ import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
+import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
+import { IS_TOUCH_PRIMARY } from './app/util/is-mouse-primary';
 import { FeatureStoresModule } from './app/root-store/feature-stores.module';
 import {
   MATERIAL_ANIMATIONS,
@@ -52,7 +54,7 @@ import {
   withPreloading,
 } from '@angular/router';
 import { APP_ROUTES } from './app/app.routes';
-import { StoreModule } from '@ngrx/store';
+import { StoreModule, Store } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
@@ -74,7 +76,8 @@ import { ShortTimePipe } from './app/ui/pipes/short-time.pipe';
 import { BackgroundTask } from '@capawesome/capacitor-background-task';
 import { PLUGIN_INITIALIZER_PROVIDER } from './app/plugins/plugin-initializer';
 import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-menu/mat-menu-touch-monkey-patch';
-import { Log } from './app/core/log';
+import { Log, SyncLog } from './app/core/log';
+import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
@@ -97,6 +100,18 @@ let appInjector: Injector | null = null;
 // Register one-time user gesture listener to unlock AudioContext.
 // Required on iOS/Android where AudioContext starts suspended.
 unlockAudioContext();
+
+// Surface a deprecation warning the first time legacy PBKDF2 ciphertext is
+// decrypted in this session. The encryption layer invokes this handler on
+// every legacy decrypt; we throttle to one log per session.
+let _hasWarnedLegacyKdf = false;
+setLegacyKdfWarningHandler(() => {
+  if (_hasWarnedLegacyKdf) return;
+  _hasWarnedLegacyKdf = true;
+  SyncLog.log(
+    '[DEPRECATION] Legacy PBKDF2 encryption detected. Consider re-syncing to migrate to Argon2id.',
+  );
+});
 
 bootstrapApplication(AppComponent, {
   providers: [
@@ -206,6 +221,10 @@ bootstrapApplication(AppComponent, {
       provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,
       useValue: { appearance: 'fill', subscriptSizing: 'dynamic' },
     },
+    // Disable autofocus for touch-primary devices to prevent virtual keyboard popup
+    ...(IS_TOUCH_PRIMARY
+      ? [{ provide: MAT_DIALOG_DEFAULT_OPTIONS, useValue: { autoFocus: false } }]
+      : []),
     provideAnimationsAsync(),
     {
       provide: MATERIAL_ANIMATIONS,
@@ -279,6 +298,20 @@ bootstrapApplication(AppComponent, {
   ],
 }).then((appRef) => {
   appInjector = appRef.injector;
+
+  // Expose store + HydrationStateService for e2e tests in dev/stage builds.
+  // Used by the screenshot pipeline to flip locale / customTheme inside a
+  // single session (see e2e/store-screenshots/helpers.ts) and by #6230
+  // recurring-task tests. Stripped from production via the env guard.
+  if (!environment.production && !environment.stage) {
+    const storeRef = appRef.injector.get(Store);
+    import('./app/op-log/apply/hydration-state.service').then((m) => {
+      (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
+        store: storeRef,
+        hydrationState: appRef.injector.get(m.HydrationStateService),
+      };
+    });
+  }
 
   // Dismiss native startup overlay after all data is loaded (Android only)
   if (IS_ANDROID_WEB_VIEW) {

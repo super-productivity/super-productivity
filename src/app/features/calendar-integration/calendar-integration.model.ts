@@ -15,4 +15,27 @@ export interface CalendarIntegrationEvent {
    * when event ID format changes (e.g., recurring event instances).
    */
   legacyIds?: string[];
+  /**
+   * URL linking to the original calendar event (e.g. Google Calendar, Outlook web).
+   * Extracted from the iCal URL property.
+   */
+  url?: string;
+  /**
+   * The issue provider key for this event's provider (e.g., 'ICAL' or 'plugin:google-calendar-provider').
+   * Used to determine if event supports CRUD operations (plugin providers) vs read-only (iCal).
+   */
+  issueProviderKey: string;
+  /**
+   * Precise due-with-time timestamp (ms). When set, the task created from this event
+   * will be scheduled at this time instead of just being assigned a due day.
+   * For plugin calendar events, this is passed through from PluginSearchResult.dueWithTime.
+   */
+  dueWithTime?: number;
+  /**
+   * When true, this event comes from a reference calendar and is shown for
+   * informational context only. Task-creation actions are hidden in the UI.
+   */
+  isReferenceCalendar?: boolean;
+  /** Hex color configured on the calendar provider (e.g. '#4caf50'). */
+  color?: string;
 }

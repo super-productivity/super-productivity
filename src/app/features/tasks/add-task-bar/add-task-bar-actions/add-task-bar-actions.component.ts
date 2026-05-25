@@ -26,6 +26,7 @@ import { msToString } from '../../../../ui/duration/ms-to-string.pipe';
 import { T } from '../../../../t.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { dateStrToUtcDate } from '../../../../util/date-str-to-utc-date';
+import { getDateTimeFromClockString } from '../../../../util/get-date-time-from-clock-string';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isSingleEmoji } from '../../../../util/extract-first-emoji';
 import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
@@ -114,20 +115,27 @@ export class AddTaskBarActionsComponent {
     if (!state.date) return null;
     const today = new Date();
     const date = dateStrToUtcDate(state.date);
+    const timeStr = state.time ? this._formatTimeForDisplay(state.time) : null;
     if (this.isSameDate(date, today)) {
-      return state.time || this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TODAY);
+      return timeStr || this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TODAY);
     }
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     if (!state.time && this.isSameDate(date, tomorrow)) {
-      return state.time || this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TOMORROW);
+      return this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TOMORROW);
     }
     const dateStr = date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), {
       month: 'short',
       day: 'numeric',
     });
-    return state.time ? `${dateStr} ${state.time}` : dateStr;
+    return timeStr ? `${dateStr} ${timeStr}` : dateStr;
   });
+
+  private _formatTimeForDisplay(timeStr: string): string {
+    return this._dateTimeFormatService.formatTime(
+      getDateTimeFromClockString(timeStr, new Date()),
+    );
+  }
 
   estimateDisplay = computed(() => {
     const estimate = this.state().estimate;

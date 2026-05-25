@@ -1,11 +1,25 @@
 import { Logger } from '../logger';
+import { Prisma } from '@prisma/client';
 import {
+  SUPER_SYNC_MAX_OPS_PER_UPLOAD,
+  SUPER_SYNC_OP_TYPES,
+  SUPER_SYNC_SNAPSHOT_OP_TYPES,
+  type SuperSyncOpType,
   VectorClock,
   VectorClockComparison,
   compareVectorClocks,
   limitVectorClockSize,
   MAX_VECTOR_CLOCK_SIZE,
 } from '@sp/shared-schema';
+
+const FULL_STATE_OP_TYPES: ReadonlySet<string> = new Set(SUPER_SYNC_SNAPSHOT_OP_TYPES);
+
+/**
+ * True when `opType` carries the user's full state (SYNC_IMPORT, BACKUP_IMPORT,
+ * REPAIR) and therefore supersedes prior ops up to its serverSeq.
+ */
+export const isFullStateOpType = (opType: string): boolean =>
+  FULL_STATE_OP_TYPES.has(opType);
 
 // Re-export for consumers of this module
 export {
@@ -68,18 +82,9 @@ export interface ConflictResult {
 }
 
 // Operation types - single source of truth
-export const OP_TYPES = [
-  'CRT',
-  'UPD',
-  'DEL',
-  'MOV',
-  'BATCH',
-  'SYNC_IMPORT',
-  'BACKUP_IMPORT',
-  'REPAIR',
-] as const;
+export const OP_TYPES = SUPER_SYNC_OP_TYPES;
 
-export type OpType = (typeof OP_TYPES)[number];
+export type OpType = SuperSyncOpType;
 
 // VectorClock, VectorClockComparison, and compareVectorClocks are imported from @sp/shared-schema
 // and re-exported above. This ensures client and server use identical implementations.
@@ -168,7 +173,74 @@ export interface Operation {
   timestamp: number;
   schemaVersion: number;
   isPayloadEncrypted?: boolean; // True if payload is E2E encrypted
+  syncImportReason?: string;
 }
+
+export interface DuplicateOperationCandidate {
+  id: string;
+  userId: number;
+  clientId: string;
+  actionType: string;
+  opType: string;
+  entityType: string;
+  entityId: string | null;
+  payload: unknown;
+  vectorClock: unknown;
+  schemaVersion: number;
+  clientTimestamp: bigint | number | string;
+  receivedAt: bigint | number | string;
+  isPayloadEncrypted: boolean;
+  syncImportReason: string | null;
+}
+
+/**
+ * The exact column set `isSameDuplicateOperation` needs to compare an incoming
+ * op against a stored one. Shared by every duplicate-detection query (batch
+ * prefetch + both legacy per-op checks) so a field added here can never be
+ * silently missed at one of the call sites.
+ */
+export const DUPLICATE_OP_SELECT = {
+  id: true,
+  userId: true,
+  clientId: true,
+  actionType: true,
+  opType: true,
+  entityType: true,
+  entityId: true,
+  payload: true,
+  vectorClock: true,
+  schemaVersion: true,
+  clientTimestamp: true,
+  receivedAt: true,
+  isPayloadEncrypted: true,
+  syncImportReason: true,
+} satisfies Prisma.OperationSelect;
+
+export interface LatestEntityOperationRow {
+  entityId: string;
+  clientId: string;
+  vectorClock: unknown;
+}
+
+export interface LatestBatchEntityOperationRow extends LatestEntityOperationRow {
+  entityType: string;
+}
+
+export interface BatchUploadCandidate {
+  op: Operation;
+  resultIndex: number;
+  originalTimestamp: number;
+  fullStateVectorClock?: VectorClock;
+}
+
+export interface AcceptedBatchOperation extends BatchUploadCandidate {
+  serverSeq: number;
+  storageBytes: number;
+}
+
+// Conservative enough to avoid planner-heavy BitmapOr + Sort plans on large
+// histories while still replacing up to 100 per-entity round trips with one query.
+export const CONFLICT_DETECTION_ENTITY_BATCH_SIZE = 100;
 
 export interface ServerOperation {
   serverSeq: number;
@@ -269,6 +341,14 @@ export interface SyncStatusResponse {
   storageQuotaBytes: number;
 }
 
+// Snapshot generation result (shared by SnapshotService + SnapshotGenerationService)
+export interface SnapshotResult {
+  state: unknown;
+  serverSeq: number;
+  generatedAt: number;
+  schemaVersion: number;
+}
+
 // Restore point types
 export type RestorePointType =
   | 'SYNC_IMPORT'
@@ -320,7 +400,7 @@ export const validatePayload = (
   payload: unknown,
 ): PayloadValidationResult => {
   // Skip validation for full-state operations (too complex to validate server-side)
-  if (opType === 'SYNC_IMPORT' || opType === 'BACKUP_IMPORT' || opType === 'REPAIR') {
+  if (isFullStateOpType(opType)) {
     return { valid: true };
   }
 
@@ -377,6 +457,7 @@ export interface SyncConfig {
   downloadRateLimit: { max: number; windowMs: number };
   retentionMs: number; // Unified retention period for ops, devices, and validation
   maxClockDriftMs: number;
+  batchUpload: boolean;
 }
 
 // Time constants (in milliseconds)
@@ -392,11 +473,12 @@ export const RETENTION_MS = RETENTION_DAYS * MS_PER_DAY;
 export const ONLINE_DEVICE_THRESHOLD_MS = 5 * MS_PER_MINUTE; // 5 minutes
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
-  maxOpsPerUpload: 100,
+  maxOpsPerUpload: SUPER_SYNC_MAX_OPS_PER_UPLOAD,
   maxPayloadSizeBytes: 20 * 1024 * 1024, // 20MB - needed for large imports
   downloadLimit: 1000,
   uploadRateLimit: { max: 100, windowMs: MS_PER_MINUTE },
   downloadRateLimit: { max: 200, windowMs: MS_PER_MINUTE },
   retentionMs: RETENTION_MS, // 45 days - used for ops, devices, and validation
   maxClockDriftMs: MS_PER_MINUTE, // 60 seconds
+  batchUpload: false,
 };

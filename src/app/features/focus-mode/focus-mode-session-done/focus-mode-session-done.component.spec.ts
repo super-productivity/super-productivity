@@ -10,9 +10,7 @@ import {
   hideFocusOverlay,
   selectFocusTask,
   selectFocusDuration,
-  startBreak,
 } from '../store/focus-mode.actions';
-import { selectCurrentCycle } from '../store/focus-mode.selectors';
 import { FocusModeMode } from '../focus-mode.model';
 import { T } from '../../../t.const';
 import {
@@ -20,8 +18,6 @@ import {
   selectLastCurrentTask,
 } from '../../tasks/store/task.selectors';
 import { selectFocusModeConfig } from '../../config/store/global-config.reducer';
-import { FocusModeStrategyFactory, PomodoroStrategy } from '../focus-mode-strategies';
-import { unsetCurrentTask } from '../../tasks/store/task.actions';
 
 describe('FocusModeSessionDoneComponent', () => {
   let component: FocusModeSessionDoneComponent;
@@ -31,30 +27,11 @@ describe('FocusModeSessionDoneComponent', () => {
     lastSessionTotalDurationOrTimeElapsedFallback: ReturnType<typeof signal<number>>;
   };
   let mockConfettiService: jasmine.SpyObj<ConfettiService>;
-  let mockStrategyFactory: jasmine.SpyObj<FocusModeStrategyFactory>;
-  let mockPomodoroStrategy: jasmine.SpyObj<PomodoroStrategy>;
   let environmentInjector: EnvironmentInjector;
 
   beforeEach(() => {
     mockStore = jasmine.createSpyObj('Store', ['dispatch', 'select', 'pipe']);
     mockConfettiService = jasmine.createSpyObj('ConfettiService', ['createConfetti']);
-    mockPomodoroStrategy = jasmine.createSpyObj(
-      'PomodoroStrategy',
-      ['getBreakDuration'],
-      {
-        initialSessionDuration: 25 * 60 * 1000,
-        shouldStartBreakAfterSession: true,
-        shouldAutoStartNextSession: true,
-      },
-    );
-    mockPomodoroStrategy.getBreakDuration.and.returnValue({
-      duration: 5 * 60 * 1000,
-      isLong: false,
-    });
-    mockStrategyFactory = jasmine.createSpyObj('FocusModeStrategyFactory', [
-      'getStrategy',
-    ]);
-    mockStrategyFactory.getStrategy.and.returnValue(mockPomodoroStrategy);
 
     mockFocusModeService = {
       mode: signal(FocusModeMode.Pomodoro),
@@ -71,9 +48,6 @@ describe('FocusModeSessionDoneComponent', () => {
       if (selector === selectFocusModeConfig) {
         return of({ isManualBreakStart: false, isPauseTrackingDuringBreak: false });
       }
-      if (selector === selectCurrentCycle) {
-        return of(1);
-      }
       return of(null);
     });
 
@@ -82,7 +56,6 @@ describe('FocusModeSessionDoneComponent', () => {
         { provide: Store, useValue: mockStore },
         { provide: FocusModeService, useValue: mockFocusModeService },
         { provide: ConfettiService, useValue: mockConfettiService },
-        { provide: FocusModeStrategyFactory, useValue: mockStrategyFactory },
       ],
     });
 
@@ -161,78 +134,6 @@ describe('FocusModeSessionDoneComponent', () => {
       component.continueWithFocusSession();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(selectFocusDuration());
-    });
-  });
-
-  describe('startBreakManually', () => {
-    it('should get strategy from factory', () => {
-      component.startBreakManually();
-
-      expect(mockStrategyFactory.getStrategy).toHaveBeenCalledWith(
-        FocusModeMode.Pomodoro,
-      );
-    });
-
-    it('should dispatch startBreak action with correct duration', () => {
-      component.startBreakManually();
-
-      expect(mockStore.dispatch).toHaveBeenCalledWith(
-        startBreak({
-          duration: 5 * 60 * 1000,
-          isLongBreak: false,
-          pausedTaskId: undefined,
-        }),
-      );
-    });
-
-    it('should pause tracking and include pausedTaskId when isPauseTrackingDuringBreak is enabled', () => {
-      mockStore.select.and.callFake((selector: any) => {
-        if (selector === selectCurrentTask) {
-          return of({ id: 'task-1', title: 'Test Task' });
-        }
-        if (selector === selectLastCurrentTask) {
-          return of({ id: 'task-1', title: 'Last Task' });
-        }
-        if (selector === selectFocusModeConfig) {
-          return of({ isManualBreakStart: true, isPauseTrackingDuringBreak: true });
-        }
-        if (selector === selectCurrentCycle) {
-          return of(1);
-        }
-        return of(null);
-      });
-
-      runInInjectionContext(environmentInjector, () => {
-        component = new FocusModeSessionDoneComponent();
-      });
-
-      component.startBreakManually();
-
-      expect(mockStore.dispatch).toHaveBeenCalledWith(unsetCurrentTask());
-      expect(mockStore.dispatch).toHaveBeenCalledWith(
-        startBreak({
-          duration: 5 * 60 * 1000,
-          isLongBreak: false,
-          pausedTaskId: 'task-1',
-        }),
-      );
-    });
-
-    it('should use long break duration when on long break cycle', () => {
-      mockPomodoroStrategy.getBreakDuration.and.returnValue({
-        duration: 15 * 60 * 1000,
-        isLong: true,
-      });
-
-      component.startBreakManually();
-
-      expect(mockStore.dispatch).toHaveBeenCalledWith(
-        startBreak({
-          duration: 15 * 60 * 1000,
-          isLongBreak: true,
-          pausedTaskId: undefined,
-        }),
-      );
     });
   });
 });

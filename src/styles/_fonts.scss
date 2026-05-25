@@ -1,0 +1,14 @@
+// Single source of truth for the primary font stack.
+// Consumed by:
+//  - _css-variables.scss — emits `--font-primary-stack` for runtime CSS
+//  - themes.scss         — passed as a string to mat.m2-define-typography-config,
+//                          which only accepts literal strings (no CSS vars).
+$primary-stack:
+  -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', Roboto,
+  'Inter', 'Open Sans', 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji',
+  'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', 'Android Emoji',
+  'EmojiSymbols', sans-serif;
+
+// Material's typography config only accepts a string — emoji fallbacks omitted
+// since Material-scoped text rarely contains emoji.
+$primary-stack-material: '-apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, Inter, "Open Sans", "Helvetica Neue", Arial, sans-serif';

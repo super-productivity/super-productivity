@@ -1,5 +1,6 @@
 import { MatMenuTrigger, MatMenuItem } from '@angular/material/menu';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { IS_HYBRID_DEVICE, IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { isTouchActive } from '../../../util/input-intent';
 
 /**
  * Shared timestamp tracking when any menu opens.
@@ -38,10 +39,6 @@ export const setLastMenuOpenTime = (time: number): void => {
  *    - 21.x+: Changed to MatMenuItem.prototype._checkDisabled
  */
 export const applyMatMenuTouchMonkeyPatch = (): void => {
-  if (!IS_TOUCH_PRIMARY) {
-    return;
-  }
-
   // Store original methods
   const originalOpenMenu = MatMenuTrigger.prototype.openMenu;
   const originalCheckDisabled = (MatMenuItem.prototype as any)._checkDisabled;
@@ -56,7 +53,7 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
     originalOpenMenu.call(this);
 
     // Add delay for touch devices
-    if (this.menu && (this.menu as any)._allItems) {
+    if (isTouchActive() && this.menu && (this.menu as any)._allItems) {
       // Temporarily disable all menu items
       const items = (this.menu as any)._allItems.toArray();
       items.forEach((item) => {
@@ -82,7 +79,7 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
     const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
 
     // On touch devices, prevent clicks that happen too quickly after menu opens
-    if (event.isTrusted && timeSinceMenuOpen < TOUCH_DELAY_MS) {
+    if (isTouchActive() && event.isTrusted && timeSinceMenuOpen < TOUCH_DELAY_MS) {
       event.preventDefault();
       // stopImmediatePropagation prevents OTHER handlers on the SAME element from firing
       // (stopPropagation only prevents bubbling UP to parent elements)
@@ -134,7 +131,12 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
       const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
 
       // Block clicks that happen too quickly after menu opened
-      if (event.isTrusted && lastMenuOpenTime > 0 && timeSinceMenuOpen < TOUCH_DELAY_MS) {
+      if (
+        isTouchActive() &&
+        event.isTrusted &&
+        lastMenuOpenTime > 0 &&
+        timeSinceMenuOpen < TOUCH_DELAY_MS
+      ) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }
@@ -150,7 +152,7 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
  * Call this function once during app initialization to apply the monkey patch
  */
 export const initializeMatMenuTouchFix = (): void => {
-  if (typeof window !== 'undefined' && IS_TOUCH_PRIMARY) {
+  if (typeof window !== 'undefined' && (IS_TOUCH_PRIMARY || IS_HYBRID_DEVICE)) {
     // Apply patch after Angular Material is loaded
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', applyMatMenuTouchMonkeyPatch);

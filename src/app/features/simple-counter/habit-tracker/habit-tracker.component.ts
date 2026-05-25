@@ -22,8 +22,15 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 import { EMPTY_SIMPLE_COUNTER } from '../simple-counter.const';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { moveItemInArray } from '../../../util/move-item-in-array';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { dragDelayForTouch } from '../../../util/input-intent';
+import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
+import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+
+interface HabitDay {
+  str: string;
+  date: Date;
+  dow: number;
+}
 
 @Component({
   selector: 'habit-tracker',
@@ -36,6 +43,7 @@ import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
     MatTooltipModule,
     CdkDropList,
     CdkDrag,
+    LocaleDatePipe,
   ],
   templateUrl: './habit-tracker.component.html',
   styleUrl: './habit-tracker.component.scss',
@@ -46,6 +54,7 @@ export class HabitTrackerComponent {
   disabledSimpleCounters = input<SimpleCounter[]>([]);
 
   private _simpleCounterService = inject(SimpleCounterService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
   private _dateService = inject(DateService);
   private _matDialog = inject(MatDialog);
 
@@ -53,19 +62,22 @@ export class HabitTrackerComponent {
 
   T = T;
   SimpleCounterType = SimpleCounterType;
-  DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
-  IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  dragDelayForTouch = dragDelayForTouch;
 
   dayOffset = signal(0);
 
   days = computed(() => {
-    const days: string[] = [];
+    const days: HabitDay[] = [];
     const today = new Date();
     const offset = this.dayOffset();
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i + offset);
-      days.push(this._dateService.todayStr(d));
+      days.push({
+        str: this._dateService.todayStr(d),
+        date: d,
+        dow: d.getDay(),
+      });
     }
     return days;
   });
@@ -95,26 +107,25 @@ export class HabitTrackerComponent {
   dateRangeLabel = computed(() => {
     const days = this.days();
     if (days.length === 0) return '';
-    const first = this.parseDateLocal(days[0]);
-    const last = this.parseDateLocal(days[days.length - 1]);
+    const first = days[0].date;
+    const last = days[days.length - 1].date;
 
+    const locale = this._dateTimeFormatService.currentLocale();
     const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    const firstStr = first.toLocaleDateString(undefined, formatOptions);
-    const lastStr = last.toLocaleDateString(undefined, formatOptions);
+    const firstStr = first.toLocaleDateString(locale, formatOptions);
+    const lastStr = last.toLocaleDateString(locale, formatOptions);
 
     return `${firstStr} - ${lastStr}`;
   });
-
-  parseDateLocal(dateStr: string): Date {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  }
 
   private _longPressTimer?: number;
   private _isLongPress = false;
   private _pendingLongPressAction?: { counter: SimpleCounter; date: string };
 
-  onCellClick(counter: SimpleCounter, date: string): void {
+  onCellClick(counter: SimpleCounter, date: string, dow: number): void {
+    if (!this.isDayEnabled(counter, dow)) {
+      return;
+    }
     if (this._isLongPress) {
       this._isLongPress = false;
       return;
@@ -135,12 +146,23 @@ export class HabitTrackerComponent {
     }
   }
 
-  onCellContextMenu(event: MouseEvent, counter: SimpleCounter, date: string): void {
-    event.preventDefault(); // Prevent default browser context menu
+  onCellContextMenu(
+    event: MouseEvent,
+    counter: SimpleCounter,
+    date: string,
+    dow: number,
+  ): void {
+    event.preventDefault();
+    if (!this.isDayEnabled(counter, dow)) {
+      return;
+    }
     this.openEditDialog(counter, date);
   }
 
-  onPressStart(counter: SimpleCounter, date: string): void {
+  onPressStart(counter: SimpleCounter, date: string, dow: number): void {
+    if (!this.isDayEnabled(counter, dow)) {
+      return;
+    }
     this._isLongPress = false;
     this._pendingLongPressAction = undefined;
     this._longPressTimer = window.setTimeout(() => {
@@ -175,6 +197,17 @@ export class HabitTrackerComponent {
     });
   }
 
+  isDayEnabled(counter: SimpleCounter, dow: number): boolean {
+    if (!counter.isTrackStreaks || counter.streakMode === 'weekly-frequency') {
+      return true;
+    }
+    // Default to 'specific-days' logic
+    if (!counter.streakWeekDays) {
+      return true;
+    }
+    return !!counter.streakWeekDays[dow];
+  }
+
   isSimpleCompletion(counter: SimpleCounter): boolean {
     // Simple completion: ClickCounter type with no specific goal or goal of 1
     return (
@@ -184,7 +217,7 @@ export class HabitTrackerComponent {
   }
 
   getVal(counter: SimpleCounter, day: string): number {
-    return counter.countOnDay[day] || 0;
+    return counter.countOnDay?.[day] ?? 0;
   }
 
   getDisplayValue(counter: SimpleCounter, day: string): string {

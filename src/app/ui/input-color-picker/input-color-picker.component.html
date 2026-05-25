@@ -1,0 +1,61 @@
+@if (label()) {
+  <label class="color-label">{{ label() }}</label>
+}
+
+<button
+  #trigger
+  type="button"
+  class="color-trigger"
+  [style.background-color]="value()"
+  (click)="toggle()"
+></button>
+
+@if (isOpen()) {
+  <div
+    class="backdrop"
+    (click)="isOpen.set(false)"
+  ></div>
+  <div
+    class="color-panel"
+    [style.position]="'fixed'"
+    [style.top]="panelTop"
+    [style.left]="panelLeft"
+  >
+    <div class="color-grid">
+      @for (color of presetColors; track color) {
+        <button
+          type="button"
+          class="color-swatch"
+          [style.background-color]="color"
+          [class.selected]="value() === color"
+          (click)="selectColor(color)"
+        >
+          @if (value() === color) {
+            <mat-icon>check</mat-icon>
+          }
+        </button>
+      }
+      <button
+        type="button"
+        class="color-swatch custom-color-btn"
+        [style.background-color]="isPresetColor() ? '' : value()"
+        [class.selected]="!isPresetColor()"
+        (click)="openNativePicker()"
+      >
+        @if (!isPresetColor()) {
+          <mat-icon>check</mat-icon>
+        } @else {
+          <mat-icon>colorize</mat-icon>
+        }
+      </button>
+    </div>
+  </div>
+}
+
+<input
+  #nativeInput
+  type="color"
+  class="native-color-input"
+  [value]="value()"
+  (change)="onNativeChange($event)"
+/>

@@ -8,6 +8,8 @@ import {
 import { GlobalConfigService } from '../config/global-config.service';
 import { FocusModeStorageService } from './focus-mode-storage.service';
 
+const MIN_BREAK_MS = 60 * 1000;
+
 @Injectable({ providedIn: 'root' })
 export class PomodoroStrategy implements FocusModeStrategy {
   private globalConfigService = inject(GlobalConfigService);
@@ -49,12 +51,59 @@ export class PomodoroStrategy implements FocusModeStrategy {
 
 @Injectable({ providedIn: 'root' })
 export class FlowtimeStrategy implements FocusModeStrategy {
+  private globalConfigService = inject(GlobalConfigService);
+
   readonly initialSessionDuration = 0; // Flowtime doesn't have a fixed duration
-  readonly shouldStartBreakAfterSession = false;
   readonly shouldAutoStartNextSession = false;
 
-  getBreakDuration(): null {
-    return null; // No automatic breaks in Flowtime
+  get shouldStartBreakAfterSession(): boolean {
+    // Flowtime can have breaks if configured
+    const config = this.globalConfigService.flowtimeConfig();
+    return config?.isBreakEnabled ?? false;
+  }
+
+  /**
+   * Calculate break duration based on elapsed work time
+   * @param elapsedMs elapsed work time in milliseconds
+   * @returns {duration, isLong} or null if breaks are not enabled
+   */
+  getBreakDuration(elapsedMs: number): { duration: number; isLong: boolean } | null {
+    const config = this.globalConfigService.flowtimeConfig();
+    if (!config?.isBreakEnabled) {
+      return null;
+    }
+
+    let breakDuration: number;
+
+    if (config.breakMode === 'ratio' && typeof config.breakPercentage === 'number') {
+      if (config.breakPercentage <= 0) {
+        return null;
+      }
+      // Ratio-based: breakDuration = elapsedTime * (percentage / 100)
+      breakDuration = Math.max(
+        MIN_BREAK_MS,
+        Math.round(elapsedMs * (config.breakPercentage / 100)),
+      );
+    } else if (config.breakMode === 'rule') {
+      if (!config.breakRules?.length) {
+        return null;
+      }
+      // Rule-based: find matching rule
+      // Use half-open ranges for adjacent rules to avoid boundary overlap.
+      const matchingRule = config.breakRules.find(
+        (rule) =>
+          elapsedMs >= rule.minDuration &&
+          (rule.maxDuration === null || elapsedMs < rule.maxDuration),
+      );
+      if (!matchingRule) {
+        return null;
+      }
+      breakDuration = matchingRule.breakDuration;
+    } else {
+      return null;
+    }
+
+    return { duration: breakDuration, isLong: false };
   }
 
   getNextScreenAfterTaskSelection(skipPreparation: boolean): {

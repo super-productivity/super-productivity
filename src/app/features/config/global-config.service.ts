@@ -1,13 +1,15 @@
 import { Injectable, inject, Signal } from '@angular/core';
 import { select, Store } from '@ngrx/store';
+import type { SyncConfigPort, SyncConfigSnapshot } from '@sp/sync-core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { updateGlobalConfigSection } from './store/global-config.actions';
-import { Observable } from 'rxjs';
+import { firstValueFrom, Observable } from 'rxjs';
 import { DEFAULT_GLOBAL_CONFIG } from './default-global-config.const';
 import {
   AppFeaturesConfig,
   ClipboardImagesConfig,
   EvaluationConfig,
+  FlowtimeConfig,
   GlobalConfigSectionKey,
   GlobalConfigState,
   GlobalSectionConfig,
@@ -34,6 +36,7 @@ import {
   selectShortSyntaxConfig,
   selectSoundConfig,
   selectSyncConfig,
+  selectFlowtimeConfig,
   selectTakeABreakConfig,
   selectTasksConfig,
   selectTimelineConfig,
@@ -44,7 +47,9 @@ import { distinctUntilChangedObject } from '../../util/distinct-until-changed-ob
 @Injectable({
   providedIn: 'root',
 })
-export class GlobalConfigService {
+export class GlobalConfigService implements SyncConfigPort<
+  NonNullable<SyncConfig['syncProvider']>
+> {
   private readonly _store = inject<Store<any>>(Store);
 
   // Keep observables for backward compatibility
@@ -102,6 +107,11 @@ export class GlobalConfigService {
     shareReplay(1),
   );
 
+  flowtimeConfig$: Observable<FlowtimeConfig> = this._store.pipe(
+    select(selectFlowtimeConfig),
+    shareReplay(1),
+  );
+
   clipboardImages$: Observable<ClipboardImagesConfig> = this._store.pipe(
     select(selectClipboardImagesConfig),
     shareReplay(1),
@@ -155,6 +165,12 @@ export class GlobalConfigService {
       initialValue: DEFAULT_GLOBAL_CONFIG.pomodoro,
     },
   );
+  readonly flowtimeConfig: Signal<FlowtimeConfig | undefined> = toSignal(
+    this.flowtimeConfig$,
+    {
+      initialValue: DEFAULT_GLOBAL_CONFIG.flowtime,
+    },
+  );
   readonly clipboardImages: Signal<ClipboardImagesConfig | undefined> = toSignal(
     this.clipboardImages$,
     { initialValue: undefined },
@@ -178,5 +194,27 @@ export class GlobalConfigService {
         isSkipSnack,
       }),
     );
+  }
+
+  async getSyncConfig(): Promise<
+    SyncConfigSnapshot<NonNullable<SyncConfig['syncProvider']>>
+  > {
+    const {
+      isEnabled,
+      syncProvider,
+      isEncryptionEnabled,
+      isCompressionEnabled,
+      isManualSyncOnly,
+      syncInterval,
+    } = await firstValueFrom(this.sync$);
+
+    return {
+      isEnabled,
+      syncProvider,
+      isEncryptionEnabled,
+      isCompressionEnabled,
+      isManualSyncOnly,
+      syncInterval,
+    };
   }
 }

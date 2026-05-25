@@ -10,8 +10,60 @@ import {
 import { error, log } from 'electron-log/main';
 import { dialog, ipcMain } from 'electron';
 import { getWin } from './main-window';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 export const initLocalFileSyncAdapter = (): void => {
+  ipcMain.handle(
+    IPC.READ_LOCAL_IMAGE_AS_DATA_URL,
+    async (_, filePathOrUrl: string): Promise<string | null> => {
+      try {
+        const normalized = filePathOrUrl.startsWith('file://')
+          ? fileURLToPath(filePathOrUrl)
+          : filePathOrUrl;
+
+        const ext = normalized.toLowerCase().split('.').pop() || '';
+
+        const mimeTypeByExt: Record<string, string> = {
+          png: 'image/png',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          gif: 'image/gif',
+          webp: 'image/webp',
+          svg: 'image/svg+xml',
+          bmp: 'image/bmp',
+          avif: 'image/avif',
+        };
+
+        const mimeType = mimeTypeByExt[ext];
+
+        // Reject unsupported file types before reading
+        if (!mimeType) {
+          return null;
+        }
+
+        const fs = await import('fs');
+
+        const stat = await fs.promises.stat(normalized);
+
+        const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+        if (stat.size > MAX_FILE_SIZE) {
+          throw new Error('Background image exceeds 5 MB limit');
+        }
+
+        const buffer = await fs.promises.readFile(normalized);
+
+        return `data:${mimeType};base64,${buffer.toString('base64')}`;
+      } catch (e) {
+        error(e);
+        return null;
+      }
+    },
+  );
+
+  ipcMain.handle(IPC.TO_FILE_URL, (_, filePath: string): string => {
+    return pathToFileURL(filePath).href;
+  });
   ipcMain.handle(
     IPC.FILE_SYNC_SAVE,
     (
@@ -112,6 +164,36 @@ export const initLocalFileSyncAdapter = (): void => {
         return true;
       } catch (e) {
         log('ERR: error while checking dir ' + dirPath);
+        if ((e as NodeJS.ErrnoException).code === 'EACCES') {
+          log(
+            'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
+          );
+        }
+        error(e);
+        return e instanceof Error ? e : new Error(String(e));
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IPC.FILE_SYNC_LIST_FILES,
+    (
+      ev,
+      {
+        dirPath,
+      }: {
+        dirPath: string;
+      },
+    ): string[] | Error => {
+      try {
+        return readdirSync(dirPath);
+      } catch (e) {
+        log('ERR: Sync error while listing files in ' + dirPath);
+        if ((e as NodeJS.ErrnoException).code === 'EACCES') {
+          log(
+            'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
+          );
+        }
         error(e);
         return e instanceof Error ? e : new Error(String(e));
       }
@@ -140,13 +222,19 @@ export const initLocalFileSyncAdapter = (): void => {
     IPC.SHOW_OPEN_DIALOG,
     async (
       _,
-      options: { properties: string[]; title?: string; defaultPath?: string },
+      options: {
+        properties: string[];
+        title?: string;
+        defaultPath?: string;
+        filters?: { name: string; extensions: string[] }[];
+      },
     ): Promise<string[] | undefined> => {
       const { canceled, filePaths } = (await dialog.showOpenDialog(getWin(), {
         title: options.title || 'Select folder',
         buttonLabel: 'Select',
         properties: options.properties as any,
         defaultPath: options.defaultPath,
+        filters: options.filters,
       })) as unknown as { canceled: boolean; filePaths: string[] };
       if (canceled) {
         return undefined;

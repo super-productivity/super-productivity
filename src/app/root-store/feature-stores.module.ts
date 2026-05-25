@@ -40,6 +40,10 @@ import {
   simpleCounterReducer,
 } from '../features/simple-counter/store/simple-counter.reducer';
 import { SimpleCounterEffects } from '../features/simple-counter/store/simple-counter.effects';
+import {
+  SECTION_FEATURE_NAME,
+  sectionReducer,
+} from '../features/section/store/section.reducer';
 import { TAG_FEATURE_NAME, tagReducer } from '../features/tag/store/tag.reducer';
 import { TagEffects } from '../features/tag/store/tag.effects';
 import {
@@ -69,6 +73,7 @@ import { MobileNotificationEffects } from '../features/mobile/store/mobile-notif
 import { IS_NATIVE_PLATFORM } from '../util/is-native-platform';
 import { NextcloudDeckIssueEffects } from '../features/issue/providers/nextcloud-deck/nextcloud-deck-issue.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
+import { TimeBlockSyncEffects } from '../features/calendar-integration/time-block/time-block-sync.effects';
 import { ElectronEffects } from '../core/electron/electron.effects';
 import { DropboxEffects } from '../imex/sync/dropbox/store/dropbox.effects';
 import { FinishDayBeforeCloseEffects } from '../features/finish-day-before-close/finish-day-before-close.effects';
@@ -136,6 +141,8 @@ import {
     StoreModule.forFeature(SIMPLE_COUNTER_FEATURE_NAME, simpleCounterReducer),
     EffectsModule.forFeature([SimpleCounterEffects]),
 
+    StoreModule.forFeature(SECTION_FEATURE_NAME, sectionReducer),
+
     StoreModule.forFeature(TAG_FEATURE_NAME, tagReducer),
     EffectsModule.forFeature([TagEffects]),
 
@@ -185,6 +192,7 @@ import {
     EffectsModule.forFeature([IssueTwoWaySyncEffects]),
     EffectsModule.forFeature([NextcloudDeckIssueEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
+    EffectsModule.forFeature([TimeBlockSyncEffects]),
     EffectsModule.forFeature([ElectronEffects]),
     EffectsModule.forFeature([DropboxEffects]),
     EffectsModule.forFeature([FinishDayBeforeCloseEffects]),

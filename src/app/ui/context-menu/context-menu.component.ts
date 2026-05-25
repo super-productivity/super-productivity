@@ -14,7 +14,7 @@ import {
 } from '@angular/material/menu';
 import { MatIconButton } from '@angular/material/button';
 import { NgTemplateOutlet } from '@angular/common';
-import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
+import { isTouchActive } from '../../util/input-intent';
 
 @Component({
   selector: 'context-menu',
@@ -28,6 +28,7 @@ export class ContextMenuComponent implements OnInit {
   rightClickTriggerEl = input.required<HTMLElement | MatMenuItem | MatIconButton>();
   contextMenu = input.required<TemplateRef<any>>();
   allowedSelectors = input<string>('');
+  isEnabled = input<boolean>(true);
 
   readonly contextMenuTriggerEl = viewChild.required('contextMenuTriggerEl', {
     read: MatMenuTrigger,
@@ -38,17 +39,19 @@ export class ContextMenuComponent implements OnInit {
     const tEl = this.rightClickTriggerEl();
     const el = tEl instanceof HTMLElement ? tEl : (tEl as any)._elementRef.nativeElement;
 
-    // On touch devices, skip contextmenu/longpress listeners to avoid conflicting
+    // On touch devices, skip contextmenu/longpress to avoid conflicting
     // with cdkDragStartDelay. The context menu is still accessible via the
     // leftClickTriggerEl (three-dots / more_vert button).
-    if (!IS_TOUCH_PRIMARY) {
-      el.addEventListener('contextmenu', (ev) => {
+    el.addEventListener('contextmenu', (ev) => {
+      if (!isTouchActive()) {
         this.openContextMenu(ev);
-      });
-      el.addEventListener('longPressIOS', (ev) => {
+      }
+    });
+    el.addEventListener('longPressIOS', (ev) => {
+      if (!isTouchActive()) {
         this.openContextMenu(ev);
-      });
-    }
+      }
+    });
 
     const leftClickEl = this.leftClickTriggerEl();
     if (leftClickEl) {
@@ -63,6 +66,12 @@ export class ContextMenuComponent implements OnInit {
   }
 
   private openContextMenu(event: TouchEvent | MouseEvent): void {
+    // When disabled the menu must stay inert (e.g. the background menu is only
+    // valid on the work-view, not on unrelated pages like Habits). See #7734.
+    if (!this.isEnabled()) {
+      return;
+    }
+
     // If allowedSelectors is provided, check if the target matches any of the selectors
     const allowedSelectors = this.allowedSelectors();
     if (allowedSelectors) {

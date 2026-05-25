@@ -15,6 +15,7 @@ import { ProjectService } from '../../features/project/project.service';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
 import { LegacyPfDbService } from '../persistence/legacy-pf-db.service';
 import { DataInitStateService } from '../data-init/data-init-state.service';
+import { CustomThemeService } from '../theme/custom-theme.service';
 import { of } from 'rxjs';
 import { signal } from '@angular/core';
 import { LS } from '../persistence/storage-keys.const';
@@ -50,7 +51,15 @@ describe('StartupService', () => {
       Promise.resolve(),
     );
 
+    const globalConfig = {
+      misc: {
+        isConfirmBeforeExit: false,
+        defaultProjectId: null,
+        isShowProductivityTipLonger: false,
+      },
+    };
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [''], {
+      cfg$: of(globalConfig),
       cfg: signal({
         misc: {
           isConfirmBeforeExit: false,
@@ -65,6 +74,7 @@ describe('StartupService', () => {
 
     const snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
+    matDialogSpy.open.and.returnValue({ afterClosed: () => of(undefined) });
 
     const pluginServiceSpy = jasmine.createSpyObj('PluginService', ['initializePlugins']);
     pluginServiceSpy.initializePlugins.and.returnValue(Promise.resolve());
@@ -105,6 +115,11 @@ describe('StartupService', () => {
       isAllDataLoadedInitially$: of(true),
     };
 
+    const customThemeServiceSpy = jasmine.createSpyObj('CustomThemeService', [
+      'applyActiveTheme',
+    ]);
+    customThemeServiceSpy.applyActiveTheme.and.resolveTo(undefined);
+
     TestBed.configureTestingModule({
       providers: [
         StartupService,
@@ -126,6 +141,7 @@ describe('StartupService', () => {
         { provide: TrackingReminderService, useValue: trackingReminderServiceSpy },
         { provide: LegacyPfDbService, useValue: legacyPfDbServiceSpy },
         { provide: DataInitStateService, useValue: dataInitStateServiceSpy },
+        { provide: CustomThemeService, useValue: customThemeServiceSpy },
         provideMockStore({
           selectors: [
             { selector: selectSyncConfig, value: { syncProvider: null } },
@@ -165,26 +181,76 @@ describe('StartupService', () => {
       // Restore
       (window as any).BroadcastChannel = originalBroadcastChannel;
     }));
+
+    it('should transfer current settings to Electron when requested', () => {
+      const originalEaDescriptor = Object.getOwnPropertyDescriptor(window, 'ea');
+      const electronApi = {
+        sendAppSettingsToElectron: jasmine.createSpy('sendAppSettingsToElectron'),
+      } as unknown as typeof window.ea;
+
+      Object.defineProperty(window, 'ea', {
+        value: electronApi,
+        configurable: true,
+        writable: true,
+      });
+
+      try {
+        (
+          service as unknown as {
+            _sendCurrentSettingsToElectronAfterDataLoad: () => void;
+          }
+        )._sendCurrentSettingsToElectronAfterDataLoad();
+
+        expect(electronApi.sendAppSettingsToElectron).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            misc: jasmine.objectContaining({
+              isConfirmBeforeExit: false,
+              isShowProductivityTipLonger: false,
+            }),
+          }),
+        );
+      } finally {
+        if (originalEaDescriptor) {
+          Object.defineProperty(window, 'ea', originalEaDescriptor);
+        } else {
+          delete (window as Partial<Window>).ea;
+        }
+      }
+    });
   });
 
   describe('_handleAppStartRating (private, tested via init)', () => {
     it('should increment app start count on new day', () => {
-      // Set up initial state - different day
       (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
         if (key === LS.APP_START_COUNT) return '5';
-        if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2026-01-04'; // Different day
+        if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2026-01-04';
         return null;
       });
 
-      // Call the private method via reflection for unit testing
       (service as any)._handleAppStartRating();
 
       expect(localStorage.setItem).toHaveBeenCalledWith(LS.APP_START_COUNT, '6');
     });
 
-    it('should show rating dialog at 32 app starts', () => {
+    it('should not double-increment count on the dialog trigger day', () => {
       (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
-        if (key === LS.APP_START_COUNT) return '32';
+        if (key === LS.APP_START_COUNT) return '31';
+        if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2026-01-04';
+        return null;
+      });
+
+      (service as any)._handleAppStartRating();
+
+      const incrementCalls = (localStorage.setItem as jasmine.Spy).calls
+        .allArgs()
+        .filter(([k]) => k === LS.APP_START_COUNT);
+      expect(incrementCalls.length).toBe(1);
+      expect(incrementCalls[0][1]).toBe('32');
+    });
+
+    it('should show rating dialog at the day-32 tier on a fresh state', () => {
+      (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
+        if (key === LS.APP_START_COUNT) return '31';
         if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2026-01-04';
         return null;
       });
@@ -194,10 +260,12 @@ describe('StartupService', () => {
       expect(matDialog.open).toHaveBeenCalled();
     });
 
-    it('should show rating dialog at 96 app starts', () => {
+    it('should show rating dialog at the day-96 tier when previously shown at day 32', () => {
       (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
-        if (key === LS.APP_START_COUNT) return '96';
+        if (key === LS.APP_START_COUNT) return '95';
         if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2026-01-04';
+        if (key === LS.RATE_DIALOG_STATE)
+          return JSON.stringify({ lastShownAppStartDay: 32, permanentOptOut: false });
         return null;
       });
 
@@ -206,10 +274,26 @@ describe('StartupService', () => {
       expect(matDialog.open).toHaveBeenCalled();
     });
 
-    it('should not show rating dialog at other counts', () => {
+    it('should not show rating dialog if already shown at the current tier', () => {
       (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
-        if (key === LS.APP_START_COUNT) return '50';
+        if (key === LS.APP_START_COUNT) return '49';
         if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2026-01-04';
+        if (key === LS.RATE_DIALOG_STATE)
+          return JSON.stringify({ lastShownAppStartDay: 32, permanentOptOut: false });
+        return null;
+      });
+
+      (service as any)._handleAppStartRating();
+
+      expect(matDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('should not show rating dialog when permanentOptOut is true', () => {
+      (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
+        if (key === LS.APP_START_COUNT) return '95';
+        if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2026-01-04';
+        if (key === LS.RATE_DIALOG_STATE)
+          return JSON.stringify({ lastShownAppStartDay: 32, permanentOptOut: true });
         return null;
       });
 

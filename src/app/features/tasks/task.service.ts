@@ -103,6 +103,8 @@ import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
+import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
+import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 
 @Injectable({
   providedIn: 'root',
@@ -119,10 +121,11 @@ export class TaskService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
+  private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
-    // NOTE: we can't use share here, as we need the last emitted value
+    distinctUntilChanged(),
   );
   currentTaskId = toSignal(this.currentTaskId$, { initialValue: null });
 
@@ -137,10 +140,7 @@ export class TaskService {
   );
 
   selectedTaskId = toSignal(
-    this._store.pipe(
-      select(selectSelectedTaskId),
-      // NOTE: we can't use share here, as we need the last emitted value
-    ),
+    this._store.pipe(select(selectSelectedTaskId), distinctUntilChanged()),
     { initialValue: null },
   );
 
@@ -163,10 +163,7 @@ export class TaskService {
   );
 
   taskDetailPanelTargetPanel$: Observable<TaskDetailTargetPanel | null | undefined> =
-    this._store.pipe(
-      select(selectTaskDetailTargetPanel),
-      // NOTE: we can't use share here, as we need the last emitted value
-    );
+    this._store.pipe(select(selectTaskDetailTargetPanel), distinctUntilChanged());
 
   isTaskDataLoaded$: Observable<boolean> = this._store.pipe(
     select(selectIsTaskDataLoaded),
@@ -247,8 +244,7 @@ export class TaskService {
       });
 
     // Flush accumulated time when task stops (currentTaskId becomes null or changes)
-    this.currentTaskId$.pipe(distinctUntilChanged()).subscribe((newTaskId) => {
-      // When task changes or stops, flush any accumulated time
+    this.currentTaskId$.subscribe(() => {
       this._flushAccumulatedTimeSpent();
     });
 
@@ -407,7 +403,7 @@ export class TaskService {
       workContextId,
     });
 
-    TaskLog.log(task, additional);
+    TaskLog.log('addTask', { taskId: task.id, workContextId, workContextType });
 
     this._store.dispatch(
       TaskSharedActions.addTask({
@@ -416,6 +412,11 @@ export class TaskService {
         workContextType,
         isAddToBacklog,
         isAddToBottom,
+        ...getDeadlineAutoPlanFields(
+          this._dateService,
+          task.deadlineDay,
+          task.deadlineWithTime,
+        ),
       }),
     );
     return task && task.id;
@@ -440,7 +441,13 @@ export class TaskService {
   }
 
   addToToday(task: TaskWithSubTasks): void {
-    this._store.dispatch(TaskSharedActions.planTasksForToday({ taskIds: [task.id] }));
+    this._store.dispatch(
+      TaskSharedActions.planTasksForToday({
+        taskIds: [task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+      }),
+    );
   }
 
   remove(task: TaskWithSubTasks): void {
@@ -463,6 +470,9 @@ export class TaskService {
           issueType: t.issueType!,
           issueProviderId: t.issueProviderId!,
         })),
+    );
+    this._timeBlockDeleteSidecar.set(
+      tasks.filter((t) => !!t.dueWithTime).map((t) => t.id),
     );
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds }));
   }
@@ -750,7 +760,7 @@ export class TaskService {
       title: additional.title || '',
       additional: { dueDay: additional.dueDay || undefined, ...additional },
     });
-    console.log(task);
+    TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
 
     this._store.dispatch(
       addSubTask({
@@ -759,17 +769,29 @@ export class TaskService {
       }),
     );
 
-    this._focusNewlyCreatedTask(task.id, !task.title?.trim().length);
+    this.focusTaskById(task.id, !task.title?.trim().length);
 
     return task.id;
   }
 
-  private _focusNewlyCreatedTask(taskId: string, shouldStartEditing: boolean): void {
-    // Use double-RAF to ensure Angular has completed rendering after change detection.
-    // First RAF queues after the current frame, second RAF runs after the render.
+  /**
+   * Focus a task element by id, deferred via double-RAF so it runs after
+   * Angular renders the next frame. When `shouldStartEditing` is true and
+   * the task's title is empty at the time of focus, also enter title edit
+   * mode. Used both by newly-created tasks and by callers that want to
+   * focus an existing task (e.g. an empty sibling on Mod+Enter).
+   */
+  focusTaskById(taskId: string, shouldStartEditing: boolean): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const taskElement = document.getElementById(`t-${taskId}`);
+        // Prefer the in-panel instance when both the main list and the side
+        // detail panel render the same task (e.g. a just-created sub-task in
+        // the parent's sub-task list). Focusing the panel copy preserves the
+        // user's current context (parent stays selected) and on mobile lands
+        // on a visible input rather than the main-list copy that the panel
+        // overlays (#7120).
+        const allEls = document.querySelectorAll<HTMLElement>(`#t-${CSS.escape(taskId)}`);
+        const taskElement = allEls[allEls.length - 1];
         if (!taskElement) return;
 
         taskElement.focus();
@@ -851,31 +873,34 @@ export class TaskService {
   }
 
   async moveToArchive(tasks: TaskWithSubTasks | TaskWithSubTasks[]): Promise<void> {
-    // Add comprehensive validation and logging
     if (!tasks) {
-      console.error('[TaskService] moveToArchive called with null/undefined tasks');
+      TaskLog.err('[TaskService] moveToArchive called with null/undefined tasks');
       return;
     }
 
     if (!Array.isArray(tasks)) {
-      console.warn('[TaskService] moveToArchive converting single task to array', tasks);
+      TaskLog.warn('[TaskService] moveToArchive converting single task to array', {
+        id: tasks.id,
+      });
       tasks = [tasks];
     }
 
-    // Double-check it's an array after conversion
-    if (!Array.isArray(tasks)) {
-      console.error('[TaskService] Failed to convert tasks to array:', tasks);
-      throw new Error('moveToArchive: tasks could not be converted to array');
+    if (!tasks.length) {
+      TaskLog.log('[TaskService] No tasks to archive');
+      return;
     }
 
     TaskLog.log('[TaskService] moveToArchive called with:', {
       count: tasks.length,
-      taskIds: tasks.map((t) => t?.id || 'undefined'),
+      taskIds: tasks.map((t) => t?.id),
       tasksType: typeof tasks,
       isArray: Array.isArray(tasks),
     });
 
-    // NOTE: we only update real parents since otherwise we move sub-tasks without their parent into the archive
+    // NOTE: malformed tasks (missing/invalid ids) are dropped inside archive.service
+    // via sanitizeTasksForArchiving, which also covers writeTasksToArchiveForRemoteSync.
+    // We only update real parents here since otherwise we'd move sub-tasks without
+    // their parent into the archive.
     const subTasks = tasks.filter((t) => t?.parentId);
     const parentTasks = tasks.filter((t) => t && !t.parentId);
 
@@ -927,7 +952,13 @@ export class TaskService {
   moveToCurrentWorkContext(task: TaskWithSubTasks | Task): void {
     if (this._workContextService.activeWorkContextType === WorkContextType.TAG) {
       if (this._workContextService.activeWorkContextId === TODAY_TAG.id) {
-        this._store.dispatch(TaskSharedActions.planTasksForToday({ taskIds: [task.id] }));
+        this._store.dispatch(
+          TaskSharedActions.planTasksForToday({
+            taskIds: [task.id],
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+          }),
+        );
       } else {
         this.updateTags(task, [this._workContextService.activeWorkContextId as string]);
       }
@@ -1078,6 +1109,25 @@ export class TaskService {
 
   setUnDone(id: string): void {
     this.update(id, { isDone: false });
+  }
+
+  /**
+   * Toggle done state with checkmark animation.
+   * Returns the timeout handle so callers can clear it on destroy.
+   */
+  toggleDoneWithAnimation(
+    taskId: string,
+    isDone: boolean,
+    setAnimation: (animate: boolean) => void,
+  ): number | undefined {
+    if (isDone) {
+      setAnimation(false);
+      this.setUnDone(taskId);
+      return undefined;
+    } else {
+      setAnimation(true);
+      return window.setTimeout(() => this.setDone(taskId), 200);
+    }
   }
 
   showSubTasks(id: string): void {

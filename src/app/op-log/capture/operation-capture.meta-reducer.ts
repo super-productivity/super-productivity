@@ -80,6 +80,25 @@ let isApplyingRemoteOps = false;
 let deferredActions: PersistentAction[] = [];
 
 /**
+ * Tracks actions that were deferred (buffered) during sync replay.
+ * The effect uses this to skip deferred actions — they will be processed
+ * later by processDeferredActions() with fresh vector clocks.
+ *
+ * Without this, deferred actions would be double-written: once by the effect
+ * (which sees them on the Actions observable) and again by processDeferredActions().
+ * The effect's dequeue() would also desync the queue since nothing was enqueued.
+ */
+const deferredActionSet = new WeakSet<PersistentAction>();
+
+/**
+ * Checks whether an action was deferred (buffered for post-sync processing).
+ * Used by the effect to skip deferred actions in the normal persistence path.
+ */
+export const isDeferredAction = (action: PersistentAction): boolean => {
+  return deferredActionSet.has(action);
+};
+
+/**
  * Sets the service instance for the meta-reducer.
  * Must be called during app initialization before any persistent actions are dispatched.
  */
@@ -130,7 +149,11 @@ const MAX_DEFERRED_ACTIONS_HARD_LIMIT = 100;
  * Called by the meta-reducer when a persistent action arrives during sync.
  */
 export const bufferDeferredAction = (action: PersistentAction): void => {
-  // Hard limit: drop oldest action if buffer is full (sync stuck scenario)
+  // Hard limit: drop oldest action if buffer is full (sync stuck scenario).
+  // NOTE: The shifted action remains in deferredActionSet (WeakSet has no delete-by-value).
+  // The effect filters it via isDeferredAction(), and getDeferredActions() won't return it,
+  // so it is silently lost. This is acceptable: the hard limit is itself an error condition
+  // (sync stuck), and dropping the oldest action is the lesser evil vs unbounded growth.
   if (deferredActions.length >= MAX_DEFERRED_ACTIONS_HARD_LIMIT) {
     devError(
       `[operationCaptureMetaReducer] Deferred actions buffer exceeded ${MAX_DEFERRED_ACTIONS_HARD_LIMIT} items. ` +
@@ -140,6 +163,7 @@ export const bufferDeferredAction = (action: PersistentAction): void => {
   }
 
   deferredActions.push(action);
+  deferredActionSet.add(action);
 
   // Soft warning at 10 items
   if (deferredActions.length > MAX_DEFERRED_ACTIONS_WARNING) {
@@ -162,6 +186,11 @@ export const getDeferredActions = (): PersistentAction[] => {
 /**
  * Clears the deferred actions buffer without processing.
  * Used for cleanup during testing or error recovery.
+ *
+ * Note: deferredActionSet (WeakSet) is not cleared here because WeakSet has
+ * no .clear() method. Entries are garbage-collected when action references are
+ * released. In practice, cleared actions are not reused by reference, so stale
+ * entries in the WeakSet are harmless.
  */
 export const clearDeferredActions = (): void => {
   deferredActions = [];

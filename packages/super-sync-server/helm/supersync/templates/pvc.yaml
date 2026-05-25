@@ -1,0 +1,19 @@
+{{- if .Values.supersync.persistence.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "supersync.fullname" . }}
+  labels:
+    {{- include "supersync.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- range .Values.supersync.persistence.accessModes }}
+    - {{ . }}
+    {{- end }}
+  {{- if .Values.supersync.persistence.storageClass }}
+  storageClassName: {{ .Values.supersync.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.supersync.persistence.size }}
+{{- end }}

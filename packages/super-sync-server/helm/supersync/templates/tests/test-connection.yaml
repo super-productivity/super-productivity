@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "supersync.fullname" . }}-test-connection"
+  labels:
+    {{- include "supersync.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  restartPolicy: Never
+  containers:
+    - name: wget
+      image: busybox:1.36
+      command: ['wget', '--spider', '--timeout=5', 'http://{{ include "supersync.fullname" . }}:{{ .Values.service.port }}/health']

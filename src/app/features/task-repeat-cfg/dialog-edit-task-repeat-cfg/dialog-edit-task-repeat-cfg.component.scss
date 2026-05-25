@@ -9,6 +9,33 @@ mat-dialog-actions {
   }
 }
 
+.show-on-small {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  mat-dialog-actions {
+    flex-wrap: nowrap;
+  }
+
+  .hide-on-small {
+    display: none;
+  }
+
+  .show-on-small {
+    display: inline;
+  }
+
+  :host ::ng-deep .icon-on-small {
+    min-width: 0 !important;
+    padding: 0 var(--s2) !important;
+
+    .mat-icon {
+      margin: 0 !important;
+    }
+  }
+}
+
 .form-wrapper {
   min-width: 280px;
   max-width: 620px;
