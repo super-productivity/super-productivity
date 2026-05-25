@@ -44,7 +44,8 @@
       "@sp/sync-providers/provider-types": [
         "packages/sync-providers/dist/provider-types.d.ts"
       ],
-      "@sp/sync-providers/log": ["packages/sync-providers/dist/log.d.ts"]
+      "@sp/sync-providers/log": ["packages/sync-providers/dist/log.d.ts"],
+      "@sp/sync-providers/onedrive": ["packages/sync-providers/dist/onedrive.d.ts"]
     }
   },
   "include": ["main.ts", "**/*.ts", "../src/app/core/window-ea.d.ts"],
