@@ -1,4 +1,5 @@
 import type { SyncLogger } from '@sp/sync-core';
+import { md5 as md5HashWasm } from 'hash-wasm';
 import {
   EmptyRemoteBodySPError,
   HttpNotOkAPIError,
@@ -8,7 +9,6 @@ import {
   RemoteFileNotFoundAPIError,
 } from '../../errors';
 import { errorMeta } from '../../log/error-meta';
-import { computeContentRev } from '../content-rev';
 import { WebDavHttpHeader, WebDavHttpMethod, WebDavHttpStatus } from './webdav.const';
 import type { WebDavHttpAdapter, WebDavHttpResponse } from './webdav-http-adapter';
 import { FileMeta, WebdavXmlParser } from './webdav-xml-parser';
@@ -35,7 +35,7 @@ export class WebdavApi {
   }
 
   private async _computeContentHash(data: string): Promise<string> {
-    return computeContentRev(data);
+    return md5HashWasm(data);
   }
 
   // ==============================
@@ -348,12 +348,9 @@ export class WebdavApi {
   }
 
   /**
-   * Try a PROPFIND against the WebDAV base root to verify the cfg works
-   * end-to-end. The configured sync folder is intentionally NOT probed —
-   * it is created lazily on the first upload and would 404 on first-time
-   * setup (see issue #7617). Returns a normalized result that the dialog
-   * surfaces directly to the user; `fullUrl` is the configured sync
-   * folder (where data will sync), not the probed root.
+   * Try a PROPFIND against the configured sync folder to verify the cfg
+   * works end-to-end. Returns a normalized result that the dialog surfaces
+   * directly to the user.
    *
    * The privacy invariant lives in the logger call below (structured
    * `errorMeta`, no raw error object). The returned `fullUrl` / `error`
@@ -375,12 +372,8 @@ export class WebdavApi {
         [WebDavHttpHeader.DEPTH]: '0',
       };
 
-      // Probe the base root (see JSDoc / issue #7617). This still fails
-      // correctly for broken configs: a wrong username / base path makes
-      // the root itself 404, and a bad password makes it 401 — both
-      // propagate out of the adapter and into the catch below.
       const response = await this._deps.httpAdapter.request({
-        url: this._buildFullPath(cfg.baseUrl, '/'),
+        url: fullPath,
         method: WebDavHttpMethod.PROPFIND,
         headers,
         body: WebdavXmlParser.PROPFIND_XML,

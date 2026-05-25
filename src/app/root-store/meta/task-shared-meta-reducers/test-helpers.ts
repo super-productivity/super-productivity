@@ -2,7 +2,6 @@ import { Action, ActionReducer } from '@ngrx/store';
 import { taskSharedCrudMetaReducer } from './task-shared-crud.reducer';
 import { taskSharedLifecycleMetaReducer } from './task-shared-lifecycle.reducer';
 import { taskSharedSchedulingMetaReducer } from './task-shared-scheduling.reducer';
-import { taskSharedDeadlineMetaReducer } from './task-shared-deadline.reducer';
 import { projectSharedMetaReducer } from './project-shared.reducer';
 import { tagSharedMetaReducer } from './tag-shared.reducer';
 import { plannerSharedMetaReducer } from './planner-shared.reducer';
@@ -17,15 +16,14 @@ import { Task } from '../../../features/tasks/task.model';
 export const createCombinedTaskSharedMetaReducer = (
   reducer: ActionReducer<any, Action>,
 ): ActionReducer<any, Action> => {
-  // Wrap in reverse registry order so execution matches META_REDUCERS.
+  // Apply meta-reducers in the same order as in main.ts
   let combinedReducer = reducer;
-  combinedReducer = plannerSharedMetaReducer(combinedReducer);
-  combinedReducer = tagSharedMetaReducer(combinedReducer);
-  combinedReducer = projectSharedMetaReducer(combinedReducer);
-  combinedReducer = taskSharedDeadlineMetaReducer(combinedReducer);
-  combinedReducer = taskSharedSchedulingMetaReducer(combinedReducer);
-  combinedReducer = taskSharedLifecycleMetaReducer(combinedReducer);
   combinedReducer = taskSharedCrudMetaReducer(combinedReducer);
+  combinedReducer = taskSharedLifecycleMetaReducer(combinedReducer);
+  combinedReducer = taskSharedSchedulingMetaReducer(combinedReducer);
+  combinedReducer = projectSharedMetaReducer(combinedReducer);
+  combinedReducer = tagSharedMetaReducer(combinedReducer);
+  combinedReducer = plannerSharedMetaReducer(combinedReducer);
   return combinedReducer;
 };
 

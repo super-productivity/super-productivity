@@ -27,17 +27,22 @@ import type {
   SuperSyncOpDownloadResponse,
   SyncOperation,
   SyncProviderBase,
-} from '../provider-types';
-import { createOpsUploadRequestId, createSnapshotUploadRequestId } from './request-id';
+} from '../provider.types';
 import type { SuperSyncResponseValidators } from './response-validators';
 import type { SuperSyncStorage } from './storage';
 import {
   PROVIDER_ID_SUPER_SYNC,
+  SUPER_SYNC_DEFAULT_BASE_URL,
   type SuperSyncPrivateCfg,
-  type SuperSyncWebSocketAccess,
 } from './super-sync.model';
 
 const LAST_SERVER_SEQ_KEY_PREFIX = 'super_sync_last_server_seq_';
+
+/** Versioned prefix for the deterministic ops-upload `requestId`. */
+const OPS_UPLOAD_REQUEST_ID_PREFIX = 'ops-v1';
+
+/** Versioned prefix for deterministic snapshot-upload `requestId`s. */
+const SNAPSHOT_UPLOAD_REQUEST_ID_PREFIX = 'snapshot-v1';
 
 /** 75s allows the server's 60s database timeout plus network/parse buffer. */
 const SUPERSYNC_REQUEST_TIMEOUT_MS = 75000;
@@ -81,14 +86,6 @@ export interface SuperSyncDeps {
   storage: SuperSyncStorage;
   responseValidators: SuperSyncResponseValidators;
   /**
-   * Host-supplied fallback used whenever `SuperSyncPrivateCfg.baseUrl`
-   * is empty/undefined. The package deliberately has no implicit
-   * default — keeping the SP-specific URL out of the package keeps it
-   * framework-agnostic. Hosts pointing at the SP-hosted server can pass
-   * `SUPER_SYNC_DEFAULT_BASE_URL`; others pass their own URL.
-   */
-  defaultBaseUrl: string;
-  /**
    * Optional override for tests to avoid real web-request retry waits.
    */
   webRequestRetryDelay?: (ms: number) => Promise<void>;
@@ -115,8 +112,7 @@ export class SuperSyncProvider
   implements
     SyncProviderBase<typeof PROVIDER_ID_SUPER_SYNC, SuperSyncPrivateCfg>,
     OperationSyncCapable<'superSyncOps'>,
-    RestoreCapable,
-    SuperSyncWebSocketAccess
+    RestoreCapable
 {
   readonly id = PROVIDER_ID_SUPER_SYNC;
   readonly isUploadForcePossible = false;
@@ -167,6 +163,100 @@ export class SuperSyncProvider
     }
   }
 
+  /**
+   * Deterministic upload-batch identifier for server-side idempotency.
+   * Lets the SuperSync server recognize a retried upload (e.g. after a
+   * network drop between server commit and client receipt) and return
+   * the cached result instead of rejecting as duplicate ops.
+   *
+   * The id is derived from `clientId` + a stable hash of the logical
+   * ops batch. Encrypted payload bytes are deliberately excluded
+   * because AES-GCM uses fresh IVs; retrying the same logical op can
+   * produce different ciphertext.
+   */
+  private _createOpsUploadRequestId(ops: SyncOperation[], clientId: string): string {
+    const opIds = ops.map((op) => op.id).join('|');
+    let opsFingerprint = opIds;
+    try {
+      opsFingerprint = this._stableJsonStringify(
+        ops.map((op) => this._toRequestIdFingerprintOp(op)),
+      );
+    } catch {
+      opsFingerprint = opIds;
+    }
+    const firstOpId = this._compactRequestIdPart(ops[0]?.id ?? 'empty');
+    const lastOp = ops.length > 0 ? ops[ops.length - 1] : undefined;
+    const lastOpId = this._compactRequestIdPart(lastOp?.id ?? 'empty');
+    const hash = this._hashRequestIdInput(`${clientId}|${opsFingerprint}`);
+    return `${OPS_UPLOAD_REQUEST_ID_PREFIX}-${ops.length}-${firstOpId}-${lastOpId}-${hash}`;
+  }
+
+  /**
+   * Deterministic dedup key for snapshot uploads. The server-side opId is a
+   * UUID-v7 minted per snapshot upload, so retries reuse it and `(clientId, opId)`
+   * uniquely identifies an attempt — no content hash needed. Stripping the
+   * payload hash avoids two expensive passes (`_stableJsonStringify` + char
+   * scan) over a multi-MB state on mobile.
+   */
+  private _createSnapshotUploadRequestId(clientId: string, opId: string): string {
+    const compactClientId = this._compactRequestIdPart(clientId);
+    const compactOpId = this._compactRequestIdPart(opId || 'snapshot');
+    const hash = this._hashRequestIdInput(`${clientId}|${opId}`);
+    return `${SNAPSHOT_UPLOAD_REQUEST_ID_PREFIX}-${compactClientId}-${compactOpId}-${hash}`;
+  }
+
+  private _compactRequestIdPart(id: string): string {
+    return id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8) || 'x';
+  }
+
+  /**
+   * Two-way FNV-1a-like hash (32-bit FNV + a second mixing pass) so
+   * the resulting hex is wide enough for batch identification. Pure
+   * function, no Web Crypto dependency.
+   */
+  private _hashRequestIdInput(input: string): string {
+    let hashA = 0x811c9dc5;
+    let hashB = 0x9e3779b9;
+
+    for (let i = 0; i < input.length; i++) {
+      const code = input.charCodeAt(i);
+      hashA = Math.imul(hashA ^ code, 16777619);
+      hashB = Math.imul(hashB + code, 2246822519) ^ (hashB >>> 13);
+    }
+
+    return `${(hashA >>> 0).toString(36)}${(hashB >>> 0).toString(36)}`;
+  }
+
+  private _stableJsonStringify(value: unknown): string {
+    return JSON.stringify(this._toStableJsonValue(value)) ?? 'undefined';
+  }
+
+  private _toRequestIdFingerprintOp(op: SyncOperation): SyncOperation {
+    return {
+      ...op,
+      payload: op.isPayloadEncrypted ? '[encrypted-payload]' : op.payload,
+    };
+  }
+
+  private _toStableJsonValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map((item) => this._toStableJsonValue(item));
+    }
+
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.keys(value as Record<string, unknown>)
+          .sort()
+          .map((key) => [
+            key,
+            this._toStableJsonValue((value as Record<string, unknown>)[key]),
+          ]),
+      );
+    }
+
+    return value;
+  }
+
   // === Operation Sync Implementation ===
 
   async uploadOps(
@@ -184,7 +274,7 @@ export class SuperSyncProvider
       ops,
       clientId,
       lastKnownServerSeq,
-      requestId: createOpsUploadRequestId(ops, clientId),
+      requestId: this._createOpsUploadRequestId(ops, clientId),
     });
 
     if (this.isNativePlatform) {
@@ -278,7 +368,7 @@ export class SuperSyncProvider
     });
     const cfg = await this._cfgOrError();
 
-    const requestId = createSnapshotUploadRequestId(clientId, opId);
+    const requestId = this._createSnapshotUploadRequestId(clientId, opId);
     const jsonPayload = JSON.stringify({
       state,
       clientId,
@@ -467,7 +557,7 @@ export class SuperSyncProvider
   }
 
   private _resolveBaseUrl(cfg: SuperSyncPrivateCfg): string {
-    return (cfg.baseUrl || this._deps.defaultBaseUrl).replace(/\/$/, '');
+    return (cfg.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL).replace(/\/$/, '');
   }
 
   /**
@@ -481,7 +571,7 @@ export class SuperSyncProvider
       return this._cachedServerSeqKey;
     }
     const cfg = await this.privateCfg.load();
-    const baseUrl = cfg?.baseUrl || this._deps.defaultBaseUrl;
+    const baseUrl = cfg?.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
     const accessToken = cfg?.accessToken ?? '';
     const identifier = `${baseUrl}|${accessToken}`;
     const hash = identifier

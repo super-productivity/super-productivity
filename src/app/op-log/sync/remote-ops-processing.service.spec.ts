@@ -16,7 +16,6 @@ import { LockService } from './lock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from './sync-import-filter.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
-import { OperationLogEffects } from '../capture/operation-log.effects';
 import {
   ActionType,
   EntityConflict,
@@ -44,7 +43,6 @@ describe('RemoteOpsProcessingService', () => {
   let lockServiceSpy: jasmine.SpyObj<LockService>;
   let compactionServiceSpy: jasmine.SpyObj<OperationLogCompactionService>;
   let syncImportFilterServiceSpy: jasmine.SpyObj<SyncImportFilterService>;
-  let operationLogEffectsSpy: jasmine.SpyObj<OperationLogEffects>;
 
   beforeEach(() => {
     schemaMigrationServiceSpy = jasmine.createSpyObj('SchemaMigrationService', [
@@ -101,9 +99,6 @@ describe('RemoteOpsProcessingService', () => {
     ]);
     operationApplierServiceSpy = jasmine.createSpyObj('OperationApplierService', [
       'applyOperations',
-    ]);
-    operationLogEffectsSpy = jasmine.createSpyObj('OperationLogEffects', [
-      'processDeferredActions',
     ]);
     conflictResolutionServiceSpy = jasmine.createSpyObj('ConflictResolutionService', [
       'autoResolveConflictsLWW',
@@ -201,7 +196,9 @@ describe('RemoteOpsProcessingService', () => {
     lockServiceSpy = jasmine.createSpyObj('LockService', ['request']);
     // Default: execute callback immediately (simulating lock acquisition)
     lockServiceSpy.request.and.callFake(
-      async <T>(_name: string, callback: () => Promise<T>) => callback(),
+      async (_name: string, callback: () => Promise<void>) => {
+        await callback();
+      },
     );
     compactionServiceSpy = jasmine.createSpyObj('OperationLogCompactionService', [
       'compact',
@@ -228,7 +225,6 @@ describe('RemoteOpsProcessingService', () => {
         { provide: OperationLogStoreService, useValue: opLogStoreSpy },
         { provide: VectorClockService, useValue: vectorClockServiceSpy },
         { provide: OperationApplierService, useValue: operationApplierServiceSpy },
-        { provide: OperationLogEffects, useValue: operationLogEffectsSpy },
         { provide: ConflictResolutionService, useValue: conflictResolutionServiceSpy },
         { provide: ValidateStateService, useValue: validateStateServiceSpy },
         { provide: LockService, useValue: lockServiceSpy },
@@ -272,7 +268,6 @@ describe('RemoteOpsProcessingService', () => {
     operationApplierServiceSpy.applyOperations.and.returnValue(
       Promise.resolve({ appliedOps: [] }),
     );
-    operationLogEffectsSpy.processDeferredActions.and.resolveTo();
   });
 
   describe('processRemoteOps', () => {
@@ -327,9 +322,9 @@ describe('RemoteOpsProcessingService', () => {
         callOrder.push('flushPendingWrites');
       });
       lockServiceSpy.request.and.callFake(
-        async <T>(_name: string, callback: () => Promise<T>) => {
+        async (_name: string, callback: () => Promise<void>) => {
           callOrder.push('lockAcquired');
-          return callback();
+          await callback();
         },
       );
       spyOn(service, 'detectConflicts').and.callFake(async () => {
@@ -1228,42 +1223,6 @@ describe('RemoteOpsProcessingService', () => {
       expect(opLogStoreSpy.mergeRemoteOpClocks).toHaveBeenCalledWith(remoteOps);
     });
 
-    it('should flush deferred actions after remote clocks are merged while reusing caller lock', async () => {
-      const remoteOps: Operation[] = [
-        createFullOp({ id: 'remote-1', vectorClock: { remoteClient: 1 } }),
-      ];
-      const callOrder: string[] = [];
-
-      operationApplierServiceSpy.applyOperations.and.callFake(async () => {
-        callOrder.push('applyOperations');
-        return { appliedOps: remoteOps };
-      });
-      opLogStoreSpy.markApplied.and.callFake(async () => {
-        callOrder.push('markApplied');
-      });
-      opLogStoreSpy.mergeRemoteOpClocks.and.callFake(async () => {
-        callOrder.push('mergeRemoteOpClocks');
-      });
-      operationLogEffectsSpy.processDeferredActions.and.callFake(async () => {
-        callOrder.push('processDeferredActions');
-      });
-
-      await service.applyNonConflictingOps(remoteOps, true);
-
-      expect(operationApplierServiceSpy.applyOperations).toHaveBeenCalledWith(remoteOps, {
-        skipDeferredLocalActions: true,
-      });
-      expect(operationLogEffectsSpy.processDeferredActions).toHaveBeenCalledWith({
-        callerHoldsOperationLogLock: true,
-      });
-      expect(callOrder).toEqual([
-        'applyOperations',
-        'markApplied',
-        'mergeRemoteOpClocks',
-        'processDeferredActions',
-      ]);
-    });
-
     it('should NOT call mergeRemoteOpClocks when no ops are applied', async () => {
       const remoteOps: Operation[] = [
         createFullOp({ id: 'remote-1', vectorClock: { remoteClient: 1 } }),
@@ -1366,10 +1325,9 @@ describe('RemoteOpsProcessingService', () => {
         // Should call appendBatchSkipDuplicates exactly once (no retry needed)
         expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledTimes(1);
         // Should apply only the non-duplicate op
-        expect(operationApplierServiceSpy.applyOperations).toHaveBeenCalledWith(
-          [remoteOps[1]],
-          { skipDeferredLocalActions: true },
-        );
+        expect(operationApplierServiceSpy.applyOperations).toHaveBeenCalledWith([
+          remoteOps[1],
+        ]);
       });
 
       it('should propagate non-duplicate errors', async () => {

@@ -16,7 +16,6 @@ const makeSection = (overrides: Partial<Section> = {}): Section => ({
   contextId: 'project1',
   contextType: WorkContextType.PROJECT,
   title: 'Section 1',
-  isExpanded: true,
   taskIds: [],
   ...overrides,
 });
@@ -37,7 +36,6 @@ describe('sectionReducer', () => {
           contextId: 'p1',
           contextType: WorkContextType.PROJECT,
           title: 'New',
-          isExpanded: true,
         } as Section,
       });
       const next = sectionReducer(initialSectionState, action);
@@ -114,15 +112,6 @@ describe('sectionReducer', () => {
         }),
       );
       expect(nextNull.entities['s1']?.title).toBe('');
-    });
-
-    it('updates isExpanded property', () => {
-      const start = stateWithSections([makeSection({ id: 's1', isExpanded: true })]);
-      const next = sectionReducer(
-        start,
-        updateSection({ section: { id: 's1', changes: { isExpanded: false } } }),
-      );
-      expect(next.entities['s1']?.isExpanded).toBe(false);
     });
   });
 

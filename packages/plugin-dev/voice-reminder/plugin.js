@@ -85,9 +85,9 @@ if (!window.speechSynthesis) {
     }, intervalMs);
   }
 
-  // Track current task via hook. The host emits { current, previous }.
-  PluginAPI.registerHook('currentTaskChange', function (payload) {
-    _vrCurrentTask = payload && payload.current ? payload.current : null;
+  // Track current task via hook
+  PluginAPI.registerHook('currentTaskChange', function (task) {
+    _vrCurrentTask = task;
   });
 
   // Initial load and start

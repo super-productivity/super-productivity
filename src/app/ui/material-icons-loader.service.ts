@@ -2,7 +2,6 @@ import { Injectable } from '@angular/core';
 import { BodyClass } from '../app.constants';
 
 const MATERIAL_ICONS_FONT = '24px "Material Symbols Outlined"';
-const MATERIAL_ICONS_FONT_READY_TIMEOUT_MS = 3000;
 
 @Injectable({
   providedIn: 'root',
@@ -42,8 +41,7 @@ export class MaterialIconsLoaderService {
       return Promise.resolve();
     }
 
-    const fonts = document.fonts;
-    if (!fonts?.load) {
+    if (!('fonts' in document)) {
       body.classList.add(BodyClass.isMaterialSymbolsLoaded);
       return Promise.resolve();
     }
@@ -52,7 +50,7 @@ export class MaterialIconsLoaderService {
       return this.fontReadyPromise;
     }
 
-    this.fontReadyPromise = this._loadFont(body, fonts);
+    this.fontReadyPromise = this._loadFont(body);
     return this.fontReadyPromise;
   }
 
@@ -62,22 +60,10 @@ export class MaterialIconsLoaderService {
     return MATERIAL_ICONS;
   }
 
-  private async _loadFont(body: HTMLElement, fonts: FontFaceSet): Promise<void> {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
+  private async _loadFont(body: HTMLElement): Promise<void> {
     try {
-      await Promise.race([
-        fonts.load(MATERIAL_ICONS_FONT),
-        new Promise<void>((resolve) => {
-          timeoutId = setTimeout(resolve, MATERIAL_ICONS_FONT_READY_TIMEOUT_MS);
-        }),
-      ]);
-    } catch {
-      // Keep the UI usable if the browser fails the font readiness probe.
+      await document.fonts.load(MATERIAL_ICONS_FONT);
     } finally {
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
       body.classList.add(BodyClass.isMaterialSymbolsLoaded);
     }
   }

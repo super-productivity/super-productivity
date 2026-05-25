@@ -90,17 +90,17 @@ const addReplaySafeDoneFields = (
     return actionPayload;
   }
 
-  const hasDoneOn = typeof taskChanges['doneOn'] === 'number';
-  const hasDueDay = Object.prototype.hasOwnProperty.call(taskChanges, 'dueDay');
-  const isLegacyDoneOpWithoutDateFields = !hasDoneOn && !hasDueDay;
-
   const replaySafeChanges = {
     ...taskChanges,
-    doneOn: hasDoneOn ? taskChanges['doneOn'] : op.timestamp,
+    doneOn:
+      typeof taskChanges['doneOn'] === 'number' ? taskChanges['doneOn'] : op.timestamp,
     // Older done ops did not store the logical day, timezone, or start-of-next-day
     // offset. This timestamp fallback is replay-stable, but still uses the replaying
     // device's local calendar and can be off near custom day-start boundaries.
-    ...(isLegacyDoneOpWithoutDateFields ? { dueDay: getDbDateStr(op.timestamp) } : {}),
+    dueDay:
+      typeof taskChanges['dueDay'] === 'string'
+        ? taskChanges['dueDay']
+        : getDbDateStr(op.timestamp),
   };
 
   return {

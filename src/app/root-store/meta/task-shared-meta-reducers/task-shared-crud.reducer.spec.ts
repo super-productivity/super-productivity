@@ -1136,26 +1136,33 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
-    it('should handle isDone updates and set doneOn timestamp and completion dueDay for unscheduled tasks', () => {
+    it('should handle isDone updates and set doneOn timestamp and dueDay to today', () => {
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
       const action = createUpdateTaskAction('task1', {
         isDone: true,
       });
 
       metaReducer(testState, action);
-      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
-      const updatedTask = resultState[TASK_FEATURE_NAME].entities['task1'] as Task;
-      expect(updatedTask.isDone).toBe(true);
-      expect(updatedTask.doneOn).toEqual(jasmine.any(Number));
-      expect(updatedTask.dueDay).toBe(getDbDateStr());
-      expect((resultState[TAG_FEATURE_NAME].entities['TODAY'] as Tag).taskIds).toContain(
-        'task1',
+      expectStateUpdate(
+        {
+          [TASK_FEATURE_NAME]: jasmine.objectContaining({
+            entities: jasmine.objectContaining({
+              task1: jasmine.objectContaining({
+                isDone: true,
+                doneOn: jasmine.any(Number),
+                dueDay: getDbDateStr(),
+              }),
+            }),
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
       );
     });
 
     it('should add completed task to TODAY_TAG.taskIds', () => {
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
-      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = getDbDateStr();
       const action = createUpdateTaskAction('task1', {
         isDone: true,
       });
@@ -1175,7 +1182,6 @@ describe('taskSharedCrudMetaReducer', () => {
 
     it('should not duplicate task in TODAY_TAG.taskIds if already present', () => {
       const testState = createStateWithExistingTasks(['task1'], [], ['task1'], ['task1']);
-      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = getDbDateStr();
       const action = createUpdateTaskAction('task1', {
         isDone: true,
       });
@@ -1187,11 +1193,11 @@ describe('taskSharedCrudMetaReducer', () => {
       expect(todayTag.taskIds.filter((id) => id === 'task1').length).toBe(1);
     });
 
-    it('should preserve dueWithTime when marking task as done', () => {
+    it('should clear dueWithTime when marking task as done', () => {
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
-      const dueWithTime = Date.now() + 3600000;
       // Set dueWithTime on the task
-      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueWithTime = dueWithTime;
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueWithTime =
+        Date.now() + 3600000;
       const action = createUpdateTaskAction('task1', {
         isDone: true,
       });
@@ -1203,7 +1209,7 @@ describe('taskSharedCrudMetaReducer', () => {
             entities: jasmine.objectContaining({
               task1: jasmine.objectContaining({
                 isDone: true,
-                dueWithTime,
+                dueWithTime: undefined,
               }),
             }),
           }),
@@ -1243,10 +1249,9 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
-    it('should preserve future dueDay when marking task as done', () => {
-      const futureDate = '2099-12-25';
+    it('should override future dueDay with today when marking task as done', () => {
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
-      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = futureDate;
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = '2099-12-25';
       const action = createUpdateTaskAction('task1', {
         isDone: true,
       });
@@ -1255,31 +1260,13 @@ describe('taskSharedCrudMetaReducer', () => {
       expectStateUpdate(
         {
           ...expectTaskUpdate('task1', {
-            dueDay: futureDate,
+            dueDay: getDbDateStr(),
           }),
         },
         action,
         mockReducer,
         testState,
       );
-    });
-
-    it('should ignore legacy synthetic completion dueDay for an already scheduled task', () => {
-      const scheduledDate = '2099-12-25';
-      const completionDay = getDbDateStr();
-      const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
-      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = scheduledDate;
-      const action = createUpdateTaskAction('task1', {
-        isDone: true,
-        dueDay: completionDay,
-        doneOn: Date.now(),
-      });
-
-      metaReducer(testState, action);
-      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
-      const updatedTask = resultState[TASK_FEATURE_NAME].entities['task1'] as Task;
-      expect(updatedTask.isDone).toBe(true);
-      expect(updatedTask.dueDay).toBe(scheduledDate);
     });
 
     it('should not add subtask to TODAY_TAG.taskIds when marked done', () => {
@@ -1306,7 +1293,7 @@ describe('taskSharedCrudMetaReducer', () => {
       expect(todayTag.taskIds).not.toContain(subtaskId);
     });
 
-    it('should preserve planner days when a scheduled task is marked done', () => {
+    it('should remove task from planner days when marked done', () => {
       const futureDate = '2099-12-25';
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
       (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = futureDate;
@@ -1320,7 +1307,7 @@ describe('taskSharedCrudMetaReducer', () => {
 
       metaReducer(testState, action);
       const resultState = mockReducer.calls.mostRecent().args[0] as any;
-      expect(resultState.planner.days[futureDate] || []).toContain('task1');
+      expect(resultState.planner.days[futureDate] || []).not.toContain('task1');
     });
 
     it('should skip tag updates when tagIds are not provided', () => {
@@ -1548,7 +1535,203 @@ describe('taskSharedCrudMetaReducer', () => {
     });
   });
 
-  describe('parent/sub-task tag interaction', () => {
+  describe('parent/sub-task tag conflict resolution', () => {
+    describe('addTask action', () => {
+      it('should remove parent from tag when adding sub-task to same tag', () => {
+        // Setup: parent task already in tag
+        const testState = createStateWithExistingTasks(
+          ['parent-task'],
+          [],
+          ['parent-task'],
+        );
+
+        // Create sub-task that will be added to the same tag
+        const subTask = createMockTask({
+          id: 'sub-task',
+          parentId: 'parent-task',
+          tagIds: ['tag1'],
+        });
+
+        const action = TaskSharedActions.addTask({
+          task: subTask,
+          workContextId: 'project1',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBottom: false,
+          isAddToBacklog: false,
+        });
+
+        metaReducer(testState, action);
+
+        // Parent should be removed from tag, and tag removed from parent
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('parent-task', {
+              tagIds: [], // Tag should be removed from parent
+            }),
+            ...expectTagUpdate('tag1', {
+              taskIds: ['sub-task'], // Only sub-task should remain
+            }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+
+      it('should remove sub-tasks from tag when adding parent to same tag', () => {
+        // Setup: sub-tasks already in tag
+        const testState = createStateWithExistingTasks(
+          ['sub1', 'sub2', 'other-task'],
+          [],
+          ['sub1', 'sub2', 'other-task'],
+        );
+
+        // Update sub-tasks to have parentId
+        testState[TASK_FEATURE_NAME].entities.sub1 = createMockTask({
+          id: 'sub1',
+          parentId: 'parent-task',
+          tagIds: ['tag1'],
+        });
+        testState[TASK_FEATURE_NAME].entities.sub2 = createMockTask({
+          id: 'sub2',
+          parentId: 'parent-task',
+          tagIds: ['tag1'],
+        });
+
+        // Create parent task with sub-tasks
+        const parentTask = createMockTask({
+          id: 'parent-task',
+          subTaskIds: ['sub1', 'sub2'],
+          tagIds: ['tag1'],
+        });
+
+        const action = TaskSharedActions.addTask({
+          task: parentTask,
+          workContextId: 'project1',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBottom: false,
+          isAddToBacklog: false,
+        });
+
+        metaReducer(testState, action);
+
+        // Sub-tasks should be removed from tag, and tag removed from sub-tasks
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('sub1', {
+              tagIds: [], // Tag should be removed
+            }),
+            ...expectTaskUpdate('sub2', {
+              tagIds: [], // Tag should be removed
+            }),
+            ...expectTagUpdate('tag1', {
+              taskIds: ['parent-task', 'other-task'], // Only parent and other-task
+            }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+    });
+
+    describe('updateTask action', () => {
+      it('should remove parent from tag when adding tag to sub-task', () => {
+        // Setup: parent task in tag, sub-task without tag
+        const testState = createStateWithExistingTasks(
+          ['parent-task', 'sub-task'],
+          [],
+          ['parent-task'],
+        );
+
+        testState[TASK_FEATURE_NAME].entities['sub-task'] = createMockTask({
+          id: 'sub-task',
+          parentId: 'parent-task',
+          tagIds: [],
+        });
+
+        const action = TaskSharedActions.updateTask({
+          task: {
+            id: 'sub-task',
+            changes: { tagIds: ['tag1'] },
+          },
+        });
+
+        metaReducer(testState, action);
+
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('parent-task', {
+              tagIds: [], // Tag removed from parent
+            }),
+            ...expectTaskUpdate('sub-task', {
+              tagIds: ['tag1'], // Tag added to sub-task
+            }),
+            ...expectTagUpdate('tag1', {
+              taskIds: ['sub-task'], // Only sub-task in tag
+            }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+
+      it('should remove sub-tasks from tag when adding tag to parent', () => {
+        // Setup: sub-tasks in tag, parent without tag
+        const testState = createStateWithExistingTasks(
+          ['parent-task', 'sub1', 'sub2'],
+          [],
+          ['sub1', 'sub2'],
+        );
+
+        testState[TASK_FEATURE_NAME].entities['parent-task'] = createMockTask({
+          id: 'parent-task',
+          subTaskIds: ['sub1', 'sub2'],
+          tagIds: [],
+        });
+        testState[TASK_FEATURE_NAME].entities.sub1 = createMockTask({
+          id: 'sub1',
+          parentId: 'parent-task',
+          tagIds: ['tag1'],
+        });
+        testState[TASK_FEATURE_NAME].entities.sub2 = createMockTask({
+          id: 'sub2',
+          parentId: 'parent-task',
+          tagIds: ['tag1'],
+        });
+
+        const action = TaskSharedActions.updateTask({
+          task: {
+            id: 'parent-task',
+            changes: { tagIds: ['tag1'] },
+          },
+        });
+
+        metaReducer(testState, action);
+
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('parent-task', {
+              tagIds: ['tag1'], // Tag added to parent
+            }),
+            ...expectTaskUpdate('sub1', {
+              tagIds: [], // Tag removed from sub-task
+            }),
+            ...expectTaskUpdate('sub2', {
+              tagIds: [], // Tag removed from sub-task
+            }),
+            ...expectTagUpdate('tag1', {
+              taskIds: ['parent-task'], // Only parent in tag
+            }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+    });
+
     describe('convertToMainTask action', () => {
       it('should keep parent tags when converting sub-task to main task with same tag', () => {
         // Setup: parent and sub-task exist, parent is in tag
@@ -1593,148 +1776,6 @@ describe('taskSharedCrudMetaReducer', () => {
           action,
           mockReducer,
           testState,
-        );
-      });
-    });
-
-    // Regression test for issue #7756 — parent and sub-task may share a tag.
-    describe('issue #7756: parent and sub-task should share tags independently', () => {
-      it('parent retains tag when sub-task gains the same tag', () => {
-        // Step 1: parent in tag1 with sub-task that has no tags
-        const initialState = createStateWithExistingTasks(
-          ['parent-task', 'sub-task'],
-          [],
-          ['parent-task'],
-        );
-        initialState[TASK_FEATURE_NAME].entities['parent-task'] = createMockTask({
-          id: 'parent-task',
-          subTaskIds: ['sub-task'],
-          tagIds: ['tag1'],
-        });
-        initialState[TASK_FEATURE_NAME].entities['sub-task'] = createMockTask({
-          id: 'sub-task',
-          parentId: 'parent-task',
-          tagIds: [],
-        });
-
-        // Step 2: add tag1 to sub-task (simulates Automations plugin or manual add)
-        const addTagToSub = TaskSharedActions.updateTask({
-          task: { id: 'sub-task', changes: { tagIds: ['tag1'] } },
-        });
-
-        metaReducer(initialState, addTagToSub);
-
-        expectStateUpdate(
-          {
-            ...expectTaskUpdate('parent-task', {
-              tagIds: ['tag1'], // parent should KEEP its tag
-            }),
-            ...expectTaskUpdate('sub-task', {
-              tagIds: ['tag1'],
-            }),
-            ...expectTagUpdate('tag1', {
-              taskIds: jasmine.arrayContaining([
-                'parent-task',
-                'sub-task',
-              ]) as unknown as string[],
-            }),
-          },
-          addTagToSub,
-          mockReducer,
-          initialState,
-        );
-      });
-
-      it('sub-task retains tag when parent gains the same tag', () => {
-        // Step 3: sub-task in tag1, parent without tag1
-        const initialState = createStateWithExistingTasks(
-          ['parent-task', 'sub-task'],
-          [],
-          ['sub-task'],
-        );
-        initialState[TASK_FEATURE_NAME].entities['parent-task'] = createMockTask({
-          id: 'parent-task',
-          subTaskIds: ['sub-task'],
-          tagIds: [],
-        });
-        initialState[TASK_FEATURE_NAME].entities['sub-task'] = createMockTask({
-          id: 'sub-task',
-          parentId: 'parent-task',
-          tagIds: ['tag1'],
-        });
-
-        // Step 4: add tag1 to parent (user "adds the tag back")
-        const addTagToParent = TaskSharedActions.updateTask({
-          task: { id: 'parent-task', changes: { tagIds: ['tag1'] } },
-        });
-
-        metaReducer(initialState, addTagToParent);
-
-        expectStateUpdate(
-          {
-            ...expectTaskUpdate('parent-task', {
-              tagIds: ['tag1'],
-            }),
-            ...expectTaskUpdate('sub-task', {
-              tagIds: ['tag1'], // sub-task should KEEP its tag
-            }),
-            ...expectTagUpdate('tag1', {
-              taskIds: jasmine.arrayContaining([
-                'parent-task',
-                'sub-task',
-              ]) as unknown as string[],
-            }),
-          },
-          addTagToParent,
-          mockReducer,
-          initialState,
-        );
-      });
-
-      it('addTask: parent retains tag when sub-task is created with the same tag', () => {
-        // Mirrors the Automations-plugin flow: parent already in tag, sub-task
-        // gets created (via addTask) and the automation immediately tags it.
-        const initialState = createStateWithExistingTasks(
-          ['parent-task'],
-          [],
-          ['parent-task'],
-        );
-        initialState[TASK_FEATURE_NAME].entities['parent-task'] = createMockTask({
-          id: 'parent-task',
-          subTaskIds: [],
-          tagIds: ['tag1'],
-        });
-
-        const subTask = createMockTask({
-          id: 'sub-task',
-          parentId: 'parent-task',
-          tagIds: ['tag1'],
-        });
-        const action = TaskSharedActions.addTask({
-          task: subTask,
-          workContextId: 'project1',
-          workContextType: WorkContextType.PROJECT,
-          isAddToBottom: false,
-          isAddToBacklog: false,
-        });
-
-        metaReducer(initialState, action);
-
-        expectStateUpdate(
-          {
-            ...expectTaskUpdate('parent-task', {
-              tagIds: ['tag1'], // parent should KEEP its tag
-            }),
-            ...expectTagUpdate('tag1', {
-              taskIds: jasmine.arrayContaining([
-                'parent-task',
-                'sub-task',
-              ]) as unknown as string[],
-            }),
-          },
-          action,
-          mockReducer,
-          initialState,
         );
       });
     });

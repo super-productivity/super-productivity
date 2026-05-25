@@ -9,7 +9,6 @@ import {
 } from 'electron';
 import { log } from 'electron-log/main';
 import { IPC } from './shared-with-frontend/ipc-events.const';
-import { getDistChannel } from './shared-with-frontend/get-dist-channel';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
 import { release } from 'os';
@@ -77,11 +76,10 @@ const WINDOWS_TRAY_GUIDS = {
 } as const;
 
 const getWindowsTrayGuid = (): string => {
-  const channel = getDistChannel();
-  if (channel === 'win-portable') {
+  if (process.env.PORTABLE_EXECUTABLE_DIR) {
     return WINDOWS_TRAY_GUIDS.portable;
   }
-  if (channel === 'win-store') {
+  if ((process as NodeJS.Process & { windowsStore?: boolean }).windowsStore) {
     return WINDOWS_TRAY_GUIDS.store;
   }
   return WINDOWS_TRAY_GUIDS.nsis;
@@ -108,15 +106,11 @@ export const initIndicator = ({
     forceDarkTray,
   };
   DIR = ICONS_FOLDER + 'indicator/';
-  // On macOS we always load the black (`-l`) icons and mark them as template
-  // images in getTrayImage(); the system auto-inverts them for the current
-  // menu bar appearance, so the static dark/light choice doesn't apply.
   shouldUseDarkColors =
-    !IS_MAC &&
-    (forceDarkTray ||
-      IS_LINUX ||
-      (IS_WINDOWS && !isWindows11()) ||
-      nativeTheme.shouldUseDarkColors);
+    forceDarkTray ||
+    IS_LINUX ||
+    (IS_WINDOWS && !isWindows11()) ||
+    nativeTheme.shouldUseDarkColors;
 
   _showApp = showApp;
   _quitApp = quitApp;
@@ -558,11 +552,8 @@ let curIco: string | undefined;
 // GNOME AppIndicator can fall back to a generic "three dots" icon for
 // sandboxed Electron apps when given only a file path. Passing a NativeImage
 // keeps the actual pixel data attached to the tray item.
-// On macOS we also need a NativeImage so we can mark it as a template image —
-// the system then inverts it for the current menu bar appearance (light/dark,
-// highlight state, accessibility), so it stays visible on any background.
 const getTrayImage = (icoPath: string): string | Electron.NativeImage => {
-  if (!IS_LINUX && !IS_MAC) {
+  if (!IS_LINUX) {
     return icoPath;
   }
 
@@ -570,10 +561,6 @@ const getTrayImage = (icoPath: string): string | Electron.NativeImage => {
   if (image.isEmpty()) {
     log('Tray icon NativeImage is empty, falling back to icon path:', icoPath);
     return icoPath;
-  }
-
-  if (IS_MAC) {
-    image.setTemplateImage(true);
   }
 
   return image;

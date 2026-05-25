@@ -35,12 +35,23 @@
     {{ T.F.FOCUS_MODE.BACK_TO_PLANNING | translate }}
   </button>
 
-  <button
-    mat-raised-button
-    color="primary"
-    (click)="currentTask() ? continueWithFocusSession() : startNextFocusSession()"
-  >
-    <mat-icon>arrow_forward</mat-icon>
-    {{ T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate }}
-  </button>
+  @if (mode() === FocusModeMode.Pomodoro && focusModeConfig()?.isManualBreakStart) {
+    <button
+      mat-raised-button
+      color="primary"
+      (click)="startBreakManually()"
+    >
+      <mat-icon>free_breakfast</mat-icon>
+      {{ T.F.FOCUS_MODE.START_BREAK | translate }}
+    </button>
+  } @else {
+    <button
+      mat-raised-button
+      color="primary"
+      (click)="currentTask() ? continueWithFocusSession() : startNextFocusSession()"
+    >
+      <mat-icon>arrow_forward</mat-icon>
+      {{ T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate }}
+    </button>
+  }
 </div>

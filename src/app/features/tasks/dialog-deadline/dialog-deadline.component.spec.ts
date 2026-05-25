@@ -29,8 +29,6 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     deadlineDay?: string;
     deadlineWithTime?: number;
     deadlineRemindAt?: number;
-    autoPlanToday?: string;
-    autoPlanStartOfNextDayDiffMs?: number;
   };
 
   const buildTask = (id = 'task-1'): Task =>
@@ -63,14 +61,7 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
         provideMockStore({ initialState: {} }),
         { provide: MatDialogRef, useValue: matDialogRefSpy },
         { provide: MAT_DIALOG_DATA, useValue: { task: buildTask() } },
-        {
-          provide: DateService,
-          useValue: {
-            isToday: () => false,
-            todayStr: () => '2026-05-06',
-            getStartOfNextDayDiffMs: () => 0,
-          },
-        },
+        { provide: DateService, useValue: { isToday: () => false } },
         {
           provide: GlobalConfigService,
           useValue: { localization: () => undefined, cfg: () => undefined },
@@ -101,7 +92,6 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     expect(calls.length).toBe(1);
     expect(calls[0].deadlineWithTime).toBeDefined();
     expect(calls[0].deadlineDay).toBeUndefined();
-    expect(calls[0].autoPlanToday).toBe('2026-05-06');
     expect(matDialogRefSpy.close).toHaveBeenCalled();
   });
 
@@ -116,7 +106,6 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     expect(calls.length).toBe(1);
     expect(calls[0].deadlineDay).toBe('2026-05-06');
     expect(calls[0].deadlineWithTime).toBeUndefined();
-    expect(calls[0].autoPlanToday).toBe('2026-05-06');
   });
 
   // Currently FAILS — proves issue #7490. After the fix, submit() must not

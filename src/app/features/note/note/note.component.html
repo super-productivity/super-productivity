@@ -36,6 +36,7 @@
       class="bottom-controls handle-drag"
       [class.isOver]="note.imgUrl"
     >
+      <ng-content></ng-content>
       @if (note.projectId) {
         <button
           mat-icon-button
@@ -45,7 +46,7 @@
             <mat-icon>wb_sunny</mat-icon>
           }
           @if (note.isPinnedToToday) {
-            <mat-icon svgIcon="remove_today"></mat-icon>
+            <mat-icon>timer_off</mat-icon>
           }
         </button>
       }

@@ -31,16 +31,6 @@ export interface WebDavFixtures {
 // Cache server health check result per worker to avoid repeated checks
 let serverHealthCache: boolean | null = null;
 
-const requireHealthyWebDav = (isHealthy: boolean, skip: () => void): void => {
-  if (isHealthy) {
-    return;
-  }
-  if (process.env.E2E_REQUIRE_WEBDAV === 'true') {
-    throw new Error('WebDAV server is required for this run but is not reachable.');
-  }
-  skip();
-};
-
 export const test = base.extend<WebDavFixtures>({
   /**
    * Check WebDAV server health once per worker and cache the result.
@@ -57,9 +47,8 @@ export const test = base.extend<WebDavFixtures>({
       }
     }
 
-    requireHealthyWebDav(serverHealthCache, () => {
-      testInfo.skip(true, 'WebDAV server not reachable');
-    });
+    // Skip the test if server is not reachable
+    testInfo.skip(!serverHealthCache, 'WebDAV server not reachable');
 
     await use(serverHealthCache);
   },

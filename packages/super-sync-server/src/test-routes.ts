@@ -10,7 +10,6 @@ import * as jwt from 'jsonwebtoken';
 import { prisma } from './db';
 import { Logger } from './logger';
 import { getJwtSecret, JWT_EXPIRY } from './auth';
-import { authCache } from './auth-cache';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -130,7 +129,6 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
           prisma.userSyncState.deleteMany(),
           prisma.user.deleteMany(),
         ]);
-        authCache.clear();
 
         Logger.info('[TEST] All test data cleaned up');
 
@@ -173,12 +171,8 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
       }
 
       try {
-        // AUTH_CACHE_INVALIDATION: test deletion should mirror production account deletion.
-        authCache.invalidate(userId);
         // CASCADE delete handles: operations, syncState, devices (via Prisma schema)
         await prisma.user.delete({ where: { id: userId } });
-        // AUTH_CACHE_INVALIDATION: clear any token cached while the delete was in flight.
-        authCache.invalidate(userId);
         Logger.info(`[TEST] Deleted test user ID: ${userId}`);
         return reply.send({ deleted: true, userId });
       } catch (err: unknown) {

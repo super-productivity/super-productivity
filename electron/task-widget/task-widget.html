@@ -2,24 +2,91 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Super Productivity Task Widget</title>
+    <title>Super Productivity Edge Panel</title>
     <link
       rel="stylesheet"
       href="task-widget.css"
     />
   </head>
-  <body>
+  <body class="edge-right">
     <div id="task-widget-container">
-      <div id="content">
-        <div id="task-title">No active task</div>
-        <div id="time-display">--:--</div>
+      <div id="edge-handle">
+        <div class="handle-label">PLAN</div>
       </div>
-      <button
-        id="show-main"
-        title="Show main window"
-      >
-        ▲
-      </button>
+
+      <main id="expanded-panel">
+        <header id="widget-header">
+          <div>
+            <h1>Today</h1>
+            <div id="current-task">
+              <span id="task-title">No active task</span>
+              <span id="time-display">--:--</span>
+            </div>
+          </div>
+          <button
+            id="show-main"
+            title="Show main window"
+          >
+            Open
+          </button>
+        </header>
+
+        <section class="quick-note-section">
+          <button
+            id="quick-note-toggle"
+            type="button"
+            aria-expanded="false"
+          >
+            + Quick note
+          </button>
+          <div id="quick-note-form">
+            <textarea
+              id="quick-note"
+              rows="3"
+              placeholder="Quick note"
+            ></textarea>
+            <button id="save-note">Save</button>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Today plan</h2>
+          <div
+            id="today-plan"
+            class="task-list"
+          ></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Upcoming</h2>
+          <div id="upcoming-plan"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Projects</h2>
+          <div id="project-plan"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Daily goals</h2>
+          <div id="daily-goals"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Today notes</h2>
+          <div id="today-notes"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Project notes</h2>
+          <div id="project-notes"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Timeline</h2>
+          <div id="timeline"></div>
+        </section>
+      </main>
     </div>
     <script src="task-widget-renderer.js"></script>
   </body>

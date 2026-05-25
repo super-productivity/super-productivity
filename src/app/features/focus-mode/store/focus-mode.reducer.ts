@@ -71,15 +71,6 @@ export const focusModeReducer = createReducer(
   on(a.setFocusModeMode, (state, { mode }) => ({
     ...state,
     mode,
-    timer:
-      mode === FocusModeMode.Flowtime
-        ? {
-            ...state.timer,
-            duration: 0,
-          }
-        : state.timer,
-    _isOvertimeEnabled:
-      mode === FocusModeMode.Flowtime ? false : state._isOvertimeEnabled,
   })),
 
   // Overlay control
@@ -132,12 +123,11 @@ export const focusModeReducer = createReducer(
   on(a.pauseFocusSession, (state, { pausedTaskId }) => {
     // Allow pausing both work sessions and breaks
     if (state.timer.purpose === null) return state;
-    const timer = updateTimer(state.timer);
 
     return {
       ...state,
       timer: {
-        ...timer,
+        ...state.timer,
         isRunning: false,
       },
       // Store paused task ID if provided (for sync feature)
@@ -171,8 +161,8 @@ export const focusModeReducer = createReducer(
     _isResumingBreak: false,
   })),
 
-  on(a.completeFocusSession, (state, { completedDuration }) => {
-    const duration = completedDuration ?? state.timer.elapsed;
+  on(a.completeFocusSession, (state, { isManual }) => {
+    const duration = state.timer.elapsed;
 
     return {
       ...state,
@@ -280,13 +270,9 @@ export const focusModeReducer = createReducer(
 
     const updatedTimer = updateTimer(state.timer);
 
-    // Check if timer completed - mark for completion but let effects handle the flow.
-    if (updatedTimer.elapsed >= updatedTimer.duration) {
+    // Check if timer completed - mark for completion but let effects handle the flow
+    if (updatedTimer.duration > 0 && updatedTimer.elapsed >= updatedTimer.duration) {
       if (updatedTimer.purpose === 'work') {
-        // Flowtime work sessions have no fixed duration and never auto-complete via tick.
-        if (state.mode === FocusModeMode.Flowtime) {
-          return { ...state, timer: updatedTimer };
-        }
         // When overtime is enabled, keep the timer running past duration
         if (state._isOvertimeEnabled) {
           return { ...state, timer: updatedTimer };

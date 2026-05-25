@@ -9,7 +9,9 @@ describe('OperationWriteFlushService', () => {
   beforeEach(() => {
     lockServiceSpy = jasmine.createSpyObj('LockService', ['request']);
     lockServiceSpy.request.and.callFake(
-      async <T>(_name: string, callback: () => Promise<T>) => callback(),
+      async (_name: string, callback: () => Promise<void>) => {
+        await callback();
+      },
     );
 
     TestBed.configureTestingModule({
@@ -35,9 +37,9 @@ describe('OperationWriteFlushService', () => {
     it('should resolve after lock is acquired', async () => {
       let lockAcquired = false;
       lockServiceSpy.request.and.callFake(
-        async <T>(_name: string, callback: () => Promise<T>) => {
+        async (_name: string, callback: () => Promise<void>) => {
           lockAcquired = true;
-          return callback();
+          await callback();
         },
       );
 
@@ -55,11 +57,11 @@ describe('OperationWriteFlushService', () => {
 
       // Simulate a lock being held by another operation
       lockServiceSpy.request.and.callFake(
-        async <T>(_name: string, callback: () => Promise<T>) => {
+        async (_name: string, callback: () => Promise<void>) => {
           executionOrder.push('lock-acquired');
           await lockHolderPromise;
           executionOrder.push('lock-callback-done');
-          return callback();
+          await callback();
         },
       );
 
@@ -111,11 +113,10 @@ describe('OperationWriteFlushService', () => {
 
       // Simulate lock service that tracks operation order
       lockServiceSpy.request.and.callFake(
-        async <T>(_name: string, callback: () => Promise<T>) => {
+        async (_name: string, callback: () => Promise<void>) => {
           const opNum = ++opCounter;
-          const r = await callback();
+          await callback();
           completedOps.push(opNum);
-          return r;
         },
       );
 

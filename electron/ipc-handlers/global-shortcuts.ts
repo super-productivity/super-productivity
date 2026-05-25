@@ -7,6 +7,7 @@ import { ensureIndicator } from '../indicator';
 import { getIsMinimizeToTray } from '../shared-state';
 import { IS_MAC } from '../common.const';
 import { errorHandlerWithFrontendInform } from '../error-handler-with-frontend-inform';
+import { showTaskWidget } from '../task-widget/task-widget';
 
 export const initGlobalShortcutsIpc = (): void => {
   ipcMain.on(IPC.REGISTER_GLOBAL_SHORTCUTS_EVENT, (_ev, cfg) => {
@@ -22,6 +23,7 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
     'globalToggleTaskStart',
     'globalAddNote',
     'globalAddTask',
+    'globalShowTaskWidget',
   ];
 
   if (cfg) {
@@ -79,6 +81,12 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
               showOrFocus(mainWin);
               // NOTE: delay slightly to make sure app is ready
               mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
+            };
+            break;
+
+          case 'globalShowTaskWidget':
+            actionFn = () => {
+              showTaskWidget();
             };
             break;
 

@@ -49,6 +49,13 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
               label: T.GCF.KEYBOARD.GLOBAL_ADD_TASK,
             },
           },
+          {
+            key: 'globalShowTaskWidget',
+            type: 'keyboard',
+            templateOptions: {
+              label: T.GCF.KEYBOARD.GLOBAL_SHOW_TASK_WIDGET,
+            },
+          },
         ]
       : []) as LimitedFormlyFieldConfig<KeyboardConfig>[]),
     // APP WIDE
@@ -87,13 +94,6 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
       type: 'keyboard',
       templateOptions: {
         label: T.GCF.KEYBOARD.TOGGLE_SIDE_NAV,
-      },
-    },
-    {
-      key: 'toggleSideNavMode',
-      type: 'keyboard',
-      templateOptions: {
-        label: T.GCF.KEYBOARD.TOGGLE_SIDE_NAV_MODE,
       },
     },
     {

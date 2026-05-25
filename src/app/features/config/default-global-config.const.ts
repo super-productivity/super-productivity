@@ -52,7 +52,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     startOfNextDay: 0,
     startOfNextDayTime: '00:00',
     isDisableAnimations: false,
-    isVerticalActionBar: false,
     isDisableCelebration: false,
     isShowProductivityTipLonger: false,
     customTheme: 'default',
@@ -120,6 +119,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     globalToggleTaskStart: null,
     globalAddNote: null,
     globalAddTask: null,
+    globalShowTaskWidget: null,
     addNewTask: 'Shift+A',
     addNewProject: 'Shift+P',
     addNewNote: 'Alt+N',
@@ -127,7 +127,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     toggleTaskViewCustomizerPanel: 'C',
     toggleIssuePanel: 'P',
     focusSideNav: 'Shift+D',
-    toggleSideNavMode: 'Ctrl+B',
     showHelp: '?',
     showSearchBar: 'Shift+F',
     toggleBacklog: 'B',
@@ -241,7 +240,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
 
     nextcloud: {
       serverUrl: null,
-      loginName: null,
       userName: null,
       password: null,
       syncFolderPath: 'super-productivity',

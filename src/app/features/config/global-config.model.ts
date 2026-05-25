@@ -33,10 +33,6 @@ export type MiscConfig = Readonly<{
   /** Canonical start-of-next-day value, including minute precision. */
   startOfNextDayTime?: string;
   isDisableAnimations: boolean;
-  // Experimental: render the header action buttons as a vertical strip on
-  // the right edge of the viewport instead of the horizontal top header.
-  // Desktop only. Optional because it was added later.
-  isVerticalActionBar?: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;
   isShowProductivityTipLonger?: boolean;
@@ -154,7 +150,6 @@ export interface SuperSyncConfig extends WebDavConfig {
 
 export interface NextcloudConfig {
   serverUrl?: string | null;
-  loginName?: string | null;
   userName?: string | null;
   password?: string | null;
   syncFolderPath?: string | null;
@@ -268,7 +263,6 @@ export type FocusModeConfig = Readonly<{
    * Kept on the type so old persisted configs deserialize without errors.
    */
   isStartInBackground?: boolean;
-  /** Note: Controls Pomodoro overtime only (keeps timer running until manually ended) */
   isManualBreakStart?: boolean;
 }>;
 
@@ -276,6 +270,10 @@ export type TaskWidgetConfig = Readonly<{
   isEnabled?: boolean;
   isAlwaysShow?: boolean;
   opacity?: number;
+  autoHideToEdge?: boolean;
+  edge?: 'left' | 'right' | 'top' | 'bottom';
+  expandedWidth?: number;
+  collapsedWidth?: number;
 }>;
 
 export type ClipboardImagesConfig = Readonly<{

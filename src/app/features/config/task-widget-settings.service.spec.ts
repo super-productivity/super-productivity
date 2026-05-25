@@ -20,6 +20,10 @@ describe('TaskWidgetSettingsService', () => {
       isEnabled: false,
       isAlwaysShow: false,
       opacity: 95,
+      autoHideToEdge: false,
+      edge: 'right',
+      expandedWidth: 360,
+      collapsedWidth: 26,
     });
   });
 
@@ -32,6 +36,10 @@ describe('TaskWidgetSettingsService', () => {
       isEnabled: true,
       isAlwaysShow: false,
       opacity: 70,
+      autoHideToEdge: false,
+      edge: 'right',
+      expandedWidth: 360,
+      collapsedWidth: 26,
     });
   });
 
@@ -44,11 +52,19 @@ describe('TaskWidgetSettingsService', () => {
       isEnabled: true,
       isAlwaysShow: false,
       opacity: 50,
+      autoHideToEdge: false,
+      edge: 'right',
+      expandedWidth: 360,
+      collapsedWidth: 26,
     });
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')).toEqual({
       isEnabled: true,
       isAlwaysShow: false,
       opacity: 50,
+      autoHideToEdge: false,
+      edge: 'right',
+      expandedWidth: 360,
+      collapsedWidth: 26,
     });
   });
 
@@ -61,6 +77,10 @@ describe('TaskWidgetSettingsService', () => {
       isEnabled: false,
       isAlwaysShow: false,
       opacity: 95,
+      autoHideToEdge: false,
+      edge: 'right',
+      expandedWidth: 360,
+      collapsedWidth: 26,
     });
   });
 });

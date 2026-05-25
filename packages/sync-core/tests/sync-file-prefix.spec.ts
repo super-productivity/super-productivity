@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createSyncFilePrefixHelpers } from '../src';
-import { SyncFilePrefixError, SyncFilePrefixVersionError } from '../src/sync-file-prefix';
+import {
+  SyncFilePrefixError,
+  SyncFilePrefixVersionError,
+  createSyncFilePrefixHelpers,
+} from '../src';
 
 describe('createSyncFilePrefixHelpers', () => {
   it('formats prefixes with host-supplied prefix and default separator', () => {

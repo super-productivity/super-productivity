@@ -6,7 +6,6 @@ export interface Section {
   contextId: string;
   contextType: WorkContextType;
   title: string;
-  isExpanded?: boolean;
   taskIds: string[];
 }
 

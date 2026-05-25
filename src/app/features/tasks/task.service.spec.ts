@@ -279,16 +279,6 @@ describe('TaskService', () => {
 
       expect(action.task.notes).toBe('Test notes');
     });
-
-    it('should include auto-plan context when adding a task with a deadline today', () => {
-      service.add('New Task', false, { deadlineDay: '2026-01-05' });
-
-      const dispatchCall = (store.dispatch as jasmine.Spy).calls.mostRecent();
-      const action = dispatchCall.args[0] as ReturnType<typeof TaskSharedActions.addTask>;
-
-      expect(action.autoPlanToday).toBe('2026-01-05');
-      expect(action.autoPlanStartOfNextDayDiffMs).toBe(0);
-    });
   });
 
   describe('addToToday', () => {

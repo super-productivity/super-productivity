@@ -102,7 +102,7 @@ export class TaskReminderEffects {
             }
 
             this._store.dispatch(
-              TaskSharedActions.dismissReminderOnly({
+              TaskSharedActions.unscheduleTask({
                 id: task.id,
               }),
             );

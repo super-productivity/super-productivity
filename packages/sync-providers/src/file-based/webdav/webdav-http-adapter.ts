@@ -9,7 +9,7 @@ import {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
 } from '../../errors';
-import { errorMeta } from '../../log/error-meta';
+import { errorMeta, urlPathOnly } from '../../log/error-meta';
 import { WebDavHttpStatus } from './webdav.const';
 
 export interface WebDavHttpRequest {
@@ -45,7 +45,7 @@ export class WebDavHttpAdapter {
   constructor(private readonly _deps: WebDavHttpAdapterDeps) {}
 
   async request(options: WebDavHttpRequest): Promise<WebDavHttpResponse> {
-    const scrubbedUrl = this._urlHostOnly(options.url);
+    const scrubbedUrl = urlPathOnly(options.url);
 
     try {
       let response: WebDavHttpResponse;
@@ -92,9 +92,11 @@ export class WebDavHttpAdapter {
         } catch (fetchError) {
           if (this._isLikelyCors(fetchError)) {
             // Privacy: PotentialCorsError carries only the scrubbed URL,
-            // never the raw fetch error. The original-error meta below is
-            // structured (errorName/errorCode), so the embedded URL some
-            // browsers put in `error.message` never reaches a log.
+            // never the raw fetch error. The original-error meta below
+            // is structured (errorName/errorCode), so the embedded URL
+            // some browsers put in `error.message` (Firefox:
+            // "NetworkError when attempting to fetch resource at <url>")
+            // never reaches a log.
             throw new PotentialCorsError(scrubbedUrl);
           }
           throw fetchError;
@@ -156,14 +158,6 @@ export class WebDavHttpAdapter {
       m.includes('network request failed') ||
       m.includes('networkerror when attempting')
     );
-  }
-
-  private _urlHostOnly(url: string): string {
-    try {
-      return new URL(url).host;
-    } catch {
-      return '[invalid-webdav-url]';
-    }
   }
 
   private async _convertFetchResponse(response: Response): Promise<WebDavHttpResponse> {

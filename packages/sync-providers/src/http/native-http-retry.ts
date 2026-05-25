@@ -6,15 +6,9 @@ import { NOOP_SYNC_LOGGER, toSyncLogError, type SyncLogger } from '@sp/sync-core
  * Retries are safe for Dropbox uploads: conditional writes (mode: 'update' with revToMatch
  * or mode: 'add') ensure duplicates fail with UploadRevToMatchMismatchAPIError.
  * Retries are safe for SuperSync: the server uses idempotent operations.
- *
- * Budget: 2 retries with 1.5s/3s linear backoff (~4.5s of additional sleep
- * between attempts; per-attempt connect/read timeouts apply on top). The
- * earlier 1s/2s backoff was sometimes too short to recover from Android Doze
- * DNS staleness after a long background period.
  * @see https://developer.apple.com/library/archive/qa/qa1941/_index.html
  */
 const MAX_RETRIES = 2;
-const RETRY_BACKOFF_BASE_MS = 1500;
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
 const DEFAULT_READ_TIMEOUT_MS = 120_000;
@@ -91,7 +85,7 @@ export const executeNativeRequestWithRetry = async (
       });
     } catch (retryErr) {
       if (attempt < maxRetries && isTransientNetworkError(retryErr)) {
-        const delayMs = RETRY_BACKOFF_BASE_MS * (attempt + 1);
+        const delayMs = 1000 * (attempt + 1);
         // toSyncLogError drops .code on Error instances, so we read it directly
         // off the raw error to preserve platform-specific transient codes
         // (NSURLErrorDomain, SocketTimeoutException, …) in the retry log.
@@ -165,11 +159,6 @@ export const isTransientNetworkError = (e: unknown): boolean => {
     message.includes('cannot find host') ||
     message.includes('hostname could not be found') ||
     message.includes('cannot connect to host') ||
-    message.includes('could not connect to the server') ||
-    // Android UnknownHostException message ("Unable to resolve host \"…\": No
-    // address associated with hostname"), and the custom WebDavHttp plugin's
-    // wrapped form ("Network error: Unable to resolve host") — defensive
-    // fallback in case the platform-specific code-based check doesn't fire.
-    message.includes('unable to resolve host')
+    message.includes('could not connect to the server')
   );
 };

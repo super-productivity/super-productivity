@@ -104,7 +104,6 @@ import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
-import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 
 @Injectable({
   providedIn: 'root',
@@ -412,11 +411,6 @@ export class TaskService {
         workContextType,
         isAddToBacklog,
         isAddToBottom,
-        ...getDeadlineAutoPlanFields(
-          this._dateService,
-          task.deadlineDay,
-          task.deadlineWithTime,
-        ),
       }),
     );
     return task && task.id;

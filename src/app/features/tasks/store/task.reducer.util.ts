@@ -13,7 +13,6 @@ import { filterOutId } from '../../../util/filter-out-id';
 import { Update } from '@ngrx/entity';
 import { TaskLog } from '../../../core/log';
 import { devError } from '../../../util/dev-error';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 
 export const getTaskById = (taskId: string, state: TaskState): Task => {
   if (!state.entities[taskId]) {
@@ -136,25 +135,9 @@ export const updateDoneOnForTask = (
   const isToDone = upd.changes.isDone === true;
   const isToUnDone = upd.changes.isDone === false;
   if (isToDone || isToUnDone) {
-    const hasExistingSchedule =
-      typeof task.dueDay === 'string' || typeof task.dueWithTime === 'number';
-    const hasScheduleInUpdate =
-      Object.prototype.hasOwnProperty.call(upd.changes, 'dueDay') ||
-      Object.prototype.hasOwnProperty.call(upd.changes, 'dueWithTime');
-    const doneOn =
-      typeof upd.changes.doneOn === 'number' ? upd.changes.doneOn : Date.now();
-    const completionDay =
-      typeof upd.changes.doneOn === 'number'
-        ? getDbDateStr(upd.changes.doneOn)
-        : todayStr;
     const changes = {
       ...(isToDone
-        ? {
-            doneOn,
-            ...(!task.parentId && !hasExistingSchedule && !hasScheduleInUpdate
-              ? { dueDay: completionDay }
-              : {}),
-          }
+        ? { doneOn: Date.now(), dueDay: todayStr, dueWithTime: undefined }
         : {}),
       ...(isToUnDone ? { doneOn: undefined } : {}),
     };

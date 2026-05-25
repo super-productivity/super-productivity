@@ -83,13 +83,6 @@ export const APP_ROUTES: Routes = [
     canActivate: [FocusOverlayOpenGuard],
   },
   {
-    path: 'archived-projects',
-    loadComponent: () =>
-      import('./routes/pages.routes').then((m) => m.ArchivedProjectsPageComponent),
-    data: { page: 'archived-projects' },
-    canActivate: [FocusOverlayOpenGuard],
-  },
-  {
     path: 'donate',
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.DonatePageComponent),

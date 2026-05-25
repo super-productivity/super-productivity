@@ -1,11 +1,5 @@
 // Operation log primitives — the generic, app-agnostic core of the sync engine.
-export {
-  OpType,
-  isMultiEntityPayload,
-  extractActionPayload,
-  extractEntityFromPayload,
-  extractUpdateChanges,
-} from './operation.types';
+export { OpType, isMultiEntityPayload, extractActionPayload } from './operation.types';
 export type {
   VectorClock,
   Operation,
@@ -27,10 +21,23 @@ export type { VectorClockComparison } from './vector-clock';
 
 // Full-state import clean-slate vector-clock decisions.
 export { classifyOpAgainstSyncImport } from './sync-import-filter';
+export type {
+  SyncImportFilterClockSource,
+  SyncImportFilterDecision,
+  SyncImportFilterDecisionReason,
+  SyncImportFilterInvalidateReason,
+  SyncImportFilterKeepReason,
+} from './sync-import-filter';
 
 // Host-configured sync file prefix helpers.
-export { createSyncFilePrefixHelpers } from './sync-file-prefix';
+export {
+  createSyncFilePrefixHelpers,
+  SyncFilePrefixError,
+  SyncFilePrefixVersionError,
+} from './sync-file-prefix';
 export type {
+  SyncFilePrefixConfig,
+  SyncFilePrefixHelpers,
   SyncFilePrefixInvalidPrefixDetails,
   SyncFilePrefixParams,
   SyncFilePrefixParamsOutput,
@@ -41,16 +48,24 @@ export {
   compressWithGzip,
   compressWithGzipToString,
   decompressGzipFromString,
+  sanitizeBase64,
+  CompressionApiUnavailableError,
+  GzipCompressError,
+  GzipDecompressError,
 } from './compression';
+export type { GzipCompressionLogMessages, GzipCompressionOptions } from './compression';
 
 // Encryption primitives — Argon2id KDF + AES-GCM, Web Crypto with @noble fallback.
 // See packages/sync-core/src/encryption.ts for the wire-format contract and
-// the legacy-KDF warning side-channel.
+// the structural-vs-side-channel legacy-diagnostics discussion.
 export {
   encrypt,
   decrypt,
   encryptBatch,
   decryptBatch,
+  encryptWithDerivedKey,
+  decryptWithDerivedKey,
+  decryptWithMigration,
   deriveKeyFromPassword,
   clearSessionKeyCache,
   getSessionKeyCacheStats,
@@ -59,7 +74,7 @@ export {
   setArgon2ParamsForTesting,
   setLegacyKdfWarningHandler,
 } from './encryption';
-export type { DerivedKey } from './encryption';
+export type { DerivedKey, DecryptResult } from './encryption';
 
 // Generic error helpers.
 export { extractErrorMessage } from './error.util';
@@ -82,12 +97,18 @@ export type { LwwUpdateActionTypeHelpers } from './lww-update-action-types';
 export type { ApplyOperationsResult, ApplyOperationsOptions } from './apply.types';
 
 // Generic operation replay coordinator.
-export { replayOperationBatch } from './replay-coordinator';
+export { replayOperationBatch, yieldToEventLoop } from './replay-coordinator';
+export type {
+  OperationReplayArchiveFailureContext,
+  OperationReplayCoordinatorOptions,
+} from './replay-coordinator';
 
 // Remote operation application coordinator.
 export { applyRemoteOperations } from './remote-apply';
 export type {
   ApplyRemoteOperationsOptions,
+  RemoteApplyOperationsResult,
+  RemoteOperationAppendResult,
   RemoteOperationApplyStorePort,
 } from './remote-apply';
 
@@ -95,6 +116,13 @@ export type {
 export {
   planRegularOpsAfterFullStateUpload,
   planUploadLastServerSeqUpdate,
+} from './upload-planning';
+export type {
+  PlanRegularOpsAfterFullStateUploadOptions,
+  PlanUploadLastServerSeqUpdateOptions,
+  RegularOpsAfterFullStateUploadPlan,
+  UploadLastServerSeqUpdatePlan,
+  UploadLastServerSeqUpdateReason,
 } from './upload-planning';
 
 // Download planning helpers.
@@ -104,39 +132,65 @@ export {
   planDownloadedDataEncryptionState,
   planSnapshotHydration,
 } from './download-planning';
+export type {
+  DownloadFullStateUploadPlan,
+  DownloadFullStateUploadReason,
+  DownloadGapResetPlan,
+  PlanDownloadFullStateUploadOptions,
+  PlanDownloadGapResetOptions,
+  PlanDownloadedDataEncryptionStateOptions,
+  PlanSnapshotHydrationOptions,
+  SnapshotHydrationPlan,
+  SnapshotHydrationPlanReason,
+} from './download-planning';
 
 // Port contracts for app-side orchestration adapters.
 export type {
   ActionDispatchPort,
   ArchiveSideEffectPort,
   ConflictUiDialogRequest,
+  ConflictUiNotification,
+  ConflictUiNotificationSeverity,
   ConflictUiPort,
   DeferredLocalActionsPort,
   OperationApplyPort,
+  OperationStorePort,
   RemoteApplyWindowPort,
   SyncActionLike,
   SyncConfigPort,
   SyncConfigSnapshot,
+  SyncPortMeta,
 } from './ports';
 
 // Conflict-resolution helpers.
 export {
+  adjustForClockCorruption,
+  buildEntityFrontier,
   convertLocalDeleteRemoteUpdatesToLww,
   deepEqual,
+  extractEntityFromPayload,
+  extractUpdateChanges,
   isIdenticalConflict,
   partitionLwwResolutions,
   planLwwConflictResolutions,
   suggestConflictResolution,
 } from './conflict-resolution';
 export type {
+  ClockCorruptionAdjustmentOptions,
   ConflictResolutionSuggestion,
+  DeepEqualOptions,
   EntityConflictLike,
+  EntityFrontierContext,
+  LocalDeleteRemoteUpdateConversionOptions,
   LwwConflictResolutionPlan,
+  LwwConflictResolutionPlanningOptions,
+  LwwConflictResolutionReason,
+  LwwConflictResolutionWinner,
+  LwwLocalWinOperationKind,
+  LwwResolutionPartitionOptions,
+  LwwResolutionPartitions,
   LwwResolvedConflict,
 } from './conflict-resolution';
-
-// Entity-frontier and clock-corruption helpers (per-entity vector-clock domain).
-export { adjustForClockCorruption, buildEntityFrontier } from './entity-frontier';
 
 // Entity-registry contracts.
 export {
@@ -153,6 +207,12 @@ export type {
   EntityStoragePattern,
   BaseEntity,
   EntityDictionary,
+  StateSelector,
+  PropsStateSelector,
+  SelectByIdFactory,
+  EntityUpdateLike,
+  EntityAdapterLike,
+  SelectById,
   EntityConfig,
   EntityRegistry,
 } from './entity-registry.types';

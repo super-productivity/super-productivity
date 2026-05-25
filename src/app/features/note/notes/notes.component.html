@@ -38,7 +38,12 @@
       <note
         [isFocus]="isElementWasAdded && $index === 0"
         [note]="note"
-      ></note>
+      >
+        <div
+          class="drag-handle"
+          cdkDragHandle
+        ></div>
+      </note>
     </div>
   }
   <!---->

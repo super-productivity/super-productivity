@@ -44,10 +44,8 @@ import {
 import { MatSelect } from '@angular/material/select';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatInput } from '@angular/material/input';
-import { TimeStepDirective } from '../../../ui/time-step/time-step.directive';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
 
 const DEFAULT_TIME = '09:00';
 
@@ -72,7 +70,6 @@ type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
     MatLabel,
     MatSuffix,
     MatPrefix,
-    TimeStepDirective,
   ],
   templateUrl: './dialog-deadline.component.html',
   styleUrl: './dialog-deadline.component.scss',
@@ -243,7 +240,6 @@ export class DialogDeadlineComponent implements AfterViewInit {
           taskId: this.task.id,
           deadlineWithTime: deadlineTimestamp,
           deadlineRemindAt,
-          ...getDeadlineAutoPlanFields(this._dateService, undefined, deadlineTimestamp),
         }),
       );
     } else {
@@ -254,7 +250,6 @@ export class DialogDeadlineComponent implements AfterViewInit {
         TaskSharedActions.setDeadline({
           taskId: this.task.id,
           deadlineDay: newDay,
-          ...getDeadlineAutoPlanFields(this._dateService, newDay),
         }),
       );
     }

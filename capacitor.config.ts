@@ -13,19 +13,14 @@ const config: CapacitorConfig = {
       smallIcon: 'ic_stat_sp',
     },
     Keyboard: {
-      // iOS-only: Android excludes @capacitor/keyboard via includePlugins below
-      // and uses JavaScriptInterface for keyboard visibility instead.
-      // 'native' resizes the WKWebView so 100vh fits above the keyboard.
-      resize: 'native',
+      // Used by iOS native keyboard handling. Android uses JavaScriptInterface
+      // for keyboard visibility and excludes the native Keyboard plugin below.
+      resize: 'body',
       resizeOnFullScreen: true,
-    },
-    StatusBar: {
-      // iOS: overlay the status bar so content can sit beneath it.
-      // No-op on Android 15+ (targetSdk 36).
-      overlaysWebView: true,
     },
   },
   android: {
+    adjustMarginsForEdgeToEdge: 'auto',
     // Android keyboard visibility is handled by JavaScriptInterface. Keeping
     // @capacitor/keyboard Android-side registers an unused insets callback
     // that can crash in Keyboard$1.onEnd on some devices.
@@ -51,6 +46,18 @@ const config: CapacitorConfig = {
     allowsLinkPreview: true,
     // Scroll behavior
     scrollEnabled: true,
+    // iOS-specific plugin overrides
+    plugins: {
+      StatusBar: {
+        overlaysWebView: true,
+      },
+      Keyboard: {
+        // Resize the native WebView when keyboard appears
+        // This shrinks the viewport so 100vh/100% automatically fits above keyboard
+        resize: 'native',
+        resizeOnFullScreen: true,
+      },
+    },
   },
 };
 

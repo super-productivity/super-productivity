@@ -183,8 +183,6 @@ describe('AddTasksForTomorrowService', () => {
             planner: {
               days: {},
             },
-            tasks: { ids: [], entities: {} },
-            projects: { ids: [], entities: {} },
           },
         }),
       ],

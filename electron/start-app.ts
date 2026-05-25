@@ -15,12 +15,15 @@ import { initIndicator } from './indicator';
 import { quitApp, showOrFocus } from './various-shared';
 import { createWindow, getWin } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
-import { destroyTaskWidget } from './task-widget/task-widget';
+import {
+  destroyTaskWidget,
+  initTaskWidgetSettingsListener,
+} from './task-widget/task-widget';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
 } from './protocol-handler';
-import { getIsQuiting, setIsLocked, setIsMinimizeToTray } from './shared-state';
+import { getIsQuiting, setIsQuiting, setIsLocked } from './shared-state';
 import { clearStaleLevelDbLocks } from './clear-stale-idb-locks';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
@@ -270,6 +273,7 @@ export const startApp = (): void => {
   });
 
   appIN.on('ready', () => createMainWin());
+  appIN.on('ready', () => initTaskWidgetSettingsListener());
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
   appIN.on('ready', () => initFullScreenBlocker(IS_DEV));
@@ -432,13 +436,11 @@ export const startApp = (): void => {
       event.preventDefault();
       const win = getWin();
       if (win && !win.isDestroyed()) {
-        // Ensure the close handler takes the real close path (not the minimize-to-tray
-        // hide branch) so the before-close IPC flow (sync, finish-day) completes.
-        setIsMinimizeToTray(false);
         win.close();
       } else {
         // No window to close — set flag and re-trigger quit directly.
-        quitApp();
+        setIsQuiting(true);
+        app.quit();
       }
       return;
     }

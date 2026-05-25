@@ -1,4 +1,4 @@
-import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ImmediateUploadService } from './immediate-upload.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
@@ -16,7 +16,6 @@ describe('ImmediateUploadService', () => {
   let mockDataInitStateService: { isAllDataLoadedInitially$: BehaviorSubject<boolean> };
   let mockSyncWrapperService: { isEncryptionOperationInProgress: boolean };
   let mockProvider: any;
-  let originalOnLineDescriptor: PropertyDescriptor | undefined;
 
   const completedResult = (
     overrides: Partial<{
@@ -47,17 +46,6 @@ describe('ImmediateUploadService', () => {
   });
 
   beforeEach(() => {
-    // Pin navigator.onLine = true so _canUpload()'s isOnline() guard isn't at
-    // the mercy of other specs that mutate the navigator (e.g., the keyboard
-    // layout spec replaces the whole object). isOnline() reads navigator.onLine
-    // directly, so a leaked false here silently disables the upload pipeline
-    // and surfaces as "uploadPendingOps was never called".
-    originalOnLineDescriptor = Object.getOwnPropertyDescriptor(navigator, 'onLine');
-    Object.defineProperty(navigator, 'onLine', {
-      value: true,
-      configurable: true,
-    });
-
     // SuperSync provider - supports operation sync and immediate upload
     mockProvider = {
       id: SyncProviderId.SuperSync,
@@ -110,11 +98,6 @@ describe('ImmediateUploadService', () => {
 
   afterEach(() => {
     service.ngOnDestroy();
-    if (originalOnLineDescriptor) {
-      Object.defineProperty(navigator, 'onLine', originalOnLineDescriptor);
-    } else {
-      delete (navigator as { onLine?: boolean }).onLine;
-    }
   });
 
   describe('checkmark (IN_SYNC) behavior', () => {
@@ -125,8 +108,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000); // Drive debounce
-      flush(); // Drain the await chain inside withSession()
+      tick(2100); // Debounce (2000ms) + processing
 
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
     }));
@@ -138,8 +120,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       // Piggybacked ops are processed internally by syncService.uploadPendingOps()
       // ImmediateUploadService should NOT show checkmark when there are piggybacked ops
@@ -153,8 +134,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalled();
     }));
@@ -181,8 +161,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       // Piggybacked ops are processed internally, no checkmark shown
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalled();
@@ -206,8 +185,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
@@ -222,8 +200,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
@@ -246,8 +223,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
@@ -268,8 +244,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       // After withSession's entry-reset and a clean upload, the latch is
       // back to false and IN_SYNC is reported normally.
@@ -287,8 +262,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       // Validation failure is structural state corruption — surface it
       // even though the upload itself threw. Transient errors with no
@@ -308,8 +282,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
     }));
@@ -323,8 +296,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
     }));
@@ -338,8 +310,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       // Upload was called, but returned blocked_fresh_client - no checkmark shown
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalled();
@@ -354,8 +325,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
     }));
@@ -369,8 +339,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
     }));
@@ -383,8 +352,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
     }));
@@ -397,8 +365,7 @@ describe('ImmediateUploadService', () => {
 
       service.initialize();
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
     }));
@@ -419,8 +386,7 @@ describe('ImmediateUploadService', () => {
       service.trigger();
       service.trigger();
 
-      tick(2000);
-      flush();
+      tick(2100);
 
       // Should only upload once despite 5 triggers
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(1);
@@ -439,8 +405,7 @@ describe('ImmediateUploadService', () => {
 
       // Trigger upload - should work because service auto-initialized
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(1);
     }));
@@ -453,8 +418,7 @@ describe('ImmediateUploadService', () => {
       // Data not loaded (still false)
       // Trigger upload - should NOT work because service not initialized
       service.trigger();
-      tick(2000);
-      flush();
+      tick(2100);
 
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
     }));
@@ -478,8 +442,7 @@ describe('ImmediateUploadService', () => {
       tick();
 
       // Wait for debounce - queued triggers should result in one upload
-      tick(2000);
-      flush();
+      tick(2100);
 
       // Should upload once (debounce coalesces multiple triggers)
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(1);

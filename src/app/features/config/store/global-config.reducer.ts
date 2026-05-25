@@ -24,7 +24,7 @@ import type { KeyboardConfig } from '../keyboard-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
-import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
+import { getStartOfNextDayHourFromTimeString } from '../../../util/start-of-next-day.util';
 
 /**
  * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
@@ -144,6 +144,37 @@ export const selectIsFocusModeEnabled = createSelector(
 
 export const initialGlobalConfigState: GlobalConfigState = {
   ...DEFAULT_GLOBAL_CONFIG,
+};
+
+const normalizeStartOfNextDayConfig = (
+  misc: Partial<MiscConfig>,
+): Partial<MiscConfig> => {
+  // `startOfNextDayTime` wins when present. When both fields arrive together
+  // from sync/REST/plugin payloads we keep minute precision from
+  // `startOfNextDayTime` and derive a legacy hour-only `startOfNextDay`.
+  // If only the legacy `startOfNextDay` arrives, minutes are unavoidably lost.
+  type NormalizedMiscConfig = Omit<
+    Partial<MiscConfig>,
+    'startOfNextDay' | 'startOfNextDayTime'
+  > & {
+    startOfNextDay?: number;
+    startOfNextDayTime?: string;
+  };
+  const normalized: NormalizedMiscConfig = { ...misc };
+
+  if (typeof misc.startOfNextDayTime === 'string') {
+    const hour = getStartOfNextDayHourFromTimeString(misc.startOfNextDayTime);
+    if (hour != null) {
+      normalized.startOfNextDay = hour;
+    }
+  }
+
+  if (typeof misc.startOfNextDay === 'number' && normalized.startOfNextDayTime == null) {
+    const hour = Math.max(0, Math.min(23, misc.startOfNextDay));
+    normalized.startOfNextDayTime = `${String(hour).padStart(2, '0')}:00`;
+  }
+
+  return normalized;
 };
 
 const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig => {

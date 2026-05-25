@@ -266,20 +266,11 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           key: 'userName',
           type: 'input',
           templateOptions: {
-            label: T.F.SYNC.FORM.NEXTCLOUD.L_FILE_USER_NAME,
-            description: T.F.SYNC.FORM.NEXTCLOUD.FILE_USER_NAME_DESCRIPTION,
+            label: T.F.SYNC.FORM.WEB_DAV.L_USER_NAME,
           },
           expressions: {
             'props.required': (field: FormlyFieldConfig) =>
               field?.parent?.parent?.model?.syncProvider === SyncProviderId.Nextcloud,
-          },
-        },
-        {
-          key: 'loginName',
-          type: 'input',
-          templateOptions: {
-            label: T.F.SYNC.FORM.NEXTCLOUD.L_LOGIN_NAME,
-            description: T.F.SYNC.FORM.NEXTCLOUD.LOGIN_NAME_DESCRIPTION,
           },
         },
         {
@@ -471,21 +462,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
     {
       key: 'superSync',
       fieldGroup: [
-        // Encryption info line — shown the moment SuperSync is selected so the
-        // mandatory client-side encryption step is visible before a token is
-        // entered. Hidden once encryption is set up (the encryption-status-box
-        // above already shows "Encryption password is set" in that case).
-        {
-          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
-            field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
-            (field?.parent?.parent?.model?.isEncryptionEnabled ?? false),
-          type: 'tpl',
-          templateOptions: {
-            tag: 'div',
-            text: T.F.SYNC.FORM.SUPER_SYNC.E2E_ENCRYPTION_INFO,
-            class: 'info-panel info-panel--encryption',
-          },
-        },
         {
           hideExpression: (m, v, field) =>
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
@@ -519,14 +495,11 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           },
         },
         // Encryption encouragement warning (shown when encryption is NOT enabled)
-        // Hidden during initial setup (encryption dialog opens automatically after save).
-        // Reads root `isEncryptionEnabled` so it stays in lockstep with the
-        // encryption-status-box / BTN_CHANGE_PASSWORD above (sync.service derives
-        // the root flag from SuperSync's privateCfg.isEncryptionEnabled).
+        // Hidden during initial setup (encryption dialog opens automatically after save)
         {
           hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
             field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
-            (field?.parent?.parent?.model?.isEncryptionEnabled ?? false) ||
+            (field?.model?.isEncryptionEnabled ?? false) ||
             field?.parent?.parent?.model?._isInitialSetup === true,
           type: 'tpl',
           templateOptions: {
@@ -540,7 +513,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         {
           hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
             field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
-            (field?.parent?.parent?.model?.isEncryptionEnabled ?? false) ||
+            (field?.model?.isEncryptionEnabled ?? false) ||
             field?.parent?.parent?.model?._isInitialSetup === true,
           type: 'btn',
           className: 'e2e-enable-encryption-btn',
@@ -550,24 +523,8 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             btnStyle: 'stroked',
             onClick: async (field: FormlyFieldConfig) => {
               const result = await openEnableEncryptionDialog();
-              if (result?.success) {
-                // Two writes are needed (asymmetric with the Disable flow,
-                // which only needs the root write):
-                //   - Sub-model: `sync-config.service._deriveEncryptionState
-                //     ForSuperSync` reads `superSync.isEncryptionEnabled`
-                //     first in its fallback chain (privateCfg comes second).
-                //     Writing it here ensures the next form-save derives
-                //     `true` even if `privateCfg` propagation lags.
-                //   - Root: sibling hideExpressions (info-panel,
-                //     ENCRYPTION_ENCOURAGED, this button) read the root
-                //     flag, so it must flip in the current Formly tick to
-                //     hide them immediately.
-                if (field?.model) {
-                  field.model.isEncryptionEnabled = true;
-                }
-                if (field?.parent?.parent?.model) {
-                  field.parent.parent.model.isEncryptionEnabled = true;
-                }
+              if (result?.success && field?.model) {
+                field.model.isEncryptionEnabled = true;
               }
               return result?.success ? true : false;
             },

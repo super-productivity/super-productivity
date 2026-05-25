@@ -315,7 +315,7 @@ const getGithubIssueErrorMarkdown = (
 
 
 
-### URL
+### Url
 ${window.location.href}
 
 ${typeof origErr === 'object' && origErr && 'additionalLog' in origErr ? `### AL\n${origErr.additionalLog}` : ''}

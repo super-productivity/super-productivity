@@ -12,7 +12,6 @@ import { uuidv7 } from 'uuidv7';
 vi.mock('../../src/db', () => ({
   prisma: {
     $transaction: vi.fn(),
-    $queryRaw: vi.fn().mockResolvedValue([]),
     userSyncState: {
       upsert: vi.fn(),
       findUnique: vi.fn(),

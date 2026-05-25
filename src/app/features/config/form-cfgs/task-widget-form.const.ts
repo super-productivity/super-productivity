@@ -34,5 +34,57 @@ export const TASK_WIDGET_FORM_CFG: ConfigFormSection<TaskWidgetConfig> = {
         label: T.GCF.TASK_WIDGET.OPACITY,
       },
     },
+    {
+      key: 'autoHideToEdge',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.TASK_WIDGET.AUTO_HIDE_TO_EDGE,
+      },
+    },
+    {
+      key: 'edge',
+      type: 'select',
+      templateOptions: {
+        label: T.GCF.TASK_WIDGET.EDGE,
+        options: [
+          {
+            label: T.GCF.TASK_WIDGET.EDGE_RIGHT,
+            value: 'right',
+          },
+          {
+            label: T.GCF.TASK_WIDGET.EDGE_LEFT,
+            value: 'left',
+          },
+          {
+            label: T.GCF.TASK_WIDGET.EDGE_TOP,
+            value: 'top',
+          },
+          {
+            label: T.GCF.TASK_WIDGET.EDGE_BOTTOM,
+            value: 'bottom',
+          },
+        ],
+      },
+    },
+    {
+      key: 'expandedWidth',
+      type: 'slider',
+      templateOptions: {
+        type: 'number',
+        min: 300,
+        max: 560,
+        label: T.GCF.TASK_WIDGET.EXPANDED_WIDTH,
+      },
+    },
+    {
+      key: 'collapsedWidth',
+      type: 'slider',
+      templateOptions: {
+        type: 'number',
+        min: 18,
+        max: 60,
+        label: T.GCF.TASK_WIDGET.COLLAPSED_WIDTH,
+      },
+    },
   ] as LimitedFormlyFieldConfig<TaskWidgetConfig>[],
 };

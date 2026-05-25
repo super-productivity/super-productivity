@@ -19,8 +19,6 @@ import {
   PluginNodeScriptResult,
   PluginShortcutCfg,
   PluginSidePanelBtnCfg,
-  PluginWorkContextHeaderBtnCfg,
-  ActiveWorkContext,
   Project,
   SnackCfg,
   Tag,
@@ -71,7 +69,6 @@ export class PluginAPI implements PluginAPIInterface {
     private _pluginBridge: PluginBridgeService,
     private _pluginI18nService: PluginI18nService,
     private _manifest?: PluginManifest,
-    private _onReadyRegister?: (fn: () => void | Promise<void>) => void,
   ) {
     // Get bound methods for this plugin
     this._boundMethods = this._pluginBridge.createBoundMethods(
@@ -107,14 +104,14 @@ export class PluginAPI implements PluginAPIInterface {
 
   registerHeaderButton(headerBtnCfg: PluginHeaderBtnCfg): void {
     this._headerButtons.push({ ...headerBtnCfg, pluginId: this._pluginId });
-    PluginLog.log(`Plugin ${this._pluginId} registered header button`);
+    PluginLog.log(`Plugin ${this._pluginId} registered header button`, headerBtnCfg);
     this._boundMethods.registerHeaderButton(headerBtnCfg);
   }
 
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void {
     const fullMenuEntry = { ...menuEntryCfg, pluginId: this._pluginId };
     this._menuEntries.push(fullMenuEntry);
-    PluginLog.log(`Plugin ${this._pluginId} registered menu entry`);
+    PluginLog.log(`Plugin ${this._pluginId} registered menu entry`, menuEntryCfg);
     this._boundMethods.registerMenuEntry(menuEntryCfg);
   }
 
@@ -137,7 +134,7 @@ export class PluginAPI implements PluginAPIInterface {
     };
 
     this._shortcuts.push(shortcut);
-    PluginLog.log(`Plugin ${this._pluginId} registered shortcut`);
+    PluginLog.log(`Plugin ${this._pluginId} registered shortcut`, shortcutCfg);
 
     // Register shortcut with bridge
     this._boundMethods.registerShortcut(shortcut);
@@ -147,15 +144,11 @@ export class PluginAPI implements PluginAPIInterface {
     sidePanelBtnCfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>,
   ): void {
     this._sidePanelButtons.push({ ...sidePanelBtnCfg, pluginId: this._pluginId });
-    PluginLog.log(`Plugin ${this._pluginId} registered side panel button`);
+    PluginLog.log(
+      `Plugin ${this._pluginId} registered side panel button`,
+      sidePanelBtnCfg,
+    );
     this._boundMethods.registerSidePanelButton(sidePanelBtnCfg);
-  }
-
-  registerWorkContextHeaderButton(
-    cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
-  ): void {
-    PluginLog.log(`Plugin ${this._pluginId} registered work-context header button`, cfg);
-    this._boundMethods.registerWorkContextHeaderButton(cfg);
   }
 
   registerIssueProvider(definition: IssueProviderPluginDefinition): void {
@@ -166,20 +159,6 @@ export class PluginAPI implements PluginAPIInterface {
   showIndexHtmlAsView(): void {
     PluginLog.log(`Plugin ${this._pluginId} requested to show index.html`);
     return this._boundMethods.showIndexHtmlAsView();
-  }
-
-  showInWorkContext(): void {
-    PluginLog.log(`Plugin ${this._pluginId} requested work-context embed`);
-    this._boundMethods.showInWorkContext();
-  }
-
-  closeWorkContextView(): void {
-    PluginLog.log(`Plugin ${this._pluginId} closed work-context embed`);
-    this._boundMethods.closeWorkContextView();
-  }
-
-  async getActiveWorkContext(): Promise<ActiveWorkContext | null> {
-    return this._boundMethods.getActiveWorkContext();
   }
 
   async getTasks(): Promise<Task[]> {
@@ -268,14 +247,10 @@ export class PluginAPI implements PluginAPIInterface {
     return this._pluginBridge.reorderTasks(taskIds, contextId, contextType);
   }
 
-  async selectTask(taskId: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to select task ${taskId}`);
-    return this._pluginBridge.selectTask(taskId);
-  }
-
   async batchUpdateForProject(request: BatchUpdateRequest): Promise<BatchUpdateResult> {
     PluginLog.log(
       `Plugin ${this._pluginId} requested batch update for project ${(request as { projectId: string }).projectId}`,
+      request,
     );
     return this._pluginBridge.batchUpdateForProject(request);
   }
@@ -285,25 +260,18 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async notify(notifyCfg: NotifyCfg): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested notification`);
+    PluginLog.log(`Plugin ${this._pluginId} requested notification:`, notifyCfg);
     return this._pluginBridge.notify(notifyCfg);
   }
 
-  persistDataSynced(dataStr: string, key?: string): Promise<void> {
-    // Log keyLen, not key — plugins may use user-supplied content as keys
-    // (search queries, document titles), and the log history is exportable.
-    // CLAUDE.md rule 9: only ids, never user content.
-    PluginLog.log(`Plugin ${this._pluginId} requested to persist data`, {
-      keyLen: key?.length ?? 0,
-    });
-    return this._boundMethods.persistDataSynced(dataStr, key);
+  persistDataSynced(dataStr: string): Promise<void> {
+    PluginLog.log(`Plugin ${this._pluginId} requested to persist data:`, dataStr);
+    return this._boundMethods.persistDataSynced(dataStr);
   }
 
-  loadSyncedData(key?: string): Promise<string | null> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to load persisted data`, {
-      keyLen: key?.length ?? 0,
-    });
-    return this._boundMethods.loadPersistedData(key);
+  loadSyncedData(): Promise<string | null> {
+    PluginLog.log(`Plugin ${this._pluginId} requested to load persisted data:`);
+    return this._boundMethods.loadPersistedData();
   }
 
   async getConfig(): Promise<any> {
@@ -317,23 +285,13 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async openDialog(dialogCfg: DialogCfg): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to open dialog`);
+    PluginLog.log(`Plugin ${this._pluginId} requested to open dialog:`, dialogCfg);
     return this._pluginBridge.openDialog(dialogCfg);
   }
 
   async triggerSync(): Promise<void> {
     PluginLog.log(`Plugin ${this._pluginId} requested to trigger sync`);
     return this._boundMethods.triggerSync();
-  }
-
-  /**
-   * Register a callback to run after the app confirms all declared APIs are ready.
-   * Put startup init code here (e.g. executeNodeScript calls) instead of at the
-   * top level of plugin.js. For nodeExecution plugins, fires only after a successful
-   * IPC ping — guaranteeing the bridge is available.
-   */
-  onReady(fn: () => void | Promise<void>): void {
-    this._onReadyRegister?.(fn);
   }
 
   /**
@@ -366,9 +324,7 @@ export class PluginAPI implements PluginAPIInterface {
    * Execute an NgRx action if it's in the allowed list
    */
   dispatchAction(action: { type: string; [key: string]: unknown }): void {
-    // Log the action TYPE only — the full action carries user content
-    // and the log history is user-exportable. See core/log.ts header / rule #9.
-    PluginLog.log(`Plugin ${this._pluginId} requested to execute action: ${action.type}`);
+    PluginLog.log(`Plugin ${this._pluginId} requested to execute action:`, action);
     return this._boundMethods.dispatchAction(action);
   }
 

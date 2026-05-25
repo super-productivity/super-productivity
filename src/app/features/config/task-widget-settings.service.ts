@@ -4,11 +4,16 @@ import { IS_ELECTRON } from '../../app.constants';
 import { Log } from '../../core/log';
 
 const STORAGE_KEY = 'sp_task_widget_settings';
+const IS_WINDOWS_ELECTRON = IS_ELECTRON && !window.ea.isLinux() && !window.ea.isMacOS();
 
 const DEFAULT_TASK_WIDGET_CONFIG: Required<TaskWidgetConfig> = {
   isEnabled: false,
   isAlwaysShow: false,
   opacity: 95,
+  autoHideToEdge: IS_WINDOWS_ELECTRON,
+  edge: 'right',
+  expandedWidth: 360,
+  collapsedWidth: 26,
 };
 
 /**

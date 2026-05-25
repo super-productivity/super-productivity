@@ -190,12 +190,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     // Skip the break
     await skipBreakButton.click();
 
-    // Verify we're back on main screen and session auto-started.
-    // The mode selector is hidden during any active session (Preparation only).
+    // Verify we're back on main screen and session auto-started
+    // (mode selector should NOT be visible because we're in progress)
     await expect(focusModeMain).toBeVisible({ timeout: 5000 });
-    await expect(focusModeBreak).not.toBeVisible();
-    await expect(completeSessionButton).toBeVisible();
     await expect(modeSelector).not.toBeVisible();
+    await expect(completeSessionButton).toBeVisible();
   });
 
   test('Back to Planning should NOT auto-start next session', async ({ page }) => {

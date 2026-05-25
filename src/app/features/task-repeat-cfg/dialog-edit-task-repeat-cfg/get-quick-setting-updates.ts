@@ -23,13 +23,12 @@ const _buildWeeklyForDay = (date: Date): Partial<TaskRepeatCfg> => {
   };
 };
 
-// Switching between monthly presets must clear every monthly anchor —
-// anchor presence is the discriminator, so a stale Nth-weekday or last-day
-// field would silently take effect.
-const MONTHLY_ANCHOR_RESET: Partial<TaskRepeatCfg> = {
+// Switching from a day-of-week preset to a day-of-month preset must clear the
+// Nth-weekday anchor — anchor presence is the discriminator, so stale fields
+// would silently take effect.
+const DAY_OF_MONTH_RESET: Partial<TaskRepeatCfg> = {
   monthlyWeekOfMonth: undefined,
   monthlyWeekday: undefined,
-  monthlyLastDay: undefined,
 };
 
 /**
@@ -75,38 +74,30 @@ export const getQuickSettingUpdates = (
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
         startDate: getDbDateStr(referenceDate || today),
-        ...MONTHLY_ANCHOR_RESET,
+        ...DAY_OF_MONTH_RESET,
       };
     }
 
     case 'MONTHLY_FIRST_DAY': {
-      // Anchor to the next 1st-of-month that is today or later, so the first
-      // generated instance is never backdated (#7726). `month + 1` rolls the
-      // year over correctly in December.
-      const firstDay =
-        today.getDate() === 1
-          ? new Date(today.getFullYear(), today.getMonth(), 1)
-          : new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
       return {
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
         startDate: getDbDateStr(firstDay),
-        ...MONTHLY_ANCHOR_RESET,
+        ...DAY_OF_MONTH_RESET,
       };
     }
 
     case 'MONTHLY_LAST_DAY': {
-      // First occurrence = the upcoming last day of the current month, which
-      // is always today or later. The `monthlyLastDay` flag tells the
-      // occurrence engine to clamp to month-end every month, so `startDate`'s
-      // day-of-month no longer needs to be a hardcoded 31 (#7726).
-      const lastDayThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      // Always use day=31 so the occurrence calculator clamps via
+      // Math.min(31, lastDayOfMonth), producing true "last day" behavior.
+      // Using the current month's last day would fail in short months (e.g. Feb=28).
+      const day31 = new Date(today.getFullYear(), 0, 31);
       return {
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
-        startDate: getDbDateStr(lastDayThisMonth),
-        ...MONTHLY_ANCHOR_RESET,
-        monthlyLastDay: true,
+        startDate: getDbDateStr(day31),
+        ...DAY_OF_MONTH_RESET,
       };
     }
 
@@ -124,7 +115,6 @@ export const getQuickSettingUpdates = (
         startDate: getDbDateStr(ref),
         monthlyWeekOfMonth: weekOfMonth,
         monthlyWeekday: weekday,
-        monthlyLastDay: undefined,
       };
     }
 

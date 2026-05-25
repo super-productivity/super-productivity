@@ -50,7 +50,6 @@ export class SectionService {
           contextId,
           contextType,
           title: sanitizeSectionTitle(title),
-          isExpanded: true,
           taskIds: [],
         },
       }),

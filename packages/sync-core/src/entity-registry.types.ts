@@ -3,12 +3,6 @@
  *
  * The sync core keeps entity names opaque. Host apps provide the actual entity
  * registry and may narrow registry keys with their own domain union.
- *
- * Framework-agnostic: this module describes only what the sync engine needs
- * to classify/route operations (`storagePattern`, `payloadKey`, optional
- * `featureName`/`mapKey`/`arrayKey`). Host applications that wire their own
- * state framework (NgRx, Redux, etc.) extend `EntityConfig` via the
- * `THostExtensions` generic and own the selector/adapter shape themselves.
  */
 
 export type EntityStoragePattern = 'adapter' | 'singleton' | 'map' | 'array' | 'virtual';
@@ -19,65 +13,79 @@ export interface BaseEntity {
 
 export type EntityDictionary<TEntity = unknown> = Record<string, TEntity | undefined>;
 
-/**
- * Engine-essential entity metadata.
- *
- * Hosts may extend this with framework-specific fields (NgRx adapters,
- * selectors, Redux reducers, etc.) by supplying a `THostExtensions` type:
- *
- * ```ts
- * type HostEntityConfig = EntityConfig<{
- *   adapter?: EntityAdapter<MyEntity>;
- *   selectState?: (s: RootState) => unknown;
- * }>;
- * ```
- */
-export type EntityConfig<THostExtensions = unknown> = {
+export type StateSelector<TResult = unknown> = (state: object) => TResult;
+
+export type PropsStateSelector<TProps = unknown, TResult = unknown> = (
+  state: object,
+  props: TProps,
+) => TResult;
+
+export type SelectByIdFactory<TKey = never, TResult = unknown> = (
+  id: string,
+  key: TKey,
+) => StateSelector<TResult>;
+
+export interface EntityUpdateLike<TEntity = unknown> {
+  id: string;
+  changes: Partial<TEntity> | Record<string, unknown>;
+}
+
+export interface EntityAdapterLike<TEntity = unknown, TState = unknown> {
+  selectId: unknown;
+  getSelectors: unknown;
+  addOne(entity: TEntity, state: TState): TState;
+  updateOne(update: EntityUpdateLike<TEntity>, state: TState): TState;
+}
+
+export type SelectById =
+  | StateSelector
+  | PropsStateSelector<{ id: string }>
+  | SelectByIdFactory;
+
+export interface EntityConfig {
   storagePattern: EntityStoragePattern;
   featureName?: string;
   payloadKey: string;
+  adapter?: EntityAdapterLike;
+  selectEntities?: StateSelector<EntityDictionary>;
+  selectById?: SelectById;
+  selectState?: StateSelector;
   mapKey?: string;
   arrayKey?: string | null;
-} & THostExtensions;
+}
 
-export type EntityRegistry<
-  TEntityType extends string = string,
-  THostExtensions = unknown,
-> = Partial<Record<TEntityType, EntityConfig<THostExtensions>>>;
+export type EntityRegistry<TEntityType extends string = string> = Partial<
+  Record<TEntityType, EntityConfig>
+>;
 
-export const getEntityConfig = <TEntityType extends string, THostExtensions = unknown>(
-  registry: EntityRegistry<TEntityType, THostExtensions>,
+export const getEntityConfig = <TEntityType extends string>(
+  registry: EntityRegistry<TEntityType>,
   entityType: TEntityType,
-): EntityConfig<THostExtensions> | undefined => registry[entityType];
+): EntityConfig | undefined => registry[entityType];
 
-export const getPayloadKey = <TEntityType extends string, THostExtensions = unknown>(
-  registry: EntityRegistry<TEntityType, THostExtensions>,
+export const getPayloadKey = <TEntityType extends string>(
+  registry: EntityRegistry<TEntityType>,
   entityType: TEntityType,
 ): string | undefined => registry[entityType]?.payloadKey;
 
-export const isAdapterEntity = <THostExtensions = unknown>(
-  config: EntityConfig<THostExtensions>,
-): boolean => config.storagePattern === 'adapter';
+export const isAdapterEntity = (config: EntityConfig): boolean =>
+  config.storagePattern === 'adapter';
 
-export const isSingletonEntity = <THostExtensions = unknown>(
-  config: EntityConfig<THostExtensions>,
-): boolean => config.storagePattern === 'singleton';
+export const isSingletonEntity = (config: EntityConfig): boolean =>
+  config.storagePattern === 'singleton';
 
-export const isMapEntity = <THostExtensions = unknown>(
-  config: EntityConfig<THostExtensions>,
-): boolean => config.storagePattern === 'map';
+export const isMapEntity = (config: EntityConfig): boolean =>
+  config.storagePattern === 'map';
 
-export const isArrayEntity = <THostExtensions = unknown>(
-  config: EntityConfig<THostExtensions>,
-): boolean => config.storagePattern === 'array';
+export const isArrayEntity = (config: EntityConfig): boolean =>
+  config.storagePattern === 'array';
 
-export const isVirtualEntity = <THostExtensions = unknown>(
-  config: EntityConfig<THostExtensions>,
-): boolean => config.storagePattern === 'virtual';
+export const isVirtualEntity = (config: EntityConfig): boolean =>
+  config.storagePattern === 'virtual';
 
-export const getAllPayloadKeys = <TEntityType extends string, THostExtensions = unknown>(
-  registry: EntityRegistry<TEntityType, THostExtensions>,
+export const getAllPayloadKeys = <TEntityType extends string>(
+  registry: EntityRegistry<TEntityType>,
 ): string[] =>
-  (Object.values(registry) as Array<EntityConfig<THostExtensions> | undefined>)
+  (Object.values(registry) as Array<EntityConfig | undefined>)
     .map((config) => config?.payloadKey)
     .filter((key): key is string => typeof key === 'string');

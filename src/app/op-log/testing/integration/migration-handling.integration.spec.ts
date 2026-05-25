@@ -17,7 +17,6 @@ import { resetTestUuidCounter } from './helpers/test-client.helper';
 import { LockService } from '../../sync/lock.service';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
-import { OperationLogEffects } from '../../capture/operation-log.effects';
 import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 
 /**
@@ -77,7 +76,7 @@ describe('Migration Handling Integration', () => {
         {
           provide: LockService,
           useValue: {
-            request: async <T>(_name: string, fn: () => Promise<T>) => fn(),
+            request: async (_name: string, fn: () => Promise<void>) => fn(),
           },
         },
         {
@@ -97,14 +96,6 @@ describe('Migration Handling Integration', () => {
               validOps: ops,
               invalidatedOps: [],
             }),
-          },
-        },
-        {
-          // RemoteOpsProcessingService lazily resolves OperationLogEffects via
-          // Injector to flush deferred local actions after remote apply (#7700).
-          provide: OperationLogEffects,
-          useValue: {
-            processDeferredActions: () => Promise.resolve(),
           },
         },
       ],
@@ -140,10 +131,9 @@ describe('Migration Handling Integration', () => {
 
       // Should be applied (no error snackbar)
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
-      expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
-        [jasmine.objectContaining({ id: op.id })],
-        jasmine.objectContaining({ skipDeferredLocalActions: true }),
-      );
+      expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith([
+        jasmine.objectContaining({ id: op.id }),
+      ]);
     });
 
     it('should accept operation with compatible future version (within skip limit)', async () => {
@@ -188,10 +178,9 @@ describe('Migration Handling Integration', () => {
       await service.processRemoteOps([op]);
 
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
-      expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
-        [jasmine.objectContaining({ id: op.id })],
-        jasmine.objectContaining({ skipDeferredLocalActions: true }),
-      );
+      expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith([
+        jasmine.objectContaining({ id: op.id }),
+      ]);
     });
   });
 

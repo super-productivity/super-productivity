@@ -20,7 +20,6 @@ import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
-import com.superproductivity.superproductivity.service.FocusModeNotificationHelper
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
@@ -223,13 +222,8 @@ class CapacitorMainActivity : BridgeActivity() {
             SyncReminderScheduler.ensureScheduled(this)
         }
 
-        // Handle initial intent (cold start) only on a fresh launch.
-        // On Activity recreation (config change) savedInstanceState is non-null
-        // and getIntent() still holds the original share/reminder Intent — re-running
-        // handleIntent() there would create a duplicate task from the same share.
-        if (savedInstanceState == null) {
-            handleIntent(intent)
-        }
+        // Handle initial intent (cold start)
+        handleIntent(intent)
     }
 
     private fun showWebViewInitFailureOrThrow(message: String, error: Throwable) {
@@ -339,13 +333,11 @@ class CapacitorMainActivity : BridgeActivity() {
             }
             FocusModeForegroundService.ACTION_SKIP -> {
                 Log.d("SP_FOCUS", "Skip action received from focus mode notification")
-                FocusModeNotificationHelper.cancelCompletionNotification(this)
                 callJSInterfaceFunctionIfExists("next", "onFocusSkip$")
                 return
             }
             FocusModeForegroundService.ACTION_COMPLETE -> {
                 Log.d("SP_FOCUS", "Complete action received from focus mode notification")
-                FocusModeNotificationHelper.cancelCompletionNotification(this)
                 callJSInterfaceFunctionIfExists("next", "onFocusComplete$")
                 return
             }
@@ -355,20 +347,13 @@ class CapacitorMainActivity : BridgeActivity() {
         if (Intent.ACTION_SEND == intent.action && intent.type != null) {
             if (intent.type?.startsWith("text/") == true) {
                 val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                // Leave title/subject empty when absent so the frontend can derive a
-                // meaningful title from the URL or note content. Defaulting to a literal
-                // "Shared Content" here masks that derivation (issue: blank shared tasks).
-                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: ""
-                val sharedSubject = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: ""
+                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: "Shared Content"
                 Log.d("SP_SHARE", "Shared text: $sharedText")
                 Log.d("SP_SHARE", "Shared title: $sharedTitle")
-                Log.d("SP_SHARE", "Shared subject: $sharedSubject")
 
-                // Ignore empty/blank shares — they only produce useless blank tasks.
-                if (!sharedText.isNullOrBlank()) {
+                if (sharedText != null) {
                     val json = JSONObject()
                     json.put("title", sharedTitle)
-                    json.put("subject", sharedSubject)
                     val type = if (sharedText.startsWith("http")) "LINK" else "NOTE"
                     json.put("type", type)
                     json.put("path", sharedText)

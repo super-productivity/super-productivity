@@ -21,6 +21,7 @@
     "SHOW_NOTES": "Project Notes"
   },
   "CONFIRM": {
+    "AUTO_FIX": "Your data seems to be damaged (\"{{validityError}}\"). Do you want to try to automatically fix it? This may result in partial data loss.",
     "DELETE_SECTION": "Are you sure you want to delete this section? Tasks in it will be moved to the task list.",
     "RELOAD_AFTER_IDB_ERROR": "Database Error - App Will Restart\n\nSuper Productivity cannot save data! This is usually caused by:\n• Low disk space (most common)\n• App update in background\n• Linux Snap users: run 'snap set core experimental.refresh-app-awareness=true'\n\nYour recent changes may not have been saved. Please free up disk space if low. The app will restart after you close this dialog.",
     "RESTORE_FILE_BACKUP": "There seems to be NO DATA, but there are backups available at \"{{dir}}\". Do you want to restore the latest backup from {{from}}?",
@@ -139,7 +140,7 @@
         "CREATE_NEW_TAG_BTN": "Create Tag",
         "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this board to work",
+        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags needs to be created for this board to work",
         "EDIT_BOARD": "Edit board",
         "NO_PANELS_BTN": "Configure Board",
         "NO_PANELS_MSG": "This board has no panels configured. Add some panels to it."
@@ -152,7 +153,7 @@
         "CALDAV_RESOURCE": "The name of the CalDAV resource (the calendar)",
         "CALDAV_URL": "CalDAV URL (the base URL)",
         "CALDAV_USER": "Your CalDAV username",
-        "IS_ADD_SUB_TASKS": "Also import subtasks when a task is added",
+        "IS_ADD_SUB_TASKS": "Import also sub-tasks when a task is added",
         "TWO_WAY_SYNC_BOTH": "Both (bidirectional)",
         "TWO_WAY_SYNC_NOTES": "Notes / Description sync direction",
         "TWO_WAY_SYNC_OFF": "Off",
@@ -163,7 +164,7 @@
         "TWO_WAY_SYNC_TITLE": "Title sync direction"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list uncompleted CalDAV tasks for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the task as well as more information about it.</p><p>In addition, you can automatically add and sync all uncompleted tasks to your task backlog.</p><p>To make it work for Nextcloud in the webapp, you may need to allow \"https://app.super-productivity.com\" in the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
+        "HELP": "<p>Here you can configure Super Productivity to list uncompleted CalDAV tasks for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the task as well as more information about it.</p><p>In addition, you can automatically add and sync all uncompleted tasks to your task backlog.</p><p>To make it work for Nextcloud in the webapp, you may need to allow \"https://app.super-productivity.com\" in the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Description",
@@ -244,7 +245,7 @@
       "S": {
         "OFFLINE": "Dropbox: Unable to sync because offline",
         "SYNC_ERROR": "Dropbox: Error while syncing",
-        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable release."
+        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable version."
       }
     },
     "FINISH_DAY_BEFORE_EXIT": {
@@ -276,8 +277,6 @@
       },
       "BACK_TO_PLANNING": "Back to Planning",
       "BREAK_RELAX_MSG": "Take a moment to relax",
-      "BROWSER_TITLE_BREAK": "Break",
-      "BROWSER_TITLE_PAUSED": "Paused",
       "CLICK_TO_EDIT_DURATION": "Click to edit duration",
       "COMPLETE_FOCUS_SESSION": "Complete focus session",
       "CONTINUE_TO_NEXT_SESSION": "Continue to next session",
@@ -355,7 +354,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and gain access, you can provide an access token."
+        "HELP": "<p>Here you can configure Super Productivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and to access, you can provide an access token."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -425,7 +424,7 @@
       "DEFAULT_PROJECT_LABEL": "Default Super Productivity Project",
       "DEFAULT_TAGS_LABEL": "Default tags for imported tasks",
       "FORM": {
-        "AUTO_ADD_TO_BACKLOG": "Auto import to default project (requires a default project)",
+        "AUTO_ADD_TO_BACKLOG": "Auto import to default project (requires default project)",
         "AUTO_POLL": "Poll imported for changes and notify",
         "POLLING_MODE": "Polling trigger",
         "POLLING_MODE_DESCRIPTION": "When to poll: only while the relevant project or tag is open, or always in the background",
@@ -487,8 +486,6 @@
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Auto-create issues for new tasks",
         "AUTO_CREATE_ISSUES_DESCRIPTION": "Automatically creates an issue when you add a new top-level task to the default project. Requires a default project to be set.",
-        "AUTO_CREATE_TAGS": "Auto-create tags for synced labels",
-        "AUTO_CREATE_TAGS_DESCRIPTION": "Automatically creates local tags when unknown labels are pulled from the remote provider.",
         "BOTH": "Both (bidirectional)",
         "DUE_DAY": "Due Day",
         "DUE_WITH_TIME": "Due Date/Time",
@@ -498,7 +495,6 @@
         "PUSH_ONLY": "Push only",
         "SECTION": "Two-Way Sync (experimental)",
         "STATUS": "Status sync direction",
-        "TAGS": "Tags / Categories sync direction",
         "TIME_ESTIMATE": "Time Estimate",
         "TITLE": "Title sync direction"
       },
@@ -591,9 +587,7 @@
         "PASSWORD": "Token / Password",
         "USE_PAT": "Use Personal Access Token instead (LEGACY)",
         "USER_NAME": "Email / Username",
-        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback Authentication (desktop app only)",
-        "ALLOW_FETCH_FALLBACK": "Fetch Jira directly from the browser (bypass extension)",
-        "ALT_PUBLIC_LINK_HOST": "Alternative host for Jira links (e.g. public URL when API host differs; path prefix allowed)"
+        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback Authentication (desktop app only)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Advanced Config",
@@ -601,7 +595,7 @@
           "H1": "Basic configuration",
           "H2": "Worklog settings",
           "H3": "Default transitions",
-          "P1_1": "Please provide a login name (can be found on your profile page) and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> or password if you can't generate one for some reason. Please note that newer versions of Jira sometimes only work with the token. ",
+          "P1_1": "Please provide a login name (can be found on your profile page) and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> or password if you can't generate one for some reason. Please not that newer versions of Jira sometimes only work with the token. ",
           "P1_2": "You also need to specify a JQL query which is used for the suggestions to add tasks from Jira. If you need help check out this link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
           "P1_3": "You can also configure if you want to automatically (e.g. every time you visit the planning view), to import all new issues specified by a custom JQL query.",
           "P1_4": "Another option is \"Check if current ticket is assigned to current user\". If enabled and you're starting, a check will be made to ensure you're currently assigned to that ticket on Jira. If not, a dialog appears in which you can chose to assign the ticket to yourself.",
@@ -897,10 +891,6 @@
       "BREAK_IS_DONE": "Break is over!"
     },
     "PROJECT": {
-      "D_CONFIRM_ARCHIVE": {
-        "MSG": "Archive the project \"{{title}}\"? Tasks, repeating configs and reminders are paused until you restore it.",
-        "OK": "Archive"
-      },
       "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
         "CANCEL": "Cancel",
         "MSG": "This project is large and may take a while to duplicate. Do you want to proceed?",
@@ -946,17 +936,8 @@
         "ARCHIVED": "Archived Project",
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the menu on the top left.",
         "DELETED": "Deleted Project",
-        "SHOW_IN_MENU": "Show in menu",
-        "UNARCHIVED": "Project restored",
-        "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the menu",
+        "UNARCHIVED": "Unarchived project",
         "UPDATED": "Updated project settings"
-      },
-      "ARCHIVED_NOTICE": "This project is archived.",
-      "ARCHIVED_PROJECTS": {
-        "EMPTY": "No archived projects.",
-        "LINK_LABEL": "Archived projects",
-        "SEARCH": "Search archived projects",
-        "UNARCHIVE": "Restore project"
       }
     },
     "PROJECT_FOLDER": {
@@ -1360,7 +1341,6 @@
           "DISABLE_ENCRYPTION_WARNING": "WARNING: This will permanently delete ALL encrypted sync data on the server! This is necessary because encrypted operations cannot be mixed with unencrypted ones.",
           "DISABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
           "E2E_ENCRYPTION_DESCRIPTION": "Will be slower, but more secure",
-          "E2E_ENCRYPTION_INFO": "SuperSync uses end-to-end encryption. Your data is encrypted on this device before it leaves, using a password you choose during setup.",
           "ENABLE_ENCRYPTION_ITEM_1": "All sync history and backups on the server will be deleted",
           "ENABLE_ENCRYPTION_ITEM_2": "Your current data will be re-uploaded with encryption",
           "ENABLE_ENCRYPTION_ITEM_3": "All other devices will need to enter this encryption password",
@@ -1397,11 +1377,7 @@
           "SETUP_ENCRYPTION_TITLE": "SuperSync: Set Password"
         },
         "NEXTCLOUD": {
-          "FILE_USER_NAME_DESCRIPTION": "Your Nextcloud account username. This is usually the name in your files URL, not your email address.",
-          "L_FILE_USER_NAME": "Username",
-          "L_LOGIN_NAME": "Login name / email (optional)",
           "L_SERVER_URL": "Nextcloud Server URL",
-          "LOGIN_NAME_DESCRIPTION": "Only fill this if your server requires a different login than the username above, e.g. an email address.",
           "SERVER_URL_DESCRIPTION": "e.g. https://cloud.example.com or https://example.com/nextcloud",
           "L_APP_PASSWORD": "App Password",
           "APP_PASSWORD_DESCRIPTION": "Go to Nextcloud → Settings → Security → App passwords to generate one"
@@ -1653,9 +1629,6 @@
         "REMOVE_FROM_MY_DAY": "Remove from Today",
         "SCHEDULE": "Schedule task",
         "SET_DEADLINE": "Set deadline",
-        "SHOW_HIDDEN_DONE_SUB_TASKS": "+ {{nr}} completed subtasks",
-        "SHOW_HIDDEN_SUB_TASKS": "+ {{nr}} subtasks",
-        "TIME_CONFLICT": "Overlaps with another scheduled task",
         "TOGGLE_ATTACHMENTS": "Show/hide attachments",
         "TOGGLE_DETAIL_PANEL": "Show/hide task panel",
         "TOGGLE_DONE": "Toggle completion status",
@@ -1720,8 +1693,6 @@
         "UNSCHEDULE_ALL": "Unschedule all"
       },
       "D_SCHEDULE_TASK": {
-        "INFO_OUTSIDE_WORK_HOURS": "Falls outside your configured work hours.",
-        "INFO_OVERLAP": "Overlaps with another scheduled task.",
         "QA_NEXT_MONTH": "Schedule next month",
         "QA_NEXT_WEEK": "Schedule next week",
         "QA_TODAY": "Schedule today",
@@ -2080,7 +2051,6 @@
     "ADVANCED_CFG": "Advanced Config",
     "APPLY": "Apply",
     "CANCEL": "Cancel",
-    "CLEAR": "Clear",
     "CLOSE": "Close",
     "COMMENT": "Comment",
     "COMPLETE": "Complete",
@@ -2209,7 +2179,7 @@
       "HELP": "Focus mode opens a distraction-free screen to help you focus on your current task. Time tracking and the focus session timer are always kept in sync — pausing one pauses the other.",
       "L_AUTO_START_FOCUS_ON_PLAY": "Start a focus session when I start tracking a task",
       "L_FOCUS_MODE_SOUND": "Ambient sound during focus sessions",
-      "L_MANUAL_BREAK_START": "Enable Pomodoro overtime (keep timer running until manually ended)",
+      "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
       "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",
       "TITLE": "Focus Mode"
@@ -2218,7 +2188,15 @@
       "TITLE": "Task Widget",
       "IS_ENABLED": "Enable task widget",
       "IS_ALWAYS_SHOW": "Always show task widget (even when main window is visible)",
-      "OPACITY": "Task widget opacity"
+      "OPACITY": "Task widget opacity",
+      "AUTO_HIDE_TO_EDGE": "Auto-hide task widget to screen edge",
+      "EDGE": "Screen edge",
+      "EDGE_LEFT": "Left",
+      "EDGE_RIGHT": "Right",
+      "EDGE_TOP": "Top",
+      "EDGE_BOTTOM": "Bottom",
+      "EXPANDED_WIDTH": "Expanded width",
+      "COLLAPSED_WIDTH": "Collapsed pill thickness"
     },
     "IDLE": {
       "HELP": "<div><p>When idle time handling is enabled, a dialog will open after a specified amount of time to check if - and on which - task you want to track your time when you have been idle.</p></div>",
@@ -2241,6 +2219,7 @@
       "GLOBAL_ADD_NOTE": "Add new note",
       "GLOBAL_ADD_TASK": "Add new task",
       "GLOBAL_SHOW_HIDE": "Show/hide Super Productivity",
+      "GLOBAL_SHOW_TASK_WIDGET": "Show task widget",
       "GLOBAL_TOGGLE_TASK_START": "Start/stop time tracking for last active task",
       "GO_TO_DAILY_AGENDA": "Go to agenda",
       "GO_TO_FOCUS_MODE": "Enter focus mode",
@@ -2283,7 +2262,6 @@
       "TOGGLE_ISSUE_PANEL": "Show/hide issue provider panel",
       "TOGGLE_PLAY": "Start/stop time tracking for task",
       "TOGGLE_SIDE_NAV": "Focus sidenav",
-      "TOGGLE_SIDE_NAV_MODE": "Toggle sidebar compact/full mode",
       "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Toggle filter/group/sort panel",
       "TRIGGER_SYNC": "Trigger sync (if configured)",
       "ZOOM_DEFAULT": "Zoom default (desktop only)",
@@ -2364,8 +2342,6 @@
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Use custom title bar (Windows/Linux only)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requires restart to take effect.",
-      "IS_VERTICAL_ACTION_BAR": "Vertical action bar on the side (experimental)",
-      "IS_VERTICAL_ACTION_BAR_HINT": "Moves the header action buttons into a vertical strip on the right edge of the window. Desktop only.",
       "START_OF_NEXT_DAY": "Start time of the next day",
       "START_OF_NEXT_DAY_HINT": "The time when your day starts (Format: HH:mm, e.g. 02:30)",
       "THEME": "Theme",
@@ -2539,7 +2515,6 @@
     "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
-    "ARCHIVE_PROJECT": "Archive project",
     "DELETE_PROJECT": "Delete project",
     "DELETE_TAG": "Delete tag",
     "DISABLE_FEATURE": "Disable feature",
@@ -2588,8 +2563,7 @@
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
-    "WORKLOG": "Worklog",
-    "ARCHIVED_PROJECTS": "Archived Projects"
+    "WORKLOG": "Worklog"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Do you want to download a backup of your legacy data (can be used with older versions of Super Productivity)?",
@@ -2765,9 +2739,7 @@
     "UNABLE_TO_PERSIST_DATA": "Unable to persist data to plugin storage",
     "UNKNOWN_ERROR": "An unknown error occurred",
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload a plugin ZIP file to install it:",
-    "VALIDATION_FAILED": "Validation failed",
-    "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
-    "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}"
+    "VALIDATION_FAILED": "Validation failed"
   },
   "PM": {
     "ALL_TASKS_TITLE": "Metrics (all tasks)",
@@ -2880,7 +2852,7 @@
     "LATER_TODAY": "Later Today",
     "MOVE_DONE_TO_ARCHIVE": "Move completed tasks to archive",
     "NO_DONE_TASKS": "There are currently no completed tasks",
-    "NO_PLANNED_TASK_ALL_DONE": "All tasks completed",
+    "NO_PLANNED_TASK_ALL_DONE": "all tasks completed",
     "NO_PLANNED_TASKS": "No tasks planned",
     "NO_TASKS_IN_MAIN_LIST": "All tasks are organized into sections",
     "RECURRING_TASKS": "Recurring Tasks",

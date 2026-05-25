@@ -70,9 +70,7 @@ describe('PluginBridgeService.addTask() — subtask short-syntax (issue #7437)',
         { provide: TagService, useValue: tagServiceSpy },
         {
           provide: WorkContextService,
-          useValue: jasmine.createSpyObj('WorkContextService', [], {
-            activeWorkContext$: of(null),
-          }),
+          useValue: jasmine.createSpyObj('WorkContextService', ['activeWorkContext$']),
         },
         {
           provide: SnackService,

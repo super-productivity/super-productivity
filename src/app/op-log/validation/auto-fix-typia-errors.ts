@@ -5,7 +5,6 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-conf
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
-import { devError } from '../../util/dev-error';
 
 const LOG_PREFIX = '[auto-fix-typia-errors]';
 
@@ -131,12 +130,6 @@ export const autoFixTypiaErrors = (
           setValueByPath(data, keys, parsedValue);
           logAutoFixApplied(path, keys, 'task-string-to-number', value, parsedValue);
         } else {
-          // Destructive for time-tracking fields (timeSpentOnDay, timeSpent,
-          // timeEstimate). Originally a release valve for #4346; surface so
-          // the root cause gets investigated instead of auto-buried.
-          devError(
-            `auto-fix-typia-errors: defaulting task number field to 0 — data loss. path=${path}`,
-          );
           setValueByPath(data, keys, 0);
           logAutoFixApplied(path, keys, 'task-number-default-zero', value, 0);
         }

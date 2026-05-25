@@ -1,18 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NOOP_SYNC_LOGGER, type SyncLogger, type SyncLogMeta } from '@sp/sync-core';
+import { NOOP_SYNC_LOGGER, type SyncLogger } from '@sp/sync-core';
 import {
   WebdavXmlParser,
   type FileMeta,
 } from '../../../src/file-based/webdav/webdav-xml-parser';
 import { RemoteFileNotFoundAPIError } from '../../../src/errors';
 
-type CriticalFn = (message: string, meta?: SyncLogMeta) => void;
-
-const makeLogger = (): SyncLogger & {
-  critical: ReturnType<typeof vi.fn<CriticalFn>>;
-} => ({
+const makeLogger = (): SyncLogger & { critical: ReturnType<typeof vi.fn> } => ({
   ...NOOP_SYNC_LOGGER,
-  critical: vi.fn<CriticalFn>(),
+  critical: vi.fn(),
 });
 
 const sampleMultistatus = `<?xml version="1.0" encoding="utf-8"?>

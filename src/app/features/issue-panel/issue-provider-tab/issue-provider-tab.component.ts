@@ -58,7 +58,6 @@ import { MatInput } from '@angular/material/input';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { Log } from '../../../core/log';
-import { IssueProviderJira } from '../../issue/issue.model';
 
 @Component({
   selector: 'issue-provider-tab',
@@ -91,12 +90,6 @@ export class IssueProviderTabComponent implements OnDestroy, AfterViewInit {
   readonly SEARCH_MIN_LENGTH = 1;
   readonly ISSUE_PROVIDER_HUMANIZED = ISSUE_PROVIDER_HUMANIZED;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
-  protected isJiraDirectFetchEnabled = computed(() => {
-    const ip = this.issueProvider();
-    return (
-      ip.issueProviderKey === 'JIRA' && !!(ip as IssueProviderJira).allowFetchFallback
-    );
-  });
 
   dropListService = inject(DropListService);
   private _issueService = inject(IssueService);

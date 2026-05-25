@@ -13,10 +13,8 @@ import { devError } from '../../../util/dev-error';
 import { isDBDateStr } from '../../../util/get-db-date-str';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { IssueProvider, isPluginIssueProvider } from '../../issue/issue.model';
-import {
-  selectArchivedProjectIds,
-  selectHiddenProjectIds,
-} from '../../project/store/project.selectors';
+import { Project } from '../../project/project.model';
+import { selectAllProjects } from '../../project/store/project.selectors';
 import {
   selectTagFeatureState,
   selectTodayTagTaskIds,
@@ -27,7 +25,6 @@ import {
 } from '../../../root-store/app-state/app-state.selectors';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { isTodayWithOffset } from '../../../util/is-today.util';
-import { getTimeConflictTaskIds } from '../util/get-time-conflict-task-ids';
 const mapSubTasksToTasks = (tasksIN: Task[]): TaskWithSubTasks[] => {
   // Create a Map for O(1) lookups instead of O(n) find() calls
   const taskMap = new Map<string, Task>();
@@ -100,18 +97,6 @@ export const flattenTasks = (tasksIN: TaskWithSubTasks[]): TaskWithSubTasks[] =>
 const { selectEntities, selectAll } = taskAdapter.getSelectors();
 export const selectTaskFeatureState = createFeatureSelector<TaskState>(TASK_FEATURE_NAME);
 export const selectTaskEntities = createSelector(selectTaskFeatureState, selectEntities);
-export const selectTaskEntitiesInActiveProjects = createSelector(
-  selectTaskEntities,
-  selectArchivedProjectIds,
-  (entities, archivedIds): Record<string, Task | undefined> =>
-    archivedIds.size === 0
-      ? entities
-      : Object.fromEntries(
-          Object.entries(entities).filter(
-            ([, t]) => !t || !t.projectId || !archivedIds.has(t.projectId),
-          ),
-        ),
-);
 export const selectCurrentTaskId = createSelector(
   selectTaskFeatureState,
   (state) => state.currentTaskId,
@@ -158,58 +143,27 @@ export const selectStartableTasks = createSelector(
   },
 );
 
-export const selectAllTasks = createSelector(
-  selectTaskFeatureState,
-  (state: TaskState): Task[] => {
-    const all = selectAll(state);
-    // Only filter when undefined entities exist — otherwise return the original
-    // memoized array from selectAll to avoid breaking NgRx selector memoization.
-    if (all.some((task) => !task)) {
-      devError('selectAllTasks: found undefined entities in task state');
-      return all.filter((task): task is Task => !!task);
-    }
-    return all;
-  },
-);
-
-export const selectAllTasksWithSubTasks = createSelector(
-  selectAllTasks,
-  mapSubTasksToTasks,
-);
-
-export const selectAllTasksInActiveProjects = createSelector(
-  selectAllTasks,
-  selectArchivedProjectIds,
-  // Fast path returns same `tasks` ref when no projects are archived, keeping memoization stable.
-  (tasks: Task[], archivedIds: Set<string>): Task[] =>
-    archivedIds.size === 0
-      ? tasks
-      : tasks.filter((t) => !t.projectId || !archivedIds.has(t.projectId)),
-);
-
-export const selectMapOfAllTasksInActiveProjects = createSelector(
-  selectAllTasksInActiveProjects,
-  (activeTasks): Map<string, Task> => new Map(activeTasks.map((t) => [t.id, t])),
-);
-
 export const selectOverdueTasks = createSelector(
-  selectAllTasksInActiveProjects,
+  selectTaskFeatureState,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (tasks, todayStr, startOfNextDayDiffMs): Task[] => {
+  (s, todayStr, startOfNextDayDiffMs): Task[] => {
     const today = dateStrToUtcDate(todayStr);
     today.setHours(0, 0, 0, 0);
     // The logical start of "today" is shifted by the offset
     const todayStartMs = today.getTime() + startOfNextDayDiffMs;
-    return tasks.filter(
-      (task): task is Task =>
-        // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
-        // which is lexicographically sortable. This avoids timezone conversion issues.
-        !!(
-          (task.dueDay && isDBDateStr(task.dueDay) && task.dueDay < todayStr) ||
-          (task.dueWithTime && task.dueWithTime < todayStartMs)
-        ),
-    );
+    return s.ids
+      .map((id) => s.entities[id])
+      .filter(
+        (task): task is Task =>
+          !!task &&
+          // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
+          // which is lexicographically sortable. This avoids timezone conversion issues.
+          !!(
+            (task.dueDay && isDBDateStr(task.dueDay) && task.dueDay < todayStr) ||
+            (task.dueWithTime && task.dueWithTime < todayStartMs)
+          ),
+      );
   },
 );
 
@@ -221,34 +175,37 @@ export const selectUndoneOverdue = createSelector(
 );
 
 export const selectUndoneOverdueDeadlineTasks = createSelector(
-  selectAllTasksInActiveProjects,
+  selectTaskFeatureState,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (tasks, todayStr, startOfNextDayDiffMs): Task[] => {
-    if (!todayStr) return [];
+  (s, todayStr, startOfNextDayDiffMs): Task[] => {
+    if (!s || !todayStr) return [];
 
     const today = dateStrToUtcDate(todayStr);
     today.setHours(0, 0, 0, 0);
     const todayStartMs = today.getTime() + startOfNextDayDiffMs;
-    return tasks.filter(
-      (task) =>
-        !task.isDone &&
-        !!(
-          (task.deadlineDay &&
-            isDBDateStr(task.deadlineDay) &&
-            task.deadlineDay < todayStr) ||
-          (task.deadlineWithTime && task.deadlineWithTime < todayStartMs)
-        ),
-    );
+    return s.ids
+      .map((id) => s.entities[id])
+      .filter(
+        (task): task is Task =>
+          !!task &&
+          !task.isDone &&
+          !!(
+            (task.deadlineDay &&
+              isDBDateStr(task.deadlineDay) &&
+              task.deadlineDay < todayStr) ||
+            (task.deadlineWithTime && task.deadlineWithTime < todayStartMs)
+          ),
+      );
   },
 );
 
 export const selectUnplannedDeadlineTasksForToday = createSelector(
-  selectAllTasksInActiveProjects,
+  selectTaskFeatureState,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (tasks, todayStr, startOfNextDayDiffMs): Task[] => {
-    if (!todayStr) return [];
+  (taskState, todayStr, startOfNextDayDiffMs): Task[] => {
+    if (!taskState || !todayStr) return [];
 
     const today = dateStrToUtcDate(todayStr);
     today.setHours(0, 0, 0, 0);
@@ -256,20 +213,23 @@ export const selectUnplannedDeadlineTasksForToday = createSelector(
     const oneDayMs = 24 * 60 * 60 * 1000;
     const todayEndMs = todayStartMs + oneDayMs;
 
-    return tasks.filter(
-      (task): task is Task =>
-        !task.isDone &&
-        // Has a date-only deadline for today (time-specific deadlines are excluded
-        // because they have their own reminder mechanism via deadlineRemindAt)
-        task.deadlineDay === todayStr &&
-        // Not already planned for today (dueDay or dueWithTime)
-        task.dueDay !== todayStr &&
-        !(
-          task.dueWithTime &&
-          task.dueWithTime >= todayStartMs &&
-          task.dueWithTime < todayEndMs
-        ),
-    );
+    return taskState.ids
+      .map((id) => taskState.entities[id])
+      .filter(
+        (task): task is Task =>
+          !!task &&
+          !task.isDone &&
+          // Has a date-only deadline for today (time-specific deadlines are excluded
+          // because they have their own reminder mechanism via deadlineRemindAt)
+          task.deadlineDay === todayStr &&
+          // Not already planned for today (dueDay or dueWithTime)
+          task.dueDay !== todayStr &&
+          !(
+            task.dueWithTime &&
+            task.dueWithTime >= todayStartMs &&
+            task.dueWithTime < todayEndMs
+          ),
+      );
   },
 );
 
@@ -379,14 +339,33 @@ export const selectCurrentTaskParentOrCurrent = createSelector(
   },
 );
 
+export const selectAllTasks = createSelector(
+  selectTaskFeatureState,
+  (state: TaskState): Task[] => {
+    const all = selectAll(state);
+    // Only filter when undefined entities exist — otherwise return the original
+    // memoized array from selectAll to avoid breaking NgRx selector memoization.
+    if (all.some((task) => !task)) {
+      devError('selectAllTasks: found undefined entities in task state');
+      return all.filter((task): task is Task => !!task);
+    }
+    return all;
+  },
+);
+
+export const selectAllTasksWithSubTasks = createSelector(
+  selectAllTasks,
+  mapSubTasksToTasks,
+);
+
 // Uses virtual tag pattern to determine TODAY membership:
 // A task is "in TODAY" if dueDay === today OR dueWithTime is for today
 // PERF: Single-pass iteration instead of multiple passes over all tasks
 export const selectLaterTodayTasksWithSubTasks = createSelector(
-  selectAllTasksInActiveProjects,
+  selectTaskFeatureState,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (allTasks, todayStr, startOfNextDayDiffMs): TaskWithSubTasks[] => {
+  (taskState, todayStr, startOfNextDayDiffMs): TaskWithSubTasks[] => {
     if (!todayStr) {
       return [];
     }
@@ -414,17 +393,9 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
     const scheduledParentTasks: Task[] = [];
     const scheduledSubtasks: Task[] = [];
     const unscheduledParentsInToday: Task[] = [];
-    const subtasksByParentId: Record<string, Task[]> = {};
 
-    for (const task of allTasks) {
-      if (task.parentId) {
-        if (!subtasksByParentId.hasOwnProperty(task.parentId)) {
-          subtasksByParentId[task.parentId] = [];
-        }
-
-        subtasksByParentId[task.parentId].push(task);
-      }
-
+    for (const id of taskState.ids) {
+      const task = taskState.entities[id];
       if (!task || task.isDone || !isInToday(task)) continue;
 
       if (task.parentId) {
@@ -469,10 +440,9 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
     // Map to include subtasks for parents and sort by time
     // PERF: Pre-compute earliest times to avoid recalculating in sort comparator
     const tasksWithTimes = allTopLevelTasks.map((task) => {
-      const taskWithSubTasks = {
-        ...task,
-        subTasks: subtasksByParentId[task.id] ?? [],
-      } as TaskWithSubTasks;
+      const taskWithSubTasks = !task.parentId
+        ? (mapSubTasksToTask(task, taskState) as TaskWithSubTasks)
+        : ({ ...task, subTasks: [] } as TaskWithSubTasks);
 
       // Pre-compute earliest scheduled time for sorting
       const earliestTime = Math.min(
@@ -488,7 +458,7 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
 );
 
 export const selectAllDoneIds = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[]): string[] => tasks.filter((t) => t?.isDone).map((t) => t.id),
 );
 
@@ -499,9 +469,6 @@ export const selectTaskById = createSelector(
   (state: TaskState, props: { id: string }): Task => state.entities[props.id] as Task,
 );
 
-// intentionally unfiltered: calendar banner shows "Add as Task" when undefined
-// filtering archived projects would cause duplicate task creation for events already
-// linked to an archived-project task
 export const selectTaskByIssueId = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { issueId: string }): Task | undefined =>
@@ -549,15 +516,13 @@ export const selectTaskByIdWithSubTaskData = createSelector(
 );
 
 export const selectMainTasksWithoutTag = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[], props: { tagId: string }): Task[] =>
     tasks.filter(
       (task) => !!task && !task.parentId && !task.tagIds.includes(props.tagId),
     ),
 );
 
-// intentionally unfiltered: filters out calendar events already linked to a task — must include
-// archived projects or those events would reappear in the schedule as "not yet added"
 export const selectAllCalendarTaskEventIds = createSelector(
   selectAllTasks,
   (tasks: Task[]): string[] =>
@@ -571,8 +536,6 @@ export const selectAllCalendarTaskEventIds = createSelector(
       .map((t) => t.issueId as string),
 );
 
-// intentionally unfiltered: explicit design choice to poll ALL calendar tasks across all projects
-// (including archived) — see poll-issue-updates.effects.ts comment "poll ALL calendar tasks"
 export const selectAllCalendarIssueTasks = createSelector(
   selectAllTasks,
   (tasks: Task[]): Task[] =>
@@ -584,7 +547,6 @@ export const selectAllCalendarIssueTasks = createSelector(
     ),
 );
 
-// intentionally unfiltered: seems unused
 export const selectTasksWorkedOnOrDoneFlat = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { day: string }) => {
@@ -605,7 +567,7 @@ export const selectTasksWorkedOnOrDoneFlat = createSelector(
 );
 
 export const selectTasksDueForDay = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[], props: { day: string }): TaskWithDueDay[] => {
     return tasks.filter(
       (task) => !!task && task.dueDay === props.day,
@@ -614,7 +576,7 @@ export const selectTasksDueForDay = createSelector(
 );
 
 export const selectTasksDueAndOverdueForDay = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[], props: { day: string }): TaskWithDueDay[] => {
     return tasks.filter(
       // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
@@ -626,7 +588,7 @@ export const selectTasksDueAndOverdueForDay = createSelector(
 );
 
 export const selectTasksWithDueTimeForRange = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[], props: { start: number; end: number }): TaskWithDueTime[] => {
     return tasks.filter(
       (task) =>
@@ -639,7 +601,7 @@ export const selectTasksWithDueTimeForRange = createSelector(
 );
 
 export const selectAllTasksWithDueTime = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[]): TaskWithDueTime[] => {
     return tasks.filter(
       (task): task is TaskWithDueTime => !!task && typeof task.dueWithTime === 'number',
@@ -648,7 +610,7 @@ export const selectAllTasksWithDueTime = createSelector(
 );
 
 export const selectAllTasksWithDueTimeSorted = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[]): TaskWithDueTime[] => {
     return tasks
       .filter(
@@ -658,13 +620,8 @@ export const selectAllTasksWithDueTimeSorted = createSelector(
   },
 );
 
-export const selectTimeConflictTaskIds = createSelector(
-  selectAllTasksWithDueTimeSorted,
-  getTimeConflictTaskIds,
-);
-
 export const selectAllTasksWithReminder = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[]): TaskWithReminder[] => {
     return tasks.filter(
       (task) => task && typeof task.remindAt === 'number' && !task.isDone,
@@ -673,7 +630,7 @@ export const selectAllTasksWithReminder = createSelector(
 );
 
 export const selectAllTasksWithDeadlineReminder = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[]): Task[] => {
     return tasks.filter(
       (task) => task && typeof task.deadlineRemindAt === 'number' && !task.isDone,
@@ -682,7 +639,7 @@ export const selectAllTasksWithDeadlineReminder = createSelector(
 );
 
 export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[]): Task[] => {
     return tasks
       .filter(
@@ -706,7 +663,7 @@ export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
 );
 
 export const selectUndoneTasksWithDueDayNoReminder = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasks,
   (tasks: Task[]): Task[] => {
     return tasks.filter(
       (task) =>
@@ -772,19 +729,52 @@ export const selectAllTaskIssueIdsForIssueProvider = (issueProvider: IssueProvid
 };
 
 export const selectAllTasksWithoutHiddenProjects = createSelector(
-  selectAllTasksInActiveProjects,
-  selectHiddenProjectIds,
-  (tasks: Task[], hiddenIds: Set<string>): Task[] =>
-    tasks.filter((t) => !t.projectId || !hiddenIds.has(t.projectId)),
+  selectAllTasks,
+  selectAllProjects,
+  (tasks: Task[], projects: Project[]): Task[] => {
+    const projectMap: { [id: string]: Project } = {};
+    projects.forEach((project) => {
+      projectMap[project.id] = project;
+    });
+
+    return tasks.filter((task) => {
+      if (!task) return false;
+      const projectId = task.projectId;
+      if (!projectId) return true;
+
+      const project = projectMap[projectId];
+      if (!project) return true;
+
+      if (project.isHiddenFromMenu) return false;
+
+      // if (project.backlogTaskIds && project.backlogTaskIds.includes(task.id)) {
+      //   return false;
+      // }
+
+      return true;
+    });
+  },
+);
+
+export const selectAllTasksWithDueDay = createSelector(
+  selectTaskFeatureState,
+  (taskState): TaskWithDueDay[] => {
+    // PERF: Iterate ids instead of Object.values() to avoid creating intermediate array
+    const tasksWithDueDay: TaskWithDueDay[] = [];
+    for (const id of taskState.ids) {
+      const task = taskState.entities[id];
+      if (task?.dueDay) {
+        tasksWithDueDay.push(task as TaskWithDueDay);
+      }
+    }
+    // Sort by dueDay (YYYY-MM-DD format is lexicographically sortable)
+    return tasksWithDueDay.sort((a, b) => a.dueDay.localeCompare(b.dueDay));
+  },
 );
 
 export const selectAllUndoneTasksWithDueDay = createSelector(
-  selectAllTasksInActiveProjects,
+  selectAllTasksWithDueDay,
   (tasks): TaskWithDueDay[] => {
-    const tasksWithDueDay = tasks.filter(
-      (t): t is TaskWithDueDay => !!t.dueDay && !t.isDone,
-    );
-    // Sort by dueDay (YYYY-MM-DD format is lexicographically sortable)
-    return tasksWithDueDay.sort((a, b) => a.dueDay.localeCompare(b.dueDay));
+    return tasks.filter((task) => !task.isDone);
   },
 );

@@ -1,4 +1,4 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { of, Subject } from 'rxjs';
@@ -13,7 +13,6 @@ import { DEFAULT_TASK, Task } from '../task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { DateService } from '../../../core/date/date.service';
-import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
 
 describe('TaskRelatedModelEffects', () => {
   let effects: TaskRelatedModelEffects;
@@ -81,82 +80,11 @@ describe('TaskRelatedModelEffects', () => {
     actions$.complete();
   });
 
-  describe('autoAddTodayTagOnTracking', () => {
-    const dispatchAddTimeSpent = (task: Task): void => {
-      actions$.next(
-        TimeTrackingActions.addTimeSpent({
-          task,
-          date: dateService.todayStr(),
-          duration: 1000,
-          isFromTrackingReminder: false,
-        }),
-      );
-    };
-
-    it('should dispatch planTasksForToday when tracking an unscheduled task', (done) => {
-      const task = createTask('task-1', {
-        dueDay: undefined,
-        dueWithTime: undefined,
-      });
-
-      effects.autoAddTodayTagOnTracking.subscribe({
-        next: (action) => {
-          expect(action).toEqual(
-            jasmine.objectContaining({
-              taskIds: ['task-1'],
-              today: dateService.todayStr(),
-              startOfNextDayDiffMs: dateService.getStartOfNextDayDiffMs(),
-            }),
-          );
-          done();
-        },
-        error: done.fail,
-      });
-
-      dispatchAddTimeSpent(task);
-    });
-
-    it('should NOT dispatch planTasksForToday when tracked task has an existing dueDay', fakeAsync(() => {
-      const task = createTask('task-1', {
-        dueDay: '2026-05-16',
-        dueWithTime: undefined,
-      });
-      let emitted = false;
-      const subscription = effects.autoAddTodayTagOnTracking.subscribe(() => {
-        emitted = true;
-      });
-
-      dispatchAddTimeSpent(task);
-      tick();
-
-      expect(emitted).toBe(false);
-      subscription.unsubscribe();
-    }));
-
-    it('should NOT dispatch planTasksForToday when tracked task has dueWithTime', fakeAsync(() => {
-      const task = createTask('task-1', {
-        dueDay: undefined,
-        dueWithTime: Date.now(),
-      });
-      let emitted = false;
-      const subscription = effects.autoAddTodayTagOnTracking.subscribe(() => {
-        emitted = true;
-      });
-
-      dispatchAddTimeSpent(task);
-      tick();
-
-      expect(emitted).toBe(false);
-      subscription.unsubscribe();
-    }));
-  });
-
   describe('autoAddTodayTagOnMarkAsDone', () => {
-    it('should dispatch planTasksForToday when an unscheduled task is marked done', (done) => {
+    it('should dispatch planTasksForToday when task is marked done and dueDay is not today', (done) => {
       const task = createTask('task-1', {
         parentId: undefined,
-        dueDay: undefined,
-        dueWithTime: undefined,
+        dueDay: undefined, // NOT set to today
       });
       taskService.getByIdOnce$.and.returnValue(of(task));
 
@@ -181,53 +109,7 @@ describe('TaskRelatedModelEffects', () => {
       );
     });
 
-    it('should NOT dispatch planTasksForToday when marked done task has an existing dueDay', fakeAsync(() => {
-      const task = createTask('task-1', {
-        parentId: undefined,
-        dueDay: '2026-05-16',
-      });
-      taskService.getByIdOnce$.and.returnValue(of(task));
-
-      let emitted = false;
-      const subscription = effects.autoAddTodayTagOnMarkAsDone.subscribe(() => {
-        emitted = true;
-      });
-
-      actions$.next(
-        TaskSharedActions.updateTask({
-          task: { id: 'task-1', changes: { isDone: true } },
-        }),
-      );
-      tick();
-
-      expect(emitted).toBe(false);
-      subscription.unsubscribe();
-    }));
-
-    it('should NOT dispatch planTasksForToday when marked done task has dueWithTime', fakeAsync(() => {
-      const task = createTask('task-1', {
-        parentId: undefined,
-        dueWithTime: Date.now(),
-      });
-      taskService.getByIdOnce$.and.returnValue(of(task));
-
-      let emitted = false;
-      const subscription = effects.autoAddTodayTagOnMarkAsDone.subscribe(() => {
-        emitted = true;
-      });
-
-      actions$.next(
-        TaskSharedActions.updateTask({
-          task: { id: 'task-1', changes: { isDone: true } },
-        }),
-      );
-      tick();
-
-      expect(emitted).toBe(false);
-      subscription.unsubscribe();
-    }));
-
-    it('should NOT dispatch planTasksForToday when task is marked done but already has dueDay set to today', fakeAsync(() => {
+    it('should NOT dispatch planTasksForToday when task is marked done but already has dueDay set to today', (done) => {
       const today = getDbDateStr();
       const task = createTask('task-1', {
         parentId: undefined,
@@ -245,13 +127,16 @@ describe('TaskRelatedModelEffects', () => {
           task: { id: 'task-1', changes: { isDone: true } },
         }),
       );
-      tick();
 
-      expect(emitted).toBe(false);
-      subscription.unsubscribe();
-    }));
+      // Wait a bit to ensure no emission
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        subscription.unsubscribe();
+        done();
+      }, 100);
+    });
 
-    it('should NOT dispatch planTasksForToday when task has a parent', fakeAsync(() => {
+    it('should NOT dispatch planTasksForToday when task has a parent', (done) => {
       const task = createTask('task-1', {
         parentId: 'parent-task', // Has parent
         dueDay: undefined,
@@ -268,13 +153,15 @@ describe('TaskRelatedModelEffects', () => {
           task: { id: 'task-1', changes: { isDone: true } },
         }),
       );
-      tick();
 
-      expect(emitted).toBe(false);
-      subscription.unsubscribe();
-    }));
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        subscription.unsubscribe();
+        done();
+      }, 100);
+    });
 
-    it('should NOT dispatch when hydration is in progress', fakeAsync(() => {
+    it('should NOT dispatch when hydration is in progress', (done) => {
       hydrationStateService.isApplyingRemoteOps.and.returnValue(true);
 
       const task = createTask('task-1', {
@@ -293,13 +180,15 @@ describe('TaskRelatedModelEffects', () => {
           task: { id: 'task-1', changes: { isDone: true } },
         }),
       );
-      tick();
 
-      expect(emitted).toBe(false);
-      subscription.unsubscribe();
-    }));
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        subscription.unsubscribe();
+        done();
+      }, 100);
+    });
 
-    it('should NOT dispatch when isDone is false', fakeAsync(() => {
+    it('should NOT dispatch when isDone is false', (done) => {
       const task = createTask('task-1', {
         parentId: undefined,
         dueDay: undefined,
@@ -316,10 +205,12 @@ describe('TaskRelatedModelEffects', () => {
           task: { id: 'task-1', changes: { isDone: false } },
         }),
       );
-      tick();
 
-      expect(emitted).toBe(false);
-      subscription.unsubscribe();
-    }));
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        subscription.unsubscribe();
+        done();
+      }, 100);
+    });
   });
 });

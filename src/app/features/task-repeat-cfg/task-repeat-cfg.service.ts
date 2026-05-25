@@ -40,7 +40,6 @@ import {
   selectTaskRepeatCfgsForExactDay,
 } from './store/task-repeat-cfg.selectors';
 import { getRepeatableTaskId } from './get-repeatable-task-id.util';
-import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 
 @Injectable({
   providedIn: 'root',
@@ -294,11 +293,6 @@ export class TaskRepeatCfgService {
           : (this._workContextService.activeWorkContextId as string),
         isAddToBacklog: false,
         isAddToBottom,
-        ...getDeadlineAutoPlanFields(
-          this._dateService,
-          taskWithTargetDates.deadlineDay,
-          taskWithTargetDates.deadlineWithTime,
-        ),
       }),
       updateTaskRepeatCfg({
         taskRepeatCfg: {

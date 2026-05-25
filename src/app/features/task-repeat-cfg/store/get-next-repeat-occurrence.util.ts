@@ -98,11 +98,7 @@ export const getNextRepeatOccurrence = (
         });
       }
 
-      // `monthlyLastDay` anchors to month-end: day 31 makes setDateSafely's
-      // Math.min(31, lastDayOfMonth) clamp to the true last day every month.
-      const dayOfMonthRepeat = taskRepeatCfg.monthlyLastDay
-        ? 31
-        : startDateDate.getDate();
+      const dayOfMonthRepeat = startDateDate.getDate();
 
       // Handle month-end dates properly
       const setDateSafely = (date: Date, day: number): void => {

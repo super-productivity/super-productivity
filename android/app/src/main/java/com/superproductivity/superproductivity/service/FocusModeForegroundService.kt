@@ -187,7 +187,6 @@ class FocusModeForegroundService : Service() {
 
     private fun startFocusMode(): Boolean {
         Log.d(TAG, "Starting focus mode: title=$title, durationMs=$durationMs, remainingMs=$remainingMs, isBreak=$isBreak, isPaused=$isPaused")
-        FocusModeNotificationHelper.cancelCompletionNotification(this)
 
         isRunning = true
         hasNotifiedCompletion = false

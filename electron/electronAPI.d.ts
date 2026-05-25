@@ -15,21 +15,17 @@ import {
   PluginNodeScriptResult,
   PluginManifest,
 } from '../packages/plugin-api/src/types';
+import { TaskWidgetOverview } from '../src/app/features/tasks/task-widget-overview.model';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
-import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
 
 export interface ElectronAPI {
   on(
     channel: string,
     listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
   ): void;
-
-  // SYNC
-  // ----
-  getDistChannel(): ElectronDistChannel | null;
 
   // INVOKE
   // ------
@@ -187,6 +183,8 @@ export interface ElectronAPI {
   sendSettingsUpdate(globalCfg: GlobalConfigState): void;
 
   updateTaskWidgetSettings(cfg: TaskWidgetConfig): void;
+
+  updateTaskWidgetOverview(overview: TaskWidgetOverview): void;
 
   updateTitleBarDarkMode(isDarkMode: boolean): void;
 

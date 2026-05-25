@@ -17,9 +17,11 @@ import { readFileSync, stat, writeFileSync } from 'fs';
 import { error, log } from 'electron-log/main';
 import { IS_MAC, IS_GNOME_DESKTOP } from './common.const';
 import {
+  collapseTaskWidgetToEdge,
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
   hideTaskWidget,
+  shouldCollapseTaskWidgetWithMainWindow,
   showTaskWidget,
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
@@ -29,13 +31,6 @@ import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 
 let mainWin: BrowserWindow;
-
-// Compact WCO band on Win/Linux. Native button width is OS-controlled
-// (~138px total); only height is configurable. Lower values may be
-// clamped to the OS minimum (~24–28px on Win11) — Electron silently
-// floors instead of rejecting. Stays well clear of the vertical action
-// strip which positions itself --bar-height (48px) down.
-const WCO_HEIGHT = 24;
 
 /**
  * Returns theme-aware background color for titlebar overlay.
@@ -124,7 +119,7 @@ export const createWindow = async ({
       ? {
           color: getTitleBarColor(nativeTheme.shouldUseDarkColors),
           symbolColor: initialSymbolColor,
-          height: WCO_HEIGHT,
+          height: 44,
         }
       : undefined;
 
@@ -354,7 +349,7 @@ export const createWindow = async ({
         mainWin.setTitleBarOverlay({
           color: getTitleBarColor(isDarkMode),
           symbolColor,
-          height: WCO_HEIGHT,
+          height: 44,
         });
       } catch (e) {
         // setTitleBarOverlay may not be available on all platforms
@@ -416,22 +411,22 @@ function initWinEventListeners(app: Electron.App): void {
   appCloseHandler(app);
   appMinimizeHandler(app);
 
-  // Handle restore and show events to hide task widget
-  mainWin.on('restore', () => {
-    if (!getIsTaskWidgetAlwaysShow()) {
+  const hideOrCollapseTaskWidgetForMainWindow = (): void => {
+    if (shouldCollapseTaskWidgetWithMainWindow()) {
+      collapseTaskWidgetToEdge();
+    } else if (!getIsTaskWidgetAlwaysShow()) {
       hideTaskWidget();
     }
-  });
+  };
 
-  mainWin.on('show', () => {
-    if (!getIsTaskWidgetAlwaysShow()) {
-      hideTaskWidget();
-    }
-  });
+  // Handle restore and show events to hide task widget
+  mainWin.on('restore', hideOrCollapseTaskWidgetForMainWindow);
+
+  mainWin.on('show', hideOrCollapseTaskWidgetForMainWindow);
 
   mainWin.on('focus', () => {
-    if (mainWin.isVisible() && !mainWin.isMinimized() && !getIsTaskWidgetAlwaysShow()) {
-      hideTaskWidget();
+    if (mainWin.isVisible() && !mainWin.isMinimized()) {
+      hideOrCollapseTaskWidgetForMainWindow();
     }
   });
 

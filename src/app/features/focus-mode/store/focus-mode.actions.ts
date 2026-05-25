@@ -37,7 +37,7 @@ export const clearResumingBreakFlag = createAction(
 
 export const completeFocusSession = createAction(
   '[FocusMode] Complete Session',
-  props<{ isManual?: boolean; completedDuration?: number }>(),
+  props<{ isManual?: boolean }>(),
 );
 export const cancelFocusSession = createAction('[FocusMode] Cancel Session');
 

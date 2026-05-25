@@ -28,14 +28,7 @@ const PROP_MAP_TO_FORM: Record<SyncProviderId, keyof SyncConfig | null> = {
 // Ensures all required fields have empty string defaults to prevent undefined/null errors
 // when providers expect string values (e.g., WebDAV API calls fail with undefined URLs)
 // Fields that should never be logged, even in development
-const SENSITIVE_FIELDS = [
-  'password',
-  'encryptKey',
-  'accessToken',
-  'refreshToken',
-  'loginName',
-  'userName',
-];
+const SENSITIVE_FIELDS = ['password', 'encryptKey', 'accessToken', 'refreshToken'];
 
 /**
  * Redacts sensitive fields from an object for safe logging.
@@ -85,7 +78,6 @@ const PROVIDER_FIELD_DEFAULTS: Record<
   },
   [SyncProviderId.Nextcloud]: {
     serverUrl: '',
-    loginName: '',
     userName: '',
     password: '',
     syncFolderPath: '',
@@ -350,12 +342,6 @@ export class SyncConfigService {
     // Empty credentials should be cleared by disabling the provider, not by form state
     const nonEmptyFormValues = Object.entries(providerCfgAsRecord).reduce(
       (acc, [key, value]) => {
-        if (providerId === SyncProviderId.Nextcloud && key === 'loginName') {
-          if (value !== undefined && value !== null) {
-            acc[key] = typeof value === 'string' ? value : '';
-          }
-          return acc;
-        }
         // Only include values that are truthy OR explicitly false/0
         // Skip: undefined, null, empty string
         if (value !== undefined && value !== null && value !== '') {

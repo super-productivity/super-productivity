@@ -1,12 +1,6 @@
 import { Task } from '@super-productivity/plugin-api';
 
-export type AutomationTriggerType =
-  | 'taskCompleted'
-  | 'taskCreated'
-  | 'taskUpdated'
-  | 'taskStarted'
-  | 'taskStopped'
-  | 'timeBased';
+export type AutomationTriggerType = 'taskCompleted' | 'taskCreated' | 'taskUpdated' | 'timeBased';
 
 export interface AutomationTrigger {
   type: AutomationTriggerType;
@@ -37,7 +31,6 @@ export type ActionType =
   | 'createTask'
   | 'deleteTask'
   | 'addTag'
-  | 'removeTag'
   | 'moveToProject'
   | 'displaySnack'
   | 'displayDialog'

@@ -42,16 +42,8 @@ describe('TaskAttachmentListComponent', () => {
 
   describe('copy', () => {
     let attachment: TaskAttachment;
-    let originalClipboardDescriptor: PropertyDescriptor | undefined;
+    let originalClipboard: Clipboard;
     let originalExecCommand: typeof document.execCommand;
-
-    const setNavigatorClipboard = (clipboard: Partial<Clipboard> | undefined): void => {
-      Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: clipboard,
-        writable: true,
-      });
-    };
 
     beforeEach(() => {
       attachment = {
@@ -60,21 +52,18 @@ describe('TaskAttachmentListComponent', () => {
         title: 'Test Link',
         type: 'LINK',
       };
-      originalClipboardDescriptor = Object.getOwnPropertyDescriptor(
-        navigator,
-        'clipboard',
-      );
+      originalClipboard = navigator.clipboard;
       originalExecCommand = document.execCommand;
     });
 
     afterEach(() => {
       // Restore original implementations
-      if (originalClipboardDescriptor) {
-        Object.defineProperty(navigator, 'clipboard', originalClipboardDescriptor);
-      } else {
-        delete (navigator as { clipboard?: Clipboard }).clipboard;
+      if (originalClipboard) {
+        Object.defineProperty(navigator, 'clipboard', {
+          value: originalClipboard,
+          writable: true,
+        });
       }
-      originalClipboardDescriptor = undefined;
       document.execCommand = originalExecCommand;
     });
 
@@ -93,7 +82,10 @@ describe('TaskAttachmentListComponent', () => {
       const writeTextSpy = jasmine
         .createSpy('writeText')
         .and.returnValue(Promise.resolve());
-      setNavigatorClipboard({ writeText: writeTextSpy });
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: writeTextSpy },
+        writable: true,
+      });
 
       await component.copy(attachment);
 
@@ -102,7 +94,10 @@ describe('TaskAttachmentListComponent', () => {
     });
 
     it('should use fallback method when clipboard API is not available', async () => {
-      setNavigatorClipboard(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: undefined,
+        writable: true,
+      });
       document.execCommand = jasmine.createSpy('execCommand').and.returnValue(true);
 
       await component.copy(attachment);
@@ -115,7 +110,10 @@ describe('TaskAttachmentListComponent', () => {
       const writeTextSpy = jasmine
         .createSpy('writeText')
         .and.returnValue(Promise.reject(new Error('Permission denied')));
-      setNavigatorClipboard({ writeText: writeTextSpy });
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: writeTextSpy },
+        writable: true,
+      });
       document.execCommand = jasmine.createSpy('execCommand').and.returnValue(true);
       spyOn(console, 'warn');
 
@@ -128,7 +126,10 @@ describe('TaskAttachmentListComponent', () => {
     });
 
     it('should show error message when fallback copy fails', async () => {
-      setNavigatorClipboard(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: undefined,
+        writable: true,
+      });
       document.execCommand = jasmine.createSpy('execCommand').and.returnValue(false);
 
       await component.copy(attachment);
@@ -141,7 +142,10 @@ describe('TaskAttachmentListComponent', () => {
     });
 
     it('should show error message when fallback copy throws error', async () => {
-      setNavigatorClipboard(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: undefined,
+        writable: true,
+      });
       document.execCommand = jasmine
         .createSpy('execCommand')
         .and.throwError('Command not supported');
@@ -158,7 +162,10 @@ describe('TaskAttachmentListComponent', () => {
     });
 
     it('should create and remove textarea element for fallback copy', async () => {
-      setNavigatorClipboard(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: undefined,
+        writable: true,
+      });
       document.execCommand = jasmine.createSpy('execCommand').and.returnValue(true);
 
       const appendChildSpy = spyOn(document.body, 'appendChild').and.callThrough();

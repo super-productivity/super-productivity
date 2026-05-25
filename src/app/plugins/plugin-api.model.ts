@@ -17,9 +17,6 @@ export {
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginSidePanelBtnCfg,
-  PluginWorkContextHeaderBtnCfg,
-  ActiveWorkContext,
-  WorkContextChangePayload,
   // Export the new unified types
   Task,
   Project,

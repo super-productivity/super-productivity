@@ -50,7 +50,7 @@ describe('OperationLogDownloadService', () => {
 
     // Default mock implementations
     // Note: Don't use async/await here as it breaks fakeAsync zone context
-    mockLockService.request.and.callFake(<T>(_name: string, fn: () => Promise<T>) => {
+    mockLockService.request.and.callFake((_name: string, fn: () => Promise<void>) => {
       return fn();
     });
     mockOpLogStore.getAppliedOpIds.and.returnValue(Promise.resolve(new Set<string>()));
@@ -247,7 +247,6 @@ describe('OperationLogDownloadService', () => {
             ],
             hasMore: false,
             latestSeq: 1,
-            serverTime,
           }),
         );
 
@@ -735,7 +734,7 @@ describe('OperationLogDownloadService', () => {
           expect(result.allOpClocks).toBeUndefined();
         });
 
-        it('should omit allOpClocks when no ops are returned from server', async () => {
+        it('should return empty allOpClocks array when no ops on server', async () => {
           mockApiProvider.downloadOps.and.returnValue(
             Promise.resolve({
               ops: [],

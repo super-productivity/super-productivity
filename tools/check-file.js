@@ -2,6 +2,21 @@
 const { execFileSync } = require('child_process');
 const path = require('path');
 
+const runPackageManager = (name, args, options) => {
+  if (process.platform === 'win32') {
+    const cliName = name === 'npx' ? 'npx-cli.js' : 'npm-cli.js';
+    const cliPath = path.join(
+      path.dirname(process.execPath),
+      'node_modules',
+      'npm',
+      'bin',
+      cliName,
+    );
+    return execFileSync(process.execPath, [cliPath, ...args], options);
+  }
+  return execFileSync(name, args, options);
+};
+
 const file = process.argv[2];
 if (!file) {
   console.error('❌ Please provide a file path');
@@ -14,7 +29,7 @@ const absolutePath = path.resolve(file);
 try {
   // Run prettier
   console.log(`🎨 Formatting ${path.basename(file)}...`);
-  execFileSync('npm', ['run', 'prettier:file', '--', absolutePath], {
+  runPackageManager('npm', ['run', 'prettier:file', '--', absolutePath], {
     stdio: 'pipe',
     encoding: 'utf8',
   });
@@ -24,13 +39,13 @@ try {
 
   if (file.endsWith('.scss')) {
     // Use stylelint for SCSS files
-    execFileSync('npx', ['stylelint', absolutePath], {
+    runPackageManager('npx', ['stylelint', absolutePath], {
       stdio: 'pipe',
       encoding: 'utf8',
     });
   } else {
     // Use ng lint for TypeScript/JavaScript files
-    execFileSync('npm', ['run', 'lint:file', '--', absolutePath], {
+    runPackageManager('npm', ['run', 'lint:file', '--', absolutePath], {
       stdio: 'pipe',
       encoding: 'utf8',
     });

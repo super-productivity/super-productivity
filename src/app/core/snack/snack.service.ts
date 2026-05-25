@@ -46,15 +46,6 @@ export class SnackService {
     }
   }
 
-  // ERROR/WARNING snacks scale with message length so long messages stay readable.
-  private _getDefaultDuration(type: SnackParams['type'], msg: unknown): number {
-    if (type !== 'ERROR' && type !== 'WARNING') {
-      return DEFAULT_SNACK_CFG.duration;
-    }
-    const length = typeof msg === 'string' ? msg.length : 0;
-    return Math.min(Math.max(10000, length * 90), 30000);
-  }
-
   @debounce(100)
   private _openSnack(params: SnackParams): void {
     const _destroy$: Subject<boolean> = new Subject<boolean>();
@@ -76,18 +67,16 @@ export class SnackService {
       isSpinner,
     } = params;
 
-    const translatedMsg = isSkipTranslate
-      ? msg
-      : typeof (msg as unknown) === 'string' &&
-        this._translateService.instant(msg, translateParams);
-
     const cfg = {
       ...DEFAULT_SNACK_CFG,
-      duration: this._getDefaultDuration(type, translatedMsg),
+      duration: type === 'ERROR' ? 8000 : DEFAULT_SNACK_CFG.duration,
       ...config,
       data: {
         ...params,
-        msg: translatedMsg,
+        msg: isSkipTranslate
+          ? msg
+          : typeof (msg as unknown) === 'string' &&
+            this._translateService.instant(msg, translateParams),
       },
     };
 

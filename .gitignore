@@ -61,6 +61,10 @@ chromedriver.log
 # tsconfig composite build info
 **/*.tsbuildinfo
 
+# local tooling and private sync data
+/.devin/
+sync-data.json
+
 
 # System Files
 .DS_Store

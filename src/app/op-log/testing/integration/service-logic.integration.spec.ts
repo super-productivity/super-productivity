@@ -55,7 +55,6 @@ import { RejectedOpsHandlerService } from '../../sync/rejected-ops-handler.servi
 import { SyncHydrationService } from '../../persistence/sync-hydration.service';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
-import { OperationLogEffects } from '../../capture/operation-log.effects';
 
 // Mock Sync Provider that supports operation sync
 class MockOperationSyncProvider
@@ -422,14 +421,6 @@ describe('Service Logic Integration', () => {
         {
           provide: TranslateService,
           useValue: jasmine.createSpyObj('TranslateService', ['instant']),
-        },
-        {
-          // RemoteOpsProcessingService lazily resolves OperationLogEffects via
-          // Injector to flush deferred local actions after remote apply (#7700).
-          provide: OperationLogEffects,
-          useValue: {
-            processDeferredActions: () => Promise.resolve(),
-          },
         },
       ],
     });

@@ -44,6 +44,77 @@ import {
 import { plannerFeatureKey } from '../../../features/planner/store/planner.reducer';
 
 // =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Removes parent or sub-tasks from a tag's task list to maintain the constraint
+ * that parent and sub-tasks should never be in the same tag list.
+ * Also removes the tag from the conflicting tasks.
+ *
+ * @param state - The current state
+ * @param taskId - The task being added
+ * @param tagId - The tag to check
+ * @returns Updated state with conflicts resolved
+ */
+const removeConflictingTasksFromTag = (
+  state: RootState,
+  taskId: string,
+  tagId: string,
+): RootState => {
+  const task = state[TASK_FEATURE_NAME].entities[taskId] as Task;
+  if (!task) return state;
+
+  const tag = getTag(state, tagId);
+  // PERF: Use Set for O(1) lookups instead of O(n) Array.includes()
+  const tagTaskIdSet = new Set(tag.taskIds);
+  const conflictingTaskIds: string[] = [];
+
+  // If this is a sub-task, check if parent is in the tag
+  if (task.parentId && tagTaskIdSet.has(task.parentId)) {
+    conflictingTaskIds.push(task.parentId);
+  }
+
+  // If this is a parent task, check if any sub-tasks are in the tag
+  if (task.subTaskIds && task.subTaskIds.length > 0) {
+    const subTasksInTag = task.subTaskIds.filter((subId) => tagTaskIdSet.has(subId));
+    conflictingTaskIds.push(...subTasksInTag);
+  }
+
+  if (conflictingTaskIds.length === 0) {
+    return state;
+  }
+
+  // Update the conflicting tasks to remove the tag
+  const taskUpdates: Update<Task>[] = conflictingTaskIds.map((conflictingTaskId) => {
+    const conflictingTask = state[TASK_FEATURE_NAME].entities[conflictingTaskId] as Task;
+    return {
+      id: conflictingTaskId,
+      changes: {
+        tagIds: conflictingTask.tagIds.filter((id) => id !== tagId),
+      },
+    };
+  });
+
+  // Update the task state
+  const updatedState = {
+    ...state,
+    [TASK_FEATURE_NAME]: taskAdapter.updateMany(taskUpdates, state[TASK_FEATURE_NAME]),
+  };
+
+  // PERF: Use Set for O(1) lookups when filtering
+  const conflictingSet = new Set(conflictingTaskIds);
+  const tagUpdate: Update<Tag> = {
+    id: tagId,
+    changes: {
+      taskIds: tag.taskIds.filter((id) => !conflictingSet.has(id)),
+    },
+  };
+
+  return updateTags(updatedState, [tagUpdate]);
+};
+
+// =============================================================================
 // ACTION HANDLERS
 // =============================================================================
 
@@ -99,7 +170,12 @@ const handleAddTask = (
     ...(shouldAddToToday ? [TODAY_TAG.id] : []), // Add TODAY_TAG if task is for today
   ].filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]);
 
-  // Add the task to all its tags
+  // First, handle conflicts for all tags
+  for (const tagId of tagIdsToUpdate) {
+    updatedState = removeConflictingTasksFromTag(updatedState, task.id, tagId);
+  }
+
+  // Then add the task to all its tags
   const tagUpdates = tagIdsToUpdate.map(
     (tagId): Update<Tag> => ({
       id: tagId,
@@ -501,40 +577,6 @@ const handleRestoreDeletedTask = (
   return updatedState;
 };
 
-const sanitizeDoneScheduleChanges = (
-  taskUpdate: Update<Task>,
-  currentTask: Task,
-  todayStr: string,
-): Update<Task> => {
-  const { changes } = taskUpdate;
-  if (changes.isDone !== true || typeof changes.dueDay !== 'string') {
-    return taskUpdate;
-  }
-
-  const hasCurrentSchedule =
-    typeof currentTask.dueDay === 'string' || typeof currentTask.dueWithTime === 'number';
-  if (!hasCurrentSchedule && !currentTask.parentId) {
-    return taskUpdate;
-  }
-
-  const completionDay =
-    typeof changes.doneOn === 'number' ? getDbDateStr(changes.doneOn) : todayStr;
-  const isSyntheticCompletionDay =
-    changes.dueDay === completionDay &&
-    (changes.dueDay !== currentTask.dueDay || !!currentTask.parentId);
-
-  if (!isSyntheticCompletionDay) {
-    return taskUpdate;
-  }
-
-  const changesWithoutSyntheticDoneDay = { ...changes };
-  delete changesWithoutSyntheticDoneDay.dueDay;
-  return {
-    ...taskUpdate,
-    changes: changesWithoutSyntheticDoneDay,
-  };
-};
-
 const handleUpdateTask = (
   state: RootState,
   taskUpdate: Update<Task>,
@@ -548,35 +590,30 @@ const handleUpdateTask = (
   }
 
   let updatedState = state;
-  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
-  const sanitizedTaskUpdate = sanitizeDoneScheduleChanges(
-    taskUpdate,
-    currentTask,
-    todayStr,
-  );
 
   // Handle tag changes if tagIds are being updated
-  if (sanitizedTaskUpdate.changes.tagIds) {
+  if (taskUpdate.changes.tagIds) {
     const oldTagIds = currentTask.tagIds;
-    const newTagIds = sanitizedTaskUpdate.changes.tagIds;
+    const newTagIds = taskUpdate.changes.tagIds;
 
     updatedState = handleTagUpdates(updatedState, taskId, oldTagIds, newTagIds);
   }
 
   // Handle task state updates using existing task reducer logic
   let taskState = updatedState[TASK_FEATURE_NAME];
-  const { timeSpentOnDay, timeEstimate } = sanitizedTaskUpdate.changes;
+  const { timeSpentOnDay, timeEstimate } = taskUpdate.changes;
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
 
   taskState = timeSpentOnDay
     ? updateTimeSpentForTask(taskId, timeSpentOnDay, taskState)
     : taskState;
-  taskState = updateTimeEstimateForTask(sanitizedTaskUpdate, timeEstimate, taskState);
-  taskState = updateDoneOnForTask(sanitizedTaskUpdate, taskState, todayStr);
+  taskState = updateTimeEstimateForTask(taskUpdate, timeEstimate, taskState);
+  taskState = updateDoneOnForTask(taskUpdate, taskState, todayStr);
   taskState = taskAdapter.updateOne(
     {
-      ...sanitizedTaskUpdate,
+      ...taskUpdate,
       changes: {
-        ...sanitizedTaskUpdate.changes,
+        ...taskUpdate.changes,
         modified: Date.now(),
       },
     },
@@ -588,11 +625,10 @@ const handleUpdateTask = (
     [TASK_FEATURE_NAME]: taskState,
   };
 
-  // Keep TODAY_TAG.taskIds order intact for tasks that are already scheduled for today.
-  // Completing a task must not move an overdue/future scheduled task to today; doneOn
-  // records completion date separately from the task's schedule.
-  const isToDone = sanitizedTaskUpdate.changes.isDone === true;
-  if (isToDone && !currentTask.parentId && currentTask.dueDay === todayStr) {
+  // Add completed top-level task to TODAY_TAG.taskIds for ordering.
+  // Subtasks are excluded — their parent manages today-tag membership.
+  const isToDone = taskUpdate.changes.isDone === true;
+  if (isToDone && !currentTask.parentId) {
     const todayTag = getTag(updatedState, TODAY_TAG.id);
     if (!todayTag.taskIds.includes(taskId)) {
       updatedState = updateTags(updatedState, [
@@ -602,20 +638,13 @@ const handleUpdateTask = (
         },
       ]);
     }
+    // Remove from planner days since task's dueDay changed to today
+    updatedState = removeTaskFromPlannerDays(updatedState, taskId);
   }
 
   // When dueDay changes (e.g. from two-way sync pull), update planner days
   // and TODAY_TAG.taskIds to keep them consistent with the task's dueDay.
-  const taskAfterUpdate = taskState.entities[taskId] as Task;
-  const hasDueDayChange = Object.prototype.hasOwnProperty.call(
-    sanitizedTaskUpdate.changes,
-    'dueDay',
-  );
-  const newDueDay = hasDueDayChange
-    ? sanitizedTaskUpdate.changes.dueDay
-    : isToDone && taskAfterUpdate?.dueDay !== currentTask.dueDay
-      ? taskAfterUpdate?.dueDay
-      : undefined;
+  const newDueDay = taskUpdate.changes.dueDay;
   if (newDueDay !== undefined && newDueDay !== currentTask.dueDay) {
     const oldDueDay = currentTask.dueDay;
 
@@ -686,11 +715,18 @@ const handleTagUpdates = (
     .filter((newId) => newId !== TODAY_TAG.id)
     .filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]); // Only existing tags
 
+  let updatedState = state;
+
+  // First, handle conflicts for all tags we're adding to
+  for (const tagId of tagsToAddTo) {
+    updatedState = removeConflictingTasksFromTag(updatedState, taskId, tagId);
+  }
+
   const removeUpdates = tagsToRemoveFrom.map(
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: getTag(state, tagId).taskIds.filter((id) => id !== taskId),
+        taskIds: getTag(updatedState, tagId).taskIds.filter((id) => id !== taskId),
       },
     }),
   );
@@ -699,12 +735,12 @@ const handleTagUpdates = (
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: unique([taskId, ...getTag(state, tagId).taskIds]),
+        taskIds: unique([taskId, ...getTag(updatedState, tagId).taskIds]),
       },
     }),
   );
 
-  return updateTags(state, [...removeUpdates, ...addUpdates]);
+  return updateTags(updatedState, [...removeUpdates, ...addUpdates]);
 };
 
 // =============================================================================

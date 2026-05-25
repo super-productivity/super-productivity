@@ -229,21 +229,12 @@ export class OperationDownloadService {
         let minSeq: number | null = null;
 
         if (sinceSeq > 0 && latestSeq > 0) {
-          // Get min sequence, but only when gap detection can use it.
-          // NOTE: Prisma's `aggregate({ _min })` compiles to
-          // `SELECT MIN(x) FROM (SELECT x ... OFFSET 0) sub`. The OFFSET
-          // subquery is a planner optimization fence, so Postgres cannot use
-          // the (user_id, server_seq) index's first-row seek and instead scans
-          // every matching row — a per-user O(N) scan that, under load, ran for
-          // minutes and blew the 60s interactive-tx timeout. `findFirst`
-          // ordered by the indexed column compiles to `ORDER BY server_seq ASC
-          // LIMIT 1`: a guaranteed index seek returning the same minimum.
-          const minSeqRow = await tx.operation.findFirst({
+          // Get min sequence efficiently, but only when gap detection can use it.
+          const minSeqAgg = await tx.operation.aggregate({
             where: { userId, serverSeq: { lte: latestSeq } },
-            orderBy: { serverSeq: 'asc' },
-            select: { serverSeq: true },
+            _min: { serverSeq: true },
           });
-          minSeq = minSeqRow?.serverSeq ?? null;
+          minSeq = minSeqAgg._min.serverSeq ?? null;
         }
 
         // Gap detection logic

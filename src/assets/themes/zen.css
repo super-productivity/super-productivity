@@ -167,30 +167,6 @@ body.isDarkTheme .mat-mdc-menu-panel {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Plugin dialogs can contain forms/cards that use --card-bg and --bg-lighter.
-   Zen makes those transparent globally, so restore an opaque surface inside
-   plugin dialogs while keeping the rest of the theme flat. */
-body .mat-mdc-dialog-surface:has(plugin-dialog),
-body .mat-mdc-dialog-surface:has(plugin-config-dialog),
-body .mat-mdc-dialog-surface:has(plugin-node-consent-dialog) {
-  --card-bg: var(--bg);
-  --bg-lighter: var(--bg);
-}
-
-body:not(.isDarkTheme) .mat-mdc-dialog-surface:has(plugin-dialog),
-body:not(.isDarkTheme) .mat-mdc-dialog-surface:has(plugin-config-dialog),
-body:not(.isDarkTheme) .mat-mdc-dialog-surface:has(plugin-node-consent-dialog) {
-  --card-bg: #fff;
-  --bg-lighter: #fff;
-}
-
-body.isDarkTheme .mat-mdc-dialog-surface:has(plugin-dialog),
-body.isDarkTheme .mat-mdc-dialog-surface:has(plugin-config-dialog),
-body.isDarkTheme .mat-mdc-dialog-surface:has(plugin-node-consent-dialog) {
-  --card-bg: color-mix(in srgb, var(--bg), #fff 5%);
-  --bg-lighter: color-mix(in srgb, var(--bg), #fff 5%);
-}
-
 body .mat-mdc-card {
   background: var(--bg) !important;
   box-shadow: none !important;

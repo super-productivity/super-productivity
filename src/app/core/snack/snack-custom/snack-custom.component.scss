@@ -29,18 +29,11 @@
 
 .message {
   flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
-.action {
+button {
   margin: 0;
   margin-left: calc(1.5 * var(--s));
-}
-
-.close {
-  flex: 0 0 auto;
-  margin-left: var(--s);
 }
 
 .button-wrapper {

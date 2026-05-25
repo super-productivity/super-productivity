@@ -78,7 +78,6 @@ export interface CustomizerContextState {
   sort: SortOption;
   group: GroupOption;
   filter: FilterOption;
-  collapsedGroupIds: string[];
 }
 
 export const DEFAULT_OPTIONS = {

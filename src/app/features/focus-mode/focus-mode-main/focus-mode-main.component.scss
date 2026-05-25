@@ -356,7 +356,7 @@ breathing-dot {
 .simple-counter-buttons {
   display: flex;
   position: absolute;
-  top: calc(var(--s2) + 80px);
+  top: 14px;
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-focus-mode-simple-counter);
@@ -367,14 +367,12 @@ breathing-dot {
       transition: var(--transition-standard);
       opacity: 0;
       transform: translateY(-10px);
-      pointer-events: none;
     }
 
     :host:hover & {
       transition: var(--transition-standard);
       opacity: 1;
       transform: translateY(0);
-      pointer-events: auto;
     }
   }
 }

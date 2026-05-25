@@ -23,7 +23,6 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
-import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/normalize-start-of-next-day-config';
 
 /**
  * Handles hydration after remote sync downloads.
@@ -224,16 +223,7 @@ export class SyncHydrationService {
       // can refuse IN_SYNC. Without this, snapshot hydration would silently
       // accept corrupt remote data — a gap not covered by validateAfterSync
       // since this path bypasses processRemoteOps entirely. (#7330)
-      const downloadedAppData = syncedData as AppDataComplete;
-      const normalizedGlobalConfig = normalizeGlobalConfigStartOfNextDay(
-        downloadedAppData.globalConfig,
-      );
-      let dataToLoad = normalizedGlobalConfig
-        ? {
-            ...downloadedAppData,
-            globalConfig: normalizedGlobalConfig,
-          }
-        : downloadedAppData;
+      let dataToLoad = syncedData as AppDataComplete;
       const validationResult =
         await this.validateStateService.validateAndRepair(dataToLoad);
       if (validationResult.wasRepaired && validationResult.repairedState) {

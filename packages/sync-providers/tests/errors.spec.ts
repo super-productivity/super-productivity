@@ -16,7 +16,7 @@ import {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
-} from '../src/errors';
+} from '../src';
 
 describe('AdditionalLogErrorBase', () => {
   it('does not invoke any logger on construction (Option A privacy guarantee)', () => {

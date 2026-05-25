@@ -40,18 +40,6 @@ export interface SuperSyncFixtures {
 // Cache server health check result per worker to avoid repeated checks
 let serverHealthyCache: boolean | null = null;
 
-const requireHealthySuperSync = (isHealthy: boolean, skip: () => void): void => {
-  if (isHealthy) {
-    return;
-  }
-  if (process.env.E2E_REQUIRE_SUPERSYNC === 'true') {
-    throw new Error(
-      'SuperSync server is required for this run but is not healthy/test-ready.',
-    );
-  }
-  skip();
-};
-
 export const test = base.extend<SuperSyncFixtures>({
   /**
    * Generate a unique test run ID for this test.
@@ -78,9 +66,8 @@ export const test = base.extend<SuperSyncFixtures>({
       }
     }
 
-    requireHealthySuperSync(serverHealthyCache, () => {
-      testInfo.skip(true, 'SuperSync server not running');
-    });
+    // Skip if server not healthy
+    testInfo.skip(!serverHealthyCache, 'SuperSync server not running');
 
     const id = generateTestRunId(testInfo.workerIndex);
     await use(id);
@@ -105,9 +92,8 @@ export const test = base.extend<SuperSyncFixtures>({
       }
     }
 
-    requireHealthySuperSync(serverHealthyCache, () => {
-      testInfo.skip(true, 'SuperSync server not running');
-    });
+    // Skip the test if server is not healthy
+    testInfo.skip(!serverHealthyCache, 'SuperSync server not running');
 
     await use(serverHealthyCache);
   },

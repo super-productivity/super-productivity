@@ -60,10 +60,7 @@ import { NoteStartupBannerService } from './features/note/note-startup-banner.se
 import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
-import {
-  WorkContextType,
-  type WorkContextThemeCfg,
-} from './features/work-context/work-context.model';
+import { WorkContextType } from './features/work-context/work-context.model';
 import { SectionService } from './features/section/section.service';
 import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
 import { TODAY_TAG } from './features/tag/tag.const';
@@ -80,7 +77,6 @@ import { OnboardingPresetSelectionComponent } from './features/onboarding/onboar
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
-import { BrowserTitleService } from './core/browser-title/browser-title.service';
 
 const ONBOARDING_PRESET_EXIT_DELAY = 1000;
 const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
@@ -90,21 +86,6 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
-
-type WorkContextThemeSource =
-  | {
-      theme?: WorkContextThemeCfg | null;
-    }
-  | null
-  | undefined;
-
-export const getBackgroundOverlayOpacity = (context: WorkContextThemeSource): number => {
-  const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
-  return baseOpacity * 0.01;
-};
-
-export const getBackgroundImageBlur = (context: WorkContextThemeSource): number =>
-  normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
 
 @Component({
   selector: 'app-root',
@@ -172,13 +153,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
-  private _browserTitleService = inject(BrowserTitleService);
   readonly T = T;
   readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
-  @ViewChild(RouterOutlet) private _routerOutlet?: RouterOutlet;
 
   @HostBinding('class.isWorkViewScrolled') get isWorkViewScrolledClass(): boolean {
     return this.layoutService.isWorkViewScrolled();
@@ -192,12 +171,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const misc = this._globalConfigService.misc();
     return misc?.isDisableAnimations ?? false;
   });
-
-  // Experimental: vertical action strip on the right edge instead of the
-  // horizontal top header. Switches the DOM layout live (see template).
-  readonly isVerticalActionBar = computed(
-    () => this._globalConfigService.misc()?.isVerticalActionBar ?? false,
-  );
 
   isRTL: boolean = false;
 
@@ -422,19 +395,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return outlet.activatedRouteData.page || 'one';
   }
 
-  /**
-   * The background context menu is scoped to the task-list / work-view routes
-   * (`tag/:id/tasks`, `project/:id/tasks`) so it never opens on unrelated pages
-   * like Habits or Config. See #7734.
-   */
-  isWorkViewPage(): boolean {
-    if (!this._routerOutlet) {
-      return false;
-    }
-    const page = this.getPage(this._routerOutlet);
-    return page === 'tag-tasks' || page === 'project-tasks';
-  }
-
   getActiveWorkContextId(): string | null {
     return this._activeWorkContextId() ?? null;
   }
@@ -445,11 +405,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   readonly bgOverlayOpacity = computed((): number => {
-    return getBackgroundOverlayOpacity(this._activeWorkContext());
+    const context = this._activeWorkContext();
+    const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
+
+    return baseOpacity * 0.01;
   });
 
   readonly bgImageBlur = computed((): number => {
-    return getBackgroundImageBlur(this._activeWorkContext());
+    const context = this._activeWorkContext();
+
+    return normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
   });
 
   readonly bgImageBlurFilter = computed((): string => {

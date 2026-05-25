@@ -154,9 +154,6 @@ export class ShortcutService {
     } else if (checkKeyCombo(ev, keys.focusSideNav)) {
       this._focusSideNav();
       ev.preventDefault();
-    } else if (checkKeyCombo(ev, keys.toggleSideNavMode)) {
-      this._layoutService.toggleSideNavMode();
-      ev.preventDefault();
     } else if (checkKeyCombo(ev, keys.addNewTask)) {
       this._layoutService.showAddTaskBar();
       ev.preventDefault();

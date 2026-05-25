@@ -4,12 +4,11 @@ import { BackupService } from './backup.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { StateSnapshotService } from './state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import { ClientIdService } from '../../core/util/client-id.service';
+import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/archive/archive.model';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { OpType } from '../core/operation.types';
-import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
-import { LockService } from '../sync/lock.service';
-import { LOCK_NAMES } from '../core/operation-log.const';
+import { OpType, Operation } from '../core/operation.types';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -17,8 +16,8 @@ describe('BackupService', () => {
   let mockImexViewService: jasmine.SpyObj<ImexViewService>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
-  let mockOperationWriteFlushService: jasmine.SpyObj<OperationWriteFlushService>;
-  let mockLockService: jasmine.SpyObj<LockService>;
+  let mockClientIdService: jasmine.SpyObj<ClientIdService>;
+  let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
 
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const createMinimalValidBackup = () => ({
@@ -99,25 +98,34 @@ describe('BackupService', () => {
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getAllSyncModelDataFromStore',
       'getAllSyncModelDataFromStoreAsync',
-      'getStateSnapshotAsync',
     ]);
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
+      'loadStateCache',
       'saveImportBackup',
-      'runDestructiveStateReplacement',
+      'clearAllOperations',
+      'append',
+      'getLastSeq',
+      'saveStateCache',
+      'setVectorClock',
     ]);
-    mockOperationWriteFlushService = jasmine.createSpyObj('OperationWriteFlushService', [
-      'flushPendingWrites',
+    mockClientIdService = jasmine.createSpyObj('ClientIdService', [
+      'generateNewClientId',
     ]);
-    mockLockService = jasmine.createSpyObj('LockService', ['request']);
+    mockArchiveDbAdapter = jasmine.createSpyObj('ArchiveDbAdapter', [
+      'saveArchiveYoung',
+      'saveArchiveOld',
+    ]);
 
     // Default mock returns
-    mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
-      createMinimalValidBackup() as any,
-    );
-    mockOpLogStore.saveImportBackup.and.resolveTo();
-    mockOpLogStore.runDestructiveStateReplacement.and.resolveTo();
-    mockOperationWriteFlushService.flushPendingWrites.and.resolveTo();
-    mockLockService.request.and.callFake(async (_lockName, fn) => fn());
+    mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
+    mockOpLogStore.clearAllOperations.and.returnValue(Promise.resolve());
+    mockOpLogStore.append.and.returnValue(Promise.resolve(1));
+    mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(1));
+    mockOpLogStore.saveStateCache.and.returnValue(Promise.resolve());
+    mockOpLogStore.setVectorClock.and.resolveTo();
+    mockClientIdService.generateNewClientId.and.resolveTo('newClientId');
+    mockArchiveDbAdapter.saveArchiveYoung.and.returnValue(Promise.resolve());
+    mockArchiveDbAdapter.saveArchiveOld.and.returnValue(Promise.resolve());
 
     TestBed.configureTestingModule({
       providers: [
@@ -126,11 +134,8 @@ describe('BackupService', () => {
         { provide: ImexViewService, useValue: mockImexViewService },
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
-        {
-          provide: OperationWriteFlushService,
-          useValue: mockOperationWriteFlushService,
-        },
-        { provide: LockService, useValue: mockLockService },
+        { provide: ClientIdService, useValue: mockClientIdService },
+        { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
       ],
     });
 
@@ -160,54 +165,11 @@ describe('BackupService', () => {
 
       await service.importCompleteBackup(backupData as any, true, true);
 
-      // Issue #7709: the destructive sequence is now a single atomic call.
-      expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
+      expect(mockOpLogStore.append).toHaveBeenCalled();
+      expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
     });
 
-    it('should flush pending writes and hold the op-log lock during import replacement', async () => {
-      const callOrder: string[] = [];
-      mockOperationWriteFlushService.flushPendingWrites.and.callFake(async () => {
-        callOrder.push('flush');
-      });
-      mockLockService.request.and.callFake(async (lockName, fn) => {
-        callOrder.push(`lock:${lockName}`);
-        const r = await fn();
-        callOrder.push('unlock');
-        return r;
-      });
-      mockOpLogStore.runDestructiveStateReplacement.and.callFake(async () => {
-        callOrder.push('replace');
-      });
-
-      await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
-
-      expect(callOrder).toEqual([
-        'flush',
-        `lock:${LOCK_NAMES.OPERATION_LOG}`,
-        'replace',
-        'unlock',
-      ]);
-    });
-
-    it('should normalize invalid startOfNextDay config before persisting import', async () => {
-      const backupData = createMinimalValidBackup();
-      backupData.globalConfig.misc = {
-        ...backupData.globalConfig.misc,
-        startOfNextDay: 4,
-        startOfNextDayTime: '24:00',
-      } as any;
-
-      await service.importCompleteBackup(backupData as any, true, true);
-
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-
-      const appendedPayload = args.syncImportOp.payload as any;
-      expect(appendedPayload.globalConfig.misc.startOfNextDay).toBe(4);
-      expect(appendedPayload.globalConfig.misc.startOfNextDayTime).toBe('04:00');
-    });
-
-    it('should pass archiveYoung to the atomic replacement when present in backup', async () => {
+    it('should write archiveYoung to IndexedDB when present in backup', async () => {
       const archiveYoung = createArchiveModel('archived-task-1', 'Archived Task Young');
       const backupData = {
         ...createMinimalValidBackup(),
@@ -217,12 +179,13 @@ describe('BackupService', () => {
 
       await service.importCompleteBackup(backupData as any, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.archiveYoung?.task.ids).toContain('archived-task-1');
+      // dataRepair may modify the data, so check it was called with archive data
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      const calledWith = mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+      expect(calledWith.task.ids).toContain('archived-task-1');
     });
 
-    it('should pass archiveOld separately to the atomic replacement when present in backup', async () => {
+    it('should write archiveOld separately to IndexedDB when present in backup', async () => {
       // Note: Dual-archive architecture keeps archives separate (no merge)
       const archiveOld = createArchiveModel('archived-task-old', 'Archived Task Old');
       const backupData = {
@@ -233,13 +196,22 @@ describe('BackupService', () => {
 
       await service.importCompleteBackup(backupData as any, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.archiveOld?.task.ids).toContain('archived-task-old');
-      expect(args.archiveYoung?.task.ids).toEqual([]);
+      // Both archives should be written
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalled();
+
+      // archiveOld remains separate - verify it was written to IndexedDB
+      const oldCalledWith =
+        mockArchiveDbAdapter.saveArchiveOld.calls.mostRecent().args[0];
+      expect(oldCalledWith.task.ids).toContain('archived-task-old');
+
+      // archiveYoung should remain empty (no merge happened)
+      const youngCalledWith =
+        mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+      expect(youngCalledWith.task.ids).toEqual([]);
     });
 
-    it('should pass both archiveYoung and archiveOld to the atomic replacement when both present', async () => {
+    it('should write both archiveYoung and archiveOld when both present', async () => {
       const archiveYoung = createArchiveModel('young-task', 'Young Archived Task');
       const archiveOld = createArchiveModel('old-task', 'Old Archived Task');
       const backupData = {
@@ -250,25 +222,31 @@ describe('BackupService', () => {
 
       await service.importCompleteBackup(backupData as any, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.archiveYoung?.task.ids).toContain('young-task');
-      expect(args.archiveYoung?.task.ids).not.toContain('old-task');
-      expect(args.archiveOld?.task.ids).toContain('old-task');
-      expect(args.archiveOld?.task.ids).not.toContain('young-task');
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalled();
+
+      // Dual-archive architecture: verify both written separately (no merge)
+      const youngCalledWith =
+        mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+      expect(youngCalledWith.task.ids).toContain('young-task');
+      expect(youngCalledWith.task.ids).not.toContain('old-task');
+
+      const oldCalledWith =
+        mockArchiveDbAdapter.saveArchiveOld.calls.mostRecent().args[0];
+      expect(oldCalledWith.task.ids).toContain('old-task');
+      expect(oldCalledWith.task.ids).not.toContain('young-task');
     });
 
-    it('should pass default empty archives when not present in backup (added by dataRepair)', async () => {
+    it('should write default empty archives when not present in backup (added by dataRepair)', async () => {
       // dataRepair adds default empty archives if not present
       const backupData = createMinimalValidBackup();
       // No archiveYoung or archiveOld property
 
       await service.importCompleteBackup(backupData as any, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.archiveYoung?.task.ids).toEqual([]);
-      expect(args.archiveOld?.task.ids).toEqual([]);
+      // dataRepair adds default archives, so they should be written
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalled();
     });
 
     it('should handle CompleteBackup wrapper format with archives', async () => {
@@ -286,34 +264,30 @@ describe('BackupService', () => {
 
       await service.importCompleteBackup(wrappedBackup as any, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.archiveYoung?.task.ids).toContain('wrapped-task');
+      expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
+      const calledWith = mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+      expect(calledWith.task.ids).toContain('wrapped-task');
     });
 
-    it('should pass a fresh { [clientId]: 1 } vector clock to the atomic helper', async () => {
+    it('should call setVectorClock with fresh clock', async () => {
       const backupData = createMinimalValidBackup();
 
       await service.importCompleteBackup(backupData as any, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      // The clientId is freshly minted (generateClientId) — new compact format.
-      const op = args.syncImportOp;
-      expect(op.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
-      expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
+      expect(mockOpLogStore.setVectorClock).toHaveBeenCalled();
+      const calledClock = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+      expect(calledClock).toEqual({ newClientId: 1 });
     });
 
-    it('should pass a fresh clock to the atomic helper on force-import', async () => {
+    it('should call setVectorClock with fresh clock on import', async () => {
+      mockClientIdService.generateNewClientId.and.resolveTo('newForceClient');
       const backupData = createMinimalValidBackup();
 
       await service.importCompleteBackup(backupData as any, true, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      const op = args.syncImportOp;
-      expect(op.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
-      expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
+      expect(mockOpLogStore.setVectorClock).toHaveBeenCalled();
+      const calledClock = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+      expect(calledClock).toEqual({ newForceClient: 1 });
     });
 
     /**
@@ -330,66 +304,23 @@ describe('BackupService', () => {
 
       await service.importCompleteBackup(backupData as any, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
+      expect(mockOpLogStore.append).toHaveBeenCalled();
+      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
 
       // CRITICAL: Must use BackupImport so server receives reason='recovery'
-      expect(args.syncImportOp.opType).toBe(OpType.BackupImport);
+      expect(appendedOp.opType).toBe(OpType.BackupImport);
       // Verify it's NOT using SyncImport (which would cause 409 errors)
-      expect(args.syncImportOp.opType).not.toBe(OpType.SyncImport);
+      expect(appendedOp.opType).not.toBe(OpType.SyncImport);
     });
 
     it('should produce fresh { [clientId]: 1 } clock on import', async () => {
+      mockClientIdService.generateNewClientId.and.resolveTo('newForceClient');
       const backupData = createMinimalValidBackup();
 
       await service.importCompleteBackup(backupData as any, true, true, true);
 
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      const op = args.syncImportOp;
-      expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
-    });
-
-    it('should abort the import (and not dispatch loadAllData) when the pre-import backup fails', async () => {
-      // Without this, the silent early-return in _persistImportToOperationLog
-      // leaves the device in a hybrid state: NgRx + archive DBs + sync seqs
-      // replaced with imported data, but OPS / state_cache / vector_clock
-      // still hold the previous content.
-      mockOpLogStore.saveImportBackup.and.rejectWith(new Error('IDB quota exceeded'));
-
-      const backupData = createMinimalValidBackup();
-
-      await expectAsync(
-        service.importCompleteBackup(backupData as any, true, true),
-      ).toBeRejected();
-
-      expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
-      expect(mockStore.dispatch).not.toHaveBeenCalled();
-    });
-
-    it('should save a fresh async state snapshot before import', async () => {
-      const currentState = {
-        ...createMinimalValidBackup(),
-        archiveYoung: createArchiveModel('current-young', 'Current Young'),
-        archiveOld: createArchiveModel('current-old', 'Current Old'),
-      };
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(currentState as any);
-
-      await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
-
-      expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
-      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(currentState);
-    });
-
-    it('should pass snapshotEntityKeys derived from the imported data', async () => {
-      const backupData = createMinimalValidBackup();
-
-      await service.importCompleteBackup(backupData as any, true, true);
-
-      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
-        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
-      expect(args.snapshotEntityKeys).toBeDefined();
-      expect(Array.isArray(args.snapshotEntityKeys)).toBe(true);
+      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
+      expect(appendedOp.vectorClock).toEqual({ newForceClient: 1 });
     });
   });
 });

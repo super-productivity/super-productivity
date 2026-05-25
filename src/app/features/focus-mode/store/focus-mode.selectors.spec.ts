@@ -382,27 +382,12 @@ describe('FocusModeSelectors', () => {
       expect(result).toBe(false);
     });
 
-    // Bug #7715: pausing during overtime previously flipped this to false,
-    // which made the display fall back to `timeRemaining` (clamped to 0:00).
-    it('should stay true when paused during overtime', () => {
+    it('should return false when timer is not running', () => {
       const timer = createMockTimer({
         isRunning: false,
         purpose: 'work',
         duration: 1500000,
         elapsed: 1600000,
-      });
-
-      const result = selectors.selectIsInOvertime.projector(timer, true);
-
-      expect(result).toBe(true);
-    });
-
-    it('should return false when paused before reaching duration', () => {
-      const timer = createMockTimer({
-        isRunning: false,
-        purpose: 'work',
-        duration: 1500000,
-        elapsed: 1000000,
       });
 
       const result = selectors.selectIsInOvertime.projector(timer, true);

@@ -65,34 +65,6 @@ describe('FocusModeReducer', () => {
 
       expect(result.mode).toBe(FocusModeMode.Pomodoro);
     });
-
-    it('should clear a fixed-duration work timer when switching to Flowtime', () => {
-      const state = {
-        ...initialState,
-        mode: FocusModeMode.Pomodoro,
-        mainState: FocusMainUIState.InProgress,
-        timer: {
-          isRunning: true,
-          startedAt: Date.now(),
-          elapsed: 5 * 60 * 1000,
-          duration: FOCUS_MODE_DEFAULTS.SESSION_DURATION,
-          purpose: 'work' as const,
-        },
-        _isOvertimeEnabled: true,
-      };
-
-      const result = focusModeReducer(
-        state,
-        a.setFocusModeMode({ mode: FocusModeMode.Flowtime }),
-      );
-
-      expect(result.mode).toBe(FocusModeMode.Flowtime);
-      expect(result.timer).toEqual({
-        ...state.timer,
-        duration: 0,
-      });
-      expect(result._isOvertimeEnabled).toBe(false);
-    });
   });
 
   describe('overlay actions', () => {
@@ -186,26 +158,6 @@ describe('FocusModeReducer', () => {
       const result = focusModeReducer(runningState, action);
 
       expect(result.timer.isRunning).toBe(false);
-    });
-
-    it('should update elapsed time when pausing a running focus session', () => {
-      spyOn(Date, 'now').and.returnValue(10 * 60 * 1000);
-      const runningState = {
-        ...initialState,
-        timer: {
-          isRunning: true,
-          startedAt: 2 * 60 * 1000,
-          elapsed: 0,
-          duration: 1500000,
-          purpose: 'work' as const,
-        },
-      };
-
-      const action = a.pauseFocusSession({ pausedTaskId: null });
-      const result = focusModeReducer(runningState, action);
-
-      expect(result.timer.isRunning).toBe(false);
-      expect(result.timer.elapsed).toBe(8 * 60 * 1000);
     });
 
     it('should pause break sessions', () => {
@@ -358,27 +310,6 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(false);
       expect(result.timer.purpose).toBeNull();
       expect(result.lastCompletedDuration).toBe(60000);
-    });
-
-    it('should use provided completedDuration when completing a focus session', () => {
-      const runningState = {
-        ...initialState,
-        timer: {
-          isRunning: true,
-          startedAt: Date.now() - 60000,
-          elapsed: 60000,
-          duration: 1500000,
-          purpose: 'work' as const,
-        },
-      };
-
-      const action = a.completeFocusSession({
-        isManual: false,
-        completedDuration: 1500000,
-      });
-      const result = focusModeReducer(runningState, action);
-
-      expect(result.lastCompletedDuration).toBe(1500000);
     });
 
     it('should cancel focus session', () => {
@@ -672,7 +603,6 @@ describe('FocusModeReducer', () => {
       const startTime = Date.now();
       const flowtimeState = {
         ...initialState,
-        mode: FocusModeMode.Flowtime,
         timer: {
           isRunning: true,
           startedAt: startTime,
