@@ -68,6 +68,7 @@ export interface IssueFieldsForTask {
   issueTimeTracked?: IssueTaskTimeTracked;
   issuePoints?: number;
   issueLastSyncedValues?: Record<string, unknown>;
+  timeLoggedToJira?: number; // ms logged to Jira via SP; undefined = 0
 }
 
 // Extend the plugin Task type with app-specific fields
