@@ -3,6 +3,7 @@ import { JiraUnloggedSummaryComponent } from './jira-unlogged-summary.component'
 import { JiraWorklogService } from '../jira-worklog.service';
 import { Task } from '../../../../tasks/task.model';
 import { JIRA_TYPE } from '../../../issue.const';
+import { provideTranslateService } from '@ngx-translate/core';
 
 describe('JiraUnloggedSummaryComponent', () => {
   let component: JiraUnloggedSummaryComponent;
@@ -24,6 +25,7 @@ describe('JiraUnloggedSummaryComponent', () => {
     await TestBed.configureTestingModule({
       imports: [JiraUnloggedSummaryComponent],
       providers: [
+        provideTranslateService(),
         {
           provide: JiraWorklogService,
           useValue: jasmine.createSpyObj('JiraWorklogService', [
