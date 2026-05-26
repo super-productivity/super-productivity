@@ -71,7 +71,7 @@ export const saveEnabledCtxIds = async (
 
 /**
  * Read one context's editor doc. Returns both the raw stored string and the
- * parsed value so callers can byte-compare against a `lastSeenRemoteData`
+ * parsed value so callers can byte-compare against a `lastSeenDocBytes`
  * snapshot (#7752) without round-tripping through `JSON.stringify` — which
  * is not byte-stable across `prepareStoredDoc`'s task-cache reshaping.
  *

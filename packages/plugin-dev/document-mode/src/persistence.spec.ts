@@ -86,7 +86,7 @@ test('loadContextDoc: returns both the raw string and parsed value', async () =>
   const doc = { type: 'doc', content: [{ type: 'paragraph' }] };
   await saveContextDoc(api, 'p1', doc);
   const loaded = await loadContextDoc(api, 'p1');
-  // raw is what the editor needs for the lastSeenRemoteData byte-compare (#7752)
+  // raw is what the editor needs for the lastSeenDocBytes byte-compare (#7752)
   assert.equal(loaded.raw, JSON.stringify(doc));
   assert.deepEqual(loaded.parsed, doc);
 });
