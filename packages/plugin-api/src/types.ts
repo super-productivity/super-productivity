@@ -21,7 +21,7 @@ export enum PluginHooks {
   CURRENT_TASK_CHANGE = 'currentTaskChange',
   FINISH_DAY = 'finishDay',
   LANGUAGE_CHANGE = 'languageChange',
-  PERSISTED_DATA_UPDATE = 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED = 'persistedDataChanged',
   ACTION = 'action',
   ANY_TASK_UPDATE = 'anyTaskUpdate',
   PROJECT_LIST_UPDATE = 'projectListUpdate',
@@ -166,10 +166,6 @@ export interface LanguageChangePayload {
   [key: string]: unknown;
 }
 
-export interface PersistedDataUpdatePayload {
-  data: string;
-}
-
 export interface ActionPayload {
   action: string;
   payload?: unknown;
@@ -233,7 +229,7 @@ export interface HookPayloadMap {
   [PluginHooks.CURRENT_TASK_CHANGE]: CurrentTaskChangePayload;
   [PluginHooks.FINISH_DAY]: FinishDayPayload;
   [PluginHooks.LANGUAGE_CHANGE]: LanguageChangePayload;
-  [PluginHooks.PERSISTED_DATA_UPDATE]: PersistedDataUpdatePayload;
+  [PluginHooks.PERSISTED_DATA_CHANGED]: void;
   [PluginHooks.ACTION]: ActionPayload;
   [PluginHooks.ANY_TASK_UPDATE]: AnyTaskUpdatePayload;
   [PluginHooks.PROJECT_LIST_UPDATE]: ProjectListUpdatePayload;

@@ -1048,6 +1048,17 @@ export class PluginService implements OnDestroy {
     await this._pluginHooks.dispatchHook(hookName, payload);
   }
 
+  async dispatchHookToPlugin(
+    pluginId: string,
+    hookName: Hooks,
+    payload?: unknown,
+  ): Promise<void> {
+    if (!this._isInitialized) {
+      return;
+    }
+    await this._pluginHooks.dispatchHookToPlugin(pluginId, hookName, payload);
+  }
+
   async loadPluginFromPath(pluginPath: string): Promise<PluginInstance> {
     const pluginInstance = await this._loadPlugin(pluginPath);
 

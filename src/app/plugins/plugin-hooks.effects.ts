@@ -49,6 +49,9 @@ import { PlannerActions } from '../features/planner/store/planner.actions';
 import { LanguageCode } from '../core/locale.constants';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { toActiveWorkContext } from './util/active-work-context.util';
+import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
+import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
+import { diffChangedPluginIds } from './util/plugin-data-diff.util';
 
 @Injectable()
 export class PluginHooksEffects {
@@ -57,6 +60,7 @@ export class PluginHooksEffects {
   private readonly pluginService = inject(PluginService);
   private readonly pluginI18nService = inject(PluginI18nService);
   private readonly workContextService = inject(WorkContextService);
+  private readonly syncTrigger = inject(SyncTriggerService);
 
   taskComplete$ = createEffect(
     () =>
@@ -359,6 +363,45 @@ export class PluginHooksEffects {
             toActiveWorkContext(ctx),
           );
         }),
+      ),
+    { dispatch: false },
+  );
+
+  // Selector-based (not action-based) because remote `PLUGIN_USER_DATA`
+  // upserts arrive through `bulkApplyOperations` — an `ofType` filter on the
+  // local action wouldn't see them. The feature-state subscription catches
+  // local writes, remote incremental sync, and post-boot `loadAllData` paths
+  // (SYNC_IMPORT / BACKUP_IMPORT / validation repair / recovery) alike.
+  //
+  // Gated on `afterInitialSyncDoneAndDataLoadedInitially$` so the boot-time
+  // selector emission seeds `pairwise` as the baseline rather than producing
+  // a per-plugin flood at startup. House pattern, cf. `task-due.effects.ts`.
+  //
+  // No inner `waitForSyncWindow` / `skipDuringSyncWindow`: the effect is
+  // `{ dispatch: false }` and creates no ops, so sync rule 2 does not apply.
+  // Critically, `skipDuringSyncWindow` would suppress emissions during
+  // `_isApplyingRemoteOps` — exactly the remote-sync delivery this hook
+  // exists to fire on.
+  firePersistedDataChanged$ = createEffect(
+    () =>
+      this.syncTrigger.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
+        filter((done) => done),
+        switchMap(() =>
+          this.store.pipe(
+            select(selectPluginUserDataFeatureState),
+            pairwise(),
+            map(([prev, next]) => diffChangedPluginIds(prev, next)),
+            filter((ids) => ids.length > 0),
+            tap((ids) => {
+              for (const pluginId of ids) {
+                this.pluginService.dispatchHookToPlugin(
+                  pluginId,
+                  PluginHooks.PERSISTED_DATA_CHANGED,
+                );
+              }
+            }),
+          ),
+        ),
       ),
     { dispatch: false },
   );

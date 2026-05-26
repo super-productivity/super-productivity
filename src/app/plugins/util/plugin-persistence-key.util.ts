@@ -33,6 +33,17 @@ export const isPluginIdMatch = (entityId: string, pluginId: string): boolean =>
   entityId === pluginId || entityId.startsWith(pluginId + ':');
 
 /**
+ * Inverse of {@link composeId} — strip an optional `:key` suffix off a
+ * persistence entityId to recover the bare owner pluginId. Plugin hook
+ * handlers are registered under the bare pluginId, so any host-side
+ * dispatch keyed by entityId must normalize through here first.
+ */
+export const extractOwnerPluginId = (entityId: string): string => {
+  const idx = entityId.indexOf(':');
+  return idx === -1 ? entityId : entityId.slice(0, idx);
+};
+
+/**
  * Bound on a single plugin's persistence key length. Generous for any
  * realistic per-plugin keyspace (e.g. document-mode uses `doc:<uuid>`,
  * well under 100 chars). Prevents a compromised iframe from passing a

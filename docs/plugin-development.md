@@ -463,7 +463,7 @@ const hooks = {
   CURRENT_TASK_CHANGE: 'currentTaskChange',
   FINISH_DAY: 'finishDay',
   LANGUAGE_CHANGE: 'languageChange',
-  PERSISTED_DATA_UPDATE: 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
 };
 
