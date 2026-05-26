@@ -6,7 +6,6 @@ import {
   filter,
   map,
   switchMap,
-  take,
   tap,
   throttleTime,
   withLatestFrom,
@@ -30,10 +29,10 @@ import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 import { DialogConfirmComponent } from '../../../../ui/dialog-confirm/dialog-confirm.component';
 import { isJiraEnabled } from './is-jira-enabled.util';
 import { IssueProviderService } from '../../issue-provider.service';
-import { TrackTimeSubmitParams } from '../../shared/dialog-track-time/track-time-dialog.model';
 import { assertTruthy } from '../../../../util/assert-truthy';
 import { devError } from '../../../../util/dev-error';
 import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
+import { JiraWorklogService } from './jira-worklog.service';
 
 @Injectable()
 export class JiraIssueEffects {
@@ -45,6 +44,7 @@ export class JiraIssueEffects {
   private readonly _jiraApiService = inject(JiraApiService);
   private readonly _issueService = inject(IssueService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _jiraWorklogService = inject(JiraWorklogService);
 
   // -----
 
@@ -72,21 +72,13 @@ export class JiraIssueEffects {
                     jiraCfg.isWorklogEnabled &&
                     jiraCfg.isAddWorklogOnSubTaskDone
                   ) {
-                    this._openWorklogDialog(
-                      subTask,
-                      assertTruthy(mainTask.issueId),
-                      jiraCfg,
-                    );
+                    this._jiraWorklogService.openWorklogDialogForTask(subTask);
                   } else if (
                     jiraCfg.isAddWorklogOnSubTaskDone &&
                     !subTask &&
                     (!jiraCfg.isWorklogEnabled || !mainTask.subTaskIds.length)
                   ) {
-                    this._openWorklogDialog(
-                      mainTask,
-                      mainTask.issueId as string,
-                      jiraCfg,
-                    );
+                    this._jiraWorklogService.openWorklogDialogForTask(mainTask);
                   }
                 }),
               )
@@ -339,53 +331,6 @@ export class JiraIssueEffects {
           }),
         );
     }
-  }
-
-  private _openWorklogDialog(
-    task: Task,
-    issueId: string,
-    jiraCfg: IssueProviderJira,
-  ): void {
-    this._jiraApiService
-      .getReducedIssueById$(issueId, jiraCfg)
-      .pipe(take(1))
-      .subscribe(async (issue) => {
-        const { DialogTrackTimeComponent } =
-          await import('../../shared/dialog-track-time/dialog-track-time.component');
-        const timeLogged = issue.timespent * 1000;
-        this._matDialog.open(DialogTrackTimeComponent, {
-          restoreFocus: true,
-          data: {
-            task,
-            issueIcon: 'jira',
-            issueLabel: `${issue.key} ${issue.summary}`,
-            timeLogged,
-            defaultTime: jiraCfg.worklogDialogDefaultTime,
-            configTimeKey: 'worklogDialogDefaultTime',
-            onSubmit: (params: TrackTimeSubmitParams) =>
-              this._jiraApiService.addWorklog$({
-                issueId: issue.id,
-                started: params.started,
-                timeSpent: params.timeSpent,
-                comment: params.comment,
-                cfg: jiraCfg,
-              }),
-            successMsg: T.F.JIRA.S.ADDED_WORKLOG_FOR,
-            successTranslateParams: { issueKey: issue.key },
-            t: {
-              title: T.F.JIRA.DIALOG_WORKLOG.TITLE,
-              submitFor: T.F.JIRA.DIALOG_WORKLOG.SUBMIT_WORKLOG_FOR,
-              currentlyLogged: T.F.JIRA.DIALOG_WORKLOG.CURRENTLY_LOGGED,
-              submit: T.F.JIRA.DIALOG_WORKLOG.SAVE_WORKLOG,
-              timeSpent: T.F.JIRA.DIALOG_WORKLOG.TIME_SPENT,
-              timeSpentTooltip: T.F.JIRA.DIALOG_WORKLOG.TIME_SPENT_TOOLTIP,
-              started: T.F.JIRA.DIALOG_WORKLOG.STARTED,
-              invalidDate: T.F.JIRA.DIALOG_WORKLOG.INVALID_DATE,
-              comment: T.G.COMMENT,
-            },
-          },
-        });
-      });
   }
 
   private _openTransitionDialog(
