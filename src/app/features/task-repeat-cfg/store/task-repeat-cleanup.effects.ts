@@ -55,34 +55,38 @@ export class TaskRepeatCleanupEffects {
               this._store.select(selectAllRepeatableTaskWithSubTasks).pipe(first()),
             ),
             switchMap((repeatableTasks: TaskWithSubTasks[]) => {
-              // Group parent tasks by repeatCfgId
-              const tasksByRepeatCfg = new Map<string, TaskWithSubTasks[]>();
+              // Group parent tasks by (repeatCfgId, creation day).
+              // Two instances created on DIFFERENT days are not duplicates —
+              // they represent separate scheduled occurrences (e.g. yesterday's
+              // overdue instance + today's freshly-created instance). Only
+              // same-day collisions are the sync-bug we want to clean up.
+              // (#7718)
+              const tasksByCfgAndDay = new Map<string, TaskWithSubTasks[]>();
               for (const task of repeatableTasks) {
                 if (task.parentId || !task.repeatCfgId) {
                   continue;
                 }
-                const group = tasksByRepeatCfg.get(task.repeatCfgId);
+                const key = `${task.repeatCfgId}|${getDbDateStr(task.created)}`;
+                const group = tasksByCfgAndDay.get(key);
                 if (group) {
                   group.push(task);
                 } else {
-                  tasksByRepeatCfg.set(task.repeatCfgId, [task]);
+                  tasksByCfgAndDay.set(key, [task]);
                 }
               }
 
               const deleteIds: string[] = [];
               const deleteTasks: TaskWithSubTasks[] = [];
-              for (const [, tasks] of tasksByRepeatCfg) {
-                // Only act when there are actual duplicates
+              for (const [, tasks] of tasksByCfgAndDay) {
+                // Only act when there are actual same-day duplicates
                 if (tasks.length <= 1) {
                   continue;
                 }
 
-                // Sort by creation day descending — newest first
-                tasks.sort((a, b) => {
-                  const dayA = getDbDateStr(a.created);
-                  const dayB = getDbDateStr(b.created);
-                  return dayB.localeCompare(dayA);
-                });
+                // Sort by raw creation timestamp descending — true newest first.
+                // (Same-day strings are tied, so sorting by ms picks an
+                // unambiguous survivor.)
+                tasks.sort((a, b) => b.created - a.created);
 
                 // Keep the newest, consider deleting older ones
                 for (let i = 1; i < tasks.length; i++) {
