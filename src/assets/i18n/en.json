@@ -1642,6 +1642,7 @@
         "ESTIMATE": "Estimate",
         "FOCUS_SESSION": "Start focus session",
         "MARK_DONE": "Mark as completed",
+        "MARK_UNDONE": "Mark as not completed",
         "MOVE_TO_BACKLOG": "Move to backlog",
         "MOVE_TO_OTHER_PROJECT": "Move to project",
         "MOVE_TO_REGULAR": "Move to regular list",
