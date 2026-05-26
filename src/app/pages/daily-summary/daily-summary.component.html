@@ -178,6 +178,9 @@
               [isShowYesterday]="isForToday && isIncludeYesterday"
             ></tasks-by-tag>
           }
+          @if (tasks?.length) {
+            <jira-unlogged-summary [flatTasks]="tasks"></jira-unlogged-summary>
+          }
           <section style="margin-top: 48px">
             <h3 style="font-weight: bold; margin-bottom: 4px">
               {{ T.PDS.WEEK | translate }}
