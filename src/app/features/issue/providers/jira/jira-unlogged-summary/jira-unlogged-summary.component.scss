@@ -1,0 +1,29 @@
+.jira-unlogged-summary {
+  margin-top: 24px;
+}
+
+.title {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--separator-color, rgba(0, 0, 0, 0.1));
+
+  .task-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .unlogged-time {
+    font-size: 0.85em;
+    opacity: 0.7;
+    white-space: nowrap;
+  }
+}

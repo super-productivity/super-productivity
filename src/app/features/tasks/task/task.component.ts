@@ -65,7 +65,7 @@ import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-ov
 import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-deadline-approaching';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { ICAL_TYPE } from '../../issue/issue.const';
+import { ICAL_TYPE, JIRA_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
@@ -276,6 +276,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   hasDeadline = computed(() => {
     const t = this.task();
     return !!(t.deadlineDay || t.deadlineWithTime);
+  });
+
+  unloggedToJiraMs = computed(() => {
+    const t = this.task();
+    if (t.issueType !== JIRA_TYPE) return 0;
+    return Math.max(0, t.timeSpent - (t.timeLoggedToJira ?? 0));
   });
 
   T: typeof T = T;
@@ -1267,4 +1273,5 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   protected readonly ICAL_TYPE = ICAL_TYPE;
+  protected readonly JIRA_TYPE = JIRA_TYPE;
 }

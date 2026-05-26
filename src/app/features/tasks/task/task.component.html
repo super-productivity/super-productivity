@@ -93,6 +93,21 @@
               </div>
             }
           }
+          @if (t.issueType === JIRA_TYPE && unloggedToJiraMs() > 0) {
+            <div
+              class="jira-unlogged-badge"
+              [matTooltip]="
+                T.F.JIRA.UNLOGGED_SUMMARY.UNLOGGED_TIME
+                  | translate: { time: (unloggedToJiraMs() | msToString) }
+              "
+            >
+              <mat-icon
+                svgIcon="jira"
+                inline="true"
+              ></mat-icon>
+              {{ unloggedToJiraMs() | msToString }}
+            </div>
+          }
         </div>
 
         <div class="controls">
