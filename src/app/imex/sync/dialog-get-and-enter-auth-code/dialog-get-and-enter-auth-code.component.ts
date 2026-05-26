@@ -134,17 +134,12 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
       // is fine: it won't match the PKCE verifier on token exchange.
       const stateFromUrl = parsedUrl.searchParams.get('state');
       if (this.data.providerName.toLowerCase() === 'onedrive') {
-        if (!stateFromUrl) {
+        // Missing and mismatched state both fail closed with the same retry
+        // message — the user can't act differently on the two cases.
+        if (!stateFromUrl || !validateOAuthState('onedrive', stateFromUrl)) {
           this._snackService.open({
             type: 'ERROR',
-            msg: 'OAuth state missing from callback URL. Please try again.',
-          });
-          return undefined;
-        }
-        if (!validateOAuthState('onedrive', stateFromUrl)) {
-          this._snackService.open({
-            type: 'ERROR',
-            msg: 'OAuth state validation failed. Please try again.',
+            msg: T.F.SYNC.S.OAUTH_STATE_INVALID,
           });
           return undefined;
         }
