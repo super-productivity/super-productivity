@@ -655,6 +655,11 @@
         "LOGIN_SUCCESS": "Login successful!",
         "TEST_CREDENTIALS": "Test Credentials",
         "WELCOME_USER": "Welcome {{user}}!"
+      },
+      "UNLOGGED_SUMMARY": {
+        "TITLE": "Jira — unlogged work",
+        "LOG_WORK_BTN": "Log work",
+        "UNLOGGED_TIME": "Unlogged: {{time}}"
       }
     },
     "MARKDOWN_PASTE": {
@@ -1686,7 +1691,8 @@
         "TRACK_TIME": "Start tracking time",
         "TRACK_TIME_STOP": "Pause tracking time",
         "UNSCHEDULE_TASK": "Unschedule task",
-        "UPDATE_ISSUE_DATA": "Update issue data"
+        "UPDATE_ISSUE_DATA": "Update issue data",
+        "LOG_WORK_TO_JIRA": "Log work to Jira"
       },
       "D_CONFIRM_DELETE": {
         "MSG": "Are you sure you want to delete the task \"{{title}}\"?",
@@ -1770,7 +1776,8 @@
         "ESTIMATE": "Estimate",
         "TIME_SPENT": "Time Spent",
         "TIME_SPENT_ON": "Time Spent {{date}}",
-        "TITLE": "Duration"
+        "TITLE": "Duration",
+        "SAVE_AND_LOG_TO_JIRA": "Save & log to Jira"
       },
       "D_TIME_FOR_DAY": {
         "ADD_ENTRY_FOR": "Add new entry for {{date}}",
