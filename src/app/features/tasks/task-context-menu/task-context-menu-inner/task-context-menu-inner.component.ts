@@ -65,7 +65,8 @@ import { PlannerActions } from '../../../planner/store/planner.actions';
 import { addSubTask } from '../../../tasks/store/task.actions';
 import { combineDateAndTime } from '../../../../util/combine-date-and-time';
 import { DateAdapter } from '@angular/material/core';
-import { ICAL_TYPE } from '../../../issue/issue.const';
+import { ICAL_TYPE, JIRA_TYPE } from '../../../issue/issue.const';
+import { JiraWorklogService } from '../../../issue/providers/jira/jira-worklog.service';
 import { IssueIconPipe } from '../../../issue/issue-icon/issue-icon.pipe';
 import { showFocusOverlay } from '../../../focus-mode/store/focus-mode.actions';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -107,6 +108,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
+  private readonly _jiraWorklogService = inject(JiraWorklogService);
   private readonly _elementRef = inject(ElementRef);
   private readonly _snackService = inject(SnackService);
   private readonly _projectService = inject(ProjectService);
@@ -383,6 +385,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   updateIssueData(): void {
     this._issueService.refreshIssueTask(this.task, true, true);
+  }
+
+  logWorkToJira(): void {
+    this._jiraWorklogService.openWorklogDialogForTask(this.task);
   }
 
   async deleteTask(): Promise<void> {
@@ -804,4 +810,5 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   protected readonly ICAL_TYPE = ICAL_TYPE;
+  protected readonly JIRA_TYPE = JIRA_TYPE;
 }
