@@ -102,6 +102,21 @@ test('loadContextDoc: corrupt entry returns raw bytes with parsed:null', async (
   assert.equal(loaded.parsed, null);
 });
 
+test('loadContextDoc: primitive JSON values pass through parsed as the primitive', async () => {
+  // `parsed` is typed `unknown` so the editor's truthy guard
+  // (`stored ? prepareStoredDoc(stored, ...) : buildSeedDoc(...)`) is the
+  // only thing keeping a non-object from reaching the doc transformer.
+  // Lock the persistence-side behaviour so a future refactor (e.g.
+  // "validate it's an object here") surfaces here, not in the editor.
+  const { api, store } = createMockApi();
+  store.set('doc:p1', '123');
+  assert.deepEqual(await loadContextDoc(api, 'p1'), { raw: '123', parsed: 123 });
+  store.set('doc:p1', 'null');
+  assert.deepEqual(await loadContextDoc(api, 'p1'), { raw: 'null', parsed: null });
+  store.set('doc:p1', '"hi"');
+  assert.deepEqual(await loadContextDoc(api, 'p1'), { raw: '"hi"', parsed: 'hi' });
+});
+
 test('saveContextDoc: writes under doc:<ctxId> and returns the raw string written', async () => {
   const { api, store } = createMockApi();
   const expected = JSON.stringify({ type: 'doc' });

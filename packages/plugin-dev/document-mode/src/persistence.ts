@@ -95,8 +95,17 @@ export const loadContextDoc = async (
 };
 
 /**
+ * Serialise an editor doc to the exact bytes that will land in storage.
+ * Extracted so `flushSave` (async, via `saveContextDoc`) and `flushSaveSync`
+ * (sync, dispatching the persist directly) produce byte-identical output
+ * — the self-echo baseline (#7752) compares raw against raw and silently
+ * desyncs if the two paths ever diverge on encoding.
+ */
+export const serializeContextDoc = (doc: unknown): string => JSON.stringify(doc);
+
+/**
  * Persist one context's editor doc. Returns the exact string handed to
- * `persistDataSynced` so the caller can store it as `lastSeenRemoteData`
+ * `persistDataSynced` so the caller can store it as `lastSeenDocBytes`
  * and recognise the host's own self-echo fire (#7752).
  */
 export const saveContextDoc = async (
@@ -104,7 +113,7 @@ export const saveContextDoc = async (
   ctxId: string,
   doc: unknown,
 ): Promise<string> => {
-  const raw = JSON.stringify(doc);
+  const raw = serializeContextDoc(doc);
   await api.persistDataSynced(raw, docKey(ctxId));
   return raw;
 };

@@ -33,6 +33,7 @@ import {
   loadContextDoc,
   migrateToKeyedPersistence,
   saveContextDoc,
+  serializeContextDoc,
 } from '../persistence';
 import { iconSvg } from './icons';
 import * as docNav from './doc-nav';
@@ -96,7 +97,7 @@ let lastSeenTaskIds = new Set<string>();
 // load path because `prepareStoredDoc` reshapes chip content against the
 // local task cache. Cleared on context switch; refreshed by `setActiveContext`
 // (load) and `flushSave` / `flushSaveSync` (write).
-let lastSeenRemoteData: string | null = null;
+let lastSeenDocBytes: string | null = null;
 
 /**
  * Safe error log: PluginAPI.log is declared on the type but currently not
@@ -259,7 +260,7 @@ const flushSave = async (): Promise<void> => {
     // mid-flight context switch would otherwise stamp the new context's
     // baseline with the old context's bytes.
     if (currentCtx && currentCtx.id === savedCtxId) {
-      lastSeenRemoteData = raw;
+      lastSeenDocBytes = raw;
     }
   } catch (err) {
     logErr('persistDataSynced failed', err);
@@ -300,9 +301,10 @@ const flushSaveSync = (): void => {
     // Stamp the self-echo baseline synchronously even though the dispatch
     // is fire-and-forget — the host serialises to the exact same string we
     // compute here, so an inbound hook caused by this write will recognise
-    // itself when matched against `lastSeenRemoteData`.
-    lastSeenRemoteData = JSON.stringify(stripChipContent(editor.getJSON()));
-    void PluginAPI.persistDataSynced(lastSeenRemoteData, docKey(currentCtx.id));
+    // itself when matched against `lastSeenDocBytes`. Shared
+    // `serializeContextDoc` keeps the sync + async flush paths byte-equal.
+    lastSeenDocBytes = serializeContextDoc(stripChipContent(editor.getJSON()));
+    void PluginAPI.persistDataSynced(lastSeenDocBytes, docKey(currentCtx.id));
   } catch (err) {
     logErr('persistDataSynced (sync flush) failed', err);
   }
@@ -379,8 +381,11 @@ const removeRemoteUpdateBanner = (): void => {
 
 const showRemoteUpdateBanner = (): void => {
   if (remoteBannerEl) {
-    // Idempotent on repeat fires for the same context — keep the existing
-    // DOM element so focus / scroll position aren't disturbed.
+    // Idempotent on repeat fires — banner text is invariant ("updated on
+    // another device"), so a newer remote arriving while the banner is up
+    // is a noop. Keeps the existing DOM element so focus / scroll position
+    // aren't disturbed. Reload always re-reads the latest bytes regardless
+    // of how many fires we collapsed.
     return;
   }
   remoteBannerEl = document.createElement('div');
@@ -396,7 +401,7 @@ const showRemoteUpdateBanner = (): void => {
   button.textContent = 'Reload';
   button.addEventListener('click', () => {
     if (!currentCtx) return;
-    // setActiveContext re-reads the blob, refreshes lastSeenRemoteData via
+    // setActiveContext re-reads the blob, refreshes lastSeenDocBytes via
     // the load-path capture, and clears the banner via the seq guard +
     // explicit removal below. Disable the button so a double-click can't
     // race the in-flight reload.
@@ -413,7 +418,7 @@ const showRemoteUpdateBanner = (): void => {
 /**
  * `PERSISTED_DATA_CHANGED` arrives once per pluginId for any change across
  * the Stage A keyspace (`meta`, `doc:${ctxId}`, `__meta__`). We re-read the
- * current context's `doc:` entry and byte-compare against `lastSeenRemoteData`
+ * current context's `doc:` entry and byte-compare against `lastSeenDocBytes`
  * — equal means "fire was about another key, or this is the host's echo of
  * our own write" (host's deterministic encoding round-trips identically),
  * different means a real remote change to *this* doc.
@@ -426,23 +431,25 @@ const onRemotePersistedDataChanged = async (): Promise<void> => {
   if (!currentCtx || !editor || isLoadingDoc) return;
   const ctxId = currentCtx.id;
   if (isDocCorrupt) {
-    // Short-circuit: re-run the load path. If the remote blob parses, the
-    // corruption flag clears and the user sees the remote content. If it
-    // still doesn't parse, the corruption banner is restored.
+    // Short-circuit: re-run the load path. Auto-recovery — if the remote
+    // blob now parses, the corruption flag clears and the user sees the
+    // remote content without having to click anything. Without this branch
+    // the user is stuck on the corruption banner until they manually
+    // disable + re-enable doc mode, even when the remote already fixed the
+    // entry. If it still doesn't parse, the corruption banner is restored.
     await setActiveContext(currentCtx);
     return;
   }
-  try {
-    const raw = await PluginAPI.loadSyncedData(docKey(ctxId));
-    // Bail if the user switched contexts during the async read.
-    if (!currentCtx || currentCtx.id !== ctxId) return;
-    // null can come from a missing or empty entry — both indistinguishable
-    // from "this fire wasn't about our doc"; treat equal-to-baseline as noop.
-    if (raw === lastSeenRemoteData) return;
-    showRemoteUpdateBanner();
-  } catch (err) {
-    logErr('PERSISTED_DATA_CHANGED handler failed', err);
-  }
+  // No try/catch — `loadSyncedData` rejecting would just hit the registration
+  // wrapper at `dispatchHookToPlugin` which already catches + logs. Matches
+  // the `loadContextDoc` convention elsewhere in this file.
+  const raw = await PluginAPI.loadSyncedData(docKey(ctxId));
+  // Bail if the user switched contexts during the async read.
+  if (!currentCtx || currentCtx.id !== ctxId) return;
+  // null can come from a missing or empty entry — both indistinguishable
+  // from "this fire wasn't about our doc"; treat equal-to-baseline as noop.
+  if (raw === lastSeenDocBytes) return;
+  showRemoteUpdateBanner();
 };
 
 const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> => {
@@ -490,7 +497,7 @@ const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> =>
   // From here on, an incoming PERSISTED_DATA_CHANGED that loads bytes equal to
   // `raw` is a self-echo (we just read them); a different load is a remote
   // change since this point.
-  lastSeenRemoteData = raw;
+  lastSeenDocBytes = raw;
   removeRemoteUpdateBanner();
   const docJson = parsed
     ? prepareStoredDoc(parsed, ctx, lookupTask)
