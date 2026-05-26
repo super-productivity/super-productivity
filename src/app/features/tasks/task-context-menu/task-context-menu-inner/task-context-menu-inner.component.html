@@ -148,7 +148,9 @@
         } @else {
           <mat-icon>check</mat-icon>
         }
-        {{ (task.isDone ? T.F.TASK.CMP.MARK_DONE : T.F.TASK.CMP.MARK_DONE) | translate }}
+        {{
+          (task.isDone ? T.F.TASK.CMP.MARK_UNDONE : T.F.TASK.CMP.MARK_DONE) | translate
+        }}
       </span>
       <span class="key-i">{{ kb.taskToggleDone }}</span>
     </button>

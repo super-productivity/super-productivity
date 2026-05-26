@@ -28,6 +28,10 @@ import {
   openEncryptionPasswordChangeDialog,
   openEncryptionPasswordChangeDialogForFileBased,
 } from '../../../imex/sync/encryption-password-dialog-opener.service';
+import {
+  HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+  IS_ONEDRIVE_SUPPORTED,
+} from '../../../imex/sync/onedrive-auth-mode.const';
 
 /**
  * Creates form fields for WebDAV-based sync providers.
@@ -119,6 +123,17 @@ const createWebdavFormFields = (options: {
   ];
 };
 
+const isOneDriveClientIdRequired = (field: FormlyFieldConfig): boolean => {
+  if (field?.parent?.parent?.model?.syncProvider !== SyncProviderId.OneDrive) {
+    return false;
+  }
+
+  // If no official app client ID is available, users must provide their own.
+  // If an official app client ID is available, clientId is only required when
+  // users explicitly switch to custom app mode.
+  return !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID || !!field?.parent?.model?.useCustomApp;
+};
+
 export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
   title: T.F.SYNC.FORM.TITLE,
   key: 'sync',
@@ -141,6 +156,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
+          ...(IS_ONEDRIVE_SUPPORTED
+            ? [{ label: 'Microsoft 365 (OneDrive)', value: SyncProviderId.OneDrive }]
+            : []),
           { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
           {
             label: 'WebDAV (not recommended / no support)',
@@ -335,6 +353,82 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           templateOptions: {
             tag: 'p',
             text: T.F.SYNC.FORM.DROPBOX.INFO_TEXT,
+          },
+        },
+      ],
+    },
+    // OneDrive provider form fields
+    {
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider !== SyncProviderId.OneDrive,
+      resetOnHide: false,
+      key: 'oneDrive',
+      fieldGroup: [
+        ...(HAS_OFFICIAL_ONEDRIVE_CLIENT_ID
+          ? [
+              {
+                type: 'tpl',
+                hideExpression: (m: any) => !!m?.useCustomApp,
+                templateOptions: {
+                  tag: 'p',
+                  text: T.F.SYNC.FORM.ONEDRIVE.OFFICIAL_MODE_INFO,
+                },
+              },
+              {
+                key: 'useCustomApp',
+                type: 'checkbox',
+                defaultValue: false,
+                templateOptions: {
+                  label: T.F.SYNC.FORM.ONEDRIVE.L_USE_CUSTOM_APP,
+                  description: T.F.SYNC.FORM.ONEDRIVE.USE_CUSTOM_APP_DESCRIPTION,
+                },
+              },
+            ]
+          : []),
+        {
+          key: 'clientId',
+          type: 'input',
+          hideExpression: (m: any) => HAS_OFFICIAL_ONEDRIVE_CLIENT_ID && !m?.useCustomApp,
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_CLIENT_ID,
+            description: T.F.SYNC.FORM.ONEDRIVE.CLIENT_ID_DESCRIPTION,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              isOneDriveClientIdRequired(field),
+          },
+        },
+        {
+          key: 'tenantId',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_TENANT_ID,
+            description: T.F.SYNC.FORM.ONEDRIVE.TENANT_ID_DESCRIPTION,
+          },
+        },
+        {
+          key: 'syncFolderPath',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_SYNC_FOLDER_PATH,
+            description: T.F.SYNC.FORM.ONEDRIVE.SYNC_FOLDER_PATH_DESCRIPTION,
+          },
+        },
+      ],
+    },
+
+    // OneDrive provider authentication panel
+    {
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider !== SyncProviderId.OneDrive,
+      resetOnHide: false,
+      props: {},
+      fieldGroup: [
+        {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            text: T.F.SYNC.FORM.ONEDRIVE.INFO_TEXT,
           },
         },
       ],

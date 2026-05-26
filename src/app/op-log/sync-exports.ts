@@ -61,6 +61,7 @@ export {
 
 // Provider types
 export type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
+export type { OneDrivePrivateCfg } from '@sp/sync-providers/onedrive';
 
 // VectorClock from core
 export { VectorClock } from '../core/util/vector-clock';

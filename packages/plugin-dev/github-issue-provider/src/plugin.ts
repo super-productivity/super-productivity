@@ -322,14 +322,20 @@ PluginAPI.registerIssueProvider({
         taskValue: unknown,
         ctx: { issueId: string; issueNumber?: number },
       ): string => {
+        const num = ctx.issueNumber ?? ctx.issueId;
         const str = taskValue as string;
-        const prefix = `#${ctx.issueNumber} `;
+        const prefix = `#${num} `;
         return str.startsWith(prefix) ? str.slice(prefix.length) : str;
       },
       toTaskValue: (
         issueValue: unknown,
         ctx: { issueId: string; issueNumber?: number },
-      ): string => `#${ctx.issueNumber} ${issueValue}`,
+      ): string => {
+        const num = ctx.issueNumber ?? ctx.issueId;
+        const str = issueValue as string;
+        const prefix = `#${num} `;
+        return str.startsWith(prefix) ? str : `${prefix}${str}`;
+      },
     },
     {
       taskField: 'notes',

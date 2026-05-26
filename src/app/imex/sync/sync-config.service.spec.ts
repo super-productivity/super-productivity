@@ -98,12 +98,14 @@ describe('SyncConfigService', () => {
 
       await service.updateSettingsFromForm(settings);
 
-      // Should only pass non-private data to global config
+      // Should only pass non-private data to global config.
+      // Optional booleans that were not set in the form are omitted entirely,
+      // so partial form updates don't silently overwrite prior true values.
       expect(globalConfigService.updateSection).toHaveBeenCalledWith('sync', {
         isEnabled: true,
+        isEncryptionEnabled: true,
         syncProvider: SyncProviderId.WebDAV,
         syncInterval: 300000,
-        isEncryptionEnabled: true,
       });
     });
 

@@ -28,6 +28,7 @@ import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clo
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskArchiveService } from '../../archive/task-archive.service';
+import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
 import { DateService } from '../../../core/date/date.service';
 import { Log } from '../../../core/log';
 import {
@@ -67,6 +68,7 @@ export class TaskRepeatCfgEffects {
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _taskArchiveService = inject(TaskArchiveService);
+  private _addTasksForTomorrowService = inject(AddTasksForTomorrowService);
   private _dateService = inject(DateService);
 
   addRepeatCfgToTaskUpdateTask$ = createEffect(() =>
@@ -315,6 +317,14 @@ export class TaskRepeatCfgEffects {
                       ),
                       lastTaskCreation: dayBeforeFirstOccurrence.getTime(),
                     });
+                    // When the new first occurrence is today, addAllDueToday()
+                    // is the only path that creates the live instance — and it
+                    // only runs on date change (#6230, see task-due.effects.ts).
+                    // Trigger it explicitly so the user sees today's instance
+                    // immediately instead of after the next midnight (#7768 Bug 2).
+                    if (this._dateService.isToday(firstOccurrence)) {
+                      this._addTasksForTomorrowService.addAllDueToday();
+                    }
                   }
                   return EMPTY;
                 }
@@ -338,9 +348,6 @@ export class TaskRepeatCfgEffects {
                   fullCfg.remindAt &&
                   isValidSplitTime(fullCfg.startTime)
                 );
-                const isFirstOccurrenceToday_ = firstOccurrence
-                  ? this._dateService.isToday(firstOccurrence)
-                  : true;
 
                 if (isTimedTask) {
                   const targetDayTimestamp = firstOccurrence
@@ -366,7 +373,12 @@ export class TaskRepeatCfgEffects {
                   );
                 }
 
-                if (!isFirstOccurrenceToday_ && firstOccurrence) {
+                // When first occurrence is today, planTaskForDay also moves
+                // the existing instance's dueDay to today via the task reducer
+                // and adds it to TODAY_TAG ordering via the planner meta
+                // reducer. Skipping today here left the instance stranded on
+                // its old dueDay (#7768 Bug 1).
+                if (firstOccurrence) {
                   return rxOf(
                     PlannerActions.planTaskForDay({
                       task: task as TaskCopy,

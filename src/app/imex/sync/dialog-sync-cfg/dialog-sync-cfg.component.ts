@@ -47,6 +47,7 @@ import {
   type WebdavPrivateCfg,
 } from '@sp/sync-providers/webdav';
 import { testWebdavConnection } from '../../../op-log/sync-providers/file-based/webdav/test-webdav-connection';
+import type { OneDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/onedrive/onedrive.model';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -207,7 +208,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   // in lockstep with the provider-side definition without an async probe.
   private _reauthBtn(): FormlyFieldConfig {
     return this._actionBtn({
-      text: T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE,
+      text: T.F.SYNC.FORM.BTN_REAUTHENTICATE,
       onClick: () => this.reauth(),
       hideExpression: (m, v, field) => {
         const id = field?.parent?.parent?.model?.syncProvider as
@@ -381,6 +382,11 @@ export class DialogSyncCfgComponent implements AfterViewInit {
             providerSpecificUpdate = {
               encryptKey: privateCfg.encryptKey || '',
             };
+          } else if (newProvider === SyncProviderId.OneDrive && privateCfg) {
+            providerSpecificUpdate = {
+              oneDrive: privateCfg as any,
+              encryptKey: privateCfg.encryptKey || '',
+            };
           }
 
           // Update the model, preserving non-provider-specific fields
@@ -412,6 +418,45 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     this._matDialogRef.close();
   }
 
+  private async _persistOneDriveFormCfgBeforeAuth(
+    providerId: SyncProviderId,
+  ): Promise<void> {
+    if (providerId !== SyncProviderId.OneDrive) {
+      return;
+    }
+    const oneDriveProvider = await this._providerManager.getProviderById(providerId);
+    if (oneDriveProvider) {
+      const existingCfg = (await oneDriveProvider.privateCfg.load()) as
+        | OneDrivePrivateCfg
+        | null
+        | undefined;
+      const formOneDriveCfg = this._tmpUpdatedCfg.oneDrive || {};
+
+      // If useCustomApp / clientId / tenantId changed, existing tokens are
+      // bound to the old identity — clear them to force a fresh OAuth flow.
+      let identityChanged = !existingCfg;
+      if (existingCfg && !identityChanged) {
+        const formClientId = formOneDriveCfg.clientId ?? existingCfg.clientId;
+        const formTenantId = formOneDriveCfg.tenantId ?? existingCfg.tenantId;
+        const formUseCustomApp = formOneDriveCfg.useCustomApp ?? existingCfg.useCustomApp;
+
+        identityChanged =
+          formUseCustomApp !== existingCfg.useCustomApp ||
+          formClientId !== existingCfg.clientId ||
+          formTenantId !== existingCfg.tenantId;
+      }
+
+      const mergedCfg: OneDrivePrivateCfg = {
+        ...(existingCfg || {}),
+        ...formOneDriveCfg,
+        ...(identityChanged
+          ? { accessToken: '', refreshToken: '', tokenExpiresAt: 0 }
+          : {}),
+      } as OneDrivePrivateCfg;
+      await oneDriveProvider.privateCfg.setComplete(mergedCfg);
+    }
+  }
+
   async save(): Promise<void> {
     // Check if form is valid
     if (!this.form.valid) {
@@ -438,6 +483,10 @@ export class DialogSyncCfgComponent implements AfterViewInit {
 
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
+      if (providerId === SyncProviderId.OneDrive) {
+        await this._persistOneDriveFormCfgBeforeAuth(providerId);
+      }
+
       await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);
 
       // If the provider requires auth (e.g. Dropbox) and is still not ready,
@@ -470,6 +519,10 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       return;
     }
     try {
+      if (providerId === SyncProviderId.OneDrive) {
+        await this._persistOneDriveFormCfgBeforeAuth(providerId);
+      }
+
       const result =
         await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(
           providerId,
@@ -478,7 +531,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       if (result.wasConfigured) {
         this._snackService.open({
           type: 'SUCCESS',
-          msg: T.F.SYNC.FORM.DROPBOX.REAUTH_SUCCESS,
+          msg: T.F.SYNC.FORM.REAUTH_SUCCESS,
         });
       }
     } catch (e) {

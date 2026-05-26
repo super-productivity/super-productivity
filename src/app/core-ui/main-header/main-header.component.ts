@@ -297,6 +297,15 @@ export class MainHeaderComponent implements OnDestroy {
     });
   }
 
+  onSyncButtonClick(): void {
+    const ready = !!this.syncIsEnabledAndReady();
+    if (ready) {
+      this.sync();
+    } else {
+      this.setupSync();
+    }
+  }
+
   private dialogSyncCfgRef: MatDialogRef<unknown> | null = null;
 
   async setupSync(): Promise<void> {

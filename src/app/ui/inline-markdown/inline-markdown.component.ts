@@ -376,7 +376,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
     const INSERT_TEXT = '\n- [ ] ';
 
-    if (this.isDefaultText()) {
+    if (this.isDefaultText() && !currentText) {
       const newValue = '- [ ] ';
       this.model = newValue;
       this.isChecklistMode.set(true);

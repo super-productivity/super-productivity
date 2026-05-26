@@ -214,6 +214,31 @@ export class DialogEditTaskRepeatCfgComponent {
       ...field,
     }));
 
+    // Clamp startDate to today as a floor for NEW configs and recent ones
+    // (#7768 Bug 4). For configs whose startDate is already in the past, the
+    // existing value is the floor — users can still keep or adjust it.
+    const startDateIdx = formConfig.findIndex((f) => f.key === 'startDate');
+    if (startDateIdx !== -1) {
+      const startDateField: FormlyFieldConfig = {
+        ...formConfig[startDateIdx],
+        templateOptions: { ...formConfig[startDateIdx].templateOptions },
+      };
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const initialStartDate = this._data.repeatCfg?.startDate
+        ? dateStrToUtcDate(this._data.repeatCfg.startDate)
+        : this._data.task?.dueDay
+          ? dateStrToUtcDate(this._data.task.dueDay)
+          : today;
+      // Formly types templateOptions.min as number, but the formly-date-picker
+      // passes it through to date-picker-input which accepts Date | string.
+      // Use the YYYY-MM-DD string form so the cast is just a type concern.
+      const minFloor = initialStartDate < today ? initialStartDate : today;
+      (startDateField.templateOptions as Record<string, unknown>).min =
+        getDbDateStr(minFloor);
+      formConfig[startDateIdx] = startDateField;
+    }
+
     // Deep-clone the quickSetting field to avoid mutating the shared constant
     const quickSettingIdx = formConfig.findIndex((f) => f.key === 'quickSetting');
     if (quickSettingIdx === -1) {
