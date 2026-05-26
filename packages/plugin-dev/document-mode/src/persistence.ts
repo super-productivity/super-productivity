@@ -70,26 +70,43 @@ export const saveEnabledCtxIds = async (
 };
 
 /**
- * Read one context's editor doc. Returns null when the entry is missing or
- * unparseable — caller falls back to a seed doc and (in editor.ts) gates
- * saves so the fallback can't overwrite a recoverable original.
+ * Read one context's editor doc. Returns both the raw stored string and the
+ * parsed value so callers can byte-compare against a `lastSeenRemoteData`
+ * snapshot (#7752) without round-tripping through `JSON.stringify` — which
+ * is not byte-stable across `prepareStoredDoc`'s task-cache reshaping.
+ *
+ * `raw` is null when the entry is missing; `parsed` is null when the entry
+ * is missing OR unparseable (caller falls back to a seed doc and, in
+ * editor.ts, gates saves so the fallback can't overwrite the original).
+ * The `raw !== null && parsed === null` shape is "corrupt entry present"
+ * — keep `raw` for the byte-compare invariant but don't try to render it.
  */
-export const loadContextDoc = async (api: PluginAPI, ctxId: string): Promise<unknown> => {
+export const loadContextDoc = async (
+  api: PluginAPI,
+  ctxId: string,
+): Promise<{ raw: string | null; parsed: unknown }> => {
   const raw = await api.loadSyncedData(docKey(ctxId));
-  if (!raw) return null;
+  if (!raw) return { raw: null, parsed: null };
   try {
-    return JSON.parse(raw) as unknown;
+    return { raw, parsed: JSON.parse(raw) as unknown };
   } catch {
-    return null;
+    return { raw, parsed: null };
   }
 };
 
+/**
+ * Persist one context's editor doc. Returns the exact string handed to
+ * `persistDataSynced` so the caller can store it as `lastSeenRemoteData`
+ * and recognise the host's own self-echo fire (#7752).
+ */
 export const saveContextDoc = async (
   api: PluginAPI,
   ctxId: string,
   doc: unknown,
-): Promise<void> => {
-  await api.persistDataSynced(JSON.stringify(doc), docKey(ctxId));
+): Promise<string> => {
+  const raw = JSON.stringify(doc);
+  await api.persistDataSynced(raw, docKey(ctxId));
+  return raw;
 };
 
 /**

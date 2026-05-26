@@ -76,22 +76,40 @@ test('loadEnabledCtxIds: tolerates corrupt meta (returns [])', async () => {
   assert.deepEqual(await loadEnabledCtxIds(api), []);
 });
 
-test('loadContextDoc: returns null when the entry is missing', async () => {
+test('loadContextDoc: returns {raw:null, parsed:null} when the entry is missing', async () => {
   const { api } = createMockApi();
-  assert.equal(await loadContextDoc(api, 'p1'), null);
+  assert.deepEqual(await loadContextDoc(api, 'p1'), { raw: null, parsed: null });
 });
 
-test('loadContextDoc: round-trips the doc value', async () => {
+test('loadContextDoc: returns both the raw string and parsed value', async () => {
   const { api } = createMockApi();
   const doc = { type: 'doc', content: [{ type: 'paragraph' }] };
   await saveContextDoc(api, 'p1', doc);
-  assert.deepEqual(await loadContextDoc(api, 'p1'), doc);
+  const loaded = await loadContextDoc(api, 'p1');
+  // raw is what the editor needs for the lastSeenRemoteData byte-compare (#7752)
+  assert.equal(loaded.raw, JSON.stringify(doc));
+  assert.deepEqual(loaded.parsed, doc);
 });
 
-test('saveContextDoc: writes under doc:<ctxId>', async () => {
+test('loadContextDoc: corrupt entry returns raw bytes with parsed:null', async () => {
+  // The editor's hook handler still needs the raw bytes for the self-echo
+  // baseline even when JSON.parse fails — otherwise a remote write that
+  // happens to also be corrupt would self-echo as "different" forever.
   const { api, store } = createMockApi();
-  await saveContextDoc(api, 'TODAY', { type: 'doc' });
-  assert.equal(store.get('doc:TODAY'), JSON.stringify({ type: 'doc' }));
+  store.set('doc:p1', '{not valid json');
+  const loaded = await loadContextDoc(api, 'p1');
+  assert.equal(loaded.raw, '{not valid json');
+  assert.equal(loaded.parsed, null);
+});
+
+test('saveContextDoc: writes under doc:<ctxId> and returns the raw string written', async () => {
+  const { api, store } = createMockApi();
+  const expected = JSON.stringify({ type: 'doc' });
+  const returned = await saveContextDoc(api, 'TODAY', { type: 'doc' });
+  assert.equal(store.get('doc:TODAY'), expected);
+  // Returned string must match exactly so the editor can stamp it as the
+  // self-echo baseline.
+  assert.equal(returned, expected);
 });
 
 /* -------------------------------------------------------------------------- */

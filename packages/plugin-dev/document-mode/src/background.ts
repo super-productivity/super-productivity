@@ -106,14 +106,56 @@ PluginAPI.registerWorkContextHeaderButton({
   },
 });
 
-// Known gap: no hook for remote PLUGIN_USER_DATA updates. An edit on
-// another device arriving mid-session leaves this script's in-memory
-// `enabledIds` and the iframe editor's per-context doc stale until a
-// context switch or page reload. Acceptable while document-mode is
-// alpha + opt-in per context; revisit if conflicts are reported.
-// Tracked alongside Stage A in docs/plans/2026-05-23-stage-a-keyed-plugin-persistence.md.
+/**
+ * React to `PERSISTED_DATA_CHANGED` (#7752) — fires when *any* of this
+ * plugin's keyed entries change, including remote updates from another
+ * device. Re-read the meta entry; if the active context's enabled-state
+ * flipped, sync the work-view visibility. Idempotent on no-op re-fires.
+ *
+ * The fire is keyless: a remote edit to `doc:${ctxId}` also fires this,
+ * after which `loadEnabledCtxIds` returns the same set we already have
+ * and we noop. The editor iframe reacts to its own `doc:` changes via a
+ * separate handler registered there.
+ */
+const onPersistedDataChanged = async (): Promise<void> => {
+  let next: Set<string>;
+  try {
+    next = new Set(await loadEnabledCtxIds(PluginAPI));
+  } catch (err) {
+    PluginAPI.log.err('document-mode: enabled-ids reload failed', err);
+    return;
+  }
+  // Skip the visibility reconcile when membership is identical — most fires
+  // are doc edits, not meta toggles.
+  let changed = next.size !== enabledIds.size;
+  if (!changed) {
+    for (const id of next) {
+      if (!enabledIds.has(id)) {
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (!changed) return;
+
+  const ctx = await PluginAPI.getActiveWorkContext();
+  const activeId = ctx?.id ?? null;
+  const wasActiveEnabled = activeId !== null && enabledIds.has(activeId);
+  const isActiveEnabled = activeId !== null && next.has(activeId);
+  enabledIds = next;
+  if (activeId === null) return;
+  if (!wasActiveEnabled && isActiveEnabled) {
+    PluginAPI.showInWorkContext();
+  } else if (wasActiveEnabled && !isActiveEnabled) {
+    PluginAPI.closeWorkContextView();
+  }
+};
+
 PluginAPI.registerHook(PluginHooks.WORK_CONTEXT_CHANGE, (payload) => {
   onContextChange(payload as WorkContextChangePayload);
+});
+PluginAPI.registerHook(PluginHooks.PERSISTED_DATA_CHANGED, () => {
+  void onPersistedDataChanged();
 });
 
 void init();
