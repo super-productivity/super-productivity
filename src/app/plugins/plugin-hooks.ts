@@ -14,13 +14,22 @@ export class PluginHooksService {
   private _handlers = new Map<Hooks, Map<string, PluginHookHandler<any>>>();
 
   /**
-   * Register a hook handler
+   * Register a hook handler.
+   * Rejects pluginIds containing `:` so the persistence-key grammar
+   * (`pluginId[:key]`) cannot be subverted via the hooks registry — the
+   * differ collapses keyed entityIds to owner pluginIds for dispatch, and a
+   * spoofed `victim:doc` registration would silently never fire.
    */
   registerHookHandler<T extends Hooks>(
     pluginId: string,
     hook: T,
     handler: PluginHookHandler<T>,
   ): void {
+    if (pluginId.includes(':')) {
+      throw new Error(
+        `Plugin id "${pluginId}" must not contain ':' — the colon is reserved as the persistence-key delimiter.`,
+      );
+    }
     if (!this._handlers.has(hook)) {
       this._handlers.set(hook, new Map());
     }
