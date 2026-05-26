@@ -77,11 +77,17 @@
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",
       "DIALOG_EDIT": {
-        "ADD_ATTACHMENT": "Add Attachment",
-        "EDIT_ATTACHMENT": "Edit Attachment",
+        "ADD_ATTACHMENT": "Add Link",
+        "EDIT_ATTACHMENT": "Edit Link",
         "LABELS": {
-          "IMG": "Image",
+          "FILE": "File path",
+          "IMG": "Image URL",
           "LINK": "URL"
+        },
+        "PLACEHOLDERS": {
+          "FILE": "/path/to/file",
+          "IMG": "https://example.com/image.png",
+          "LINK": "https://example.com"
         },
         "SELECT_TYPE": "Select a type",
         "TYPES": {
@@ -1613,9 +1619,9 @@
         "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)"
       },
       "ADDITIONAL_INFO": {
-        "ADD_ATTACHMENT": "Attachments",
+        "ADD_ATTACHMENT": "Links & Files",
         "ADD_SUB_TASK": "Add subtask",
-        "ATTACHMENTS": "Attachments ({{nr}})",
+        "ATTACHMENTS": "Links & Files ({{nr}})",
         "COMPLETED_ON": "Completed on",
         "CREATED_ON": "Created on",
         "DEADLINE": "Deadline",
