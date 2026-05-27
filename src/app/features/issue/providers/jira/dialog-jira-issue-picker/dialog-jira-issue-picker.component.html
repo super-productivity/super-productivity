@@ -1,0 +1,59 @@
+<h2 mat-dialog-title>Log to Jira issue</h2>
+
+<mat-dialog-content>
+  @if (jiraProviders$ | async; as providers) {
+    @if (providers.length > 1) {
+      <mat-form-field
+        appearance="outline"
+        class="full-width"
+      >
+        <mat-label>Jira provider</mat-label>
+        <mat-select
+          [value]="selectedProviderId()"
+          (valueChange)="selectedProviderId.set($event)"
+        >
+          @for (p of providers; track p.id) {
+            <mat-option [value]="p.id">{{ p.title }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+  }
+
+  <mat-form-field
+    appearance="outline"
+    class="full-width"
+  >
+    <mat-label>Search Jira issues</mat-label>
+    <input
+      matInput
+      autofocus
+      placeholder="e.g. PROJ-123 or login page"
+      (input)="onSearchInput($any($event.target).value)"
+    />
+  </mat-form-field>
+
+  @if (isLoading()) {
+    <mat-spinner diameter="24" />
+  }
+
+  <mat-list>
+    @for (r of results(); track r.id) {
+      <mat-list-item
+        class="picker-item"
+        (click)="select(r)"
+      >
+        <span matListItemTitle>{{ r.key }} — {{ r.summary }}</span>
+      </mat-list-item>
+    }
+  </mat-list>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    mat-dialog-close
+  >
+    Cancel
+  </button>
+</mat-dialog-actions>
