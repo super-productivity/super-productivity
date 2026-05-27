@@ -298,11 +298,12 @@ describe('TaskContextMenuInnerComponent', () => {
       // Allow dynamic import to resolve, then drain promise/microtask queues
       // Multiple macrotask yields are needed for the async chain:
       // dynamic import → afterClosed subscribe → _assignAsSubtask awaits
-      await new Promise((r) => setTimeout(r, 0));
-      await new Promise((r) => setTimeout(r, 0));
-      await new Promise((r) => setTimeout(r, 0));
-      await new Promise((r) => setTimeout(r, 0));
-      await new Promise((r) => setTimeout(r, 0));
+      // → getCfgOnce$ firstValueFrom → getReducedIssueById$ firstValueFrom
+      // → addTaskFromIssue → selectAllTasks firstValueFrom → snackService.open
+      for (let i = 0; i < 8; i++) {
+        await new Promise((r) => setTimeout(r, 0));
+        fixture.detectChanges();
+      }
     };
 
     it('should open MatDialog when called', async () => {
