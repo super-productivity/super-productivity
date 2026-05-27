@@ -36,6 +36,7 @@ import { MatInput } from '@angular/material/input';
 import { KeysPipe } from '../../../ui/pipes/keys.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { take } from 'rxjs/operators';
 import { JiraWorklogService } from '../../issue/providers/jira/jira-worklog.service';
 import { JIRA_TYPE } from '../../issue/issue.const';
 
@@ -111,6 +112,30 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   submitAndLogToJira(): void {
     this.submit();
     this._jiraWorklogService.openWorklogDialogForTask(this.task);
+  }
+
+  logToJiraTicket(): void {
+    this.submit();
+    import('../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component').then(
+      ({ DialogJiraIssuePickerComponent }) => {
+        this._matDialog
+          .open(DialogJiraIssuePickerComponent, {
+            restoreFocus: true,
+            data: {},
+          })
+          .afterClosed()
+          .pipe(take(1))
+          .subscribe((result) => {
+            if (!result) return;
+            this._jiraWorklogService.openWorklogDialogForExternalTask(
+              this.task,
+              result.issueId,
+              result.issueProviderId,
+              `${result.issueKey} ${result.issueSummary}`,
+            );
+          });
+      },
+    );
   }
 
   showAddForAnotherDayForm(): void {
