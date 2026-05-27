@@ -73,21 +73,37 @@
     </mat-form-field>
 
     @if (selectedTime) {
-      <mat-form-field [@expandFade]>
-        <mat-icon matPrefix>alarm</mat-icon>
-        <mat-label>{{ T.F.TASK.D_SCHEDULE_TASK.REMIND_AT | translate }}</mat-label>
-        <mat-select
-          [(ngModel)]="selectedReminderCfgId"
-          name="type"
-          required="true"
-        >
-          @for (remindOption of remindAvailableOptions; track remindOption.value) {
-            <mat-option [value]="remindOption.value">
-              {{ remindOption.label | translate }}
-            </mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
+      <div
+        [@expandFade]
+        class="reminder-datetime-wrapper"
+      >
+        <mat-form-field class="example-full-width">
+          <mat-label
+            >{{ T.F.TASK.D_SCHEDULE_TASK.REMIND_AT | translate }}
+            {{ T.F.TASK.D_SELECT_DATE_AND_TIME.TIME | translate }}</mat-label
+          >
+          <mat-icon matPrefix>alarm</mat-icon>
+          <input
+            type="time"
+            [(ngModel)]="selectedReminderTime"
+            step="60"
+            matInput
+          />
+        </mat-form-field>
+
+        <mat-form-field class="example-full-width">
+          <mat-label
+            >{{ T.F.TASK.D_SCHEDULE_TASK.REMIND_AT | translate }}
+            {{ T.F.TASK.D_SELECT_DATE_AND_TIME.DATE | translate }}</mat-label
+          >
+          <mat-icon matPrefix>alarm</mat-icon>
+          <input
+            type="date"
+            [(ngModel)]="selectedReminderDate"
+            matInput
+          />
+        </mat-form-field>
+      </div>
     }
 
     @if (

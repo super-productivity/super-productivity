@@ -265,6 +265,8 @@ export interface Task {
   doneOn?: number | null;
   attachments?: any[];
   remindAt?: number | null;
+  remindAtTime?: number | null;
+  remindAtDay?: string | null;
   dueDay?: string | null;
   dueWithTime?: number | null;
   repeatCfgId?: string | null;

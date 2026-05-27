@@ -138,6 +138,8 @@ export interface TaskCopy
   doneOn?: number;
   parentId?: string;
   remindAt?: number;
+  remindAtTime?: number;
+  remindAtDay?: string;
   repeatCfgId?: string;
   _hideSubTasksMode?: HideSubTasksMode;
 }
@@ -153,13 +155,23 @@ export type ArchiveTask = Readonly<TaskCopy>;
 export type Task = Readonly<TaskCopy>;
 
 export interface TaskWithReminderData extends Task {
-  readonly reminderData: { remindAt: number };
+  readonly reminderData: {
+    remindAt: number;
+    remindAtTime?: number | null;
+    remindAtDay?: string | null;
+  };
   readonly parentData?: Task;
   readonly isDeadlineReminder?: boolean;
 }
 
 export interface TaskWithReminder extends Task {
   remindAt: number;
+}
+
+export interface TaskWithSetReminder extends Task {
+  remindAt: undefined;
+  remindAtTime?: number;
+  remindAtDay?: string;
 }
 
 export interface TaskWithDueTime extends Task {

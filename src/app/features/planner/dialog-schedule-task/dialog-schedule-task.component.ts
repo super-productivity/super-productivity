@@ -128,6 +128,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
   private _selectedDate = signal<Date | string | null>(null);
   private _selectedTime = signal<string | null>(null);
+  selectedDate: Date | string | null = null;
+  selectedTime: string | null = null;
+  selectedReminderDate: Date | string | null = null;
+  selectedReminderTime: string | null = null;
   selectedReminderCfgId!: TaskReminderOptionId;
 
   plannedDayForTask: string | null = null;
@@ -231,6 +235,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
         );
+        this.selectedReminderDate = new Date();
+        this.selectedReminderTime = this.selectedTime;
       } else {
         this.plannedDayForTask = this.data.task.dueDay || null;
 
