@@ -391,6 +391,29 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this._jiraWorklogService.openWorklogDialogForTask(this.task);
   }
 
+  logTimeToJiraTicket(): void {
+    import('../../../../features/issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component').then(
+      ({ DialogJiraIssuePickerComponent }) => {
+        this._matDialog
+          .open(DialogJiraIssuePickerComponent, {
+            restoreFocus: true,
+            data: {},
+          })
+          .afterClosed()
+          .pipe(take(1))
+          .subscribe((result) => {
+            if (!result) return;
+            this._jiraWorklogService.openWorklogDialogForExternalTask(
+              this.task,
+              result.issueId,
+              result.issueProviderId,
+              `${result.issueKey} ${result.issueSummary}`,
+            );
+          });
+      },
+    );
+  }
+
   async deleteTask(): Promise<void> {
     // NOTE: prevents attempts to delete the same task multiple times
     if (this._isTaskDeleteTriggered) {
