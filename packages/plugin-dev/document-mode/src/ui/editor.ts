@@ -32,7 +32,7 @@ import {
   docKey,
   loadContextDoc,
   migrateToKeyedPersistence,
-  saveContextDoc,
+  persistContextDocRaw,
   serializeContextDoc,
 } from '../persistence';
 import { iconSvg } from './icons';
@@ -244,18 +244,28 @@ const flushSave = async (): Promise<void> => {
     saveTimer = null;
   }
   if (!currentCtx || !editor) return;
-  saveInFlight = true;
+  // Same guard as scheduleSave + flushSaveSync — never overwrite a doc we
+  // couldn't read. The schedule gate normally prevents flushSave from firing
+  // on a corrupt doc, but corruption can be set between schedule and fire
+  // (e.g. a remote update reload turning up an unparseable blob), so the
+  // guard is repeated here for symmetry.
+  if (isDocCorrupt) return;
   const savedCtxId = currentCtx.id;
+  // Compute the would-be-written bytes before the await so we can short-circuit
+  // no-op saves (#7815): a typed-then-reverted cycle inside the 30s throttle
+  // window produces bytes byte-identical to the baseline. Skipping here avoids
+  // an unnecessary postMessage round-trip, IDB transaction, and op-log entry.
+  // The baseline is NOT updated on a skip — it already equals these bytes, so
+  // the self-echo invariant is preserved.
+  const raw = serializeContextDoc(stripChipContent(editor.getJSON()));
+  if (raw === lastSeenDocBytes) return;
+  saveInFlight = true;
   try {
     // Keyed storage (Stage A): write only this context's doc. No need to
     // read+merge any sibling state — the meta entry (enabledCtxIds) lives
     // in its own LWW-resolved entity owned by background.ts, and sibling
     // contexts each have their own `doc:${ctxId}` entry.
-    const raw = await saveContextDoc(
-      PluginAPI,
-      savedCtxId,
-      stripChipContent(editor.getJSON()),
-    );
+    await persistContextDocRaw(PluginAPI, savedCtxId, raw);
     // Update the self-echo baseline only if we still own this context; a
     // mid-flight context switch would otherwise stamp the new context's
     // baseline with the old context's bytes.
@@ -298,13 +308,19 @@ const flushSaveSync = (): void => {
   // Same guard as scheduleSave — never overwrite a doc we couldn't read.
   if (isDocCorrupt) return;
   try {
+    // Compute first, then short-circuit no-op saves (#7815) before stamping
+    // the baseline — stamping unconditionally would still be correct (the new
+    // value equals the old) but the early return also skips the fire-and-forget
+    // persist dispatch and the op-log entry it produces.
+    const raw = serializeContextDoc(stripChipContent(editor.getJSON()));
+    if (raw === lastSeenDocBytes) return;
     // Stamp the self-echo baseline synchronously even though the dispatch
     // is fire-and-forget — the host serialises to the exact same string we
     // compute here, so an inbound hook caused by this write will recognise
     // itself when matched against `lastSeenDocBytes`. Shared
     // `serializeContextDoc` keeps the sync + async flush paths byte-equal.
-    lastSeenDocBytes = serializeContextDoc(stripChipContent(editor.getJSON()));
-    void PluginAPI.persistDataSynced(lastSeenDocBytes, docKey(currentCtx.id));
+    lastSeenDocBytes = raw;
+    void persistContextDocRaw(PluginAPI, currentCtx.id, raw);
   } catch (err) {
     logErr('persistDataSynced (sync flush) failed', err);
   }
