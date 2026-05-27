@@ -57,7 +57,13 @@ import { isTouchActive } from 'src/app/util/input-intent';
 import { T } from 'src/app/t.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Store } from '@ngrx/store';
-import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
+import {
+  selectAllTasks,
+  selectTaskByIdWithSubTaskData,
+} from '../../store/task.selectors';
+import { firstValueFrom } from 'rxjs';
+import { JiraApiService } from '../../../issue/providers/jira/jira-api.service';
+import { IssueProviderService } from '../../../issue/issue-provider.service';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
@@ -109,6 +115,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
   private readonly _jiraWorklogService = inject(JiraWorklogService);
+  private readonly _jiraApiService = inject(JiraApiService);
+  private readonly _issueProviderService = inject(IssueProviderService);
   private readonly _elementRef = inject(ElementRef);
   private readonly _snackService = inject(SnackService);
   private readonly _projectService = inject(ProjectService);
@@ -411,6 +419,66 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
             );
           });
       },
+    );
+  }
+
+  assignAsSubtaskOfJiraIssue(): void {
+    import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component').then(
+      ({ DialogJiraIssuePickerComponent }) => {
+        this._matDialog
+          .open(DialogJiraIssuePickerComponent, {
+            restoreFocus: true,
+            data: {},
+          })
+          .afterClosed()
+          .pipe(take(1))
+          .subscribe((result) => {
+            if (!result) return;
+            void this._assignAsSubtask(result);
+          });
+      },
+    );
+  }
+
+  private async _assignAsSubtask(
+    result: import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.model').JiraIssuePickerResult,
+  ): Promise<void> {
+    // 1. Get Jira provider config
+    const cfg = await firstValueFrom(
+      this._issueProviderService.getCfgOnce$(result.issueProviderId, 'JIRA'),
+    );
+
+    // 2. Fetch full reduced issue data
+    const reducedIssue = await firstValueFrom(
+      this._jiraApiService.getReducedIssueById$(result.issueId, cfg),
+    );
+
+    // 3. Import (or deduplicate) the Jira issue as a task
+    let jiraTaskId = await this._issueService.addTaskFromIssue({
+      issueDataReduced: reducedIssue,
+      issueProviderId: result.issueProviderId,
+      issueProviderKey: 'JIRA',
+    });
+
+    // 4. If already imported, find the existing task by issueId + issueProviderId
+    if (!jiraTaskId) {
+      const allTasks = await firstValueFrom(this._store.select(selectAllTasks));
+      jiraTaskId = allTasks.find(
+        (t) =>
+          t.issueId === result.issueId && t.issueProviderId === result.issueProviderId,
+      )?.id;
+    }
+
+    if (!jiraTaskId) {
+      return; // Could not find or create the Jira task
+    }
+
+    // 5. Reparent this task as a subtask
+    this._store.dispatch(
+      TaskSharedActions.convertToSubTask({
+        task: this.task,
+        parentId: jiraTaskId,
+      }),
     );
   }
 
