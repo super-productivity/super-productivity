@@ -243,6 +243,21 @@ describe('SearchPageComponent', () => {
     expect(latestResults[0].ctx.title).toBe('My Tag');
   }));
 
+  it('should reflect isDone state on the result item (#7807)', fakeAsync(() => {
+    const task = createTask({ id: 't1', title: 'Finish report', isDone: false });
+    allTasks$.next([task]);
+    initAndFlush();
+    typeAndFlush('Finish');
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].isDone).toBe(false);
+
+    // Mark the task done — the search result must update without re-mounting
+    allTasks$.next([{ ...task, isDone: true }]);
+    tick(150);
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].isDone).toBe(true);
+  }));
+
   it('should mark archive tasks with isArchiveTask=true', fakeAsync(() => {
     // Must set archive tasks before creating a new component instance,
     // because _searchableItems$ calls getArchivedTasks() at construction time.

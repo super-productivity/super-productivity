@@ -157,7 +157,12 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
           ...(IS_ONEDRIVE_SUPPORTED
-            ? [{ label: 'Microsoft 365 (OneDrive)', value: SyncProviderId.OneDrive }]
+            ? [
+                {
+                  label: 'Microsoft 365 / OneDrive (experimental)',
+                  value: SyncProviderId.OneDrive,
+                },
+              ]
             : []),
           { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
           {

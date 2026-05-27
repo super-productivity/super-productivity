@@ -470,6 +470,110 @@ describe('OneDrive', () => {
     expect(refreshCallCount).toBe(1);
   });
 
+  it('should pass @odata.nextLink absolute URLs through verbatim', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    // Simulate a sovereign-cloud nextLink whose prefix is NOT the public
+    // graph.microsoft.com base. Previously this was silently truncated and
+    // re-prefixed, producing a 404 and an empty listing.
+    const sovereignNextLink =
+      'https://graph.microsoft.us/v1.0/me/drive/special/approot/children?skiptoken=abc';
+    let listCall = 0;
+    const urls: string[] = [];
+    fetchSpy.and.callFake(async (url: string) => {
+      urls.push(url);
+      listCall++;
+      if (listCall === 1) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            value: [{ id: '1', name: 'a.json', file: {} }],
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            '@odata.nextLink': sovereignNextLink,
+          }),
+          text: async () => '',
+        } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          value: [{ id: '2', name: 'b.json', file: {} }],
+        }),
+        text: async () => '',
+      } as Response;
+    });
+
+    const names = await provider.listFiles('');
+
+    expect(names).toEqual(['a.json', 'b.json']);
+    expect(urls[1]).toBe(sovereignNextLink);
+  });
+
+  it('should refuse to send the Bearer token to a non-Graph nextLink host', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    // First page returns a hostile @odata.nextLink. _request must reject
+    // the host BEFORE issuing the second fetch — otherwise the Bearer
+    // token would be leaked to the attacker's origin.
+    let callCount = 0;
+    fetchSpy.and.callFake(async () => {
+      callCount++;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          value: [{ id: '1', name: 'a.json', file: {} }],
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          '@odata.nextLink': 'https://attacker.example.com/steal',
+        }),
+        text: async () => '',
+      } as Response;
+    });
+
+    await expectAsync(provider.listFiles('')).toBeRejectedWithError(/non-Graph host/);
+    // Exactly one fetch — the legitimate first page. The hostile nextLink
+    // must NOT have been requested.
+    expect(callCount).toBe(1);
+  });
+
+  it('should refuse http:// (non-HTTPS) nextLink even if host is Graph', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    fetchSpy.and.callFake(async () => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          value: [],
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          '@odata.nextLink': 'http://graph.microsoft.com/v1.0/cleartext',
+        }),
+        text: async () => '',
+      } as Response;
+    });
+
+    await expectAsync(provider.listFiles('')).toBeRejectedWithError(/non-Graph host/);
+  });
+
+  it('should throw if listFiles pagination exceeds the page cap', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    // Cyclic continuation: every page returns the same nextLink, simulating
+    // a buggy server. The cap (500) must stop the loop instead of OOMing.
+    fetchSpy.and.callFake(async () => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          value: [{ id: 'x', name: 'x.json', file: {} }],
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          '@odata.nextLink': 'https://graph.microsoft.com/v1.0/cycle',
+        }),
+        text: async () => '',
+      } as Response;
+    });
+
+    await expectAsync(provider.listFiles('')).toBeRejectedWithError(/exceeded \d+ pages/);
+  });
+
   afterEach(() => {
     (globalThis as any).fetch = originalFetch;
   });

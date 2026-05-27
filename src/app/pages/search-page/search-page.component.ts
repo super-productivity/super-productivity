@@ -120,6 +120,7 @@ export class SearchPageComponent implements OnInit {
         issueType: task.issueType || null,
         ctx: this._getContextIcon(task, projectMap, tagMap, tagId),
         isArchiveTask,
+        isDone: !!task.isDone,
       };
     });
   }

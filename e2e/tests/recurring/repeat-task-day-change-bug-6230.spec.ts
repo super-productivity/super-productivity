@@ -71,6 +71,13 @@ test.describe('Repeat Task - Day Change (#6230)', () => {
     // 7. Advance clock past midnight to Day X+1
     await page.clock.setFixedTime(new Date('2026-06-16T00:05:00'));
 
+    // The day-change emission has two real-world paths in GlobalTrackingIntervalService:
+    // the 1s `interval` (timerBased$) and `window:focus` / `visibilitychange`.
+    // CI runners have enough CPU contention that the 1s tick can lag past the 30s
+    // wait window. Dispatching a focus event triggers focusBased$ (debounced 100ms)
+    // immediately, exercising the same effect chain deterministically.
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+
     // 8. Assert: a new undone task with the same title should appear
     //    The app's date-change mechanism should detect the new day and create
     //    a fresh repeat task instance. 30s timeout accounts for debounce + sync.

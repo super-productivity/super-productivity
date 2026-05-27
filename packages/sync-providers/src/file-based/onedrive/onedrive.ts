@@ -48,6 +48,23 @@ const ONEDRIVE_DEFAULTS = {
   syncFolderPath: 'Super Productivity',
 } as const;
 
+// Hard cap on listFiles pagination iterations. ~200 items per page × 500 pages
+// = 100k op-log files, well past any realistic limit. A buggy or cyclic
+// continuation that ignored this cap would grow `names[]` unbounded.
+const ONEDRIVE_MAX_LIST_PAGES = 500;
+
+// Allowlist of Microsoft Graph sovereign hosts. `_request` accepts absolute
+// URLs (for @odata.nextLink pass-through), but the request carries the user's
+// Bearer token — sending it to an attacker-controlled host would leak the
+// token. A tampered or spoofed nextLink with any other host throws instead.
+const ONEDRIVE_GRAPH_HOSTS: ReadonlySet<string> = new Set([
+  'graph.microsoft.com',
+  'graph.microsoft.us',
+  'dod-graph.microsoft.us',
+  'microsoftgraph.chinacloudapi.cn',
+  'graph.microsoft.de',
+]);
+
 export class OneDrive implements FileSyncProvider<
   typeof PROVIDER_ID_ONEDRIVE,
   OneDrivePrivateCfg
@@ -244,8 +261,14 @@ export class OneDrive implements FileSyncProvider<
     // to collect the full listing. Missing entries would cause replay drift
     // when the op-log folder grows beyond a single page.
     let nextUrl: string | undefined = `${this._getDriveItemPath(dirPath, cfg)}/children`;
+    let pages = 0;
     try {
       while (nextUrl) {
+        if (++pages > ONEDRIVE_MAX_LIST_PAGES) {
+          throw new Error(
+            `OneDrive listFiles exceeded ${ONEDRIVE_MAX_LIST_PAGES} pages — refusing to continue`,
+          );
+        }
         const result: OneDriveListResponse =
           await this._requestJson<OneDriveListResponse>(nextUrl);
         for (const item of result.value || []) {
@@ -253,12 +276,10 @@ export class OneDrive implements FileSyncProvider<
             names.push(item.name);
           }
         }
-        // @odata.nextLink is a full URL — strip the Graph base prefix
-        // so _request can re-add it without doubling.
-        const raw: string | undefined = result['@odata.nextLink'];
-        nextUrl = raw?.startsWith(ONEDRIVE_PROTOCOL.graphApiBaseUrl)
-          ? raw.slice(ONEDRIVE_PROTOCOL.graphApiBaseUrl.length)
-          : raw;
+        // Per Microsoft, @odata.nextLink is opaque — pass it through as-is.
+        // _request accepts absolute URLs to support sovereign clouds and
+        // future Graph path drift without silent truncation.
+        nextUrl = result['@odata.nextLink'];
       }
       return names;
     } catch (e) {
@@ -608,14 +629,31 @@ export class OneDrive implements FileSyncProvider<
     const requestHeaders = new Headers(options.headers);
     requestHeaders.set('Authorization', `Bearer ${accessToken}`);
 
-    const response = await this._deps.webFetch()(
-      `${ONEDRIVE_PROTOCOL.graphApiBaseUrl}${options.path}`,
-      {
-        method: options.method,
-        headers: requestHeaders,
-        body: options.body,
-      },
-    );
+    // Accept absolute URLs verbatim (e.g. @odata.nextLink, sovereign clouds).
+    // Microsoft documents nextLink as opaque, so stripping/re-adding a base
+    // would silently 404 if the prefix ever drifts (graph.microsoft.us,
+    // /beta rewrites). Relative paths still get the standard base prepended.
+    // Absolute URLs are gated by an HTTPS + Graph-host allowlist so a
+    // tampered nextLink can't redirect this request's Bearer token to a
+    // hostile origin.
+    let fullUrl: string;
+    if (/^https?:\/\//i.test(options.path)) {
+      const parsed = new URL(options.path);
+      if (parsed.protocol !== 'https:' || !ONEDRIVE_GRAPH_HOSTS.has(parsed.hostname)) {
+        throw new Error(
+          `OneDrive refused to send bearer token to non-Graph host: ${parsed.host}`,
+        );
+      }
+      fullUrl = parsed.toString();
+    } else {
+      fullUrl = `${ONEDRIVE_PROTOCOL.graphApiBaseUrl}${options.path}`;
+    }
+
+    const response = await this._deps.webFetch()(fullUrl, {
+      method: options.method,
+      headers: requestHeaders,
+      body: options.body,
+    });
 
     const responseBody = response.ok ? '' : await response.text();
 

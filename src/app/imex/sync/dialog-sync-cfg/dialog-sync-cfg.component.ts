@@ -446,13 +446,33 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           formTenantId !== existingCfg.tenantId;
       }
 
+      // Build the merged cfg explicitly so TS structurally validates the
+      // result against OneDrivePrivateCfg, and so form-side `null` values
+      // get coerced to `undefined` (the storage type doesn't accept null).
+      // NOTE: any new field added to OneDrivePrivateCfg must be added here
+      // — the explicit literal will not silently pick it up via spread.
+      const clientId = formOneDriveCfg.clientId ?? existingCfg?.clientId;
+      const tenantId = formOneDriveCfg.tenantId ?? existingCfg?.tenantId;
+      if (!clientId || !tenantId) {
+        // Form validators normally prevent this; surface a snack instead of
+        // a silent no-op save if we ever reach it.
+        SyncLog.err('OneDrive cfg save: missing required clientId/tenantId');
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.INCOMPLETE_CFG,
+        });
+        return;
+      }
       const mergedCfg: OneDrivePrivateCfg = {
-        ...(existingCfg || {}),
-        ...formOneDriveCfg,
-        ...(identityChanged
-          ? { accessToken: '', refreshToken: '', tokenExpiresAt: 0 }
-          : {}),
-      } as OneDrivePrivateCfg;
+        encryptKey: existingCfg?.encryptKey,
+        useCustomApp: formOneDriveCfg.useCustomApp ?? existingCfg?.useCustomApp,
+        clientId,
+        tenantId,
+        syncFolderPath: formOneDriveCfg.syncFolderPath ?? existingCfg?.syncFolderPath,
+        accessToken: identityChanged ? '' : existingCfg?.accessToken,
+        refreshToken: identityChanged ? '' : existingCfg?.refreshToken,
+        tokenExpiresAt: identityChanged ? 0 : existingCfg?.tokenExpiresAt,
+      };
       await oneDriveProvider.privateCfg.setComplete(mergedCfg);
     }
   }

@@ -26,7 +26,11 @@ import { DataInitStateService } from './app/core/data-init/data-init-state.servi
 import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
 import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import {
+  HTTP_INTERCEPTORS,
+  provideHttpClient,
+  withInterceptorsFromDi,
+} from '@angular/common/http';
 import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
@@ -86,6 +90,7 @@ import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
 import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapter';
 import { unlockAudioContext } from './app/util/audio-context';
+import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
 
 if (environment.production || environment.stage) {
   enableProdMode();
@@ -188,6 +193,11 @@ bootstrapApplication(AppComponent, {
     ),
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideHttpClient(withInterceptorsFromDi()),
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: NetworkRetryInterceptorService,
+      multi: true,
+    },
     LocaleDatePipe,
     ShortTimeHtmlPipe,
     ShortTimePipe,

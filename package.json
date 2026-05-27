@@ -274,6 +274,7 @@
     "eslint-plugin-local-rules": "^3.0.2",
     "eslint-plugin-prefer-arrow": "1.2.3",
     "eslint-plugin-prettier": "^5.5.5",
+    "fake-indexeddb": "^6.2.5",
     "fflate": "^0.8.2",
     "file-saver": "^2.0.5",
     "fs-extra": "^11.3.4",
