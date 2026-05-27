@@ -190,6 +190,7 @@ New keys in `src/assets/i18n/en.json` only:
 
 - GitLab or other issue providers (different dialog, not requested).
 - Surfacing one-time logs in the unlogged badge or daily summary (task stays unlinked).
-- Dragging the task to a Jira parent in the task list (drag-and-drop already works if the
-  parent is visible; this feature covers the case where the parent doesn't exist yet).
+- Extending drag-and-drop to support reparenting root tasks as subtasks (the `enterPredicate`
+  explicitly rejects drops of root tasks onto `listId='SUB'` zones; the `moveSubTask` reducer
+  also rejects an empty `srcTaskId` — this is a separate, larger UI change).
 - Unit tests for `DialogJiraIssuePickerComponent` beyond the standard spec stub.
