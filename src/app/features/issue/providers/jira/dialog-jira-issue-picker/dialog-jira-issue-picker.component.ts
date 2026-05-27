@@ -1,12 +1,12 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   inject,
-  OnDestroy,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AsyncPipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import {
   MAT_DIALOG_DATA,
@@ -23,8 +23,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { TranslateModule } from '@ngx-translate/core';
 import { Store } from '@ngrx/store';
-import { Observable, Subject } from 'rxjs';
-import { debounceTime, filter, map, switchMap, takeUntil } from 'rxjs/operators';
+import { Observable, Subject, of } from 'rxjs';
+import { catchError, debounceTime, filter, map, switchMap } from 'rxjs/operators';
 import { JiraApiService } from '../jira-api.service';
 import { IssueProviderService } from '../../../issue-provider.service';
 import { selectEnabledIssueProviders } from '../../../store/issue-provider.selectors';
@@ -35,6 +35,7 @@ import {
   JiraIssuePickerResult,
 } from './dialog-jira-issue-picker.model';
 import { JiraIssueReduced } from '../jira-issue.model';
+import { T } from '../../../../../t.const';
 
 @Component({
   selector: 'app-dialog-jira-issue-picker',
@@ -43,7 +44,6 @@ import { JiraIssueReduced } from '../jira-issue.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AsyncPipe,
-    FormsModule,
     MatButtonModule,
     MatDialogTitle,
     MatDialogContent,
@@ -57,19 +57,21 @@ import { JiraIssueReduced } from '../jira-issue.model';
     TranslateModule,
   ],
 })
-export class DialogJiraIssuePickerComponent implements OnDestroy {
+export class DialogJiraIssuePickerComponent {
   private readonly _store = inject(Store);
   private readonly _jiraApiService = inject(JiraApiService);
   private readonly _issueProviderService = inject(IssueProviderService);
   private readonly _matDialogRef =
     inject<MatDialogRef<DialogJiraIssuePickerComponent>>(MatDialogRef);
   private readonly _data = inject<DialogJiraIssuePickerData>(MAT_DIALOG_DATA);
+  private readonly _destroyRef = inject(DestroyRef);
 
+  protected readonly T = T;
   protected readonly selectedProviderId = signal<string>('');
   protected readonly results = signal<JiraIssueReduced[]>([]);
   protected readonly isLoading = signal<boolean>(false);
 
-  readonly jiraProviders$: Observable<IssueProviderJira[]> = this._store
+  protected readonly jiraProviders$: Observable<IssueProviderJira[]> = this._store
     .select(selectEnabledIssueProviders)
     .pipe(
       map((providers) =>
@@ -78,17 +80,18 @@ export class DialogJiraIssuePickerComponent implements OnDestroy {
     );
 
   private readonly _searchInput$ = new Subject<string>();
-  private readonly _destroy$ = new Subject<void>();
 
   constructor() {
     // Auto-select first Jira provider (or use pre-selected id from dialog data)
-    this.jiraProviders$.pipe(takeUntil(this._destroy$)).subscribe((providers) => {
-      if (this._data.issueProviderId) {
-        this.selectedProviderId.set(this._data.issueProviderId);
-      } else if (providers.length > 0 && !this.selectedProviderId()) {
-        this.selectedProviderId.set(providers[0].id);
-      }
-    });
+    this.jiraProviders$
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((providers) => {
+        if (this._data.issueProviderId) {
+          this.selectedProviderId.set(this._data.issueProviderId);
+        } else if (providers.length > 0 && !this.selectedProviderId()) {
+          this.selectedProviderId.set(providers[0].id);
+        }
+      });
 
     // Wire search input to debounced API call
     this._searchInput$
@@ -97,22 +100,29 @@ export class DialogJiraIssuePickerComponent implements OnDestroy {
         filter((term) => term.trim().length > 0),
         switchMap((term) => {
           const providerId = this.selectedProviderId();
-          if (!providerId) {
-            return [];
+          if (!term.trim() || !providerId) {
+            return of<JiraIssueReduced[]>([]);
           }
           this.isLoading.set(true);
-          const sanitized = term.replace(/"/g, '\\"');
-          const jql = `text ~ "${sanitized}" ORDER BY updated DESC`;
-          return this._issueProviderService
-            .getCfgOnce$(providerId, 'JIRA')
-            .pipe(switchMap((cfg) => this._jiraApiService.search$(jql, cfg)));
+          return this._issueProviderService.getCfgOnce$(providerId, 'JIRA').pipe(
+            switchMap((cfg) => {
+              const sanitized = term.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+              const jql = `text ~ "${sanitized}" ORDER BY updated DESC`;
+              return this._jiraApiService.search$(jql, cfg as IssueProviderJira).pipe(
+                map((items: SearchResultItem[]) =>
+                  items.map((item) => item.issueData as JiraIssueReduced),
+                ),
+                catchError(() => of<JiraIssueReduced[]>([])),
+              );
+            }),
+          );
         }),
-        takeUntil(this._destroy$),
+        takeUntilDestroyed(this._destroyRef),
       )
       .subscribe({
-        next: (items: SearchResultItem[]) => {
+        next: (items: JiraIssueReduced[]) => {
           this.isLoading.set(false);
-          this.results.set(items.map((item) => item.issueData as JiraIssueReduced));
+          this.results.set(items);
         },
         error: () => {
           this.isLoading.set(false);
@@ -121,9 +131,11 @@ export class DialogJiraIssuePickerComponent implements OnDestroy {
       });
   }
 
-  onSearchInput(term: string): void {
+  onSearchInput(event: Event): void {
+    const term = (event.target as HTMLInputElement).value;
     if (!term.trim()) {
       this.results.set([]);
+      this.isLoading.set(false);
       return;
     }
     this._searchInput$.next(term);
@@ -137,10 +149,5 @@ export class DialogJiraIssuePickerComponent implements OnDestroy {
       issueSummary: result.summary,
     };
     this._matDialogRef.close(pickResult);
-  }
-
-  ngOnDestroy(): void {
-    this._destroy$.next();
-    this._destroy$.complete();
   }
 }

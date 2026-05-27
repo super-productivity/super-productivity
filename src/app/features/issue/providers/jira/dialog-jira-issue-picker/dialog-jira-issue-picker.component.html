@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>Log to Jira issue</h2>
+<h2 mat-dialog-title>{{ T.F.JIRA.DIALOG_PICKER.TITLE | translate }}</h2>
 
 <mat-dialog-content>
   @if (jiraProviders$ | async; as providers) {
@@ -7,13 +7,13 @@
         appearance="outline"
         class="full-width"
       >
-        <mat-label>Jira provider</mat-label>
+        <mat-label>{{ T.F.JIRA.DIALOG_PICKER.PROVIDER_LABEL | translate }}</mat-label>
         <mat-select
           [value]="selectedProviderId()"
           (valueChange)="selectedProviderId.set($event)"
         >
           @for (p of providers; track p.id) {
-            <mat-option [value]="p.id">{{ p.title }}</mat-option>
+            <mat-option [value]="p.id">{{ p.host ?? p.id }}</mat-option>
           }
         </mat-select>
       </mat-form-field>
@@ -24,12 +24,12 @@
     appearance="outline"
     class="full-width"
   >
-    <mat-label>Search Jira issues</mat-label>
+    <mat-label>{{ T.F.JIRA.DIALOG_PICKER.SEARCH_LABEL | translate }}</mat-label>
     <input
       matInput
       autofocus
-      placeholder="e.g. PROJ-123 or login page"
-      (input)="onSearchInput($any($event.target).value)"
+      [placeholder]="T.F.JIRA.DIALOG_PICKER.SEARCH_PLACEHOLDER | translate"
+      (input)="onSearchInput($event)"
     />
   </mat-form-field>
 
@@ -54,6 +54,6 @@
     mat-button
     mat-dialog-close
   >
-    Cancel
+    {{ T.F.JIRA.DIALOG_PICKER.CANCEL | translate }}
   </button>
 </mat-dialog-actions>

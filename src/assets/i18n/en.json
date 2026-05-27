@@ -563,6 +563,13 @@
         "TASK_NAME": "Task name:",
         "TITLE": "Jira: Update Status"
       },
+      "DIALOG_PICKER": {
+        "TITLE": "Select Jira issue",
+        "PROVIDER_LABEL": "Jira provider",
+        "SEARCH_LABEL": "Search Jira issues",
+        "SEARCH_PLACEHOLDER": "e.g. PROJ-123 or login page",
+        "CANCEL": "Cancel"
+      },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
           "ALL_TIME": "Always use all time spent on task as default",
