@@ -110,27 +110,24 @@ describe('PluginHooksService.dispatchHookToPlugin', () => {
   });
 
   it('fires every handler when a plugin registers more than once for the same hook', async () => {
-    // document-mode registers from both its background script and its iframe
+    // doc-mode registers from both its background script and its iframe
     // editor under the same pluginId — pre-fix the second registration
     // silently overwrote the first, so iframe registration permanently
     // shadowed background's enabledIds-reconcile handler.
     const bgHandler = jasmine.createSpy('bgHandler');
     const iframeHandler = jasmine.createSpy('iframeHandler');
     service.registerHookHandler(
-      'document-mode',
+      'doc-mode',
       PluginHooks.PERSISTED_DATA_CHANGED,
       bgHandler,
     );
     service.registerHookHandler(
-      'document-mode',
+      'doc-mode',
       PluginHooks.PERSISTED_DATA_CHANGED,
       iframeHandler,
     );
 
-    await service.dispatchHookToPlugin(
-      'document-mode',
-      PluginHooks.PERSISTED_DATA_CHANGED,
-    );
+    await service.dispatchHookToPlugin('doc-mode', PluginHooks.PERSISTED_DATA_CHANGED);
 
     expect(bgHandler).toHaveBeenCalledTimes(1);
     expect(iframeHandler).toHaveBeenCalledTimes(1);
@@ -143,23 +140,23 @@ describe('PluginHooksService.dispatchHookToPlugin', () => {
     const otherPlugin = jasmine.createSpy('otherPlugin');
 
     service.registerHookHandler(
-      'document-mode',
+      'doc-mode',
       PluginHooks.PERSISTED_DATA_CHANGED,
       dataChanged,
     );
     service.registerHookHandler(
-      'document-mode',
+      'doc-mode',
       PluginHooks.PERSISTED_DATA_CHANGED,
       dataChanged2,
     );
-    service.registerHookHandler('document-mode', PluginHooks.TASK_COMPLETE, taskComplete);
-    // Sibling plugin's handler must survive a teardown targeting document-mode.
+    service.registerHookHandler('doc-mode', PluginHooks.TASK_COMPLETE, taskComplete);
+    // Sibling plugin's handler must survive a teardown targeting doc-mode.
     service.registerHookHandler('other', PluginHooks.TASK_COMPLETE, otherPlugin);
 
-    service.unregisterPluginHooks('document-mode');
+    service.unregisterPluginHooks('doc-mode');
 
     return Promise.all([
-      service.dispatchHookToPlugin('document-mode', PluginHooks.PERSISTED_DATA_CHANGED),
+      service.dispatchHookToPlugin('doc-mode', PluginHooks.PERSISTED_DATA_CHANGED),
       service.dispatchHook(PluginHooks.TASK_COMPLETE),
     ]).then(() => {
       expect(dataChanged).not.toHaveBeenCalled();

@@ -57,7 +57,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/voice-reminder',
   'assets/bundled-plugins/google-calendar-provider',
   'assets/bundled-plugins/caldav-calendar-provider',
-  'assets/bundled-plugins/document-mode',
+  'assets/bundled-plugins/doc-mode',
 ] as const;
 
 @Injectable({

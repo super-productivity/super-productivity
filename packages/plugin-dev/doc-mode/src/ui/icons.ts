@@ -1,5 +1,5 @@
 /**
- * Inline SVG icons for Document Mode. Kept as a static path map so the
+ * Inline SVG icons for Doc Mode. Kept as a static path map so the
  * iframe renders icons offline — no Material Icons web font, no Google
  * Fonts request. Paths are the standard Material Symbols 24×24 outlines.
  */

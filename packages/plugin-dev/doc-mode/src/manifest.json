@@ -1,7 +1,7 @@
 {
-  "id": "document-mode",
+  "id": "doc-mode",
   "manifestVersion": 1,
-  "name": "Document Mode (Alpha)",
+  "name": "Doc Mode (Alpha)",
   "version": "0.1.0",
   "description": "Document-style editor for projects and Today, powered by TipTap.",
   "author": "SuperProductivity",

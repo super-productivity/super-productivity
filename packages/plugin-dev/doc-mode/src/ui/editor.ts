@@ -113,7 +113,7 @@ const logErr = (msg: string, err?: unknown): void => {
     // ignore — fall through to console
   }
   // eslint-disable-next-line no-console
-  console.error('[document-mode]', msg, err);
+  console.error('[doc-mode]', msg, err);
 };
 
 /**
@@ -1910,7 +1910,7 @@ const mount = async (): Promise<void> => {
   try {
     await migrateToKeyedPersistence(PluginAPI);
   } catch (err) {
-    logErr('document-mode: migration failed', err);
+    logErr('doc-mode: migration failed', err);
   }
   updateDocStatusBanner();
   const initialCtx = await PluginAPI.getActiveWorkContext();
@@ -2149,7 +2149,7 @@ const waitForPluginAPI = (): Promise<void> =>
       if (attempts >= MAX_ATTEMPTS) {
         // eslint-disable-next-line no-console
         console.error(
-          '[document-mode] PluginAPI not injected after',
+          '[doc-mode] PluginAPI not injected after',
           MAX_ATTEMPTS * INTERVAL_MS,
           'ms — giving up',
         );
@@ -2173,7 +2173,7 @@ void waitForPluginAPI()
       const msg = document.createElement('div');
       msg.className = 'doc-error-state';
       msg.textContent =
-        'Document Mode could not connect to Super Productivity. ' +
+        'Doc Mode could not connect to Super Productivity. ' +
         'Try closing and reopening this panel.';
       root.appendChild(msg);
     }

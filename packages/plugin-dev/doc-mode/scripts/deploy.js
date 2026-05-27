@@ -13,7 +13,7 @@ const TARGET_DIR = path.join(
   'src',
   'assets',
   'bundled-plugins',
-  'document-mode',
+  'doc-mode',
 );
 
 // editor.js is inlined into index.html, so it doesn't need to be deployed.

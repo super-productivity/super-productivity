@@ -48,7 +48,7 @@ export const reconcileEnabledIds = async (
   try {
     next = new Set(await loadEnabledCtxIds(api));
   } catch (err) {
-    api.log.err('document-mode: enabled-ids reload failed', err);
+    api.log.err('doc-mode: enabled-ids reload failed', err);
     return { next: new Set(prev), action: 'noop' };
   }
   // Skip the visibility reconcile when membership is identical — most fires
@@ -69,7 +69,7 @@ export const reconcileEnabledIds = async (
     const ctx = await api.getActiveWorkContext();
     activeId = ctx?.id ?? null;
   } catch (err) {
-    api.log.err('document-mode: active-ctx read failed', err);
+    api.log.err('doc-mode: active-ctx read failed', err);
     return { next, action: 'noop' };
   }
   if (activeId === null) return { next, action: 'noop' };

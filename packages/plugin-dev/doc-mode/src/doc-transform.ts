@@ -1,5 +1,5 @@
 /**
- * Pure document-transform helpers for Document Mode.
+ * Pure document-transform helpers for Doc Mode.
  *
  * Everything here operates on plain ProseMirror-JSON (`PMNode`) and a task
  * lookup function — no TipTap editor, no DOM, no module-global cache. That
