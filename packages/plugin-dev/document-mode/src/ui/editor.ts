@@ -314,11 +314,14 @@ const flushSaveSync = (): void => {
     // persist dispatch and the op-log entry it produces.
     const raw = serializeContextDoc(stripChipContent(editor.getJSON()));
     if (raw === lastSeenDocBytes) return;
-    // Stamp the self-echo baseline synchronously even though the dispatch
-    // is fire-and-forget — the host serialises to the exact same string we
-    // compute here, so an inbound hook caused by this write will recognise
-    // itself when matched against `lastSeenDocBytes`. Shared
-    // `serializeContextDoc` keeps the sync + async flush paths byte-equal.
+    // Stamp the self-echo baseline BEFORE the dispatch. Asymmetric vs
+    // flushSave, which stamps AFTER `await`: this path is fire-and-forget —
+    // the iframe can be torn down mid-call and the promise never resolves,
+    // so a post-dispatch stamp would silently drop on teardown. Pre-stamping
+    // is safe because the host serialises to the exact same string we compute
+    // here, so an inbound hook caused by this write recognises itself when
+    // matched against `lastSeenDocBytes`. Shared `serializeContextDoc` keeps
+    // the sync + async flush paths byte-equal.
     lastSeenDocBytes = raw;
     void persistContextDocRaw(PluginAPI, currentCtx.id, raw);
   } catch (err) {

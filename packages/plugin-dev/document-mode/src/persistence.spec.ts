@@ -129,20 +129,27 @@ test('persistContextDocRaw: writes the exact raw string under doc:<ctxId>', asyn
   assert.deepEqual(writes, [{ key: 'doc:TODAY', data: raw }]);
 });
 
-test('serializeContextDoc: deterministic for identical input', () => {
+test('serializeContextDoc: deterministic across repeated calls on the same input', () => {
   // The no-op save short-circuit (#7815) in flushSave / flushSaveSync compares
   // the freshly-serialised bytes against the `lastSeenDocBytes` baseline. That
-  // comparison is only meaningful if a doc that round-trips through the editor
-  // back to the same JS value re-serialises byte-identically. JSON.stringify on
-  // V8 honours property insertion order, so structurally equal docs produced
-  // the same way (i.e. via TipTap getJSON()) byte-equal. Lock that in so a
-  // future swap to a non-deterministic encoder breaks here, not silently in
-  // the editor.
+  // comparison is only meaningful if the encoder is deterministic — same input
+  // must always produce byte-identical output, otherwise a "real revert" cycle
+  // would compute different bytes each call and the skip would never fire (or,
+  // worse, would fire when bytes actually differ if the comparator hashed).
+  // Lock this in so a future swap to a non-deterministic encoder (e.g. one
+  // that randomises iteration order over Map-backed nodes) breaks here, not
+  // silently in the editor.
   const doc = {
     type: 'doc',
     content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }],
   };
-  assert.equal(serializeContextDoc(doc), serializeContextDoc({ ...doc }));
+  const first = serializeContextDoc(doc);
+  const second = serializeContextDoc(doc);
+  assert.equal(first, second);
+  // Also asserts the obvious shape so a future signature change (e.g.
+  // returning a Uint8Array) fails compile + runtime, not just structurally.
+  assert.equal(typeof first, 'string');
+  assert.ok(first.length > 0);
 });
 
 test('persistContextDocRaw: re-persisting identical bytes is a no-op at the store level', async () => {
