@@ -645,6 +645,7 @@
       },
       "S": {
         "ADDED_WORKLOG_FOR": "Jira: Added worklog for {{issueKey}}",
+        "ASSIGN_AS_SUBTASK_ERROR": "Jira: Could not find or create the parent Jira task",
         "EXTENSION_NOT_LOADED": "Super Productivity Extension not loaded. Reloading the page may help",
         "INSUFFICIENT_SETTINGS": "Insufficient settings provided for Jira",
         "INVALID_RESPONSE": "Jira: Response contained invalid data",

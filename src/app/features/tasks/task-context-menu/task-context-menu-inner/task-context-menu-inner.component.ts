@@ -86,6 +86,7 @@ import { TaskLog } from '../../../../core/log';
 import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
 import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
+import type { JiraIssuePickerResult } from '../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.model';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -400,7 +401,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   logTimeToJiraTicket(): void {
-    import('../../../../features/issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component').then(
+    import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component').then(
       ({ DialogJiraIssuePickerComponent }) => {
         this._matDialog
           .open(DialogJiraIssuePickerComponent, {
@@ -434,15 +435,19 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           .pipe(take(1))
           .subscribe((result) => {
             if (!result) return;
-            void this._assignAsSubtask(result);
+            void this._assignAsSubtask(result).catch((err) => {
+              console.error('Failed to assign subtask:', err);
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.JIRA.S.ASSIGN_AS_SUBTASK_ERROR,
+              });
+            });
           });
       },
     );
   }
 
-  private async _assignAsSubtask(
-    result: import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.model').JiraIssuePickerResult,
-  ): Promise<void> {
+  private async _assignAsSubtask(result: JiraIssuePickerResult): Promise<void> {
     // 1. Get Jira provider config
     const cfg = await firstValueFrom(
       this._issueProviderService.getCfgOnce$(result.issueProviderId, 'JIRA'),
@@ -470,7 +475,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     }
 
     if (!jiraTaskId) {
-      return; // Could not find or create the Jira task
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.JIRA.S.ASSIGN_AS_SUBTASK_ERROR,
+      });
+      return;
     }
 
     // 5. Reparent this task as a subtask
