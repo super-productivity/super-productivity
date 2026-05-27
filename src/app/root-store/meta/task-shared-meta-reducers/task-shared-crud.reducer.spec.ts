@@ -2,9 +2,15 @@
 import { taskSharedCrudMetaReducer } from './task-shared-crud.reducer';
 import { TaskSharedActions } from '../task-shared.actions';
 import { RootState } from '../../root-state';
-import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
-import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
-import { PROJECT_FEATURE_NAME } from '../../../features/project/store/project.reducer';
+import {
+  TASK_FEATURE_NAME,
+  taskAdapter,
+} from '../../../features/tasks/store/task.reducer';
+import { TAG_FEATURE_NAME, tagAdapter } from '../../../features/tag/store/tag.reducer';
+import {
+  PROJECT_FEATURE_NAME,
+  projectAdapter,
+} from '../../../features/project/store/project.reducer';
 import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { Tag } from '../../../features/tag/tag.model';
 import { Project } from '../../../features/project/project.model';
@@ -2649,6 +2655,115 @@ describe('taskSharedCrudMetaReducer', () => {
       metaReducer(baseState, action);
 
       expect(mockReducer).toHaveBeenCalledWith(baseState, action);
+    });
+  });
+
+  describe('convertToSubTask action', () => {
+    let state: RootState;
+    let task1: Task;
+    let jiraTask: Task;
+
+    beforeEach(() => {
+      const base = createBaseState();
+
+      task1 = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+      });
+      jiraTask = createMockTask({
+        id: 'jiraTask',
+        projectId: 'project1',
+        tagIds: [],
+        subTaskIds: [],
+      });
+
+      const tasksWithBoth = taskAdapter.addMany(
+        [task1, jiraTask],
+        base[TASK_FEATURE_NAME],
+      );
+      const projectWithBoth = projectAdapter.updateOne(
+        { id: 'project1', changes: { taskIds: ['task1', 'jiraTask'] } },
+        base[PROJECT_FEATURE_NAME],
+      );
+      const tagWithTask1 = tagAdapter.updateOne(
+        { id: 'tag1', changes: { taskIds: ['task1'] } },
+        base[TAG_FEATURE_NAME],
+      );
+
+      state = {
+        ...base,
+        [TASK_FEATURE_NAME]: tasksWithBoth,
+        [PROJECT_FEATURE_NAME]: projectWithBoth,
+        [TAG_FEATURE_NAME]: tagWithTask1,
+      };
+    });
+
+    it('should set parentId on the converted task', () => {
+      const action = TaskSharedActions.convertToSubTask({
+        task: task1,
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(state, action);
+      expect(result[TASK_FEATURE_NAME].entities['task1']!.parentId).toBe('jiraTask');
+    });
+
+    it('should append task to parent subTaskIds', () => {
+      const action = TaskSharedActions.convertToSubTask({
+        task: task1,
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(state, action);
+      expect(result[TASK_FEATURE_NAME].entities['jiraTask']!.subTaskIds).toContain(
+        'task1',
+      );
+    });
+
+    it('should clear tagIds on the converted task', () => {
+      const action = TaskSharedActions.convertToSubTask({
+        task: task1,
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(state, action);
+      expect(result[TASK_FEATURE_NAME].entities['task1']!.tagIds).toEqual([]);
+    });
+
+    it('should remove task from project taskIds', () => {
+      const action = TaskSharedActions.convertToSubTask({
+        task: task1,
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(state, action);
+      expect(result[PROJECT_FEATURE_NAME].entities['project1']!.taskIds).not.toContain(
+        'task1',
+      );
+    });
+
+    it('should remove task from tag taskIds', () => {
+      const action = TaskSharedActions.convertToSubTask({
+        task: task1,
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(state, action);
+      expect(result[TAG_FEATURE_NAME].entities['tag1']!.taskIds).not.toContain('task1');
+    });
+
+    it('should be a no-op if task does not exist in state', () => {
+      const action = TaskSharedActions.convertToSubTask({
+        task: createMockTask({ id: 'nonexistent' }),
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(state, action);
+      expect(result[TASK_FEATURE_NAME].ids).toEqual(state[TASK_FEATURE_NAME].ids);
+    });
+
+    it('should be a no-op if parent does not exist', () => {
+      const action = TaskSharedActions.convertToSubTask({
+        task: task1,
+        parentId: 'noSuchParent',
+      });
+      const result = metaReducer(state, action);
+      expect(result[TASK_FEATURE_NAME].entities['task1']!.parentId).toBeUndefined();
     });
   });
 });

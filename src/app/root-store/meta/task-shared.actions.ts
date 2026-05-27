@@ -49,6 +49,16 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
+    convertToSubTask: (taskProps: { task: Task; parentId: string }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK' as const,
+        entityId: taskProps.task.id,
+        opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
     deleteTask: (taskProps: { task: TaskWithSubTasks }) => ({
       ...taskProps,
       meta: {

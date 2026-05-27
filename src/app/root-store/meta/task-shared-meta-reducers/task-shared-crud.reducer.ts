@@ -208,6 +208,71 @@ const handleConvertToMainTask = (
   return updateTags(updatedState, tagUpdates);
 };
 
+const handleConvertToSubTask = (
+  state: RootState,
+  task: Task,
+  parentId: string,
+): RootState => {
+  const parentTask = state[TASK_FEATURE_NAME].entities[parentId] as Task | undefined;
+  if (!parentTask) {
+    return state;
+  }
+
+  const updatedTaskState = taskAdapter.updateMany(
+    [
+      {
+        id: task.id,
+        changes: {
+          parentId,
+          tagIds: [],
+          modified: Date.now(),
+        },
+      },
+      {
+        id: parentId,
+        changes: {
+          subTaskIds: parentTask.subTaskIds.includes(task.id)
+            ? parentTask.subTaskIds
+            : [...parentTask.subTaskIds, task.id],
+        },
+      },
+    ],
+    state[TASK_FEATURE_NAME],
+  );
+
+  let updatedState: RootState = {
+    ...state,
+    [TASK_FEATURE_NAME]: updatedTaskState,
+  };
+
+  // Remove from project.taskIds and backlogTaskIds
+  if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
+    const project = getProject(updatedState, task.projectId);
+    updatedState = updateProject(updatedState, task.projectId, {
+      taskIds: project.taskIds.filter((id) => id !== task.id),
+      ...(project.backlogTaskIds
+        ? { backlogTaskIds: project.backlogTaskIds.filter((id) => id !== task.id) }
+        : {}),
+    });
+  }
+
+  // Remove from tag.taskIds
+  const tagUpdates = task.tagIds
+    .filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
+    .map((tagId) => ({
+      id: tagId,
+      changes: {
+        taskIds: getTag(updatedState, tagId).taskIds.filter((id) => id !== task.id),
+      },
+    }));
+
+  if (tagUpdates.length > 0) {
+    updatedState = updateTags(updatedState, tagUpdates);
+  }
+
+  return updatedState;
+};
+
 const handleDeleteTask = (
   state: RootState,
   task: {
@@ -723,6 +788,16 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
       typeof TaskSharedActions.convertToMainTask
     >;
     return handleConvertToMainTask(state, task, parentTagIds, isPlanForToday);
+  },
+  [TaskSharedActions.convertToSubTask.type]: () => {
+    const typedAction = action as ReturnType<typeof TaskSharedActions.convertToSubTask>;
+    const taskEntity = state[TASK_FEATURE_NAME].entities[typedAction.task.id] as
+      | Task
+      | undefined;
+    if (!taskEntity) {
+      return state;
+    }
+    return handleConvertToSubTask(state, taskEntity, typedAction.parentId);
   },
   [TaskSharedActions.deleteTask.type]: () => {
     const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
