@@ -305,9 +305,5 @@ class FocusModeForegroundService : Service() {
         handler.removeCallbacks(updateRunnable)
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        Log.d(TAG, "Task removed, stopping service")
-        stopFocusMode()
-    }
+    // Do not override onTaskRemoved — foreground service must survive app swipe (#7818).
 }
