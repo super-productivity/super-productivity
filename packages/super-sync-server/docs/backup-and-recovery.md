@@ -120,6 +120,57 @@ Server is down / data lost
 │             Accept data loss since last backup
 ```
 
+## Per-User Recovery (single account wiped)
+
+The procedures above recover the **whole server**. A different situation: one
+user's account is wiped — usually because a bad `SYNC_IMPORT` propagated an
+empty or stale snapshot across their devices — and you need to roll *that one
+user* back to a point in time.
+
+The in-app **Restore from History** handles this for unencrypted accounts. It
+does **not** work for E2E-encrypted accounts: the server cannot decrypt the op
+payloads, so `generateSnapshotAtSeq` throws `EncryptedOpsNotSupportedError`.
+
+`scripts/recover-user.ts` fills that gap. It replays the user's operation log up
+to a chosen `serverSeq`, decrypting encrypted payloads with the user's
+passphrase, and writes an importable `AppDataComplete` JSON file. It is
+**read-only** on the database.
+
+> **Status: unverified against real encrypted data.** The script lints, builds,
+> and its module graph loads, but it has not been run end-to-end against an
+> actual encrypted account. Before relying on it in an incident, verify it
+> against a known account (e.g. your own): recover at the latest seq and confirm
+> the entity counts match the live app.
+
+**1. Inspect** — find the cutoff sequence (no encryption key needed):
+
+```bash
+DATABASE_URL=... npm run recover-user -- --user <email|id> --inspect
+```
+
+This lists every full-state op (`SYNC_IMPORT` / `BACKUP_IMPORT` / `REPAIR`) with
+timestamps. Identify the bad import; the cutoff is its `serverSeq` minus 1.
+
+**2. Recover** — replay up to the cutoff and write the importable file:
+
+```bash
+DATABASE_URL=... RECOVER_ENCRYPT_KEY='<the user's passphrase>' \
+  npm run recover-user -- --user <email|id> --target-seq <N> --out ./recovered.json
+```
+
+Add `--dry-run` to preview entity counts without writing. The user imports the
+resulting file via **Settings → Import/Export → Import from File**.
+
+**Notes:**
+
+- The encryption key is read only from `RECOVER_ENCRYPT_KEY` or `--key-file` —
+  never a CLI argument (process lists / shell history).
+- Run it from a dev checkout — it needs `ts-node` and the Prisma client, which
+  the production image does not include. Pointing `DATABASE_URL` at a restored
+  dump keeps the run fully isolated from production.
+- The output file holds the user's complete **plaintext** data — transmit it
+  over a secure channel and delete every copy once recovery is confirmed.
+
 ## Hoster Backups
 
 If your VPS hoster provides incremental backups (e.g., daily snapshots), these serve as an additional safety net. However:

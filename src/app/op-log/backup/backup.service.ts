@@ -3,7 +3,7 @@ import { Store } from '@ngrx/store';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { StateSnapshotService } from './state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { ClientIdService } from '../../core/util/client-id.service';
+import { generateClientId } from '../../core/util/generate-client-id';
 import { Operation, OpType, ActionType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { uuidv7 } from '../../util/uuid-v7';
@@ -39,7 +39,6 @@ export class BackupService {
   private _store = inject(Store);
   private _stateSnapshotService = inject(StateSnapshotService);
   private _opLogStore = inject(OperationLogStoreService);
-  private _clientIdService = inject(ClientIdService);
   private _operationWriteFlushService = inject(OperationWriteFlushService);
   private _lockService = inject(LockService);
 
@@ -188,8 +187,7 @@ export class BackupService {
     } catch (e) {
       // `message` is intentionally omitted: log history is user-exportable
       // (CLAUDE.md sync rule 9), and a future validator/IDB error type could
-      // interpolate user content into its message. Match the `name`-only
-      // pattern used by `ClientIdService.withRotation` rollback logging.
+      // interpolate user content into its message. Log the error `name` only.
       OpLog.warn('BackupService: Failed to backup state before import:', {
         name: (e as Error | undefined)?.name,
       });
@@ -198,40 +196,40 @@ export class BackupService {
       );
     }
 
-    // Rotate the clientId for the duration of the destructive replacement.
-    // `pf` (clientId) is a separate IDB DB and so cannot share the atomic
-    // SUP_OPS tx; ClientIdService.withRotation rolls it back on failure.
-    await this._clientIdService.withRotation('BackupService:', async (clientId) => {
-      const newClock = { [clientId]: 1 };
-      const opId = uuidv7();
-      // IMPORTANT: Uses OpType.BackupImport which maps to reason='recovery' on the server.
-      // This allows backup imports to succeed even when a SYNC_IMPORT already exists.
-      // See server validation at sync.routes.ts:703-733
-      const op: Operation = {
-        id: opId,
-        actionType: ActionType.LOAD_ALL_DATA,
-        opType: OpType.BackupImport,
-        entityType: 'ALL',
-        entityId: opId,
-        payload: importedData,
-        clientId,
-        vectorClock: newClock,
-        timestamp: Date.now(),
-        schemaVersion: CURRENT_SCHEMA_VERSION,
-        syncImportReason: 'BACKUP_RESTORE',
-      };
+    // Mint a fresh clientId for the new sync baseline. It is pure here —
+    // persisted only inside runDestructiveStateReplacement's atomic SUP_OPS
+    // transaction, which also clears the ClientIdService cache. On a throw the
+    // tx aborts and the prior id stands.
+    const clientId = generateClientId();
+    const newClock = { [clientId]: 1 };
+    const opId = uuidv7();
+    // IMPORTANT: Uses OpType.BackupImport which maps to reason='recovery' on the server.
+    // This allows backup imports to succeed even when a SYNC_IMPORT already exists.
+    // See server validation at sync.routes.ts:703-733
+    const op: Operation = {
+      id: opId,
+      actionType: ActionType.LOAD_ALL_DATA,
+      opType: OpType.BackupImport,
+      entityType: 'ALL',
+      entityId: opId,
+      payload: importedData,
+      clientId,
+      vectorClock: newClock,
+      timestamp: Date.now(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      syncImportReason: 'BACKUP_RESTORE',
+    };
 
-      // Issue #7709: replace OPS + state_cache + vector_clock atomically so an
-      // interrupt during backup-restore can't leave the device in the
-      // `isWhollyFreshClient + meaningful store data` state that triggers the
-      // multi-device data-loss chain.
-      OpLog.normal('BackupService: Replacing op-log + state cache atomically');
-      await this._opLogStore.runDestructiveStateReplacement({
-        syncImportOp: op,
-        snapshotEntityKeys: extractEntityKeysFromState(importedData),
-        archiveYoung: importedData.archiveYoung,
-        archiveOld: importedData.archiveOld,
-      });
+    // Issue #7709: replace OPS + state_cache + vector_clock + clientId
+    // atomically so an interrupt during backup-restore can't leave the device
+    // in the `isWhollyFreshClient + meaningful store data` state that triggers
+    // the multi-device data-loss chain.
+    OpLog.normal('BackupService: Replacing op-log + state cache atomically');
+    await this._opLogStore.runDestructiveStateReplacement({
+      syncImportOp: op,
+      snapshotEntityKeys: extractEntityKeysFromState(importedData),
+      archiveYoung: importedData.archiveYoung,
+      archiveOld: importedData.archiveOld,
     });
 
     OpLog.normal('BackupService: Import persisted to operation log.');

@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Document Mode</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: transparent;
+        color: var(--text-color, #222);
+        font-family: var(--font-primary-stack, sans-serif);
+        font-size: 16px;
+        line-height: 1.5;
+      }
+      .doc-icon {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        fill: currentColor;
+        display: inline-block;
+        vertical-align: middle;
+      }
+
+      #editor-root {
+        max-width: 720px;
+        margin: 0 auto;
+        /* Generous left padding so the block hover gutter (positioned 52px
+           left of each block) renders inside editor-root — the mouse never
+           leaves the root when moving from block to gutter. */
+        padding: 32px 24px min(240px, 30vh) 60px;
+      }
+      .ProseMirror {
+        outline: none;
+        min-height: 60vh;
+      }
+      .ProseMirror > * {
+        margin: 4px 0;
+      }
+      .ProseMirror > [data-task-ref] {
+        margin: 0;
+      }
+      .ProseMirror > [data-task-ref] + [data-task-ref] {
+        margin-top: 0;
+      }
+      .ProseMirror > h1 {
+        font-size: 1.8em;
+        font-weight: 700;
+        margin: 24px 0 8px;
+        line-height: 1.2;
+      }
+      .ProseMirror > h2 {
+        font-size: 1.4em;
+        font-weight: 600;
+        margin: 18px 0 6px;
+        line-height: 1.25;
+      }
+      .ProseMirror > h3 {
+        font-size: 1.15em;
+        font-weight: 600;
+        margin: 14px 0 4px;
+        line-height: 1.3;
+      }
+      .ProseMirror p {
+        margin: 4px 0;
+      }
+      .ProseMirror blockquote {
+        border-left: 3px solid var(--divider-color, #ccc);
+        margin: 8px 0;
+        padding: 2px 12px;
+        color: var(--text-color-less-intense, #555);
+      }
+      .ProseMirror ul,
+      .ProseMirror ol {
+        margin: 4px 0;
+        padding-left: 24px;
+      }
+      .ProseMirror li > p {
+        margin: 2px 0;
+      }
+      .ProseMirror code {
+        background: var(--bg-darker, rgba(0, 0, 0, 0.06));
+        border-radius: 3px;
+        padding: 1px 4px;
+        font-size: 0.92em;
+      }
+      .ProseMirror pre {
+        background: var(--bg-darker, rgba(0, 0, 0, 0.06));
+        border-radius: 4px;
+        padding: 8px 12px;
+        font-size: 0.9em;
+        overflow-x: auto;
+      }
+      .ProseMirror hr {
+        border: none;
+        border-top: 1px solid var(--divider-color, #ccc);
+        margin: 12px 0;
+      }
+
+      /* Placeholder */
+      .ProseMirror p.is-editor-empty:first-child::before {
+        color: var(--text-color-muted, #999);
+        content: attr(data-placeholder);
+        float: left;
+        height: 0;
+        pointer-events: none;
+      }
+
+      /* taskRef — styled to match the app's task list item */
+      .task-ref {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        margin: 0;
+        line-height: 1.5;
+        background: transparent;
+        border-radius: 4px;
+      }
+      .task-ref:hover {
+        /* --task-c-bg-hover is not injected into the plugin iframe; use the
+           generic hover token so the wash is visible in dark mode too. */
+        background: var(--select-hover-bg, rgba(0, 0, 0, 0.04));
+      }
+      .ProseMirror-selectednode.task-ref {
+        background: var(--task-c-selected-bg, rgba(63, 81, 181, 0.08));
+        /* inset shadow (not outline) so the ring follows the 4px radius */
+        box-shadow: inset 0 0 0 1px var(--c-primary, #3f51b5);
+      }
+      /* Subtask: indented, slightly smaller toggle to match the app's
+         sub-task hierarchy without dropping legibility. */
+      .ProseMirror > .sub-task-ref {
+        margin-left: 24px;
+        position: relative;
+      }
+      .ProseMirror > .sub-task-ref::before {
+        content: '';
+        position: absolute;
+        left: -14px;
+        top: 50%;
+        width: 8px;
+        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+      }
+      .sub-task-ref .done-toggle,
+      .sub-task-ref .done-toggle-svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* Done-toggle: mirror src/app/ui/done-toggle exactly */
+      .task-ref .done-toggle {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--text-color, #222);
+      }
+      .task-ref .done-toggle:focus-visible {
+        outline: 2px solid var(--c-primary, #3f51b5);
+        outline-offset: 1px;
+        border-radius: 4px;
+      }
+      .task-ref .done-toggle-svg {
+        width: 22px;
+        height: 22px;
+        transition: transform 0.15s ease;
+      }
+      .task-ref .done-toggle:hover .done-toggle-svg {
+        transform: scale(1.1);
+      }
+      .task-ref .done-circle {
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        opacity: 0.3;
+        transition: opacity 0.2s ease;
+      }
+      .task-ref .done-check {
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 18;
+        stroke-dashoffset: 18;
+        opacity: 0;
+        transition:
+          opacity 0.2s ease,
+          stroke-dashoffset 0.2s ease;
+      }
+      .task-ref.is-done .done-circle {
+        opacity: 0.5;
+      }
+      .task-ref.is-done .done-check {
+        opacity: 0.6;
+        stroke-dashoffset: 0;
+      }
+      .task-ref .done-toggle:hover .done-circle,
+      .task-ref .done-toggle:hover .done-check {
+        opacity: 0.65;
+      }
+
+      .task-ref .title {
+        flex: 1;
+        min-width: 0;
+        outline: none;
+        word-break: break-word;
+        white-space: pre-wrap;
+      }
+      .task-ref.is-done .title {
+        text-decoration: line-through;
+        opacity: var(--task-is-done-dim-opacity, 0.5);
+      }
+      .task-ref.is-missing .title {
+        opacity: 0.4;
+        font-style: italic;
+      }
+      .task-ref.is-missing .title:empty::before {
+        content: '(task not found)';
+      }
+      .task-ref.is-missing .done-toggle {
+        cursor: default;
+      }
+
+      /* Block hover gutter */
+      .block-gutter {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        /* Extend hit area to the right so the mouse can travel from the
+           block toward the gutter without crossing an empty region. */
+        padding-right: 12px;
+        z-index: 90;
+        opacity: 0;
+        transition: opacity 80ms ease;
+      }
+      /* Shown (via .is-visible) once positioned over a hovered block. */
+      .block-gutter.is-visible {
+        opacity: 1;
+      }
+      .block-gutter-btn {
+        width: 22px;
+        height: 22px;
+        border: none;
+        background: transparent;
+        color: var(--text-color-muted, #888);
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+      }
+      .block-gutter-btn:hover {
+        background: var(--select-hover-bg, rgba(0, 0, 0, 0.06));
+        color: var(--text-color, #222);
+      }
+      .block-gutter-btn:focus-visible {
+        outline: 2px solid var(--c-primary, #3f51b5);
+        outline-offset: -1px;
+        color: var(--text-color, #222);
+      }
+      .block-gutter-btn .doc-icon {
+        width: 18px;
+        height: 18px;
+      }
+      .block-gutter-btn[data-action='grip'] {
+        cursor: grab;
+      }
+      .block-gutter-btn[data-action='grip']:active {
+        cursor: grabbing;
+      }
+
+      /* Block currently being dragged (HTML5 drag) */
+      .ProseMirror > .is-dragging {
+        opacity: 0.4;
+      }
+
+      /* Drop-zone indicator between blocks during drag */
+      .doc-drop-indicator {
+        position: absolute;
+        height: 2px;
+        background: var(--c-accent, #3a85f0);
+        border-radius: 1px;
+        pointer-events: none;
+        z-index: 95;
+      }
+      .doc-drop-indicator::before {
+        content: '';
+        position: absolute;
+        left: -3px;
+        top: -3px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--c-accent, #3a85f0);
+      }
+
+      /* Slash menu / block menu */
+      .slash-menu {
+        position: absolute;
+        z-index: 100;
+        background: var(--card-bg, #fff);
+        border-radius: 8px;
+        box-shadow: var(--whiteframe-shadow-6dp, 0 4px 18px rgba(0, 0, 0, 0.18));
+        padding: 4px 0;
+        min-width: 220px;
+        max-height: 360px;
+        overflow-y: auto;
+        font-size: 14px;
+      }
+      .slash-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 12px;
+        cursor: pointer;
+        line-height: 1.3;
+      }
+      .slash-menu-item.is-active,
+      .slash-menu-item:hover {
+        background: var(--select-hover-bg, rgba(0, 0, 0, 0.08));
+      }
+      .slash-menu-icon {
+        color: var(--text-color-less-intense, #666);
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+      .slash-menu-label {
+        flex: 1;
+      }
+      .slash-menu-hint {
+        color: var(--text-color-less-intense, #666);
+        font-size: 12px;
+      }
+      .slash-menu-empty {
+        padding: 8px 12px;
+        color: var(--text-color-less-intense, #666);
+        font-size: 13px;
+      }
+
+      /* Bubble menu */
+      .bubble-menu {
+        display: flex;
+        gap: 2px;
+        background: var(--card-bg, #fff);
+        border-radius: 6px;
+        box-shadow: var(--whiteframe-shadow-4dp, 0 2px 10px rgba(0, 0, 0, 0.15));
+        padding: 2px;
+      }
+      .bubble-menu button {
+        border: none;
+        background: transparent;
+        width: 28px;
+        height: 28px;
+        border-radius: 4px;
+        cursor: pointer;
+        color: var(--text-color, #222);
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .bubble-menu button:hover {
+        background: var(--select-hover-bg, rgba(0, 0, 0, 0.08));
+      }
+      .bubble-menu button:focus-visible {
+        outline: 2px solid var(--c-primary, #3f51b5);
+        outline-offset: -1px;
+      }
+      .bubble-menu button code {
+        font-size: 11px;
+      }
+
+      /* Status banner — corrupt / future-version document notices */
+      .doc-banner {
+        max-width: 720px;
+        margin: 12px auto 0;
+        padding: 8px 14px;
+        border-radius: var(--card-border-radius, 8px);
+        border-left: 3px solid var(--color-warning, #e0a800);
+        background: var(--card-bg, #fff);
+        color: var(--text-color, #222);
+        box-shadow: var(--whiteframe-shadow-2dp, 0 1px 5px rgba(0, 0, 0, 0.2));
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      /* Full-panel fallback shown when the plugin can't reach the host */
+      .doc-error-state {
+        max-width: 480px;
+        margin: 48px auto;
+        padding: 24px;
+        text-align: center;
+        color: var(--text-color-less-intense, #666);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        ::before,
+        ::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="editor-root"></div>
+    <script src="editor.js"></script>
+  </body>
+</html>

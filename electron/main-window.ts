@@ -30,6 +30,13 @@ import { markGpuStartupSuccess } from './gpu-startup-guard';
 
 let mainWin: BrowserWindow;
 
+// Compact WCO band on Win/Linux. Native button width is OS-controlled
+// (~138px total); only height is configurable. Lower values may be
+// clamped to the OS minimum (~24–28px on Win11) — Electron silently
+// floors instead of rejecting. Stays well clear of the vertical action
+// strip which positions itself --bar-height (48px) down.
+const WCO_HEIGHT = 24;
+
 /**
  * Returns theme-aware background color for titlebar overlay.
  * Semi-transparent to ensure window controls are always visible.
@@ -142,7 +149,7 @@ export const createWindow = async ({
       ? {
           color: getTitleBarColor(nativeTheme.shouldUseDarkColors),
           symbolColor: initialSymbolColor,
-          height: 44,
+          height: WCO_HEIGHT,
         }
       : undefined;
 
@@ -372,7 +379,7 @@ export const createWindow = async ({
         mainWin.setTitleBarOverlay({
           color: getTitleBarColor(isDarkMode),
           symbolColor,
-          height: 44,
+          height: WCO_HEIGHT,
         });
       } catch (e) {
         // setTitleBarOverlay may not be available on all platforms

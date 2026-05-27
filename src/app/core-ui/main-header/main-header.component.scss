@@ -144,6 +144,10 @@ button.isActive2 {
     margin-right: auto;
   }
 
+  // EXPERIMENT: vertical action strip styles live in src/styles.scss so they
+  // bypass Angular view encapsulation (and any containing-block surprises
+  // from this file). See `nav.action-nav-right` rules there.
+
   // Set 20px icon sizing for buttons outside counters-action-group
   // (add button, panel buttons, etc.)
   > button:not(.sync-btn) .mat-icon:not(.sync-state-ico),

@@ -85,6 +85,8 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
 import { recordSearchNavDebug } from '../../util/search-nav-debug';
 import { dragDelayForTouch } from '../../util/input-intent';
 import { DateService } from '../../core/date/date.service';
+import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index.component';
+import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 
 @Component({
   selector: 'work-view',
@@ -118,6 +120,7 @@ import { DateService } from '../../core/date/date.service';
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
+    PluginIndexComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -139,7 +142,40 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _matDialog = inject(MatDialog);
   private _destroyRef = inject(DestroyRef);
   private _dateService = inject(DateService);
+  private _pluginBridge = inject(PluginBridgeService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
+
+  isProjectContext = toSignal(this.workContextService.isActiveWorkContextProject$, {
+    initialValue: false,
+  });
+
+  private _isTodayContext = toSignal(
+    this.workContextService.activeWorkContext$.pipe(
+      map((ctx) => ctx.id === TODAY_TAG.id),
+    ),
+    { initialValue: false },
+  );
+
+  /**
+   * Whether the current work context allows a plugin embed in the work-view
+   * body. Mirrors the restriction documented on `PluginAPI.showInWorkContext`:
+   * project and TODAY contexts only — a plugin embed is never shown for a
+   * regular tag or a non-work-view route.
+   */
+  private _isEmbeddableContext = computed(
+    () => this.isProjectContext() || this._isTodayContext(),
+  );
+
+  /**
+   * Plugin id currently embedded in the work-view body, or null. The plugin
+   * iframe replaces the task list when a plugin has requested the embed
+   * (`showInWorkContext`) AND the active context is embeddable.
+   */
+  pluginEmbedId = computed(() => {
+    const id = this._pluginBridge.workContextEmbedPluginId();
+    if (!id) return null;
+    return this._isEmbeddableContext() ? id : null;
+  });
 
   isFinishDayEnabled = computed(
     () => this._globalConfigService.appFeatures().isFinishDayEnabled,

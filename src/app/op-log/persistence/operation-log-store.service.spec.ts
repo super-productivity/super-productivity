@@ -1,4 +1,6 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { IDBPDatabase, unwrap } from 'idb';
+import { forceCloseDatabase } from 'fake-indexeddb';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
@@ -30,6 +32,7 @@ describe('OperationLogStoreService', () => {
   const mockClientIdProvider: ClientIdProvider = {
     loadClientId: () => Promise.resolve('testClient'),
     getOrGenerateClientId: () => Promise.resolve('testClient'),
+    clearCache: () => {},
   };
 
   // Helper to create test operations
@@ -88,6 +91,65 @@ describe('OperationLogStoreService', () => {
 
       // All should resolve without error
       await expectAsync(Promise.all(initPromises)).toBeResolved();
+    });
+  });
+
+  describe('connection lifecycle handlers', () => {
+    // Open the connection through the lazy `_ensureInit()` path so `_initPromise`
+    // is genuinely populated (the `beforeEach` above uses a direct `init()`,
+    // which leaves it unset — making an `_initPromise` assertion vacuous).
+    const openViaLazyInit = async (): Promise<void> => {
+      (service as any)._db = undefined;
+      (service as any)._initPromise = undefined;
+      await service.getLastSeq();
+    };
+
+    it('closes the connection and clears cached state on versionchange, then reopens', async () => {
+      await openViaLazyInit();
+      expect((service as any)._db).toBeDefined();
+      expect((service as any)._initPromise).toBeDefined();
+
+      const raw = unwrap((service as any)._db as IDBPDatabase);
+      // fake-indexeddb's FakeEventTarget rejects native DOM `Event` (no
+      // `initialized` flag), so dispatch its own `IDBVersionChangeEvent`
+      // (installed globally by `fake-indexeddb/auto`) which derives from
+      // the polyfill's `FakeEvent`.
+      raw.dispatchEvent(
+        new IDBVersionChangeEvent('versionchange', { oldVersion: 1, newVersion: 2 }),
+      );
+
+      // The handler runs synchronously: cached state cleared and the
+      // connection actually closed (so it cannot block a schema upgrade).
+      expect((service as any)._db).toBeUndefined();
+      expect((service as any)._initPromise).toBeUndefined();
+      let txError: unknown;
+      try {
+        raw.transaction(STORE_NAMES.OPS, 'readonly');
+      } catch (e) {
+        txError = e;
+      }
+      expect((txError as DOMException | undefined)?.name).toBe('InvalidStateError');
+
+      // The next access transparently reopens the connection.
+      await expectAsync(service.getLastSeq()).toBeResolved();
+    });
+
+    it('clears cached state on the browser close event, then reopens', async () => {
+      await openViaLazyInit();
+
+      const raw = unwrap((service as any)._db as IDBPDatabase);
+      // Drive the spec-compliant forced-close path; fake-indexeddb fires a real
+      // `close` event through its internal pipeline (unlike dispatchEvent of a
+      // synthetic DOM Event, which its FakeEventTarget shim rejects). The cast
+      // works around an incorrect `(db: typeof FDBDatabase)` type declaration
+      // in fake-indexeddb's types.d.ts — the runtime expects an instance.
+      forceCloseDatabase(raw as unknown as Parameters<typeof forceCloseDatabase>[0]);
+      // Let queued tasks (connection bookkeeping) settle before reopening.
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect((service as any)._db).toBeUndefined();
+      expect((service as any)._initPromise).toBeUndefined();
+      await expectAsync(service.getLastSeq()).toBeResolved();
     });
   });
 
@@ -1711,6 +1773,62 @@ describe('OperationLogStoreService', () => {
       expect((await db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY)).data).toEqual(
         priorArchiveOld,
       );
+    });
+
+    it('writes the rotated clientId into the client_id store and clears the cache', async () => {
+      const clearCacheSpy = spyOn(mockClientIdProvider, 'clearCache');
+
+      await service.runDestructiveStateReplacement({
+        syncImportOp: createTestOperation({
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+          clientId: 'rotatedClient',
+          vectorClock: { rotatedClient: 1 },
+          payload: { task: { ids: [], entities: {} } },
+        }),
+        snapshotEntityKeys: [],
+      });
+
+      const db = (service as any).db;
+      expect(await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY)).toBe('rotatedClient');
+      // Cache-clear runs after a committed tx.done so the next clientId read
+      // sees the rotated value.
+      expect(clearCacheSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the client_id store and cache untouched when the destructive tx aborts', async () => {
+      const db = (service as any).db;
+      // Seed a prior clientId — the aborted put must roll back to this.
+      await db.put(STORE_NAMES.CLIENT_ID, 'priorClient', SINGLETON_KEY);
+      const clearCacheSpy = spyOn(mockClientIdProvider, 'clearCache');
+
+      const realTransaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake((stores: any, mode: any) => {
+        const tx = realTransaction(stores, mode);
+        if (Array.isArray(stores) && stores.includes(STORE_NAMES.OPS)) {
+          const opsStore = tx.objectStore(STORE_NAMES.OPS);
+          opsStore.add = async () => {
+            throw new Error('Simulated interrupt inside destructive tx');
+          };
+        }
+        return tx;
+      });
+
+      await expectAsync(
+        service.runDestructiveStateReplacement({
+          syncImportOp: createTestOperation({
+            opType: OpType.SyncImport,
+            entityType: 'ALL' as EntityType,
+            clientId: 'abortClient',
+            vectorClock: { abortClient: 1 },
+          }),
+          snapshotEntityKeys: [],
+        }),
+      ).toBeRejected();
+
+      expect(await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY)).toBe('priorClient');
+      expect(clearCacheSpy).not.toHaveBeenCalled();
     });
   });
 

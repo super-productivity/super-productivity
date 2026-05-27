@@ -9,10 +9,9 @@ describe('CLIENT_ID_PROVIDER', () => {
   beforeEach(() => {
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
       'loadClientId',
-      'generateNewClientId',
       'getOrGenerateClientId',
+      'clearCache',
     ]);
-    mockClientIdService.generateNewClientId.and.resolveTo('B_new1');
     mockClientIdService.getOrGenerateClientId.and.resolveTo('test-client-id-123');
 
     TestBed.configureTestingModule({
@@ -58,5 +57,11 @@ describe('CLIENT_ID_PROVIDER', () => {
 
     expect(result).toBe('B_a7Kx');
     expect(mockClientIdService.getOrGenerateClientId).toHaveBeenCalledTimes(1);
+  });
+
+  it('should delegate clearCache to ClientIdService', () => {
+    provider.clearCache();
+
+    expect(mockClientIdService.clearCache).toHaveBeenCalledTimes(1);
   });
 });

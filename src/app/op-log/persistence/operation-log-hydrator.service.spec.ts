@@ -303,49 +303,6 @@ describe('OperationLogHydratorService', () => {
         expect(mockValidateStateService.validateAndRepair).not.toHaveBeenCalled();
       });
 
-      // SKIPPED: Repair system is disabled for debugging archive subtask loss
-      xit('should dispatch repaired state if validation repairs it', async () => {
-        // Use mismatched schema version to trigger validation
-        const snapshot = createMockSnapshot({ schemaVersion: undefined });
-        const repairedState = { ...mockState, repaired: true };
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockValidateStateService.validateAndRepair.and.resolveTo({
-          isValid: false,
-          wasRepaired: true,
-          repairedState,
-          repairSummary: { entityStateFixed: 1 } as any,
-        });
-
-        await service.hydrateStore();
-
-        expect(mockStore.dispatch).toHaveBeenCalledWith(
-          loadAllData({ appDataComplete: repairedState }),
-        );
-      });
-
-      // SKIPPED: Repair system is disabled for debugging archive subtask loss
-      xit('should create repair operation when state is repaired', async () => {
-        // Use mismatched schema version to trigger validation
-        const snapshot = createMockSnapshot({ schemaVersion: undefined });
-        const repairedState = { ...mockState, repaired: true };
-        const repairSummary = { entityStateFixed: 1 } as any;
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockValidateStateService.validateAndRepair.and.resolveTo({
-          isValid: false,
-          wasRepaired: true,
-          repairedState,
-          repairSummary,
-        });
-
-        await service.hydrateStore();
-
-        expect(mockRepairOperationService.createRepairOperation).toHaveBeenCalledWith(
-          repairedState,
-          repairSummary,
-          'test-client',
-        );
-      });
-
       it('should restore vector clock from snapshot to vector clock store', async () => {
         // This test verifies the fix for the bug where vector clock was not restored
         // from snapshot during hydration, causing new ops to have incomplete clocks

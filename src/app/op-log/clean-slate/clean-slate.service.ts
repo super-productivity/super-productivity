@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { uuidv7 } from '../../util/uuid-v7';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { ClientIdService } from '../../core/util/client-id.service';
+import { generateClientId } from '../../core/util/generate-client-id';
 import { OpLog } from '../../core/log';
 import { Operation, OpType, SyncImportReason } from '../core/operation.types';
 import { ActionType } from '../core/action-types.enum';
@@ -22,15 +22,16 @@ export type CleanSlateReason = 'ENCRYPTION_CHANGE' | 'MANUAL';
 /**
  * Service for performing "clean slate" operations on the sync state.
  *
- * Atomically replaces the local op-log + state_cache + vector_clock with a
- * fresh baseline derived from current state. Used by encryption-password
+ * Atomically replaces the local op-log + state_cache + vector_clock + clientId
+ * with a fresh baseline derived from current state. Used by encryption-password
  * changes (which need a fresh sync baseline) and by user-initiated sync
  * recovery.
  *
- * Atomicity within `SUP_OPS` is guaranteed by
- * `OperationLogStoreService.runDestructiveStateReplacement`; cross-DB
- * rotation of the clientId (which lives in `pf`) is rolled back on failure
- * — see issue #7709.
+ * Atomicity is guaranteed by
+ * `OperationLogStoreService.runDestructiveStateReplacement`. The clientId now
+ * lives in `SUP_OPS` too, so it rotates atomically with the op-log inside that
+ * single transaction — no cross-database rollback is needed (issues #7709,
+ * #7732).
  *
  * @example
  * ```typescript
@@ -44,7 +45,6 @@ export type CleanSlateReason = 'ENCRYPTION_CHANGE' | 'MANUAL';
 export class CleanSlateService {
   private stateSnapshotService = inject(StateSnapshotService);
   private opLogStore = inject(OperationLogStoreService);
-  private clientIdService = inject(ClientIdService);
   private operationWriteFlushService = inject(OperationWriteFlushService);
   private lockService = inject(LockService);
 
@@ -52,10 +52,9 @@ export class CleanSlateService {
    * Creates a clean slate by resetting local operation log and preparing
    * a fresh SYNC_IMPORT operation for upload.
    *
-   * The destructive sequence (clear OPS, append SYNC_IMPORT, write vector
-   * clock, write state_cache) runs as a single atomic transaction. On
-   * failure, the rotated clientId is rolled back so `pf` and `SUP_OPS` stay
-   * consistent.
+   * The destructive sequence (rotate clientId, clear OPS, append SYNC_IMPORT,
+   * write vector clock, write state_cache) runs as a single atomic
+   * transaction. On failure it aborts wholesale and the prior id stands.
    *
    * Does NOT upload to the server — that happens on the next sync, with the
    * `isCleanSlate=true` flag, which makes the server delete its operations
@@ -101,43 +100,41 @@ export class CleanSlateService {
         // which causes data loss.
         const currentState = await this.stateSnapshotService.getStateSnapshotAsync();
 
-        // Rotate the clientId for the duration of the destructive replacement.
-        // The clientId lives in a separate IDB database (`pf`) and so cannot
-        // share the atomic SUP_OPS tx below; ClientIdService.withRotation rolls
-        // it back on failure so `pf` and `SUP_OPS` agree on the device's
-        // clientId after this method returns or throws.
-        return this.clientIdService.withRotation('[CleanSlate]', async (newClientId) => {
-          OpLog.normal('[CleanSlate] Generated new client ID', {
-            newClientIdSuffix: newClientId.slice(-3),
-          });
-
-          const newVectorClock = { [newClientId]: 1 };
-          const syncImportOp: Operation = {
-            id: uuidv7(),
-            actionType: ActionType.LOAD_ALL_DATA,
-            opType: OpType.SyncImport,
-            entityType: 'ALL',
-            entityId: undefined,
-            payload: currentState,
-            clientId: newClientId,
-            vectorClock: newVectorClock,
-            timestamp: Date.now(),
-            schemaVersion: CURRENT_SCHEMA_VERSION,
-            syncImportReason,
-          };
-
-          OpLog.normal('[CleanSlate] Created SYNC_IMPORT operation', {
-            opId: syncImportOp.id,
-          });
-
-          OpLog.normal('[CleanSlate] Replacing op-log + state cache atomically');
-          await this.opLogStore.runDestructiveStateReplacement({
-            syncImportOp,
-            snapshotEntityKeys: extractEntityKeysFromState(currentState),
-          });
-
-          return { syncImportId: syncImportOp.id };
+        // Mint a fresh clientId for the new sync baseline. It is pure here —
+        // persisted only inside runDestructiveStateReplacement's atomic
+        // SUP_OPS transaction, which also clears the ClientIdService cache.
+        // On a throw the tx aborts and the prior id stands.
+        const newClientId = generateClientId();
+        OpLog.normal('[CleanSlate] Generated new client ID', {
+          newClientIdSuffix: newClientId.slice(-3),
         });
+
+        const newVectorClock = { [newClientId]: 1 };
+        const syncImportOp: Operation = {
+          id: uuidv7(),
+          actionType: ActionType.LOAD_ALL_DATA,
+          opType: OpType.SyncImport,
+          entityType: 'ALL',
+          entityId: undefined,
+          payload: currentState,
+          clientId: newClientId,
+          vectorClock: newVectorClock,
+          timestamp: Date.now(),
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+          syncImportReason,
+        };
+
+        OpLog.normal('[CleanSlate] Created SYNC_IMPORT operation', {
+          opId: syncImportOp.id,
+        });
+
+        OpLog.normal('[CleanSlate] Replacing op-log + state cache atomically');
+        await this.opLogStore.runDestructiveStateReplacement({
+          syncImportOp,
+          snapshotEntityKeys: extractEntityKeysFromState(currentState),
+        });
+
+        return { syncImportId: syncImportOp.id };
       },
     );
 

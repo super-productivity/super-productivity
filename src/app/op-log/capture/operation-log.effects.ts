@@ -165,14 +165,10 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // Clean-slate and backup import rotate the clientId while holding this
         // same lock; reading here prevents a queued operation from capturing
         // the old id before waiting behind a destructive replacement.
-        const clientId =
-          (await this.clientIdService.loadClientId()) ??
-          (await this.clientIdService.generateNewClientId());
-        if (!clientId) {
-          throw new Error(
-            'Failed to load or generate clientId - cannot persist operation',
-          );
-        }
+        // getOrGenerateClientId() throws on a transient IndexedDB read failure
+        // rather than minting a fresh id — the catch below treats that as a
+        // retryable persistence failure.
+        const clientId = await this.clientIdService.getOrGenerateClientId();
 
         // MULTI-TAB SAFETY: Clear vector clock cache to ensure fresh read after other tabs
         // may have written while we were waiting for the lock. Each tab has its own in-memory

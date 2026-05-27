@@ -20,6 +20,7 @@
     "docker:shell": "./scripts/docker-monitor.sh shell",
     "delete-user": "ts-node scripts/delete-user.ts",
     "clear-data": "ts-node scripts/clear-data.ts",
+    "recover-user": "ts-node --transpile-only scripts/recover-user.ts",
     "monitor": "node dist/scripts/monitor.js",
     "monitor:dev": "tsx scripts/monitor.ts",
     "analyze-storage": "node dist/scripts/analyze-storage.js",

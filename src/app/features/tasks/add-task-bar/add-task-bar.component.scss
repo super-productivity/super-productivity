@@ -33,7 +33,9 @@
 
 :host-context(.isTouchOnly).global {
   top: auto;
-  bottom: calc(var(--keyboard-height) + var(--s));
+  // Extra gap above the keyboard so the bottom action buttons stay easy to
+  // tap — `--s` alone leaves them flush against the IME's top edge.
+  bottom: calc(var(--keyboard-height) + var(--s2));
   transition: bottom var(--transition-duration-m) ease-out;
 }
 

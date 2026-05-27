@@ -173,6 +173,12 @@ finish-day-btn,
   bottom: 0;
   // make space for add task bar button not overlapping 'finish day' button
   padding-bottom: var(--s8);
+
+  // When a plugin embed is active, the iframe fills the area itself and the
+  // bottom padding clips popup menus rendered inside it (slash menu, etc.).
+  &:has(plugin-index) {
+    padding-bottom: 0;
+  }
 }
 
 .backlog {

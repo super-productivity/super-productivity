@@ -6,7 +6,7 @@
     "declarationMap": false,
     "noEmit": true,
     "rootDir": ".",
-    "types": ["vitest"]
+    "types": ["vitest", "node"]
   },
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]

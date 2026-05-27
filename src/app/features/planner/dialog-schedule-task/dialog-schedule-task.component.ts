@@ -38,6 +38,7 @@ import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateAdapter, MatOption } from '@angular/material/core';
@@ -163,7 +164,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   plannedTimestamp = computed<number | null>(() => {
     const selectedDate = this._selectedDate();
     const selectedTime = this._selectedTime();
-    if (!selectedDate || !selectedTime) {
+    // Malformed values (e.g. `HH:MM:SS` pasted into <input type="time">, out-of-range
+    // `25:00`, garbage) would otherwise crash getDateTimeFromClockString and bubble
+    // "Invalid clock string" to the global error handler via scheduleWarnings (#7802).
+    if (!selectedDate || !selectedTime || !isValidSplitTime(selectedTime)) {
       return null;
     }
 
@@ -428,7 +432,11 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
     this._handleReminderRemoval();
 
-    if (this.selectedTime) {
+    // Treat malformed time the same as "no time": fall through to day-only planning
+    // rather than crashing in _scheduleWithTime (#7802).
+    const hasValidTime = !!this.selectedTime && isValidSplitTime(this.selectedTime);
+
+    if (hasValidTime) {
       this._scheduleWithTime();
     } else if (
       this.data.task &&
@@ -473,8 +481,9 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   }
 
   private _scheduleWithTime(): void {
-    // Only schedule if task is provided
-    if (!this.data.task) {
+    // Only schedule if task is provided and time is valid (submit() pre-validates;
+    // belt-and-braces guard against direct callers / malformed paste — see #7802).
+    if (!this.data.task || !isValidSplitTime(this.selectedTime ?? undefined)) {
       return;
     }
 

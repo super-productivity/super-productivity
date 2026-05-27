@@ -863,23 +863,6 @@ describe('Sync Operations', () => {
       const snapshot = await service.generateSnapshot(userId);
       expect(snapshot).toBeDefined();
     });
-
-    // Skip: Cannot spy on zlib.gunzipSync in this test environment
-    it.skip('should discard cached snapshot if decompression exceeds limit', async () => {
-      const service = getSyncService();
-
-      await service.uploadOps(userId, clientId, [createOp('task-1', 'CRT')]);
-      await service.generateSnapshot(userId);
-
-      const gunzipSpy = vi.spyOn(zlib, 'gunzipSync').mockImplementation(() => {
-        throw new RangeError('maxOutputLength exceeded');
-      });
-
-      const cached = await service.getCachedSnapshot(userId);
-      expect(cached).toBeNull();
-
-      gunzipSpy.mockRestore();
-    });
   });
 
   describe('Rate Limiting', () => {

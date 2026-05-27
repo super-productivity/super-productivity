@@ -1096,6 +1096,50 @@ describe('ArchiveOperationHandler', () => {
           });
         });
 
+        describe('REPAIR', () => {
+          // Regression: a REPAIR op built from the sync getStateSnapshot() carries
+          // empty archives. Without this guard it overwrites (wipes) the local
+          // archive on every other client that applies the REPAIR op.
+          it('should preserve local archiveYoung when REPAIR has empty archive (likely bug)', async () => {
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.Repair },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+          });
+
+          it('should preserve local archiveOld when REPAIR has empty archive (likely bug)', async () => {
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveOld: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.Repair },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+          });
+
+          it('should allow writing non-empty archive over existing archive', async () => {
+            const newArchive = createArchiveModelForTest(['new-task']);
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: newArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.Repair },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+              newArchive,
+            );
+          });
+        });
+
         describe('BACKUP_IMPORT', () => {
           let originalConfirm: typeof window.confirm;
 

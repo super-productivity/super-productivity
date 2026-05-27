@@ -1,0 +1,25 @@
+{
+  "id": "document-mode",
+  "manifestVersion": 1,
+  "name": "Document Mode (Alpha)",
+  "version": "0.1.0",
+  "description": "Document-style editor for projects and Today, powered by TipTap.",
+  "author": "SuperProductivity",
+  "homepage": "https://github.com/super-productivity/super-productivity",
+  "minSupVersion": "10.0.0",
+  "permissions": [
+    "getTasks",
+    "updateTask",
+    "addTask",
+    "deleteTask",
+    "reorderTasks",
+    "selectTask",
+    "persistDataSynced",
+    "loadSyncedData",
+    "registerHook"
+  ],
+  "iFrame": true,
+  "isSkipMenuEntry": true,
+  "hooks": ["workContextChange", "anyTaskUpdate"],
+  "icon": "icon.svg"
+}

@@ -28,6 +28,7 @@ import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clo
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskArchiveService } from '../../archive/task-archive.service';
+import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
 import { DateService } from '../../../core/date/date.service';
 import { Log } from '../../../core/log';
 import {
@@ -67,6 +68,7 @@ export class TaskRepeatCfgEffects {
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _taskArchiveService = inject(TaskArchiveService);
+  private _addTasksForTomorrowService = inject(AddTasksForTomorrowService);
   private _dateService = inject(DateService);
 
   addRepeatCfgToTaskUpdateTask$ = createEffect(() =>
@@ -199,12 +201,17 @@ export class TaskRepeatCfgEffects {
           // TODAY FIRST OCCURRENCE:
           // Keep the stable occurrence identity aligned even if the task was
           // originally created before it became repeatable.
-          const currentDueDay = task.dueDay || getDbDateStr(task.created);
           const update: Partial<TaskCopy> = {};
           if (firstOccurrence && getDbDateStr(task.created) !== firstOccurrenceStr) {
             update.created = firstOccurrence.getTime();
           }
-          if (currentDueDay !== firstOccurrenceStr) {
+          // Schedule the task for its first occurrence day. An Inbox task has
+          // no dueDay, so set it explicitly (#7725); task.created is not a
+          // valid fallback — being created today does not imply it is
+          // scheduled. Skip already time-scheduled tasks: dueDay/dueWithTime
+          // are mutually exclusive and this plain update cannot clear
+          // dueWithTime (timed scheduling: addRepeatCfgToTaskUpdateTask$).
+          if (!isTimedTask && !task.dueWithTime && task.dueDay !== firstOccurrenceStr) {
             update.dueDay = firstOccurrenceStr;
           }
           if (Object.keys(update).length > 0) {
@@ -268,12 +275,6 @@ export class TaskRepeatCfgEffects {
               first(),
               switchMap((liveInstances) => {
                 const undoneInstances = liveInstances.filter((t) => !t.isDone);
-                if (undoneInstances.length === 0) {
-                  return EMPTY;
-                }
-                const task = undoneInstances.reduce((a, b) =>
-                  a.created > b.created ? a : b,
-                );
 
                 // If the user moved startDate earlier than the existing
                 // lastTaskCreationDay, the anchor is stale — re-anchor on
@@ -293,6 +294,45 @@ export class TaskRepeatCfgEffects {
                 const firstOccurrence = isStartDateMovedEarlier
                   ? getFirstRepeatOccurrence(fullCfg)
                   : getNextRepeatOccurrence(fullCfg, new Date());
+
+                if (undoneInstances.length === 0) {
+                  // No live instance to reschedule. But when startDate moved
+                  // earlier, the stale lastTaskCreationDay would still suppress
+                  // every projected/created instance between the new startDate
+                  // and the old anchor (#7724). Re-anchor to the day before the
+                  // new first occurrence so it — and every following day — is
+                  // created and projected fresh.
+                  // The re-dispatched updateTaskRepeatCfg only touches
+                  // lastTaskCreation* fields, which are absent from
+                  // SCHEDULE_AFFECTING_FIELDS, so it does not re-enter this
+                  // effect.
+                  if (isStartDateMovedEarlier && firstOccurrence) {
+                    const dayBeforeFirstOccurrence = new Date(firstOccurrence);
+                    dayBeforeFirstOccurrence.setDate(
+                      dayBeforeFirstOccurrence.getDate() - 1,
+                    );
+                    this._taskRepeatCfgService.updateTaskRepeatCfg(cfgId, {
+                      lastTaskCreationDay: this._dateService.todayStr(
+                        dayBeforeFirstOccurrence,
+                      ),
+                      lastTaskCreation: dayBeforeFirstOccurrence.getTime(),
+                    });
+                    // When the new first occurrence is today, addAllDueToday()
+                    // is the only path that creates the live instance — and it
+                    // only runs on date change (#6230, see task-due.effects.ts).
+                    // Trigger it explicitly so the user sees today's instance
+                    // immediately instead of after the next midnight (#7768 Bug 2).
+                    if (this._dateService.isToday(firstOccurrence)) {
+                      this._addTasksForTomorrowService.addAllDueToday();
+                    }
+                  }
+                  return EMPTY;
+                }
+
+                const task = undoneInstances.reduce((a, b) =>
+                  a.created > b.created ? a : b,
+                );
+
                 const firstOccurrenceStr = firstOccurrence
                   ? this._dateService.todayStr(firstOccurrence)
                   : this._dateService.todayStr();
@@ -308,9 +348,6 @@ export class TaskRepeatCfgEffects {
                   fullCfg.remindAt &&
                   isValidSplitTime(fullCfg.startTime)
                 );
-                const isFirstOccurrenceToday_ = firstOccurrence
-                  ? this._dateService.isToday(firstOccurrence)
-                  : true;
 
                 if (isTimedTask) {
                   const targetDayTimestamp = firstOccurrence
@@ -336,7 +373,12 @@ export class TaskRepeatCfgEffects {
                   );
                 }
 
-                if (!isFirstOccurrenceToday_ && firstOccurrence) {
+                // When first occurrence is today, planTaskForDay also moves
+                // the existing instance's dueDay to today via the task reducer
+                // and adds it to TODAY_TAG ordering via the planner meta
+                // reducer. Skipping today here left the instance stranded on
+                // its old dueDay (#7768 Bug 1).
+                if (firstOccurrence) {
                   return rxOf(
                     PlannerActions.planTaskForDay({
                       task: task as TaskCopy,

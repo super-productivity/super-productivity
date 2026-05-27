@@ -888,50 +888,6 @@ describe('RejectedOpsHandlerService', () => {
 
       it('should only reset counters for ALL entities on a fully clean sync (empty rejections)', async () => {
         opLogStoreSpy.markRejected.and.resolveTo();
-
-        // Build up attempts for two different entities
-        for (let i = 0; i < MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
-          // Entity X
-          const opX = createOp({
-            id: `op-x-${i}`,
-            entityType: 'TASK',
-            entityId: 'entity-X',
-          });
-          opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(opX)));
-          downloadCallback.and.callFake(async (options: any) => {
-            if (options?.forceFromSeq0) {
-              return {
-                newOpsCount: 0,
-                allOpClocks: [{ remoteClient: 2 }],
-              } as DownloadResultForRejection;
-            }
-            return { newOpsCount: 0 } as DownloadResultForRejection;
-          });
-          supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
-
-          await service.handleRejectedOps(
-            [
-              {
-                opId: `op-x-${i}`,
-                error: 'concurrent',
-                errorCode: 'CONFLICT_CONCURRENT',
-              },
-            ],
-            downloadCallback,
-          );
-        }
-
-        // Both entities are at the limit. Clean sync resets ALL counters.
-        await service.handleRejectedOps([]);
-
-        // After reset, entity X should resolve normally again
-        supersededOperationResolverSpy.resolveSupersededLocalOps.calls.reset();
-        const opAfter = createOp({
-          id: 'op-after-reset',
-          entityType: 'TASK',
-          entityId: 'entity-X',
-        });
-        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(opAfter)));
         downloadCallback.and.callFake(async (options: any) => {
           if (options?.forceFromSeq0) {
             return {
@@ -943,22 +899,59 @@ describe('RejectedOpsHandlerService', () => {
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
-        await service.handleRejectedOps(
-          [
-            {
-              opId: 'op-after-reset',
-              error: 'concurrent',
-              errorCode: 'CONFLICT_CONCURRENT',
-            },
-          ],
-          downloadCallback,
-        );
+        // Build up attempts for two different entities
+        for (const entitySuffix of ['X', 'Y']) {
+          for (let i = 0; i < MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+            const op = createOp({
+              id: `op-${entitySuffix.toLowerCase()}-${i}`,
+              entityType: 'TASK',
+              entityId: `entity-${entitySuffix}`,
+            });
+            opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
 
-        // Should have resolved, not rejected
-        expect(
-          supersededOperationResolverSpy.resolveSupersededLocalOps,
-        ).toHaveBeenCalled();
-        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+            await service.handleRejectedOps(
+              [
+                {
+                  opId: op.id,
+                  error: 'concurrent',
+                  errorCode: 'CONFLICT_CONCURRENT',
+                },
+              ],
+              downloadCallback,
+            );
+          }
+        }
+
+        // Both entities are at the limit. Clean sync resets ALL counters.
+        await service.handleRejectedOps([]);
+        opLogStoreSpy.markRejected.calls.reset();
+
+        for (const entitySuffix of ['X', 'Y']) {
+          supersededOperationResolverSpy.resolveSupersededLocalOps.calls.reset();
+          const opAfter = createOp({
+            id: `op-after-reset-${entitySuffix.toLowerCase()}`,
+            entityType: 'TASK',
+            entityId: `entity-${entitySuffix}`,
+          });
+          opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(opAfter)));
+
+          await service.handleRejectedOps(
+            [
+              {
+                opId: opAfter.id,
+                error: 'concurrent',
+                errorCode: 'CONFLICT_CONCURRENT',
+              },
+            ],
+            downloadCallback,
+          );
+
+          // Should have resolved, not rejected
+          expect(
+            supersededOperationResolverSpy.resolveSupersededLocalOps,
+          ).toHaveBeenCalled();
+          expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+        }
       });
 
       it('should reset resolution attempt counters when sync succeeds (no rejections)', async () => {

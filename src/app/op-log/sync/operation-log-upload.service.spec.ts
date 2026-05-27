@@ -1411,16 +1411,10 @@ describe('OperationLogUploadService', () => {
       });
 
       it('should allow callback to create new operations that get uploaded', async () => {
-        // First call to getUnsynced returns empty (callback hasn't run yet)
-        // After callback runs, we simulate it creating a new op
-        let callCount = 0;
+        let callbackCreatedOperation = false;
+        const callbackCreatedEntry = createMockEntry(1, 'sync-import-op', 'client-1');
         mockOpLogStore.getUnsynced.and.callFake(async () => {
-          callCount++;
-          if (callCount === 1) {
-            // After callback ran, return the new op it created
-            return [createMockEntry(1, 'sync-import-op', 'client-1')];
-          }
-          return [];
+          return callbackCreatedOperation ? [callbackCreatedEntry] : [];
         });
 
         mockApiProvider.uploadOps.and.returnValue(
@@ -1431,13 +1425,19 @@ describe('OperationLogUploadService', () => {
           }),
         );
 
-        const callback = jasmine.createSpy('preUploadCallback').and.resolveTo(undefined);
+        const callback = jasmine.createSpy('preUploadCallback').and.callFake(async () => {
+          callbackCreatedOperation = true;
+        });
 
         await service.uploadPendingOps(mockApiProvider, { preUploadCallback: callback });
 
         // Callback was called, and the op it created was uploaded
         expect(callback).toHaveBeenCalled();
-        expect(mockApiProvider.uploadOps).toHaveBeenCalled();
+        expect(mockApiProvider.uploadOps).toHaveBeenCalledWith(
+          [jasmine.objectContaining(callbackCreatedEntry.op)],
+          'client-1',
+          jasmine.any(Number),
+        );
       });
     });
   });

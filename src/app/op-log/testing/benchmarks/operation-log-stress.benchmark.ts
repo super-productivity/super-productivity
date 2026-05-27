@@ -5,8 +5,7 @@
  * for measuring IndexedDB operation throughput.
  *
  * To run these benchmarks:
- * 1. Change `xdescribe` to `describe` below
- * 2. Run: npm run test:file src/app/op-log/testing/benchmarks/operation-log-stress.benchmark.ts
+ * 1. Run: npm run test:file src/app/op-log/testing/benchmarks/operation-log-stress.benchmark.ts
  * 3. Watch the console output for timing information
  *
  * Note: Results vary significantly based on:
@@ -25,8 +24,7 @@ import { uuidv7 } from '../../../util/uuid-v7';
 // Increase timeout for stress tests
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 60000;
 
-// Change to `describe` to run benchmarks
-xdescribe('OperationLog Performance Benchmarks', () => {
+describe('OperationLog Performance Benchmarks', () => {
   let service: OperationLogStoreService;
 
   beforeEach(async () => {

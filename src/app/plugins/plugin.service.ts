@@ -57,6 +57,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/voice-reminder',
   'assets/bundled-plugins/google-calendar-provider',
   'assets/bundled-plugins/caldav-calendar-provider',
+  'assets/bundled-plugins/document-mode',
 ] as const;
 
 @Injectable({
@@ -1045,6 +1046,17 @@ export class PluginService implements OnDestroy {
       return;
     }
     await this._pluginHooks.dispatchHook(hookName, payload);
+  }
+
+  async dispatchHookToPlugin(
+    pluginId: string,
+    hookName: Hooks,
+    payload?: unknown,
+  ): Promise<void> {
+    if (!this._isInitialized) {
+      return;
+    }
+    await this._pluginHooks.dispatchHookToPlugin(pluginId, hookName, payload);
   }
 
   async loadPluginFromPath(pluginPath: string): Promise<PluginInstance> {

@@ -103,10 +103,20 @@ enum PluginHooks {
   TASK_DELETE = 'taskDelete',
   FINISH_DAY = 'finishDay',
   LANGUAGE_CHANGE = 'languageChange',
-  PERSISTED_DATA_UPDATE = 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED = 'persistedDataChanged',
   ACTION = 'action',
 }
 ```
+
+**`PERSISTED_DATA_CHANGED`** fires on any persistent-data change to this
+plugin after the host has finished its initial boot load — including
+remote sync deliveries and bulk imports. Handler receives no payload;
+re-call `loadSyncedData(key?)` for any key your plugin tracks to get
+fresh data (scoped to the calling plugin). Contract: call
+`loadSyncedData()` on plugin init for the initial state; then use this
+hook for subsequent changes. There is no replay-on-register, no
+per-key discrimination in the event, and no guaranteed ordering across
+rapid changes. Handlers must be idempotent.
 
 ### 2. Required Permissions
 

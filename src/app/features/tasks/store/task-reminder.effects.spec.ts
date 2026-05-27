@@ -206,7 +206,7 @@ describe('TaskReminderEffects', () => {
     });
 
     it('should not show snack when remindAt is undefined', () => {
-      testScheduler.run(({ hot, expectObservable }) => {
+      testScheduler.run(({ hot, flush }) => {
         const action = TaskSharedActions.reScheduleTaskWithTime({
           task: mockTask,
           dueWithTime: Date.now() + 86400000,
@@ -218,6 +218,8 @@ describe('TaskReminderEffects', () => {
 
         // Non-dispatching effect, just verify snack not called
         effects.updateTaskReminderSnack$.subscribe();
+        flush();
+        expect(snackService.open).not.toHaveBeenCalled();
       });
     });
   });
@@ -426,17 +428,11 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
 
       // Verify the effect emits (filter passes)
       effects.cancelNativeReminderOnUnschedule$.subscribe({
-        next: () => {
-          // Action passed through the filter - this is the expected behavior
-          expect(true).toBe(true);
+        next: (emittedAction) => {
+          expect(emittedAction).toBe(action);
           done();
         },
-        error: () => {
-          // The tap may throw because androidInterface is undefined,
-          // but the filter still passed, which is what we're testing
-          expect(true).toBe(true);
-          done();
-        },
+        error: done.fail,
       });
     });
 
@@ -445,14 +441,11 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
       actions$ = of(action);
 
       effects.cancelNativeReminderOnUnschedule$.subscribe({
-        next: () => {
-          expect(true).toBe(true);
+        next: (emittedAction) => {
+          expect(emittedAction).toBe(action);
           done();
         },
-        error: () => {
-          expect(true).toBe(true);
-          done();
-        },
+        error: done.fail,
       });
     });
   });
@@ -546,14 +539,11 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
       actions$ = of(action);
 
       effects.cancelNativeReminderOnDialogAction$.subscribe({
-        next: () => {
-          expect(true).toBe(true);
+        next: (emittedAction) => {
+          expect(emittedAction).toBe(action);
           done();
         },
-        error: () => {
-          expect(true).toBe(true);
-          done();
-        },
+        error: done.fail,
       });
     });
 
@@ -564,14 +554,11 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
       actions$ = of(action);
 
       effects.cancelNativeReminderOnDialogAction$.subscribe({
-        next: () => {
-          expect(true).toBe(true);
+        next: (emittedAction) => {
+          expect(emittedAction).toBe(action);
           done();
         },
-        error: () => {
-          expect(true).toBe(true);
-          done();
-        },
+        error: done.fail,
       });
     });
 
@@ -583,14 +570,11 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
       actions$ = of(action);
 
       effects.cancelNativeReminderOnDialogAction$.subscribe({
-        next: () => {
-          expect(true).toBe(true);
+        next: (emittedAction) => {
+          expect(emittedAction).toBe(action);
           done();
         },
-        error: () => {
-          expect(true).toBe(true);
-          done();
-        },
+        error: done.fail,
       });
     });
   });

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subscription } from 'rxjs';
 import { FocusModeEffects } from './focus-mode.effects';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { FocusModeStrategyFactory } from '../focus-mode-strategies';
@@ -46,6 +46,16 @@ describe('FocusModeEffects', () => {
     purpose: null,
     ...overrides,
   });
+
+  const collectEmissions = <T>(
+    source$: Observable<T>,
+  ): { emitted: T[]; subscription: Subscription } => {
+    const emitted: T[] = [];
+    const subscription = source$.subscribe((action) => {
+      emitted.push(action);
+    });
+    return { emitted, subscription };
+  };
 
   beforeEach(() => {
     currentTaskId$ = new BehaviorSubject<string | null>(null);
@@ -1121,9 +1131,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStartToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1139,10 +1154,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStartToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
-        // Should not start new session when on SessionDone screen
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1158,10 +1177,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStartToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
-        // Should not start new session when on Break screen
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1205,10 +1228,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStartToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
-        // Should not start session when focus mode feature is disabled
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1336,6 +1363,9 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
@@ -1343,6 +1373,8 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1390,6 +1422,9 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
@@ -1398,6 +1433,8 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1415,6 +1452,9 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
@@ -1422,7 +1462,8 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       setTimeout(() => {
-        // Should not pause session when focus mode feature is disabled
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1445,6 +1486,9 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
@@ -1452,7 +1496,8 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       setTimeout(() => {
-        // Effect should NOT fire during sync - this prevents the freeze bug
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -2166,9 +2211,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
-      // Wait a bit to ensure no action is dispatched
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
-        done(); // If no emission occurred, test passes
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
+        done();
       }, 50);
     });
 
@@ -2187,7 +2237,13 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -2207,7 +2263,13 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -2227,7 +2289,13 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -2251,8 +2319,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
-        done(); // If no emission occurred, test passes
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
+        done();
       }, 50);
     });
 
@@ -2541,6 +2615,9 @@ describe('FocusModeEffects', () => {
 
         effects = TestBed.inject(FocusModeEffects);
 
+        const { emitted, subscription } = collectEmissions(
+          effects.syncTrackingStopToSession$,
+        );
         currentTaskId$.next('task-123');
 
         setTimeout(() => {
@@ -2548,7 +2625,8 @@ describe('FocusModeEffects', () => {
         }, 10);
 
         setTimeout(() => {
-          // Should not dispatch when break timer is already paused
+          expect(emitted).toEqual([]);
+          subscription.unsubscribe();
           done();
         }, 50);
       });

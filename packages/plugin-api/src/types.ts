@@ -21,10 +21,11 @@ export enum PluginHooks {
   CURRENT_TASK_CHANGE = 'currentTaskChange',
   FINISH_DAY = 'finishDay',
   LANGUAGE_CHANGE = 'languageChange',
-  PERSISTED_DATA_UPDATE = 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED = 'persistedDataChanged',
   ACTION = 'action',
   ANY_TASK_UPDATE = 'anyTaskUpdate',
   PROJECT_LIST_UPDATE = 'projectListUpdate',
+  WORK_CONTEXT_CHANGE = 'workContextChange',
 }
 
 export type Hooks = PluginHooks;
@@ -165,10 +166,6 @@ export interface LanguageChangePayload {
   [key: string]: unknown;
 }
 
-export interface PersistedDataUpdatePayload {
-  data: string;
-}
-
 export interface ActionPayload {
   action: string;
   payload?: unknown;
@@ -188,6 +185,41 @@ export interface ProjectListUpdatePayload {
   changes?: Partial<Project>;
 }
 
+/**
+ * Snapshot of the active work context (project or tag).
+ * Used by getActiveWorkContext() and as the WORK_CONTEXT_CHANGE payload.
+ *
+ * **`taskIds` is a snapshot at the moment of emission**, not a live view.
+ * It goes stale as soon as a task is added, removed, or moved. Plugins
+ * that need the current ordering should call `getActiveWorkContext()` /
+ * `getTasks()` on demand or subscribe to `ANY_TASK_UPDATE` for changes.
+ */
+export interface ActiveWorkContext {
+  id: string;
+  /**
+   * `'TODAY'` is reported for the special Today tag (whose `id` is also
+   * `'TODAY'`); every other tag is `'TAG'`. This matches the vocabulary of
+   * {@link PluginWorkContextHeaderBtnCfg.showFor}.
+   */
+  type: 'PROJECT' | 'TAG' | 'TODAY';
+  title: string;
+  /**
+   * An independent copy taken at emit time — safe to read, and mutating it
+   * has no effect on the app. See the {@link ActiveWorkContext} note above.
+   */
+  taskIds: string[];
+}
+
+/**
+ * Payload of the WORK_CONTEXT_CHANGE hook, fired when the user switches
+ * between projects/tags. A context is always active while the app is
+ * running, so the payload is never null.
+ *
+ * The included `taskIds` is a snapshot — re-read via `getActiveWorkContext()`
+ * if you care about the current order/membership.
+ */
+export type WorkContextChangePayload = ActiveWorkContext;
+
 // Map hook types to their payload types
 export interface HookPayloadMap {
   [PluginHooks.TASK_CREATED]: TaskCreatedPayload;
@@ -197,10 +229,11 @@ export interface HookPayloadMap {
   [PluginHooks.CURRENT_TASK_CHANGE]: CurrentTaskChangePayload;
   [PluginHooks.FINISH_DAY]: FinishDayPayload;
   [PluginHooks.LANGUAGE_CHANGE]: LanguageChangePayload;
-  [PluginHooks.PERSISTED_DATA_UPDATE]: PersistedDataUpdatePayload;
+  [PluginHooks.PERSISTED_DATA_CHANGED]: void;
   [PluginHooks.ACTION]: ActionPayload;
   [PluginHooks.ANY_TASK_UPDATE]: AnyTaskUpdatePayload;
   [PluginHooks.PROJECT_LIST_UPDATE]: ProjectListUpdatePayload;
+  [PluginHooks.WORK_CONTEXT_CHANGE]: WorkContextChangePayload;
 }
 
 // Generic hook handler with typed payload
@@ -323,6 +356,18 @@ export interface PluginSidePanelBtnCfg {
   onClick: () => void;
 }
 
+/**
+ * Header button that is only rendered when the active work context matches
+ * one of the entries in `showFor`. `'TODAY'` refers to the special TODAY tag.
+ */
+export interface PluginWorkContextHeaderBtnCfg {
+  pluginId: string;
+  label: string;
+  icon?: string;
+  onClick: (ctx: ActiveWorkContext) => void;
+  showFor: ('PROJECT' | 'TAG' | 'TODAY')[];
+}
+
 export interface OAuthFlowConfig {
   authUrl: string;
   tokenUrl: string;
@@ -381,7 +426,51 @@ export interface PluginAPI {
 
   registerSidePanelButton(sidePanelBtnCfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>): void;
 
+  /**
+   * Register a header button that is only visible when the active work
+   * context matches one of the entries in `showFor`. The handler receives a
+   * snapshot of the active context.
+   *
+   * Register this from your plugin's main script — not from an embedded
+   * `index.html` — so the button and its handler outlive any work-view embed
+   * the button toggles. A button registered from an embed iframe stops
+   * working once that embed is closed.
+   */
+  registerWorkContextHeaderButton(
+    cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
+  ): void;
+
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
+
+  /**
+   * Returns the currently active project or tag. The TODAY tag has id
+   * `'TODAY'`. A context stays active even on non-work-view routes (e.g. a
+   * settings page) — it is the last one the user opened. Resolves to null
+   * only if the app has not finished its initial data load.
+   */
+  getActiveWorkContext(): Promise<ActiveWorkContext | null>;
+
+  /**
+   * Mount this plugin's index.html inside the work-view body, in place of
+   * the task list.
+   *
+   * The embed is shown **only while the active context is a project or the
+   * TODAY tag**. For any other context (a regular tag, or a non-work-view
+   * route) it is a silent no-op — nothing renders and no error is raised.
+   * The embed automatically hides and reappears as the user navigates in
+   * and out of eligible contexts; the request stays armed until
+   * `closeWorkContextView` is called. To check whether a call will take
+   * effect right now, read `getActiveWorkContext()` first.
+   *
+   * Call `closeWorkContextView` to revert to the normal task-list view.
+   */
+  showInWorkContext(): void;
+
+  /**
+   * Revert the work-view body to the normal task list. No-op unless this
+   * plugin currently owns the embed.
+   */
+  closeWorkContextView(): void;
 
   // readiness signal — register a callback to run after the app confirms all
   // declared APIs (e.g. nodeExecution IPC bridge) are available. Put startup
@@ -407,6 +496,13 @@ export interface PluginAPI {
   getArchivedTasks(): Promise<Task[]>;
 
   getCurrentContextTasks(): Promise<Task[]>;
+
+  /**
+   * Select a task, opening its detail panel in the app's right-hand panel.
+   * Works regardless of the active view — including while a plugin embed
+   * occupies the work-view body. Accepts a task or subtask id.
+   */
+  selectTask(taskId: string): Promise<void>;
 
   reInitData(): Promise<void>;
   updateTask(taskId: string, updates: Partial<Task>): Promise<void>;
@@ -452,9 +548,16 @@ export interface PluginAPI {
   };
 
   // persistence
-  persistDataSynced(dataStr: string): Promise<void>;
+  //
+  // The optional `key` splits a plugin's synced data into multiple
+  // independently-LWW-resolved entries. Calls without a key target the
+  // legacy single-blob entry. `key` must not contain ':' beyond what the
+  // plugin chooses (the host reserves ':' only as the pluginId/key
+  // delimiter and only enforces that the pluginId itself is clean).
+  // Empty-string keys are equivalent to omitting the argument.
+  persistDataSynced(dataStr: string, key?: string): Promise<void>;
 
-  loadSyncedData(): Promise<string | null>;
+  loadSyncedData(key?: string): Promise<string | null>;
 
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
 
@@ -605,6 +708,9 @@ export enum PluginIframeMessageType {
   // Dialog interaction
   DIALOG_BUTTON_CLICK = 'PLUGIN_DIALOG_BUTTON_CLICK',
   DIALOG_BUTTON_RESPONSE = 'PLUGIN_DIALOG_BUTTON_RESPONSE',
+
+  // Work-context header button click forwarded to the iframe
+  WORK_CONTEXT_BTN_CLICK = 'PLUGIN_WORK_CONTEXT_BTN_CLICK',
 
   // Message forwarding
   MESSAGE = 'PLUGIN_MESSAGE',

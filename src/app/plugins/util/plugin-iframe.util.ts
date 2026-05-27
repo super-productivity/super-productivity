@@ -1,6 +1,6 @@
 import { PluginBridgeService } from '../plugin-bridge.service';
 import { PluginBaseCfg, PluginManifest } from '../plugin-api.model';
-import { PluginIframeMessageType } from '@super-productivity/plugin-api';
+import { PluginHooks, PluginIframeMessageType } from '@super-productivity/plugin-api';
 import { PluginLog } from '../../core/log';
 import { PLUGIN_UI_KIT_CSS } from './plugin-ui-kit.css';
 
@@ -190,9 +190,16 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
         const pendingCalls = new Map();
         const dialogButtonHandlers = new Map();
         const hookHandlers = new Map(); // Store hook handlers by hook type
+        const workContextBtnHandlers = new Map(); // button label -> onClick
 
         // Handle responses from parent
         window.addEventListener('message', function(event) {
+          // Accept messages only from the host (our parent window).
+          // Without this check, any other iframe / sibling window could
+          // spoof API responses, hook events, or work-context button
+          // clicks. The host always posts via the iframe's contentWindow,
+          // so event.source will be window.parent in the legitimate case.
+          if (event.source !== window.parent) return;
           const data = event.data;
           if (data?.type === '${PluginIframeMessageType.API_RESPONSE}' && data.callId) {
             const resolver = pendingCalls.get(data.callId);
@@ -226,6 +233,15 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
                   buttonIndex: data.buttonIndex,
                   error: error.message
                 }, '*');
+              }
+            }
+          } else if (data?.type === '${PluginIframeMessageType.WORK_CONTEXT_BTN_CLICK}') {
+            const handler = workContextBtnHandlers.get(data.buttonHandlerId);
+            if (handler) {
+              try {
+                handler(data.ctx);
+              } catch (error) {
+                console.error('Plugin work-context button handler error:', error);
               }
             }
           } else if (data?.type === '${PluginIframeMessageType.HOOK_EVENT}') {
@@ -307,22 +323,15 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
         window.PluginAPI = {
           cfg: ${JSON.stringify(config.baseCfg)},
 
-          // Add Hooks enum
-          Hooks: {
-            TASK_COMPLETE: 'taskComplete',
-            TASK_UPDATE: 'taskUpdate',
-            TASK_DELETE: 'taskDelete',
-            CURRENT_TASK_CHANGE: 'currentTaskChange',
-            FINISH_DAY: 'finishDay',
-            LANGUAGE_CHANGE: 'languageChange',
-            PERSISTED_DATA_UPDATE: 'persistedDataUpdate',
-            ACTION: 'action'
-          },
+          // Add Hooks enum (kept in sync with PluginHooks via JSON.stringify
+          // of the real source — no hand-edited mirror to drift).
+          Hooks: ${JSON.stringify({ ...PluginHooks })},
 
           // Task methods
           getTasks: () => callApi('getTasks'),
           getArchivedTasks: () => callApi('getArchivedTasks'),
           getCurrentContextTasks: () => callApi('getCurrentContextTasks'),
+          selectTask: (taskId) => callApi('selectTask', [taskId]),
           reInitData: () => callApi('reInitData'),
           updateTask: (taskId, updates) => callApi('updateTask', [taskId, updates]),
           addTask: (taskData) => callApi('addTask', [taskData]),
@@ -348,11 +357,14 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           openDialog: (cfg) => callApi('openDialog', [cfg]),
           showIndexHtmlAsView: () => callApi('showIndexHtmlAsView'),
           showIndexHtmlInSidePanel: () => callApi('showIndexHtmlInSidePanel'),
+          showInWorkContext: () => callApi('showInWorkContext'),
+          closeWorkContextView: () => callApi('closeWorkContextView'),
+          getActiveWorkContext: () => callApi('getActiveWorkContext'),
 
-          // Persistence methods
-          persistDataSynced: (data) => callApi('persistDataSynced', [data]),
-          loadPersistedData: () => callApi('loadPersistedData'),
-          loadSyncedData: () => callApi('loadPersistedData'), // Alias
+          // Persistence methods (optional second arg = key, forwarded by callApi)
+          persistDataSynced: (data, key) => callApi('persistDataSynced', [data, key]),
+          loadPersistedData: (key) => callApi('loadPersistedData', [key]),
+          loadSyncedData: (key) => callApi('loadPersistedData', [key]), // Alias
 
           // Registration methods
           registerHook: (hook, handler) => callApi('registerHook', [hook, handler]),
@@ -361,6 +373,17 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           registerConfigHandler: (handler) => callApi('registerConfigHandler', [handler]),
           registerShortcut: (cfg) => callApi('registerShortcut', [cfg]),
           registerSidePanelButton: (cfg) => callApi('registerSidePanelButton', [cfg]),
+          registerWorkContextHeaderButton: (cfg) => {
+            // onClick is not structured-cloneable across postMessage; keep it
+            // locally, keyed by the button's label, and send the rest of the
+            // cfg. The host rebuilds onClick as a proxy and posts a
+            // WORK_CONTEXT_BTN_CLICK back (carrying the label) on invocation.
+            // Keying by label — which the host also dedups on — means
+            // re-registering a button overwrites instead of leaking.
+            workContextBtnHandlers.set(cfg.label, cfg.onClick);
+            const { onClick, ...rest } = cfg;
+            return callApi('registerWorkContextHeaderButton', [rest]);
+          },
 
           // Node execution (if available)
           executeNodeScript: (request) => callApi('executeNodeScript', [request]),
@@ -405,6 +428,9 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
             // Store the handler and set up message listener
             window.__pluginMessageHandler = handler;
             window.addEventListener('message', async (event) => {
+              // Same origin-check rationale as the listener above —
+              // accept only messages from our parent host.
+              if (event.source !== window.parent) return;
               if (event.data?.type === '${PluginIframeMessageType.MESSAGE}' && window.__pluginMessageHandler) {
                 try {
                   const result = await window.__pluginMessageHandler(event.data.message);
@@ -524,6 +550,45 @@ export const handlePluginMessage = async (
     try {
       // For iframe plugins, we need to handle API calls differently
       // Some methods need special handling because the bridge methods have different signatures
+
+      // registerWorkContextHeaderButton: the iframe keeps its onClick
+      // locally, keyed by the button label; rebuild onClick here as a proxy
+      // that posts WORK_CONTEXT_BTN_CLICK back into the iframe, where the
+      // real handler is looked up by that same label.
+      if (method === 'registerWorkContextHeaderButton' && args.length >= 1) {
+        const rawCfg = args[0] as Record<string, unknown>;
+        const handlerId = rawCfg.label;
+        if (typeof handlerId !== 'string' || !handlerId) {
+          throw new Error('registerWorkContextHeaderButton requires a string label');
+        }
+        const wrappedCfg = {
+          ...rawCfg,
+          onClick: (ctx: unknown): void => {
+            (event.source as Window)?.postMessage(
+              {
+                type: PluginIframeMessageType.WORK_CONTEXT_BTN_CLICK,
+                buttonHandlerId: handlerId,
+                ctx,
+              },
+              '*',
+            );
+          },
+        };
+        const boundMethods = config.boundMethods as Record<string, unknown>;
+        const fn = boundMethods.registerWorkContextHeaderButton as (
+          c: unknown,
+        ) => unknown;
+        const result = await fn(wrappedCfg);
+        event.source?.postMessage(
+          {
+            type: PluginIframeMessageType.API_RESPONSE,
+            callId,
+            result,
+          },
+          { targetOrigin: '*' },
+        );
+        return;
+      }
 
       // For registerHook, we need to add the pluginId parameter when calling the bridge
       if (method === 'registerHook') {

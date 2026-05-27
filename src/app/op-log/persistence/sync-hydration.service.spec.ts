@@ -54,7 +54,6 @@ describe('SyncHydrationService', () => {
     mockOpLogStore.loadStateCache.and.resolveTo(null);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
       'loadClientId',
-      'generateNewClientId',
       'getOrGenerateClientId',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [

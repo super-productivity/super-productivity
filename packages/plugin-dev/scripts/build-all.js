@@ -346,6 +346,30 @@ const plugins = [
       return 'Built and copied to assets';
     },
   },
+  {
+    name: 'document-mode',
+    path: 'document-mode',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/document-mode',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      // editor.js is inlined into index.html; only ship the runtime files.
+      const distFiles = ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'];
+      for (const file of distFiles) {
+        const src = path.join(pluginPath, 'dist', file);
+        const dest = path.join(targetDir, file);
+        if (fs.existsSync(src)) copyRecursive(src, dest);
+      }
+      return 'Built and copied to assets';
+    },
+  },
 ];
 
 async function buildPlugin(plugin) {

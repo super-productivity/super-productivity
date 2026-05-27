@@ -1,57 +1,38 @@
 For all current downloads, package links, and platform-specific notes: [check the wiki](https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install).
 
-## Super Productivity 18.6.0
-
 ### Highlights
 
-- Added scheduling warnings for overlapping tasks and tasks outside work hours (#7559).
-- Added repeat-after-completion for repeating tasks (#7524).
-- Added configurable dynamic breaks for Flowtime (#7402).
-- Added an image picker for choosing background images (#7564).
-- Added per-provider include/exclude regex filters for iCal calendars (#7528).
-
-### Tasks, Focus & UI
-
-- Show the Pomodoro timer in the browser tab title (#7579).
-- Added a notes panel shortcut.
-- Prevented task creation during IME conversion (#7557).
-- Persist collapsed sections across project switches (#7600).
-- Restored ArrowRight focus into the task detail panel.
-- Format add-task-bar times using the user's locale (#7563).
-- Improved UI consistency, wording capitalization, task done-toggle styling, plugin dialog backgrounds, and Velvet/liquid-glass theme details.
-
-### Calendar & Worklog
-
-- Prevent Google time-block sync from hitting write rate limits.
-- Request verified Google OAuth scopes.
-- Harden iCal regex filters against ReDoS.
-- Reload worklog on context changes so metrics stay per project.
+- Tasks with deadlines today can now be added to the Today view automatically.
+- Added Ctrl/Cmd+C to copy the focused task title.
+- Focus Mode can auto-start breaks after manual session completion and show Flowtime/countdown timers in the browser tab.
+- Added a keyboard shortcut to toggle the sidebar between compact and full mode.
+- Schedule time inputs now support Shift/Ctrl+Arrow minute stepping.
+- Specific-day habit streaks now grey out non-selected days.
+- Self-hosted Jira instances can be used without the web extension.
 
 ### Sync & SuperSync
 
-- Improved SuperSync server speed and correctness (#7621), faster uploads, and optimized status/conflict checks.
-- Fixed WebSocket reconnect storms caused by shared client IDs.
-- Preserve WebDAV credentials on transient auth errors and improve WebDAV connection tests (#7617).
-- Retry transient web fetch failures/rate-limited uploads and surface warnings.
-- Hardened SuperSync snapshot replay, storage quota accounting, retry idempotency, cleanup, and deploy/migration recovery.
-- Handle wrapped backup encryption imports and filter stale ops after synced import.
+- SuperSync selection now surfaces mandatory client-side encryption.
+- Improved SuperSync reconnect handling and reduced reconnect storm logging.
+- Fixed sync status wording to distinguish newly synced data from already-synced data.
+- Added support for a separate Nextcloud login name.
+- Fixed sync fallback lock recovery after timeout and database version-change handling.
+- Added a SuperSync server user-recovery script.
 
-### Plugins & Integrations
+### Fixes
 
-- Added plugin automation triggers for task start/stop and a removeTag action.
-- Added plugin onReady() API with IPC ping and fixed consent write delay (#7578).
-- Improved plugin tag ID handling and protected the virtual TODAY tag from plugin sync.
-- Use template tray icons on macOS (#7609).
-- Retry Wayland idle helper startup on Electron/Linux (#7527).
-- Handle Android WebView initialization and foreground service failures safely.
+- Fixed backups continuing after automatic backups were disabled.
+- Fixed calendar auto-import timing and serialized auto time-block writes.
+- Fixed planner budget calculations for 24-hour calendar events.
+- Fixed task creation messages for untitled tasks, deleted-task short syntax handling, task panel toggling, and scheduled completion preserving schedules.
+- Fixed Focus Mode overtime display while paused, zero-duration completion, Flowtime switching, mode selector visibility, and countdown badge layout.
+- Fixed note dragging, touch scrolling, and unpin-from-today icons.
+- Fixed larger background image uploads and stale Schedule button translations.
+- Fixed native dialogs during op-log hydration, Android focus-mode time crediting, and macOS shutdown quitting.
 
-### Privacy & Security
+### Plugins & Advanced
 
-- Prevent exported logs from leaking user content (#7619).
-- Sanitized sync-related logging and hardened SuperSync error handling, quota paths, rate limits, and content-encoding handling.
-- Avoid PWA startup stalls during network changes.
-
-### Localization
-
-- Updated Vietnamese translation (#7576).
-- Moved collapsed subtasks label to translations and improved capitalization.
+- Added plugin support for work-context header buttons, an embed slot, the WORK_CONTEXT_CHANGE hook, and iframe-only installs.
+- Added a TipTap-based document-mode plugin and reduced redundant synced chip data.
+- Added distribution-target suffixes to Electron version strings.
+- Fixed SuperSync Caddy healthchecks, PostgreSQL connection headroom, Docker sync package inclusion, and the F-Droid build dependency issue.

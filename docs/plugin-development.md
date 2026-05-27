@@ -463,9 +463,21 @@ const hooks = {
   CURRENT_TASK_CHANGE: 'currentTaskChange',
   FINISH_DAY: 'finishDay',
   LANGUAGE_CHANGE: 'languageChange',
-  PERSISTED_DATA_UPDATE: 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
 };
+```
+
+`PERSISTED_DATA_CHANGED` fires whenever this plugin's persisted data
+changes — local writes, remote sync deliveries, and bulk imports —
+*after* the host has finished its initial boot load. The handler
+receives no payload; re-call `loadSyncedData(key?)` for any key your
+plugin tracks to get fresh data. There is no replay-on-register and no
+guaranteed ordering across rapid changes, so handlers must be
+idempotent. The typical pattern is: call `loadSyncedData()` once on
+plugin init, then subscribe to this hook for subsequent updates.
+
+```javascript
 
 // Register hook listener
 PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {

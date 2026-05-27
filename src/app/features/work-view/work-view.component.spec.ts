@@ -12,6 +12,7 @@ import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
 import { WorkContextService } from '../work-context/work-context.service';
+import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { ProjectService } from '../project/project.service';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
@@ -116,8 +117,14 @@ describe('WorkViewComponent', () => {
                 activeType: 'TAG',
                 activeId: 'TODAY',
               }),
+              activeWorkContext$: of({ id: TODAY_TAG.id, type: 'TAG' }),
+              isActiveWorkContextProject$: of(false),
               isContextChanging$: of(false),
             },
+          },
+          {
+            provide: PluginBridgeService,
+            useValue: { workContextEmbedPluginId: signal(null) },
           },
           { provide: ProjectService, useValue: { onMoveToBacklog$: of() } },
           {
@@ -274,8 +281,14 @@ describe('WorkViewComponent', () => {
                 activeType: 'PROJECT',
                 activeId: 'ctx',
               }),
+              activeWorkContext$: of({ id: 'ctx', type: 'PROJECT' }),
+              isActiveWorkContextProject$: of(true),
               isContextChanging$: of(false),
             },
+          },
+          {
+            provide: PluginBridgeService,
+            useValue: { workContextEmbedPluginId: signal(null) },
           },
           { provide: ProjectService, useValue: { onMoveToBacklog$: of() } },
           {

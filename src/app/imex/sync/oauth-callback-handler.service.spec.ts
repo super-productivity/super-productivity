@@ -15,7 +15,7 @@ describe('OAuthCallbackHandlerService', () => {
       const result = service['_parseOAuthCallback'](url);
 
       expect(result.code).toBe('ABC123');
-      expect(result.provider).toBe('dropbox');
+      expect(result.provider).toBe('unknown');
       expect(result.error).toBeUndefined();
     });
 
@@ -27,7 +27,7 @@ describe('OAuthCallbackHandlerService', () => {
       expect(result.code).toBeUndefined();
       expect(result.error).toBe('access_denied');
       expect(result.error_description).toBe('User denied access');
-      expect(result.provider).toBe('dropbox');
+      expect(result.provider).toBe('unknown');
     });
 
     it('should handle URL without code or error', () => {
@@ -36,7 +36,7 @@ describe('OAuthCallbackHandlerService', () => {
 
       expect(result.code).toBeUndefined();
       expect(result.error).toBeUndefined();
-      expect(result.provider).toBe('dropbox');
+      expect(result.provider).toBe('unknown');
     });
 
     it('should handle malformed URL', () => {
@@ -45,7 +45,7 @@ describe('OAuthCallbackHandlerService', () => {
 
       expect(result.error).toBe('parse_error');
       expect(result.error_description).toBe('Failed to parse OAuth callback URL');
-      expect(result.provider).toBe('dropbox');
+      expect(result.provider).toBe('unknown');
     });
 
     it('should decode URL-encoded parameters', () => {

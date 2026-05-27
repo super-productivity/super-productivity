@@ -1,6 +1,7 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { skipOnboardingForE2E, waitForAppReady } from './waits';
 import { MIGRATION_BACKUP_PREFIX } from '../../electron/shared-with-frontend/get-backup-timestamp';
+import { installDevErrorDialogHandler } from './runtime-errors';
 
 /**
  * Legacy Migration E2E Test Helpers
@@ -96,6 +97,7 @@ export const createLegacyMigratedClient = async (
   page.on('pageerror', (error) => {
     console.error(`[Legacy Client ${clientName}] Page error:`, error.message);
   });
+  installDevErrorDialogHandler(page, `Legacy Client ${clientName}`);
 
   // Block JS to seed database before app initializes
   await page.route('**/*.js', async (route) => {
@@ -149,26 +151,6 @@ export const createLegacyMigratedClient = async (
   console.log(`[Legacy Client ${clientName}] App ready after migration`);
 
   return { context, page };
-};
-
-/**
- * Create a legacy-migrated client without auto-accepting dialogs.
- * Use this when you need to interact with conflict dialogs manually.
- *
- * @param browser - Playwright browser instance
- * @param baseURL - App base URL
- * @param legacyData - Legacy data to seed
- * @param clientName - Human-readable name for debugging
- */
-export const createLegacyMigratedClientNoDialogHandler = async (
-  browser: Browser,
-  baseURL: string,
-  legacyData: Record<string, unknown>,
-  clientName: string,
-): Promise<{ context: BrowserContext; page: Page }> => {
-  // Same as createLegacyMigratedClient but doesn't add dialog handlers
-  // This is useful for conflict tests where we need to observe dialogs
-  return createLegacyMigratedClient(browser, baseURL, legacyData, clientName);
 };
 
 /**

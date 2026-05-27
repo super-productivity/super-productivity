@@ -4,6 +4,13 @@ import { BehaviorSubject, merge, Observable, ReplaySubject, Subject } from 'rxjs
 import { mapTo } from 'rxjs/operators';
 import { DroidLog } from '../../core/log';
 
+export interface AndroidShareData {
+  title: string;
+  subject: string;
+  type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
+  path: string;
+}
+
 export interface AndroidInterface {
   getVersion?(): string;
 
@@ -100,12 +107,7 @@ export interface AndroidInterface {
   isInBackground$: Observable<boolean>;
   isKeyboardShown$: Subject<boolean>;
 
-  onShareWithAttachment$: Subject<{
-    title: string;
-    subject: string;
-    type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
-    path: string;
-  }>;
+  onShareWithAttachment$: Subject<AndroidShareData>;
 
   // Notification action callbacks
   onPauseTracking$: Subject<void>;

@@ -42,6 +42,7 @@ export enum BodyClass {
   isDisableBackgroundTint = 'isDisableBackgroundTint',
   isDisableAnimations = 'isDisableAnimations',
   isObsidianStyleHeader = 'isObsidianStyleHeader',
+  isVerticalActionBar = 'isVerticalActionBar',
   isDataImportInProgress = 'isDataImportInProgress',
   hasBgImage = 'hasBgImage',
   hasMobileBottomNav = 'hasMobileBottomNav',

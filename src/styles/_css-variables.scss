@@ -134,6 +134,11 @@
   --bar-height-small: 40px;
   --mat-mini-fab-size: 48px;
   --mac-title-bar-padding: 20px;
+  --vertical-action-bar-width: 48px;
+  // Matches WCO_HEIGHT in electron/main-window.ts. Keep in sync so the
+  // vertical action strip clears the WCO band by exactly this much on
+  // Win/Linux with custom title bar.
+  --wco-height: 24px;
 
   // Radius scale — use tokens below; legacy aliases kept for existing rules.
   --radius-xs: 4px;
@@ -160,6 +165,7 @@
   --z-right-panel: 44;
   --z-right-panel-resize-handle: 65;
   --z-right-panel-edge-handle: 66;
+  --z-vertical-action-bar: 70;
   --z-tour: 1001;
   --z-onboarding-hint: 1100;
   --z-dragged-nav-item: 1002;

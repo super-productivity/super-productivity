@@ -47,7 +47,7 @@ describe('OperationLogMigrationService', () => {
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockStore = jasmine.createSpyObj('Store', ['dispatch']);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
-      'generateNewClientId',
+      'getOrGenerateClientId',
       'persistClientId',
     ]);
     mockTranslateService = jasmine.createSpyObj('TranslateService', [
@@ -373,7 +373,7 @@ describe('OperationLogMigrationService', () => {
             const meta = await mockLegacyPfDb.loadMetaModel();
             const legacyClientId = await mockLegacyPfDb.loadClientId();
             const clientId =
-              legacyClientId || (await mockClientIdService.generateNewClientId());
+              legacyClientId ?? (await mockClientIdService.getOrGenerateClientId());
 
             if (legacyClientId) {
               await mockClientIdService.persistClientId(legacyClientId);
@@ -427,18 +427,18 @@ describe('OperationLogMigrationService', () => {
         expect(mockClientIdService.persistClientId).toHaveBeenCalledWith(
           'legacyClientId1234',
         );
-        expect(mockClientIdService.generateNewClientId).not.toHaveBeenCalled();
+        expect(mockClientIdService.getOrGenerateClientId).not.toHaveBeenCalled();
         expect(mockOpLogStore.append).toHaveBeenCalled();
       });
 
       it('should generate new client ID and NOT call persistClientId when legacy ID is null', async () => {
         mockLegacyPfDb.loadClientId.and.resolveTo(null);
         mockLegacyPfDb.loadMetaModel.and.resolveTo({ vectorClock: {} });
-        mockClientIdService.generateNewClientId.and.resolveTo('B_xYz1');
+        mockClientIdService.getOrGenerateClientId.and.resolveTo('B_xYz1');
 
         await service.checkAndMigrate();
 
-        expect(mockClientIdService.generateNewClientId).toHaveBeenCalled();
+        expect(mockClientIdService.getOrGenerateClientId).toHaveBeenCalled();
         expect(mockClientIdService.persistClientId).not.toHaveBeenCalled();
         expect(mockOpLogStore.append).toHaveBeenCalled();
       });

@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom, Observable, of } from 'rxjs';
+import { SnackService } from '../../core/snack/snack.service';
 import { Project } from './project.model';
 import { select, Store } from '@ngrx/store';
 import { nanoid } from 'nanoid';
@@ -23,6 +24,7 @@ import {
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
+  toggleHideFromMenu,
   unarchiveProject,
   updateProject,
   updateProjectOrder,
@@ -62,6 +64,7 @@ export class ProjectService {
   private readonly _translate = inject(TranslateService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _dateService = inject(DateService);
+  private readonly _snackService = inject(SnackService);
 
   list$: Observable<Project[]> = this._store$.pipe(select(selectUnarchivedProjects));
   list = toSignal(this.list$, { initialValue: [] });
@@ -141,10 +144,28 @@ export class ProjectService {
 
   archive(projectId: string): void {
     this._store$.dispatch(archiveProject({ id: projectId }));
+    this._snackService.open({
+      ico: 'archive',
+      msg: T.F.PROJECT.S.ARCHIVED,
+    });
   }
 
-  unarchive(projectId: string): void {
+  async unarchive(projectId: string): Promise<void> {
+    const project = await firstValueFrom(this.getByIdOnce$(projectId));
     this._store$.dispatch(unarchiveProject({ id: projectId }));
+    this._snackService.open(
+      project?.isHiddenFromMenu
+        ? {
+            ico: 'unarchive',
+            msg: T.F.PROJECT.S.UNARCHIVED_HIDDEN_FROM_MENU,
+            actionStr: T.F.PROJECT.S.SHOW_IN_MENU,
+            actionFn: () => this._store$.dispatch(toggleHideFromMenu({ id: projectId })),
+          }
+        : {
+            ico: 'unarchive',
+            msg: T.F.PROJECT.S.UNARCHIVED,
+          },
+    );
   }
 
   getByIdOnce$(id: string): Observable<Project | undefined> {

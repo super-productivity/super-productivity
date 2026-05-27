@@ -1,32 +1,83 @@
-/**
- * DailySummaryComponent Tests
- *
- * Note: Full component testing requires extensive mocking due to many dependencies
- * (Store, TranslateService, WorkContextService, TaskService, etc.)
- *
- * The finishDay() method now waits for ongoing sync to complete before archiving
- * tasks to prevent DB lock errors. This is tested via:
- * - Manual testing: Start sync, click "Finish Day" while sync is running
- * - The fix ensures afterCurrentSyncDoneOrSyncDisabled$ completes before _moveDoneToArchive()
- */
+import { Subject } from 'rxjs';
+import { T } from '../../t.const';
+import { DailySummaryComponent } from './daily-summary.component';
 
 describe('DailySummaryComponent', () => {
   describe('finishDay()', () => {
-    // These tests document the expected behavior but are skipped due to
-    // complex dependency mocking requirements
-    xit('should wait for sync to complete before archiving tasks', () => {
-      // The finishDay() method now includes:
-      // await this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$
-      //   .pipe(first())
-      //   .toPromise();
-      // This ensures any ongoing sync completes before _moveDoneToArchive() is called,
-      // preventing "Attempting to write DB for archiveYoung while locked" errors.
+    it('should wait for sync to complete before archiving tasks', async () => {
+      const syncDone$ = new Subject<void>();
+      const callOrder: string[] = [];
+      const moveDoneToArchive = jasmine
+        .createSpy('moveDoneToArchive')
+        .and.callFake(() => {
+          callOrder.push('archive');
+          return Promise.resolve();
+        });
+      const finishDayForGood = jasmine.createSpy('finishDayForGood').and.callFake(() => {
+        callOrder.push('finish');
+        return Promise.resolve();
+      });
+
+      const receiver = {
+        _beforeFinishDayService: {
+          executeActions: jasmine.createSpy('executeActions').and.callFake(() => {
+            callOrder.push('before');
+            return Promise.resolve();
+          }),
+        },
+        _syncWrapperService: {
+          afterCurrentSyncDoneOrSyncDisabled$: syncDone$,
+        },
+        _moveDoneToArchive: moveDoneToArchive,
+        _finishDayForGood: finishDayForGood,
+        _snackService: { open: jasmine.createSpy('open') },
+        _matDialog: { open: jasmine.createSpy('open') },
+        _router: { navigate: jasmine.createSpy('navigate') },
+        isForToday: true,
+      } as unknown as DailySummaryComponent;
+
+      const finishPromise = DailySummaryComponent.prototype.finishDay.call(receiver);
+      await Promise.resolve();
+
+      expect(moveDoneToArchive).not.toHaveBeenCalled();
+      expect(callOrder).toEqual(['before']);
+
+      syncDone$.next();
+      syncDone$.complete();
+      await finishPromise;
+
+      expect(callOrder).toEqual(['before', 'archive', 'finish']);
     });
 
-    xit('should call moveToArchive only after sync completes', () => {
-      // Implementation: See daily-summary.component.ts:329-332
-      // The sync wait is placed right after _beforeFinishDayService.executeActions()
-      // and before any branch that calls _moveDoneToArchive()
+    it('should not archive when before-finish actions fail', async () => {
+      const moveDoneToArchive = jasmine
+        .createSpy('moveDoneToArchive')
+        .and.resolveTo(undefined);
+      const snackOpen = jasmine.createSpy('snackOpen');
+      const receiver = {
+        _beforeFinishDayService: {
+          executeActions: jasmine
+            .createSpy('executeActions')
+            .and.rejectWith(new Error('precondition failed')),
+        },
+        _syncWrapperService: {
+          afterCurrentSyncDoneOrSyncDisabled$: new Subject<void>(),
+        },
+        _moveDoneToArchive: moveDoneToArchive,
+        _finishDayForGood: jasmine.createSpy('finishDayForGood'),
+        _snackService: { open: snackOpen },
+        _matDialog: { open: jasmine.createSpy('open') },
+        _router: { navigate: jasmine.createSpy('navigate') },
+        isForToday: true,
+      } as unknown as DailySummaryComponent;
+
+      await DailySummaryComponent.prototype.finishDay.call(receiver);
+
+      expect(moveDoneToArchive).not.toHaveBeenCalled();
+      expect(snackOpen).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.FINISH_DAY_SYNC_ERROR,
+        type: 'ERROR',
+      });
     });
   });
 });

@@ -53,7 +53,7 @@
   "EXAMPLE_TASKS": {
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Learn the keyboard shortcuts",
-      "NOTES": "Super Productivity is designed to be used with the keyboard. Learn the shortcuts to work faster.\n\n**How to start:**\n1. Open the **sidebar menu**\n2. Go to **Help**\n3. Click **Keyboard Navigation Tour**"
+      "NOTES": "Super Productivity is designed to be used with the keyboard. Learn the shortcuts to work faster.\n\n**How to start:**\n1. Open the **sidebar menu**\n2. Go to **Help**\n3. Click **How to: Keyboard Navigation**"
     },
     "CREATE_PROJECT": {
       "TITLE": "Create your first project",
@@ -77,11 +77,17 @@
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",
       "DIALOG_EDIT": {
-        "ADD_ATTACHMENT": "Add Attachment",
-        "EDIT_ATTACHMENT": "Edit Attachment",
+        "ADD_ATTACHMENT": "Add Link",
+        "EDIT_ATTACHMENT": "Edit Link",
         "LABELS": {
-          "IMG": "Image",
+          "FILE": "File path",
+          "IMG": "Image URL",
           "LINK": "URL"
+        },
+        "PLACEHOLDERS": {
+          "FILE": "/path/to/file",
+          "IMG": "https://example.com/image.png",
+          "LINK": "https://example.com"
         },
         "SELECT_TYPE": "Select a type",
         "TYPES": {
@@ -897,6 +903,10 @@
       "BREAK_IS_DONE": "Break is over!"
     },
     "PROJECT": {
+      "D_CONFIRM_ARCHIVE": {
+        "MSG": "Archive the project \"{{title}}\"? Tasks, repeating configs and reminders are paused until you restore it.",
+        "OK": "Archive"
+      },
       "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
         "CANCEL": "Cancel",
         "MSG": "This project is large and may take a while to duplicate. Do you want to proceed?",
@@ -942,8 +952,17 @@
         "ARCHIVED": "Archived Project",
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the menu on the top left.",
         "DELETED": "Deleted Project",
-        "UNARCHIVED": "Unarchived project",
+        "SHOW_IN_MENU": "Show in menu",
+        "UNARCHIVED": "Project restored",
+        "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the menu",
         "UPDATED": "Updated project settings"
+      },
+      "ARCHIVED_NOTICE": "This project is archived.",
+      "ARCHIVED_PROJECTS": {
+        "EMPTY": "No archived projects.",
+        "LINK_LABEL": "Archived projects",
+        "SEARCH": "Search archived projects",
+        "UNARCHIVE": "Restore project"
       }
     },
     "PROJECT_FOLDER": {
@@ -1250,6 +1269,8 @@
       "FORM": {
         "BTN_CHANGE_PASSWORD": "Change Password",
         "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
+        "BTN_REAUTHENTICATE": "Re-authenticate",
+        "REAUTH_SUCCESS": "Re-authentication successful! Credentials updated.",
         "DROPBOX": {
           "AUTH_SUCCESS": "Dropbox authentication successful! Credentials saved.",
           "BTN_AUTHENTICATE": "Authenticate with Dropbox",
@@ -1393,6 +1414,18 @@
           "L_APP_PASSWORD": "App Password",
           "APP_PASSWORD_DESCRIPTION": "Go to Nextcloud → Settings → Security → App passwords to generate one"
         },
+        "ONEDRIVE": {
+          "CLIENT_ID_DESCRIPTION": "Application (client) ID from your Microsoft Entra app registration",
+          "INFO_TEXT": "Microsoft 365 authentication uses OAuth. Fill client and tenant first, then authenticate.",
+          "L_CLIENT_ID": "Application (Client) ID",
+          "L_SYNC_FOLDER_PATH": "Sync Folder Path",
+          "L_TENANT_ID": "Tenant ID",
+          "L_USE_CUSTOM_APP": "Use my own Microsoft Entra app registration",
+          "OFFICIAL_MODE_INFO": "Using built-in Microsoft 365 sign-in for this app. Switch to custom mode only if you need your own Entra app registration.",
+          "SYNC_FOLDER_PATH_DESCRIPTION": "Stored under your OneDrive App Folder (e.g. super-productivity)",
+          "TENANT_ID_DESCRIPTION": "Use 'common' for multi-tenant sign-in",
+          "USE_CUSTOM_APP_DESCRIPTION": "Enable this if you want to provide your own Application (Client) ID"
+        },
         "TITLE": "Sync",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Making it work in a web browser:</strong> You need to allow Super Productivity to make CORS requests to your server. For Nextcloud, one approach is allowing \"https://app.super-productivity.com\" via the <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> app. Refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information.",
@@ -1460,6 +1493,7 @@
         "MIGRATION_FAILED": "Some sync data could not be migrated and was skipped. This may indicate data corruption or a bug.",
         "NETWORK_ERROR": "Sync request failed because of a temporary network problem. Your changes remain local and sync will retry.",
         "NEWER_VERSION_AVAILABLE": "Some changes are from a newer app version. Consider updating for full compatibility.",
+        "OAUTH_STATE_INVALID": "OAuth state mismatch — the callback URL did not match this device's request. Please try authenticating again.",
         "OPERATION_PERMANENTLY_FAILED": "Some sync operations failed and could not be applied. Data may be incomplete.",
         "OVERWRITE_SERVER_FAILED": "Failed to overwrite server data: {{message}}",
         "PARTIAL_APPLY_FAILURE": "Some sync operations failed to apply. Data has been validated.",
@@ -1586,9 +1620,9 @@
         "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)"
       },
       "ADDITIONAL_INFO": {
-        "ADD_ATTACHMENT": "Attachments",
+        "ADD_ATTACHMENT": "Links & Files",
         "ADD_SUB_TASK": "Add subtask",
-        "ATTACHMENTS": "Attachments ({{nr}})",
+        "ATTACHMENTS": "Links & Files ({{nr}})",
         "COMPLETED_ON": "Completed on",
         "CREATED_ON": "Created on",
         "DEADLINE": "Deadline",
@@ -1629,6 +1663,7 @@
         "ESTIMATE": "Estimate",
         "FOCUS_SESSION": "Start focus session",
         "MARK_DONE": "Mark as completed",
+        "MARK_UNDONE": "Mark as not completed",
         "MOVE_TO_BACKLOG": "Move to backlog",
         "MOVE_TO_OTHER_PROJECT": "Move to project",
         "MOVE_TO_REGULAR": "Move to regular list",
@@ -2067,6 +2102,7 @@
     "ADVANCED_CFG": "Advanced Config",
     "APPLY": "Apply",
     "CANCEL": "Cancel",
+    "CLEAR": "Clear",
     "CLOSE": "Close",
     "COMMENT": "Comment",
     "COMPLETE": "Complete",
@@ -2350,6 +2386,8 @@
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Use custom title bar (Windows/Linux only)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requires restart to take effect.",
+      "IS_VERTICAL_ACTION_BAR": "Vertical action bar on the side (experimental)",
+      "IS_VERTICAL_ACTION_BAR_HINT": "Moves the header action buttons into a vertical strip on the right edge of the window. Desktop only.",
       "START_OF_NEXT_DAY": "Start time of the next day",
       "START_OF_NEXT_DAY_HINT": "The time when your day starts (Format: HH:mm, e.g. 02:30)",
       "THEME": "Theme",
@@ -2523,6 +2561,7 @@
     "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
+    "ARCHIVE_PROJECT": "Archive project",
     "DELETE_PROJECT": "Delete project",
     "DELETE_TAG": "Delete tag",
     "DISABLE_FEATURE": "Disable feature",
@@ -2537,7 +2576,7 @@
       "CALENDARS": "How to: Connect calendars",
       "CONTRIBUTE": "Contribute",
       "GET_HELP_ONLINE": "Get help online",
-      "KEYBOARD": "How to: Advanced keyboard",
+      "KEYBOARD": "How to: Keyboard Navigation",
       "REDDIT_COMMUNITY": "Reddit community",
       "REPORT_A_PROBLEM": "Report a problem",
       "START_WELCOME": "Start welcome tour",
@@ -2571,7 +2610,8 @@
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
-    "WORKLOG": "Worklog"
+    "WORKLOG": "Worklog",
+    "ARCHIVED_PROJECTS": "Archived Projects"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Do you want to download a backup of your legacy data (can be used with older versions of Super Productivity)?",

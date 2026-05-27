@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { DialogScheduleTaskComponent } from './dialog-schedule-task.component';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -226,16 +226,15 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       fixture.detectChanges();
     });
 
-    it('should update selectedDate when dateSelected is called', () => {
+    it('should update selectedDate when dateSelected is called', fakeAsync(() => {
       const testDate = new Date('2024-01-20');
 
       component.dateSelected(testDate);
+      // dateSelected defers the assignment via setTimeout — flush it before asserting
+      tick();
 
-      // Wait for setTimeout to complete
-      setTimeout(() => {
-        expect(component.selectedDate).toEqual(testDate);
-      }, 1);
-    });
+      expect(component.selectedDate).toEqual(testDate);
+    }));
 
     it('should handle quick access buttons correctly', () => {
       const initialDate = new Date();

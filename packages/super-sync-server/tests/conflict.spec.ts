@@ -66,6 +66,57 @@ describe('conflict helpers', () => {
     );
   });
 
+  it('accepts encrypted retries whose ciphertext differs from the stored payload', () => {
+    // Regression: when encryption is on, encrypt() generates a fresh random IV
+    // per call, so a retry of the same logical op produces different ciphertext.
+    // The server must still recognize it as a duplicate, otherwise the client
+    // sees INVALID_OP_ID and marks the op as permanently rejected even though
+    // the server already committed it (partial-success retry on flaky network).
+    const incoming = op({
+      payload: 'BASE64-CIPHERTEXT-WITH-FRESH-IV',
+      isPayloadEncrypted: true,
+    });
+    const existing = duplicateCandidate({
+      payload: 'BASE64-CIPHERTEXT-WITH-ORIGINAL-IV',
+      isPayloadEncrypted: true,
+    });
+
+    expect(isSameDuplicateOperation(existing, 1, incoming, 60_000)).toBe(true);
+  });
+
+  it('rejects encrypted retries when structural fields differ', () => {
+    // The ciphertext bypass must not let through a genuine id collision: if any
+    // structural field (here vectorClock) differs, it's not a retry.
+    const incoming = op({
+      payload: 'BASE64-CIPHERTEXT-A',
+      isPayloadEncrypted: true,
+      vectorClock: { 'client-a': 2 },
+    });
+    const existing = duplicateCandidate({
+      payload: 'BASE64-CIPHERTEXT-B',
+      isPayloadEncrypted: true,
+      vectorClock: { 'client-a': 1 },
+    });
+
+    expect(isSameDuplicateOperation(existing, 1, incoming, 60_000)).toBe(false);
+  });
+
+  it('rejects when only one side is encrypted', () => {
+    // A sudden flip in encryption status for the same op id is suspicious and
+    // should remain a hard rejection — the bypass only kicks in when both sides
+    // declare the payload encrypted.
+    const incoming = op({
+      payload: 'BASE64-CIPHERTEXT',
+      isPayloadEncrypted: true,
+    });
+    const existing = duplicateCandidate({
+      payload: { title: 'A' },
+      isPayloadEncrypted: false,
+    });
+
+    expect(isSameDuplicateOperation(existing, 1, incoming, 60_000)).toBe(false);
+  });
+
   it('accepts retry timestamps previously clamped at the clock-drift boundary', () => {
     expect(isSameDuplicateTimestamp(160_000, 100_000, 170_000, 180_000, 60_000)).toBe(
       true,

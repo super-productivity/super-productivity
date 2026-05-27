@@ -1318,6 +1318,10 @@ export class SuperSyncPage extends BasePage {
     // Click the confirm button (mat-flat-button with color="primary")
     // In setup mode the button text is "Set Password", in full mode it's "Enable Encryption"
     const confirmBtn = dialog.locator('button[mat-flat-button][color="primary"]');
+    // Wait for [(ngModel)] propagation to flip [disabled]="!isPasswordValid"
+    // — fill() resolves before Angular CD ticks, so the click can otherwise
+    // burn the full retry window against a still-disabled button.
+    await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
     await confirmBtn.click();
 
     await this.page.waitForTimeout(500);

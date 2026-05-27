@@ -88,6 +88,7 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
         await pageA.waitForTimeout(500);
       }
     }
+    expect(errorFound).toBe(true);
 
     // App should not crash - verify we can still interact
     const taskLocator = pageA.locator('task', { hasText: taskName });
@@ -119,13 +120,7 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
     // Sync should work again
     await syncPageA.triggerSync();
 
-    // Use a custom wait that ignores stale error messages
-    const startTimeRetry = Date.now();
-    while (Date.now() - startTimeRetry < 30000) {
-      const successVisible = await syncPageA.syncCheckIcon.isVisible();
-      if (successVisible) break;
-      await pageA.waitForTimeout(500);
-    }
+    await expect(syncPageA.syncCheckIcon).toBeVisible({ timeout: 30000 });
 
     // Cleanup
     await contextA.close();
@@ -187,6 +182,7 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
         await pageA.waitForTimeout(500);
       }
     }
+    expect(authErrorFound).toBe(true);
 
     // App should not crash
     const taskList = pageA.locator('task-list');

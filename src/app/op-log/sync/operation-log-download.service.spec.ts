@@ -247,6 +247,7 @@ describe('OperationLogDownloadService', () => {
             ],
             hasMore: false,
             latestSeq: 1,
+            serverTime,
           }),
         );
 
@@ -734,7 +735,7 @@ describe('OperationLogDownloadService', () => {
           expect(result.allOpClocks).toBeUndefined();
         });
 
-        it('should return empty allOpClocks array when no ops on server', async () => {
+        it('should omit allOpClocks when no ops are returned from server', async () => {
           mockApiProvider.downloadOps.and.returnValue(
             Promise.resolve({
               ops: [],

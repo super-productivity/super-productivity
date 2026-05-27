@@ -187,11 +187,14 @@
     box-shadow: var(--task-shadow-sub-task);
     border-radius: 0;
     top: -1px;
-    background: var(--sub-task-c-bg);
 
     @include lightTheme {
       border-color: var(--extra-border-color);
       bottom: 0;
+    }
+
+    @include darkTheme {
+      background: var(--sub-task-c-bg);
     }
   }
 

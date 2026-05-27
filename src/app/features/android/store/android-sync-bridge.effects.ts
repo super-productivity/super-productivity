@@ -21,7 +21,7 @@ import { CurrentProviderPrivateCfg } from '../../../op-log/core/types/sync.types
  * - Both non-SuperSync → true (suppress, prevents repeated clearSuperSyncCredentials calls)
  * - Both SuperSync → compare accessToken and baseUrl
  */
-const credentialConfigEqual = (
+export const credentialConfigEqual = (
   a: CurrentProviderPrivateCfg | null,
   b: CurrentProviderPrivateCfg | null,
 ): boolean => {
@@ -35,6 +35,34 @@ const credentialConfigEqual = (
 const isNonNull = (
   cfg: CurrentProviderPrivateCfg | null,
 ): cfg is CurrentProviderPrivateCfg => cfg !== null;
+
+export type SuperSyncCredentialBridgeCommand =
+  | {
+      type: 'set';
+      baseUrl: string;
+      accessToken: string;
+    }
+  | {
+      type: 'clear';
+      reason: 'no-token' | 'not-supersync';
+    };
+
+export const getSuperSyncCredentialBridgeCommand = (
+  cfg: CurrentProviderPrivateCfg,
+): SuperSyncCredentialBridgeCommand => {
+  if (cfg.providerId === SyncProviderId.SuperSync && cfg.privateCfg) {
+    const privateCfg = cfg.privateCfg as SuperSyncPrivateCfg;
+    if (privateCfg.accessToken) {
+      return {
+        type: 'set',
+        baseUrl: privateCfg.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL,
+        accessToken: privateCfg.accessToken,
+      };
+    }
+    return { type: 'clear', reason: 'no-token' };
+  }
+  return { type: 'clear', reason: 'not-supersync' };
+};
 
 /**
  * Mirrors SuperSync credentials to native SharedPreferences so the
@@ -54,21 +82,18 @@ export class AndroidSyncBridgeEffects {
           distinctUntilChanged(credentialConfigEqual),
           filter(isNonNull),
           tap((cfg) => {
-            if (cfg.providerId === SyncProviderId.SuperSync && cfg.privateCfg) {
-              const privateCfg = cfg.privateCfg as SuperSyncPrivateCfg;
-              if (privateCfg.accessToken) {
-                const baseUrl = privateCfg.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
-                DroidLog.log('AndroidSyncBridgeEffects: Setting SuperSync credentials');
-                androidInterface.setSuperSyncCredentials?.(
-                  baseUrl,
-                  privateCfg.accessToken,
-                );
-              } else {
-                DroidLog.log(
-                  'AndroidSyncBridgeEffects: No access token, clearing credentials',
-                );
-                androidInterface.clearSuperSyncCredentials?.();
-              }
+            const command = getSuperSyncCredentialBridgeCommand(cfg);
+            if (command.type === 'set') {
+              DroidLog.log('AndroidSyncBridgeEffects: Setting SuperSync credentials');
+              androidInterface.setSuperSyncCredentials?.(
+                command.baseUrl,
+                command.accessToken,
+              );
+            } else if (command.reason === 'no-token') {
+              DroidLog.log(
+                'AndroidSyncBridgeEffects: No access token, clearing credentials',
+              );
+              androidInterface.clearSuperSyncCredentials?.();
             } else {
               DroidLog.log(
                 'AndroidSyncBridgeEffects: Non-SuperSync provider, clearing credentials',
