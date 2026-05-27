@@ -23,12 +23,7 @@ import {
   showTaskWidget,
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
-import {
-  getIsMinimizeToTray,
-  getIsQuiting,
-  setIsMinimizeToTray,
-  setIsQuiting,
-} from './shared-state';
+import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
@@ -60,11 +55,24 @@ export const getWin = (): BrowserWindow => {
   return mainWinModule.win;
 };
 
+let quitRequestedTimeout: NodeJS.Timeout | undefined;
+
+const getIsQuitRequested = (): boolean => !!quitRequestedTimeout;
+
+const setIsQuitRequested = (flag: boolean): void => {
+  if (quitRequestedTimeout) clearTimeout(quitRequestedTimeout);
+
+  // Set timeout to cancel quit request, if app fails to respond within 5 seconds.
+  quitRequestedTimeout = flag
+    ? setTimeout(() => (quitRequestedTimeout = undefined), 5 * 1000)
+    : undefined;
+};
+
 export const closeWinAndQuit = (quitApp: () => void): void => {
   if (mainWin && !mainWin.isDestroyed()) {
     // Ensure the close handler takes the real close path (not the minimize-to-tray
     // hide branch) so the before-close IPC flow (sync, finish-day) completes.
-    setIsMinimizeToTray(false);
+    setIsQuitRequested(true);
     mainWin.close();
   } else {
     // No window to close — set flag and re-trigger quit directly.
@@ -529,7 +537,7 @@ const appCloseHandler = (app: App): void => {
     // NOTE: this might not work if we run a second instance of the app
     log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
     if (!getIsQuiting()) {
-      if (getIsMinimizeToTray()) {
+      if (getIsMinimizeToTray() && !getIsQuitRequested()) {
         const indicator = ensureIndicator();
         if (indicator) {
           event.preventDefault();
@@ -552,6 +560,8 @@ const appCloseHandler = (app: App): void => {
   });
 
   mainWin.on('closed', () => {
+    setIsQuitRequested(false);
+
     // Dereference the window object
     mainWin = null;
     mainWinModule.win = null;
