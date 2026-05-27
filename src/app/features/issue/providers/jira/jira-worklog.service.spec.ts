@@ -6,10 +6,15 @@ import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../../../tasks/task.service';
 import { JIRA_TYPE } from '../../issue.const';
 import { Task } from '../../../tasks/task.model';
+import { of } from 'rxjs';
+import { DEFAULT_TASK } from '../../../tasks/task.model';
 
 describe('JiraWorklogService', () => {
   let service: JiraWorklogService;
   let matDialog: jasmine.SpyObj<MatDialog>;
+  let mockJiraApiService: jasmine.SpyObj<JiraApiService>;
+  let mockIssueProviderService: jasmine.SpyObj<IssueProviderService>;
+  let mockTaskService: jasmine.SpyObj<TaskService>;
 
   const mockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -23,27 +28,29 @@ describe('JiraWorklogService', () => {
     }) as Task;
 
   beforeEach(() => {
+    mockJiraApiService = jasmine.createSpyObj('JiraApiService', [
+      'getReducedIssueById$',
+      'addWorklog$',
+    ]);
+    mockIssueProviderService = jasmine.createSpyObj('IssueProviderService', [
+      'getCfgOnce$',
+    ]);
     matDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockTaskService = jasmine.createSpyObj('TaskService', ['update']);
+
+    mockIssueProviderService.getCfgOnce$.and.returnValue(of({ id: 'prov1' } as any));
+    mockJiraApiService.getReducedIssueById$.and.returnValue(
+      of({ id: 'ISS-1', key: 'PROJ-1', summary: 'Test issue' } as any),
+    );
+    matDialog.open.and.returnValue({ afterClosed: () => of(null) } as any);
 
     TestBed.configureTestingModule({
       providers: [
         JiraWorklogService,
-        {
-          provide: JiraApiService,
-          useValue: jasmine.createSpyObj('JiraApiService', [
-            'getReducedIssueById$',
-            'addWorklog$',
-          ]),
-        },
-        {
-          provide: IssueProviderService,
-          useValue: jasmine.createSpyObj('IssueProviderService', ['getCfgOnce$']),
-        },
+        { provide: JiraApiService, useValue: mockJiraApiService },
+        { provide: IssueProviderService, useValue: mockIssueProviderService },
         { provide: MatDialog, useValue: matDialog },
-        {
-          provide: TaskService,
-          useValue: jasmine.createSpyObj('TaskService', ['update']),
-        },
+        { provide: TaskService, useValue: mockTaskService },
       ],
     });
     service = TestBed.inject(JiraWorklogService);
@@ -66,5 +73,66 @@ describe('JiraWorklogService', () => {
   it('should return early if task is not JIRA type', () => {
     service.openWorklogDialogForTask(mockTask({ issueType: 'GITHUB' as any }));
     expect(matDialog.open).not.toHaveBeenCalled();
+  });
+
+  describe('openWorklogDialogForExternalTask', () => {
+    it('should call getCfgOnce$ with the given issueProviderId', () => {
+      const task = {
+        ...DEFAULT_TASK,
+        id: 't1',
+        timeSpent: 3600000,
+        projectId: 'proj1',
+      } as Task;
+      service.openWorklogDialogForExternalTask(task, 'ISS-1', 'prov1', 'PROJ-1 Test');
+      expect(mockIssueProviderService.getCfgOnce$).toHaveBeenCalledWith('prov1', 'JIRA');
+    });
+
+    it('should call getReducedIssueById$ with the given issueId', () => {
+      const task = {
+        ...DEFAULT_TASK,
+        id: 't1',
+        timeSpent: 3600000,
+        projectId: 'proj1',
+      } as Task;
+      service.openWorklogDialogForExternalTask(task, 'ISS-1', 'prov1', 'PROJ-1 Test');
+      expect(mockJiraApiService.getReducedIssueById$).toHaveBeenCalledWith(
+        'ISS-1',
+        jasmine.any(Object),
+      );
+    });
+
+    it('should open the worklog dialog', async () => {
+      const task = {
+        ...DEFAULT_TASK,
+        id: 't1',
+        timeSpent: 3600000,
+        projectId: 'proj1',
+      } as Task;
+      service.openWorklogDialogForExternalTask(task, 'ISS-1', 'prov1', 'PROJ-1 Test');
+      // Dynamic import is async — flush microtasks/macrotasks
+      await new Promise((r) => setTimeout(r, 50));
+      expect(matDialog.open).toHaveBeenCalled();
+    });
+
+    it('should NOT call TaskService.update (no timeLoggedToJira tracking)', async () => {
+      const task = {
+        ...DEFAULT_TASK,
+        id: 't1',
+        timeSpent: 3600000,
+        projectId: 'proj1',
+      } as Task;
+      mockJiraApiService.addWorklog$.and.returnValue(of({}));
+      // Simulate onSubmit firing
+      matDialog.open.and.callFake((_comp: any, config: any) => {
+        config.data
+          .onSubmit({ timeSpent: 3600000, started: '', comment: '' })
+          .subscribe();
+        return { afterClosed: () => of(null) } as any;
+      });
+
+      service.openWorklogDialogForExternalTask(task, 'ISS-1', 'prov1', 'PROJ-1 Test');
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockTaskService.update).not.toHaveBeenCalled();
+    });
   });
 });

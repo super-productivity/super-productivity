@@ -28,6 +28,20 @@ export class JiraWorklogService {
       .subscribe((jiraCfg) => this._openDialog(task, jiraCfg));
   }
 
+  openWorklogDialogForExternalTask(
+    task: Task,
+    issueId: string,
+    issueProviderId: string,
+    issueLabel: string,
+  ): void {
+    this._issueProviderService
+      .getCfgOnce$(issueProviderId, 'JIRA')
+      .pipe(take(1))
+      .subscribe((jiraCfg) =>
+        this._openDialogForExternalTask(task, issueId, jiraCfg, issueLabel),
+      );
+  }
+
   private _openDialog(task: Task, jiraCfg: IssueProviderJira): void {
     this._jiraApiService
       .getReducedIssueById$(task.issueId as string, jiraCfg)
@@ -63,6 +77,55 @@ export class JiraWorklogService {
                     }),
                   ),
                 ),
+            successMsg: T.F.JIRA.S.ADDED_WORKLOG_FOR,
+            successTranslateParams: { issueKey: issue.key },
+            t: {
+              title: T.F.JIRA.DIALOG_WORKLOG.TITLE,
+              submitFor: T.F.JIRA.DIALOG_WORKLOG.SUBMIT_WORKLOG_FOR,
+              currentlyLogged: T.F.JIRA.DIALOG_WORKLOG.CURRENTLY_LOGGED,
+              submit: T.F.JIRA.DIALOG_WORKLOG.SAVE_WORKLOG,
+              timeSpent: T.F.JIRA.DIALOG_WORKLOG.TIME_SPENT,
+              timeSpentTooltip: T.F.JIRA.DIALOG_WORKLOG.TIME_SPENT_TOOLTIP,
+              started: T.F.JIRA.DIALOG_WORKLOG.STARTED,
+              invalidDate: T.F.JIRA.DIALOG_WORKLOG.INVALID_DATE,
+              comment: T.G.COMMENT,
+            },
+          },
+        });
+      });
+  }
+
+  private _openDialogForExternalTask(
+    task: Task,
+    issueId: string,
+    jiraCfg: IssueProviderJira,
+    issueLabel: string,
+  ): void {
+    this._jiraApiService
+      .getReducedIssueById$(issueId, jiraCfg)
+      .pipe(take(1))
+      .subscribe(async (issue) => {
+        const { DialogTrackTimeComponent } =
+          await import('../../shared/dialog-track-time/dialog-track-time.component');
+        this._matDialog.open(DialogTrackTimeComponent, {
+          restoreFocus: true,
+          data: {
+            task,
+            issueIcon: 'jira',
+            issueLabel,
+            timeLogged: 0,
+            defaultTime:
+              jiraCfg.worklogDialogDefaultTime ??
+              JiraWorklogExportDefaultTime.AllTimeMinusLogged,
+            configTimeKey: 'worklogDialogDefaultTime',
+            onSubmit: (params: TrackTimeSubmitParams) =>
+              this._jiraApiService.addWorklog$({
+                issueId: issue.id,
+                started: params.started,
+                timeSpent: params.timeSpent,
+                comment: params.comment,
+                cfg: jiraCfg,
+              }),
             successMsg: T.F.JIRA.S.ADDED_WORKLOG_FOR,
             successTranslateParams: { issueKey: issue.key },
             t: {
