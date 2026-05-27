@@ -62,16 +62,26 @@ export const getWin = (): BrowserWindow => {
   return mainWinModule.win;
 };
 
-let quitRequestedTimeout: NodeJS.Timeout | undefined;
+// How long the "quit requested" intent survives before auto-clearing.
+// Long enough to cover normal before-close IPC (sync, finish-day prompt);
+// short enough that if the user cancels finish-day and then clicks the
+// window close button, they get their normal minimize-to-tray behavior
+// rather than being re-prompted indefinitely.
+const QUIT_REQUEST_TIMEOUT_MS = 5_000;
 
-const getIsQuitRequested = (): boolean => !!quitRequestedTimeout;
+let isQuitRequested = false;
+let quitRequestResetTimer: NodeJS.Timeout | undefined;
+
+const getIsQuitRequested = (): boolean => isQuitRequested;
 
 const setIsQuitRequested = (flag: boolean): void => {
-  if (quitRequestedTimeout) clearTimeout(quitRequestedTimeout);
-
-  // Set timeout to cancel quit request, if app fails to respond within 5 seconds.
-  quitRequestedTimeout = flag
-    ? setTimeout(() => (quitRequestedTimeout = undefined), 5 * 1000)
+  if (quitRequestResetTimer) clearTimeout(quitRequestResetTimer);
+  isQuitRequested = flag;
+  quitRequestResetTimer = flag
+    ? setTimeout(() => {
+        isQuitRequested = false;
+        quitRequestResetTimer = undefined;
+      }, QUIT_REQUEST_TIMEOUT_MS)
     : undefined;
 };
 
@@ -82,7 +92,8 @@ export const closeWinAndQuit = (quitApp: () => void): void => {
     setIsQuitRequested(true);
     mainWin.close();
   } else {
-    // No window to close — set flag and re-trigger quit directly.
+    // No window to drive the IPC flow through — quit directly. No flag
+    // needed: the close handler that reads it cannot run without a window.
     quitApp();
   }
 };
@@ -567,6 +578,8 @@ const appCloseHandler = (app: App): void => {
   });
 
   mainWin.on('closed', () => {
+    // Clear any pending reset timer so it doesn't keep the event loop alive
+    // after the window is gone.
     setIsQuitRequested(false);
 
     // Dereference the window object
