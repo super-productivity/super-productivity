@@ -25,7 +25,7 @@ async function buildPlugin() {
     platform: 'browser',
     target: 'es2020',
     format: 'iife',
-    globalName: 'DocumentModePlugin',
+    globalName: 'DocModePlugin',
     logLevel: 'info',
     minify: true,
     sourcemap: false,

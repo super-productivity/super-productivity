@@ -1,5 +1,5 @@
 /**
- * Document-Mode editor — runs inside the plugin iframe. Notion-style UX:
+ * Doc-Mode editor — runs inside the plugin iframe. Notion-style UX:
  * inline bubble menu on text selection, block hover gutter with insert
  * (`+`) and grip (`⋮⋮`) buttons, slash menu for inserts and turn-into,
  * and a custom taskRef atom node tied to Super Productivity tasks.
@@ -1917,7 +1917,7 @@ const mount = async (): Promise<void> => {
 
   const root = document.getElementById('editor-root');
   if (!root) {
-    logErr('Document mode: #editor-root not found');
+    logErr('doc-mode: #editor-root not found');
     isMounted = false;
     return;
   }

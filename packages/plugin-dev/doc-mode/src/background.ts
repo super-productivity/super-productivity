@@ -1,5 +1,5 @@
 /**
- * Document-Mode background script. Runs once per plugin load in the host
+ * Doc-Mode background script. Runs once per plugin load in the host
  * page context. Responsible for:
  *  - Running the legacy → keyed persistence migration on first load
  *  - Registering the work-context header button
