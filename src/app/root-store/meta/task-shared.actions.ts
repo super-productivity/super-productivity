@@ -53,7 +53,7 @@ export const TaskSharedActions = createActionGroup({
       ...taskProps,
       meta: {
         isPersistent: true,
-        entityType: 'TASK' as const,
+        entityType: 'TASK',
         entityId: taskProps.task.id,
         opType: OpType.Update,
       } satisfies PersistentActionMeta,

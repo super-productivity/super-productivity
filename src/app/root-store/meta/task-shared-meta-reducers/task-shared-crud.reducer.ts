@@ -32,6 +32,7 @@ import {
   addTaskToPlannerDay,
   getProject,
   getTag,
+  getTagOrUndefined,
   hasInvalidTodayTag,
   ProjectTaskList,
   filterOutTodayTag,
@@ -225,6 +226,9 @@ const handleConvertToSubTask = (
         changes: {
           parentId,
           tagIds: [],
+          dueDay: undefined,
+          dueWithTime: undefined,
+          reminderId: undefined,
           modified: Date.now(),
         },
       },
@@ -256,7 +260,7 @@ const handleConvertToSubTask = (
     });
   }
 
-  // Remove from tag.taskIds
+  // Remove from tag.taskIds (regular tags)
   const tagUpdates = task.tagIds
     .filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
     .map((tagId) => ({
@@ -268,6 +272,20 @@ const handleConvertToSubTask = (
 
   if (tagUpdates.length > 0) {
     updatedState = updateTags(updatedState, tagUpdates);
+  }
+
+  // Remove from planner days (task may have been scheduled for a future day)
+  updatedState = removeTaskFromPlannerDays(updatedState, task.id);
+
+  // Remove from TODAY_TAG.taskIds if present (task may have been in today's list)
+  const todayTag = getTagOrUndefined(updatedState, TODAY_TAG.id);
+  if (todayTag && todayTag.taskIds.includes(task.id)) {
+    updatedState = updateTags(updatedState, [
+      {
+        id: TODAY_TAG.id,
+        changes: { taskIds: todayTag.taskIds.filter((id) => id !== task.id) },
+      },
+    ]);
   }
 
   return updatedState;

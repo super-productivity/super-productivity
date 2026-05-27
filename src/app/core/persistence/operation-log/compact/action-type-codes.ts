@@ -74,6 +74,7 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.TASK_SHARED_RESTORE]: 'HR',
   [ActionType.TASK_SHARED_RESTORE_DELETED]: 'HRD',
   [ActionType.TASK_SHARED_CONVERT_TO_MAIN]: 'HC',
+  [ActionType.TASK_SHARED_CONVERT_TO_SUBTASK]: 'HCS',
   [ActionType.TASK_SHARED_SCHEDULE_WITH_TIME]: 'HS',
   [ActionType.TASK_SHARED_RESCHEDULE_WITH_TIME]: 'HSR',
   [ActionType.TASK_SHARED_UNSCHEDULE]: 'HSX',

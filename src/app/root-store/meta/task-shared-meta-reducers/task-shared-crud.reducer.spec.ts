@@ -2765,5 +2765,71 @@ describe('taskSharedCrudMetaReducer', () => {
       const result = metaReducer(state, action);
       expect(result[TASK_FEATURE_NAME].entities['task1']!.parentId).toBeUndefined();
     });
+
+    it('should clear dueDay when converting a scheduled task to subtask', () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = getDbDateStr(tomorrow);
+
+      const scheduledTask = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        dueDay: tomorrowStr,
+      });
+
+      const stateWithScheduledTask = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          { id: 'task1', changes: { dueDay: tomorrowStr } },
+          state[TASK_FEATURE_NAME],
+        ),
+        planner: {
+          days: { [tomorrowStr]: ['task1'] },
+          addPlannedTasksDialogLastShown: undefined,
+        },
+      } as RootState;
+
+      const action = TaskSharedActions.convertToSubTask({
+        task: scheduledTask,
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(stateWithScheduledTask, action);
+
+      expect(result[TASK_FEATURE_NAME].entities['task1']!.dueDay).toBeUndefined();
+      expect((result as any).planner.days[tomorrowStr]).not.toContain('task1');
+    });
+
+    it('should remove task from TODAY_TAG.taskIds when converting to subtask', () => {
+      const todayStr = getDbDateStr();
+
+      const todayTask = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        dueDay: todayStr,
+      });
+
+      const stateWithTodayTask = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          { id: 'task1', changes: { dueDay: todayStr } },
+          state[TASK_FEATURE_NAME],
+        ),
+        [TAG_FEATURE_NAME]: tagAdapter.updateOne(
+          { id: 'TODAY', changes: { taskIds: ['task1'] } },
+          state[TAG_FEATURE_NAME],
+        ),
+      } as RootState;
+
+      const action = TaskSharedActions.convertToSubTask({
+        task: todayTask,
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(stateWithTodayTask, action);
+
+      expect(result[TASK_FEATURE_NAME].entities['task1']!.dueDay).toBeUndefined();
+      expect(result[TAG_FEATURE_NAME].entities['TODAY']!.taskIds).not.toContain('task1');
+    });
   });
 });
