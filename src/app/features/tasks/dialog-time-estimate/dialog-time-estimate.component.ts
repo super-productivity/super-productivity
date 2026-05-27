@@ -116,8 +116,8 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
 
   logToJiraTicket(): void {
     this.submit();
-    import('../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component').then(
-      ({ DialogJiraIssuePickerComponent }) => {
+    import('../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component')
+      .then(({ DialogJiraIssuePickerComponent }) => {
         this._matDialog
           .open(DialogJiraIssuePickerComponent, {
             restoreFocus: true,
@@ -134,8 +134,10 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
               `${result.issueKey} ${result.issueSummary}`,
             );
           });
-      },
-    );
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load Jira issue picker', err);
+      });
   }
 
   showAddForAnotherDayForm(): void {

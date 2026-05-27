@@ -401,8 +401,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   logTimeToJiraTicket(): void {
-    import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component').then(
-      ({ DialogJiraIssuePickerComponent }) => {
+    import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component')
+      .then(({ DialogJiraIssuePickerComponent }) => {
         this._matDialog
           .open(DialogJiraIssuePickerComponent, {
             restoreFocus: true,
@@ -419,13 +419,15 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
               `${result.issueKey} ${result.issueSummary}`,
             );
           });
-      },
-    );
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load Jira issue picker', err);
+      });
   }
 
   assignAsSubtaskOfJiraIssue(): void {
-    import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component').then(
-      ({ DialogJiraIssuePickerComponent }) => {
+    import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component')
+      .then(({ DialogJiraIssuePickerComponent }) => {
         this._matDialog
           .open(DialogJiraIssuePickerComponent, {
             restoreFocus: true,
@@ -435,7 +437,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           .pipe(take(1))
           .subscribe((result) => {
             if (!result) return;
-            void this._assignAsSubtask(result).catch((err) => {
+            void this._assignAsSubtask(result).catch((err: unknown) => {
               console.error('Failed to assign subtask:', err);
               this._snackService.open({
                 type: 'ERROR',
@@ -443,8 +445,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
               });
             });
           });
-      },
-    );
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load Jira issue picker', err);
+      });
   }
 
   private async _assignAsSubtask(result: JiraIssuePickerResult): Promise<void> {

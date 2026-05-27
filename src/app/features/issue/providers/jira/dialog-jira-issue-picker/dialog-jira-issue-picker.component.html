@@ -2,6 +2,11 @@
 
 <mat-dialog-content>
   @if (jiraProviders$ | async; as providers) {
+    @if (providers.length === 0) {
+      <p class="no-providers-hint">
+        {{ T.F.JIRA.DIALOG_PICKER.NO_PROVIDERS | translate }}
+      </p>
+    }
     @if (providers.length > 1) {
       <mat-form-field
         appearance="outline"
@@ -18,35 +23,36 @@
         </mat-select>
       </mat-form-field>
     }
-  }
-
-  <mat-form-field
-    appearance="outline"
-    class="full-width"
-  >
-    <mat-label>{{ T.F.JIRA.DIALOG_PICKER.SEARCH_LABEL | translate }}</mat-label>
-    <input
-      matInput
-      autofocus
-      [placeholder]="T.F.JIRA.DIALOG_PICKER.SEARCH_PLACEHOLDER | translate"
-      (input)="onSearchInput($event)"
-    />
-  </mat-form-field>
-
-  @if (isLoading()) {
-    <mat-spinner diameter="24" />
-  }
-
-  <mat-list>
-    @for (r of results(); track r.id) {
-      <mat-list-item
-        class="picker-item"
-        (click)="select(r)"
+    @if (providers.length > 0) {
+      <mat-form-field
+        appearance="outline"
+        class="full-width"
       >
-        <span matListItemTitle>{{ r.key }} — {{ r.summary }}</span>
-      </mat-list-item>
+        <mat-label>{{ T.F.JIRA.DIALOG_PICKER.SEARCH_LABEL | translate }}</mat-label>
+        <input
+          matInput
+          autofocus
+          [placeholder]="T.F.JIRA.DIALOG_PICKER.SEARCH_PLACEHOLDER | translate"
+          (input)="onSearchInput($event)"
+        />
+      </mat-form-field>
+
+      @if (isLoading()) {
+        <mat-spinner diameter="24" />
+      }
+
+      <mat-list>
+        @for (r of results(); track r.id) {
+          <mat-list-item
+            class="picker-item"
+            (click)="select(r)"
+          >
+            <span matListItemTitle>{{ r.key }} — {{ r.summary }}</span>
+          </mat-list-item>
+        }
+      </mat-list>
     }
-  </mat-list>
+  }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">

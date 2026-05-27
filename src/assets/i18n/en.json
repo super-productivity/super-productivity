@@ -568,7 +568,8 @@
         "PROVIDER_LABEL": "Jira provider",
         "SEARCH_LABEL": "Search Jira issues",
         "SEARCH_PLACEHOLDER": "e.g. PROJ-123 or login page",
-        "CANCEL": "Cancel"
+        "CANCEL": "Cancel",
+        "NO_PROVIDERS": "No Jira providers configured. Please add a Jira integration in Settings."
       },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
