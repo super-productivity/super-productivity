@@ -1692,7 +1692,9 @@
         "TRACK_TIME_STOP": "Pause tracking time",
         "UNSCHEDULE_TASK": "Unschedule task",
         "UPDATE_ISSUE_DATA": "Update issue data",
-        "LOG_WORK_TO_JIRA": "Log work to Jira"
+        "LOG_WORK_TO_JIRA": "Log work to Jira",
+        "LOG_TIME_TO_JIRA_TICKET": "Log time to Jira ticket…",
+        "ASSIGN_AS_SUBTASK_OF_JIRA": "Assign as subtask of Jira issue…"
       },
       "D_CONFIRM_DELETE": {
         "MSG": "Are you sure you want to delete the task \"{{title}}\"?",
