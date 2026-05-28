@@ -225,9 +225,11 @@ const handleConvertToSubTask = (
         id: task.id,
         changes: {
           parentId,
+          projectId: parentTask.projectId,
           tagIds: [],
           dueDay: undefined,
           dueWithTime: undefined,
+          remindAt: undefined,
           reminderId: undefined,
           modified: Date.now(),
         },

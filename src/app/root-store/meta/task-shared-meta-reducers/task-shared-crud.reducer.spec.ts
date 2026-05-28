@@ -2831,5 +2831,48 @@ describe('taskSharedCrudMetaReducer', () => {
       expect(result[TASK_FEATURE_NAME].entities['task1']!.dueDay).toBeUndefined();
       expect(result[TAG_FEATURE_NAME].entities['TODAY']!.taskIds).not.toContain('task1');
     });
+
+    it('should clear remindAt when converting a task with an active reminder', () => {
+      const stateWithReminder = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          { id: 'task1', changes: { remindAt: Date.now() + 3600000 } },
+          state[TASK_FEATURE_NAME],
+        ),
+      } as RootState;
+
+      const action = TaskSharedActions.convertToSubTask({
+        task: task1,
+        parentId: 'jiraTask',
+      });
+      const result = metaReducer(stateWithReminder, action);
+
+      expect(result[TASK_FEATURE_NAME].entities['task1']!.remindAt).toBeUndefined();
+    });
+
+    it('should set projectId to parent projectId when converting across projects', () => {
+      // Add a parent task in a different project
+      const parentInOtherProject = createMockTask({
+        id: 'otherParent',
+        projectId: 'project2',
+        tagIds: [],
+        subTaskIds: [],
+      });
+      const stateWithOtherProject = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.addOne(
+          parentInOtherProject,
+          state[TASK_FEATURE_NAME],
+        ),
+      } as RootState;
+
+      const action = TaskSharedActions.convertToSubTask({
+        task: task1, // projectId: 'project1'
+        parentId: 'otherParent', // projectId: 'project2'
+      });
+      const result = metaReducer(stateWithOtherProject, action);
+
+      expect(result[TASK_FEATURE_NAME].entities['task1']!.projectId).toBe('project2');
+    });
   });
 });
