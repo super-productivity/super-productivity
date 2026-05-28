@@ -60,7 +60,7 @@ export class JiraWorklogService {
           await import('../../shared/dialog-track-time/dialog-track-time.component');
         // For subtask-done flow, task is the subtask but issueId is the parent's Jira issue.
         // We track issueTimeLogged on the subtask to prevent re-logging its own time.
-        const issueTimeLogged = task.issueTimeLogged ?? issue.timespent * 1000;
+        const issueTimeLogged = task.issueTimeLogged ?? (issue.timespent ?? 0) * 1000;
         if (task.issueTimeLogged === undefined) {
           this._taskService.update(task.id, { issueTimeLogged });
         }
