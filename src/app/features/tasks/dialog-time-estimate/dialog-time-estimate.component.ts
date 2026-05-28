@@ -109,12 +109,26 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     });
   }
 
+  private _taskWithCurrentTime(): Task {
+    const updatedTimeSpent = Object.values(this.timeSpentOnDayCopy).reduce(
+      (sum: number, ms) => sum + ms,
+      0,
+    );
+    return {
+      ...this.task,
+      timeSpentOnDay: this.timeSpentOnDayCopy,
+      timeSpent: updatedTimeSpent,
+    };
+  }
+
   submitAndLogToJira(): void {
+    const updatedTask = this._taskWithCurrentTime();
     this.submit();
-    this._jiraWorklogService.openWorklogDialogForTask(this.task);
+    this._jiraWorklogService.openWorklogDialogForTask(updatedTask);
   }
 
   logToJiraTicket(): void {
+    const updatedTask = this._taskWithCurrentTime();
     this.submit();
     import('../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component')
       .then(({ DialogJiraIssuePickerComponent }) => {
@@ -128,7 +142,7 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
           .subscribe((result) => {
             if (!result) return;
             this._jiraWorklogService.openWorklogDialogForExternalTask(
-              this.task,
+              updatedTask,
               result.issueId,
               result.issueProviderId,
               `${result.issueKey} ${result.issueSummary}`,
