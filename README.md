@@ -49,9 +49,14 @@
 </p>
 
 <p align="center">
-  <strong>For all current downloads, package links, and platform-specific notes:
+  <strong>
+    For all current downloads, package links, and platform-specific notes:
+    <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install" target="_blank">
+      check the wiki
+    </a>.
+  </strong>
+  <br/>
   <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install" target="_blank">
-    check the wiki</strong>.<br/>
     <img
       src="docs/screens/get-it-on-github.webp"
       alt="Get it on GitHub"
