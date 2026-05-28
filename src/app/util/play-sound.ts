@@ -1,4 +1,4 @@
-import { getAudioBuffer, playBuffer } from './audio-context';
+import { getAudioBuffer, getAudioBufferFromRaw, playBuffer } from './audio-context';
 
 const BASE = './assets/snd';
 
@@ -56,5 +56,29 @@ export const playSound = async (filePath: string, vol = 100): Promise<void> => {
     });
   } catch (e) {
     console.error('Error playing sound:', e);
+  }
+};
+
+/**
+ * Plays a raw ArrayBuffer as audio at the specified volume.
+ * Uses `cacheKey` to avoid re-decoding on subsequent plays.
+ * Multiple concurrent calls are automatically queued to prevent audio clipping.
+ *
+ * @param cacheKey - Unique identifier for the decoded buffer cache (e.g. `custom:<id>`)
+ * @param arrayBuffer - Raw audio data (e.g. from IndexedDB)
+ * @param vol - Volume level from 0 to 100 (default: 100)
+ */
+export const playSoundFromBuffer = async (
+  cacheKey: string,
+  arrayBuffer: ArrayBuffer,
+  vol = 100,
+): Promise<void> => {
+  try {
+    await audioQueue.enqueue(async () => {
+      const buffer = await getAudioBufferFromRaw(cacheKey, arrayBuffer);
+      await playBuffer(buffer, vol);
+    });
+  } catch (e) {
+    console.error('Error playing custom sound:', e);
   }
 };

@@ -28,6 +28,8 @@ export interface SimpleCounterCfgFields {
 
   // audio feedback
   isAudioEnabled?: boolean;
+  soundType?: string;
+  soundVolume?: number;
 }
 
 export interface SimpleCounterCopy extends SimpleCounterCfgFields {

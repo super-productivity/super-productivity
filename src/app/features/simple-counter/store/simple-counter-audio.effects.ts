@@ -3,14 +3,32 @@ import { Actions, createEffect, ofType } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import { combineLatest, take } from 'rxjs';
 import { filter, map, switchMap, tap } from 'rxjs/operators';
-import { playSound } from '../../../util/play-sound';
+import { AudioPlayerService } from '../../../util/audio-player.service';
 import {
   toggleSimpleCounterCounter,
   setSimpleCounterCounterOff,
 } from './simple-counter.actions';
 import { selectSoundConfig } from '../../config/store/global-config.reducer';
 import { selectSimpleCounterById } from './simple-counter.reducer';
-import { SimpleCounterType } from '../simple-counter.model';
+import { SimpleCounter, SimpleCounterType } from '../simple-counter.model';
+import { SoundConfig } from '../../config/global-config.model';
+import { CustomSoundStorageService } from '../custom-sound-storage.service';
+
+const CUSTOM_PREFIX = 'custom:';
+
+/**
+ * Resolves the effective sound file and volume for a counter, falling back
+ * to the global sound config when the counter has no per-counter overrides.
+ *
+ * Pure function — easy to unit-test without mocking the store.
+ */
+export const resolveCounterSoundCfg = (
+  counter: SimpleCounter,
+  globalCfg: SoundConfig,
+): { file: string | null; volume: number } => ({
+  file: counter.soundType ?? globalCfg.doneSound,
+  volume: counter.soundVolume != null ? counter.soundVolume : globalCfg.volume,
+});
 
 /**
  * Audio Effects for Simple Counter start/stop events.
@@ -24,6 +42,8 @@ import { SimpleCounterType } from '../simple-counter.model';
 export class SimpleCounterAudioEffects {
   private actions$ = inject(Actions);
   private store$ = inject(Store);
+  private _customSoundService = inject(CustomSoundStorageService);
+  private _audioPlayer = inject(AudioPlayerService);
 
   /**
    * Plays audio feedback when a SimpleCounter is toggled on or off.
@@ -32,42 +52,31 @@ export class SimpleCounterAudioEffects {
    * Listens to toggleSimpleCounterCounter and setSimpleCounterCounterOff actions
    * which are dispatched when the user clicks to stop a habit.
    *
-   * Uses the global sound configuration to determine:
-   * - Whether audio is enabled
-   * - Which sound file to play
-   * - Volume level
+   * Uses per-counter sound settings when configured, falling back to the global
+   * sound configuration for the sound file and volume.
    */
   playHabitAudio$ = createEffect(
     () =>
       this.actions$.pipe(
         ofType(toggleSimpleCounterCounter, setSimpleCounterCounterOff),
-        // Get counter and sound config at the time of toggle
-        // Use take(1) to prevent re-emissions from store updates
+        // Get counter and sound config at the time of toggle.
+        // take(1) prevents re-emissions from subsequent store updates.
         switchMap((action) =>
           combineLatest([
             this.store$.select(selectSoundConfig),
-            this.store$.select(selectSimpleCounterById, {
-              id: action.id,
-            }),
+            this.store$.select(selectSimpleCounterById, { id: action.id }),
           ]).pipe(
             take(1),
-            map(([soundConfig, counter]) => ({
-              action,
-              soundConfig,
-              counter,
-            })),
+            map(([soundConfig, counter]) => ({ soundConfig, counter })),
           ),
         ),
-        // Filter: only process if audio config and counter exist
+        // Require both configs to exist
         filter(({ soundConfig, counter }) => !!soundConfig && !!counter),
-        // Filter: only if audio is enabled in global config
-        filter(
-          ({ soundConfig }) =>
-            soundConfig && soundConfig.volume > 0 && !!soundConfig.doneSound,
-        ),
-        // Filter: only if counter has audio enabled locally
+        // Require global config to have a usable fallback sound
+        filter(({ soundConfig }) => !!soundConfig.doneSound),
+        // Respect the per-counter audio toggle
         filter(({ counter }) => !!counter && counter.isAudioEnabled !== false),
-        // Filter: only for StopWatch and RepeatedCountdownReminder types
+        // Only StopWatch and RepeatedCountdownReminder emit audio
         filter(
           ({ counter }) =>
             !!counter &&
@@ -75,9 +84,21 @@ export class SimpleCounterAudioEffects {
               counter.type === SimpleCounterType.RepeatedCountdownReminder),
         ),
         tap(async ({ soundConfig, counter }) => {
-          // Play completion sound
-          if (counter && soundConfig.doneSound && soundConfig.volume > 0) {
-            await playSound(soundConfig.doneSound, soundConfig.volume);
+          if (!counter) return;
+          const { file, volume } = resolveCounterSoundCfg(counter, soundConfig);
+          if (!file || volume <= 0) return;
+          if (file.startsWith(CUSTOM_PREFIX)) {
+            const soundId = file.slice(CUSTOM_PREFIX.length);
+            const stored = await this._customSoundService.getSound(soundId);
+            if (stored) {
+              await this._audioPlayer.playSoundFromBuffer(
+                `${CUSTOM_PREFIX}${soundId}`,
+                stored.arrayBuffer,
+                volume,
+              );
+            }
+          } else {
+            await this._audioPlayer.playSound(file, volume);
           }
         }),
       ),
