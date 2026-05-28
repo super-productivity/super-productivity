@@ -1964,7 +1964,6 @@ const T = {
     },
     TIME_TRACKING: {
       B: {
-        ALREADY_DID: 'F.TIME_TRACKING.B.ALREADY_DID',
         SNOOZE: 'F.TIME_TRACKING.B.SNOOZE'
       },
       B_TTR: {

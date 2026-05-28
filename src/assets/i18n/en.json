@@ -1964,7 +1964,6 @@
     },
     "TIME_TRACKING": {
       "B": {
-        "ALREADY_DID": "I already did",
         "SNOOZE": "Snooze {{time}}"
       },
       "B_TTR": {
