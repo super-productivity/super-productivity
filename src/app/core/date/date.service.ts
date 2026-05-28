@@ -6,8 +6,12 @@ export class DateService {
   private startOfNextDayDiff: number = 0;
 
   setStartOfNextDayDiff(startOfNextDay: number): void {
-    const clamped = Math.max(0, Math.min(23, startOfNextDay || 0));
-    this.startOfNextDayDiff = clamped * 60 * 60 * 1000;
+    const hour = startOfNextDay ?? 0;
+    if (hour < 0 || hour > 23) {
+      this.startOfNextDayDiff = 0;
+      return;
+    }
+    this.startOfNextDayDiff = hour * 60 * 60 * 1000;
   }
 
   /**

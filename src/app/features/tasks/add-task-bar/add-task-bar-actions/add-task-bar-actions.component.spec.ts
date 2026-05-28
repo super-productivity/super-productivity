@@ -276,6 +276,25 @@ describe('AddTaskBarActionsComponent', () => {
       expect(component.dateDisplay()).toBe('Today');
     });
 
+    it('should compute dateDisplay for logical tomorrow before start of next day', () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      const offsetMs = 3 * 60 * 60 * 1000;
+      mockDateService.getStartOfNextDayDiffMs.and.returnValue(offsetMs);
+      const nowMs = new Date(2024, 4, 20, 1, 30, 0, 0).getTime();
+      mockDateService.getLogicalTodayDate.and.returnValue(new Date(nowMs - offsetMs));
+      spyOn(Date, 'now').and.returnValue(nowMs);
+
+      const stateWithLogicalTomorrow = {
+        ...mockState,
+        date: '2024-05-20',
+        time: null,
+      };
+      (mockStateService as any)._mockStateSignal.set(stateWithLogicalTomorrow);
+
+      fixture.detectChanges();
+      expect(component.dateDisplay()).toBe('Tomorrow');
+    });
+
     it('should compute dateDisplay for other dates', () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);

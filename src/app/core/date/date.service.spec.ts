@@ -28,6 +28,15 @@ describe('DateService', () => {
       expect(service.isToday(tomorrow)).toBe(false);
     });
 
+    it('should return false for logical tomorrow when offset is set', () => {
+      jasmine.clock().install();
+      const fixed = new Date(2026, 2, 27, 1, 30, 0);
+      jasmine.clock().mockDate(fixed);
+      service.setStartOfNextDayDiff(3);
+      expect(service.isToday(service.getLogicalTomorrowMs())).toBe(false);
+      jasmine.clock().uninstall();
+    });
+
     it('should treat post-midnight as previous day when offset is set', () => {
       // offset = 2 hours means the "day" doesn't change until 2 AM
       service.setStartOfNextDayDiff(2);
@@ -111,9 +120,9 @@ describe('DateService', () => {
       expect(service.getStartOfNextDayDiffMs()).toBe(0);
     });
 
-    it('should clamp values above 23 to 23 hours', () => {
+    it('should treat out-of-range hour values as 0', () => {
       service.setStartOfNextDayDiff(99);
-      expect(service.getStartOfNextDayDiffMs()).toBe(23 * 60 * 60 * 1000);
+      expect(service.getStartOfNextDayDiffMs()).toBe(0);
     });
 
     it('should treat undefined as 0', () => {
