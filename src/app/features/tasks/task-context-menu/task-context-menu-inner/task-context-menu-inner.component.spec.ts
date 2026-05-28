@@ -385,6 +385,27 @@ describe('TaskContextMenuInnerComponent', () => {
       expect(store.dispatch).not.toHaveBeenCalled();
     });
 
+    it('should show error snack and not dispatch when the only matching task in selectAllTasks is itself a subtask', async () => {
+      issueService.addTaskFromIssue.and.resolveTo(undefined);
+      const subtaskMatch = {
+        id: 'EXISTING_JIRA_TASK_ID',
+        issueId: mockPickerResult.issueId,
+        issueProviderId: mockPickerResult.issueProviderId,
+        parentId: 'SOME_PARENT_ID',
+      } as any;
+      store.overrideSelector(selectAllTasks, [subtaskMatch]);
+      store.refreshState();
+      spyOn(store, 'dispatch');
+
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR' }),
+      );
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
     it('should not call getCfgOnce$ when picker is cancelled (returns undefined)', async () => {
       setupDialogWithPickerResult(undefined);
 

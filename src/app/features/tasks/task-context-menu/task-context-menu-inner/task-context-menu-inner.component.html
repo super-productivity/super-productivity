@@ -232,7 +232,7 @@
       {{ T.F.TASK.CMP.LOG_TIME_TO_JIRA_TICKET | translate }}
     </button>
   }
-  @if (!task.parentId && task.issueType !== JIRA_TYPE) {
+  @if (!task.parentId && !task.subTaskIds.length && task.issueType !== JIRA_TYPE) {
     <button
       (click)="assignAsSubtaskOfJiraIssue()"
       mat-menu-item

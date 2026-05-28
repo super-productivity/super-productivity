@@ -474,7 +474,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       const allTasks = await firstValueFrom(this._store.select(selectAllTasks));
       jiraTaskId = allTasks.find(
         (t) =>
-          t.issueId === result.issueId && t.issueProviderId === result.issueProviderId,
+          t.issueId === result.issueId &&
+          t.issueProviderId === result.issueProviderId &&
+          !t.parentId,
       )?.id;
     }
 
