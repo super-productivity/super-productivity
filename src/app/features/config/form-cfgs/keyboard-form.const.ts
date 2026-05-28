@@ -417,5 +417,29 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
         label: T.GCF.KEYBOARD.TASK_EDIT_TAGS,
       },
     },
+    // UNDO/REDO
+    {
+      type: 'tpl',
+      className: 'tpl',
+      templateOptions: {
+        tag: 'h3',
+        class: 'sub-section-heading',
+        text: T.GCF.KEYBOARD.UNDO_REDO_SHORTCUTS,
+      },
+    },
+    {
+      key: 'undo',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.UNDO,
+      },
+    },
+    {
+      key: 'redo',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.REDO,
+      },
+    },
   ],
 };

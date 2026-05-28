@@ -14,6 +14,7 @@ import { selectTodayTaskIds } from '../../work-context/store/work-context.select
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DateService } from '../../../core/date/date.service';
+import { isCompensatingAction } from '../../../op-log/core/persistent-action.interface';
 
 @Injectable()
 export class TaskRelatedModelEffects {
@@ -61,6 +62,7 @@ export class TaskRelatedModelEffects {
     this.ifAutoAddTodayEnabled$(
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
+        filter((action) => !isCompensatingAction(action)),
         filter((a) => a.task.changes.isDone === true),
         // PERF: Skip during hydration/sync to avoid service calls
         filter(() => !this._hydrationState.isApplyingRemoteOps()),

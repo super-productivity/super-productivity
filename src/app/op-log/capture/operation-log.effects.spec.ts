@@ -21,6 +21,7 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { OperationCaptureService } from './operation-capture.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
+import { UndoRedoActions } from '../../root-store/undo-redo/undo-redo.actions';
 
 describe('OperationLogEffects', () => {
   let effects: OperationLogEffects;
@@ -90,7 +91,7 @@ describe('OperationLogEffects', () => {
     );
     mockCompactionService.compact.and.returnValue(Promise.resolve());
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
-    mockStore.select.and.returnValue(of({})); // Return empty state observable
+    mockStore.select.and.returnValue(of(false));
     mockClientIdService.getOrGenerateClientId.and.returnValue(
       Promise.resolve('testClient'),
     );
@@ -322,6 +323,31 @@ describe('OperationLogEffects', () => {
             actionPayload: { title: 'Updated Title', done: true },
             entityChanges: jasmine.any(Array),
           });
+          done();
+        },
+      });
+    });
+
+    it('should persist compensating actions without adding them to the undo stack', (done) => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_DELETE);
+      action.meta.isCompensating = true;
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              actionType: ActionType.TASK_SHARED_DELETE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+            }),
+            'local',
+          );
+          expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              type: UndoRedoActions.addToUndoStack.type,
+            }),
+          );
           done();
         },
       });

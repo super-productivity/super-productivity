@@ -21,6 +21,7 @@ import { fromEvent, merge, Observable, of } from 'rxjs';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
+import { UndoRedoService } from '../../root-store/undo-redo/undo-redo.service';
 
 // NOTE: Relying on Angular CDK overlay CSS class names keeps shortcut suppression simple.
 // If CDK changes these class names we only need to adjust the helpers below.
@@ -45,6 +46,7 @@ export class ShortcutService {
   private _pluginBridgeService = inject(PluginBridgeService);
   private _taskShortcutService = inject(TaskShortcutService);
   private _overlayContainer = inject(OverlayContainer);
+  private _undoRedoService = inject(UndoRedoService);
 
   isCtrlPressed$: Observable<boolean> = fromEvent(document, 'keydown').pipe(
     switchMap((ev: Event) => {
@@ -103,11 +105,18 @@ export class ShortcutService {
 
     // Skip handling if no special keys are used and inside input elements or overlays.
     // Overlay detection intentionally keys off CDK CSS class names for now (see constants above).
-    if (
-      !ev.metaKey &&
-      (isInputElement(el) || hasBlockingOverlay || this._isEventFromOverlay(ev))
-    ) {
-      return;
+    // Exception: allow undo/redo even when a blocking overlay (e.g. snackbar) is open so
+    // keyboard undo/redo still work while the app shows transient overlays.
+    if (!ev.metaKey) {
+      const isInput = isInputElement(el);
+      const isFromOverlay = this._isEventFromOverlay(ev);
+      const overlayBlocks = hasBlockingOverlay;
+      const tryingUndoOrRedo =
+        checkKeyCombo(ev, keys.undo) || checkKeyCombo(ev, keys.redo);
+
+      if (isInput || isFromOverlay || (overlayBlocks && !tryingUndoOrRedo)) {
+        return;
+      }
     }
 
     if (
@@ -200,6 +209,17 @@ export class ShortcutService {
       if (await this._syncWrapperService.isEnabledAndReady$.pipe(first()).toPromise()) {
         this._syncWrapperService.sync();
       }
+    } else if (checkKeyCombo(ev, keys.undo)) {
+      ev.preventDefault();
+      this._undoRedoService.undo();
+      return;
+    } else if (checkKeyCombo(ev, keys.redo)) {
+      ev.preventDefault();
+      console.debug(
+        '[ShortcutService] Redo shortcut detected, calling UndoRedoService.redo()',
+      );
+      this._undoRedoService.redo();
+      return;
     } else if (
       checkKeyCombo(ev, 'Ctrl+Shift+*') &&
       document.activeElement &&
