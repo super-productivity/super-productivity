@@ -49,6 +49,7 @@ import { LayoutService } from '../../core-ui/layout/layout.service';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
+  setWebViewBackgroundColor(options: { color: string }): Promise<void>;
 }
 
 const NavigationBar = registerPlugin<NavigationBarPlugin>('NavigationBar');
@@ -796,6 +797,11 @@ export class GlobalThemeService {
           style: isDark ? 'DARK' : 'LIGHT',
         }).catch((err) => {
           Log.warn('Failed to set navigation bar color', err);
+        });
+        // Keep the native WebView surface matched to the theme so the
+        // adjustResize keyboard animation can't flash white between frames.
+        NavigationBar.setWebViewBackgroundColor({ color: bgColor }).catch((err) => {
+          Log.warn('Failed to set web view background color', err);
         });
       }
     });
