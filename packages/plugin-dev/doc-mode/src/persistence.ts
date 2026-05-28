@@ -96,27 +96,25 @@ export const loadContextDoc = async (
 
 /**
  * Serialise an editor doc to the exact bytes that will land in storage.
- * Extracted so `flushSave` (async, via `saveContextDoc`) and `flushSaveSync`
- * (sync, dispatching the persist directly) produce byte-identical output
+ * Extracted so `flushSave` and `flushSaveSync` produce byte-identical output
  * — the self-echo baseline (#7752) compares raw against raw and silently
- * desyncs if the two paths ever diverge on encoding.
+ * desyncs if the two paths ever diverge on encoding. Also used by both flush
+ * paths to short-circuit no-op saves (#7815) by comparing the would-be-written
+ * bytes against `lastSeenDocBytes` before dispatching.
  */
 export const serializeContextDoc = (doc: unknown): string => JSON.stringify(doc);
 
 /**
- * Persist one context's editor doc. Returns the exact string handed to
- * `persistDataSynced` so the caller can store it as `lastSeenDocBytes`
- * and recognise the host's own self-echo fire (#7752).
+ * Persist a pre-serialised raw doc string under `doc:${ctxId}`. The caller
+ * is expected to have already computed the bytes via `serializeContextDoc`
+ * (so a no-op short-circuit against `lastSeenDocBytes` can run before this
+ * is invoked — see editor.ts `flushSave` for #7815).
  */
-export const saveContextDoc = async (
+export const persistContextDocRaw = (
   api: PluginAPI,
   ctxId: string,
-  doc: unknown,
-): Promise<string> => {
-  const raw = serializeContextDoc(doc);
-  await api.persistDataSynced(raw, docKey(ctxId));
-  return raw;
-};
+  raw: string,
+): Promise<void> => api.persistDataSynced(raw, docKey(ctxId));
 
 /**
  * One-shot migration from the legacy single-blob shape to keyed entries.

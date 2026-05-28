@@ -7,8 +7,8 @@ import {
 
 /**
  * End-to-end coverage of the Stage A keyed persistence migration in the
- * bundled document-mode plugin. The migration logic is unit-tested against
- * a mock PluginAPI (`packages/plugin-dev/document-mode/src/persistence.spec.ts`),
+ * bundled doc-mode plugin. The migration logic is unit-tested against
+ * a mock PluginAPI (`packages/plugin-dev/doc-mode/src/persistence.spec.ts`),
  * but those tests can't catch real-iframe quirks: postMessage handling of
  * `undefined` second args, commit-chain timing across the host's rate
  * limiter, hydration ordering against the op-log.
@@ -21,7 +21,7 @@ import {
  *    `doc:${ctxId}` keyed entries and tombstones the legacy id.
  */
 
-const PLUGIN_ID = 'document-mode';
+const PLUGIN_ID = 'doc-mode';
 // Underscore-cased so the @typescript-eslint/naming-convention rule on
 // object literal keys is happy. The keys are opaque context ids; their
 // shape doesn't matter to the host.
@@ -79,7 +79,7 @@ const findEntry = (
   id: string,
 ): PluginUserDataEntry | undefined => entries?.find((e) => e.id === id);
 
-test.describe('Document Mode Stage A migration', () => {
+test.describe('Doc Mode Stage A migration', () => {
   test('stamps migration success on a fresh install', async ({ page, workViewPage }) => {
     test.setTimeout(60000);
 
@@ -96,7 +96,7 @@ test.describe('Document Mode Stage A migration', () => {
     const pluginReady = await waitForPluginManagementInit(page);
     expect(pluginReady).toBeTruthy();
 
-    const enabled = await enablePluginWithVerification(page, 'Document Mode');
+    const enabled = await enablePluginWithVerification(page, 'Doc Mode');
     expect(enabled).toBeTruthy();
 
     // The migration runs once the plugin's background.js executes init().
@@ -169,7 +169,7 @@ test.describe('Document Mode Stage A migration', () => {
     const pluginReady = await waitForPluginManagementInit(page);
     expect(pluginReady).toBeTruthy();
 
-    const enabled = await enablePluginWithVerification(page, 'Document Mode');
+    const enabled = await enablePluginWithVerification(page, 'Doc Mode');
     expect(enabled).toBeTruthy();
 
     // Wait for the migration to stamp success. The full sequence is:

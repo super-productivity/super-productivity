@@ -45,6 +45,12 @@ import {
   NodeExecutionConsentDialogResult,
 } from './util/plugin-consent.util';
 
+// Each plugin's `id` (from its manifest.json, distinct from the asset path
+// here) becomes the entityId prefix for all data it persists via
+// `persistDataSynced` — keyed entries land under `<pluginId>:<key>` in IDB,
+// the op-log, and on the sync wire. Once a plugin ships, renaming its id
+// orphans every user's stored data: there is no automatic re-keying. Treat
+// pluginIds as permanent for any plugin that has ever been published.
 const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/yesterday-tasks-plugin',
   'assets/bundled-plugins/sync-md',
@@ -57,7 +63,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/voice-reminder',
   'assets/bundled-plugins/google-calendar-provider',
   'assets/bundled-plugins/caldav-calendar-provider',
-  'assets/bundled-plugins/document-mode',
+  'assets/bundled-plugins/doc-mode',
 ] as const;
 
 @Injectable({

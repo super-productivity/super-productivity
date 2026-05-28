@@ -1,5 +1,5 @@
 /**
- * Document-Mode editor — runs inside the plugin iframe. Notion-style UX:
+ * Doc-Mode editor — runs inside the plugin iframe. Notion-style UX:
  * inline bubble menu on text selection, block hover gutter with insert
  * (`+`) and grip (`⋮⋮`) buttons, slash menu for inserts and turn-into,
  * and a custom taskRef atom node tied to Super Productivity tasks.
@@ -32,7 +32,7 @@ import {
   docKey,
   loadContextDoc,
   migrateToKeyedPersistence,
-  saveContextDoc,
+  persistContextDocRaw,
   serializeContextDoc,
 } from '../persistence';
 import { iconSvg } from './icons';
@@ -113,7 +113,7 @@ const logErr = (msg: string, err?: unknown): void => {
     // ignore — fall through to console
   }
   // eslint-disable-next-line no-console
-  console.error('[document-mode]', msg, err);
+  console.error('[doc-mode]', msg, err);
 };
 
 /**
@@ -244,18 +244,28 @@ const flushSave = async (): Promise<void> => {
     saveTimer = null;
   }
   if (!currentCtx || !editor) return;
-  saveInFlight = true;
+  // Same guard as scheduleSave + flushSaveSync — never overwrite a doc we
+  // couldn't read. The schedule gate normally prevents flushSave from firing
+  // on a corrupt doc, but corruption can be set between schedule and fire
+  // (e.g. a remote update reload turning up an unparseable blob), so the
+  // guard is repeated here for symmetry.
+  if (isDocCorrupt) return;
   const savedCtxId = currentCtx.id;
+  // Compute the would-be-written bytes before the await so we can short-circuit
+  // no-op saves (#7815): a typed-then-reverted cycle inside the 30s throttle
+  // window produces bytes byte-identical to the baseline. Skipping here avoids
+  // an unnecessary postMessage round-trip, IDB transaction, and op-log entry.
+  // The baseline is NOT updated on a skip — it already equals these bytes, so
+  // the self-echo invariant is preserved.
+  const raw = serializeContextDoc(stripChipContent(editor.getJSON()));
+  if (raw === lastSeenDocBytes) return;
+  saveInFlight = true;
   try {
     // Keyed storage (Stage A): write only this context's doc. No need to
     // read+merge any sibling state — the meta entry (enabledCtxIds) lives
     // in its own LWW-resolved entity owned by background.ts, and sibling
     // contexts each have their own `doc:${ctxId}` entry.
-    const raw = await saveContextDoc(
-      PluginAPI,
-      savedCtxId,
-      stripChipContent(editor.getJSON()),
-    );
+    await persistContextDocRaw(PluginAPI, savedCtxId, raw);
     // Update the self-echo baseline only if we still own this context; a
     // mid-flight context switch would otherwise stamp the new context's
     // baseline with the old context's bytes.
@@ -298,13 +308,22 @@ const flushSaveSync = (): void => {
   // Same guard as scheduleSave — never overwrite a doc we couldn't read.
   if (isDocCorrupt) return;
   try {
-    // Stamp the self-echo baseline synchronously even though the dispatch
-    // is fire-and-forget — the host serialises to the exact same string we
-    // compute here, so an inbound hook caused by this write will recognise
-    // itself when matched against `lastSeenDocBytes`. Shared
-    // `serializeContextDoc` keeps the sync + async flush paths byte-equal.
-    lastSeenDocBytes = serializeContextDoc(stripChipContent(editor.getJSON()));
-    void PluginAPI.persistDataSynced(lastSeenDocBytes, docKey(currentCtx.id));
+    // Compute first, then short-circuit no-op saves (#7815) before stamping
+    // the baseline — stamping unconditionally would still be correct (the new
+    // value equals the old) but the early return also skips the fire-and-forget
+    // persist dispatch and the op-log entry it produces.
+    const raw = serializeContextDoc(stripChipContent(editor.getJSON()));
+    if (raw === lastSeenDocBytes) return;
+    // Stamp the self-echo baseline BEFORE the dispatch. Asymmetric vs
+    // flushSave, which stamps AFTER `await`: this path is fire-and-forget —
+    // the iframe can be torn down mid-call and the promise never resolves,
+    // so a post-dispatch stamp would silently drop on teardown. Pre-stamping
+    // is safe because the host serialises to the exact same string we compute
+    // here, so an inbound hook caused by this write recognises itself when
+    // matched against `lastSeenDocBytes`. Shared `serializeContextDoc` keeps
+    // the sync + async flush paths byte-equal.
+    lastSeenDocBytes = raw;
+    void persistContextDocRaw(PluginAPI, currentCtx.id, raw);
   } catch (err) {
     logErr('persistDataSynced (sync flush) failed', err);
   }
@@ -1891,14 +1910,14 @@ const mount = async (): Promise<void> => {
   try {
     await migrateToKeyedPersistence(PluginAPI);
   } catch (err) {
-    logErr('document-mode: migration failed', err);
+    logErr('doc-mode: migration failed', err);
   }
   updateDocStatusBanner();
   const initialCtx = await PluginAPI.getActiveWorkContext();
 
   const root = document.getElementById('editor-root');
   if (!root) {
-    logErr('Document mode: #editor-root not found');
+    logErr('doc-mode: #editor-root not found');
     isMounted = false;
     return;
   }
@@ -2130,7 +2149,7 @@ const waitForPluginAPI = (): Promise<void> =>
       if (attempts >= MAX_ATTEMPTS) {
         // eslint-disable-next-line no-console
         console.error(
-          '[document-mode] PluginAPI not injected after',
+          '[doc-mode] PluginAPI not injected after',
           MAX_ATTEMPTS * INTERVAL_MS,
           'ms — giving up',
         );
@@ -2154,7 +2173,7 @@ void waitForPluginAPI()
       const msg = document.createElement('div');
       msg.className = 'doc-error-state';
       msg.textContent =
-        'Document Mode could not connect to Super Productivity. ' +
+        'Doc Mode could not connect to Super Productivity. ' +
         'Try closing and reopening this panel.';
       root.appendChild(msg);
     }

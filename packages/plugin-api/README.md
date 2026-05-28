@@ -135,6 +135,7 @@ Add these to your manifest.json based on what your plugin needs:
 - `getAllTags` - Read tags
 - `addTag` - Create tags
 - `persistDataSynced` - Persist plugin data
+- `getAppState` - Read-only snapshot of application state
 
 ### 3. Plugin Structure
 
@@ -171,6 +172,9 @@ PluginAPI.registerHeaderButton({
     PluginAPI.showIndexHtmlAsView();
   },
 });
+
+// Read full app state
+const state = await PluginAPI.getAppState();
 ```
 
 ## License

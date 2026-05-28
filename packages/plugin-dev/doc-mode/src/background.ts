@@ -1,5 +1,5 @@
 /**
- * Document-Mode background script. Runs once per plugin load in the host
+ * Doc-Mode background script. Runs once per plugin load in the host
  * page context. Responsible for:
  *  - Running the legacy → keyed persistence migration on first load
  *  - Registering the work-context header button
@@ -54,7 +54,7 @@ const init = async (): Promise<void> => {
   try {
     await migrateToKeyedPersistence(PluginAPI);
   } catch (err) {
-    PluginAPI.log.err('document-mode: migration failed', err);
+    PluginAPI.log.err('doc-mode: migration failed', err);
     // Continue anyway: a partial migration leaves the data in place
     // (corruption guard in persistence.ts) and the next session will retry.
   }
@@ -94,12 +94,12 @@ const onButtonClick = async (ctx: ActiveWorkContext): Promise<void> => {
       return [...set];
     });
   } catch (err) {
-    PluginAPI.log.err('document-mode: failed to persist toggle', err);
+    PluginAPI.log.err('doc-mode: failed to persist toggle', err);
   }
 };
 
 PluginAPI.registerWorkContextHeaderButton({
-  label: 'Document Mode',
+  label: 'Doc Mode',
   icon: 'description',
   showFor: ['PROJECT', 'TODAY'],
   onClick: (ctx) => {

@@ -7,7 +7,7 @@ import { PluginLog } from '../core/log';
  * Each handler has a 5s timeout to prevent hung handlers from blocking others.
  *
  * A plugin may register multiple handlers for the same hook under one
- * pluginId — for example, document-mode registers from both its background
+ * pluginId — for example, doc-mode registers from both its background
  * script (host page) and its iframe editor. All registered handlers fire on
  * dispatch.
  */

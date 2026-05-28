@@ -12,8 +12,9 @@ import {
   loadContextDoc,
   loadEnabledCtxIds,
   migrateToKeyedPersistence,
-  saveContextDoc,
+  persistContextDocRaw,
   saveEnabledCtxIds,
+  serializeContextDoc,
 } from './persistence';
 
 /**
@@ -84,7 +85,7 @@ test('loadContextDoc: returns {raw:null, parsed:null} when the entry is missing'
 test('loadContextDoc: returns both the raw string and parsed value', async () => {
   const { api } = createMockApi();
   const doc = { type: 'doc', content: [{ type: 'paragraph' }] };
-  await saveContextDoc(api, 'p1', doc);
+  await persistContextDocRaw(api, 'p1', serializeContextDoc(doc));
   const loaded = await loadContextDoc(api, 'p1');
   // raw is what the editor needs for the lastSeenDocBytes byte-compare (#7752)
   assert.equal(loaded.raw, JSON.stringify(doc));
@@ -117,14 +118,51 @@ test('loadContextDoc: primitive JSON values pass through parsed as the primitive
   assert.deepEqual(await loadContextDoc(api, 'p1'), { raw: '"hi"', parsed: 'hi' });
 });
 
-test('saveContextDoc: writes under doc:<ctxId> and returns the raw string written', async () => {
+test('persistContextDocRaw: writes the exact raw string under doc:<ctxId>', async () => {
+  const { api, store, writes } = createMockApi();
+  // Pre-computed raw (mirrors the flushSave path: serialize once, byte-compare,
+  // then persist). The helper must not re-stringify — that would defeat the
+  // self-echo baseline (#7752) and the no-op skip (#7815).
+  const raw = serializeContextDoc({ type: 'doc' });
+  await persistContextDocRaw(api, 'TODAY', raw);
+  assert.equal(store.get('doc:TODAY'), raw);
+  assert.deepEqual(writes, [{ key: 'doc:TODAY', data: raw }]);
+});
+
+test('serializeContextDoc: deterministic across repeated calls on the same input', () => {
+  // The no-op save short-circuit (#7815) in flushSave / flushSaveSync compares
+  // the freshly-serialised bytes against the `lastSeenDocBytes` baseline. That
+  // comparison is only meaningful if the encoder is deterministic — same input
+  // must always produce byte-identical output, otherwise a "real revert" cycle
+  // would compute different bytes each call and the skip would never fire (or,
+  // worse, would fire when bytes actually differ if the comparator hashed).
+  // Lock this in so a future swap to a non-deterministic encoder (e.g. one
+  // that randomises iteration order over Map-backed nodes) breaks here, not
+  // silently in the editor.
+  const doc = {
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }],
+  };
+  const first = serializeContextDoc(doc);
+  const second = serializeContextDoc(doc);
+  assert.equal(first, second);
+  // Also asserts the obvious shape so a future signature change (e.g.
+  // returning a Uint8Array) fails compile + runtime, not just structurally.
+  assert.equal(typeof first, 'string');
+  assert.ok(first.length > 0);
+});
+
+test('persistContextDocRaw: re-persisting identical bytes is a no-op at the store level', async () => {
+  // The optimization premise: when the editor's no-op short-circuit fires, the
+  // persist call never reaches here. But IF a caller did call this twice with
+  // the same raw, the result is byte-identical state — confirming the skip is
+  // safe (no information is lost by not making the second write).
   const { api, store } = createMockApi();
-  const expected = JSON.stringify({ type: 'doc' });
-  const returned = await saveContextDoc(api, 'TODAY', { type: 'doc' });
-  assert.equal(store.get('doc:TODAY'), expected);
-  // Returned string must match exactly so the editor can stamp it as the
-  // self-echo baseline.
-  assert.equal(returned, expected);
+  const raw = serializeContextDoc({ type: 'doc', content: [] });
+  await persistContextDocRaw(api, 'p1', raw);
+  const after1 = store.get('doc:p1');
+  await persistContextDocRaw(api, 'p1', raw);
+  assert.equal(store.get('doc:p1'), after1);
 });
 
 /* -------------------------------------------------------------------------- */

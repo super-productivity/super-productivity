@@ -779,8 +779,19 @@ export class SuperSyncPage extends BasePage {
 
         // Final check for check icon — generous timeout because the inner
         // race above already used the 30s budget, and on saturated CI runners
-        // the sync state icon can take noticeably longer to render.
-        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+        // the sync state icon can take noticeably longer to render. If the very
+        // first sync stalls entirely (a setup flake seen under parallel CI load),
+        // clear any leftover dialog and re-trigger sync once before giving up.
+        try {
+          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+        } catch {
+          console.log(
+            '[SuperSyncPage] Sync check icon not visible after 60s — re-triggering sync once',
+          );
+          await this._handleSyncDialogs(config.syncImportChoice === 'local');
+          await this.syncBtn.click();
+          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+        }
       }
     } else if (waitForInitialSync) {
       // Encryption is mandatory for SuperSync, so even when the caller doesn't

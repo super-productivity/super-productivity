@@ -1,5 +1,6 @@
 import { PluginAPI } from './plugin-api';
 import { PluginBaseCfg } from './plugin-api.model';
+import { PluginBridgeService } from './plugin-bridge.service';
 import { Log } from '../core/log';
 import { BatchUpdateRequest, DialogCfg, NotifyCfg } from '@super-productivity/plugin-api';
 
@@ -8,6 +9,14 @@ describe('PluginAPI', () => {
   let showIndexHtmlAsViewSpy: jasmine.Spy;
   let reInitDataSpy: jasmine.Spy;
   let dispatchActionSpy: jasmine.Spy;
+  let mockBridge: jasmine.SpyObj<{
+    createBoundMethods: () => Record<string, unknown>;
+    getAppState: () => Promise<unknown>;
+    reInitData: () => Promise<void>;
+    notify: () => Promise<void>;
+    openDialog: () => Promise<void>;
+    batchUpdateForProject: () => Promise<unknown>;
+  }>;
 
   const baseCfg: PluginBaseCfg = {
     theme: 'light',
@@ -21,8 +30,9 @@ describe('PluginAPI', () => {
     reInitDataSpy = jasmine.createSpy('reInitData').and.resolveTo();
     dispatchActionSpy = jasmine.createSpy('dispatchAction');
 
-    const mockBridge = jasmine.createSpyObj('PluginBridgeService', [
+    mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
+      'getAppState',
       'reInitData',
       'notify',
       'openDialog',
@@ -45,13 +55,27 @@ describe('PluginAPI', () => {
         warn: jasmine.createSpy(),
       },
     });
+    mockBridge.getAppState.and.resolveTo({
+      tasks: {},
+      projects: {},
+      tags: {},
+      notes: {},
+      taskRepeatCfgs: {},
+      simpleCounters: {},
+      globalConfig: { theme: 'light' },
+    });
 
     const mockI18nService = jasmine.createSpyObj('PluginI18nService', [
       'translate',
       'getCurrentLanguage',
     ]);
 
-    pluginAPI = new PluginAPI(baseCfg, 'test-plugin', mockBridge, mockI18nService);
+    pluginAPI = new PluginAPI(
+      baseCfg,
+      'test-plugin',
+      mockBridge as unknown as PluginBridgeService,
+      mockI18nService,
+    );
   });
 
   describe('showIndexHtmlAsView()', () => {
@@ -140,6 +164,23 @@ describe('PluginAPI', () => {
     it('should delegate to the bridge method', async () => {
       await pluginAPI.reInitData();
       expect(reInitDataSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('getAppState()', () => {
+    it('should delegate to the bridge method and return the snapshot', async () => {
+      const appState = await pluginAPI.getAppState();
+
+      expect(appState).toEqual({
+        tasks: {},
+        projects: {},
+        tags: {},
+        notes: {},
+        taskRepeatCfgs: {},
+        simpleCounters: {},
+        globalConfig: { theme: 'light' },
+      });
+      expect(mockBridge.getAppState).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -33,6 +33,6 @@ For all current downloads, package links, and platform-specific notes: [check th
 ### Plugins & Advanced
 
 - Added plugin support for work-context header buttons, an embed slot, the WORK_CONTEXT_CHANGE hook, and iframe-only installs.
-- Added a TipTap-based document-mode plugin and reduced redundant synced chip data.
+- Added a TipTap-based doc-mode plugin and reduced redundant synced chip data.
 - Added distribution-target suffixes to Electron version strings.
 - Fixed SuperSync Caddy healthchecks, PostgreSQL connection headroom, Docker sync package inclusion, and the F-Droid build dependency issue.

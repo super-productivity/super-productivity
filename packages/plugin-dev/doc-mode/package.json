@@ -1,5 +1,5 @@
 {
-  "name": "document-mode",
+  "name": "doc-mode",
   "version": "0.1.0",
   "description": "Document-style editor for projects and Today using TipTap",
   "private": true,

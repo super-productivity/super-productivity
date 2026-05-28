@@ -5,9 +5,9 @@ import {
 } from '../../helpers/plugin-test.helpers';
 
 // Smoke test for the BUNDLED_PLUGIN_PATHS entry added in commit 199e816479.
-// A typo or accidental removal of 'assets/bundled-plugins/document-mode'
+// A typo or accidental removal of 'assets/bundled-plugins/doc-mode'
 // would silently regress this; the test fails loudly instead.
-test.describe('Document Mode bundled plugin', () => {
+test.describe('Doc Mode bundled plugin', () => {
   test('appears in plugin management list', async ({ page, workViewPage }) => {
     test.setTimeout(60000);
 
@@ -26,7 +26,7 @@ test.describe('Document Mode bundled plugin', () => {
     const pluginReady = await waitForPluginManagementInit(page);
     expect(pluginReady).toBeTruthy();
 
-    // Manifest declares the user-visible name as "Document Mode (Alpha)".
+    // Manifest declares the user-visible name as "Doc Mode (Alpha)".
     // Match on the prefix so a future Alpha→Beta label change doesn't break.
     const titles = await page.evaluate(() => {
       const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
@@ -35,7 +35,7 @@ test.describe('Document Mode bundled plugin', () => {
         .filter(Boolean);
     });
 
-    const hasDocumentMode = titles.some((t) => t.startsWith('Document Mode'));
-    expect(hasDocumentMode).toBeTruthy();
+    const hasDocMode = titles.some((t) => t.startsWith('Doc Mode'));
+    expect(hasDocMode).toBeTruthy();
   });
 });

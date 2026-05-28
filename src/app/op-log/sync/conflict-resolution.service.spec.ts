@@ -1151,7 +1151,7 @@ describe('ConflictResolutionService', () => {
         const conflicts: EntityConflict[] = [
           {
             entityType: 'PLUGIN_USER_DATA',
-            entityId: 'document-mode',
+            entityId: 'doc-mode',
             localOps: [
               {
                 id: 'local-plugin-data',
@@ -1159,8 +1159,8 @@ describe('ConflictResolutionService', () => {
                 actionType: '[Plugin] Upsert User Data' as ActionType,
                 opType: OpType.Update,
                 entityType: 'PLUGIN_USER_DATA',
-                entityId: 'document-mode',
-                payload: { id: 'document-mode', data: 'local-blob' },
+                entityId: 'doc-mode',
+                payload: { id: 'doc-mode', data: 'local-blob' },
                 vectorClock: { clientA: 1 },
                 timestamp: now - 500,
                 schemaVersion: 1,
@@ -1173,8 +1173,8 @@ describe('ConflictResolutionService', () => {
                 actionType: '[Plugin] Upsert User Data' as ActionType,
                 opType: OpType.Update,
                 entityType: 'PLUGIN_USER_DATA',
-                entityId: 'document-mode',
-                payload: { id: 'document-mode', data: 'remote-blob' },
+                entityId: 'doc-mode',
+                payload: { id: 'doc-mode', data: 'remote-blob' },
                 vectorClock: { clientB: 1 },
                 timestamp: now,
                 schemaVersion: 1,

@@ -360,6 +360,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           showInWorkContext: () => callApi('showInWorkContext'),
           closeWorkContextView: () => callApi('closeWorkContextView'),
           getActiveWorkContext: () => callApi('getActiveWorkContext'),
+          getAppState: () => callApi('getAppState'),
 
           // Persistence methods (optional second arg = key, forwarded by callApi)
           persistDataSynced: (data, key) => callApi('persistDataSynced', [data, key]),

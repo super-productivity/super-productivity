@@ -8,6 +8,7 @@ import {
   OAuthFlowConfig,
   OAuthTokenResult,
   PluginAPI as PluginAPIInterface,
+  PluginAppState,
   PluginBaseCfg,
   PluginCreateTaskData,
   PluginHeaderBtnCfg,
@@ -198,6 +199,11 @@ export class PluginAPI implements PluginAPIInterface {
     PluginLog.log(`Plugin ${this._pluginId} requested current context tasks`);
     const tasks = await this._pluginBridge.getCurrentContextTasks();
     return tasks.map(taskCopyToTaskData);
+  }
+
+  async getAppState(): Promise<PluginAppState> {
+    PluginLog.log(`Plugin ${this._pluginId} requested app state snapshot`);
+    return this._pluginBridge.getAppState();
   }
 
   async reInitData(): Promise<void> {

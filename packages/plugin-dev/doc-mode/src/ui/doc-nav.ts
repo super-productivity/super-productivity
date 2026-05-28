@@ -1,5 +1,5 @@
 /**
- * Pure top-level-navigation helpers for the Document Mode editor.
+ * Pure top-level-navigation helpers for the Doc Mode editor.
  *
  * Every function here operates on a `DocLike` — the minimal structural
  * slice of a ProseMirror document node that the drag / move / keyboard

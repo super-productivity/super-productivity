@@ -45,7 +45,7 @@ export const extractOwnerPluginId = (entityId: string): string => {
 
 /**
  * Bound on a single plugin's persistence key length. Generous for any
- * realistic per-plugin keyspace (e.g. document-mode uses `doc:<uuid>`,
+ * realistic per-plugin keyspace (e.g. doc-mode uses `doc:<uuid>`,
  * well under 100 chars). Prevents a compromised iframe from passing a
  * multi-megabyte `key` that would be stored verbatim in NgRx state,
  * IndexedDB, the op-log, and on the sync wire — bypassing the
