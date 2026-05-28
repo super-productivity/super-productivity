@@ -12,6 +12,11 @@ export const TRACKING_INTERVAL = 1000;
 
 export const DRAG_DELAY_FOR_TOUCH = 500;
 
+// Maximum wall-clock gap credited on iOS resume when the WebView was suspended
+// in the background. Larger gaps are capped to this value so an overnight
+// charge can't silently add 8 h to the active task.
+export const MOBILE_BACKGROUND_IDLE_CAP_MS = 4 * 60 * 60 * 1000;
+
 // TODO use
 // const CORS_SKIP_EXTRA_HEADER_PROP = 'sp_cors_skip' as const;
 // export const CORS_SKIP_EXTRA_HEADERS: { [name: string]: string } = IS_ANDROID_WEB_VIEW
