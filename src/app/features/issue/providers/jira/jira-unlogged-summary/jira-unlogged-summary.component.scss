@@ -12,7 +12,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--separator-color, rgba(0, 0, 0, 0.1));
+  border-bottom: 1px solid var(--separator-color);
 
   .task-title {
     flex: 1;

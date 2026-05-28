@@ -4,7 +4,7 @@ import { JiraApiService } from './jira-api.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../../../tasks/task.service';
-import { JIRA_TYPE } from '../../issue.const';
+import { GITHUB_TYPE, JIRA_TYPE } from '../../issue.const';
 import { Task } from '../../../tasks/task.model';
 import { of } from 'rxjs';
 import { DEFAULT_TASK } from '../../../tasks/task.model';
@@ -71,8 +71,34 @@ describe('JiraWorklogService', () => {
   });
 
   it('should return early if task is not JIRA type', () => {
-    service.openWorklogDialogForTask(mockTask({ issueType: 'GITHUB' as any }));
+    service.openWorklogDialogForTask(mockTask({ issueType: GITHUB_TYPE }));
     expect(matDialog.open).not.toHaveBeenCalled();
+  });
+
+  describe('openWorklogDialogForTask — success path', () => {
+    it('should call TaskService.update with incremented issueTimeLogged after successful worklog', async () => {
+      const task = mockTask({ issueTimeLogged: 1800000 }); // 30 min already logged
+      const addedMs = 3600000; // logging 1 hour more
+
+      mockJiraApiService.addWorklog$.and.returnValue(of({}));
+      matDialog.open.and.callFake((_comp: unknown, config: any) => {
+        config.data
+          .onSubmit({
+            timeSpent: addedMs,
+            started: '2026-05-28T10:00:00.000Z',
+            comment: '',
+          })
+          .subscribe();
+        return { afterClosed: () => of(null) } as any;
+      });
+
+      service.openWorklogDialogForTask(task);
+      await new Promise((r) => setTimeout(r, 50)); // flush dynamic import + async chain
+
+      expect(mockTaskService.update).toHaveBeenCalledWith('task1', {
+        issueTimeLogged: 1800000 + 3600000,
+      });
+    });
   });
 
   describe('openWorklogDialogForExternalTask', () => {

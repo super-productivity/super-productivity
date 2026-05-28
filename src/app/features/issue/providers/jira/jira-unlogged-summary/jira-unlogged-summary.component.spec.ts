@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { JiraUnloggedSummaryComponent } from './jira-unlogged-summary.component';
 import { JiraWorklogService } from '../jira-worklog.service';
 import { Task } from '../../../../tasks/task.model';
-import { JIRA_TYPE } from '../../../issue.const';
+import { GITHUB_TYPE, JIRA_TYPE } from '../../../issue.const';
 import { provideTranslateService } from '@ngx-translate/core';
 
 describe('JiraUnloggedSummaryComponent', () => {
@@ -48,7 +48,7 @@ describe('JiraUnloggedSummaryComponent', () => {
   it('should show tasks with unlogged time', () => {
     fixture.componentRef.setInput('flatTasks', [
       makeTask({ timeSpent: 7200000, issueTimeLogged: 3600000 }),
-      makeTask({ id: 'task2', issueType: 'GITHUB' as any }),
+      makeTask({ id: 'task2', issueType: GITHUB_TYPE }),
     ]);
     fixture.detectChanges();
     expect(component.pendingTasks().length).toBe(1);
