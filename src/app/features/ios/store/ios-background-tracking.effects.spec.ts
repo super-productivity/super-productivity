@@ -1,75 +1,16 @@
 import { Store } from '@ngrx/store';
 import { TimerState } from '../../focus-mode/focus-mode.model';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
-import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { TaskService } from '../../tasks/task.service';
 import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
-import { handleIosPause, handleIosResume } from './ios-background-tracking.effects';
+import { handleIosResume } from './ios-background-tracking.effects';
 
 // Effect creation is gated by IS_IOS_NATIVE (false under Karma), so the spec
-// drives the handler bodies directly. Mirrors the precedent in
+// drives the handler body directly. Mirrors the precedent in
 // android-foreground-tracking.effects.spec.ts.
 
 describe('IosBackgroundTrackingEffects', () => {
-  describe('handleIosPause', () => {
-    let taskService: jasmine.SpyObj<TaskService>;
-    let operationWriteFlush: jasmine.SpyObj<OperationWriteFlushService>;
-
-    beforeEach(() => {
-      taskService = jasmine.createSpyObj('TaskService', ['flushAccumulatedTimeSpent']);
-      operationWriteFlush = jasmine.createSpyObj('OperationWriteFlushService', [
-        'flushPendingWrites',
-      ]);
-      operationWriteFlush.flushPendingWrites.and.returnValue(Promise.resolve());
-    });
-
-    it('flushes accumulated time before draining the write queue', async () => {
-      const callOrder: string[] = [];
-      taskService.flushAccumulatedTimeSpent.and.callFake(() =>
-        callOrder.push('flushAccumulated'),
-      );
-      operationWriteFlush.flushPendingWrites.and.callFake(() => {
-        callOrder.push('flushWrites');
-        return Promise.resolve();
-      });
-
-      await handleIosPause(taskService, operationWriteFlush);
-
-      expect(callOrder).toEqual(['flushAccumulated', 'flushWrites']);
-    });
-
-    it('awaits the write-queue drain', async () => {
-      let resolveFlush!: () => void;
-      operationWriteFlush.flushPendingWrites.and.returnValue(
-        new Promise((resolve) => {
-          resolveFlush = resolve;
-        }),
-      );
-
-      let settled = false;
-      const promise = handleIosPause(taskService, operationWriteFlush).then(() => {
-        settled = true;
-      });
-      await Promise.resolve();
-      expect(settled).toBeFalse();
-
-      resolveFlush();
-      await promise;
-      expect(settled).toBeTrue();
-    });
-
-    it('propagates a write-queue rejection so the effect can log it', async () => {
-      const err = new Error('IDB unavailable');
-      operationWriteFlush.flushPendingWrites.and.returnValue(Promise.reject(err));
-
-      await expectAsync(
-        handleIosPause(taskService, operationWriteFlush),
-      ).toBeRejectedWith(err);
-      expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(1);
-    });
-  });
-
   describe('handleIosResume', () => {
     let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
     let taskService: jasmine.SpyObj<TaskService>;

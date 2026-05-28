@@ -1,25 +1,23 @@
-import { ReplaySubject, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 import { App as CapacitorApp } from '@capacitor/app';
 import { IS_IOS_NATIVE } from '../../util/is-native-platform';
 
 export interface IosInterface {
-  onPause$: Subject<void>;
-  // ReplaySubject so a cold-start onResume emission arriving before the JS
-  // subscriber attaches is still delivered. Mirrors androidInterface.
-  onResume$: ReplaySubject<void>;
+  onResume$: Subject<void>;
 }
 
+// Plain Subject (not ReplaySubject): unlike androidInterface, the producer is a
+// JS appStateChange listener registered at app bootstrap, so a resume can never
+// be delivered before the effect has subscribed. Pause persistence is handled
+// in main.ts inside the BackgroundTask.beforeExit budget, not here.
 export const iosInterface: IosInterface = {
-  onPause$: new Subject<void>(),
-  onResume$: new ReplaySubject<void>(1),
+  onResume$: new Subject<void>(),
 };
 
 if (IS_IOS_NATIVE) {
   CapacitorApp.addListener('appStateChange', ({ isActive }) => {
     if (isActive) {
       iosInterface.onResume$.next();
-    } else {
-      iosInterface.onPause$.next();
     }
   });
 }

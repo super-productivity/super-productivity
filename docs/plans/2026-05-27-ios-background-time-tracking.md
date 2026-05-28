@@ -14,9 +14,10 @@ no equivalent primitive exists on iOS (silent-audio / location
 
 ## Strategy: wall-clock reconciliation on resume
 
-Trust `Date.now()` deltas. On `pause` flush whatever we have; on `resume`
-compute the wall-clock gap and credit it (capped) to the active task, then
-nudge the focus-mode reducer so its UI snaps to truth.
+Trust `Date.now()` deltas. On `pause` persist whatever we have (handled by the
+existing `main.ts` `appStateChange` listener, inside its `BackgroundTask`
+budget); on `resume` compute the wall-clock gap and credit it (capped) to the
+active task, then nudge the focus-mode reducer so its UI snaps to truth.
 
 The codebase already exposes the three primitives this needs:
 
@@ -30,25 +31,31 @@ The codebase already exposes the three primitives this needs:
 
 ## Multi-review findings folded in
 
-This plan was reviewed by four parallel reviewers (approach / sync /
-iOS-platform / test-strategy) plus a gemini CLI bonus voice. Adjustments
-from that review:
+This plan was reviewed by parallel reviewers across two rounds (plan review,
+then a post-implementation code review). Adjustments:
 
 1. **Cap raised from 30 min → 4 h.** 30 min silently swallowed legitimate
    long sessions; 4 h bounds an overnight-charging scenario (~16 h) but
    keeps an in-flight workday whole. Tunable post-feedback.
-2. **Pause-flush awaits operation persistence.** `flushAccumulatedTimeSpent()`
-   only dispatches actions; the IDB write happens later via
-   `OperationWriteFlushService.flushPendingWrites()`. iOS gives ~5 s after
-   `didEnterBackground` and the existing `main.ts:497`
-   `BackgroundTask.beforeExit` wrapper budgets that window — the effect
-   awaits `flushPendingWrites()` so the queue drains within it (matches
-   Android's `android-foreground-tracking.effects.ts:296`).
-3. **Test seam via `iosInterface.ts`.** Mirror `androidInterface` with
-   `onPause$` / `onResume$` Subjects, fed from a single Capacitor
-   `appStateChange` listener. Handler bodies are exported pure functions
-   so the spec exercises them directly (no `IS_IOS_NATIVE` gate inside
-   the spec).
+2. **Pause persistence stays in `main.ts`, not a new effect.** An earlier
+   draft added a `flushOnPause$` effect that called
+   `OperationWriteFlushService.flushPendingWrites()`. The post-implementation
+   review found this was (a) a duplicate of the drain `main.ts`'s existing iOS
+   `appStateChange` listener already performs, (b) run *outside* the
+   `BackgroundTask.beforeExit` budget (so unprotected against suspension), and
+   (c) racing the `main.ts` listener — if `main.ts` drained first, the
+   accumulated time the effect dispatched afterwards could be lost. `flushPendingWrites()`
+   also has a 30 s `MAX_WAIT_TIME`, so it is not bounded by the iOS budget.
+   Fix: the only new work needed on pause is dispatching accumulated tracked
+   time, so `flushAccumulatedTimeSpent()` is called inside the existing
+   `main.ts` iOS handler, *before* its budgeted drain. The pause effect is
+   removed entirely.
+3. **Test seam via `iosInterface.ts`.** A small `iosInterface` exposes
+   `onResume$`, fed from a single Capacitor `appStateChange` listener. A plain
+   `Subject` (not `ReplaySubject`): unlike `androidInterface`, the producer is
+   a JS listener registered at bootstrap, so a resume cannot arrive before the
+   effect subscribes. The resume handler body is an exported pure function so
+   the spec exercises it directly (no `IS_IOS_NATIVE` gate inside the spec).
 4. **Conditional focus dispatch.** Skip the `focusModeActions.tick()`
    dispatch unless the focus timer is actually running (`timer.purpose !==
    null && timer.isRunning`). The reducer no-ops anyway, but conditioning
@@ -66,28 +73,32 @@ from that review:
 | File | Purpose |
 |---|---|
 | `src/app/app.constants.ts` | Add `MOBILE_BACKGROUND_IDLE_CAP_MS = 4 * 60 * 60 * 1000`. |
-| `src/app/features/ios/ios-interface.ts` (new) | `iosInterface` with `onPause$` / `onResume$` Subjects; one `appStateChange` listener feeds them when `IS_IOS_NATIVE`. |
-| `src/app/features/ios/store/ios-background-tracking.effects.ts` (new) | Two `{ dispatch: false }` effects gated by `IS_IOS_NATIVE`. Exports pure handler functions for spec. |
-| `src/app/features/ios/store/ios-background-tracking.effects.spec.ts` (new) | Karma spec covering the 8 enumerated edge cases. |
+| `src/main.ts` | In the existing iOS `appStateChange` handler, call `flushAccumulatedTimeSpent()` before the budgeted op-log drain. |
+| `src/app/features/ios/ios-interface.ts` (new) | `iosInterface` with an `onResume$` Subject; one `appStateChange` listener feeds it when `IS_IOS_NATIVE`. |
+| `src/app/features/ios/store/ios-background-tracking.effects.ts` (new) | One `{ dispatch: false }` resume effect gated by `IS_IOS_NATIVE`. Exports the pure handler function for spec. |
+| `src/app/features/ios/store/ios-background-tracking.effects.spec.ts` (new) | Karma spec covering the resume edge cases. |
 | `src/app/root-store/feature-stores.module.ts` | Register effect under `IS_IOS_NATIVE`, beside Android. |
 
-### Effects
+### Pause (in `main.ts`)
 
 ```ts
-// On pause: synchronously dispatch any accumulated time, then drain the
-// op-log write queue inside the BackgroundTask budget claimed by main.ts.
-flushOnPause$ = IS_IOS_NATIVE && createEffect(
-  () => iosInterface.onPause$.pipe(
-    exhaustMap(() =>
-      handleIosPause(this._taskService, this._operationWriteFlush)
-    ),
-  ),
-  { dispatch: false },
-);
+const taskId = await BackgroundTask.beforeExit(async () => {
+  try {
+    // Dispatch accumulated tracked time so it is enqueued before the drain.
+    appInjector?.get(TaskService).flushAccumulatedTimeSpent();
+    await flushPendingOperations('iOS');
+  } catch (e) {
+    Log.err('iOS background: operation flush failed', e);
+  }
+  BackgroundTask.finish({ taskId });
+});
+```
 
-// On resume: credit the wall-clock gap to the active task (capped), reset
-// the anchor, drain accumulated time, then nudge the focus reducer if a
-// session is running.
+### Resume effect
+
+```ts
+// Credit the wall-clock gap to the active task (capped), reset the anchor,
+// drain accumulated time, then nudge the focus reducer if a session is running.
 reconcileOnResume$ = IS_IOS_NATIVE && createEffect(
   () => iosInterface.onResume$.pipe(
     withLatestFrom(this._store.select(selectTimer)),
@@ -104,17 +115,9 @@ reconcileOnResume$ = IS_IOS_NATIVE && createEffect(
 );
 ```
 
-### Pure handler functions
+### Pure handler function
 
 ```ts
-export const handleIosPause = async (
-  taskService: TaskService,
-  operationWriteFlush: OperationWriteFlushService,
-): Promise<void> => {
-  taskService.flushAccumulatedTimeSpent();
-  await operationWriteFlush.flushPendingWrites();
-};
-
 export const handleIosResume = (
   globalTracking: GlobalTrackingIntervalService,
   taskService: TaskService,
@@ -132,9 +135,9 @@ export const handleIosResume = (
 
 ## Sync / lint correctness
 
-- Both effects are `{ dispatch: false }` and source from `iosInterface`
-  Subjects, not `Actions` — no `LOCAL_ACTIONS`/`Actions` injection,
-  `no-actions-in-effects` clean. `require-hydration-guard` exempts
+- The resume effect is `{ dispatch: false }` and sources from the
+  `iosInterface` Subject, not `Actions` — no `LOCAL_ACTIONS`/`Actions`
+  injection, `no-actions-in-effects` clean. `require-hydration-guard` exempts
   `{ dispatch: false }`.
 - `addTimeSpent` and `focusModeActions.tick` are non-persistent
   (`time-tracking.actions.ts:70` comment confirms; `tick` has no
@@ -167,8 +170,6 @@ Manual (no Capacitor `appStateChange` simulation precedent in `e2e/`):
 
 Automated (in `ios-background-tracking.effects.spec.ts`):
 
-- `handleIosPause` calls `flushAccumulatedTimeSpent` then awaits
-  `flushPendingWrites`.
 - `handleIosResume` calls `triggerWakeUpTick(4h)` →
   `resetTrackingStart` → `flushAccumulatedTimeSpent` in order.
 - `handleIosResume` dispatches `focusModeActions.tick()` when timer is
@@ -178,5 +179,7 @@ Automated (in `ios-background-tracking.effects.spec.ts`):
   (paused / BreakOffer).
 - Cap exactly at 4 h returns capped duration (delegated to existing
   `global-tracking-interval.service.spec.ts`).
-- `flushPendingWrites` rejection in `handleIosPause` propagates (caller
-  decides — the effect's `exhaustMap` swallows + logs).
+
+The pause path (accumulated-time flush in `main.ts`) has no new unit test —
+it reuses the already-covered `flushAccumulatedTimeSpent` /
+`flushPendingWrites` machinery; verified manually on device.
