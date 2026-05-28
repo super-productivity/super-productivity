@@ -136,12 +136,6 @@ body {
     inset: 0;
     pointer-events: none;
     opacity: 0;
-    // Promote the full-viewport gradient backdrop to its own compositor layer
-    // so the per-frame layout-viewport changes during the Android soft-keyboard
-    // (adjustResize) animation don't force a full main-thread re-raster of it.
-    // First-pass mitigation for keyboard-resize choppiness pending deeper work.
-    will-change: transform;
-    backface-visibility: hidden;
   }
 
   // Soft primary-tinted gradient backdrop. Light and dark want different

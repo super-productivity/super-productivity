@@ -15,12 +15,12 @@ the remaining *choppiness*.
 **Already shipped (commit `80b08f0e96`):** white-flash fix — the native WebView
 surface is now painted in the theme background (`values`/`values-night`
 `windowBackground` color + a `NavigationBar.setWebViewBackgroundColor` push kept
-in sync with the JS theme), plus a backdrop-compositing tweak (`body::before`
-promoted to its own compositor layer). **Caveat (from review):** the compositing
-tweak is likely a no-op for the jank — the backdrop box *resizes* every frame
-under `adjustResize`, so its gradient re-rasterizes regardless of layer
-promotion (`will-change: transform` only helps for transforms, not size
-changes). It is harmless and reversible; do not count on it.
+in sync with the JS theme). Verified to compile (`./gradlew
+:app:compilePlayDebugKotlin`); still needs an on-device flash smoke-test.
+A `body::before` backdrop-compositing tweak (`will-change: transform`) was tried
+in the same commit and then **reverted** — review showed it's a no-op for the
+jank (the backdrop resizes every frame, so it re-rasterizes regardless of layer)
+while adding an always-on compositor layer on every platform.
 
 ## TL;DR
 
