@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
 import { tap, withLatestFrom } from 'rxjs/operators';
 import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
 import { IS_IOS_NATIVE } from '../../../util/is-native-platform';
@@ -42,6 +43,23 @@ export const handleIosResume = (
   }
 };
 
+/**
+ * Wire a resume stream to the reconciliation handler, reading the latest focus
+ * timer off the store. Exported (and effect-independent) so the spec can drive
+ * the full pipe — `withLatestFrom(selectTimer)` included — without tripping the
+ * `IS_IOS_NATIVE` gate on `createEffect`.
+ */
+export const reconcileOnResume = (
+  onResume$: Observable<void>,
+  store: Store,
+  globalTracking: GlobalTrackingIntervalService,
+  taskService: TaskService,
+): Observable<unknown> =>
+  onResume$.pipe(
+    withLatestFrom(store.select(selectTimer)),
+    tap(([, timer]) => handleIosResume(globalTracking, taskService, store, timer)),
+  );
+
 @Injectable()
 export class IosBackgroundTrackingEffects {
   private _store = inject(Store);
@@ -52,16 +70,11 @@ export class IosBackgroundTrackingEffects {
     IS_IOS_NATIVE &&
     createEffect(
       () =>
-        iosInterface.onResume$.pipe(
-          withLatestFrom(this._store.select(selectTimer)),
-          tap(([, timer]) => {
-            handleIosResume(
-              this._globalTrackingIntervalService,
-              this._taskService,
-              this._store,
-              timer,
-            );
-          }),
+        reconcileOnResume(
+          iosInterface.onResume$,
+          this._store,
+          this._globalTrackingIntervalService,
+          this._taskService,
         ),
       { dispatch: false },
     );
