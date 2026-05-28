@@ -72,7 +72,11 @@ export class JiraIssueEffects {
                     jiraCfg.isWorklogEnabled &&
                     jiraCfg.isAddWorklogOnSubTaskDone
                   ) {
-                    this._jiraWorklogService.openWorklogDialogForTask(subTask);
+                    this._jiraWorklogService.openWorklogDialogForTask(
+                      subTask,
+                      mainTask.issueId,
+                      mainTask.issueProviderId,
+                    );
                   } else if (
                     jiraCfg.isAddWorklogOnSubTaskDone &&
                     !subTask &&

@@ -5,11 +5,11 @@ import { JiraApiService } from './jira-api.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { TaskService } from '../../../tasks/task.service';
 import { Task } from '../../../tasks/task.model';
-import { JIRA_TYPE } from '../../issue.const';
 import { T } from '../../../../t.const';
 import { TrackTimeSubmitParams } from '../../shared/dialog-track-time/track-time-dialog.model';
 import { IssueProviderJira } from '../../issue.model';
 import { JiraWorklogExportDefaultTime } from './jira.model';
+import { JIRA_TYPE } from '../../issue.const';
 
 @Injectable({ providedIn: 'root' })
 export class JiraWorklogService {
@@ -18,14 +18,23 @@ export class JiraWorklogService {
   private readonly _matDialog = inject(MatDialog);
   private readonly _taskService = inject(TaskService);
 
-  openWorklogDialogForTask(task: Task): void {
-    if (task.issueType !== JIRA_TYPE || !task.issueId || !task.issueProviderId) {
+  openWorklogDialogForTask(
+    task: Task,
+    issueIdOverride?: string,
+    issueProviderIdOverride?: string,
+  ): void {
+    if (issueIdOverride == null && task.issueType !== JIRA_TYPE) {
+      return;
+    }
+    const issueId = issueIdOverride ?? task.issueId;
+    const issueProviderId = issueProviderIdOverride ?? task.issueProviderId;
+    if (!issueId || !issueProviderId) {
       return;
     }
     this._issueProviderService
-      .getCfgOnce$(task.issueProviderId, 'JIRA')
+      .getCfgOnce$(issueProviderId, 'JIRA')
       .pipe(take(1))
-      .subscribe((jiraCfg) => this._openDialog(task, jiraCfg));
+      .subscribe((jiraCfg) => this._openDialog(task, jiraCfg, issueId));
   }
 
   openWorklogDialogForExternalTask(
@@ -42,13 +51,15 @@ export class JiraWorklogService {
       );
   }
 
-  private _openDialog(task: Task, jiraCfg: IssueProviderJira): void {
+  private _openDialog(task: Task, jiraCfg: IssueProviderJira, issueId: string): void {
     this._jiraApiService
-      .getReducedIssueById$(task.issueId as string, jiraCfg)
+      .getReducedIssueById$(issueId, jiraCfg)
       .pipe(take(1))
       .subscribe(async (issue) => {
         const { DialogTrackTimeComponent } =
           await import('../../shared/dialog-track-time/dialog-track-time.component');
+        // For subtask-done flow, task is the subtask but issueId is the parent's Jira issue.
+        // We track timeLoggedToJira on the subtask to prevent re-logging its own time.
         const timeLoggedToJira = task.timeLoggedToJira ?? 0;
         this._matDialog.open(DialogTrackTimeComponent, {
           restoreFocus: true,
