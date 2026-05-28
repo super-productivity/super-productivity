@@ -5,7 +5,6 @@ import {
   Component,
   computed,
   inject,
-  signal,
   viewChild,
 } from '@angular/core';
 import {
@@ -53,14 +52,9 @@ import {
 import { MatSelect } from '@angular/material/select';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatInput } from '@angular/material/input';
-import { TimeStepDirective } from '../../../ui/time-step/time-step.directive';
 import { Log } from '../../../core/log';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
-import { selectTimelineConfig } from '../../config/store/global-config.reducer';
-import { getTimeConflictTaskIds } from '../../tasks/util/get-time-conflict-task-ids';
-import { isTaskOutsideWorkHours } from '../../tasks/util/is-task-outside-work-hours';
 
 const DEFAULT_TIME = '09:00';
 
@@ -83,7 +77,6 @@ const DEFAULT_TIME = '09:00';
     MatLabel,
     MatSuffix,
     MatPrefix,
-    TimeStepDirective,
   ],
   templateUrl: './dialog-schedule-task.component.html',
   styleUrl: './dialog-schedule-task.component.scss',
@@ -108,10 +101,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
   private readonly _dateAdapter = inject(DateAdapter);
-  private readonly _tasksWithDueTimeSorted = this._store.selectSignal(
-    selectAllTasksWithDueTimeSorted,
-  );
-  private readonly _timelineConfig = this._store.selectSignal(selectTimelineConfig);
 
   // Wait for localization config to be loaded before rendering calendar
   // This ensures DateAdapter.getFirstDayOfWeek() returns the correct value
@@ -126,11 +115,9 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
   task: TaskCopy | undefined = this.data.task;
 
-  private _selectedDate = signal<Date | string | null>(null);
-  private _selectedTime = signal<string | null>(null);
   selectedDate: Date | string | null = null;
   selectedTime: string | null = null;
-  selectedReminderDate: Date | string | null = null;
+  selectedReminderDate: string | null = null;
   selectedReminderTime: string | null = null;
   selectedReminderCfgId!: TaskReminderOptionId;
 
@@ -142,7 +129,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   // private _prevSelectedQuickAccessDate: Date | null = null;
   // private _prevQuickAccessAction: number | null = null;
   private _timeCheckVal: string | null = null;
-  private _previewTaskId = '__schedule-preview__';
+  private _reminderTimeCheckVal: string | null = null;
+  private _reminderDateCheckVal: string | null = null;
 
   private _defaultTaskRemindCfgId = computed(
     () =>
@@ -150,66 +138,12 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         ?.defaultTaskRemindOption as TaskReminderOptionId) ??
       DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
   );
-  get selectedDate(): Date | string | null {
-    return this._selectedDate();
-  }
-  set selectedDate(value: Date | string | null) {
-    this._selectedDate.set(value);
-  }
-
-  get selectedTime(): string | null {
-    return this._selectedTime();
-  }
-  set selectedTime(value: string | null) {
-    this._selectedTime.set(value);
-  }
-
-  plannedTimestamp = computed<number | null>(() => {
-    const selectedDate = this._selectedDate();
-    const selectedTime = this._selectedTime();
-    if (!selectedDate || !selectedTime) {
-      return null;
-    }
-
-    return getDateTimeFromClockString(selectedTime, selectedDate as Date);
-  });
-  scheduleWarnings = computed(() => {
-    const plannedTimestamp = this.plannedTimestamp();
-    if (!plannedTimestamp) {
-      return {
-        hasOverlap: false,
-        isOutsideWorkHours: false,
-      };
-    }
-
-    const candidateTask = {
-      id: this._previewTaskId,
-      dueWithTime: plannedTimestamp,
-      timeEstimate: this.task?.timeEstimate || 0,
-      timeSpent: this.task?.timeSpent || 0,
-      subTaskIds: this.task?.subTaskIds || [],
-      isDone: false,
-      projectId: this.task?.projectId || '',
-      timeSpentOnDay: this.task?.timeSpentOnDay || {},
-      attachments: this.task?.attachments || [],
-      title: this.task?.title || '',
-      tagIds: this.task?.tagIds || [],
-      created: this.task?.created || 0,
-    };
-    const conflictIds = getTimeConflictTaskIds([
-      ...this._tasksWithDueTimeSorted().filter((task) => task.id !== this.task?.id),
-      candidateTask,
-    ]);
-
-    return {
-      hasOverlap: conflictIds.has(this._previewTaskId),
-      isOutsideWorkHours: isTaskOutsideWorkHours(candidateTask, this._timelineConfig()),
-    };
-  });
 
   async ngAfterViewInit(): Promise<void> {
     // Handle case when task is provided
+    Log.log(this.data);
     if (this.data.task) {
+      Log.log('hi');
       if (this.data.task.remindAt) {
         if (this.data.task.dueWithTime) {
           this.selectedReminderCfgId = millisecondsDiffToRemindOption(
@@ -217,7 +151,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
             this.data.task.remindAt,
           );
         }
-      } else if (!this.data.task.dueWithTime) {
+      } else if (this.data.task.dueWithTime) {
         this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
       } else {
         this.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
@@ -235,14 +169,30 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
         );
-        this.selectedReminderDate = new Date();
-        this.selectedReminderTime = this.selectedTime;
       } else {
         this.plannedDayForTask = this.data.task.dueDay || null;
 
         this.selectedDate = this.plannedDayForTask
           ? dateStrToUtcDate(this.plannedDayForTask)
           : null;
+      }
+      Log.log('hi2');
+      if (this.data.task.remindAtTime) {
+        this.selectedReminderTime = new Date(
+          this.data.task.remindAtTime,
+        ).toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        });
+      } else {
+        this.selectedReminderTime = this.selectedTime;
+      }
+
+      if (this.data.task.remindAtDay) {
+        this.selectedReminderDate = this.data.task.remindAtDay;
+      } else {
+        this.selectedReminderDate = new Date().toISOString().split('T')[0];
       }
     } else {
       this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
@@ -323,6 +273,30 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     }
   }
 
+  onReminderTimeKeyDown(ev: KeyboardEvent): void {
+    if (ev.key === 'Enter') {
+      this.isShowEnterMsg = true;
+      if (this._reminderTimeCheckVal === this.selectedReminderTime) {
+        this.submit();
+      }
+      this._reminderTimeCheckVal = this.selectedReminderTime;
+    } else {
+      this.isShowEnterMsg = false;
+    }
+  }
+
+  onReminderDateKeyDown(ev: KeyboardEvent): void {
+    if (ev.key === 'Enter') {
+      this.isShowEnterMsg = true;
+      if (this._reminderDateCheckVal === this.selectedReminderDate) {
+        this.submit();
+      }
+      this._reminderDateCheckVal = this.selectedReminderDate;
+    } else {
+      this.isShowEnterMsg = false;
+    }
+  }
+
   close(
     result:
       | boolean
@@ -330,6 +304,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
           date: Date | null;
           time: string | null;
           remindOption: TaskReminderOptionId | null;
+          reminderTime: string | null;
+          reminderDate: string | null;
         } = false,
   ): void {
     this._matDialogRef.close(result);
@@ -425,6 +401,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         date: this.selectedDate as Date,
         time: this.selectedTime,
         remindOption: this.selectedReminderCfgId,
+        reminderTime: this.selectedReminderTime,
+        reminderDate: this.selectedReminderDate,
       });
       return;
     }
@@ -488,10 +466,29 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     const newDate = new Date(
       getDateTimeFromClockString(this.selectedTime as string, this.selectedDate as Date),
     );
+
+    let remindAt: TaskReminderOptionId | number | null = null;
+    let specificReminder: boolean = false;
+    if (this.selectedReminderDate && this.selectedReminderTime) {
+      remindAt = new Date(
+        `${this.selectedReminderDate}T${this.selectedReminderTime}`,
+      ).getTime();
+      specificReminder = true;
+    } else if (this.selectedReminderTime && !this.selectedReminderDate) {
+      remindAt = getDateTimeFromClockString(
+        this.selectedReminderTime,
+        this.selectedDate as Date,
+      );
+      specificReminder = true;
+    } else {
+      remindAt = this.selectedReminderCfgId;
+    }
+
     this._taskService.scheduleTask(
       task,
       newDate.getTime(),
-      this.selectedReminderCfgId,
+      remindAt,
+      specificReminder,
       false,
     );
     // TODO if we want this, we should add it as an effect

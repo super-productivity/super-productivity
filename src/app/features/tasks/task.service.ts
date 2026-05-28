@@ -1026,14 +1026,17 @@ export class TaskService {
   scheduleTask(
     task: Task | TaskWithSubTasks,
     due: number,
-    remindCfg: TaskReminderOptionId,
+    remindTime: TaskReminderOptionId | number,
+    specificReminder: boolean = false,
     isMoveToBacklog: boolean = false,
   ): void {
     this._store.dispatch(
       TaskSharedActions.scheduleTaskWithTime({
         task,
         dueWithTime: due,
-        remindAt: remindOptionToMilliseconds(due, remindCfg),
+        remindAt: specificReminder
+          ? remindOptionToMilliseconds(due, remindTime as TaskReminderOptionId)
+          : (remindTime as number),
         isMoveToBacklog,
       }),
     );
@@ -1042,19 +1045,23 @@ export class TaskService {
   reScheduleTask({
     task,
     due,
-    remindCfg,
+    remindTime,
+    specificReminder,
     isMoveToBacklog = false,
   }: {
     task: Task;
     due: number;
-    remindCfg: TaskReminderOptionId;
+    remindTime: TaskReminderOptionId | number;
+    specificReminder: boolean;
     isMoveToBacklog: boolean;
   }): void {
     this._store.dispatch(
       TaskSharedActions.reScheduleTaskWithTime({
         task,
         dueWithTime: due,
-        remindAt: remindOptionToMilliseconds(due, remindCfg),
+        remindAt: specificReminder
+          ? remindOptionToMilliseconds(due, remindTime as TaskReminderOptionId)
+          : (remindTime as number),
         isMoveToBacklog,
       }),
     );

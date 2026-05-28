@@ -73,6 +73,24 @@
     </mat-form-field>
 
     @if (selectedTime) {
+      <mat-form-field [@expandFade]>
+        <mat-icon matPrefix>alarm</mat-icon>
+        <mat-label>{{ T.F.TASK.D_SCHEDULE_TASK.REMIND_AT | translate }}</mat-label>
+        <mat-select
+          [(ngModel)]="selectedReminderCfgId"
+          name="type"
+          required="true"
+        >
+          @for (remindOption of remindAvailableOptions; track remindOption.value) {
+            <mat-option [value]="remindOption.value">
+              {{ remindOption.label | translate }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    @if (selectedTime) {
       <div
         [@expandFade]
         class="reminder-datetime-wrapper"
@@ -88,7 +106,17 @@
             [(ngModel)]="selectedReminderTime"
             step="60"
             matInput
+            (keydown)="onReminderTimeKeyDown($event)"
           />
+          @if (selectedReminderTime) {
+            <mat-icon
+              class="time-clear-btn"
+              matSuffix
+              (click)="onReminderTimeClear($event)"
+            >
+              close
+            </mat-icon>
+          }
         </mat-form-field>
 
         <mat-form-field class="example-full-width">
@@ -101,7 +129,17 @@
             type="date"
             [(ngModel)]="selectedReminderDate"
             matInput
+            (keydown)="onReminderDateKeyDown($event)"
           />
+          @if (selectedReminderDate) {
+            <mat-icon
+              class="time-clear-btn"
+              matSuffix
+              (click)="onReminderDateClear($event)"
+            >
+              close
+            </mat-icon>
+          }
         </mat-form-field>
       </div>
     }

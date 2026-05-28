@@ -753,11 +753,12 @@ export class TaskRepeatCfgEffects {
         this._taskService.reScheduleTask({
           task,
           due: dateTime,
-          remindCfg: completeCfg.remindAt,
+          remindTime: completeCfg.remindAt,
+          specificReminder: false,
           isMoveToBacklog: false,
         });
       } else {
-        this._taskService.scheduleTask(task, dateTime, completeCfg.remindAt);
+        this._taskService.scheduleTask(task, dateTime, completeCfg.remindAt, false);
       }
     }
     if (changes.tagIds) {
