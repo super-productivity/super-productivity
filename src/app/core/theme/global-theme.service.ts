@@ -341,7 +341,11 @@ export class GlobalThemeService {
 
     if (IS_ANDROID_WEB_VIEW) {
       androidInterface.isKeyboardShown$
-        .pipe(takeUntilDestroyed(this._destroyRef))
+        // The native OnGlobalLayoutListener pushes a value on every layout pass
+        // (i.e. every frame of the IME slide), so dedupe to actual transitions —
+        // otherwise we rewrite <body> classes and re-trigger change detection
+        // every frame while the keyboard animates.
+        .pipe(distinctUntilChanged(), takeUntilDestroyed(this._destroyRef))
         .subscribe((isShown) => {
           Log.log('isShown', isShown);
 
