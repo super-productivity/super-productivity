@@ -37,17 +37,26 @@ real lever is native: switch the Capacitor activity from `adjustResize` to
 `adjustNothing` and drive all keyboard-aware layout from the visual-viewport /
 keyboard-inset signal the app already tracks (`--keyboard-height`).
 
-**Do the smallest thing first.** The KISS core is a static one-liner +
-reuse of existing code: flip **only** `CapacitorMainActivity` to `adjustNothing`
-(legacy F-Droid `FullscreenActivity` stays on `adjustResize`) and generalize the
-existing iOS `_scrollActiveInputIntoView` to the Android visual-viewport path.
-No runtime probe, no VirtualKeyboard API, no new geometry pipeline — the app
-already derives `--keyboard-height` from `innerHeight - visualViewport.height`,
-which is exactly what current WebViews provide. Reach for the VirtualKeyboard
-API + a capability probe **only if** on-device testing finds a shipping WebView
-that gives no height signal under `adjustNothing`. And gate the whole thing
-behind a **baseline DevTools trace** that confirms layout reflow (not paint) is
-the dominant cost — so we fix the thing that's actually slow.
+**Correction (post-implementation review):** the "just flip + reuse
+visualViewport" KISS path is **not viable for this app's support matrix.** The
+WebView gate is `MIN_CHROMIUM_VERSION = 107` (`WebViewCompatibilityChecker.kt:26`),
+but the automatic IME visual-viewport resize in WebView only landed ~Chrome 139.
+Today `--keyboard-height` works *because* `adjustResize` shrinks the window (and
+thus the visual viewport). Switch to `adjustNothing` and Chrome 107–138 lose the
+window resize **and** don't auto-resize the visual viewport → `innerHeight -
+visualViewport.height` stays 0 → keyboard silently covers inputs. So the
+**VirtualKeyboard API (Chrome 94+, covers the whole 107+ range) is required, not
+optional.**
+
+**Non-regressive design = runtime-gated, not a static manifest flip.** Keep
+`adjustResize` in the manifest as the fallback; at runtime, *only if*
+`'virtualKeyboard' in navigator`, set `overlaysContent = true`, switch the
+activity to `adjustNothing` via a **new native plugin method**, and drive
+`--keyboard-height` from VirtualKeyboard `geometrychange`. WebViews without the
+API stay on `adjustResize` (current behavior, no regression). Gate the whole
+effort behind a **baseline DevTools trace** confirming layout reflow (not paint)
+dominates — and weigh the cheaper "keep `adjustResize` + CSS containment" route
+(Phase 1) first, since the flip is now a larger native+web change.
 
 ## Root cause (confirmed, ~90%)
 
@@ -115,90 +124,87 @@ strictly less code.
 ## Recommended target architecture
 
 The OS stops resizing the WebView window during the IME animation, and the app
-drives keyboard-aware layout from the visual-viewport signal it **already**
-tracks (`--keyboard-height = innerHeight - visualViewport.height`). This removes
-the documented jank source while preserving the existing model, the edge-to-edge
-plugin's sole inset ownership (no double-handling regression), and the
-add-task-bar pinning.
+drives keyboard-aware layout from a keyboard-inset signal — removing the
+documented per-frame reflow while preserving the edge-to-edge plugin's sole
+inset ownership (no double-handling) and the add-task-bar pinning.
 
-**Approach C, kept minimal.** No new geometry pipeline. The VirtualKeyboard API
-(Approach B) and CSS containment (Approach E) are *contingencies*, not part of
-the baseline architecture — adopt them only if measurement/on-device testing
-proves they're needed (see Phase 2). Reviewers were unanimous that baking B in
-up front is speculative complexity, since current WebViews already give the
-height via visualViewport.
+**Approach B+C, runtime-gated (see the TL;DR correction).** Because the support
+matrix starts at Chrome 107 and visualViewport-under-`adjustNothing` only signals
+on ~Chrome 139+, the VirtualKeyboard API (Chrome 94+) is the **required** height
+source, not a contingency. Capability-gate it: keep `adjustResize` in the
+manifest; at runtime, only when `'virtualKeyboard' in navigator`, set
+`overlaysContent = true`, switch the activity to `adjustNothing` via a native
+plugin method, and read `--keyboard-height` from `geometrychange`. No-API
+WebViews stay on `adjustResize` unchanged. CSS containment (Approach E) stays a
+cheaper alternative to measure first.
 
-## Migration (KISS core first, contingencies behind proven need)
+## Migration (cheapest verified step first; the flip is now a larger change)
 
 ### Phase 0 — Baseline measurement (go/no-go gate, no code)
 Capture a DevTools trace (chrome://inspect) of a keyboard open AND close on a
 real device, **categorized by Layout / Recalc-Style / Paint / Scripting**. This
 confirms the dominant cost before any fix.
-- If **Layout** dominates → proceed to Phase 1 (the flip is the right fix).
-- If **Paint** (backdrop raster) dominates → the cheap mitigation is the
-  contingency in Phase 2c, and the flip may be unnecessary.
-- If **Scripting** is large → the `distinctUntilChanged()` win below is in play.
-- **Abort/redirect criterion:** if the trace shows the flip wouldn't address the
-  dominant cost, stop and pick the matching contingency instead.
+- **Layout** dominates → only the `adjustNothing` switch (Phase 2) truly removes
+  it, but try Phase 1 first to see how far cheap mitigation gets.
+- **Paint** dominates → Phase 1's containment is the targeted, low-risk fix and
+  the flip may be unnecessary.
+- **Scripting** large → already partly addressed by the shipped
+  `distinctUntilChanged` (commit `f486496b7b`); check whether the native
+  `OnGlobalLayoutListener` JNI round-trip also needs native debouncing.
 
-### Phase 1 — The KISS core fix
-Three small, reversible changes:
-1. **Flip `CapacitorMainActivity` `adjustResize` → `adjustNothing`** in
-   `AndroidManifest.xml:71`. Leave the legacy F-Droid `FullscreenActivity`
-   (`:49`) on `adjustResize` — this static per-activity split *is* the safety net
-   (no runtime probe needed yet). The OS stops resizing the window → no per-frame
-   ICB reflow.
-2. **Generalize `_scrollActiveInputIntoView`** (already exists, iOS-only at
-   `global-theme.service.ts:708`) to the Android visual-viewport path, since
-   `adjustNothing` won't move content for you. **Scope guard:** apply only to the
-   Capacitor Android WebView, NOT Android *mobile-web* (which also runs
-   `_initVisualViewportKeyboardTracking` at `:366` but has no manifest flip and
-   different viewport behavior).
-3. **Extend `_patchCdkViewportForSafeArea`** (`:752`, currently narrows only for
-   the iOS overlay offset at `:769-773`) to the Android keyboard, so CDK overlays
-   (autocomplete/menus/selects) still position above the keyboard. This is a real
-   code change Phase 1 *introduces as a regression risk*, not just a check.
+### Phase 1 — Cheap, low-risk mitigations (no mechanism change)
+- **Done — `distinctUntilChanged()`** on the Android `isKeyboardShown$`
+  subscription (`global-theme.service.ts`, commit `f486496b7b`): the subscriber
+  no longer rewrites `<body>` classes every frame of the slide.
+- **CSS containment** *(if Phase 0 shows it helps).* `contain: layout paint` on
+  large keyboard-affected containers to scope reflow/repaint cost while staying
+  on `adjustResize`. Keep it OFF any ancestor of the add-task bar and the CDK
+  overlay root (it can create a containing-block/scroll context that shifts fixed
+  children or clips overlays).
+- **On-device check:** re-trace; if open/close is now acceptably smooth, **stop
+  here** — the higher-risk Phase 2 becomes unnecessary.
 
-Independent cheap win (ship anytime): add `distinctUntilChanged()` to
-`androidInterface.isKeyboardShown$` so the per-frame `OnGlobalLayoutListener`
-storm stops rewriting `<body>` classes every frame.
+### Phase 2 — Runtime-gated `adjustNothing` + VirtualKeyboard (only if Phase 1 is insufficient)
+This is the real reflow fix, but a coupled native+web change that is **100%
+on-device-gated** and must be built with a device in the loop. Because the
+support matrix starts at Chrome 107 (< the ~139 that auto-resizes the visual
+viewport under `adjustNothing`), the VirtualKeyboard API is the required signal
+source, and the switch must be **runtime-gated so no-API WebViews keep
+`adjustResize` unchanged**:
+1. **New native plugin method** to set `windowSoftInputMode` at runtime
+   (`SOFT_INPUT_ADJUST_NOTHING`) on `CapacitorMainActivity`. The manifest stays
+   `adjustResize` (the fallback); only this call flips capable devices.
+2. **Capability gate (web):** only when `'virtualKeyboard' in navigator` — set
+   `navigator.virtualKeyboard.overlaysContent = true`, call (1), and drive
+   `--keyboard-height` from the `geometrychange` `boundingRect`. Order matters:
+   `env(keyboard-inset-*)` / `boundingRect` read 0 until `overlaysContent` is set,
+   and never set `overlaysContent=true` while still on `adjustResize` (Blink and
+   the OS disagree → double-offset bar). Lands in/near
+   `_initVisualViewportKeyboardTracking` (`:645`); leave the existing
+   visualViewport path as the M139+/mobile-web fallback.
+3. **Generalize `_scrollActiveInputIntoView`** (`:708`, iOS-only) to the Android
+   WebView path — `adjustNothing` won't move content for you. **Scope guard:**
+   Capacitor Android WebView only, NOT Android *mobile-web* (also runs the
+   tracker at `:366` but gets no flip and is handled by the browser). This is the
+   one genuinely iterative piece (scrolling a focused input above an *overlay*
+   keyboard needs real-device tuning).
+4. **Extend `_patchCdkViewportForSafeArea`** (`:752`, iOS-only narrowing at
+   `:769-773`) to subtract the Android keyboard height so CDK overlays
+   (autocomplete/menus/selects) stay above the keyboard once the window no longer
+   shrinks.
+5. **Transition reconciliation** *(polish).* Re-evaluate the add-task-bar
+   `transition: bottom 225ms`: keep it, or drive `bottom` from
+   `env(keyboard-inset-bottom)` 1:1. Decide on-device.
 
-- **On-device checks (device-dependent — test on a recent and an older WebView):**
-  - Open/close is smooth (slow-mo; no per-frame stutter of list/backdrop).
-  - Focused input near the bottom scrolls above the keyboard on focus AND when
-    moving focus between fields while the keyboard stays up.
-  - Add-task bar sits exactly above the keyboard, no lag/jump.
-  - Backdrop fills behind the keyboard (no blank band now the window doesn't
-    shrink).
-  - CDK overlays position above the keyboard.
-  - Landscape + split-screen/multi-window (intersection is bottom-edge only;
-    docked/side keyboards won't resize).
-  - **Older WebView specifically:** with `adjustNothing` the IME fully overlays
-    and `innerHeight - visualViewport.height` may stay 0 (no height signal) →
-    inputs silently covered. If found on a *shipping* WebView, that device is the
-    trigger for Phase 2.
-- **Biggest risk:** the no-height-signal case above. **Abort criterion:** if a
-  supported shipping WebView shows a dead signal, revert this activity to
-  `adjustResize` and move to Phase 2 — do not ship Phase 1 alone to that device.
-
-### Phase 2 — Contingencies (adopt ONLY if Phase 0/1 prove the need)
-- **2a — VirtualKeyboard API + runtime probe** *(only if Phase 1 found a shipping
-  no-signal WebView).* Where `'virtualKeyboard' in navigator`, prefer
-  `env(keyboard-inset-bottom)` / `geometrychange` as the `--keyboard-height`
-  source. **Do NOT set `overlaysContent=true` until the activity is already on
-  `adjustNothing`** — setting it while still on `adjustResize` makes Blink and the
-  OS disagree and double-offsets the bar. Gate the flip behind a runtime probe
-  (API present, or a focus-time visualViewport-resize check) that falls back to
-  `adjustResize`. Note `env(keyboard-inset-*)` read 0 until `overlaysContent` is
-  set, so verify in that order.
-- **2b — Transition reconciliation** *(polish).* Re-evaluate the add-task-bar
-  `transition: bottom 225ms`: keep it, or drive `bottom` from
-  `env(keyboard-inset-bottom)` 1:1. Decide on-device.
-- **2c — CSS containment** *(only if Phase 0 showed Paint/Layout cost worth
-  scoping).* `contain: layout paint` on large keyboard-affected containers —
-  keep it OFF any ancestor of the add-task bar and the CDK overlay root (it can
-  create a containing-block/scroll context that shifts fixed children or clips
-  overlays).
+- **On-device checks (test on a recent AND an older/Chrome-107-ish WebView):**
+  smooth open/close; focused input scrolls above the keyboard on focus and on
+  field-to-field moves; add-task bar pinned exactly above the keyboard; backdrop
+  fills behind the keyboard; CDK overlays clear the keyboard; landscape +
+  split-screen/multi-window; and confirm a no-VirtualKeyboard WebView stays on
+  `adjustResize` with today's behavior intact.
+- **Biggest risk:** a capable-looking WebView whose VirtualKeyboard signal is
+  flaky. **Abort criterion:** if a supported device misbehaves, the runtime gate
+  must leave it on `adjustResize` — never ship a covered-input state.
 
 ## Cross-cutting invariant (carry through all phases)
 
@@ -215,24 +221,26 @@ no-focus-clearing invariant in any change.
 ## Files
 
 - `android/app/src/main/AndroidManifest.xml` — `windowSoftInputMode="adjustResize"`
-  on `FullscreenActivity` (line 49) and `CapacitorMainActivity` (line 71) — the
-  Phase 1 lever (flip line 71 only).
-- `src/app/core/theme/global-theme.service.ts` — `_scrollActiveInputIntoView`
-  (`:708`, iOS helper to generalize, Phase 1); `_patchCdkViewportForSafeArea`
-  (`:752`, extend to Android, Phase 1); `_initVisualViewportKeyboardTracking`
-  (`:645`, Phase 2a source change + probe).
-- `src/app/features/android/android-interface.ts` — `isKeyboardShown$`
-  `BehaviorSubject` (`:167`) — add `distinctUntilChanged()` (cheap win).
+  on `FullscreenActivity` (line 49) and `CapacitorMainActivity` (line 71). Stays
+  `adjustResize` (the fallback); Phase 2.1 flips capable devices at runtime.
+- `android/app/src/main/java/.../plugins/NavigationBarPlugin.kt` — home for the
+  new runtime `setSoftInputMode` plugin method (Phase 2.1).
+- `src/app/core/theme/global-theme.service.ts` — `_initVisualViewportKeyboardTracking`
+  (`:645`, VirtualKeyboard source + capability gate, Phase 2.2);
+  `_scrollActiveInputIntoView` (`:708`, iOS helper to generalize, Phase 2.3);
+  `_patchCdkViewportForSafeArea` (`:752`, extend to Android, Phase 2.4); the
+  Android `isKeyboardShown$` subscription (`distinctUntilChanged` — done).
 - `src/index.html` — viewport meta (line 8); where an `interactive-widget` key
   would go if Approach A is ever tested.
 - `src/app/features/tasks/add-task-bar/add-task-bar.component.scss` —
-  `bottom: calc(var(--keyboard-height) + var(--s2))` + `transition` (Phase 2b).
+  `bottom: calc(var(--keyboard-height) + var(--s2))` + `transition` (Phase 2.5).
 
 ## Constraint: cannot be verified in CI / dev sandbox
 
-Gradle cannot run in the Claude dev sandbox, so Phases 1–2 must be validated on a
-real device (ideally one recent and one older WebView, to cover the
-visual-viewport-resize boundary). Weight each phase by reversibility accordingly.
+Gradle cannot run in the Claude dev sandbox, so Phase 2 must be validated on a
+real device (ideally one recent and one ~Chrome-107 WebView, to cover the
+VirtualKeyboard/visual-viewport-resize boundary). The shipped Phase 1
+`distinctUntilChanged` is unit-verifiable; the rest is device-gated.
 
 ## Sources
 
