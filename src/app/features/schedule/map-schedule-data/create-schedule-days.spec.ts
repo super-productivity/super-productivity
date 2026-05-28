@@ -3,6 +3,7 @@ import { DEFAULT_TASK, TaskWithoutReminder } from '../../tasks/task.model';
 import { PlannerDayMap } from '../../planner/planner.model';
 import { BlockedBlockByDayMap } from '../schedule.model';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 // Helper function to create test tasks with required properties
 const createTestTask = (
@@ -182,7 +183,7 @@ describe('createScheduleDays - Task Filtering', () => {
       expect(hasTask).toBe(true);
     });
 
-    it('should appear when dueDay is in the future relative to viewed week', () => {
+    it('should NOT appear before its dueDay', () => {
       // Arrange
       const taskDueFutureWeek = createTestTask('task4', 'Task Due Future Week', {
         dueDay: futureWeekStr,
@@ -209,7 +210,40 @@ describe('createScheduleDays - Task Filtering', () => {
       const hasTask = result.some((day) =>
         day.entries.some((entry) => entry.id === 'task4'),
       );
-      expect(hasTask).toBe(true);
+      expect(hasTask).toBe(false);
+    });
+
+    it('should appear on its dueDay after being carried through earlier displayed days', () => {
+      // Arrange
+      const taskDueFutureWeek = createTestTask('task4', 'Task Due Future Week', {
+        dueDay: futureWeekStr,
+      });
+
+      const dayBeforeFutureWeek = parseDbDateStr(futureWeekStr);
+      dayBeforeFutureWeek.setDate(dayBeforeFutureWeek.getDate() - 1);
+      const dayBeforeFutureWeekStr = getDbDateStr(dayBeforeFutureWeek);
+
+      const dayDates = [dayBeforeFutureWeekStr, futureWeekStr];
+      const plannerDayMap: PlannerDayMap = {};
+      const blockerBlocksDayMap: BlockedBlockByDayMap = {};
+
+      // Act
+      const result = createScheduleDays(
+        [taskDueFutureWeek],
+        [],
+        dayDates,
+        plannerDayMap,
+        blockerBlocksDayMap,
+        undefined,
+        now,
+        realNow,
+      );
+
+      // Assert
+      const dayBeforeHasTask = result[0].entries.some((entry) => entry.id === 'task4');
+      const dueDayHasTask = result[1].entries.some((entry) => entry.id === 'task4');
+      expect(dayBeforeHasTask).toBe(false);
+      expect(dueDayHasTask).toBe(true);
     });
 
     it('should NOT appear when dueDay is before the viewed week', () => {
@@ -240,6 +274,102 @@ describe('createScheduleDays - Task Filtering', () => {
         day.entries.some((entry) => entry.id === 'task5'),
       );
       expect(hasTask).toBe(false);
+    });
+
+    it('should keep over-budget dueDay tasks attached to the due day', () => {
+      // Arrange
+      const lateToday = parseDbDateStr(todayStr);
+      lateToday.setHours(23, 59, 0, 0);
+      const lateNow = lateToday.getTime();
+      const taskDueToday = createTestTask('task-due-today', 'Task Due Today', {
+        dueDay: todayStr,
+        timeEstimate: 3600000,
+      });
+
+      const dayDates = [todayStr, tomorrowStr];
+      const plannerDayMap: PlannerDayMap = {};
+      const blockerBlocksDayMap: BlockedBlockByDayMap = {};
+
+      // Act
+      const result = createScheduleDays(
+        [taskDueToday],
+        [],
+        dayDates,
+        plannerDayMap,
+        blockerBlocksDayMap,
+        undefined,
+        lateNow,
+        lateNow,
+      );
+
+      // Assert
+      const todayEntriesHaveTask = result[0].entries.some(
+        (entry) => entry.id === 'task-due-today',
+      );
+      const todayEntry = result[0].entries.find((entry) => entry.id === 'task-due-today');
+      const todayBeyondBudgetHasTask = result[0].beyondBudgetTasks.some(
+        (task) => task.id === 'task-due-today',
+      );
+      const tomorrowHasTask = result[1].entries.some(
+        (entry) => entry.id === 'task-due-today',
+      );
+      expect(todayEntriesHaveTask).toBe(true);
+      expect(todayEntry?.isBeyondBudget).toBe(true);
+      expect(todayBeyondBudgetHasTask).toBe(false);
+      expect(tomorrowHasTask).toBe(false);
+    });
+
+    it('should keep future dueDay tasks from wrapping into the next day', () => {
+      // Arrange
+      const dayAfterTomorrow = parseDbDateStr(tomorrowStr);
+      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+      const dayAfterTomorrowStr = getDbDateStr(dayAfterTomorrow);
+
+      const firstTask = createTestTask('task-due-first', 'First Due Task', {
+        dueDay: tomorrowStr,
+        timeEstimate: 8 * 60 * 60 * 1000,
+      });
+      const overflowingTask = createTestTask(
+        'task-due-overflow',
+        'Overflowing Due Task',
+        {
+          dueDay: tomorrowStr,
+          timeEstimate: 8 * 60 * 60 * 1000,
+        },
+      );
+
+      const dayDates = [tomorrowStr, dayAfterTomorrowStr];
+      const plannerDayMap: PlannerDayMap = {};
+      const blockerBlocksDayMap: BlockedBlockByDayMap = {};
+
+      // Act
+      const result = createScheduleDays(
+        [firstTask, overflowingTask],
+        [],
+        dayDates,
+        plannerDayMap,
+        blockerBlocksDayMap,
+        {
+          startTime: '09:00',
+          endTime: '17:00',
+        },
+        now,
+        realNow,
+      );
+
+      // Assert
+      const tomorrowHasFirstTask = result[0].entries.some(
+        (entry) => entry.id === 'task-due-first',
+      );
+      const tomorrowOverflowingEntry = result[0].entries.find(
+        (entry) => entry.id === 'task-due-overflow',
+      );
+      const dayAfterHasOverflowingTask = result[1].entries.some(
+        (entry) => entry.id === 'task-due-overflow',
+      );
+      expect(tomorrowHasFirstTask).toBe(true);
+      expect(tomorrowOverflowingEntry?.isBeyondBudget).toBe(true);
+      expect(dayAfterHasOverflowingTask).toBe(false);
     });
   });
 
@@ -418,7 +548,7 @@ describe('createScheduleDays - Task Filtering', () => {
   });
 
   describe('End-of-day filter for tasks flowing to next day', () => {
-    it('should allow tasks with plannedForDay to flow to next day', () => {
+    it('should keep over-budget plannedForDay tasks attached to their planned day', () => {
       // Arrange
       const taskPlannedForToday = createTestTask('task12', 'Task Planned for Today', {
         timeEstimate: 86400000, // 24 hours - won't fit in one day
@@ -443,9 +573,14 @@ describe('createScheduleDays - Task Filtering', () => {
       );
 
       // Assert
-      // Task should appear on today
-      const todayHasTask = result[0].entries.some((entry) => entry.id === 'task12');
-      expect(todayHasTask).toBe(true);
+      const todayBeyondBudgetHasTask = result[0].beyondBudgetTasks.some(
+        (task) => task.id === 'task12',
+      );
+      const todayEntry = result[0].entries.find((entry) => entry.id === 'task12');
+      const tomorrowHasTask = result[1].entries.some((entry) => entry.id === 'task12');
+      expect(todayEntry?.isBeyondBudget).toBe(true);
+      expect(todayBeyondBudgetHasTask).toBe(false);
+      expect(tomorrowHasTask).toBe(false);
     });
   });
 

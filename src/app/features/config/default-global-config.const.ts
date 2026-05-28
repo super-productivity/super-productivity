@@ -1,4 +1,8 @@
 import { environment } from '../../../environments/environment';
+import {
+  HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+  OFFICIAL_ONEDRIVE_CLIENT_ID,
+} from '../../imex/sync/onedrive-auth-mode.const';
 
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { GlobalConfigState } from './global-config.model';
@@ -50,7 +54,9 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isLocalRestApiEnabled: false,
     isTrayShowCurrentCountdown: true,
     startOfNextDay: 0,
+    startOfNextDayTime: '00:00',
     isDisableAnimations: false,
+    isVerticalActionBar: false,
     isDisableCelebration: false,
     isShowProductivityTipLonger: false,
     customTheme: 'default',
@@ -98,6 +104,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     autoStartFocusOnPlay: false,
     isManualBreakStart: false,
   },
+  flowtime: {
+    isBreakEnabled: false,
+    breakMode: 'ratio',
+    breakPercentage: 20,
+    breakRules: [],
+  },
   clipboardImages: {
     imagePath: null,
   },
@@ -114,11 +126,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     globalAddTask: null,
     addNewTask: 'Shift+A',
     addNewProject: 'Shift+P',
-    addNewNote: 'N',
+    addNewNote: 'Alt+N',
     openProjectNotes: 'Shift+N',
     toggleTaskViewCustomizerPanel: 'C',
     toggleIssuePanel: 'P',
     focusSideNav: 'Shift+D',
+    toggleSideNavMode: 'Ctrl+B',
     showHelp: '?',
     showSearchBar: 'Shift+F',
     toggleBacklog: 'B',
@@ -136,6 +149,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     triggerSync: 'Ctrl+S',
     taskEditTitle: null,
     taskToggleDetailPanelOpen: 'I',
+    taskOpenNotesPanel: 'N',
     taskOpenNotesFullscreen: null,
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
@@ -231,9 +245,17 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
 
     nextcloud: {
       serverUrl: null,
+      loginName: null,
       userName: null,
       password: null,
       syncFolderPath: 'super-productivity',
+    },
+
+    oneDrive: {
+      useCustomApp: !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+      clientId: OFFICIAL_ONEDRIVE_CLIENT_ID,
+      tenantId: 'common',
+      syncFolderPath: 'Super Productivity',
     },
   },
 } as const;

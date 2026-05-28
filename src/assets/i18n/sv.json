@@ -1403,7 +1403,7 @@
         "TOOLTIP_ENABLE_SEARCH": "Aktivera sökning efter ärenden (Ctrl+2)",
         "TOOLTIP_DISABLE_SEARCH": "Inaktivera ärendesökning (Ctrl+2)",
         "SEARCH_INFO_TEXT": "Sök och lägg till ärenden och uppgifter från arkivet och andra projekt",
-        "DUE_BUTTON": "På grund av",
+        "DUE_BUTTON": "Schemalägg",
         "TAGS_BUTTON": "Taggar",
         "ESTIMATE_BUTTON": "Uppskattning",
         "TOOLTIP_CLEAR_DATE": "Rensa datum",

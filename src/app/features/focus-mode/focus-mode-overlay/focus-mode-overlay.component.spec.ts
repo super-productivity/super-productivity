@@ -7,23 +7,25 @@ import { FocusModeService } from '../focus-mode.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { FocusScreen, FocusModeMode } from '../focus-mode.model';
 import { cancelFocusSession, hideFocusOverlay } from '../store/focus-mode.actions';
+import { MatDialog } from '@angular/material/dialog';
 import {
   EnvironmentInjector,
   runInInjectionContext,
   signal,
-  Signal,
+  WritableSignal,
 } from '@angular/core';
 
 describe('FocusModeOverlayComponent', () => {
   let component: FocusModeOverlayComponent;
   let mockStore: jasmine.SpyObj<Store>;
+  let mockMatDialog: { openDialogs: unknown[] };
   let mockFocusModeService: {
-    currentScreen: Signal<FocusScreen>;
-    isSessionRunning: Signal<boolean>;
-    isSessionPaused: Signal<boolean>;
-    isBreakActive: Signal<boolean>;
-    mode: Signal<FocusModeMode>;
-    currentCycle: Signal<number>;
+    currentScreen: WritableSignal<FocusScreen>;
+    isSessionRunning: WritableSignal<boolean>;
+    isSessionPaused: WritableSignal<boolean>;
+    isBreakActive: WritableSignal<boolean>;
+    mode: WritableSignal<FocusModeMode>;
+    currentCycle: WritableSignal<number>;
     timeToGo$: Observable<number>;
     sessionProgress$: Observable<number>;
   };
@@ -33,6 +35,7 @@ describe('FocusModeOverlayComponent', () => {
     mockStore = jasmine.createSpyObj('Store', ['dispatch', 'select']);
     const mockTaskService = jasmine.createSpyObj('TaskService', ['add']);
     const mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', ['cfg']);
+    mockMatDialog = { openDialogs: [] };
 
     mockFocusModeService = {
       currentScreen: signal(FocusScreen.Main),
@@ -53,6 +56,7 @@ describe('FocusModeOverlayComponent', () => {
         { provide: TaskService, useValue: mockTaskService },
         { provide: FocusModeService, useValue: mockFocusModeService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
+        { provide: MatDialog, useValue: mockMatDialog },
       ],
     });
 
@@ -102,11 +106,85 @@ describe('FocusModeOverlayComponent', () => {
     });
 
     it('should dispatch hideFocusOverlay regardless of session state', () => {
-      (mockFocusModeService.isSessionRunning as any).set(true);
+      mockFocusModeService.isSessionRunning.set(true);
 
       component.closeOverlay();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(hideFocusOverlay());
+    });
+  });
+
+  describe('keyboard handling', () => {
+    const dispatchKeydown = (event: KeyboardEvent): KeyboardEvent => {
+      document.dispatchEvent(event);
+      return event;
+    };
+
+    it('should close the overlay when Escape is pressed', () => {
+      const event = dispatchKeydown(
+        new KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(hideFocusOverlay());
+    });
+
+    it('should only hide the overlay on Escape while a session is running', () => {
+      mockFocusModeService.isSessionRunning.set(true);
+
+      dispatchKeydown(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(hideFocusOverlay());
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(cancelFocusSession());
+    });
+
+    it('should not handle non-Escape keys', () => {
+      dispatchKeydown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+      expect(mockStore.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not handle Escape if another component already handled it', () => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      event.preventDefault();
+
+      dispatchKeydown(event);
+
+      expect(mockStore.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not close the overlay while a dialog is open', () => {
+      mockMatDialog.openDialogs = [{}];
+
+      dispatchKeydown(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+      expect(mockStore.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not close the overlay when Escape comes from an input', () => {
+      const input = document.createElement('textarea');
+      document.body.appendChild(input);
+
+      try {
+        input.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Escape',
+            bubbles: true,
+          }),
+        );
+      } finally {
+        input.remove();
+      }
+
+      expect(mockStore.dispatch).not.toHaveBeenCalled();
     });
   });
 

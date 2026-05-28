@@ -20,6 +20,8 @@ import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
+import com.superproductivity.superproductivity.service.FocusModeNotificationHelper
+import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.util.printWebViewVersion
@@ -42,6 +44,8 @@ class CapacitorMainActivity : BridgeActivity() {
     private var pendingShareIntent: JSONObject? = null
     private var isFrontendReady = false
     private var startupOverlayManager: StartupOverlayManager? = null
+    private var isTimerCompleteReceiverRegistered = false
+    private var isForegroundServiceFailureReceiverRegistered = false
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -56,8 +60,28 @@ class CapacitorMainActivity : BridgeActivity() {
         }
     }
 
+    private val foregroundServiceFailureReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ForegroundServiceFailure.ACTION) {
+                return
+            }
+            val service = intent.getStringExtra(ForegroundServiceFailure.EXTRA_SERVICE) ?: return
+            val reason = intent.getStringExtra(ForegroundServiceFailure.EXTRA_REASON) ?: return
+            callJSInterfaceFunctionIfExists(
+                "next",
+                "onForegroundServiceStartFailed$",
+                "{service:${JSONObject.quote(service)},reason:${JSONObject.quote(reason)}}"
+            )
+        }
+    }
+
     override fun load() {
-        val result = WebViewCompatibilityChecker.evaluate(this)
+        val result = try {
+            WebViewCompatibilityChecker.evaluate(this)
+        } catch (e: Throwable) {
+            showWebViewInitFailureOrThrow("WebView compatibility check failed", e)
+            return
+        }
         webViewCompatibility = result
         if (result.isBlocked) {
             webViewBlocked = true
@@ -65,7 +89,11 @@ class CapacitorMainActivity : BridgeActivity() {
             finish()
             return
         }
-        super.load()
+        try {
+            super.load()
+        } catch (e: Throwable) {
+            showWebViewInitFailureOrThrow("BridgeActivity.load() failed to initialize WebView", e)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,72 +102,73 @@ class CapacitorMainActivity : BridgeActivity() {
         registerPlugin(WebDavHttpPlugin::class.java)
         registerPlugin(NavigationBarPlugin::class.java)
 
-        super.onCreate(savedInstanceState)
+        try {
+            super.onCreate(savedInstanceState)
+        } catch (e: Throwable) {
+            showWebViewInitFailureOrThrow("BridgeActivity.onCreate() failed to initialize WebView", e)
+            return
+        }
         if (webViewBlocked) {
             return
         }
 
         val webView = bridge?.webView
         if (webView == null) {
-            Log.e("CapacitorMainActivity", "Bridge or WebView is null after onCreate — finishing activity")
-            val result = webViewCompatibility ?: WebViewCompatibilityChecker.Result(
-                status = WebViewCompatibilityChecker.Status.BLOCK,
-                majorVersion = null,
-                providerPackage = null,
-                providerVersionName = null,
-                source = WebViewCompatibilityChecker.VersionSource.UNKNOWN,
-            )
-            WebViewBlockActivity.present(this, result)
-            finish()
+            showWebViewInitFailure("Bridge or WebView is null after onCreate")
             return
         }
 
-        printWebViewVersion(webView)
+        try {
+            printWebViewVersion(webView)
 
-        // DEBUG ONLY
-        if (BuildConfig.DEBUG) {
-            Handler(Looper.getMainLooper()).postDelayed({
-                val debugToast = Toast.makeText(this, "DEBUG", Toast.LENGTH_SHORT)
-                debugToast.show()
-                Handler(Looper.getMainLooper()).postDelayed({ debugToast.cancel() }, 100)
-            }, 10_000)
-            WebView.setWebContentsDebuggingEnabled(true)
-        }
+            // DEBUG ONLY
+            if (BuildConfig.DEBUG) {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    val debugToast = Toast.makeText(this, "DEBUG", Toast.LENGTH_SHORT)
+                    debugToast.show()
+                    Handler(Looper.getMainLooper()).postDelayed({ debugToast.cancel() }, 100)
+                }, 10_000)
+                WebView.setWebContentsDebuggingEnabled(true)
+            }
 
-        webViewCompatibility?.let {
-            if (it.status == WebViewCompatibilityChecker.Status.WARN) {
-                Log.w(
-                    "SP-WebView",
-                    "WebView version ${it.majorVersion ?: "unknown"} below recommended ${WebViewCompatibilityChecker.RECOMMENDED_CHROMIUM_VERSION}",
+            webViewCompatibility?.let {
+                if (it.status == WebViewCompatibilityChecker.Status.WARN) {
+                    Log.w(
+                        "SP-WebView",
+                        "WebView version ${it.majorVersion ?: "unknown"} below recommended ${WebViewCompatibilityChecker.RECOMMENDED_CHROMIUM_VERSION}",
+                    )
+                }
+            }
+
+            // Hide the action bar
+            supportActionBar?.hide()
+
+            // Initialize JavaScriptInterface
+            javaScriptInterface = JavaScriptInterface(this, webView)
+
+            // Initialize WebView
+            WebHelper().setupView(webView, false)
+
+            // Inject JavaScriptInterface into Capacitor's WebView
+            webView.addJavascriptInterface(
+                javaScriptInterface,
+                WINDOW_INTERFACE_PROPERTY
+            )
+            if (BuildConfig.FLAVOR.equals("fdroid")) {
+                webView.addJavascriptInterface(
+                    javaScriptInterface,
+                    WINDOW_PROPERTY_F_DROID
                 )
             }
+        } catch (e: Throwable) {
+            showWebViewInitFailureOrThrow("WebView setup failed", e)
+            return
         }
 
-        // We made it past the pre-flight version check and the WebView is alive.
+        // We made it past the pre-flight version check and the WebView setup.
         // Persist the detected version so a transient mis-read on a later launch
         // can't lock the user out, and clear any prior user override if healthy.
         WebViewCompatibilityChecker.recordSuccessfulLoad(this, webViewCompatibility?.majorVersion)
-
-        // Hide the action bar
-        supportActionBar?.hide()
-
-        // Initialize JavaScriptInterface
-        javaScriptInterface = JavaScriptInterface(this, webView)
-
-        // Initialize WebView
-        WebHelper().setupView(webView, false)
-
-        // Inject JavaScriptInterface into Capacitor's WebView
-        webView.addJavascriptInterface(
-            javaScriptInterface,
-            WINDOW_INTERFACE_PROPERTY
-        )
-        if (BuildConfig.FLAVOR.equals("fdroid")) {
-            webView.addJavascriptInterface(
-                javaScriptInterface,
-                WINDOW_PROPERTY_F_DROID
-            )
-        }
 
 
         // Register OnBackPressedCallback to handle back button press
@@ -175,6 +204,12 @@ class CapacitorMainActivity : BridgeActivity() {
             timerCompleteReceiver,
             IntentFilter(FocusModeForegroundService.ACTION_TIMER_COMPLETE)
         )
+        isTimerCompleteReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            foregroundServiceFailureReceiver,
+            IntentFilter(ForegroundServiceFailure.ACTION)
+        )
+        isForegroundServiceFailureReceiverRegistered = true
 
         // Show startup overlay for quick task entry while Angular loads.
         // Only on fresh cold start — not on config-change recreation.
@@ -188,9 +223,44 @@ class CapacitorMainActivity : BridgeActivity() {
             SyncReminderScheduler.ensureScheduled(this)
         }
 
-        // Handle initial intent (cold start)
-        handleIntent(intent)
+        // Handle initial intent (cold start) only on a fresh launch.
+        // On Activity recreation (config change) savedInstanceState is non-null
+        // and getIntent() still holds the original share/reminder Intent — re-running
+        // handleIntent() there would create a duplicate task from the same share.
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+        }
     }
+
+    private fun showWebViewInitFailureOrThrow(message: String, error: Throwable) {
+        if (!WebViewCompatibilityChecker.isLikelyWebViewInitFailure(error)) {
+            throw error
+        }
+        showWebViewInitFailure(message, error)
+    }
+
+    private fun showWebViewInitFailure(message: String, error: Throwable? = null) {
+        if (error == null) {
+            Log.e("CapacitorMainActivity", "$message - finishing activity")
+        } else {
+            Log.e("CapacitorMainActivity", "$message - finishing activity", error)
+        }
+        webViewBlocked = true
+        WebViewBlockActivity.present(this, webViewInitFailureResult())
+        finish()
+    }
+
+    private fun webViewInitFailureResult(): WebViewCompatibilityChecker.Result =
+        (webViewCompatibility ?: WebViewCompatibilityChecker.Result(
+            status = WebViewCompatibilityChecker.Status.BLOCK,
+            majorVersion = null,
+            providerPackage = null,
+            providerVersionName = null,
+            source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
+        )).copy(
+            status = WebViewCompatibilityChecker.Status.BLOCK,
+            source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
+        )
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -269,11 +339,13 @@ class CapacitorMainActivity : BridgeActivity() {
             }
             FocusModeForegroundService.ACTION_SKIP -> {
                 Log.d("SP_FOCUS", "Skip action received from focus mode notification")
+                FocusModeNotificationHelper.cancelCompletionNotification(this)
                 callJSInterfaceFunctionIfExists("next", "onFocusSkip$")
                 return
             }
             FocusModeForegroundService.ACTION_COMPLETE -> {
                 Log.d("SP_FOCUS", "Complete action received from focus mode notification")
+                FocusModeNotificationHelper.cancelCompletionNotification(this)
                 callJSInterfaceFunctionIfExists("next", "onFocusComplete$")
                 return
             }
@@ -283,13 +355,20 @@ class CapacitorMainActivity : BridgeActivity() {
         if (Intent.ACTION_SEND == intent.action && intent.type != null) {
             if (intent.type?.startsWith("text/") == true) {
                 val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: "Shared Content"
+                // Leave title/subject empty when absent so the frontend can derive a
+                // meaningful title from the URL or note content. Defaulting to a literal
+                // "Shared Content" here masks that derivation (issue: blank shared tasks).
+                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: ""
+                val sharedSubject = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: ""
                 Log.d("SP_SHARE", "Shared text: $sharedText")
                 Log.d("SP_SHARE", "Shared title: $sharedTitle")
+                Log.d("SP_SHARE", "Shared subject: $sharedSubject")
 
-                if (sharedText != null) {
+                // Ignore empty/blank shares — they only produce useless blank tasks.
+                if (!sharedText.isNullOrBlank()) {
                     val json = JSONObject()
                     json.put("title", sharedTitle)
+                    json.put("subject", sharedSubject)
                     val type = if (sharedText.startsWith("http")) "LINK" else "NOTE"
                     json.put("type", type)
                     json.put("path", sharedText)
@@ -357,8 +436,17 @@ class CapacitorMainActivity : BridgeActivity() {
     override fun onDestroy() {
         startupOverlayManager?.dismiss()
         startupOverlayManager = null
+        if (isTimerCompleteReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(timerCompleteReceiver)
+            isTimerCompleteReceiverRegistered = false
+        }
+        if (isForegroundServiceFailureReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                foregroundServiceFailureReceiver
+            )
+            isForegroundServiceFailureReceiverRegistered = false
+        }
         super.onDestroy()
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(timerCompleteReceiver)
     }
 
     companion object {

@@ -24,7 +24,8 @@ import { MetricState } from '../../features/metric/metric.model';
 import { GlobalConfigState } from '../../features/config/global-config.model';
 import { AppDataComplete } from '../model/model-config';
 import { ValidationResult } from '../core/types/sync.types';
-import { OpLog } from '../../core/log';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
+import { getValidationFailureLogMeta } from './validation-log-meta';
 import {
   PluginMetaDataState,
   PluginUserDataState,
@@ -58,7 +59,7 @@ const _validateSection = createValidate<SectionState>();
 export const validateAllData = <R>(
   d: AppDataComplete | R,
 ): ValidationResult<AppDataComplete> => {
-  const r = _wrapValidate(_validateAllData(d));
+  const r = _wrapValidate(_validateAllData(d), d, false, 'appData');
   return r as ValidationResult<AppDataComplete>;
 
   // unfortunately that is quite a bit slower
@@ -81,35 +82,59 @@ export const appDataValidators: {
     data: AppDataComplete[K] | R,
   ) => ValidationResult<AppDataComplete[K] | R>;
 } = {
-  task: <R>(d: R | TaskState) => _wrapValidate(_validateTask(d), d, true),
+  task: <R>(d: R | TaskState) => _wrapValidate(_validateTask(d), d, true, 'task'),
   taskRepeatCfg: <R>(d: R | TaskRepeatCfgState) =>
-    _wrapValidate(_validateTaskRepeatCfg(d), d, true),
-  archiveYoung: <R>(d: R | ArchiveModel) => validateArchiveModel(d),
-  archiveOld: <R>(d: R | ArchiveModel) => validateArchiveModel(d),
-  project: <R>(d: R | ProjectState) => _wrapValidate(_validateProject(d), d, true),
-  menuTree: <R>(d: R | MenuTreeState) => _wrapValidate(_validateMenuTree(d), d, false),
-  tag: <R>(d: R | TagState) => _wrapValidate(_validateTag(d), d, true),
+    _wrapValidate(_validateTaskRepeatCfg(d), d, true, 'taskRepeatCfg'),
+  archiveYoung: <R>(d: R | ArchiveModel) => validateArchiveModel(d, 'archiveYoung'),
+  archiveOld: <R>(d: R | ArchiveModel) => validateArchiveModel(d, 'archiveOld'),
+  project: <R>(d: R | ProjectState) =>
+    _wrapValidate(_validateProject(d), d, true, 'project'),
+  menuTree: <R>(d: R | MenuTreeState) =>
+    _wrapValidate(_validateMenuTree(d), d, false, 'menuTree'),
+  tag: <R>(d: R | TagState) => _wrapValidate(_validateTag(d), d, true, 'tag'),
   simpleCounter: <R>(d: R | SimpleCounterState) =>
-    _wrapValidate(_validateSimpleCounter(d), d, true),
-  note: (d) => _wrapValidate(_validateNote(d), d, true),
-  reminders: <R>(d: R | Reminder[]) => _wrapValidate(_validateReminders(d)),
-  planner: <R>(d: R | PlannerState) => _wrapValidate(_validatePlanner(d)),
-  boards: <R>(d: R | BoardsState) => _wrapValidate(_validateBoards(d)),
-  issueProvider: (d) => _wrapValidate(_validateIssueProvider(d), d, true),
-  metric: <R>(d: R | MetricState) => _wrapValidate(_validateMetric(d), d, true),
-  globalConfig: <R>(d: R | GlobalConfigState) => _wrapValidate(_validateGlobalConfig(d)),
-  timeTracking: <R>(d: R | TimeTrackingState) => _wrapValidate(_validateTimeTracking(d)),
+    _wrapValidate(_validateSimpleCounter(d), d, true, 'simpleCounter'),
+  note: (d) => _wrapValidate(_validateNote(d), d, true, 'note'),
+  reminders: <R>(d: R | Reminder[]) =>
+    _wrapValidate(_validateReminders(d), d, false, 'reminders'),
+  planner: <R>(d: R | PlannerState) =>
+    _wrapValidate(_validatePlanner(d), d, false, 'planner'),
+  boards: <R>(d: R | BoardsState) =>
+    _wrapValidate(_validateBoards(d), d, false, 'boards'),
+  issueProvider: (d) =>
+    _wrapValidate(_validateIssueProvider(d), d, true, 'issueProvider'),
+  metric: <R>(d: R | MetricState) => _wrapValidate(_validateMetric(d), d, true, 'metric'),
+  globalConfig: <R>(d: R | GlobalConfigState) =>
+    _wrapValidate(_validateGlobalConfig(d), d, false, 'globalConfig'),
+  timeTracking: <R>(d: R | TimeTrackingState) =>
+    _wrapValidate(_validateTimeTracking(d), d, false, 'timeTracking'),
   pluginUserData: <R>(d: R | PluginUserDataState) =>
-    _wrapValidate(_validatePluginUserData(d)),
+    _wrapValidate(_validatePluginUserData(d), d, false, 'pluginUserData'),
   pluginMetadata: <R>(d: R | PluginMetaDataState) =>
-    _wrapValidate(_validatePluginMetadata(d)),
-  section: <R>(d: R | SectionState) => _wrapValidate(_validateSection(d), d, true),
+    _wrapValidate(_validatePluginMetadata(d), d, false, 'pluginMetadata'),
+  section: <R>(d: R | SectionState) =>
+    _wrapValidate(_validateSection(d), d, true, 'section'),
 } as const;
 
-const validateArchiveModel = <R>(d: ArchiveModel | R): ValidationResult<ArchiveModel> => {
+const logValidationFailure = <R>(
+  context: string,
+  result: ValidationResult<R>,
+  inputData?: unknown,
+  isEntityCheck = false,
+): void => {
+  OP_LOG_SYNC_LOGGER.log(
+    '[validation-fn] Validation failed',
+    getValidationFailureLogMeta({ context, result, inputData, isEntityCheck }),
+  );
+};
+
+const validateArchiveModel = <R>(
+  d: ArchiveModel | R,
+  context: 'archiveYoung' | 'archiveOld',
+): ValidationResult<ArchiveModel> => {
   const r = _validateArchive(d);
   if (!r.success) {
-    OpLog.log('Validation failed', (r as any)?.errors, r.data);
+    logValidationFailure(context, r, d);
   }
   if (!isEntityStateConsistent((d as ArchiveModel).task)) {
     return {
@@ -130,16 +155,17 @@ export const validateAppDataProperty = <K extends keyof AppDataComplete>(
 
 const _wrapValidate = <R>(
   result: ValidationResult<R>,
-  d?: R,
+  d?: unknown,
   isEntityCheck = false,
+  context = 'unknown',
 ): ValidationResult<R> => {
   if (!result.success) {
-    OpLog.log('Validation failed', (result as any)?.errors, result, d);
+    logValidationFailure(context, result, d, isEntityCheck);
   }
   if (isEntityCheck && !isEntityStateConsistent(d as any)) {
     return {
       success: false,
-      data: d,
+      data: d as R,
       errors: [{ expected: 'Valid Entity State', path: '.', value: d }],
     };
   }

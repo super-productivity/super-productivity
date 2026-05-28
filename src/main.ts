@@ -26,7 +26,11 @@ import { DataInitStateService } from './app/core/data-init/data-init-state.servi
 import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
 import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import {
+  HTTP_INTERCEPTORS,
+  provideHttpClient,
+  withInterceptorsFromDi,
+} from '@angular/common/http';
 import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
@@ -54,8 +58,7 @@ import {
   withPreloading,
 } from '@angular/router';
 import { APP_ROUTES } from './app/app.routes';
-import { StoreModule } from '@ngrx/store';
-// import { Store } from '@ngrx/store'; // #6230: uncomment if re-enabling __e2eTestHelpers below
+import { StoreModule, Store } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
@@ -77,8 +80,10 @@ import { ShortTimePipe } from './app/ui/pipes/short-time.pipe';
 import { BackgroundTask } from '@capawesome/capacitor-background-task';
 import { PLUGIN_INITIALIZER_PROVIDER } from './app/plugins/plugin-initializer';
 import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-menu/mat-menu-touch-monkey-patch';
-import { Log } from './app/core/log';
+import { Log, SyncLog } from './app/core/log';
+import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
+import { TaskService } from './app/features/tasks/task.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
@@ -86,6 +91,7 @@ import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
 import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapter';
 import { unlockAudioContext } from './app/util/audio-context';
+import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
 
 if (environment.production || environment.stage) {
   enableProdMode();
@@ -100,6 +106,18 @@ let appInjector: Injector | null = null;
 // Register one-time user gesture listener to unlock AudioContext.
 // Required on iOS/Android where AudioContext starts suspended.
 unlockAudioContext();
+
+// Surface a deprecation warning the first time legacy PBKDF2 ciphertext is
+// decrypted in this session. The encryption layer invokes this handler on
+// every legacy decrypt; we throttle to one log per session.
+let _hasWarnedLegacyKdf = false;
+setLegacyKdfWarningHandler(() => {
+  if (_hasWarnedLegacyKdf) return;
+  _hasWarnedLegacyKdf = true;
+  SyncLog.log(
+    '[DEPRECATION] Legacy PBKDF2 encryption detected. Consider re-syncing to migrate to Argon2id.',
+  );
+});
 
 bootstrapApplication(AppComponent, {
   providers: [
@@ -176,6 +194,11 @@ bootstrapApplication(AppComponent, {
     ),
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideHttpClient(withInterceptorsFromDi()),
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: NetworkRetryInterceptorService,
+      multi: true,
+    },
     LocaleDatePipe,
     ShortTimeHtmlPipe,
     ShortTimePipe,
@@ -287,19 +310,19 @@ bootstrapApplication(AppComponent, {
 }).then((appRef) => {
   appInjector = appRef.injector;
 
-  // #6230: Expose store and HydrationStateService for e2e tests in dev mode only.
-  // Commented out because the tests that use it (Test A and B in
-  // e2e/tests/recurring/repeat-task-day-change-bug-6230.spec.ts) are also commented out.
-  // Uncomment both if investigating #6230 further. Also uncomment the Store import above.
-  // if (!environment.production && !environment.stage) {
-  //   const storeRef = appRef.injector.get(Store);
-  //   import('./app/op-log/apply/hydration-state.service').then((m) => {
-  //     (window as any).__e2eTestHelpers = {
-  //       store: storeRef,
-  //       hydrationState: appRef.injector.get(m.HydrationStateService),
-  //     };
-  //   });
-  // }
+  // Expose store + HydrationStateService for e2e tests in dev/stage builds.
+  // Used by the screenshot pipeline to flip locale / customTheme inside a
+  // single session (see e2e/store-screenshots/helpers.ts) and by #6230
+  // recurring-task tests. Stripped from production via the env guard.
+  if (!environment.production && !environment.stage) {
+    const storeRef = appRef.injector.get(Store);
+    import('./app/op-log/apply/hydration-state.service').then((m) => {
+      (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
+        store: storeRef,
+        hydrationState: appRef.injector.get(m.HydrationStateService),
+      };
+    });
+  }
 
   // Dismiss native startup overlay after all data is loaded (Android only)
   if (IS_ANDROID_WEB_VIEW) {
@@ -474,6 +497,10 @@ if (IS_IOS_NATIVE) {
     }
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
+        // Dispatch any accumulated tracked time so it is enqueued before the
+        // op-log drain below. iOS suspends the WebView seconds after this, so
+        // both the dispatch and the persist must happen inside this budget.
+        appInjector?.get(TaskService).flushAccumulatedTimeSpent();
         await flushPendingOperations('iOS');
       } catch (e) {
         Log.err('iOS background: operation flush failed', e);

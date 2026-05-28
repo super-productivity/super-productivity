@@ -19,12 +19,17 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
 
 export interface ElectronAPI {
   on(
     channel: string,
     listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
   ): void;
+
+  // SYNC
+  // ----
+  getDistChannel(): ElectronDistChannel | null;
 
   // INVOKE
   // ------
@@ -59,7 +64,12 @@ export interface ElectronAPI {
     properties: string[];
     title?: string;
     defaultPath?: string;
+    filters?: { name: string; extensions: string[] }[];
   }): Promise<string[] | undefined>;
+
+  toFileUrl(filePath: string): Promise<string>;
+
+  readLocalImageAsDataUrl(filePathOrUrl: string): Promise<string | null>;
 
   // checkDirExists(dirPath: string): Promise<true | Error>;
 
@@ -90,6 +100,8 @@ export interface ElectronAPI {
   isGnomeDesktop(): boolean;
 
   isMacOS(): boolean;
+
+  isAppleSilicon(): boolean;
 
   isSnap(): boolean;
 

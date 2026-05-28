@@ -18,15 +18,20 @@ export const mapScheduleDaysToScheduleEvents = (
     beyondBudgetDays[dayIndex] = day.beyondBudgetTasks.map((taskPlannedForDay) => {
       const timeLeft = getTimeLeftForTask(taskPlannedForDay);
       const timeLeftInHours = timeLeft / 1000 / 60 / 60;
-      const rowSpan = Math.max(Math.round(timeLeftInHours * FH), 1);
+      const plannedForDay =
+        (taskPlannedForDay as TaskWithPlannedForDayIndication).plannedForDay ||
+        taskPlannedForDay.dueDay ||
+        day.dayDate;
       return {
         id: taskPlannedForDay.id,
-        dayOfMonth: undefined,
+        dayOfMonth: getDayOfMonth(plannedForDay),
         data: taskPlannedForDay,
         type: SVEType.TaskPlannedForDay,
-        style: `height: ${rowSpan * 8}px`,
+        style: '',
         timeLeftInHours,
         startHours: 0,
+        plannedForDay,
+        isBeyondBudget: true,
       };
     });
 
@@ -49,12 +54,9 @@ export const mapScheduleDaysToScheduleEvents = (
         const rowSpan = Math.max(1, Math.round(timeLeftInHours * FH));
 
         eventsFlat.push({
-          dayOfMonth:
-            ((entry.data as TaskWithPlannedForDayIndication)?.plannedForDay &&
-              dateStrToUtcDate(
-                (entry.data as TaskWithPlannedForDayIndication)?.plannedForDay,
-              ).getDate()) ||
-            undefined,
+          dayOfMonth: getDayOfMonth(
+            (entry.data as TaskWithPlannedForDayIndication)?.plannedForDay,
+          ),
           id: entry.id,
           type: entry.type as SVEType,
           startHours: hoursToday,
@@ -62,6 +64,7 @@ export const mapScheduleDaysToScheduleEvents = (
           style: `grid-column: ${dayIndex + 2};  grid-row: ${startRow} / span ${rowSpan}`,
           data: entry.data,
           plannedForDay: entry.plannedForDay,
+          isBeyondBudget: entry.isBeyondBudget,
         });
 
         let overlapCount = 0;
@@ -98,3 +101,6 @@ export const mapScheduleDaysToScheduleEvents = (
 
   return { eventsFlat, beyondBudgetDays };
 };
+
+const getDayOfMonth = (dayDate: string | undefined): number | undefined =>
+  dayDate ? dateStrToUtcDate(dayDate).getDate() : undefined;

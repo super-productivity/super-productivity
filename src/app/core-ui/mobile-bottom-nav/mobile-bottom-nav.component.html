@@ -33,14 +33,16 @@
     <mat-icon>add</mat-icon>
   </button>
 
-  <button
-    mat-button
-    class="nav-button"
-    [matMenuTriggerFor]="panelsMenu"
-    [attr.aria-label]="T.MH.SIDE_PANEL_MENU | translate"
-  >
-    <mat-icon>bottom_panel_open</mat-icon>
-  </button>
+  @if (hasSidePanelMenuItems()) {
+    <button
+      mat-button
+      class="nav-button"
+      [matMenuTriggerFor]="panelsMenu"
+      [attr.aria-label]="T.MH.SIDE_PANEL_MENU | translate"
+    >
+      <mat-icon>bottom_panel_open</mat-icon>
+    </button>
+  }
 
   <button
     mat-button
@@ -69,23 +71,29 @@
     </button>
   }
 
-  <button
-    mat-menu-item
-    [disabled]="!isRouteWithSidePanel()"
-    [class.active]="isShowIssuePanel()"
-    (click)="toggleIssuePanel()"
-  >
-    <mat-icon>webhook</mat-icon>
-    <span>{{ T.BN.SHOW_ISSUE_PANEL | translate }}</span>
-  </button>
+  @if (isIssuesPanelEnabled()) {
+    <button
+      mat-menu-item
+      class="e2e-toggle-issue-provider-panel"
+      [disabled]="!isRouteWithSidePanel()"
+      [class.active]="isShowIssuePanel()"
+      (click)="toggleIssuePanel()"
+    >
+      <mat-icon>webhook</mat-icon>
+      <span>{{ T.BN.SHOW_ISSUE_PANEL | translate }}</span>
+    </button>
+  }
 
-  <button
-    mat-menu-item
-    [disabled]="!isRouteWithSidePanel()"
-    [class.active]="isShowNotes()"
-    (click)="toggleNotes()"
-  >
-    <mat-icon>comment</mat-icon>
-    <span>{{ T.BN.SHOW_NOTES | translate }}</span>
-  </button>
+  @if (isProjectNotesEnabled()) {
+    <button
+      mat-menu-item
+      class="e2e-toggle-notes-btn"
+      [disabled]="!isRouteWithSidePanel()"
+      [class.active]="isShowNotes()"
+      (click)="toggleNotes()"
+    >
+      <mat-icon>comment</mat-icon>
+      <span>{{ T.BN.SHOW_NOTES | translate }}</span>
+    </button>
+  }
 </mat-menu>

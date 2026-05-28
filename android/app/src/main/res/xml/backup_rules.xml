@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+  <!-- Prevent restored legacy launch_mode from pinning fresh installs to online mode. -->
+  <exclude
+    domain="sharedpref"
+    path="com.superproductivity.superproductivity_preferences.xml" />
+</full-backup-content>

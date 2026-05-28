@@ -16,6 +16,7 @@ import { INBOX_PROJECT } from '../../features/project/project.const';
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { IValidation } from 'typia';
 import { OpLog } from '../../core/log';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { repairMenuTree } from './repair-menu-tree';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { RepairSummary } from '../core/operation.types';
@@ -193,14 +194,22 @@ const _fixInvalidDueDateStrings = (
       const t = taskState.entities[id] as TaskCopy;
       if (!t) continue;
       if (typeof t.dueDay === 'string' && !isDBDateStr(t.dueDay)) {
-        OpLog.warn(`[data-repair] Clearing invalid dueDay "${t.dueDay}" on task ${id}`);
+        OP_LOG_SYNC_LOGGER.warn('[data-repair] Clearing invalid task date field', {
+          taskId: id,
+          field: 'dueDay',
+          valueType: 'string',
+          valueStringLength: t.dueDay.length,
+        });
         t.dueDay = undefined;
         fixedCount++;
       }
       if (typeof t.deadlineDay === 'string' && !isDBDateStr(t.deadlineDay)) {
-        OpLog.warn(
-          `[data-repair] Clearing invalid deadlineDay "${t.deadlineDay}" on task ${id}`,
-        );
+        OP_LOG_SYNC_LOGGER.warn('[data-repair] Clearing invalid task date field', {
+          taskId: id,
+          field: 'deadlineDay',
+          valueType: 'string',
+          valueStringLength: t.deadlineDay.length,
+        });
         t.deadlineDay = undefined;
         fixedCount++;
       }

@@ -1,0 +1,37 @@
+<h1 mat-dialog-title>{{ T.F.FINISH_DAY_BEFORE_EXIT.C.TITLE | translate }}</h1>
+<mat-dialog-content>
+  <div class="content">{{ bodyKey | translate: { nr: data.doneTaskCount } }}</div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <div class="wrap-buttons">
+    <button
+      (click)="close('cancel')"
+      mat-button
+      type="button"
+    >
+      <mat-icon>close</mat-icon>
+      {{ T.F.FINISH_DAY_BEFORE_EXIT.C.DONT_QUIT | translate }}
+    </button>
+    <button
+      (click)="close('quit')"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>exit_to_app</mat-icon>
+      {{ T.F.FINISH_DAY_BEFORE_EXIT.C.QUIT | translate }}
+    </button>
+    <button
+      (click)="close('finish-day')"
+      e2e="finishDayBtn"
+      class="submit-button"
+      color="primary"
+      mat-stroked-button
+      type="button"
+      cdkFocusInitial
+    >
+      <mat-icon>check</mat-icon>
+      {{ T.F.FINISH_DAY_BEFORE_EXIT.C.FINISH_DAY | translate }}
+    </button>
+  </div>
+</mat-dialog-actions>

@@ -107,6 +107,30 @@ const normalizeTimeSpentOnDay = (state: TaskState): TaskState => {
   return { ...state, entities };
 };
 
+const normalizeSubTaskIds = (state: TaskState): TaskState => {
+  const parentIdsWithDuplicates: string[] = [];
+  for (const id of state.ids as string[]) {
+    const task = state.entities[id];
+    if (task?.subTaskIds && new Set(task.subTaskIds).size !== task.subTaskIds.length) {
+      parentIdsWithDuplicates.push(id);
+    }
+  }
+  if (parentIdsWithDuplicates.length === 0) return state;
+
+  const entities: TaskState['entities'] = { ...state.entities };
+  for (const id of parentIdsWithDuplicates) {
+    const task = state.entities[id];
+    if (task) {
+      entities[id] = {
+        ...task,
+        subTaskIds: unique(task.subTaskIds),
+      };
+    }
+  }
+
+  return { ...state, entities };
+};
+
 // REDUCER
 // -------
 export const initialTaskState: TaskState = taskAdapter.getInitialState({
@@ -135,13 +159,15 @@ export const taskReducer = createReducer<TaskState>(
     const sanitized = hasOrphans
       ? { ...task, ids: ids.filter((id) => !!task.entities[id]) }
       : task;
-    return normalizeTimeSpentOnDay({
-      ...sanitized,
-      currentTaskId: null,
-      selectedTaskId: null,
-      lastCurrentTaskId: task.currentTaskId,
-      isDataLoaded: true,
-    } as TaskState);
+    return normalizeSubTaskIds(
+      normalizeTimeSpentOnDay({
+        ...sanitized,
+        currentTaskId: null,
+        selectedTaskId: null,
+        lastCurrentTaskId: task.currentTaskId,
+        isDataLoaded: true,
+      } as TaskState),
+    );
   }),
 
   on(TaskSharedActions.deleteProject, (state, { allTaskIds }) => {
@@ -155,6 +181,13 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(TimeTrackingActions.addTimeSpent, (state, { task, date, duration }) => {
+    // NaN/Infinity → JSON.stringify → null → auto-fix zeroes the day. Catch source.
+    if (!Number.isFinite(duration)) {
+      devError(
+        `addTimeSpent: non-finite duration for task ${task.id} on ${date}: ${duration}`,
+      );
+      return state;
+    }
     const currentTimeSpentForTickDay =
       (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
     return updateTimeSpentForTask(
@@ -180,6 +213,12 @@ export const taskReducer = createReducer<TaskState>(
     const task = state.entities[taskId];
     if (!task) {
       TaskLog.warn(`[syncTimeSpent] Task ${taskId} not found, skipping`);
+      return state;
+    }
+    if (!Number.isFinite(duration)) {
+      devError(
+        `syncTimeSpent (remote): non-finite duration for task ${taskId} on ${date}: ${duration}`,
+      );
       return state;
     }
 
@@ -257,6 +296,19 @@ export const taskReducer = createReducer<TaskState>(
         selectedTaskId: id,
       };
     }
+
+    const isExplicitTargetPanel =
+      !!taskDetailTargetPanel &&
+      taskDetailTargetPanel !== TaskDetailTargetPanel.Default &&
+      taskDetailTargetPanel !== TaskDetailTargetPanel.DONT_OPEN_PANEL;
+
+    if (id && id === state.selectedTaskId && isExplicitTargetPanel) {
+      return {
+        ...state,
+        taskDetailTargetPanel,
+      };
+    }
+
     return {
       ...state,
       taskDetailTargetPanel:
@@ -542,6 +594,12 @@ export const taskReducer = createReducer<TaskState>(
       state,
     );
 
+    // Keep this guard at the reducer boundary: normal creators generate fresh IDs,
+    // but op-log replay/import or direct action dispatch can replay the same task ID.
+    const parentSubTaskIds = parentTask.subTaskIds.includes(task.id)
+      ? parentTask.subTaskIds
+      : [...parentTask.subTaskIds, task.id];
+
     const stateWithParentTask: TaskState = {
       ...stateCopy,
       // update current task to new sub task if parent was current before
@@ -551,7 +609,7 @@ export const taskReducer = createReducer<TaskState>(
         ...stateCopy.entities,
         [parentId]: {
           ...parentTask,
-          subTaskIds: [...parentTask.subTaskIds, task.id],
+          subTaskIds: parentSubTaskIds,
         },
       },
     };

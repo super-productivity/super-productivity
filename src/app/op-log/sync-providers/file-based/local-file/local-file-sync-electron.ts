@@ -1,114 +1,38 @@
-import { LocalFileSyncBase } from './local-file-sync-base';
+import {
+  LocalFileSyncElectron as PackageLocalFileSyncElectron,
+  type LocalFileSyncElectronDeps,
+} from '@sp/sync-providers/local-file';
 import { IS_ELECTRON } from '../../../../app.constants';
-import { SyncLog } from '../../../../core/log';
+import type { ElectronAPI } from '../../../../../../electron/electronAPI';
+import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
+import { SyncCredentialStore } from '../../credential-store.service';
+import { SyncProviderId } from '../../provider.const';
 import { ElectronFileAdapter } from './electron-file-adapter';
-import { LocalFileSyncPrivateCfg } from '../../../core/types/sync.types';
 
-export class LocalFileSyncElectron extends LocalFileSyncBase {
-  private static readonly L = 'LocalFileSyncElectron';
-
-  constructor() {
-    super(new ElectronFileAdapter());
+const getElectronApi = (): ElectronAPI => {
+  const maybeWindow = window as Window & { ea?: ElectronAPI };
+  if (!maybeWindow.ea) {
+    throw new Error('Electron API is not available');
   }
+  return maybeWindow.ea;
+};
 
-  async isReady(): Promise<boolean> {
-    if (!IS_ELECTRON) {
-      throw new Error('LocalFileSyncElectron is only available in electron');
+const buildLocalFileSyncElectronDeps = (): LocalFileSyncElectronDeps => ({
+  logger: OP_LOG_SYNC_LOGGER,
+  fileAdapter: new ElectronFileAdapter(),
+  credentialStore: new SyncCredentialStore(
+    SyncProviderId.LocalFile,
+  ) as LocalFileSyncElectronDeps['credentialStore'],
+  isElectron: IS_ELECTRON,
+  checkDirExists: async (dirPath) => {
+    const r = await getElectronApi().checkDirExists({ dirPath });
+    if (r instanceof Error) {
+      throw r;
     }
-    const privateCfg = await this.privateCfg.load();
-    return !!privateCfg?.syncFolderPath;
-  }
+    return r;
+  },
+  pickDirectory: () => getElectronApi().pickDirectory(),
+});
 
-  async setPrivateCfg(privateCfg: LocalFileSyncPrivateCfg): Promise<void> {
-    await this.privateCfg.setComplete(privateCfg);
-  }
-
-  async getFilePath(targetPath: string): Promise<string> {
-    const folderPath = await this._getFolderPath();
-    // Normalize path: remove leading slash if present in targetPath
-    const normalizedPath = targetPath.startsWith('/')
-      ? targetPath.substring(1)
-      : targetPath;
-    return `${folderPath}/${normalizedPath}`;
-  }
-
-  private async _checkDirAndOpenPickerIfNotExists(): Promise<void> {
-    SyncLog.normal(
-      `${LocalFileSyncElectron.L}.${this._checkDirAndOpenPickerIfNotExists.name}`,
-    );
-
-    try {
-      // Read directly from config to avoid mutual recursion with _getFolderPath()
-      const privateCfg = await this.privateCfg.load();
-      const folderPath = privateCfg?.syncFolderPath;
-
-      if (!folderPath) {
-        SyncLog.critical(
-          `${LocalFileSyncElectron.L} - No sync folder configured, opening picker`,
-        );
-        await this.pickDirectory();
-        return;
-      }
-
-      const isDirExists = await this._checkDirExists(folderPath);
-      if (!isDirExists) {
-        SyncLog.critical(
-          `${LocalFileSyncElectron.L} - No valid directory, opening picker`,
-        );
-        await this.pickDirectory();
-      }
-    } catch (err) {
-      SyncLog.error(
-        `${LocalFileSyncElectron.L}.${this._checkDirAndOpenPickerIfNotExists.name}() error`,
-        err,
-      );
-      await this.pickDirectory();
-    }
-  }
-
-  private async _getFolderPath(): Promise<string> {
-    const privateCfg = await this.privateCfg.load();
-    const folderPath = privateCfg?.syncFolderPath;
-    if (!folderPath) {
-      await this._checkDirAndOpenPickerIfNotExists();
-      const updatedCfg = await this.privateCfg.load();
-      const updatedPath = updatedCfg?.syncFolderPath;
-      if (!updatedPath) {
-        throw new Error('No sync folder path configured after directory picker');
-      }
-      return updatedPath;
-    }
-    return folderPath;
-  }
-
-  private async _checkDirExists(dirPath: string): Promise<boolean> {
-    try {
-      const r = await (window as any).ea.checkDirExists({ dirPath });
-      if (r instanceof Error) {
-        throw r;
-      }
-      return r;
-    } catch (e) {
-      SyncLog.critical(
-        `${LocalFileSyncElectron.L}.${this._checkDirExists.name}() error`,
-        e,
-      );
-      return false;
-    }
-  }
-
-  async pickDirectory(): Promise<string | void> {
-    SyncLog.normal(`${LocalFileSyncElectron.L}.pickDirectory()`);
-
-    try {
-      const dir = await (window as any).ea.pickDirectory();
-      if (dir) {
-        await this.privateCfg.upsertPartial({ syncFolderPath: dir });
-      }
-      return dir;
-    } catch (e) {
-      SyncLog.critical(`${LocalFileSyncElectron.L}.pickDirectory() error`, e);
-      throw e;
-    }
-  }
-}
+export const createLocalFileSyncElectron = (): PackageLocalFileSyncElectron =>
+  new PackageLocalFileSyncElectron(buildLocalFileSyncElectronDeps());

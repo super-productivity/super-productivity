@@ -7,6 +7,7 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from '../sync/sync-session-validation.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { Operation, OpType, ActionType, SyncImportReason } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
@@ -22,6 +23,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
+import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/normalize-start-of-next-day-config';
 
 /**
  * Handles hydration after remote sync downloads.
@@ -43,6 +45,7 @@ export class SyncHydrationService {
   private clientIdService = inject(ClientIdService);
   private vectorClockService = inject(VectorClockService);
   private validateStateService = inject(ValidateStateService);
+  private sessionValidation = inject(SyncSessionValidationService);
   private snackService = inject(SnackService);
   private archiveDbAdapter = inject(ArchiveDbAdapter);
 
@@ -214,15 +217,36 @@ export class SyncHydrationService {
         lastSeq = await this.opLogStore.getLastSeq();
       }
 
-      // 7. Validate and repair synced data before dispatching
-      // This fixes stale task references (e.g., tags/projects referencing deleted tasks)
-      let dataToLoad = syncedData as AppDataComplete;
+      // 7. Validate and repair synced data before dispatching.
+      // This fixes stale task references (e.g., tags/projects referencing deleted tasks).
+      // If the validator reports the data is *not* valid (and repair didn't
+      // succeed), flip the SyncSessionValidationService latch so the wrapper
+      // can refuse IN_SYNC. Without this, snapshot hydration would silently
+      // accept corrupt remote data — a gap not covered by validateAfterSync
+      // since this path bypasses processRemoteOps entirely. (#7330)
+      const downloadedAppData = syncedData as AppDataComplete;
+      const normalizedGlobalConfig = normalizeGlobalConfigStartOfNextDay(
+        downloadedAppData.globalConfig,
+      );
+      let dataToLoad = normalizedGlobalConfig
+        ? {
+            ...downloadedAppData,
+            globalConfig: normalizedGlobalConfig,
+          }
+        : downloadedAppData;
       const validationResult =
         await this.validateStateService.validateAndRepair(dataToLoad);
       if (validationResult.wasRepaired && validationResult.repairedState) {
         // Cast to any since Record<string, unknown> doesn't directly map to AppDataComplete
         dataToLoad = validationResult.repairedState as any;
         OpLog.normal('SyncHydrationService: Repaired synced data before loading');
+      }
+      if (!validationResult.isValid) {
+        OpLog.err(
+          'SyncHydrationService: Validation failed for hydrated remote snapshot — flagging session',
+          { error: validationResult.error },
+        );
+        this.sessionValidation.setFailed();
       }
 
       // 7b. Restore local-only sync settings into dataToLoad

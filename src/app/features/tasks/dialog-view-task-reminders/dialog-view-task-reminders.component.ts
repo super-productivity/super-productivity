@@ -37,6 +37,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { DateService } from '../../../core/date/date.service';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
@@ -73,6 +74,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private _reminderService = inject(ReminderService);
+  private _dateService = inject(DateService);
   data = inject<{
     reminders: TaskWithReminderData[];
   }>(MAT_DIALOG_DATA);
@@ -175,6 +177,8 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: [task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         parentTaskMap: {
           [task.id]: task.parentId,
         },
@@ -335,6 +339,8 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: selectedTasks.map((t) => t.id),
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         parentTaskMap: selectedTasks.reduce((acc, next: Task) => {
           return { ...acc, [next.id as string]: next.parentId };
         }, {}),

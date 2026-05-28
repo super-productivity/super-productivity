@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import { sendLoginMagicLinkEmail, sendVerificationEmail } from './email';
 import { loadConfigFromEnv } from './config';
 import { Prisma } from '@prisma/client';
+import { authCache } from './auth-cache';
 
 // Auth constants
 const MIN_JWT_SECRET_LENGTH = 32;
@@ -63,6 +64,11 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
     },
   });
 
+  // AUTH_CACHE_INVALIDATION: drop any negative (isVerified:false) entry so the
+  // now-verified user isn't denied for up to the cache TTL, and so the cache
+  // stays correct if a verified -> unverified path is ever added.
+  authCache.invalidate(user.id);
+
   Logger.info(`User verified (ID: ${user.id})`);
   return true;
 };
@@ -72,10 +78,14 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
  * Call this when the user explicitly logs out all devices.
  */
 export const revokeAllTokens = async (userId: number): Promise<void> => {
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(userId);
   await prisma.user.update({
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
   });
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(userId);
   Logger.info(`All tokens revoked for user ${userId}`);
 };
 
@@ -87,6 +97,8 @@ export const replaceToken = async (
   userId: number,
   email: string,
 ): Promise<{ token: string; user: { id: number; email: string } }> => {
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(userId);
   // Use transaction to ensure atomicity of version increment and read
   const newTokenVersion = await prisma.$transaction(async (tx) => {
     // Increment token version to invalidate all existing tokens
@@ -97,6 +109,8 @@ export const replaceToken = async (
     });
     return user.tokenVersion;
   });
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(userId);
 
   const token = jwt.sign({ userId, email, tokenVersion: newTokenVersion }, JWT_SECRET, {
     expiresIn: JWT_EXPIRY,
@@ -124,6 +138,13 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
       });
     });
 
+    const tokenVersion = payload.tokenVersion ?? 0;
+    const cachedUser = authCache.get(payload.userId);
+    if (cachedUser && cachedUser.isVerified && cachedUser.tokenVersion === tokenVersion) {
+      return { valid: true, userId: payload.userId, email: payload.email };
+    }
+    const cacheVersionBeforeRead = authCache.getInvalidationVersion(payload.userId);
+
     // Verify user exists, is verified, and token version matches
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
@@ -137,12 +158,17 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
 
     if (!user.isVerified) {
       Logger.warn(`Token verification failed: User ${payload.userId} is not verified`);
+      authCache.setIfCurrent(
+        payload.userId,
+        user.tokenVersion ?? 0,
+        false,
+        cacheVersionBeforeRead,
+      );
       return { valid: false, reason: 'Account unavailable' };
     }
 
     // Check token version - if it doesn't match, the token has been revoked
     // (e.g., user used "Revoke & Replace Token"). Tokens without version are treated as version 0.
-    const tokenVersion = payload.tokenVersion ?? 0;
     const currentVersion = user.tokenVersion ?? 0;
     if (tokenVersion !== currentVersion) {
       Logger.warn(
@@ -155,6 +181,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
       };
     }
 
+    authCache.setIfCurrent(payload.userId, currentVersion, true, cacheVersionBeforeRead);
     return { valid: true, userId: payload.userId, email: payload.email };
   } catch (err) {
     if (err instanceof TokenExpiredError) {
@@ -168,7 +195,8 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
     if (err instanceof JsonWebTokenError) {
       return { valid: false, reason: 'Invalid token' };
     }
-    const errMsg = err instanceof Error ? `[${err.name}] ${err.message}` : 'non-Error value';
+    const errMsg =
+      err instanceof Error ? `[${err.name}] ${err.message}` : 'non-Error value';
     Logger.error(`Token verification failed due to unexpected error: ${errMsg}`);
     throw err;
   }
@@ -349,6 +377,11 @@ export const registerWithMagicLink = async (
         // Send verification email; clean up new user on failure
         const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
         if (!emailSent) {
+          // AUTH_CACHE_INVALIDATION: no invalidate needed here. This only
+          // deletes the user just created above (isVerified: 0). No JWT is
+          // issued for an unverified user, so verifyToken was never called for
+          // it and no authCache entry can exist. Documented to keep the
+          // bracket-every-delete convention auditable.
           await prisma.user.deleteMany({
             where: { email: normalizedEmail, isVerified: 0 },
           });

@@ -153,7 +153,9 @@ describe('TagService', () => {
 
       service.deleteTag('tag-1');
 
-      expect(dispatchSpy).toHaveBeenCalledWith(deleteTag({ id: 'tag-1' }));
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: deleteTag.type, id: 'tag-1' }),
+      );
     });
   });
 
@@ -163,7 +165,9 @@ describe('TagService', () => {
 
       service.removeTag('tag-2');
 
-      expect(dispatchSpy).toHaveBeenCalledWith(deleteTag({ id: 'tag-2' }));
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: deleteTag.type, id: 'tag-2' }),
+      );
     });
   });
 
@@ -173,7 +177,12 @@ describe('TagService', () => {
 
       service.deleteTags(['tag-1', 'tag-2']);
 
-      expect(dispatchSpy).toHaveBeenCalledWith(deleteTags({ ids: ['tag-1', 'tag-2'] }));
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: deleteTags.type,
+          ids: ['tag-1', 'tag-2'],
+        }),
+      );
     });
   });
 

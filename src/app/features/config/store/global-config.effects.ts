@@ -28,6 +28,7 @@ import { UserProfileService } from '../../user-profile/user-profile.service';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
+import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -115,13 +116,17 @@ export class GlobalConfigEffects {
       filter(({ sectionKey }) => sectionKey === 'misc'),
       filter(
         ({ sectionCfg }) =>
-          sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
+          sectionCfg &&
+          (typeof (sectionCfg as MiscConfig).startOfNextDay === 'number' ||
+            typeof (sectionCfg as MiscConfig).startOfNextDayTime === 'string'),
       ),
       withLatestFrom(this._store.select(selectAllTasks)),
       switchMap(([{ sectionCfg }, allTasks]) => {
         const oldTodayStr = this._dateService.todayStr();
+        const miscCfg = normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>);
         this._dateService.setStartOfNextDayDiff(
-          (sectionCfg as MiscConfig).startOfNextDay,
+          miscCfg.startOfNextDayTime,
+          miscCfg.startOfNextDay,
         );
         const newTodayStr = this._dateService.todayStr();
 
@@ -154,8 +159,12 @@ export class GlobalConfigEffects {
       ofType(loadAllData),
       tap(({ appDataComplete }) => {
         const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
-        const startOfNextDay = cfg && cfg.misc && cfg.misc.startOfNextDay;
-        this._dateService.setStartOfNextDayDiff(startOfNextDay);
+        const misc = cfg?.misc ?? DEFAULT_GLOBAL_CONFIG.misc;
+        const normalizedMisc = normalizeStartOfNextDayConfig(misc);
+        this._dateService.setStartOfNextDayDiff(
+          normalizedMisc.startOfNextDayTime,
+          normalizedMisc.startOfNextDay,
+        );
       }),
       map(() =>
         AppStateActions.setTodayString({

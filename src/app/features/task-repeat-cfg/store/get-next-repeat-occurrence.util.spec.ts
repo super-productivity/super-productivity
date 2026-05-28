@@ -264,6 +264,50 @@ describe('getNextRepeatOccurrence()', () => {
     });
   });
 
+  describe('MONTHLY monthlyLastDay (issue #7726)', () => {
+    it('returns the last day of the next month', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: getDbDateStr(new Date(2026, 4, 31)),
+      });
+      testCase(cfg, new Date(2026, 5, 1), new Date(2026, 4, 31), new Date(2026, 5, 30));
+    });
+
+    it('clamps to month-end even when startDate day-of-month is 30', () => {
+      // A recurrence set up in a 30-day month must still hit 31 in long
+      // months — the anchor is decoupled from startDate's day.
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: getDbDateStr(new Date(2026, 5, 30)),
+      });
+      testCase(cfg, new Date(2026, 6, 1), new Date(2026, 5, 30), new Date(2026, 6, 31));
+    });
+
+    it('clamps to February month-end', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: getDbDateStr(new Date(2026, 0, 31)),
+      });
+      testCase(cfg, new Date(2026, 1, 1), new Date(2026, 0, 31), new Date(2026, 1, 28));
+    });
+
+    it('clamps to February 29 in a leap year', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: getDbDateStr(new Date(2024, 0, 31)),
+      });
+      testCase(cfg, new Date(2024, 1, 1), new Date(2024, 0, 31), new Date(2024, 1, 29));
+    });
+  });
+
   describe('MONTHLY Nth weekday (issue #6040)', () => {
     it('returns the first Thursday of next month', () => {
       const startDate = new Date(2026, 0, 1); // Jan 1, 2026 (Thursday)

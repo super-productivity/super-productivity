@@ -72,12 +72,22 @@ export interface TaskRepeatCfgCopy {
   monthlyWeekOfMonth?: MonthlyWeekOfMonth;
   monthlyWeekday?: MonthlyWeekday;
 
+  // MONTHLY-only: when true, the recurrence anchors to the last calendar day
+  // of every month (28/29/30/31) regardless of `startDate`'s day-of-month.
+  // Decouples the anchor from `startDate` so the first occurrence is never
+  // backdated. Mutually exclusive with the Nth-weekday anchor above; if a
+  // malformed payload sets both, the Nth-weekday anchor wins (checked first
+  // by all recurrence calc utils). Issue #7726.
+  monthlyLastDay?: boolean;
+
   // advanced
   notes: string | undefined;
   // ... possible sub tasks & attachments
   shouldInheritSubtasks?: boolean;
   // Base new start date on completion date
   repeatFromCompletionDate?: boolean;
+  // Only create next task after current one is completed (prevents pile-up of uncompleted recurring tasks)
+  waitForCompletion?: boolean;
   // new UX: disable auto update checkbox (auto-update is default)
   disableAutoUpdateSubtasks?: boolean;
   subTaskTemplates?: {
@@ -112,6 +122,7 @@ export const DEFAULT_TASK_REPEAT_CFG: Omit<TaskRepeatCfgCopy, 'id'> = {
   quickSetting: 'DAILY',
   repeatCycle: 'WEEKLY',
   repeatFromCompletionDate: false,
+  waitForCompletion: false,
   monday: true,
   tuesday: true,
   wednesday: true,

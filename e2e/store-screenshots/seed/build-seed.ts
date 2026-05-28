@@ -37,6 +37,16 @@ const BG_LIGHT_URL =
   process.env.SP_SCREENSHOT_BG_LIGHT_URL ??
   'https://images.unsplash.com/photo-1523964977-2014b69c49bc?w=2560&q=85&auto=format';
 const BG_DISABLED = process.env.SP_SCREENSHOT_BG_DISABLE === '1';
+/**
+ * Drives the per-context "Darken/lighten background image for better contrast"
+ * slider (work-context theme `backgroundOverlayOpacity`, default 20%). Bumped
+ * to 80 for screenshots so the bg image dims enough that task content reads
+ * cleanly. Override via `SP_SCREENSHOT_BG_OVERLAY_OPACITY` (0–99).
+ */
+const BG_OVERLAY_OPACITY = Math.max(
+  0,
+  Math.min(99, Number(process.env.SP_SCREENSHOT_BG_OVERLAY_OPACITY ?? '80')),
+);
 
 const toDateStr = (d: Date): string => {
   const pad = (n: number): string => `${n}`.padStart(2, '0');
@@ -57,7 +67,11 @@ const isRecord = (v: unknown): v is AnyRecord =>
 export type SeedOptions = {
   /** Two-letter locale code; written into globalConfig.localization.lng. */
   locale?: string;
-  /** Custom theme id (e.g. 'catppuccin-mocha'); written into globalConfig.misc.customTheme. */
+  /**
+   * Custom theme id (e.g. 'catppuccin-mocha'). Written into LS via the
+   * fixture's addInitScript before the page loads — no field is set on the
+   * imported globalConfig.
+   */
   customTheme?: string;
 };
 
@@ -82,12 +96,10 @@ export const buildSeed = (baseDate: Date, opts: SeedOptions = {}): AnyRecord => 
     gc.localization = { ...(gc.localization as AnyRecord), lng: opts.locale };
   }
 
-  // Custom theme: stored at globalConfig.misc.customTheme; ids defined in
-  // src/app/core/theme/custom-theme.service.ts (e.g. 'catppuccin-mocha').
-  if (opts.customTheme) {
-    const gc = data.globalConfig as AnyRecord;
-    gc.misc = { ...(gc.misc as AnyRecord), customTheme: opts.customTheme };
-  }
+  // Custom theme: the active selection lives in localStorage (LS.CUSTOM_THEME)
+  // and is wired by `fixture.ts` via addInitScript. No write into the seed
+  // is required; `opts.customTheme` flows through to the fixture's init
+  // script, not into the imported globalConfig.
 
   // Planner: materialize @@PLANNER_OFFSET_+N keys into YYYY-MM-DD strings.
   const planner = data.planner as AnyRecord;
@@ -134,21 +146,17 @@ export const buildSeed = (baseDate: Date, opts: SeedOptions = {}): AnyRecord => 
     if (tag.created === 0) tag.created = baseMs;
   }
 
-  // Background images: apply on every work-context theme (projects + tags) so
-  // every scenario picks up the polished bg. Override individual themes in the
-  // template if you want per-context variations.
+  // Background images: only apply to TAG themes (TODAY etc.) — not projects.
+  // Projects should render against their own primary color so contexts like
+  // catppuccin (or any custom theme) read clearly without a wallpaper
+  // fighting them. To re-enable a bg image for a specific project, set it
+  // explicitly in the template.
   const applyBg = (theme: AnyRecord): void => {
     if (BG_DISABLED) return;
     theme.backgroundImageDark = BG_DARK_URL;
     theme.backgroundImageLight = BG_LIGHT_URL;
+    theme.backgroundOverlayOpacity = BG_OVERLAY_OPACITY;
   };
-  const projectEntities = (data.project as AnyRecord).entities as Record<
-    string,
-    AnyRecord
-  >;
-  for (const p of Object.values(projectEntities)) {
-    if (isRecord(p.theme)) applyBg(p.theme);
-  }
   for (const t of Object.values(tagEntities)) {
     if (isRecord(t.theme)) applyBg(t.theme);
   }

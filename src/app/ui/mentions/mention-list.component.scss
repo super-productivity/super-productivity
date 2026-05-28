@@ -19,13 +19,13 @@
   padding: 0.5em 0;
   margin: 0.125em 0 0;
   font-size: 1em;
-  color: #212529;
+  color: var(--text-color);
   text-align: left;
   list-style: none;
-  background-color: #fff;
+  background-color: var(--bg-lightest);
   background-clip: padding-box;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  border-radius: 0.25em;
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--card-border-radius);
 }
 .mention-item {
   display: block;
@@ -33,16 +33,16 @@
   line-height: 1.5em;
   clear: both;
   font-weight: 400;
-  color: #212529;
+  color: var(--text-color);
   text-align: inherit;
   white-space: nowrap;
   background-color: transparent;
   border: 0;
 }
 .mention-active > a {
-  color: #fff;
+  color: var(--c-contrast);
   text-decoration: none;
-  background-color: #337ab7;
+  background-color: var(--c-primary);
   outline: 0;
 }
 .scrollable-menu {

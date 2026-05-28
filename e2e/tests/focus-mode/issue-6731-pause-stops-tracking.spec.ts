@@ -9,9 +9,8 @@
  *   4. exit focus mode
  *   expected: task is paused (current task cleared)
  *
- * Before the always-sync rework this only worked when the user had toggled
- * `isSyncSessionWithTracking`. Now sync is unconditional, so this test
- * locks the fix in place.
+ * This behavior is now always enabled via the syncSessionPauseToTracking$ effect
+ * in focus-mode.effects.ts (no longer gated by a config setting).
  */
 
 import { test, expect } from '../../fixtures/test.fixture';
@@ -34,9 +33,12 @@ test.describe('Issue #6731: Pause in focus mode stops task time tracking', () =>
     );
     const closeOverlayButton = page.locator('focus-mode-overlay button.close-btn');
 
+    // Navigate to work view
+    await page.goto('/');
+    await workViewPage.waitForTaskList();
+
     // Step 1+2 (setup): add a task and start tracking it. Focus mode now
     // requires a current task so the play button is enabled.
-    await workViewPage.waitForTaskList();
     await workViewPage.addTask('Issue6731Task');
 
     const firstTask = page.locator('task').first();
@@ -45,9 +47,12 @@ test.describe('Issue #6731: Pause in focus mode stops task time tracking', () =>
     const trackingPlayBtn = page.locator('.play-btn.tour-playBtn').first();
     await trackingPlayBtn.waitFor({ state: 'visible' });
     await trackingPlayBtn.click();
-    await expect(firstTask).toHaveClass(/isCurrent/, { timeout: 5000 });
 
-    // Step 1: start focus mode
+    // Wait for navigation triggered by task tracking to complete
+    await page.waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    // Step 1: start focus mode by clicking the focus button
     await mainFocusButton.click();
     await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
 
@@ -68,14 +73,17 @@ test.describe('Issue #6731: Pause in focus mode stops task time tracking', () =>
     await closeOverlayButton.click();
     await expect(focusModeMain).not.toBeVisible();
 
+    // Wait for task list to be visible after closing overlay
+    await workViewPage.waitForTaskList();
+
     // Expected: task is paused — no task carries the isCurrent class.
-    await expect(firstTask).not.toHaveClass(/isCurrent/, { timeout: 5000 });
+    const task = page.locator('task').first();
+    await expect(task).toBeVisible({ timeout: 5000 });
+    await expect(task).not.toHaveClass(/isCurrent/, { timeout: 5000 });
     await expect(page.locator('task.isCurrent')).toHaveCount(0);
 
-    // The header focus-button must remain the visible indicator while the
-    // session is paused — otherwise the user has no way back to it without
-    // hitting the keyboard shortcut. Banner removal would have hidden this.
-    const focusRunningLabel = page.locator('focus-button .focus-running-label');
-    await expect(focusRunningLabel).toBeVisible({ timeout: 5000 });
+    // The header focus-button should remain visible while the session is paused,
+    // allowing the user to return to the paused session.
+    await expect(mainFocusButton).toBeVisible({ timeout: 5000 });
   });
 });

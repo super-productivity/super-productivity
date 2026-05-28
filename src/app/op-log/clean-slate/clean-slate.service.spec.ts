@@ -2,19 +2,20 @@ import { TestBed } from '@angular/core/testing';
 import { CleanSlateService } from './clean-slate.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { ClientIdService } from '../../core/util/client-id.service';
-import { PreMigrationBackupService } from './pre-migration-backup.service';
-import { Operation, OpType, OperationLogEntry } from '../core/operation.types';
+import { OpType, OperationLogEntry } from '../core/operation.types';
 import { ActionType } from '../core/action-types.enum';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { OpLog } from '../../core/log';
+import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 describe('CleanSlateService', () => {
   let service: CleanSlateService;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
-  let mockClientIdService: jasmine.SpyObj<ClientIdService>;
-  let mockPreMigrationBackupService: jasmine.SpyObj<PreMigrationBackupService>;
+  let mockOperationWriteFlushService: jasmine.SpyObj<OperationWriteFlushService>;
+  let mockLockService: jasmine.SpyObj<LockService>;
 
   const mockState = {
     task: { ids: [], entities: {} },
@@ -28,30 +29,25 @@ describe('CleanSlateService', () => {
       'getStateSnapshotAsync',
     ]);
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
-      'clearAllOperations',
-      'append',
-      'setVectorClock',
-      'saveStateCache',
+      'runDestructiveStateReplacement',
       'getVectorClock',
       'getUnsynced',
     ]);
-    mockClientIdService = jasmine.createSpyObj('ClientIdService', [
-      'generateNewClientId',
+    mockOperationWriteFlushService = jasmine.createSpyObj('OperationWriteFlushService', [
+      'flushPendingWrites',
     ]);
-    mockPreMigrationBackupService = jasmine.createSpyObj('PreMigrationBackupService', [
-      'createPreMigrationBackup',
-    ]);
+    mockLockService = jasmine.createSpyObj('LockService', ['request']);
 
     TestBed.configureTestingModule({
       providers: [
         CleanSlateService,
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
-        { provide: ClientIdService, useValue: mockClientIdService },
         {
-          provide: PreMigrationBackupService,
-          useValue: mockPreMigrationBackupService,
+          provide: OperationWriteFlushService,
+          useValue: mockOperationWriteFlushService,
         },
+        { provide: LockService, useValue: mockLockService },
       ],
     });
 
@@ -59,56 +55,65 @@ describe('CleanSlateService', () => {
 
     // Setup default mock responses
     mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
-    mockClientIdService.generateNewClientId.and.resolveTo('eNewC');
-    mockPreMigrationBackupService.createPreMigrationBackup.and.resolveTo();
-    mockOpLogStore.clearAllOperations.and.resolveTo();
-    mockOpLogStore.append.and.resolveTo(1);
-    mockOpLogStore.setVectorClock.and.resolveTo();
-    mockOpLogStore.saveStateCache.and.resolveTo();
+    mockOpLogStore.runDestructiveStateReplacement.and.resolveTo();
     mockOpLogStore.getVectorClock.and.resolveTo(null);
     mockOpLogStore.getUnsynced.and.resolveTo([]);
+    mockOperationWriteFlushService.flushPendingWrites.and.resolveTo();
+    mockLockService.request.and.callFake(async (_lockName, fn) => fn());
   });
 
   describe('createCleanSlate', () => {
     it('should create a clean slate successfully', async () => {
       await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
-      // Should create pre-migration backup
-      expect(mockPreMigrationBackupService.createPreMigrationBackup).toHaveBeenCalledWith(
-        'ENCRYPTION_CHANGE',
-      );
-
       // Should get current state (async version to include archives)
       expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
 
-      // Should generate new client ID
-      expect(mockClientIdService.generateNewClientId).toHaveBeenCalled();
+      // Should route through the atomic helper (issues #7709, #7732)
+      expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
+      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
+        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
 
-      // Should clear all operations
-      expect(mockOpLogStore.clearAllOperations).toHaveBeenCalled();
-
-      // Should append SYNC_IMPORT operation
-      expect(mockOpLogStore.append).toHaveBeenCalled();
-      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
+      const appendedOp = args.syncImportOp;
       expect(appendedOp.actionType).toBe(ActionType.LOAD_ALL_DATA);
       expect(appendedOp.opType).toBe(OpType.SyncImport);
       expect(appendedOp.entityType).toBe('ALL');
       expect(appendedOp.payload).toBe(mockState);
-      expect(appendedOp.clientId).toBe('eNewC');
-      expect(appendedOp.vectorClock).toEqual({ eNewC: 1 });
+      // The clientId is freshly minted (generateClientId) — new compact format.
+      // runDestructiveStateReplacement persists it inside its atomic tx.
+      expect(appendedOp.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
+      expect(appendedOp.vectorClock).toEqual({ [appendedOp.clientId]: 1 });
       expect(appendedOp.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    });
 
-      // Should update vector clock
-      expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith({ eNewC: 1 });
-
-      // Should save snapshot
-      expect(mockOpLogStore.saveStateCache).toHaveBeenCalledWith({
-        state: mockState,
-        lastAppliedOpSeq: 0,
-        vectorClock: { eNewC: 1 },
-        compactedAt: jasmine.any(Number),
-        schemaVersion: CURRENT_SCHEMA_VERSION,
+    it('should flush pending writes and hold the op-log lock during replacement', async () => {
+      const callOrder: string[] = [];
+      mockOperationWriteFlushService.flushPendingWrites.and.callFake(async () => {
+        callOrder.push('flush');
       });
+      mockLockService.request.and.callFake(async (lockName, fn) => {
+        callOrder.push(`lock:${lockName}`);
+        const r = await fn();
+        callOrder.push('unlock');
+        return r;
+      });
+      mockStateSnapshotService.getStateSnapshotAsync.and.callFake(async () => {
+        callOrder.push('snapshot');
+        return mockState as any;
+      });
+      mockOpLogStore.runDestructiveStateReplacement.and.callFake(async () => {
+        callOrder.push('replace');
+      });
+
+      await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
+
+      expect(callOrder).toEqual([
+        'flush',
+        `lock:${LOCK_NAMES.OPERATION_LOG}`,
+        'snapshot',
+        'replace',
+        'unlock',
+      ]);
     });
 
     it('should log diagnostic snapshot of prior clock and unsynced ops before mutation', async () => {
@@ -148,54 +153,48 @@ describe('CleanSlateService', () => {
             [OpType.Update]: 1,
           }),
           priorClockSize: 2,
-          priorClock: { ['B_old']: 42, ['B_other']: 7 },
         }),
       );
-      // Order invariant: snapshot reads must precede the destructive clear.
+      // Security C2: vector-clock contents must never be logged — keys are
+      // per-device clientIds and log history is user-exportable.
+      const loggedPayload = opLogSpy.calls.mostRecent().args[1] as Record<
+        string,
+        unknown
+      >;
+      expect('priorClock' in loggedPayload).toBe(false);
+      // Order invariant: diagnostic snapshot reads must precede the
+      // destructive atomic replacement.
       expect(mockOpLogStore.getVectorClock).toHaveBeenCalledBefore(
-        mockOpLogStore.clearAllOperations,
+        mockOpLogStore.runDestructiveStateReplacement,
       );
       expect(mockOpLogStore.getUnsynced).toHaveBeenCalledBefore(
-        mockOpLogStore.clearAllOperations,
+        mockOpLogStore.runDestructiveStateReplacement,
       );
     });
 
     it('should work with MANUAL reason', async () => {
       await service.createCleanSlate('MANUAL', 'PASSWORD_CHANGED');
 
-      expect(mockPreMigrationBackupService.createPreMigrationBackup).toHaveBeenCalledWith(
-        'MANUAL',
-      );
-    });
-
-    it('should continue if pre-migration backup fails', async () => {
-      mockPreMigrationBackupService.createPreMigrationBackup.and.rejectWith(
-        new Error('Backup failed'),
-      );
-
-      // Should not throw - backup failure is non-fatal
-      await expectAsync(
-        service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED'),
-      ).toBeResolved();
-
-      // Should still complete the clean slate
-      expect(mockOpLogStore.clearAllOperations).toHaveBeenCalled();
-      expect(mockOpLogStore.append).toHaveBeenCalled();
+      // Should still complete the destructive replacement with MANUAL reason.
+      expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
     });
 
     it('should generate fresh vector clock starting at 1', async () => {
       await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
-      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
-      expect(appendedOp.vectorClock).toEqual({ eNewC: 1 });
+      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
+        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
+      const op = args.syncImportOp;
+      expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
     });
 
     it('should create operation with valid UUIDv7', async () => {
       await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
-      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
+      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
+        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
       // UUIDv7 format: 8-4-4-4-12 characters
-      expect(appendedOp.id).toMatch(
+      expect(args.syncImportOp.id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
       );
     });
@@ -210,78 +209,32 @@ describe('CleanSlateService', () => {
       ).toBeRejectedWith(jasmine.objectContaining({ message: 'State error' }));
     });
 
-    it('should throw if client ID generation fails', async () => {
-      mockClientIdService.generateNewClientId.and.rejectWith(new Error('ClientID error'));
+    it('should propagate errors from runDestructiveStateReplacement', async () => {
+      // The clientId now rotates inside runDestructiveStateReplacement's atomic
+      // transaction; a failure there aborts the whole replacement and the
+      // caller must see the real error.
+      mockOpLogStore.runDestructiveStateReplacement.and.rejectWith(
+        new Error('Atomic replacement failed'),
+      );
 
       await expectAsync(
         service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED'),
-      ).toBeRejectedWith(jasmine.objectContaining({ message: 'ClientID error' }));
+      ).toBeRejectedWith(
+        jasmine.objectContaining({ message: 'Atomic replacement failed' }),
+      );
     });
 
-    it('should throw if operation append fails', async () => {
-      mockOpLogStore.append.and.rejectWith(new Error('Append error'));
-
-      await expectAsync(
-        service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED'),
-      ).toBeRejectedWith(jasmine.objectContaining({ message: 'Append error' }));
-    });
-  });
-
-  describe('error handling', () => {
-    it('should propagate clearAllOperations errors', async () => {
-      mockOpLogStore.clearAllOperations.and.rejectWith(new Error('Clear failed'));
-
-      await expectAsync(
-        service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED'),
-      ).toBeRejectedWith(jasmine.objectContaining({ message: 'Clear failed' }));
-    });
-
-    it('should propagate setVectorClock errors', async () => {
-      mockOpLogStore.setVectorClock.and.rejectWith(new Error('VectorClock failed'));
-
-      await expectAsync(
-        service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED'),
-      ).toBeRejectedWith(jasmine.objectContaining({ message: 'VectorClock failed' }));
-    });
-
-    it('should propagate saveStateCache errors', async () => {
-      mockOpLogStore.saveStateCache.and.rejectWith(new Error('SaveCache failed'));
-
-      await expectAsync(
-        service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED'),
-      ).toBeRejectedWith(jasmine.objectContaining({ message: 'SaveCache failed' }));
-    });
-  });
-
-  describe('operation ordering', () => {
-    it('should clear operations before appending new SYNC_IMPORT', async () => {
-      const callOrder: string[] = [];
-      mockOpLogStore.clearAllOperations.and.callFake(async () => {
-        callOrder.push('clear');
-      });
-      mockOpLogStore.append.and.callFake(async () => {
-        callOrder.push('append');
-        return 1;
-      });
-
+    it('should pass snapshotEntityKeys derived from current state', async () => {
+      // Without snapshotEntityKeys, the persisted state_cache singleton looks
+      // like the "old snapshot format" to remote-ops-processing, which
+      // triggers an unnecessary background recompaction after every
+      // clean-slate. Callers must pass it.
       await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
-      expect(callOrder).toEqual(['clear', 'append']);
-    });
-
-    it('should append operation before updating vector clock', async () => {
-      const callOrder: string[] = [];
-      mockOpLogStore.append.and.callFake(async () => {
-        callOrder.push('append');
-        return 1;
-      });
-      mockOpLogStore.setVectorClock.and.callFake(async () => {
-        callOrder.push('setVectorClock');
-      });
-
-      await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
-
-      expect(callOrder).toEqual(['append', 'setVectorClock']);
+      const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
+        .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
+      expect(args.snapshotEntityKeys).toBeDefined();
+      expect(Array.isArray(args.snapshotEntityKeys)).toBe(true);
     });
   });
 });

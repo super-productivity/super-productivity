@@ -7,6 +7,7 @@ import { VectorClockService } from './vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { RepairOperationService } from '../validation/repair-operation.service';
 import { OperationLogUploadService } from './operation-log-upload.service';
 import { OperationLogDownloadService } from './operation-log-download.service';
@@ -511,6 +512,62 @@ describe('OperationLogSyncService', () => {
             jasmine.any(Function),
           );
         });
+
+        // Issue #7330 follow-up: a download triggered from inside the
+        // rejected-op handler can run post-sync validation. If validation
+        // fails on that path, the boolean must surface through the eventual
+        // uploadPendingOps return — otherwise sync-wrapper reports IN_SYNC.
+        it('should surface validationFailed from a download triggered by handleRejectedOps callback', async () => {
+          uploadServiceSpy.uploadPendingOps.and.returnValue(
+            Promise.resolve({
+              uploadedCount: 0,
+              piggybackedOps: [],
+              rejectedCount: 1,
+              rejectedOps: [
+                {
+                  opId: 'local-op-1',
+                  error: 'Concurrent',
+                  errorCode: 'CONFLICT_CONCURRENT',
+                },
+              ],
+            }),
+          );
+
+          rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
+            async (_ops, callback) => {
+              // Real handler invokes the download callback for concurrent-mod
+              // resolution. The latch is flipped inside the nested download's
+              // validateAfterSync — here we just exercise the call.
+              await callback?.();
+              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+            },
+          );
+
+          // Simulate the nested download triggering validation failure by
+          // flipping the latch directly, which the real
+          // RemoteOpsProcessingService.validateAfterSync would do. The flow
+          // runs inside a withSession() in production (opened by the wrapper);
+          // mirror that here so setFailed() doesn't trip the no-session guard.
+          const latch = TestBed.inject(SyncSessionValidationService);
+          latch._resetForTest();
+          spyOn(service, 'downloadRemoteOps').and.callFake(async () => {
+            latch.setFailed();
+            return {
+              kind: 'ops_processed' as const,
+              newOpsCount: 1,
+              localWinOpsCreated: 0,
+            };
+          });
+
+          await latch.withSession(async () => {
+            await service.uploadPendingOps(mockProvider);
+          });
+
+          // The latch is the canonical signal that reaches the wrapper. The
+          // upload result no longer carries validationFailed — that field is
+          // gone (#7330 simplification).
+          expect(latch.hasFailed()).toBe(true);
+        });
       });
     });
 
@@ -523,6 +580,7 @@ describe('OperationLogSyncService', () => {
             latestSeq: 0,
             needsFullStateUpload: false,
             success: true,
+            providerMode: 'superSyncOps',
             failedFileCount: 0,
           }),
         );
@@ -559,6 +617,7 @@ describe('OperationLogSyncService', () => {
             latestSeq: 1,
             needsFullStateUpload: false,
             success: true,
+            providerMode: 'superSyncOps',
             failedFileCount: 0,
           }),
         );
@@ -592,6 +651,7 @@ describe('OperationLogSyncService', () => {
             latestSeq: 0,
             needsFullStateUpload: true, // Server migration
             success: true,
+            providerMode: 'superSyncOps',
             failedFileCount: 0,
           }),
         );
@@ -631,6 +691,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 1,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'superSyncOps',
               failedFileCount: 0,
               latestServerSeq: 42, // Server sequence to persist
             }),
@@ -676,6 +737,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 0,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'superSyncOps',
               failedFileCount: 0,
               latestServerSeq: 100, // Server is at seq 100 but no new ops for us
             }),
@@ -705,6 +767,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 0,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'superSyncOps',
               failedFileCount: 0,
               // latestServerSeq not set
             }),
@@ -734,6 +797,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 0,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'superSyncOps',
               failedFileCount: 0,
               latestServerSeq: 100,
             }),
@@ -745,10 +809,10 @@ describe('OperationLogSyncService', () => {
           const mockProvider = {
             isReady: () => Promise.resolve(true),
             setLastServerSeq: setLastServerSeqSpy,
-            // supportsOperationSync NOT set - but method still called since provider passed
+            // Operation-sync marker fields NOT set - but method still called since provider passed
           } as any;
 
-          // Should not throw even though provider doesn't have supportsOperationSync
+          // Should not throw even though provider doesn't have operation-sync marker fields
           await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
 
           // setLastServerSeq should still be called when latestServerSeq is present
@@ -802,6 +866,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 1,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'superSyncOps',
               failedFileCount: 0,
               latestServerSeq: 5,
               // NO snapshotState - this is incremental sync
@@ -856,6 +921,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 0,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [{ id: 'remote-task' }] },
               snapshotVectorClock: { clientB: 5 },
@@ -909,6 +975,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 0,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [{ id: 'old-dropbox-task' }] },
               snapshotVectorClock: { clientB: 5 },
@@ -960,6 +1027,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 0,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [{ id: 'remote-task' }] }, // Remote snapshot
               snapshotVectorClock: { clientB: 5 },
@@ -1028,6 +1096,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 0,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: remoteSnapshot,
               snapshotVectorClock: remoteVectorClock,
@@ -1067,6 +1136,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 0,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [] },
               snapshotVectorClock: { clientB: 5 },
@@ -1133,6 +1203,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 1,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [{ id: 'old-windows-task' }] },
               snapshotVectorClock: { windowsClient: 1 },
@@ -1230,6 +1301,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 5,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [{ id: 'task-w-1' }] },
               snapshotVectorClock: { windowsClient: 5 },
@@ -1284,6 +1356,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 1,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [{ id: 'remote-task' }] },
               snapshotVectorClock: { clientB: 3 },
@@ -1330,6 +1403,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 1,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [{ id: 'legacy-task' }] },
               snapshotVectorClock: {}, // empty — legacy file or never populated
@@ -1388,6 +1462,7 @@ describe('OperationLogSyncService', () => {
               latestSeq: 1,
               needsFullStateUpload: false,
               success: true,
+              providerMode: 'fileSnapshotOps',
               failedFileCount: 0,
               snapshotState: { tasks: [{ id: 'old-windows-task' }] },
               snapshotVectorClock: { windowsClient: 1 },
@@ -1553,6 +1628,7 @@ describe('OperationLogSyncService', () => {
           newOps: [],
           needsFullStateUpload: false,
           success: true,
+          providerMode: 'superSyncOps',
           failedFileCount: 0,
         };
       });
@@ -1572,6 +1648,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
       });
 
@@ -1592,6 +1669,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
       });
 
@@ -1606,6 +1684,25 @@ describe('OperationLogSyncService', () => {
         mockProvider,
         jasmine.objectContaining({ forceFromSeq0: true }),
       );
+    });
+
+    it('should throw when force download fails', async () => {
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: false,
+        failedFileCount: 1,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await expectAsync(
+        service.forceDownloadRemoteState(mockProvider),
+      ).toBeRejectedWithError(/Download failed/);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).not.toHaveBeenCalled();
     });
 
     it('should process downloaded ops without confirmation', async () => {
@@ -1628,6 +1725,7 @@ describe('OperationLogSyncService', () => {
         newOps: mockOps,
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 1,
       });
@@ -1663,6 +1761,7 @@ describe('OperationLogSyncService', () => {
         newOps: [mockOp],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 50,
       });
@@ -1686,6 +1785,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
       });
 
@@ -1710,6 +1810,7 @@ describe('OperationLogSyncService', () => {
         newOps: [], // Empty - snapshot replaces incremental ops
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState,
         snapshotVectorClock,
@@ -1755,6 +1856,51 @@ describe('OperationLogSyncService', () => {
         error,
       );
     });
+
+    // Issue #7330: post-sync validation failure must be surfaced so
+    // SyncWrapperService can refuse IN_SYNC. After the latch refactor,
+    // failure flows via SyncSessionValidationService rather than the return
+    // shape — but processRemoteOps is the layer that flips the latch via
+    // validateAfterSync. We assert here that forceDownloadRemoteState
+    // delegates through processRemoteOps, leaving the latch intact for the
+    // wrapper to read. (The flip itself is unit-tested in
+    // remote-ops-processing.service.spec.ts.)
+    it('forceDownloadRemoteState invokes processRemoteOps with skipConflictDetection', async () => {
+      const mockOps: Operation[] = [
+        {
+          id: 'op1',
+          actionType: 'ACTION' as ActionType,
+          opType: 'UPDATE' as OpType,
+          entityType: 'TASK',
+          entityId: 'task1',
+          payload: {},
+          clientId: 'remote',
+          vectorClock: {},
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ];
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: mockOps,
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 1,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+        mockOps,
+        { skipConflictDetection: true },
+      );
+    });
   });
 
   describe('_hasMeaningfulStoreData detection for first-time sync', () => {
@@ -1784,6 +1930,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState: { task: { ids: ['remote-task'] } },
         snapshotVectorClock: { clientB: 5 },
@@ -1811,6 +1958,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState: { task: { ids: [] } },
         snapshotVectorClock: { clientB: 5 },
@@ -1838,6 +1986,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState: { task: { ids: [] } },
         snapshotVectorClock: { clientB: 5 },
@@ -1865,6 +2014,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState: { task: { ids: [] } },
         snapshotVectorClock: { clientB: 5 },
@@ -1897,6 +2047,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState: { task: { ids: ['remote-task'] } },
         snapshotVectorClock: { clientB: 5 },
@@ -1948,6 +2099,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState: { task: { ids: ['remote-task'] } },
         snapshotVectorClock: { clientB: 5 },
@@ -1979,6 +2131,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState: remoteSnapshot,
         snapshotVectorClock: remoteVectorClock,
@@ -2018,6 +2171,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'fileSnapshotOps',
         failedFileCount: 0,
         snapshotState: { task: { ids: [] } },
         snapshotVectorClock: { clientB: 5 },
@@ -2069,6 +2223,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 0, // Empty server
       });
@@ -2100,6 +2255,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 0, // Empty server
       });
@@ -2128,6 +2284,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 5, // Server has data (just no new ops for us)
       });
@@ -2165,6 +2322,7 @@ describe('OperationLogSyncService', () => {
         newOps: [],
         needsFullStateUpload: false,
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 0,
       });
@@ -2210,6 +2368,7 @@ describe('OperationLogSyncService', () => {
       downloadServiceSpy.downloadRemoteOps.and.resolveTo({
         newOps: [incomingSyncImport],
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 42,
       });
@@ -2245,6 +2404,7 @@ describe('OperationLogSyncService', () => {
       downloadServiceSpy.downloadRemoteOps.and.resolveTo({
         newOps: [incomingSyncImport],
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 42,
       });
@@ -2288,12 +2448,46 @@ describe('OperationLogSyncService', () => {
       expect(result.kind).toBe('cancelled');
     });
 
+    it('should flush pending writes before checking incoming SYNC_IMPORT conflicts', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+      const events: string[] = [];
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+      writeFlushServiceSpy.flushPendingWrites.and.callFake(async () => {
+        events.push('flush');
+      });
+      opLogStoreSpy.getUnsynced.and.callFake(async () => {
+        events.push('getUnsynced');
+        return [];
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      const result = await service.downloadRemoteOps(mockProvider);
+
+      expect(events.slice(0, 2)).toEqual(['flush', 'getUnsynced']);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
+        incomingSyncImport,
+      ]);
+      expect(result.kind).toBe('ops_processed');
+    });
+
     it('should process incoming SYNC_IMPORT when pending ops are config-only', async () => {
       const incomingSyncImport = createIncomingSyncImport();
 
       downloadServiceSpy.downloadRemoteOps.and.resolveTo({
         newOps: [incomingSyncImport],
         success: true,
+        providerMode: 'superSyncOps',
         failedFileCount: 0,
         latestServerSeq: 42,
       });
@@ -2454,6 +2648,38 @@ describe('OperationLogSyncService', () => {
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
         piggybackedSyncImport,
       ]);
+      expect(result.kind).toBe('completed');
+    });
+
+    it('should not flush again before checking piggybacked SYNC_IMPORT conflicts', async () => {
+      const piggybackedSyncImport: Operation = {
+        id: 'import-1',
+        clientId: 'client-B',
+        actionType: ActionType.LOAD_ALL_DATA,
+        opType: OpType.SyncImport,
+        entityType: 'ALL',
+        payload: {},
+        vectorClock: { clientB: 5 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      uploadServiceSpy.uploadPendingOps.and.resolveTo({
+        uploadedCount: 1,
+        piggybackedOps: [piggybackedSyncImport],
+        rejectedCount: 0,
+        rejectedOps: [],
+      });
+      opLogStoreSpy.getUnsynced.and.resolveTo([]);
+
+      const mockProvider = {
+        isReady: () => Promise.resolve(true),
+      } as any;
+
+      const result = await service.uploadPendingOps(mockProvider);
+
+      expect(writeFlushServiceSpy.flushPendingWrites).toHaveBeenCalledTimes(1);
+      expect(opLogStoreSpy.getUnsynced).toHaveBeenCalled();
       expect(result.kind).toBe('completed');
     });
 
@@ -2783,6 +3009,7 @@ describe('OperationLogSyncService', () => {
           Promise.resolve({
             newOps: [remoteOp],
             success: true,
+            providerMode: 'superSyncOps',
             failedFileCount: 0,
             latestServerSeq: 42,
           }),
@@ -2812,6 +3039,7 @@ describe('OperationLogSyncService', () => {
           Promise.resolve({
             newOps: [],
             success: true,
+            providerMode: 'superSyncOps',
             failedFileCount: 0,
             latestServerSeq: 42,
           }),

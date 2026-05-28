@@ -121,6 +121,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button
@@ -135,6 +144,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button
@@ -153,6 +171,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button

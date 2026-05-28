@@ -1383,7 +1383,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "افزودن کار موجود \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "ایجاد برچسب های جدید",
-        "DUE_BUTTON": "دلیل",
+        "DUE_BUTTON": "زمان‌بندی",
         "ESTIMATE_BUTTON": "برآورد",
         "PLACEHOLDER_CREATE": "عنوان یک وظیفه #tag @16:00",
         "PLACEHOLDER_SEARCH": "وظایف یا مشکلات موجود را اضافه کنید...",

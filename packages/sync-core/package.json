@@ -1,0 +1,37 @@
+{
+  "name": "@sp/sync-core",
+  "version": "1.0.0",
+  "description": "Framework-agnostic core types and utilities for Super Productivity sync",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:tsc": "tsc",
+    "test": "npm run test:typecheck && vitest run",
+    "test:typecheck": "tsc --noEmit -p tsconfig.spec.json",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.2.0",
+    "hash-wasm": "^4.12.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.6"
+  }
+}

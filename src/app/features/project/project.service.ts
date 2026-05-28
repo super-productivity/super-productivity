@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom, Observable, of } from 'rxjs';
+import { SnackService } from '../../core/snack/snack.service';
 import { Project } from './project.model';
 import { select, Store } from '@ngrx/store';
 import { nanoid } from 'nanoid';
@@ -23,6 +24,7 @@ import {
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
+  toggleHideFromMenu,
   unarchiveProject,
   updateProject,
   updateProjectOrder,
@@ -47,6 +49,8 @@ import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { addNote } from '../note/store/note.actions';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { DateService } from '../../core/date/date.service';
+import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 
 @Injectable({
   providedIn: 'root',
@@ -59,6 +63,8 @@ export class ProjectService {
   private readonly _taskService = inject(TaskService);
   private readonly _translate = inject(TranslateService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _dateService = inject(DateService);
+  private readonly _snackService = inject(SnackService);
 
   list$: Observable<Project[]> = this._store$.pipe(select(selectUnarchivedProjects));
   list = toSignal(this.list$, { initialValue: [] });
@@ -138,10 +144,28 @@ export class ProjectService {
 
   archive(projectId: string): void {
     this._store$.dispatch(archiveProject({ id: projectId }));
+    this._snackService.open({
+      ico: 'archive',
+      msg: T.F.PROJECT.S.ARCHIVED,
+    });
   }
 
-  unarchive(projectId: string): void {
+  async unarchive(projectId: string): Promise<void> {
+    const project = await firstValueFrom(this.getByIdOnce$(projectId));
     this._store$.dispatch(unarchiveProject({ id: projectId }));
+    this._snackService.open(
+      project?.isHiddenFromMenu
+        ? {
+            ico: 'unarchive',
+            msg: T.F.PROJECT.S.UNARCHIVED_HIDDEN_FROM_MENU,
+            actionStr: T.F.PROJECT.S.SHOW_IN_MENU,
+            actionFn: () => this._store$.dispatch(toggleHideFromMenu({ id: projectId })),
+          }
+        : {
+            ico: 'unarchive',
+            msg: T.F.PROJECT.S.UNARCHIVED,
+          },
+    );
   }
 
   getByIdOnce$(id: string): Observable<Project | undefined> {
@@ -344,6 +368,11 @@ export class ProjectService {
           workContextType: WorkContextType.PROJECT,
           isAddToBacklog: isBacklog,
           isAddToBottom: true,
+          ...getDeadlineAutoPlanFields(
+            this._dateService,
+            newParentTask.deadlineDay,
+            newParentTask.deadlineWithTime,
+          ),
         }),
       );
 

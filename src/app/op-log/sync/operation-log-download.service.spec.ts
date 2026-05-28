@@ -4,7 +4,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { LockService } from './lock.service';
 import { SnackService } from '../../core/snack/snack.service';
 import {
-  SyncProviderServiceInterface,
+  SyncProviderBase,
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
@@ -50,7 +50,7 @@ describe('OperationLogDownloadService', () => {
 
     // Default mock implementations
     // Note: Don't use async/await here as it breaks fakeAsync zone context
-    mockLockService.request.and.callFake((_name: string, fn: () => Promise<void>) => {
+    mockLockService.request.and.callFake(<T>(_name: string, fn: () => Promise<T>) => {
       return fn();
     });
     mockOpLogStore.getAppliedOpIds.and.returnValue(Promise.resolve(new Set<string>()));
@@ -82,7 +82,7 @@ describe('OperationLogDownloadService', () => {
 
     describe('API-based sync', () => {
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       beforeEach(() => {
@@ -91,7 +91,8 @@ describe('OperationLogDownloadService', () => {
           'downloadOps',
           'setLastServerSeq',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         // Add privateCfg mock for E2E encryption support
         (mockApiProvider as any).privateCfg = {
           load: jasmine
@@ -246,6 +247,7 @@ describe('OperationLogDownloadService', () => {
             ],
             hasMore: false,
             latestSeq: 1,
+            serverTime,
           }),
         );
 
@@ -733,7 +735,7 @@ describe('OperationLogDownloadService', () => {
           expect(result.allOpClocks).toBeUndefined();
         });
 
-        it('should return empty allOpClocks array when no ops on server', async () => {
+        it('should omit allOpClocks when no ops are returned from server', async () => {
           mockApiProvider.downloadOps.and.returnValue(
             Promise.resolve({
               ops: [],

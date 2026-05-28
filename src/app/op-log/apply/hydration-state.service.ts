@@ -1,5 +1,6 @@
 import { computed, Injectable, signal } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
+import type { RemoteApplyWindowPort } from '@sp/sync-core';
 import { setIsApplyingRemoteOps } from '../capture/operation-capture.meta-reducer';
 import { POST_SYNC_COOLDOWN_MS } from '../core/operation-log.const';
 
@@ -60,7 +61,7 @@ const SYNC_WINDOW_FAILSAFE_MS = 2000;
  * effects fire immediately, creating conflicting operations. See `isInSyncWindow`.
  */
 @Injectable({ providedIn: 'root' })
-export class HydrationStateService {
+export class HydrationStateService implements RemoteApplyWindowPort {
   private _isApplyingRemoteOps = signal(false);
   private _isInPostSyncCooldown = signal(false);
   private _isSyncWindowOpen = signal(false);

@@ -2,14 +2,8 @@ import {
   extractSyncFileStateFromPrefix,
   getSyncFilePrefix,
 } from '../util/sync-file-prefix';
-import { OpLog } from '../../core/log';
-import {
-  deriveKeyFromPassword,
-  encryptWithDerivedKey,
-  decryptWithDerivedKey,
-  DerivedKeyInfo,
-  base642ab,
-} from './encryption';
+import { decrypt, encrypt, type SyncLogger } from '@sp/sync-core';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import {
   DecryptError,
   DecryptNoPasswordError,
@@ -23,7 +17,8 @@ import { EncryptAndCompressCfg } from '../core/types/sync.types';
 
 export class EncryptAndCompressHandlerService {
   private static readonly L = 'EncryptAndCompressHandlerService';
-  private static readonly SALT_LENGTH = 16;
+
+  constructor(private readonly _logger: SyncLogger = OP_LOG_SYNC_LOGGER) {}
 
   async compressAndEncryptData<T>(
     cfg: EncryptAndCompressCfg,
@@ -72,7 +67,7 @@ export class EncryptAndCompressHandlerService {
       isEncrypt,
       modelVersion,
     });
-    OpLog.normal(
+    this._logger.normal(
       `${EncryptAndCompressHandlerService.L}.${this.compressAndEncrypt.name}()`,
       {
         prefix,
@@ -83,16 +78,14 @@ export class EncryptAndCompressHandlerService {
     );
     let dataStr = JSON.stringify(data);
     if (isCompress) {
-      dataStr = await compressWithGzipToString(dataStr);
+      dataStr = await compressWithGzipToString(dataStr, this._logger);
     }
     if (isEncrypt) {
       if (!encryptKey || encryptKey.length === 0) {
         throw new Error('No encryption password provided');
       }
 
-      // Use derived key encryption to benefit from session cache
-      const keyInfo: DerivedKeyInfo = await deriveKeyFromPassword(encryptKey);
-      dataStr = await encryptWithDerivedKey(dataStr, keyInfo);
+      dataStr = await encrypt(dataStr, encryptKey);
     }
 
     return prefix + dataStr;
@@ -110,7 +103,7 @@ export class EncryptAndCompressHandlerService {
   }> {
     const { isCompressed, isEncrypted, modelVersion, cleanDataStr } =
       extractSyncFileStateFromPrefix(dataStr);
-    OpLog.normal(
+    this._logger.normal(
       `${EncryptAndCompressHandlerService.L}.${this.decompressAndDecrypt.name}()`,
       { isCompressed, isEncrypted, modelVersion },
     );
@@ -126,30 +119,14 @@ export class EncryptAndCompressHandlerService {
         });
       }
       try {
-        // Extract salt from ciphertext and derive key to benefit from session cache
-        const dataBuffer = base642ab(outStr);
-
-        // Validate buffer size before extracting salt
-        if (dataBuffer.byteLength < EncryptAndCompressHandlerService.SALT_LENGTH) {
-          throw new DecryptError(
-            `Ciphertext too short to contain salt (${dataBuffer.byteLength} bytes)`,
-          );
-        }
-
-        const salt = new Uint8Array(
-          dataBuffer,
-          0,
-          EncryptAndCompressHandlerService.SALT_LENGTH,
-        );
-        const keyInfo: DerivedKeyInfo = await deriveKeyFromPassword(encryptKey, salt);
-        outStr = await decryptWithDerivedKey(outStr, keyInfo);
+        outStr = await decrypt(outStr, encryptKey);
       } catch (e) {
         throw new DecryptError(e);
       }
     }
 
     if (isCompressed) {
-      outStr = await decompressGzipFromString(outStr);
+      outStr = await decompressGzipFromString(outStr, this._logger);
     }
 
     let parsedData: T;

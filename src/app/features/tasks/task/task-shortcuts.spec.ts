@@ -20,6 +20,7 @@ describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
   let component: TaskComponent;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let storeSpy: jasmine.SpyObj<Store>;
 
   const createSubTask = (title: string): TaskWithSubTasks =>
     ({
@@ -82,6 +83,8 @@ describe('TaskComponent shortcut handling', () => {
         subTaskIds: [],
       } as unknown as TaskWithSubTasks),
     );
+    storeSpy = jasmine.createSpyObj<Store>('Store', ['dispatch', 'select']);
+    storeSpy.select.and.returnValue(of(new Set<string>()));
 
     await TestBed.configureTestingModule({
       imports: [TaskComponent],
@@ -108,7 +111,7 @@ describe('TaskComponent shortcut handling', () => {
             'addAttachment',
           ]),
         },
-        { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
+        { provide: Store, useValue: storeSpy },
         {
           provide: ProjectService,
           useValue: jasmine.createSpyObj('ProjectService', [

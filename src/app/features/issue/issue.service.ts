@@ -509,20 +509,21 @@ export class IssueService {
       };
     }
 
+    const providerCfg = await firstValueFrom(
+      this._issueProviderService.getCfgOnce$(issueProviderId, issueProviderKey),
+    );
+
     const {
       title = null,
       related_to,
       ...additionalFromProviderIssueService
-    } = this._getAddTaskData(issueProviderKey, issueDataReduced);
+    } = this._getAddTaskData(issueProviderKey, issueDataReduced, providerCfg);
     IssueLog.log({
       related_to,
       additionalKeys: Object.keys(additionalFromProviderIssueService),
     });
 
-    const getTaskDefaults = async (): Promise<Partial<TaskCopy>> => {
-      const providerCfg = await this._issueProviderService
-        .getCfgOnce$(issueProviderId, issueProviderKey)
-        .toPromise();
+    const getTaskDefaults = (): Partial<TaskCopy> => {
       const defaultProjectId = providerCfg.defaultProjectId;
       const defaultTagIds = (providerCfg.defaultTagIds || []).filter(
         (id) => id !== TODAY_TAG.id,
@@ -563,6 +564,13 @@ export class IssueService {
       }
     };
 
+    const taskDefaults = getTaskDefaults();
+    const providerTagIds = (additionalFromProviderIssueService as Partial<TaskCopy>)
+      .tagIds;
+    if (Array.isArray(providerTagIds)) {
+      taskDefaults.tagIds = unique([...(taskDefaults.tagIds ?? []), ...providerTagIds]);
+    }
+
     const taskData = {
       issueType: issueProviderKey,
       issueProviderId: issueProviderId,
@@ -574,7 +582,7 @@ export class IssueService {
       // shows up in the Today tab, defeating the point of the backlog.
       ...(isAddToBacklog ? {} : { dueDay: getDbDateStr() }),
       ...additionalFromProviderIssueService,
-      ...(await getTaskDefaults()),
+      ...taskDefaults,
       ...additional,
     };
 
@@ -860,12 +868,19 @@ export class IssueService {
   private _getAddTaskData(
     issueProviderKey: IssueProviderKey,
     issueReduced: IssueDataReduced,
+    cfg?: unknown,
   ): IssueTask {
     const service = this._getService(issueProviderKey);
     if (!service?.getAddTaskData) {
       throw new Error('Issue method not available');
     }
-    const r = service.getAddTaskData(issueReduced);
+    const serviceWithCfg = service as IssueServiceInterface & {
+      getAddTaskDataForCfg?: (issueData: IssueDataReduced, cfg: unknown) => IssueTask;
+    };
+    const r =
+      cfg && serviceWithCfg.getAddTaskDataForCfg
+        ? serviceWithCfg.getAddTaskDataForCfg(issueReduced, cfg)
+        : service.getAddTaskData(issueReduced);
     typia.assert<IssueTask>(r);
     return r;
   }

@@ -12,7 +12,8 @@
 export type Theme = 'light' | 'dark';
 export type Locale = 'en' | 'de';
 
-export const LOCALES: readonly Locale[] = ['en', 'de'] as const;
+// 'de' temporarily disabled — re-add once translations are caught up.
+export const LOCALES: readonly Locale[] = ['en'] as const;
 export const THEMES: readonly Theme[] = ['light', 'dark'] as const;
 
 /**
@@ -32,27 +33,39 @@ export type ViewportSpec = {
  * The key is also the on-disk directory name under `_master/<viewport>/`.
  */
 export const VIEWPORTS = {
-  /** Shared desktop master (16:10). 1440×900 CSS @2x → 2880×1800. Source for
-   *  Mac App Store, MS Store, Snap, and the marketing site — MS Store accepts
-   *  ≥1366×768 so this exceeds spec. */
-  desktopMaster: { width: 2880, height: 1800, deviceScaleFactor: 2 },
+  /** Shared desktop master (16:10). 1280×800 CSS @2x → 2560×1600. The smaller
+   *  of MAS's two listed Retina sizes — gives more apparent UI zoom than the
+   *  1440×900 baseline while still being a native MAS submission size. MS
+   *  Store min is 1366×768 so this still exceeds spec. */
+  desktopMaster: { width: 2560, height: 1600, deviceScaleFactor: 2 },
   /** Apple App Store iPhone 6.9" portrait. CSS 430×932 @3x → 1290×2796. */
   iphone69: { width: 1290, height: 2796, deviceScaleFactor: 3, isMobile: true },
   /** Apple App Store iPad 13" portrait. CSS 1032×1376 @2x → 2064×2752. */
   ipad13: { width: 2064, height: 2752, deviceScaleFactor: 2, isMobile: true },
-  /** Google Play phone portrait. CSS 360×640 @3x → 1080×1920. */
-  androidPhone: { width: 1080, height: 1920, deviceScaleFactor: 3, isMobile: true },
-  /** Google Play 7" tablet portrait. CSS 600×960 @2x → 1200×1920. */
-  android7Tablet: { width: 1200, height: 1920, deviceScaleFactor: 2, isMobile: true },
-  /** Google Play 10" tablet landscape. CSS 960×600 @2x → 1920×1200. */
-  android10Tablet: { width: 1920, height: 1200, deviceScaleFactor: 2, isMobile: true },
+  /** Google Play phone portrait. CSS 412×915 @3x → 1236×2745.
+   *  Matches modern flagships (Pixel 7/8, Galaxy S22+, OnePlus 11). 412 CSS
+   *  stays below the 768px breakpoint so SP still renders its phone layout. */
+  androidPhone: { width: 1236, height: 2745, deviceScaleFactor: 3, isMobile: true },
+  /** Google Play 7" tablet landscape. CSS 960×600 @2x → 1920×1200.
+   *  Portrait (600 CSS) was below the 768 desktop breakpoint and rendered
+   *  the phone layout, which felt cramped — landscape stays in tablet
+   *  layout and reads cleanly. */
+  android7Tablet: { width: 1920, height: 1200, deviceScaleFactor: 2, isMobile: true },
+  /** Google Play 10" tablet portrait. CSS 800×1280 @2x → 1600×2560.
+   *  Standard 10" tablet portrait dimensions. */
+  android10Tablet: { width: 1600, height: 2560, deviceScaleFactor: 2, isMobile: true },
 } as const satisfies Record<string, ViewportSpec>;
 
 export type ViewportName = keyof typeof VIEWPORTS;
 
 export const VIEWPORT_NAMES = Object.keys(VIEWPORTS) as ViewportName[];
 
-/** Mobile viewports — drives the side-nav-collapsed flag in the fixture. */
+/**
+ * Mobile viewports — drives the side-nav-collapsed flag in the fixture.
+ * Includes tablets too: at any of these widths we want a tighter sidenav
+ * (icons-only) so content gets the room. Spec routing is a separate axis
+ * (see PHONE_VIEWPORTS / TABLET_VIEWPORTS below).
+ */
 export const MOBILE_VIEWPORTS = [
   'iphone69',
   'ipad13',
@@ -61,16 +74,34 @@ export const MOBILE_VIEWPORTS = [
   'android10Tablet',
 ] as const satisfies readonly ViewportName[];
 
+/**
+ * "Phone-class": viewports < 768 CSS px wide where SP renders its mobile
+ * layout (bottom-nav, no side panels). These run `scenarios/mobile/`.
+ */
+export const PHONE_VIEWPORTS = [
+  'iphone69',
+  'androidPhone',
+] as const satisfies readonly ViewportName[];
+
+/**
+ * "Tablet-class": viewports ≥ 768 CSS px wide where SP renders the desktop
+ * layout (sidenav, panels) but the canvas is taller-than-wide (iPad / 10"
+ * portrait) or narrower than the desktopMaster (7" landscape). Routing these
+ * to the desktop spec would push side panels off-screen; routing them to the
+ * mobile spec wastes the canvas. They run `scenarios/tablet/` instead.
+ */
+export const TABLET_VIEWPORTS = [
+  'ipad13',
+  'android7Tablet',
+  'android10Tablet',
+] as const satisfies readonly ViewportName[];
+
 import * as path from 'path';
 const repoRoot = path.resolve(__dirname, '..', '..');
+export const SCREENSHOTS_OUT_DIR = path.join(repoRoot, 'dist', 'screenshots');
 /** Roots that hold raw scenario captures, separated by capture pipeline. */
-export const MASTER_DIR_WEB = path.join(repoRoot, '.tmp', 'screenshots', '_master');
-export const MASTER_DIR_ELECTRON = path.join(
-  repoRoot,
-  '.tmp',
-  'screenshots',
-  '_master_electron',
-);
+export const MASTER_DIR_WEB = path.join(SCREENSHOTS_OUT_DIR, '_master');
+export const MASTER_DIR_ELECTRON = path.join(SCREENSHOTS_OUT_DIR, '_master_electron');
 
 /**
  * Per-store derivation rules used by `build-store-assets.ts`. Each rule maps
@@ -95,6 +126,19 @@ export type StoreRule = {
    * chrome (traffic-lights / GTK titlebar) only Electron can produce.
    */
   masterDir?: 'web' | 'electron';
+  /**
+   * Hard byte cap per file enforced by the store. When set, the post-processor
+   * re-encodes outputs above the cap as JPEG (quality stepped down from 90 to
+   * 60 until the file fits) and writes a `.jpg`. Currently only Snap caps
+   * each entry at 2 MB; everything else keeps the lossless PNG.
+   */
+  maxBytes?: number;
+  /** Optional explicit gallery order/filter for stores with tighter curation. */
+  scenarioOrder?: readonly string[];
+  /** Optional output filename labels for raw scenario ids. */
+  scenarioLabels?: readonly { scenario: string; label: string }[];
+  /** Optional post-processing frame applied before writing the store output. */
+  frame?: 'flathub-window';
 };
 
 export const STORE_RULES: readonly StoreRule[] = [
@@ -107,15 +151,42 @@ export const STORE_RULES: readonly StoreRule[] = [
     // captured. Run on a Mac via `npm run screenshots:capture:electron`.
     masterDir: 'electron',
   },
+  // Web and Microsoft Store use the same desktop Chromium captures. Keep one
+  // derived folder and pick at most 10 from it when submitting to MS Store.
+  { store: 'desktop', source: 'desktopMaster', localeLayout: 'per-locale-dir' },
+  // Snap technically caps at 5 entries, ≤2 MB each — pick which to upload
+  // manually before submission. The 2 MB cap forces JPEG re-encode in the
+  // post-processor; everything else stays lossless PNG.
   {
-    store: 'msstore',
+    store: 'snap',
     source: 'desktopMaster',
-    localeLayout: 'per-locale-dir',
-    maxCount: 10,
+    localeLayout: 'global',
+    maxBytes: 2 * 1024 * 1024,
   },
-  // Snap technically caps at 5 — pick which to upload manually before submission.
-  { store: 'snap', source: 'desktopMaster', localeLayout: 'global' },
-  { store: 'web', source: 'desktopMaster', localeLayout: 'per-locale-dir' },
+  // Flathub: metainfo.xml `<screenshot>` is single-gallery and sourced from the
+  // Electron pipeline so the captures include native GTK chrome. Keep the
+  // gallery concise: no marketing hero, no duplicate light/dark variants.
+  {
+    store: 'flathub',
+    source: 'desktopMaster',
+    localeLayout: 'global',
+    masterDir: 'electron',
+    scenarioOrder: [
+      'desktop-01-list-with-schedule',
+      'desktop-08-planner',
+      'desktop-02-eisenhower',
+      'desktop-03-schedule-dark',
+      'desktop-04-list-with-notes',
+      'desktop-05-focus-mode',
+      'desktop-07-project-dark',
+      'desktop-10-task-detail-panel',
+    ],
+    scenarioLabels: [
+      { scenario: 'desktop-03-schedule-dark', label: 'schedule' },
+      { scenario: 'desktop-07-project-dark', label: 'project' },
+    ],
+    frame: 'flathub-window',
+  },
   {
     store: 'ios/iphone-69',
     source: 'iphone69',

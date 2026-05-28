@@ -42,11 +42,20 @@ import { alertDialog } from '../../util/native-dialogs';
 import { DataInitStateService } from '../data-init/data-init-state.service';
 import { OnboardingHintService } from '../../features/onboarding/onboarding-hint.service';
 import { LocalRestApiHandlerService } from '../electron/local-rest-api-handler.service';
+import { CustomThemeService } from '../theme/custom-theme.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
 /** Delay before running deferred initialization tasks (plugins, storage checks, etc.) */
 const DEFERRED_INIT_DELAY_MS = 1000;
+
+/**
+ * Cap on how long the persisted theme is allowed to block startup. Built-ins
+ * finish in <1 ms (no IDB read), normal user-theme reads land in 15-120 ms.
+ * Only a stalled IDB hits this timeout; we then fall through to default
+ * rendering so the splash screen can't hang forever on a corrupted store.
+ */
+const APPLY_THEME_TIMEOUT_MS = 500;
 
 @Injectable({
   providedIn: 'root',
@@ -71,6 +80,7 @@ export class StartupService {
   private _platformService = inject(CapacitorPlatformService);
   private _dataInitStateService = inject(DataInitStateService);
   private _injector = inject(Injector);
+  private _customThemeService = inject(CustomThemeService);
 
   constructor() {
     // Initialize electron error handler in an effect
@@ -109,6 +119,19 @@ export class StartupService {
     this._initBackups();
     this._requestPersistence();
 
+    // Apply the persisted custom theme before the deferred init / Electron
+    // ready notification, so the page doesn't briefly flash the default
+    // stylesheet. Worst-case adds one IDB read for user themes — guarded by
+    // a hard timeout so a corrupted/blocked IDB can't hang the splash.
+    try {
+      await Promise.race([
+        this._customThemeService.applyActiveTheme(),
+        new Promise<void>((resolve) => setTimeout(resolve, APPLY_THEME_TIMEOUT_MS)),
+      ]);
+    } catch (err) {
+      Log.err({ stage: 'apply-active-theme', error: (err as Error).message });
+    }
+
     // deferred init
     window.setTimeout(async () => {
       this._trackingReminderService.init();
@@ -116,6 +139,23 @@ export class StartupService {
       this._initOfflineBanner();
 
       const miscCfg = this._globalConfigService.misc();
+
+      // One-time migration for users syncing from a device that still
+      // wrote the theme into `globalConfig.misc.customTheme`. Brief flash
+      // of default → preferred is acceptable and only happens once.
+      // Wrapped because a failure here must not skip the productivity-tip
+      // snack and `_initPlugins` further down in this deferred-init body.
+      if (miscCfg?.customTheme) {
+        try {
+          await this._customThemeService.migrateLegacyCustomTheme(miscCfg.customTheme);
+        } catch (err) {
+          Log.err({
+            stage: 'migrate-legacy-custom-theme',
+            error: (err as Error).message,
+          });
+        }
+      }
+
       if (miscCfg?.isShowProductivityTipLonger && !this._isTourLikelyToBeShown()) {
         if (w.productivityTips && w.randomIndex !== undefined) {
           this._snackService.open({

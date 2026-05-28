@@ -28,7 +28,7 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { TaskCopy, TaskReminderOptionId } from '../task.model';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
-import { WorkContextType } from '../../work-context/work-context.model';
+import { WorkContext, WorkContextType } from '../../work-context/work-context.model';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -261,6 +261,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private _autocompleteTimeout?: number;
   private _processingAutocompleteSelection = false;
   private _isAddingTask = false;
+  private _defaultTagIds: string[] = [];
 
   ngOnInit(): void {
     this._setProjectInitially();
@@ -308,11 +309,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this._workContextService.activeWorkContext$
       .pipe(first(), takeUntilDestroyed(this._destroyRef))
       .subscribe((workContext) => {
-        if (
-          workContext?.type === WorkContextType.TAG &&
-          workContext.id !== TODAY_TAG.id
-        ) {
-          this.stateService.updateTagIds([workContext.id]);
+        this._defaultTagIds = this._getDefaultTagIdsForWorkContext(workContext);
+        if (this._defaultTagIds.length > 0) {
+          this.stateService.updateTagIds(this._defaultTagIds);
         }
       });
   }
@@ -686,7 +685,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
 
     // Handle Enter key
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       if (!this.isSearchMode() && !event.repeat) {
         void this.addTask();
@@ -801,8 +800,21 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private _resetAfterAdd(): void {
     this.stateService.resetAfterAdd();
+    if (this._defaultTagIds.length > 0) {
+      this.stateService.updateTagIds(this._defaultTagIds);
+    }
     // Reset parser state but don't reset project/date/estimate
     this._parserService.resetPreviousResult();
+  }
+
+  private _getDefaultTagIdsForWorkContext(
+    workContext: WorkContext | null | undefined,
+  ): string[] {
+    return !this.isNoDefaults() &&
+      workContext?.type === WorkContextType.TAG &&
+      workContext.id !== TODAY_TAG.id
+      ? [workContext.id]
+      : [];
   }
 
   focusInput(selectAll: boolean = false): void {

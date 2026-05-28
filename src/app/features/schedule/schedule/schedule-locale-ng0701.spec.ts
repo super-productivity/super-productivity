@@ -102,7 +102,9 @@ describe('issue #7383 — NG0701 race on /schedule', () => {
       await TestBed.configureTestingModule({
         imports: [ScheduleComponent, TranslateModule.forRoot()],
         providers: [
-          provideMockStore({ initialState: {} }),
+          provideMockStore({
+            initialState: { issueProvider: { ids: [], entities: {} } },
+          }),
           { provide: TaskService, useValue: mockTaskService },
           { provide: LayoutService, useValue: mockLayoutService },
           { provide: ScheduleService, useValue: mockScheduleService },

@@ -64,7 +64,7 @@ import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.comp
 import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-deadline-approaching';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ICAL_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
@@ -87,6 +87,8 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
+import { selectTimeConflictTaskIds } from '../store/task.selectors';
+import { MatTooltip } from '@angular/material/tooltip';
 
 @Component({
   selector: 'task',
@@ -104,6 +106,7 @@ import { TaskFocusService } from '../task-focus.service';
     '[class.isSelected]': 'isSelected()',
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
+    '[class.hasTimeConflict]': 'hasTimeConflict()',
     '(contextmenu)': 'onHostContextMenu($event)',
   },
   imports: [
@@ -122,6 +125,7 @@ import { TaskFocusService } from '../task-focus.service';
     MsToStringPipe,
     LocalDateStrPipe,
     TranslatePipe,
+    MatTooltip,
     SubTaskTotalTimeSpentPipe,
     TagListComponent,
     ShortPlannedAtPipe,
@@ -146,6 +150,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
+  private readonly _timeConflictTaskIds = toSignal(
+    this._store.select(selectTimeConflictTaskIds),
+    { initialValue: new Set<string>() },
+  );
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
@@ -210,6 +218,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return (
       (t.dueWithTime && this._dateService.isToday(t.dueWithTime)) ||
       (t.dueDay && t.dueDay === todayStr)
+    );
+  });
+  hasTimeConflict = computed(() => {
+    const task = this.task();
+    return (
+      typeof task.dueWithTime === 'number' && this._timeConflictTaskIds().has(task.id)
     );
   });
 
@@ -337,6 +351,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     // If detail panel is open for another task, update it to show this task (#6578)
     // Skip if this task is inside the detail panel (e.g. subtask list)
     if (this._elementRef.nativeElement.closest('task-detail-panel')) {
+      return;
+    }
+    // Skip when focus came from clicking the toggle-detail-panel button itself —
+    // the click handler owns that action; running both inverts the toggle (#7694).
+    if (ev.target instanceof Element && ev.target.closest('.show-additional-info-btn')) {
       return;
     }
     const selectedTaskId = this._taskService.selectedTaskId();
@@ -876,6 +895,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this.focusSelf();
   }
 
+  openNotesPanel(): void {
+    this._taskService.setSelectedId(this.task().id, TaskDetailTargetPanel.Notes);
+    this.focusSelf();
+  }
+
   toggleSubTaskMode(): void {
     this._taskService.toggleSubTaskMode(this.task().id, true, true);
     this.focusSelf();
@@ -913,6 +937,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: [task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         parentTaskMap: { [task.id]: task.parentId },
       }),
     );

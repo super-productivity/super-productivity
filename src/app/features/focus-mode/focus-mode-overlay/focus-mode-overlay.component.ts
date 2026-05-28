@@ -11,11 +11,13 @@ import { T } from 'src/app/t.const';
 import { BannerComponent } from '../../../core/banner/banner/banner.component';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
+import { MatDialog } from '@angular/material/dialog';
 import { FocusModeMainComponent } from '../focus-mode-main/focus-mode-main.component';
 import { FocusModeSessionDoneComponent } from '../focus-mode-session-done/focus-mode-session-done.component';
 import { FocusModeBreakComponent } from '../focus-mode-break/focus-mode-break.component';
 import { FocusModeService } from '../focus-mode.service';
 import { FocusScreen } from '../focus-mode.model';
+import { isInputElement } from '../../../util/dom-element';
 
 @Component({
   selector: 'focus-mode-overlay',
@@ -38,6 +40,7 @@ export class FocusModeOverlayComponent implements OnDestroy {
 
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _store = inject(Store);
+  private readonly _matDialog = inject(MatDialog);
 
   FocusScreen: typeof FocusScreen = FocusScreen;
   activePage = this.focusModeService.currentScreen;
@@ -49,14 +52,14 @@ export class FocusModeOverlayComponent implements OnDestroy {
   isSessionPaused = this.focusModeService.isSessionPaused;
 
   private _closeOnEscapeKeyListener = (ev: KeyboardEvent): void => {
-    if (ev.key === 'Escape') {
-      if (
-        this.activePage() === FocusScreen.Main &&
-        !this.isSessionRunning() &&
-        !this.isSessionPaused()
-      ) {
-        this.cancelFocusSession();
-      }
+    if (
+      ev.key === 'Escape' &&
+      !ev.defaultPrevented &&
+      !this._isInputTarget(ev.target) &&
+      this._matDialog.openDialogs.length === 0
+    ) {
+      ev.preventDefault();
+      this.closeOverlay();
     }
   };
 
@@ -85,5 +88,9 @@ export class FocusModeOverlayComponent implements OnDestroy {
 
   cancelFocusSession(): void {
     this._store.dispatch(cancelFocusSession());
+  }
+
+  private _isInputTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement && isInputElement(target);
   }
 }

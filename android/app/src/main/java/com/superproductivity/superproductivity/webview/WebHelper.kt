@@ -6,6 +6,8 @@ import android.view.View
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.LinearLayout
+import androidx.core.content.ContextCompat
+import com.superproductivity.superproductivity.R
 
 
 class WebHelper {
@@ -23,6 +25,12 @@ class WebHelper {
     fun setupView(wv: WebView, modifyUA: Boolean) : WebView {
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         wv.isFocusableInTouchMode = true
+
+        // Paint the WebView surface in the theme background so the adjustResize
+        // keyboard animation never reveals the default white backing surface
+        // between layout and the next page repaint. Follows the system
+        // light/dark mode via the values-night resource qualifier.
+        wv.setBackgroundColor(ContextCompat.getColor(wv.context, R.color.windowBackground))
 
         // additional web view settings
         val wSettings = wv.settings

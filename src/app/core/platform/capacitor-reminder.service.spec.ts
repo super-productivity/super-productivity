@@ -41,10 +41,12 @@ describe('CapacitorReminderService', () => {
       'ensurePermissions',
       'cancel',
       'cancelMultiple',
+      'registerReminderActions',
     ]);
     notificationServiceSpy.ensurePermissions.and.returnValue(Promise.resolve(true));
     notificationServiceSpy.cancel.and.returnValue(Promise.resolve(true));
     notificationServiceSpy.cancelMultiple.and.returnValue(Promise.resolve(true));
+    notificationServiceSpy.registerReminderActions.and.returnValue(Promise.resolve());
 
     TestBed.configureTestingModule({
       providers: [
@@ -86,6 +88,58 @@ describe('CapacitorReminderService', () => {
       });
       const nativeService = TestBed.inject(CapacitorReminderService);
       expect(nativeService.isAvailable).toBe(true);
+    });
+  });
+
+  describe('initialize', () => {
+    // initialize() branches solely on isIOS(); other platform fields are
+    // intentionally omitted to keep the mock honest about what's exercised.
+    const setupPlatform = (
+      platform: 'ios' | 'android' | 'web',
+    ): CapacitorReminderService => {
+      const platformSpy = jasmine.createSpyObj(
+        'CapacitorPlatformService',
+        ['hasCapability', 'isIOS'],
+        { platform },
+      );
+      platformSpy.isIOS.and.returnValue(platform === 'ios');
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          CapacitorReminderService,
+          provideMockStore(),
+          { provide: CapacitorPlatformService, useValue: platformSpy },
+          { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
+        ],
+      });
+      return TestBed.inject(CapacitorReminderService);
+    };
+
+    it('registers reminder action types on iOS', async () => {
+      const iosService = setupPlatform('ios');
+      await iosService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT request permissions eagerly on iOS (contextual prompt on first schedule)', async () => {
+      const iosService = setupPlatform('ios');
+      await iosService.initialize();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op on Android', async () => {
+      const androidService = setupPlatform('android');
+      await androidService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).not.toHaveBeenCalled();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op on web', async () => {
+      const webService = setupPlatform('web');
+      await webService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).not.toHaveBeenCalled();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
     });
   });
 

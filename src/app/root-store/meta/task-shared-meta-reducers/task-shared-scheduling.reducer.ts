@@ -178,11 +178,16 @@ const handlePlanTasksForToday = (
   state: RootState,
   taskIds: string[],
   parentTaskMap: Record<string, string | undefined>,
+  todayFromAction?: string,
+  startOfNextDayDiffMsFromAction?: number,
   isClearScheduledTime?: boolean,
 ): RootState => {
   const todayTag = getTag(state, TODAY_TAG.id);
-  const today = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
-  const offsetMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
+  const today = todayFromAction ?? state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const offsetMs =
+    startOfNextDayDiffMsFromAction ??
+    state[appStateFeatureKey]?.startOfNextDayDiffMs ??
+    0;
 
   // Filter out tasks that don't exist, are already in today, or whose parent is in today
   const newTasksForToday = taskIds.filter((taskId) => {
@@ -339,10 +344,19 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   [TaskSharedActions.planTasksForToday.type]: () => {
     const {
       taskIds,
+      today,
+      startOfNextDayDiffMs,
       parentTaskMap = {},
       isClearScheduledTime,
     } = action as ReturnType<typeof TaskSharedActions.planTasksForToday>;
-    return handlePlanTasksForToday(state, taskIds, parentTaskMap, isClearScheduledTime);
+    return handlePlanTasksForToday(
+      state,
+      taskIds,
+      parentTaskMap,
+      today,
+      startOfNextDayDiffMs,
+      isClearScheduledTime,
+    );
   },
   [TaskSharedActions.removeTasksFromTodayTag.type]: () => {
     const { taskIds } = action as ReturnType<

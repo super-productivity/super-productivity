@@ -165,6 +165,11 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .first();
       await taskLocatorA.hover();
       await taskLocatorA.locator('done-toggle').click();
+      // Wait for the click to propagate into store state — done-toggle dispatches
+      // updateTask asynchronously (animation/focus delay). Without this, sync can
+      // run as a no-op and the queued updateTask lands AFTER, flipping
+      // hasNoPendingOps back and hiding the check icon.
+      await expect(taskLocatorA).toHaveClass(/isDone/);
 
       // Client B also marks done
       const taskLocatorB = clientB.page
@@ -172,6 +177,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .first();
       await taskLocatorB.hover();
       await taskLocatorB.locator('done-toggle').click();
+      await expect(taskLocatorB).toHaveClass(/isDone/);
 
       // 4. Client A syncs first
       await clientA.sync.syncAndWait();

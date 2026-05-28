@@ -23,6 +23,8 @@ export const TaskSharedActions = createActionGroup({
       isAddToBacklog: boolean;
       isAddToBottom: boolean;
       isIgnoreShortSyntax?: boolean;
+      autoPlanToday?: string;
+      autoPlanStartOfNextDayDiffMs?: number;
     }) => ({
       ...taskProps,
       meta: {
@@ -183,6 +185,8 @@ export const TaskSharedActions = createActionGroup({
       deadlineDay?: string;
       deadlineWithTime?: number;
       deadlineRemindAt?: number;
+      autoPlanToday?: string;
+      autoPlanStartOfNextDayDiffMs?: number;
     }) => ({
       ...taskProps,
       meta: {
@@ -190,6 +194,21 @@ export const TaskSharedActions = createActionGroup({
         entityType: 'TASK',
         entityId: taskProps.taskId,
         opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
+    planDeadlineTasksForToday: (taskProps: {
+      taskIds: string[];
+      today: string;
+      startOfNextDayDiffMs: number;
+    }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityIds: taskProps.taskIds,
+        opType: OpType.Update,
+        isBulk: true,
       } satisfies PersistentActionMeta,
     }),
 
@@ -268,6 +287,10 @@ export const TaskSharedActions = createActionGroup({
     // Today Tag Management
     planTasksForToday: (taskProps: {
       taskIds: string[];
+      // The logical day "today" referred to when the action was created.
+      // Optional only for legacy operation replay and older tests.
+      today?: string;
+      startOfNextDayDiffMs?: number;
       parentTaskMap?: { [taskId: string]: string | undefined };
       isShowSnack?: boolean;
       isSkipRemoveReminder?: boolean;

@@ -1,36 +1,30 @@
-import { Operation } from '../operation.types';
+// App-narrowed apply types. The lib's @sp/sync-core ships generic versions; the
+// app uses its own Operation type so callers see the SP-narrowed entityType /
+// actionType unions and the syncImportReason field.
 
-/**
- * Result of applying operations to the NgRx store.
- *
- * This allows callers to handle partial success scenarios where some operations
- * were applied before an error occurred.
- */
+import type { Operation } from '../operation.types';
+
 export interface ApplyOperationsResult {
-  /**
-   * Operations that were successfully applied to the NgRx store.
-   * These ops have already been dispatched and should be marked as applied.
-   */
+  /** Operations that were successfully applied. */
   appliedOps: Operation[];
-
-  /**
-   * If an error occurred, this contains the failed operation and the error.
-   * Operations after this one in the batch were NOT applied.
-   */
   failedOp?: {
     op: Operation;
     error: Error;
   };
 }
 
-/**
- * Options for applying operations to the NgRx store.
- */
 export interface ApplyOperationsOptions {
   /**
-   * When true, skip archive handling (already persisted from original execution).
-   * Use ONLY for local hydration where operations are replaying
-   * previously validated local operations from SUP_OPS.
+   * When true, skip side effects that would normally fire on first application
+   * (e.g. writing to archive storage) — used when replaying already-persisted
+   * local operations during hydration.
    */
   isLocalHydration?: boolean;
+
+  /**
+   * When true, the caller will flush deferred local actions after finishing its
+   * own crash-safety bookkeeping, such as marking remote ops applied and merging
+   * their vector clocks.
+   */
+  skipDeferredLocalActions?: boolean;
 }

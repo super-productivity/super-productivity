@@ -50,7 +50,6 @@
               "stack-generator",
               "stacktrace-gps",
               "error-stack-parser",
-              "spark-md5",
               "chrono-node",
               "dayjs",
               "query-string"
@@ -253,7 +252,9 @@
               "src/**/*.ts",
               "src/**/*.html",
               "e2e/**/*.ts",
-              "electron/**/*.ts"
+              "electron/**/*.ts",
+              "packages/sync-core/**/*.ts",
+              "packages/sync-providers/**/*.ts"
             ]
           }
         }

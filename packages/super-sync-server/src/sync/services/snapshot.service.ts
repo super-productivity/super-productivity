@@ -7,54 +7,20 @@
  * CRITICAL: FIX 1.7 - Uses in-memory locks to prevent concurrent snapshot
  * generation for the same user. This prevents duplicate expensive computation.
  */
-import * as zlib from 'zlib';
-import { prisma, Operation as PrismaOperation } from '../../db';
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
+import { prisma } from '../../db';
 import { Logger } from '../../logger';
+import { gunzipAsync, gzipAsync } from '../gzip';
+import type { SnapshotResult } from '../sync.types';
 import {
-  CURRENT_SCHEMA_VERSION,
-  migrateState,
-  migrateOperation,
-  stateNeedsMigration,
-  type OperationLike,
-} from '@sp/shared-schema';
-import { Operation } from '../sync.types';
-import { ALLOWED_ENTITY_TYPES } from './validation.service';
+  MAX_SNAPSHOT_DECOMPRESSED_BYTES,
+  MAX_SNAPSHOT_SIZE_BYTES,
+  SnapshotGenerationService,
+} from './snapshot-generation.service';
 
-/**
- * Maximum operations to process during snapshot generation.
- * Prevents memory exhaustion for users with excessive operation history.
- */
-const MAX_OPS_FOR_SNAPSHOT = 100000;
-
-/**
- * Maximum compressed snapshot size in bytes (50MB).
- * Prevents storage exhaustion from excessively large snapshots.
- */
-const MAX_SNAPSHOT_SIZE_BYTES = 50 * 1024 * 1024;
-
-/**
- * Maximum decompressed snapshot size in bytes (100MB).
- * Prevents zip bombs from exhausting memory when reading cached snapshots.
- */
-const MAX_SNAPSHOT_DECOMPRESSED_BYTES = 100 * 1024 * 1024;
-
-/**
- * Maximum state size during replay (100MB).
- * Prevents memory exhaustion from malicious or corrupted data.
- */
-const MAX_REPLAY_STATE_SIZE_BYTES = 100 * 1024 * 1024;
-
-/**
- * How often to check state size during replay (every N operations).
- */
-const REPLAY_SIZE_CHECK_INTERVAL = 1000;
-
-export interface SnapshotResult {
-  state: unknown;
-  serverSeq: number;
-  generatedAt: number;
-  schemaVersion: number;
-}
+export { EncryptedOpsNotSupportedError } from '../op-replay';
+export { MAX_SNAPSHOT_SIZE_BYTES } from './snapshot-generation.service';
+export type { SnapshotResult };
 
 export interface RestorePoint {
   serverSeq: number;
@@ -64,6 +30,20 @@ export interface RestorePoint {
   description?: string;
 }
 
+export interface PreparedSnapshotCache {
+  data: Buffer;
+  bytes: number;
+  stateBytes: number;
+  cacheable: boolean;
+}
+
+export interface CacheSnapshotResult {
+  cached: boolean;
+  bytesWritten: number;
+  previousBytes: number;
+  deltaBytes: number;
+}
+
 export class SnapshotService {
   /**
    * FIX 1.7: In-memory lock to prevent concurrent snapshot generation for the same user.
@@ -71,12 +51,50 @@ export class SnapshotService {
    * Concurrent requests wait for the existing generation and reuse its result.
    */
   private snapshotGenerationLocks: Map<number, Promise<SnapshotResult>> = new Map();
+  private snapshotGenerationService = new SnapshotGenerationService();
 
   /**
    * Clear any cached state for a user (e.g., when user data is deleted).
    */
   clearForUser(userId: number): void {
     this.snapshotGenerationLocks.delete(userId);
+  }
+
+  /**
+   * Serialize + gzip a snapshot off the event loop. Returns the prepared blob
+   * plus byte accounting needed by quota tracking.
+   */
+  async prepareSnapshotCache(state: unknown): Promise<PreparedSnapshotCache> {
+    const serialized = JSON.stringify(state);
+    const data = await gzipAsync(Buffer.from(serialized, 'utf-8'));
+    return {
+      data,
+      bytes: data.length,
+      stateBytes: Buffer.byteLength(serialized, 'utf8'),
+      cacheable: data.length <= MAX_SNAPSHOT_SIZE_BYTES,
+    };
+  }
+
+  async getCachedSnapshotBytes(userId: number): Promise<number> {
+    const result = await prisma.$queryRaw<[{ bytes: number | bigint | null }]>`
+      SELECT COALESCE(octet_length(snapshot_data), 0) as bytes
+      FROM user_sync_state WHERE user_id = ${userId}
+    `;
+    return Number(result[0]?.bytes ?? 0);
+  }
+
+  /**
+   * Return cached snapshot timestamp without loading the snapshot blob.
+   * Status polling only needs snapshot age; reading, gunzipping, and parsing
+   * snapshotData there can turn a cheap endpoint into a large CPU/memory hit.
+   */
+  async getCachedSnapshotGeneratedAt(userId: number): Promise<number | null> {
+    const row = await prisma.userSyncState.findUnique({
+      where: { userId },
+      select: { snapshotAt: true },
+    });
+
+    return row?.snapshotAt != null ? Number(row.snapshotAt) : null;
   }
 
   /**
@@ -96,12 +114,11 @@ export class SnapshotService {
     if (!row?.snapshotData) return null;
 
     try {
-      // Decompress snapshot
-      const decompressed = zlib
-        .gunzipSync(row.snapshotData, {
+      const decompressed = (
+        await gunzipAsync(row.snapshotData, {
           maxOutputLength: MAX_SNAPSHOT_DECOMPRESSED_BYTES,
         })
-        .toString('utf-8');
+      ).toString('utf-8');
       return {
         state: JSON.parse(decompressed),
         serverSeq: row.lastSnapshotSeq ?? 0,
@@ -109,45 +126,172 @@ export class SnapshotService {
         schemaVersion: row.snapshotSchemaVersion ?? 1,
       };
     } catch (err) {
+      // Without this clear the same error would be logged on every cache read
+      // until a new snapshot is generated.
       Logger.error(
-        `[user:${userId}] Failed to decompress cached snapshot: ${(err as Error).message}`,
+        `[user:${userId}] Failed to decompress cached snapshot, invalidating: ${(err as Error).message}`,
       );
+      await this._invalidateCachedSnapshot(userId);
       return null;
     }
   }
 
+  private async _invalidateCachedSnapshot(userId: number): Promise<void> {
+    try {
+      await prisma.userSyncState.update({
+        where: { userId },
+        data: {
+          snapshotData: null,
+          lastSnapshotSeq: null,
+          snapshotAt: null,
+          snapshotSchemaVersion: null,
+        },
+      });
+    } catch (err) {
+      // Row may have been deleted concurrently — best-effort cleanup.
+      Logger.warn(
+        `[user:${userId}] Failed to invalidate cached snapshot: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Cache a snapshot only when it's replayable by the server.
+   * Encrypted payloads remain available as ops but cannot back snapshot
+   * replay (server cannot decrypt). Owning this invariant here keeps HTTP
+   * routes from having to remember the rule.
+   */
+  async cacheSnapshotIfReplayable(
+    userId: number,
+    state: unknown,
+    serverSeq: number,
+    isPayloadEncrypted: boolean,
+    preparedSnapshot?: PreparedSnapshotCache,
+  ): Promise<CacheSnapshotResult | null> {
+    if (isPayloadEncrypted) return null;
+    return this.cacheSnapshot(userId, state, serverSeq, preparedSnapshot);
+  }
+
   /**
    * Cache a snapshot for a user.
+   *
+   * Guards against stale-overwrite races between concurrent uploads: only
+   * writes when no row exists yet or the cached `lastSnapshotSeq` is older
+   * than `serverSeq`. The op append itself is serialized by the DB; the cache
+   * write is not, so without this guard a later request finishing first could
+   * be clobbered by an earlier one.
+   *
+   * Returns byte accounting so callers can keep the storage usage counter in
+   * sync with `snapshotData` writes. `deltaBytes` is 0 when nothing was
+   * written (race lost) so storage accounting stays self-consistent.
    */
-  async cacheSnapshot(userId: number, state: unknown, serverSeq: number): Promise<void> {
+  async cacheSnapshot(
+    userId: number,
+    state: unknown,
+    serverSeq: number,
+    preparedSnapshot?: PreparedSnapshotCache,
+  ): Promise<CacheSnapshotResult> {
     const now = Date.now();
-    // Compress snapshot
-    const compressed = zlib.gzipSync(JSON.stringify(state));
+    const prepared = preparedSnapshot ?? (await this.prepareSnapshotCache(state));
+    const previousBytes = await this.getCachedSnapshotBytes(userId);
 
-    if (compressed.length > MAX_SNAPSHOT_SIZE_BYTES) {
+    if (!prepared.cacheable) {
       Logger.error(
-        `[user:${userId}] Snapshot too large: ${compressed.length} bytes ` +
-          `(max ${MAX_SNAPSHOT_SIZE_BYTES}). Skipping cache.`,
+        `[user:${userId}] Snapshot too large: ${prepared.bytes} bytes ` +
+          `(max ${MAX_SNAPSHOT_SIZE_BYTES}). Clearing stale cache.`,
       );
-      return;
+      // Race-safe clear: only when our serverSeq is newer than what is
+      // cached, so we don't clobber a smaller, still-valid snapshot that
+      // won the race.
+      let cleared = 0;
+      if (previousBytes > 0) {
+        const clearResult = await prisma.userSyncState.updateMany({
+          where: {
+            userId,
+            OR: [{ lastSnapshotSeq: null }, { lastSnapshotSeq: { lt: serverSeq } }],
+          },
+          data: {
+            snapshotData: null,
+            lastSnapshotSeq: null,
+            snapshotAt: null,
+            snapshotSchemaVersion: null,
+          },
+        });
+        cleared = clearResult.count;
+      }
+      return {
+        cached: false,
+        bytesWritten: 0,
+        previousBytes,
+        deltaBytes: cleared > 0 ? -previousBytes : 0,
+      };
     }
 
-    await prisma.userSyncState.update({
-      where: { userId },
-      data: {
-        snapshotData: compressed,
-        lastSnapshotSeq: serverSeq,
-        snapshotAt: BigInt(now),
-        snapshotSchemaVersion: CURRENT_SCHEMA_VERSION,
+    const data = {
+      snapshotData: prepared.data,
+      lastSnapshotSeq: serverSeq,
+      snapshotAt: BigInt(now),
+      snapshotSchemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+
+    // Conditional update — does nothing when no row exists OR when cached
+    // lastSnapshotSeq is already >= serverSeq.
+    const updateResult = await prisma.userSyncState.updateMany({
+      where: {
+        userId,
+        OR: [{ lastSnapshotSeq: null }, { lastSnapshotSeq: { lt: serverSeq } }],
       },
+      data,
     });
+
+    if (updateResult.count > 0) {
+      return {
+        cached: true,
+        bytesWritten: prepared.bytes,
+        previousBytes,
+        deltaBytes: prepared.bytes - previousBytes,
+      };
+    }
+
+    // Either no row exists yet (first-time-user path) or a newer snapshot
+    // already won the race. Try a create — if a row was inserted between
+    // the updateMany and now, the unique-userId constraint throws P2002
+    // and we treat that as "newer snapshot won; nothing to do".
+    try {
+      await prisma.userSyncState.create({ data: { userId, ...data } });
+      return {
+        cached: true,
+        bytesWritten: prepared.bytes,
+        previousBytes,
+        deltaBytes: prepared.bytes - previousBytes,
+      };
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'P2002') throw err;
+      return { cached: false, bytesWritten: 0, previousBytes, deltaBytes: 0 };
+    }
   }
 
   /**
    * Generate a snapshot for a user at the latest sequence.
    * Uses FIX 1.7 lock to prevent concurrent generation for the same user.
+   *
+   * `onCacheDelta` is invoked after the transaction commits with the byte
+   * change applied to the `snapshotData` column when the cache was rewritten.
+   * Callers should use it to keep the storage usage counter in sync with
+   * on-disk reality — otherwise `GET /snapshot` can grow `snapshotData` by up
+   * to ~MAX_SNAPSHOT_SIZE_BYTES without the counter noticing.
+   *
+   * `maxCacheBytes` (B5) caps how large the persisted cache blob may be.
+   * When the freshly compressed snapshot would exceed this cap (typically set
+   * to the user's remaining quota), the cache is NOT written but the in-memory
+   * snapshot is still returned to the caller. Lets a user at quota still read
+   * their state without growing on-disk storage further.
    */
-  async generateSnapshot(userId: number): Promise<SnapshotResult> {
+  async generateSnapshot(
+    userId: number,
+    onCacheDelta?: (deltaBytes: number) => Promise<void>,
+    maxCacheBytes?: number,
+  ): Promise<SnapshotResult> {
     // FIX 1.7: Check if snapshot generation is already in progress for this user.
     // If so, wait for the existing generation and return its result.
     // This prevents duplicate expensive computation under concurrent requests.
@@ -158,7 +302,11 @@ export class SnapshotService {
     }
 
     // Start new generation and store the promise
-    const promise = this._generateSnapshotImpl(userId);
+    const promise = this.snapshotGenerationService.generateSnapshot(
+      userId,
+      onCacheDelta,
+      maxCacheBytes,
+    );
     this.snapshotGenerationLocks.set(userId, promise);
 
     try {
@@ -167,148 +315,6 @@ export class SnapshotService {
       // Clean up lock when done (whether success or failure)
       this.snapshotGenerationLocks.delete(userId);
     }
-  }
-
-  /**
-   * Internal implementation of snapshot generation.
-   * Called only when no concurrent generation is in progress.
-   */
-  private async _generateSnapshotImpl(userId: number): Promise<SnapshotResult> {
-    // Transaction for consistent view
-    return prisma.$transaction(
-      async (tx) => {
-        // Get latest seq in this transaction
-        const seqRow = await tx.userSyncState.findUnique({
-          where: { userId },
-          select: { lastSeq: true },
-        });
-        const latestSeq = seqRow?.lastSeq ?? 0;
-
-        let state: Record<string, unknown> = {};
-        let startSeq = 0;
-        let snapshotSchemaVersion = CURRENT_SCHEMA_VERSION;
-
-        // Try to get cached snapshot (need to fetch it inside tx for consistency?
-        // Actually, we can fetch it. If it's old, we just replay more ops.)
-        // Re-implementing getCachedSnapshot logic inside tx
-        const cachedRow = await tx.userSyncState.findUnique({
-          where: { userId },
-          select: {
-            snapshotData: true,
-            lastSnapshotSeq: true,
-            snapshotAt: true,
-            snapshotSchemaVersion: true,
-          },
-        });
-
-        if (cachedRow?.snapshotData) {
-          try {
-            const decompressed = zlib
-              .gunzipSync(cachedRow.snapshotData, {
-                maxOutputLength: MAX_SNAPSHOT_DECOMPRESSED_BYTES,
-              })
-              .toString('utf-8');
-            state = JSON.parse(decompressed) as Record<string, unknown>;
-            startSeq = cachedRow.lastSnapshotSeq ?? 0;
-            snapshotSchemaVersion = cachedRow.snapshotSchemaVersion ?? 1;
-          } catch (err) {
-            // Ignore corrupted cache
-          }
-        }
-
-        if (
-          startSeq >= latestSeq &&
-          cachedRow?.snapshotData &&
-          snapshotSchemaVersion === CURRENT_SCHEMA_VERSION
-        ) {
-          return {
-            state,
-            serverSeq: startSeq,
-            generatedAt: Date.now(),
-            schemaVersion: CURRENT_SCHEMA_VERSION,
-          };
-        }
-
-        // Migrate snapshot if needed
-        if (stateNeedsMigration(snapshotSchemaVersion, CURRENT_SCHEMA_VERSION)) {
-          Logger.info(
-            `[user:${userId}] Migrating snapshot from v${snapshotSchemaVersion} to v${CURRENT_SCHEMA_VERSION}`,
-          );
-          const migrationResult = migrateState(
-            state,
-            snapshotSchemaVersion,
-            CURRENT_SCHEMA_VERSION,
-          );
-          if (!migrationResult.success) {
-            throw new Error(`Snapshot migration failed: ${migrationResult.error}`);
-          }
-          state = migrationResult.data as Record<string, unknown>;
-          snapshotSchemaVersion = CURRENT_SCHEMA_VERSION;
-        }
-
-        const totalOpsToProcess = latestSeq - startSeq;
-        if (totalOpsToProcess > MAX_OPS_FOR_SNAPSHOT) {
-          throw new Error(
-            `Too many operations to process (${totalOpsToProcess}). ` +
-              `Max: ${MAX_OPS_FOR_SNAPSHOT}.`,
-          );
-        }
-
-        const BATCH_SIZE = 10000;
-        let currentSeq = startSeq;
-        let totalProcessed = 0;
-
-        while (currentSeq < latestSeq) {
-          const batchOps = await tx.operation.findMany({
-            where: {
-              userId,
-              serverSeq: { gt: currentSeq },
-            },
-            orderBy: { serverSeq: 'asc' },
-            take: BATCH_SIZE,
-          });
-
-          if (batchOps.length === 0) break;
-
-          // Replay ops
-          state = this.replayOpsToState(batchOps, state);
-
-          currentSeq = batchOps[batchOps.length - 1].serverSeq;
-          totalProcessed += batchOps.length;
-
-          if (totalProcessed > MAX_OPS_FOR_SNAPSHOT) break;
-        }
-
-        const generatedAt = Date.now();
-
-        // Update cache (we can do this async/outside, but doing it inside ensures it matches the returned state)
-        // However, we are in a read-only-ish flow, but we can write to cache.
-        // We'll call the update directly on tx.
-        // Re-implementing cacheSnapshot logic for tx
-        const compressed = zlib.gzipSync(JSON.stringify(state));
-        if (compressed.length <= MAX_SNAPSHOT_SIZE_BYTES) {
-          await tx.userSyncState.update({
-            where: { userId },
-            data: {
-              snapshotData: compressed,
-              lastSnapshotSeq: latestSeq,
-              snapshotAt: BigInt(generatedAt),
-              snapshotSchemaVersion: CURRENT_SCHEMA_VERSION,
-            },
-          });
-        }
-
-        return {
-          state,
-          serverSeq: latestSeq,
-          generatedAt,
-          schemaVersion: CURRENT_SCHEMA_VERSION,
-        };
-      },
-      {
-        timeout: 60000, // Snapshots can take time
-      },
-    );
   }
 
   /**
@@ -375,299 +381,6 @@ export class SnapshotService {
     serverSeq: number;
     generatedAt: number;
   }> {
-    return prisma.$transaction(
-      async (tx) => {
-        // Verify targetSeq is valid
-        const maxSeqRow = await tx.userSyncState.findUnique({
-          where: { userId },
-          select: { lastSeq: true },
-        });
-        const maxSeq = maxSeqRow?.lastSeq ?? 0;
-
-        if (targetSeq > maxSeq) {
-          throw new Error(
-            `Target sequence ${targetSeq} exceeds latest sequence ${maxSeq}`,
-          );
-        }
-
-        if (targetSeq < 1) {
-          throw new Error('Target sequence must be at least 1');
-        }
-
-        let state: Record<string, unknown> = {};
-        let startSeq = 0;
-
-        // Try to use cached snapshot as base if it's before targetSeq
-        const cachedRow = await tx.userSyncState.findUnique({
-          where: { userId },
-          select: {
-            snapshotData: true,
-            lastSnapshotSeq: true,
-            snapshotSchemaVersion: true,
-          },
-        });
-
-        if (
-          cachedRow?.snapshotData &&
-          cachedRow.lastSnapshotSeq &&
-          cachedRow.lastSnapshotSeq <= targetSeq
-        ) {
-          try {
-            const decompressed = zlib
-              .gunzipSync(cachedRow.snapshotData, {
-                maxOutputLength: MAX_SNAPSHOT_DECOMPRESSED_BYTES,
-              })
-              .toString('utf-8');
-            state = JSON.parse(decompressed) as Record<string, unknown>;
-            startSeq = cachedRow.lastSnapshotSeq;
-
-            // Migrate if needed
-            const snapshotSchemaVersion = cachedRow.snapshotSchemaVersion ?? 1;
-            if (stateNeedsMigration(snapshotSchemaVersion, CURRENT_SCHEMA_VERSION)) {
-              const migrationResult = migrateState(
-                state,
-                snapshotSchemaVersion,
-                CURRENT_SCHEMA_VERSION,
-              );
-              if (migrationResult.success) {
-                state = migrationResult.data as Record<string, unknown>;
-              }
-            }
-          } catch (err) {
-            // Ignore corrupted cache, start from scratch
-            Logger.warn(
-              `[user:${userId}] Failed to use cached snapshot: ${(err as Error).message}`,
-            );
-          }
-        }
-
-        const totalOpsToProcess = targetSeq - startSeq;
-        if (totalOpsToProcess > MAX_OPS_FOR_SNAPSHOT) {
-          throw new Error(
-            `Too many operations to process (${totalOpsToProcess}). ` +
-              `Max: ${MAX_OPS_FOR_SNAPSHOT}.`,
-          );
-        }
-
-        // Check for encrypted ops in the range - server cannot replay encrypted payloads
-        const encryptedOpCount = await tx.operation.count({
-          where: {
-            userId,
-            serverSeq: { gt: startSeq, lte: targetSeq },
-            isPayloadEncrypted: true,
-          },
-        });
-
-        if (encryptedOpCount > 0) {
-          throw new Error(
-            `ENCRYPTED_OPS_NOT_SUPPORTED: Cannot generate snapshot - ${encryptedOpCount} operations have encrypted payloads. ` +
-              `Server-side restore is not available when E2E encryption is enabled. ` +
-              `Alternative: Use the client app's "Sync Now" button which can decrypt and restore locally.`,
-          );
-        }
-
-        // Replay ops from startSeq to targetSeq
-        const BATCH_SIZE = 10000;
-        let currentSeq = startSeq;
-
-        while (currentSeq < targetSeq) {
-          const batchOps = await tx.operation.findMany({
-            where: {
-              userId,
-              serverSeq: { gt: currentSeq, lte: targetSeq },
-            },
-            orderBy: { serverSeq: 'asc' },
-            take: BATCH_SIZE,
-          });
-
-          if (batchOps.length === 0) break;
-
-          state = this.replayOpsToState(batchOps, state);
-          currentSeq = batchOps[batchOps.length - 1].serverSeq;
-        }
-
-        return {
-          state,
-          serverSeq: targetSeq,
-          generatedAt: Date.now(),
-        };
-      },
-      {
-        timeout: 60000, // Snapshot generation can take time
-      },
-    );
-  }
-
-  /**
-   * Replay operations to build state.
-   * Used internally by snapshot generation methods.
-   */
-  replayOpsToState(
-    ops: PrismaOperation[],
-    initialState: Record<string, unknown> = {},
-  ): Record<string, unknown> {
-    const state = { ...(initialState as Record<string, Record<string, unknown>>) };
-
-    for (let i = 0; i < ops.length; i++) {
-      const row = ops[i];
-
-      // Skip encrypted operations - server cannot decrypt E2E encrypted payloads
-      // This is a defensive check; generateSnapshotAtSeq should reject encrypted ops upfront
-      if (row.isPayloadEncrypted) {
-        Logger.warn(
-          `[replayOpsToState] Skipping encrypted op ${row.id} (seq=${row.serverSeq})`,
-        );
-        continue;
-      }
-
-      // Periodically check state size to prevent memory exhaustion
-      if (i > 0 && i % REPLAY_SIZE_CHECK_INTERVAL === 0) {
-        const estimatedSize = JSON.stringify(state).length;
-        if (estimatedSize > MAX_REPLAY_STATE_SIZE_BYTES) {
-          throw new Error(
-            `State too large during replay: ${Math.round(estimatedSize / 1024 / 1024)}MB ` +
-              `(max: ${Math.round(MAX_REPLAY_STATE_SIZE_BYTES / 1024 / 1024)}MB)`,
-          );
-        }
-      }
-
-      let opType = row.opType as Operation['opType'];
-      let entityType = row.entityType;
-      let entityId = row.entityId;
-      let payload = row.payload;
-
-      const opSchemaVersion = row.schemaVersion ?? 1;
-
-      // Prepare list of operations to process (may be expanded by migration)
-      let opsToProcess: Array<{
-        opType: string;
-        entityType: string;
-        entityId: string | null;
-        payload: unknown;
-      }> = [{ opType, entityType, entityId, payload }];
-
-      if (opSchemaVersion < CURRENT_SCHEMA_VERSION) {
-        const opLike: OperationLike = {
-          id: row.id,
-          opType,
-          entityType,
-          entityId: entityId ?? undefined,
-          payload,
-          schemaVersion: opSchemaVersion,
-        };
-
-        const migrationResult = migrateOperation(opLike, CURRENT_SCHEMA_VERSION);
-        if (!migrationResult.success) {
-          continue;
-        }
-        const migratedOp = migrationResult.data;
-        if (!migratedOp) continue;
-
-        // Handle array result (operation was split into multiple)
-        if (Array.isArray(migratedOp)) {
-          opsToProcess = migratedOp.map((op) => ({
-            opType: op.opType,
-            entityType: op.entityType,
-            entityId: op.entityId ?? null,
-            payload: op.payload,
-          }));
-        } else {
-          opsToProcess = [
-            {
-              opType: migratedOp.opType,
-              entityType: migratedOp.entityType,
-              entityId: migratedOp.entityId ?? null,
-              payload: migratedOp.payload,
-            },
-          ];
-        }
-      }
-
-      // Process all operations (original or migrated)
-      for (const opToProcess of opsToProcess) {
-        const {
-          opType: processOpType,
-          entityType: processEntityType,
-          entityId: processEntityId,
-          payload: processPayload,
-        } = opToProcess;
-
-        // Handle full-state operations BEFORE entity type check
-        // These operations replace the entire state and don't use a specific entity type
-        if (
-          processOpType === 'SYNC_IMPORT' ||
-          processOpType === 'BACKUP_IMPORT' ||
-          processOpType === 'REPAIR'
-        ) {
-          if (
-            processPayload &&
-            typeof processPayload === 'object' &&
-            'appDataComplete' in processPayload
-          ) {
-            Object.assign(
-              state,
-              (processPayload as { appDataComplete: unknown }).appDataComplete,
-            );
-          } else {
-            Object.assign(state, processPayload);
-          }
-          continue;
-        }
-
-        if (!ALLOWED_ENTITY_TYPES.has(processEntityType)) continue;
-
-        if (!state[processEntityType]) {
-          state[processEntityType] = {};
-        }
-
-        switch (processOpType) {
-          case 'CRT':
-          case 'UPD':
-            if (processEntityId) {
-              state[processEntityType][processEntityId] = {
-                ...(state[processEntityType][processEntityId] as Record<string, unknown>),
-                ...(processPayload as Record<string, unknown>),
-              };
-            }
-            break;
-          case 'DEL':
-            if (processEntityId) {
-              delete state[processEntityType][processEntityId];
-            }
-            break;
-          case 'MOV':
-            if (processEntityId && processPayload) {
-              state[processEntityType][processEntityId] = {
-                ...(state[processEntityType][processEntityId] as Record<string, unknown>),
-                ...(processPayload as Record<string, unknown>),
-              };
-            }
-            break;
-          case 'BATCH':
-            if (processPayload && typeof processPayload === 'object') {
-              const batchPayload = processPayload as Record<string, unknown>;
-              if (batchPayload.entities && typeof batchPayload.entities === 'object') {
-                const entities = batchPayload.entities as Record<string, unknown>;
-                for (const [id, entity] of Object.entries(entities)) {
-                  state[processEntityType][id] = {
-                    ...(state[processEntityType][id] as Record<string, unknown>),
-                    ...(entity as Record<string, unknown>),
-                  };
-                }
-              } else if (processEntityId) {
-                state[processEntityType][processEntityId] = {
-                  ...(state[processEntityType][processEntityId] as Record<
-                    string,
-                    unknown
-                  >),
-                  ...batchPayload,
-                };
-              }
-            }
-            break;
-        }
-      }
-    }
-    return state;
+    return this.snapshotGenerationService.generateSnapshotAtSeq(userId, targetSeq);
   }
 }

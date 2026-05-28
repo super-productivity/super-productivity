@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { DialogScheduleTaskComponent } from './dialog-schedule-task.component';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -16,10 +16,14 @@ import { WorkContextService } from '../../../features/work-context/work-context.
 import { of } from 'rxjs';
 import { PlannerService } from '../planner.service';
 import { RootState } from '../../../root-store/root-state';
-import { CONFIG_FEATURE_NAME } from '../../config/store/global-config.reducer';
+import {
+  CONFIG_FEATURE_NAME,
+  selectTimelineConfig,
+} from '../../config/store/global-config.reducer';
 import { TaskReminderOptionId } from '../../tasks/task.model';
 import { ReminderService } from '../../reminder/reminder.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 
 describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
   let component: DialogScheduleTaskComponent;
@@ -73,6 +77,10 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
               },
             } as any,
           },
+          selectors: [
+            { selector: selectAllTasksWithDueTimeSorted, value: [] },
+            { selector: selectTimelineConfig, value: null },
+          ],
         }),
         { provide: MatDialogRef, useValue: dialogRefSpy },
         { provide: SnackService, useValue: snackServiceSpy },
@@ -218,16 +226,15 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       fixture.detectChanges();
     });
 
-    it('should update selectedDate when dateSelected is called', () => {
+    it('should update selectedDate when dateSelected is called', fakeAsync(() => {
       const testDate = new Date('2024-01-20');
 
       component.dateSelected(testDate);
+      // dateSelected defers the assignment via setTimeout — flush it before asserting
+      tick();
 
-      // Wait for setTimeout to complete
-      setTimeout(() => {
-        expect(component.selectedDate).toEqual(testDate);
-      }, 1);
-    });
+      expect(component.selectedDate).toEqual(testDate);
+    }));
 
     it('should handle quick access buttons correctly', () => {
       const initialDate = new Date();

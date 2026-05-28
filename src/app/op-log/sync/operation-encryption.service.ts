@@ -1,34 +1,31 @@
 import { Injectable } from '@angular/core';
-import { encrypt, decrypt, encryptBatch, decryptBatch } from '../encryption/encryption';
+import { decrypt, decryptBatch, encrypt, encryptBatch } from '@sp/sync-core';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { DecryptError } from '../core/errors/sync-errors';
 
 /**
  * Handles E2E encryption/decryption of operation payloads for SuperSync.
- * Uses AES-256-GCM with Argon2id key derivation (same as legacy sync providers).
+ * Uses AES-256-GCM with Argon2id key derivation.
  *
- * PERFORMANCE OPTIMIZATION:
- * Batch encrypt/decrypt methods use key caching to avoid expensive Argon2id
- * derivation (64MB, 3 iterations) for each operation. On mobile devices, this
- * can reduce sync time from minutes to seconds when processing many operations.
+ * The single-item and batch primitives all share the @sp/sync-core session
+ * cache, so repeated calls with the same password reuse the derived key —
+ * critical on mobile where Argon2id (64MB, 3 iterations) takes 500ms-2000ms.
+ *
+ * Tests should use real encryption with weakened Argon2 params
+ * (`setArgon2ParamsForTesting({ memorySize: 8, iterations: 1 })`) rather than
+ * mocking the package exports.
  */
 @Injectable({
   providedIn: 'root',
 })
 export class OperationEncryptionService {
-  // Exposed as properties so tests can spy on them without DI tokens
-  private _encrypt = encrypt;
-  private _decrypt = decrypt;
-  private _encryptBatch = encryptBatch;
-  private _decryptBatch = decryptBatch;
-
   /**
    * Encrypts the payload of a SyncOperation.
    * Returns a new operation with encrypted payload and isPayloadEncrypted=true.
    */
   async encryptOperation(op: SyncOperation, encryptKey: string): Promise<SyncOperation> {
     const payloadStr = JSON.stringify(op.payload);
-    const encryptedPayload = await this._encrypt(payloadStr, encryptKey);
+    const encryptedPayload = await encrypt(payloadStr, encryptKey);
     return {
       ...op,
       payload: encryptedPayload,
@@ -51,7 +48,7 @@ export class OperationEncryptionService {
     }
     let decryptedStr: string;
     try {
-      decryptedStr = await this._decrypt(op.payload, encryptKey);
+      decryptedStr = await decrypt(op.payload, encryptKey);
     } catch (e) {
       throw new DecryptError('Failed to decrypt operation payload', e);
     }
@@ -68,9 +65,7 @@ export class OperationEncryptionService {
   }
 
   /**
-   * Batch encrypt operations for upload.
-   * OPTIMIZED: Derives Argon2id key once instead of per-operation.
-   * This is critical for mobile performance.
+   * Batch encrypt operations for upload. Derives the Argon2id key once.
    */
   async encryptOperations(
     ops: SyncOperation[],
@@ -80,13 +75,9 @@ export class OperationEncryptionService {
       return [];
     }
 
-    // Convert payloads to strings for batch encryption
     const payloadStrings = ops.map((op) => JSON.stringify(op.payload));
+    const encryptedPayloads = await encryptBatch(payloadStrings, encryptKey);
 
-    // Encrypt all payloads with a single key derivation
-    const encryptedPayloads = await this._encryptBatch(payloadStrings, encryptKey);
-
-    // Reconstruct operations with encrypted payloads
     return ops.map((op, index) => ({
       ...op,
       payload: encryptedPayloads[index],
@@ -95,10 +86,8 @@ export class OperationEncryptionService {
   }
 
   /**
-   * Batch decrypt operations after download.
+   * Batch decrypt operations after download. Caches keys by salt.
    * Non-encrypted ops pass through unchanged.
-   * OPTIMIZED: Caches Argon2id keys by salt to avoid redundant derivations.
-   * This is critical for mobile performance.
    */
   async decryptOperations(
     ops: SyncOperation[],
@@ -108,14 +97,12 @@ export class OperationEncryptionService {
       return [];
     }
 
-    // Separate encrypted and non-encrypted operations
     const encryptedOps: { index: number; op: SyncOperation }[] = [];
     const results: SyncOperation[] = new Array(ops.length);
 
     for (let i = 0; i < ops.length; i++) {
       const op = ops[i];
       if (op.isPayloadEncrypted) {
-        // Validate that encrypted payloads are strings (matching single-op behavior)
         if (typeof op.payload !== 'string') {
           throw new DecryptError(
             `Encrypted payload must be a string (op ${op.id} has ${typeof op.payload})`,
@@ -123,7 +110,6 @@ export class OperationEncryptionService {
         }
         encryptedOps.push({ index: i, op });
       } else {
-        // Non-encrypted ops pass through unchanged
         results[i] = op;
       }
     }
@@ -132,16 +118,14 @@ export class OperationEncryptionService {
       return ops;
     }
 
-    // Batch decrypt all encrypted payloads
     const encryptedPayloads = encryptedOps.map((item) => item.op.payload as string);
     let decryptedStrings: string[];
     try {
-      decryptedStrings = await this._decryptBatch(encryptedPayloads, encryptKey);
+      decryptedStrings = await decryptBatch(encryptedPayloads, encryptKey);
     } catch (e) {
       throw new DecryptError('Failed to decrypt operation payloads', e);
     }
 
-    // Reconstruct operations with decrypted payloads
     for (let i = 0; i < encryptedOps.length; i++) {
       const { index, op } = encryptedOps[i];
       try {
@@ -161,16 +145,14 @@ export class OperationEncryptionService {
 
   /**
    * Encrypts an arbitrary payload (for snapshot uploads).
-   * Returns the encrypted string.
    */
   async encryptPayload(payload: unknown, encryptKey: string): Promise<string> {
     const payloadStr = JSON.stringify(payload);
-    return this._encrypt(payloadStr, encryptKey);
+    return encrypt(payloadStr, encryptKey);
   }
 
   /**
-   * Decrypts an encrypted payload string.
-   * Returns the parsed payload object.
+   * Decrypts an encrypted payload string and JSON-parses the result.
    */
   async decryptPayload<T = unknown>(
     encryptedPayload: string,
@@ -178,7 +160,7 @@ export class OperationEncryptionService {
   ): Promise<T> {
     let decryptedStr: string;
     try {
-      decryptedStr = await this._decrypt(encryptedPayload, encryptKey);
+      decryptedStr = await decrypt(encryptedPayload, encryptKey);
     } catch (e) {
       throw new DecryptError('Failed to decrypt payload', e);
     }

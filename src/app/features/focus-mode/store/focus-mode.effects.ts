@@ -268,7 +268,6 @@ export class FocusModeEffects {
         ([timer, mode, _isOvertimeEnabled]) =>
           timer.purpose === 'work' &&
           !timer.isRunning &&
-          timer.duration > 0 &&
           timer.elapsed >= timer.duration &&
           mode !== FocusModeMode.Flowtime &&
           !_isOvertimeEnabled,
@@ -287,7 +286,7 @@ export class FocusModeEffects {
           (timer) =>
             timer.purpose === 'break' &&
             !timer.isRunning &&
-            timer.duration > 0 &&
+            timer.startedAt !== null &&
             timer.elapsed >= timer.duration,
         ),
         distinctUntilChanged(
@@ -338,9 +337,7 @@ export class FocusModeEffects {
           return true;
         }
         // Bug #6510 fix: For automatic completion, only stop tracking if no break will start.
-        // When a break will start (auto or manual), tracking pause is deferred to break-start:
-        // - Auto: autoStartBreakOnSessionComplete$
-        // - Manual: FocusModeService.startAfterSessionComplete()
+        // When a break will start, tracking pause is deferred to break-start (autoStartBreakOnSessionComplete$).
         const strategy = this.strategyFactory.getStrategy(mode);
         const breakWillStart = strategy.shouldStartBreakAfterSession;
         return !breakWillStart;
@@ -369,7 +366,7 @@ export class FocusModeEffects {
         // Only for Pomodoro mode (since only Pomodoro increments cycles)
         if (mode !== FocusModeMode.Pomodoro) return false;
         const strategy = this.strategyFactory.getStrategy(mode);
-        return strategy.shouldStartBreakAfterSession && !config?.isManualBreakStart;
+        return strategy.shouldStartBreakAfterSession;
       }),
       switchMap(([_, mode, cycle, config, currentTaskId]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
@@ -403,6 +400,40 @@ export class FocusModeEffects {
         }
 
         return of(...actionsArr);
+      }),
+    ),
+  );
+
+  // Effect 3b: Offer Flowtime breaks when user explicitly ends their session
+  // Triggers on endFlowtimeSession — NOT pauseFocusSession (which is fired by
+  // sync-stop, idle, and the regular pause button)
+  offerFlowtimeBreakOnSessionEnd$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(actions.endFlowtimeSession),
+      withLatestFrom(
+        this.store.select(selectors.selectMode),
+        this.store.select(selectors.selectTimer),
+      ),
+      filter(([_action, mode, timer]) => {
+        if (mode !== FocusModeMode.Flowtime) return false;
+        if (timer.purpose !== 'work') return false;
+        return true;
+      }),
+      switchMap(([action, mode, timer]) => {
+        const strategy = this.strategyFactory.getStrategy(mode);
+        const breakInfo = strategy.getBreakDuration(timer.elapsed);
+
+        if (!strategy.shouldStartBreakAfterSession || !breakInfo) {
+          return [actions.completeFocusSession({ isManual: true })];
+        }
+
+        return [
+          actions.offerFlowtimeBreak({
+            duration: breakInfo.duration,
+            isLongBreak: breakInfo.isLong,
+            pausedTaskId: action.pausedTaskId,
+          }),
+        ];
       }),
     ),
   );
@@ -453,37 +484,6 @@ export class FocusModeEffects {
         ),
       ),
     { dispatch: false },
-  );
-
-  // Effect 5: Store pausedTaskId when session completes with manual break start
-  // Bug #5954 fix: Ensures task can be resumed when break is skipped/completed
-  // Bug #5974 fix: Store pausedTaskId regardless of isPauseTrackingDuringBreak setting
-  // This allows tracking to resume when user manually stops tracking before starting break
-  storePausedTaskOnManualBreakSession$ = createEffect(() =>
-    this.actions$.pipe(
-      ofType(actions.completeFocusSession),
-      withLatestFrom(
-        this.store.select(selectors.selectMode),
-        this.store.select(selectFocusModeConfig),
-        this.taskService.currentTaskId$,
-      ),
-      filter(([_, mode, config, currentTaskId]) => {
-        const strategy = this.strategyFactory.getStrategy(mode);
-        // Store pausedTaskId when manual break is enabled and there's a current task
-        // Note: We store regardless of isPauseTrackingDuringBreak because:
-        // - If isPauseTrackingDuringBreak=true: pausedTaskId is used to resume after break
-        // - If isPauseTrackingDuringBreak=false: pausedTaskId is used to resume if user
-        //   manually stopped tracking before starting the break (bug #5974)
-        return (
-          strategy.shouldStartBreakAfterSession &&
-          !!config?.isManualBreakStart &&
-          !!currentTaskId
-        );
-      }),
-      map(([_, _mode, _config, currentTaskId]) =>
-        actions.setPausedTaskId({ pausedTaskId: currentTaskId }),
-      ),
-    ),
   );
 
   // Break completion effects - split into separate concerns for better maintainability
@@ -617,7 +617,9 @@ export class FocusModeEffects {
   logFocusSession$ = createEffect(
     () =>
       this.actions$.pipe(
-        ofType(actions.completeFocusSession),
+        // Flowtime sessions are logged when the break is offered, even if the
+        // user declines the break and never starts it.
+        ofType(actions.completeFocusSession, actions.offerFlowtimeBreak),
         withLatestFrom(this.store.select(selectors.selectLastSessionDuration)),
         tap(([, duration]) => {
           if (duration > 0) {

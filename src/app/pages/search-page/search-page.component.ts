@@ -17,6 +17,7 @@ import { Tag } from '../../features/tag/tag.model';
 import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
 import { Task } from '../../features/tasks/task.model';
+import { resolveDisplayTagIds } from '../../features/tasks/util/resolve-display-tag-ids.util';
 import { SearchItem } from './search-page.model';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
 import { AsyncPipe } from '@angular/common';
@@ -101,11 +102,8 @@ export class SearchPageComponent implements OnInit {
     const tagMap = new Map(tags.map((t) => [t.id, t]));
 
     return tasks.map((task) => {
-      // By design subtasks cannot have tags.
-      // If a subtask does not belong to a project, it will neither have a project nor a tag.
-      // Therefore, we need to use the parent's tag.
       const parent = task.parentId ? taskMap.get(task.parentId) : undefined;
-      const tagId = parent ? parent.tagIds?.[0] : task.tagIds?.[0];
+      const tagId = resolveDisplayTagIds(task, parent)[0];
       const taskNotes = task.notes || '';
 
       return {
@@ -122,6 +120,7 @@ export class SearchPageComponent implements OnInit {
         issueType: task.issueType || null,
         ctx: this._getContextIcon(task, projectMap, tagMap, tagId),
         isArchiveTask,
+        isDone: !!task.isDone,
       };
     });
   }

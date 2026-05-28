@@ -39,6 +39,7 @@ export {
   WebCryptoNotAvailableError,
   RemoteFileNotFoundAPIError,
   MissingCredentialsSPError,
+  NetworkUnavailableSPError,
   AuthFailSPError,
   NoSyncProviderSetError,
   SyncAlreadyInProgressError,
@@ -55,12 +56,12 @@ export {
 export {
   SyncProviderBase,
   FileSyncProvider,
-  SyncProviderServiceInterface,
   isFileSyncProvider,
 } from './sync-providers/provider.interface';
 
 // Provider types
-export type { DropboxPrivateCfg } from './sync-providers/file-based/dropbox/dropbox';
+export type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
+export type { OneDrivePrivateCfg } from '@sp/sync-providers/onedrive';
 
 // VectorClock from core
 export { VectorClock } from '../core/util/vector-clock';

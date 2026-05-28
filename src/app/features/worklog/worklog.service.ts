@@ -10,13 +10,13 @@ import { dedupeByKey } from '../../util/de-dupe-by-key';
 import { BehaviorSubject, from, merge, Observable } from 'rxjs';
 import {
   concatMap,
+  distinctUntilChanged,
   filter,
   first,
   map,
   shareReplay,
   startWith,
   switchMap,
-  take,
 } from 'rxjs/operators';
 import { getWeekNumber } from '../../util/get-week-number';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -55,7 +55,6 @@ export class WorklogService {
     this._dataInitStateService.isAllDataLoadedInitially$.pipe(
       concatMap(() =>
         merge(
-          // this._workContextService.activeWorkContextOnceOnContextChange$,
           this.archiveUpdateManualTrigger$,
           this._router.events.pipe(
             filter((event: any) => event instanceof NavigationEnd),
@@ -63,20 +62,33 @@ export class WorklogService {
               ({ urlAfterRedirects }: NavigationEnd) =>
                 urlAfterRedirects.includes('worklog') ||
                 urlAfterRedirects.includes('daily-summary') ||
-                urlAfterRedirects.includes('quick-history'),
+                urlAfterRedirects.includes('quick-history') ||
+                urlAfterRedirects.includes('metrics'),
             ),
           ),
         ),
       ),
     );
 
+  // Each trigger emission opens a fresh subscription to activeWorkContext$ that
+  // also lives until the next trigger, so:
+  //   - manual refreshes and URL-driven triggers always reload (the inner stream
+  //     is fresh, so distinctUntilChanged has no prior value and lets the first
+  //     emission through);
+  //   - subsequent context changes (e.g. switching projects on the metrics page,
+  //     where no trigger URL is crossed) also reload, because the inner
+  //     subscription is still alive and distinctUntilChanged sees a different id.
   // NOTE: task updates are not reflected
   // TODO improve to reflect task updates or load when route is changed to worklog or daily summary
   worklogData$: Observable<{
     worklog: Worklog;
     totalTimeSpent: number;
   }> = this._archiveUpdateTrigger$.pipe(
-    switchMap(() => this._workContextService.activeWorkContext$.pipe(take(1))),
+    switchMap(() =>
+      this._workContextService.activeWorkContext$.pipe(
+        distinctUntilChanged((a, b) => a.id === b.id),
+      ),
+    ),
     switchMap((curCtx) =>
       from(
         this._loadWorklogForWorkContext(curCtx).catch((e) => {
@@ -117,7 +129,11 @@ export class WorklogService {
 
   _quickHistoryData$: Observable<WorklogYearsWithWeeks | null> =
     this._archiveUpdateTrigger$.pipe(
-      switchMap(() => this._workContextService.activeWorkContext$.pipe(take(1))),
+      switchMap(() =>
+        this._workContextService.activeWorkContext$.pipe(
+          distinctUntilChanged((a, b) => a.id === b.id),
+        ),
+      ),
       switchMap((curCtx) =>
         from(
           this._loadQuickHistoryForWorkContext(curCtx).catch((e) => {

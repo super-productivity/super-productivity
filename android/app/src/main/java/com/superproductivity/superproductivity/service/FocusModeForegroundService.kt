@@ -83,11 +83,14 @@ class FocusModeForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
 
-        // Every Context.startForegroundService() creates a per-call FGS token
-        // that must be answered with startForeground() within the system
-        // timeout, regardless of action or existing state. Satisfy it here so
-        // every branch below already has the contract honored.
-        ensureForegroundNotification()
+        // Android documents successful startForeground() as the safe path
+        // after startForegroundService(). Promote before handling actions so
+        // newly started services satisfy that contract.
+        if (!ensureForegroundNotification()) {
+            reportForegroundFailure()
+            stopAfterForegroundFailure(startId)
+            return START_NOT_STICKY
+        }
 
         when (intent?.action) {
             ACTION_START -> {
@@ -98,7 +101,11 @@ class FocusModeForegroundService : Service() {
                 isBreak = intent.getBooleanExtra(EXTRA_IS_BREAK, false)
                 isPaused = intent.getBooleanExtra(EXTRA_IS_PAUSED, false)
 
-                startFocusMode()
+                if (!startFocusMode()) {
+                    reportForegroundFailure()
+                    stopAfterForegroundFailure(startId)
+                    return START_NOT_STICKY
+                }
             }
 
             ACTION_UPDATE -> {
@@ -144,9 +151,9 @@ class FocusModeForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun ensureForegroundNotification() {
-        try {
-            val notification = if (isRunning && title.isNotEmpty()) {
+    private fun ensureForegroundNotification(): Boolean {
+        val notification = try {
+            if (isRunning && title.isNotEmpty()) {
                 FocusModeNotificationHelper.buildNotification(
                     this,
                     title,
@@ -157,7 +164,7 @@ class FocusModeForegroundService : Service() {
                 )
             } else {
                 // A content title is required on some OEM skins (notably Samsung
-                // One UI) — a title-less notification can render blank or cause
+                // One UI) - a title-less notification can render blank or cause
                 // startForeground() to throw IllegalArgumentException on a few
                 // Android 14 builds, which would re-trigger the FGS timeout.
                 androidx.core.app.NotificationCompat.Builder(
@@ -171,46 +178,61 @@ class FocusModeForegroundService : Service() {
                     .setSilent(true)
                     .build()
             }
-            startForegroundSpecialUse(FocusModeNotificationHelper.NOTIFICATION_ID, notification)
-        } catch (e: IllegalArgumentException) {
-            // Some Android 14 builds throw this from startForeground() when the
-            // notification lacks a content title. We set one above, but keep
-            // the guard so the FGS timeout path still short-circuits.
-            Log.e(TAG, "ensureForegroundNotification: invalid notification", e)
-        } catch (e: SecurityException) {
-            // Missing POST_NOTIFICATIONS or FGS type permission.
-            Log.e(TAG, "ensureForegroundNotification: missing permission", e)
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "ensureForegroundNotification: failed to build notification", e)
+            return false
         }
+        return startForegroundSpecialUse(FocusModeNotificationHelper.NOTIFICATION_ID, notification)
     }
 
-    private fun startFocusMode() {
+    private fun startFocusMode(): Boolean {
         Log.d(TAG, "Starting focus mode: title=$title, durationMs=$durationMs, remainingMs=$remainingMs, isBreak=$isBreak, isPaused=$isPaused")
+        FocusModeNotificationHelper.cancelCompletionNotification(this)
 
         isRunning = true
         hasNotifiedCompletion = false
         lastUpdateTimestamp = System.currentTimeMillis()
 
-        // Start foreground immediately to avoid ANR
-        val notification = FocusModeNotificationHelper.buildNotification(
-            this,
-            title,
-            taskTitle,
-            remainingMs,
-            isPaused,
-            isBreak
-        )
-        startForegroundSpecialUse(FocusModeNotificationHelper.NOTIFICATION_ID, notification)
+        // The foreground-service start token was already satisfied at the top
+        // of onStartCommand(). Replace the placeholder notification without
+        // risking a second startForeground() failure resetting focus state.
+        if (!updateNotification()) {
+            return false
+        }
 
         // Start update loop if not paused
         handler.removeCallbacks(updateRunnable)
         if (!isPaused) {
             handler.post(updateRunnable)
         }
+        return true
     }
 
     private fun stopForegroundAndSelf() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun stopAfterForegroundFailure(startId: Int) {
+        isRunning = false
+        handler.removeCallbacks(updateRunnable)
+        title = ""
+        taskTitle = null
+        durationMs = 0
+        remainingMs = 0
+        isBreak = false
+        isPaused = false
+        lastUpdateTimestamp = 0
+        hasNotifiedCompletion = false
+        stopSelf(startId)
+    }
+
+    private fun reportForegroundFailure() {
+        ForegroundServiceFailure.send(
+            this,
+            ForegroundServiceFailure.SERVICE_FOCUS_MODE,
+            ForegroundServiceFailure.REASON_PROMOTION_FAILED
+        )
     }
 
     private fun stopFocusMode() {
@@ -223,10 +245,10 @@ class FocusModeForegroundService : Service() {
         stopSelf()
     }
 
-    private fun updateNotification() {
-        if (!isRunning) return
+    private fun updateNotification(): Boolean {
+        if (!isRunning) return true
 
-        try {
+        return try {
             val notification = FocusModeNotificationHelper.buildNotification(
                 this,
                 title,
@@ -239,8 +261,10 @@ class FocusModeForegroundService : Service() {
                 FocusModeNotificationHelper.NOTIFICATION_ID,
                 notification
             )
-        } catch (e: SecurityException) {
-            Log.w(TAG, "No permission to post notification", e)
+            true
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Unable to update focus mode notification", e)
+            false
         }
     }
 
@@ -281,9 +305,5 @@ class FocusModeForegroundService : Service() {
         handler.removeCallbacks(updateRunnable)
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        Log.d(TAG, "Task removed, stopping service")
-        stopFocusMode()
-    }
+    // Do not override onTaskRemoved — foreground service must survive app swipe (#7818).
 }

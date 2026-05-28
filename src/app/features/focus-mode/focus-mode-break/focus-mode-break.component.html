@@ -1,11 +1,15 @@
 <div class="focus-mode-break">
   <h1>
-    {{
-      (focusModeService.isBreakLong()
-        ? T.F.FOCUS_MODE.LONG_BREAK_TITLE
-        : T.F.FOCUS_MODE.SHORT_BREAK_TITLE
-      ) | translate: { cycle: focusModeService.currentCycle() - 1 }
-    }}
+    @if (isBreakOffer()) {
+      {{ T.F.FOCUS_MODE.FLOWTIME_BREAK_TITLE | translate }}
+    } @else {
+      {{
+        (focusModeService.isBreakLong()
+          ? T.F.FOCUS_MODE.LONG_BREAK_TITLE
+          : T.F.FOCUS_MODE.SHORT_BREAK_TITLE
+        ) | translate: { cycle: focusModeService.currentCycle() - 1 }
+      }}
+    }
   </h1>
 
   <div class="timer-container">
@@ -19,7 +23,7 @@
     <div class="timer-text">
       {{ remainingTime() | msToMinuteClockString }}
     </div>
-    @if (remainingTime() > 0) {
+    @if (remainingTime() > 0 && !isBreakOffer()) {
       @if (isBreakPaused()) {
         <button
           mat-icon-button
@@ -48,6 +52,17 @@
 
   @if (remainingTime() > 0) {
     <div class="button-row">
+      @if (isBreakOffer()) {
+        <button
+          mat-raised-button
+          color="primary"
+          (click)="resumeBreak()"
+        >
+          <mat-icon>play_arrow</mat-icon>
+          {{ T.F.FOCUS_MODE.START_BREAK | translate }}
+        </button>
+      }
+
       <button
         mat-stroked-button
         (click)="exitToPlanning()"

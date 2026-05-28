@@ -263,6 +263,22 @@ describe('taskSharedMetaReducer', () => {
       );
     });
 
+    it('should auto-plan newly added tasks with a deadline today in the same action', () => {
+      const today = getDbDateStr();
+      const action = createAddTaskAction(
+        { deadlineDay: today },
+        { autoPlanToday: today, autoPlanStartOfNextDayDiffMs: 0 },
+      );
+
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', { deadlineDay: today, dueDay: today }),
+          ...expectTagUpdate('TODAY', { taskIds: ['task1'] }),
+        },
+        action,
+      );
+    });
+
     it('should create task entity with correct properties', () => {
       const taskData = {
         id: 'task1',

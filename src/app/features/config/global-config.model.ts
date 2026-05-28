@@ -28,8 +28,15 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
   isLocalRestApiEnabled?: boolean;
+  /** @deprecated Legacy hour-only representation. Use `startOfNextDayTime` as canonical source of truth. */
   startOfNextDay: number;
+  /** Canonical start-of-next-day value, including minute precision. */
+  startOfNextDayTime?: string;
   isDisableAnimations: boolean;
+  // Experimental: render the header action buttons as a vertical strip on
+  // the right edge of the viewport instead of the horizontal top header.
+  // Desktop only. Optional because it was added later.
+  isVerticalActionBar?: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;
   isShowProductivityTipLonger?: boolean;
@@ -112,6 +119,19 @@ export type PomodoroConfig = Readonly<{
   cyclesBeforeLongerBreak?: number | null;
 }>;
 
+export type FlowtimeBreakRule = Readonly<{
+  minDuration: number; // in milliseconds
+  maxDuration: number | null; // in milliseconds, or null for no upper bound
+  breakDuration: number; // in milliseconds
+}>;
+
+export type FlowtimeConfig = Readonly<{
+  isBreakEnabled?: boolean | null;
+  breakMode?: 'ratio' | 'rule' | null; // ratio-based or rule-based break calculation
+  breakPercentage?: number | null; // percentage of work time (for ratio mode)
+  breakRules?: FlowtimeBreakRule[] | null; // rules for rule-based breaks
+}>;
+
 // NOTE: needs to be writable due to how we use it
 // export type DropboxSyncConfig = object;
 
@@ -134,8 +154,17 @@ export interface SuperSyncConfig extends WebDavConfig {
 
 export interface NextcloudConfig {
   serverUrl?: string | null;
+  loginName?: string | null;
   userName?: string | null;
   password?: string | null;
+  syncFolderPath?: string | null;
+}
+
+export interface OneDriveConfig {
+  /** View-model only: false = use built-in official app (if available), true = use custom app */
+  useCustomApp?: boolean | null;
+  clientId?: string | null;
+  tenantId?: string | null;
   syncFolderPath?: string | null;
 }
 
@@ -188,6 +217,8 @@ export type SyncConfig = Readonly<{
   localFileSync?: LocalFileSyncConfig;
   /* NOTE: view model for form only*/
   nextcloud?: NextcloudConfig;
+  /* NOTE: view model for form only*/
+  oneDrive?: OneDriveConfig;
 }>;
 
 export type ScheduleConfig = Readonly<{
@@ -247,6 +278,7 @@ export type FocusModeConfig = Readonly<{
    * Kept on the type so old persisted configs deserialize without errors.
    */
   isStartInBackground?: boolean;
+  /** Note: Controls Pomodoro overtime only (keeps timer running until manually ended) */
   isManualBreakStart?: boolean;
 }>;
 
@@ -276,6 +308,7 @@ export type GlobalConfigState = Readonly<{
   idle: IdleConfig;
   takeABreak: TakeABreakConfig;
   pomodoro: PomodoroConfig;
+  flowtime: FlowtimeConfig;
   keyboard: KeyboardConfig;
   localBackup: LocalBackupConfig;
   sound: SoundConfig;
@@ -307,6 +340,7 @@ export type GlobalSectionConfig =
   | MiscConfig
   | TasksConfig
   | PomodoroConfig
+  | FlowtimeConfig
   | KeyboardConfig
   | ScheduleConfig
   | ReminderConfig

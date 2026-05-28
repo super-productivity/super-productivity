@@ -10,12 +10,14 @@ import {
   OnDestroy,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { CdkDrag } from '@angular/cdk/drag-drop';
 import { ScheduleEvent, ScheduleFromCalendarEvent } from '../schedule.model';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import { MatTooltip } from '@angular/material/tooltip';
 import { delay, first } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { selectProjectById } from '../../project/store/project.selectors';
@@ -29,7 +31,7 @@ import { isDraggableSE } from '../map-schedule-data/is-schedule-types-type';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TaskCopy } from '../../tasks/task.model';
 import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors';
@@ -53,6 +55,7 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     MatMenu,
     MatMenuItem,
     MatMenuTrigger,
+    MatTooltip,
   ],
   templateUrl: './schedule-event.component.html',
   styleUrl: './schedule-event.component.scss',
@@ -64,7 +67,7 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[class]': 'cssClass()',
     '[style]': 'style()',
     '[style.--title-line-clamp]': '_titleLineClamp()',
-    '[style.--project-color]': 'projectColor()',
+    '[style.--project-color]': 'calEventColor() || projectColor()',
     '[style.height]': '_resizeHeight()',
     '(click)': 'clickHandler($event)',
     '(contextmenu)': 'onContextMenu($event)',
@@ -83,6 +86,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   private _elRef = inject(ElementRef);
   private _matDialog = inject(MatDialog);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _translateService = inject(TranslateService);
   private _taskService = inject(TaskService);
   private _calEventActions = inject(CalendarEventActionsService);
   private _ngZone = inject(NgZone);
@@ -100,6 +104,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   readonly T: typeof T = T;
   readonly isDragPreview = input<boolean>(false);
   readonly isMonthView = input<boolean>(false);
+  readonly isResizeDisabled = input<boolean>(false);
   readonly event = input.required<ScheduleEvent>();
 
   readonly taskContextMenu = viewChild('taskContextMenu', {
@@ -107,6 +112,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   });
 
   readonly calMenuTrigger = viewChild('calMenuTrigger', { read: MatMenuTrigger });
+  private readonly _calMenuItems = viewChildren(MatMenuItem);
   private readonly _titleEl = viewChild<ElementRef<HTMLElement>>('titleEl');
 
   protected readonly SVEType = SVEType;
@@ -147,6 +153,10 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     );
   });
 
+  readonly beyondBudgetTooltip = this._translateService.instant(
+    T.F.SCHEDULE.EXCESS_TASK_TOOLTIP,
+  );
+
   readonly hoverTitle = computed(() => {
     const evt = this.se();
     const is12Hour = !this._dateTimeFormatService.is24HourFormat;
@@ -168,6 +178,9 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
       t.timeSpent === 0
     ) {
       result += '  !!!!! ESTIMATE FOR SCHEDULE WAS SET TO 10MIN !!!!!';
+    }
+    if (evt.isBeyondBudget) {
+      result += `  ${this.beyondBudgetTooltip}`;
     }
     return result;
   });
@@ -214,6 +227,14 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
 
     if (this._isResizing()) {
       addClass += ' is-resizing';
+    }
+
+    if (this.isReferenceCalendar()) {
+      addClass += ' is-reference-calendar';
+    }
+
+    if (evt.isBeyondBudget) {
+      addClass += ' is-beyond-budget';
     }
 
     return evt.type + '  ' + addClass;
@@ -292,16 +313,22 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
 
   readonly projectColor = computed(() => {
     const projectId = this._projectId();
-    if (!projectId) return '';
+    if (!projectId) return null;
     // Use store.select and convert to immediate value
-    let color = '';
+    let color: string | null = null;
     this._store
       .select(selectProjectById, { id: projectId })
       .pipe(first())
       .subscribe((project) => {
-        color = project?.theme?.primary || '';
+        color = project?.theme?.primary || null;
       });
     return color;
+  });
+
+  readonly calEventColor = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return null;
+    return (evt.data as ScheduleFromCalendarEvent).color || null;
   });
 
   readonly elementId = computed(() => {
@@ -369,7 +396,9 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
         },
       });
     } else if (evt.type === SVEType.CalendarEvent) {
-      this.calMenuTrigger()?.openMenu();
+      if (this._calMenuItems().length) {
+        this.calMenuTrigger()?.openMenu();
+      }
     }
   }
 
@@ -377,6 +406,12 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     const evt = this.se();
     if (evt.type !== SVEType.CalendarEvent) return false;
     return this._calEventActions.isPluginEvent(evt.data as ScheduleFromCalendarEvent);
+  });
+
+  readonly isReferenceCalendar = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return !!(evt.data as ScheduleFromCalendarEvent).isReferenceCalendar;
   });
 
   async openCalendarEventLink(): Promise<void> {
@@ -488,6 +523,10 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   private _startHeight = 0;
 
   isResizable(): boolean {
+    if (this.isResizeDisabled() || this.isDragPreview() || this.isMonthView()) {
+      return false;
+    }
+
     const t = this.task();
     const evt = this.se();
     // Allow resizing for all task types with a time estimate

@@ -44,12 +44,12 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { SafeArea } from 'capacitor-plugin-safe-area';
 import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
-import { CustomThemeService } from './custom-theme.service';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
+  setWebViewBackgroundColor(options: { color: string }): Promise<void>;
 }
 
 const NavigationBar = registerPlugin<NavigationBarPlugin>('NavigationBar');
@@ -79,7 +79,6 @@ export class GlobalThemeService {
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _imexMetaService = inject(ImexViewService);
   private _http = inject(HttpClient);
-  private _customThemeService = inject(CustomThemeService);
   private _platformService = inject(CapacitorPlatformService);
   private _environmentInjector = inject(EnvironmentInjector);
   private _destroyRef = inject(DestroyRef);
@@ -151,9 +150,6 @@ export class GlobalThemeService {
         const darkMode = this.darkMode();
         localStorage.setItem(LS.DARK_MODE, darkMode);
       });
-
-      // Set up reactive custom theme updates
-      this._setupCustomThemeEffect();
     });
   }
 
@@ -200,17 +196,12 @@ export class GlobalThemeService {
       ['calendar', 'assets/icons/calendar.svg'],
       ['open_project', 'assets/icons/open-project.svg'],
       ['remove_today', 'assets/icons/remove-today-48px.svg'],
-      ['working_today', 'assets/icons/working-today.svg'],
-      ['repeat', 'assets/icons/repeat.svg'],
       ['gitea', 'assets/icons/gitea.svg'],
       ['redmine', 'assets/icons/redmine.svg'],
       ['linear', 'assets/icons/linear.svg'],
       ['clickup', 'assets/icons/clickup.svg'],
       // trello icon
       ['trello', 'assets/icons/trello.svg'],
-      ['tomorrow', 'assets/icons/tomorrow.svg'],
-      ['next_week', 'assets/icons/next-week.svg'],
-      ['habit', 'assets/icons/habit.svg'],
       ['azure_devops', 'assets/icons/azure_devops.svg'],
       ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
     ];
@@ -350,7 +341,11 @@ export class GlobalThemeService {
 
     if (IS_ANDROID_WEB_VIEW) {
       androidInterface.isKeyboardShown$
-        .pipe(takeUntilDestroyed(this._destroyRef))
+        // The native OnGlobalLayoutListener pushes a value on every layout pass
+        // (i.e. every frame of the IME slide), so dedupe to actual transitions —
+        // otherwise we rewrite <body> classes and re-trigger change detection
+        // every frame while the keyboard animates.
+        .pipe(distinctUntilChanged(), takeUntilDestroyed(this._destroyRef))
         .subscribe((isShown) => {
           Log.log('isShown', isShown);
 
@@ -368,6 +363,14 @@ export class GlobalThemeService {
         });
     }
 
+    // VisualViewport keyboard-height tracking covers every non-iOS touch
+    // build: Capacitor Android, the legacy F-Droid build, and Android
+    // mobile-web. iOS uses _initIOSKeyboardHandling above; its Capacitor
+    // plugin already drives the same CSS variable and the two would race.
+    if (IS_TOUCH_ONLY && !this._platformService.isIOS()) {
+      this._initVisualViewportKeyboardTracking();
+    }
+
     // Use effect to reactively update animation class
     effect(() => {
       const misc = this._globalConfigService.misc();
@@ -383,6 +386,15 @@ export class GlobalThemeService {
         this.document.body.classList.add(BodyClass.isObsidianStyleHeader);
       } else {
         this.document.body.classList.remove(BodyClass.isObsidianStyleHeader);
+      }
+    });
+
+    effect(() => {
+      const misc = this._globalConfigService.misc();
+      if (misc?.isVerticalActionBar) {
+        this.document.body.classList.add(BodyClass.isVerticalActionBar);
+      } else {
+        this.document.body.classList.remove(BodyClass.isVerticalActionBar);
       }
     });
 
@@ -464,23 +476,6 @@ export class GlobalThemeService {
           scales: {},
         };
     chartThemeService.setColorschemesOptions(overrides);
-  }
-
-  private _setupCustomThemeEffect(): void {
-    // Track previous theme to avoid unnecessary reloads
-    let previousThemeId: string | null = null;
-
-    // Set up effect to reactively update custom theme when config changes
-    effect(() => {
-      const misc = this._globalConfigService.misc();
-      const themeId = misc?.customTheme || 'default';
-
-      // Only load theme if it has changed
-      if (themeId !== previousThemeId) {
-        this._customThemeService.loadTheme(themeId);
-        previousThemeId = themeId;
-      }
-    });
   }
 
   /**
@@ -634,6 +629,76 @@ export class GlobalThemeService {
     });
   }
 
+  /**
+   * Keyboard-height tracking via VisualViewport — the fallback path for any
+   * non-iOS touch build (Capacitor Android, F-Droid, mobile-web).
+   *
+   * Android's `adjustResize` is supposed to shrink the WebView when the IME
+   * appears, in which case `position: fixed; bottom: 0` would naturally sit
+   * above the keyboard. In practice it's inconsistent — depending on Chrome
+   * version, transient transitions, and edge-to-edge insets, the layout
+   * viewport sometimes does not shrink in step with the keyboard, leaving
+   * fixed-position UI hidden behind it.
+   *
+   * VisualViewport always reflects the actual visible area. The difference
+   * `window.innerHeight - visualViewport.height` is the obscured area —
+   * which is zero when adjustResize already handled it, and equals the
+   * keyboard height otherwise. Either way, `--keyboard-height` ends up
+   * correct without needing to know which path Android took.
+   */
+  private _initVisualViewportKeyboardTracking(): void {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = this.document.documentElement;
+    // Filter out small differences from URL bar / overlay UI rather than the
+    // IME — keeps us from setting a phantom keyboard offset.
+    const KEYBOARD_THRESHOLD_PX = 100;
+    // IME open/close on Android resizes the layout viewport (adjustResize)
+    // and the visual viewport at slightly different times, so per-event
+    // commits park fixed-position UI (e.g. the global add-task bar) at
+    // intermediate partial-keyboard amounts. Debounce the OPEN path so only
+    // the final value lands (200ms, just past `--transition-duration-m`:
+    // 225ms). Commit the CLOSE path synchronously so the bar drops the moment
+    // the IME is gone rather than parking at the old height for the debounce
+    // window — that would just invert the original symptom.
+    const KEYBOARD_RESIZE_DEBOUNCE_MS = 200;
+    let resizeTimer: number | null = null;
+
+    const commit = (): void => {
+      const obscured = window.innerHeight - vv.height;
+      const keyboardHeight = obscured > KEYBOARD_THRESHOLD_PX ? obscured : 0;
+      root.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, `${keyboardHeight}px`);
+    };
+
+    const onViewportResize = (): void => {
+      const obscured = window.innerHeight - vv.height;
+      if (obscured <= KEYBOARD_THRESHOLD_PX) {
+        if (resizeTimer !== null) {
+          window.clearTimeout(resizeTimer);
+          resizeTimer = null;
+        }
+        commit();
+        return;
+      }
+      if (resizeTimer !== null) {
+        window.clearTimeout(resizeTimer);
+      }
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = null;
+        commit();
+      }, KEYBOARD_RESIZE_DEBOUNCE_MS);
+    };
+
+    commit();
+    vv.addEventListener('resize', onViewportResize, { passive: true });
+    this._destroyRef.onDestroy(() => {
+      vv.removeEventListener('resize', onViewportResize);
+      if (resizeTimer !== null) {
+        window.clearTimeout(resizeTimer);
+      }
+    });
+  }
+
   private _isInputElement(el: HTMLElement): boolean {
     const tagName = el.tagName.toLowerCase();
     return (
@@ -662,8 +727,7 @@ export class GlobalThemeService {
    */
   /**
    * Read native safe area insets and set CSS variables.
-   * Works around Capacitor 7's broken adjustMarginsForEdgeToEdge and
-   * Android WebView's unreliable env(safe-area-inset-*) values.
+   * Works around Android WebView's unreliable env(safe-area-inset-*) values.
    */
   private _initSafeAreaInsets(): void {
     const applyInsets = (insets: {
@@ -737,6 +801,11 @@ export class GlobalThemeService {
           style: isDark ? 'DARK' : 'LIGHT',
         }).catch((err) => {
           Log.warn('Failed to set navigation bar color', err);
+        });
+        // Keep the native WebView surface matched to the theme so the
+        // adjustResize keyboard animation can't flash white between frames.
+        NavigationBar.setWebViewBackgroundColor({ color: bgColor }).catch((err) => {
+          Log.warn('Failed to set web view background color', err);
         });
       }
     });

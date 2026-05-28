@@ -36,9 +36,11 @@ describe('PluginRunner', () => {
     mockPluginBridge = jasmine.createSpyObj('PluginBridgeService', [
       'unregisterPluginHooks',
       'createBoundMethods',
+      'pingNodeBridge',
     ]);
     // createBoundMethods should return an empty object (no additional bound methods)
     mockPluginBridge.createBoundMethods.and.returnValue({} as any);
+    mockPluginBridge.pingNodeBridge.and.resolveTo(false);
 
     mockSecurityService = jasmine.createSpyObj('PluginSecurityService', [
       'analyzePluginCode',
@@ -173,6 +175,89 @@ describe('PluginRunner', () => {
       const result = service.unloadPlugin('unknown-plugin');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('triggerReady()', () => {
+    // Plugin code runs via `new Function` so it sees globalThis. Tests install
+    // observable spies there and the registered onReady fn calls them.
+    const READY_GLOBAL = '__pluginRunnerSpec_onReady__';
+    const getGlobal = (): Record<string, jasmine.Spy> =>
+      (globalThis as unknown as Record<string, Record<string, jasmine.Spy>>)[
+        READY_GLOBAL
+      ];
+
+    beforeEach(() => {
+      (globalThis as unknown as Record<string, Record<string, jasmine.Spy>>)[
+        READY_GLOBAL
+      ] = {};
+    });
+
+    afterEach(() => {
+      delete (globalThis as unknown as Record<string, unknown>)[READY_GLOBAL];
+    });
+
+    it('should call the registered onReady callback', async () => {
+      const readySpy = jasmine.createSpy('ready');
+      getGlobal()[mockManifest.id] = readySpy;
+
+      const code = `plugin.onReady(() => globalThis['${READY_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      await service.triggerReady(mockManifest.id);
+      expect(readySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should only fire the callback for the specified plugin', async () => {
+      const manifestB = { ...mockManifest, id: 'plugin-b', name: 'Plugin B' };
+      const aSpy = jasmine.createSpy('aReady');
+      const bSpy = jasmine.createSpy('bReady');
+      getGlobal()[mockManifest.id] = aSpy;
+      getGlobal()[manifestB.id] = bSpy;
+
+      await service.loadPlugin(
+        mockManifest,
+        `plugin.onReady(() => globalThis['${READY_GLOBAL}']['${mockManifest.id}']());`,
+        mockBaseCfg,
+      );
+      await service.loadPlugin(
+        manifestB,
+        `plugin.onReady(() => globalThis['${READY_GLOBAL}']['${manifestB.id}']());`,
+        mockBaseCfg,
+      );
+
+      await service.triggerReady(mockManifest.id);
+      expect(aSpy).toHaveBeenCalledTimes(1);
+      expect(bSpy).not.toHaveBeenCalled();
+
+      await service.triggerReady(manifestB.id);
+      expect(aSpy).toHaveBeenCalledTimes(1);
+      expect(bSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should resolve silently for unknown plugin id', async () => {
+      await expectAsync(service.triggerReady('does-not-exist')).toBeResolved();
+    });
+  });
+
+  describe('pingNodeBridge()', () => {
+    it('should return false for unknown plugin', async () => {
+      const result = await service.pingNodeBridge('unknown-plugin');
+      expect(result).toBe(false);
+    });
+
+    it('should return false when bridge returns false (non-Electron / bridge unavailable)', async () => {
+      await service.loadPlugin(mockManifest, `/* no-op */`, mockBaseCfg);
+      mockPluginBridge.pingNodeBridge.and.resolveTo(false);
+      const result = await service.pingNodeBridge(mockManifest.id);
+      expect(result).toBe(false);
+    });
+
+    it('should return true when bridge responds successfully', async () => {
+      await service.loadPlugin(mockManifest, `/* no-op */`, mockBaseCfg);
+      mockPluginBridge.pingNodeBridge.and.resolveTo(true);
+      const result = await service.pingNodeBridge(mockManifest.id);
+      expect(result).toBe(true);
     });
   });
 });

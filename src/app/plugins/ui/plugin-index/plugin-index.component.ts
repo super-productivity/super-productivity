@@ -74,6 +74,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   @Input() showFullUI: boolean = true;
   // Optional input to use side panel configuration instead of full page
   @Input() useSidePanelConfig: boolean = false;
+  // Skip tearing down hook registrations / bridge state on destroy.
+  // Set true when embedding the component repeatedly (e.g. work-view embed
+  // toggled on/off), so the plugin keeps its registrations across mounts.
+  @Input() skipCleanupOnDestroy: boolean = false;
 
   private readonly _route = inject(ActivatedRoute);
   private readonly _router = inject(Router);
@@ -232,8 +236,15 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     this._currentIframeUrl = iframeUrl;
 
     // Store message handler for cleanup
+    // Filter by event.source so messages from other plugin iframes (side panel,
+    // other embed slots) don't get answered with this plugin's bound methods.
     this._messageListener = async (event: Event) => {
-      await handlePluginMessage(event as MessageEvent, config);
+      const msgEvent = event as MessageEvent;
+      const iframeWin = this.iframeRef?.nativeElement?.contentWindow;
+      if (!iframeWin || msgEvent.source !== iframeWin) {
+        return;
+      }
+      await handlePluginMessage(msgEvent, config);
     };
 
     // Set up message communication
@@ -270,8 +281,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       this._currentIframeUrl = null;
     }
 
-    // Clear iframe reference from cleanup service (but don't remove from DOM)
-    if (currentPluginId) {
+    // Clear iframe reference from cleanup service (but don't remove from DOM).
+    // Skip when embedding (work-view, side panel) so the plugin keeps its hook
+    // and button registrations across embed mount/unmount cycles.
+    if (currentPluginId && !this.skipCleanupOnDestroy) {
       this._cleanupService.cleanupPlugin(currentPluginId);
       PluginLog.log(`Cleaned up plugin references for: ${currentPluginId}`);
     }

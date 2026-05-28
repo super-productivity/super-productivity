@@ -12,6 +12,26 @@ files:
   - '!**/@nx/nx-darwin-*/**'
   - '!**/@nx/nx-linux-*/**'
   - '!**/@nx/nx-win32-*/**'
+  # Capacitor (mobile shim) - never required from electron/ at runtime
+  - '!**/@capacitor/**'
+  - '!**/@capawesome/**'
+  - '!**/capacitor-plugin-safe-area/**'
+  # sharp + libvips native binaries - only used by tools/generate-*-icon.js
+  # during local dev; ~33 MB of unused weight in the asar otherwise
+  - '!**/sharp/**'
+  - '!**/@img/**'
+  # Nx LMDB cache and Rollup pulled in transitively by build tooling
+  - '!**/@lmdb/**'
+  - '!**/@rollup/**'
+  # Compiled into the Angular CSS bundle; the node_modules copy is unused
+  - '!**/@material-symbols/**'
+  # @noble/ciphers and hash-wasm are imported by the Angular bundle and
+  # inlined by the bundler (WASM is base64-embedded). The node_modules
+  # copies are dead weight at runtime.
+  - '!**/@noble/**'
+  - '!**/hash-wasm/**'
+  # uuidv7 is imported by src/ (Angular bundle inlines it); not used by electron/
+  - '!**/uuidv7/**'
 #afterSign: ./tools/notarizeMacApp.js
 
 directories:

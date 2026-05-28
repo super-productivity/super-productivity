@@ -9,6 +9,7 @@ import { OpLog } from '../../core/log';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { handleStorageQuotaError } from './sync-error-utils';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 
 const IMMEDIATE_UPLOAD_DEBOUNCE_MS = 2000;
 
@@ -51,6 +52,7 @@ export class ImmediateUploadService implements OnDestroy {
   private _syncService = inject(OperationLogSyncService);
   private _dataInitStateService = inject(DataInitStateService);
   private _syncWrapper = inject(SyncWrapperService);
+  private _sessionValidation = inject(SyncSessionValidationService);
 
   private _uploadTrigger$ = new Subject<void>();
   private _subscription: Subscription | null = null;
@@ -166,6 +168,18 @@ export class ImmediateUploadService implements OnDestroy {
    * - Handling of rejected ops
    *
    * Note: This is only called for SuperSync (file-based providers are filtered in _canUpload)
+   *
+   * ## Session boundary (#7330)
+   *
+   * uploadPendingOps() processes piggybacked remote ops, which run
+   * post-sync validation (`RemoteOpsProcessingService.validateAfterSync`).
+   * On corruption, validation flips the SyncSessionValidationService latch.
+   * Without an explicit `withSession()` wrapper here, the latch flip would
+   * either fire outside any session (logged as a contract violation and
+   * silently dropped by the next normal sync's reset) or — worse — go
+   * unread while `_performUpload` claimed `IN_SYNC` based purely on
+   * `result.uploadedCount`. That reproduces the exact #7330 surface on
+   * the immediate-upload path.
    */
   private async _performUpload(): Promise<void> {
     const provider = this._providerManager.getActiveProvider();
@@ -183,65 +197,86 @@ export class ImmediateUploadService implements OnDestroy {
     const syncCapableProvider =
       provider as unknown as import('../sync-providers/provider.interface').OperationSyncCapable;
 
-    try {
-      OpLog.verbose('ImmediateUploadService: Starting immediate upload...');
+    return this._sessionValidation.withSession(async () => {
+      try {
+        OpLog.verbose('ImmediateUploadService: Starting immediate upload...');
 
-      // Use sync service's uploadPendingOps which includes migration detection callback.
-      // This ensures SYNC_IMPORT is created when switching to a new/empty server.
-      const result = await this._syncService.uploadPendingOps(syncCapableProvider);
-      if (result.kind === 'blocked_fresh_client') {
-        OpLog.verbose('ImmediateUploadService: Upload blocked (fresh client)');
-        return;
-      }
+        // Use sync service's uploadPendingOps which includes migration detection callback.
+        // This ensures SYNC_IMPORT is created when switching to a new/empty server.
+        const result = await this._syncService.uploadPendingOps(syncCapableProvider);
+        if (result.kind === 'blocked_fresh_client') {
+          OpLog.verbose('ImmediateUploadService: Upload blocked (fresh client)');
+          return;
+        }
 
-      if (result.kind === 'cancelled') {
-        OpLog.verbose(
-          'ImmediateUploadService: Upload cancelled (piggybacked SYNC_IMPORT conflict)',
+        if (result.kind === 'cancelled') {
+          OpLog.verbose(
+            'ImmediateUploadService: Upload cancelled (piggybacked SYNC_IMPORT conflict)',
+          );
+          return;
+        }
+
+        // result.kind === 'completed' from here
+
+        // If LWW local-wins created new update ops from piggybacked ops,
+        // do a follow-up upload to push them to the server immediately
+        if (result.localWinOpsCreated > 0) {
+          OpLog.verbose(
+            `ImmediateUploadService: LWW created ${result.localWinOpsCreated} local-win op(s), re-uploading`,
+          );
+          await this._syncService.uploadPendingOps(syncCapableProvider);
+        }
+
+        // Read the validation latch BEFORE any IN_SYNC / deferred-checkmark
+        // decision. A failure during piggybacked-op processing (or the
+        // re-upload above) is otherwise lost when the next normal sync
+        // resets the latch on entry.
+        if (this._sessionValidation.hasFailed()) {
+          OpLog.err(
+            'ImmediateUploadService: Post-sync validation failed during immediate upload — reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+          return;
+        }
+
+        // Don't show checkmark when piggybacked ops exist - there may be more
+        // remote ops pending. Let normal sync cycle confirm full sync state.
+        if (result.piggybackedOpsCount > 0) {
+          OpLog.verbose(
+            `ImmediateUploadService: Uploaded ${result.uploadedCount} ops, ` +
+              `processed ${result.piggybackedOpsCount} piggybacked (checkmark deferred)`,
+          );
+          return;
+        }
+
+        // Show checkmark ONLY when server confirms no pending remote ops
+        // (empty piggybackedOps means we're confirmed in sync)
+        if (result.uploadedCount > 0 || result.localWinOpsCreated > 0) {
+          this._providerManager.setSyncStatus('IN_SYNC');
+          OpLog.verbose(
+            `ImmediateUploadService: Uploaded ${result.uploadedCount} ops, confirmed in sync`,
+          );
+        }
+      } catch (e) {
+        // Check for storage quota exceeded - this requires user action
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        handleStorageQuotaError(message);
+
+        // Validation failure is structural state corruption, not a transient
+        // network/throttle error — surface ERROR even though the upload
+        // itself threw afterward.
+        if (this._sessionValidation.hasFailed()) {
+          this._providerManager.setSyncStatus('ERROR');
+        }
+
+        // Silent failure for other errors - normal sync will pick up pending ops
+        OpLog.warn(
+          'ImmediateUploadService: Immediate upload failed, will retry on normal sync',
+          e,
         );
-        return;
+        // Don't emit ERROR state for non-validation failures - transient failures are expected
       }
-
-      // result.kind === 'completed' from here
-
-      // If LWW local-wins created new update ops from piggybacked ops,
-      // do a follow-up upload to push them to the server immediately
-      if (result.localWinOpsCreated > 0) {
-        OpLog.verbose(
-          `ImmediateUploadService: LWW created ${result.localWinOpsCreated} local-win op(s), re-uploading`,
-        );
-        await this._syncService.uploadPendingOps(syncCapableProvider);
-      }
-
-      // Don't show checkmark when piggybacked ops exist - there may be more
-      // remote ops pending. Let normal sync cycle confirm full sync state.
-      if (result.piggybackedOpsCount > 0) {
-        OpLog.verbose(
-          `ImmediateUploadService: Uploaded ${result.uploadedCount} ops, ` +
-            `processed ${result.piggybackedOpsCount} piggybacked (checkmark deferred)`,
-        );
-        return;
-      }
-
-      // Show checkmark ONLY when server confirms no pending remote ops
-      // (empty piggybackedOps means we're confirmed in sync)
-      if (result.uploadedCount > 0 || result.localWinOpsCreated > 0) {
-        this._providerManager.setSyncStatus('IN_SYNC');
-        OpLog.verbose(
-          `ImmediateUploadService: Uploaded ${result.uploadedCount} ops, confirmed in sync`,
-        );
-      }
-    } catch (e) {
-      // Check for storage quota exceeded - this requires user action
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      handleStorageQuotaError(message);
-
-      // Silent failure for other errors - normal sync will pick up pending ops
-      OpLog.warn(
-        'ImmediateUploadService: Immediate upload failed, will retry on normal sync',
-        e,
-      );
-      // Don't emit ERROR state - transient failures are expected
-    }
+    });
   }
 
   ngOnDestroy(): void {

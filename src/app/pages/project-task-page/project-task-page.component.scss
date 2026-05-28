@@ -1,3 +1,16 @@
 :host {
   overflow: hidden !important;
 }
+
+.archived-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  padding: var(--s) var(--s2);
+  background: var(--state-hover);
+  border-bottom: 1px solid var(--divider-color);
+
+  span {
+    flex: 1;
+  }
+}

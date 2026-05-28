@@ -1,4 +1,5 @@
 import {
+  TaskCopy,
   TaskWithoutReminder,
   TaskWithPlannedForDayIndication,
 } from '../../tasks/task.model';
@@ -21,6 +22,8 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { Log } from '../../../core/log';
 
+type ScheduleFlowTask = TaskWithoutReminder | TaskWithPlannedForDayIndication;
+
 export const createScheduleDays = (
   nonScheduledTasks: TaskWithoutReminder[],
   unScheduledTaskRepeatCfgs: TaskRepeatCfg[],
@@ -32,7 +35,7 @@ export const createScheduleDays = (
   realNow?: number, // Actual current time for determining "current week"
 ): ScheduleDay[] => {
   let viewEntriesPushedToNextDay: SVEEntryForNextDay[];
-  let flowTasksLeftAfterDay: TaskWithoutReminder[] = nonScheduledTasks.map((task) => {
+  let flowTasksLeftAfterDay: ScheduleFlowTask[] = nonScheduledTasks.map((task) => {
     if (task.timeEstimate === 0 && task.timeSpent === 0) {
       return {
         ...task,
@@ -41,7 +44,7 @@ export const createScheduleDays = (
     }
     return task;
   });
-  let beyondBudgetTasks: TaskWithoutReminder[];
+  let beyondBudgetTasks: ScheduleFlowTask[];
 
   // Calculate current week boundary (today + next 6 days = 7 days total)
   // Always use real current time to determine what "current week" means
@@ -65,32 +68,9 @@ export const createScheduleDays = (
     if (!isFirstDayInCurrentWeek) {
       // Viewing a week outside the current week
       // Filter out tasks that don't belong in this week
-      flowTasksLeftAfterDay = flowTasksLeftAfterDay.filter((task) => {
-        const taskAsPlanned = task as TaskWithPlannedForDayIndication;
-
-        // Keep tasks with plannedForDay (these will be filtered by plannerDayMap per day)
-        if (taskAsPlanned.plannedForDay) {
-          return true;
-        }
-
-        // Check if task has a dueDay that falls within or after the displayed week
-        if (task.dueDay) {
-          const dueDayDate = dateStrToUtcDate(task.dueDay);
-          dueDayDate.setHours(0, 0, 0, 0);
-          const dueDayTime = dueDayDate.getTime();
-          // Only keep if due date is on or after the first day being viewed
-          return dueDayTime >= firstDayStartTime;
-        }
-
-        // Check if task has a dueWithTime that falls within or after the displayed week
-        if (task.dueWithTime) {
-          // Only keep if due time is on or after the first day being viewed
-          return task.dueWithTime >= firstDayStartTime;
-        }
-
-        // Tasks without any scheduling info are filtered out
-        return false;
-      });
+      flowTasksLeftAfterDay = flowTasksLeftAfterDay.filter((task) =>
+        isTaskOnOrAfterDay(task, firstDayStartTime),
+      );
     }
   }
 
@@ -134,54 +114,45 @@ export const createScheduleDays = (
     let viewEntries: SVE[] = [];
 
     // Filter incoming tasks from previous day if this day is outside current week
-    const filteredFlowTasks = isInCurrentWeek
+    const filteredFlowTasks: ScheduleFlowTask[] = isInCurrentWeek
       ? flowTasksLeftAfterDay
       : flowTasksLeftAfterDay.filter((task) => {
-          const taskAsPlanned = task as TaskWithPlannedForDayIndication;
-
-          // Keep tasks with plannedForDay
-          if (taskAsPlanned.plannedForDay) {
-            return true;
-          }
-
-          // Check if task has a dueDay that falls within or after this day
-          if (task.dueDay) {
-            const dueDayDate = dateStrToUtcDate(task.dueDay);
-            dueDayDate.setHours(0, 0, 0, 0);
-            return dueDayDate.getTime() >= dayStartTime;
-          }
-
-          // Check if task has a dueWithTime that falls within or after this day
-          if (task.dueWithTime) {
-            return task.dueWithTime >= dayStartTime;
-          }
-
-          return false;
+          return isTaskOnOrAfterDay(task, dayStartTime);
         });
 
-    const plannedForDayTasks = (plannerDayMap[dayDate] || []).map((t) => {
-      return {
-        ...t,
-        plannedForDay: dayDate,
-        ...(t.timeEstimate === 0 && t.timeSpent === 0
-          ? { timeEstimate: SCHEDULE_TASK_MIN_DURATION_IN_MS }
-          : {}),
-      };
-    }) as TaskWithPlannedForDayIndication[];
-    const flowTasksForDay = [...filteredFlowTasks, ...plannedForDayTasks];
+    const plannedForDayTasks = (plannerDayMap[dayDate] || []).map((t) =>
+      asPlannedForDayTask(t, dayDate),
+    );
+    const flowTasksForDay = uniqueTasksById([
+      ...filteredFlowTasks.flatMap((task): ScheduleFlowTask[] => {
+        if (isPlannedForDayTask(task)) {
+          return task.plannedForDay === dayDate ? [task] : [];
+        }
+        if (task.dueDay) {
+          return task.dueDay === dayDate ? [asPlannedForDayTask(task, dayDate)] : [];
+        }
+        return [task];
+      }),
+      ...plannedForDayTasks,
+    ]);
     const { beyond, within, isSomeTimeLeftForLastOverBudget } =
       getTasksWithinAndBeyondBudget(flowTasksForDay, nonScheduledBudgetForDay);
 
-    const nonSplitBeyondTasks = (() => {
-      if (isSomeTimeLeftForLastOverBudget) {
-        const firstBeyond = beyond[0];
-        if (firstBeyond) {
-          within.push(firstBeyond as any);
-        }
-        return beyond.slice(1);
+    const overBudgetTaskIds = new Set<string>();
+    const partiallyVisibleBeyondTask = isSomeTimeLeftForLastOverBudget
+      ? beyond[0]
+      : undefined;
+    if (partiallyVisibleBeyondTask) {
+      within.push(partiallyVisibleBeyondTask);
+      if (isDayAssignedTask(partiallyVisibleBeyondTask)) {
+        overBudgetTaskIds.add(partiallyVisibleBeyondTask.id);
       }
-      return beyond;
-    })();
+    }
+    const fullyBeyondTasks = isSomeTimeLeftForLastOverBudget ? beyond.slice(1) : beyond;
+    const dayAssignedBeyondBudgetTasks = fullyBeyondTasks.filter(isDayAssignedTask);
+    const nonSplitBeyondTasks = fullyBeyondTasks.filter(
+      (task) => !isDayAssignedTask(task),
+    );
 
     viewEntries = createViewEntriesForDay(
       dayDate,
@@ -191,43 +162,73 @@ export const createScheduleDays = (
       blockerBlocksForDay,
       viewEntriesPushedToNextDay,
     );
-    // beyondBudgetTasks = beyond;
-    beyondBudgetTasks = [];
+    beyondBudgetTasks = dayAssignedBeyondBudgetTasks;
     // For the current week (days within 7 days from today), include all tasks including unscheduled ones
     // After current week, filter out tasks that don't belong in remaining days
-    flowTasksLeftAfterDay = isInCurrentWeek
-      ? [...nonSplitBeyondTasks]
-      : nonSplitBeyondTasks.filter((task) => {
-          const taskAsPlanned = task as TaskWithPlannedForDayIndication;
-
-          // Keep tasks with plannedForDay
-          if (taskAsPlanned.plannedForDay) {
-            return true;
-          }
-
-          // Check if task has a dueDay that falls on or after the next day
-          if (task.dueDay) {
-            const dueDayDate = dateStrToUtcDate(task.dueDay);
-            dueDayDate.setHours(0, 0, 0, 0);
-            return dueDayDate.getTime() >= nextDayStart;
-          }
-
-          // Check if task has a dueWithTime that falls on or after the next day
-          if (task.dueWithTime) {
-            return task.dueWithTime >= nextDayStart;
-          }
-
-          return false;
-        });
+    const futureDayAssignedTasks = filteredFlowTasks.filter(
+      (task) => isDayAssignedTask(task) && isTaskOnOrAfterDay(task, nextDayStart),
+    );
+    flowTasksLeftAfterDay = uniqueTasksById([
+      ...(isInCurrentWeek
+        ? [...nonSplitBeyondTasks]
+        : nonSplitBeyondTasks.filter((task) => {
+            return isTaskOnOrAfterDay(task, nextDayStart);
+          })),
+      ...futureDayAssignedTasks,
+    ]);
 
     const viewEntriesToRenderForDay: SVE[] = [];
     viewEntriesPushedToNextDay = [];
     viewEntries.forEach((entry) => {
+      const taskId = getEntryTaskId(entry);
+      if (taskId && overBudgetTaskIds.has(taskId)) {
+        entry.isBeyondBudget = true;
+      }
+
       if (entry.plannedForDay && entry.type === SVEType.Task) {
         entry.type = SVEType.TaskPlannedForDay;
       }
 
+      if (isDayAssignedEntry(entry) && entry.start + entry.duration > nextDayStart) {
+        if (taskId) {
+          markEntriesForTaskAsBeyondBudget(viewEntriesToRenderForDay, taskId);
+        }
+        entry.isBeyondBudget = true;
+        if (entry.start < nextDayStart) {
+          viewEntriesToRenderForDay.push(
+            normalizeDayAssignedEntry({
+              ...entry,
+              duration: Math.max(0, nextDayStart - entry.start),
+            }),
+          );
+          return;
+        }
+
+        if (taskId && hasEntryForTask(viewEntriesToRenderForDay, taskId)) {
+          return;
+        }
+        beyondBudgetTasks = uniqueTasksById([
+          ...beyondBudgetTasks,
+          entry.data as ScheduleFlowTask,
+        ]);
+        return;
+      }
+
       if (entry.start >= nextDayStart) {
+        if (isDayAssignedEntry(entry)) {
+          if (taskId) {
+            markEntriesForTaskAsBeyondBudget(viewEntriesToRenderForDay, taskId);
+          }
+          if (taskId && hasEntryForTask(viewEntriesToRenderForDay, taskId)) {
+            return;
+          }
+          beyondBudgetTasks = uniqueTasksById([
+            ...beyondBudgetTasks,
+            entry.data as ScheduleFlowTask,
+          ]);
+          return;
+        }
+
         if (
           entry.type === SVEType.Task ||
           entry.type === SVEType.SplitTask ||
@@ -244,17 +245,7 @@ export const createScheduleDays = (
           Log.err('Entry start time after next day start', entry);
         }
       } else {
-        if (
-          entry.type === SVEType.SplitTask &&
-          (entry.data as TaskWithPlannedForDayIndication).plannedForDay
-        ) {
-          viewEntriesToRenderForDay.push({
-            ...entry,
-            type: SVEType.SplitTaskPlannedForDay,
-          });
-        } else {
-          viewEntriesToRenderForDay.push(entry);
-        }
+        viewEntriesToRenderForDay.push(normalizeDayAssignedEntry(entry));
       }
     });
 
@@ -283,6 +274,104 @@ export const createScheduleDays = (
   });
 
   return v;
+};
+
+const isPlannedForDayTask = (
+  task: ScheduleFlowTask,
+): task is TaskWithPlannedForDayIndication =>
+  typeof (task as TaskWithPlannedForDayIndication).plannedForDay === 'string';
+
+const isDayAssignedTask = (task: ScheduleFlowTask): boolean =>
+  isPlannedForDayTask(task) || !!task.dueDay;
+
+const isDayAssignedEntry = (entry: SVE): boolean => {
+  const data = entry.data as ScheduleFlowTask | undefined;
+  if (!data || !isDayAssignedTask(data)) {
+    return false;
+  }
+
+  return (
+    entry.type === SVEType.Task ||
+    entry.type === SVEType.TaskPlannedForDay ||
+    entry.type === SVEType.SplitTask ||
+    entry.type === SVEType.SplitTaskPlannedForDay ||
+    entry.type === SVEType.SplitTaskContinued ||
+    entry.type === SVEType.SplitTaskContinuedLast
+  );
+};
+
+const getEntryTaskId = (entry: SVE): string | undefined => {
+  const data = entry.data as TaskCopy | undefined;
+  return data?.id;
+};
+
+const hasEntryForTask = (entries: SVE[], taskId: string): boolean =>
+  entries.some((entry) => getEntryTaskId(entry) === taskId);
+
+const markEntriesForTaskAsBeyondBudget = (entries: SVE[], taskId: string): void => {
+  entries.forEach((entry) => {
+    if (getEntryTaskId(entry) === taskId) {
+      entry.isBeyondBudget = true;
+    }
+  });
+};
+
+const normalizeDayAssignedEntry = (entry: SVE): SVE => {
+  if (
+    entry.type === SVEType.SplitTask &&
+    (entry.data as TaskWithPlannedForDayIndication).plannedForDay
+  ) {
+    return {
+      ...entry,
+      type: SVEType.SplitTaskPlannedForDay,
+    };
+  }
+  return entry;
+};
+
+const asPlannedForDayTask = (
+  task: TaskCopy,
+  dayDate: string,
+): TaskWithPlannedForDayIndication =>
+  ({
+    ...task,
+    plannedForDay: dayDate,
+    ...(task.timeEstimate === 0 && task.timeSpent === 0
+      ? { timeEstimate: SCHEDULE_TASK_MIN_DURATION_IN_MS }
+      : {}),
+  }) as TaskWithPlannedForDayIndication;
+
+const isTaskOnOrAfterDay = (task: ScheduleFlowTask, dayStartTime: number): boolean => {
+  if (isPlannedForDayTask(task)) {
+    return getDayStartTime(task.plannedForDay) >= dayStartTime;
+  }
+
+  if (task.dueDay) {
+    return getDayStartTime(task.dueDay) >= dayStartTime;
+  }
+
+  if (task.dueWithTime) {
+    return task.dueWithTime >= dayStartTime;
+  }
+
+  return false;
+};
+
+const getDayStartTime = (dayDate: string): number => {
+  const date = dateStrToUtcDate(dayDate);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+};
+
+const uniqueTasksById = <T extends ScheduleFlowTask>(tasks: T[]): T[] => {
+  const ids = new Set<string>();
+  return tasks.filter((task) => {
+    if (ids.has(task.id)) {
+      return false;
+    }
+    ids.add(task.id);
+    return true;
+  });
 };
 
 const getBudgetLeftForDay = (

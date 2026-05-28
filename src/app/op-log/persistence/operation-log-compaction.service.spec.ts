@@ -55,10 +55,8 @@ describe('OperationLogCompactionService', () => {
     spyOn(OpLog, 'normal');
 
     // Default mock implementations
-    mockLockService.request.and.callFake(
-      async (_name: string, fn: () => Promise<void>) => {
-        await fn();
-      },
+    mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
+      fn(),
     );
     mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(100));
     mockOpLogStore.saveStateCache.and.returnValue(Promise.resolve());
@@ -332,10 +330,11 @@ describe('OperationLogCompactionService', () => {
       const callOrder: string[] = [];
 
       mockLockService.request.and.callFake(
-        async (_name: string, fn: () => Promise<void>) => {
+        async <T>(_name: string, fn: () => Promise<T>) => {
           callOrder.push('lock-start');
-          await fn();
+          const r = await fn();
           callOrder.push('lock-end');
+          return r;
         },
       );
 
@@ -797,9 +796,9 @@ describe('OperationLogCompactionService', () => {
       const lockRequests: string[] = [];
 
       mockLockService.request.and.callFake(
-        async (_name: string, fn: () => Promise<void>) => {
+        async <T>(_name: string, fn: () => Promise<T>) => {
           lockRequests.push('lock-requested');
-          await fn();
+          return fn();
         },
       );
 
@@ -867,10 +866,11 @@ describe('OperationLogCompactionService', () => {
       const callOrder: string[] = [];
 
       mockLockService.request.and.callFake(
-        async (_name: string, fn: () => Promise<void>) => {
+        async <T>(_name: string, fn: () => Promise<T>) => {
           callOrder.push('lock-start');
-          await fn();
+          const r = await fn();
           callOrder.push('lock-end');
+          return r;
         },
       );
 
@@ -947,10 +947,10 @@ describe('OperationLogCompactionService', () => {
       const callOrder: string[] = [];
 
       mockLockService.request.and.callFake(
-        async (_name: string, fn: () => Promise<void>) => {
+        async <T>(_name: string, fn: () => Promise<T>) => {
           callOrder.push('lock-acquired');
           try {
-            await fn();
+            return await fn();
           } finally {
             callOrder.push('lock-released');
           }

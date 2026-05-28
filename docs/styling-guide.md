@@ -168,6 +168,34 @@ Defined in `src/styles/util.scss` and `src/styles/themes.scss`:
 - Color: `.bg-primary`, `.bgc-accent`, `.color-primary`, `.bg-success`, `.bg-warning`, `.bg-danger`
 - Effects: `.milk-glass` (backdrop blur)
 
+## Authoring Themes
+
+Theme files live in `src/assets/themes/*.css` and are loaded at runtime.
+
+### Side nav: never apply CB-creating properties to the `magic-side-nav` host
+
+The mobile drawer (`.nav-sidenav`) and its overlay (`.nav-backdrop-mobile`) are `position: fixed` children of the `magic-side-nav` host. On mobile the host shrinks to `width: 0` (`hostWidthSignal` in `magic-side-nav.component.ts`).
+
+Any property that establishes a [new containing block for fixed-position descendants](https://developer.mozilla.org/en-US/docs/Web/CSS/Containing_block#identifying_the_containing_block) — `backdrop-filter`, `filter`, `transform`, `perspective`, `contain: paint|layout|strict`, or a matching `will-change` — re-anchors the drawer and backdrop to the 0-wide host. The drawer never appears when the user taps the menu.
+
+Apply glass/blur/tint to the inner `.nav-sidenav` instead:
+
+```css
+/* ❌ Bad — collapses the mobile drawer */
+body.isDarkTheme magic-side-nav {
+  background: var(--my-pane);
+  backdrop-filter: blur(32px);
+}
+
+/* ✅ Good — host stays visually inert */
+body.isDarkTheme magic-side-nav .nav-sidenav {
+  background: var(--my-pane);
+  backdrop-filter: blur(32px);
+}
+```
+
+Properties that do NOT create a containing block — `background`, `border`, `box-shadow`, `margin` — are safe on the host. See `velvet.css` and `liquid-glass.css` for full reference patterns.
+
 ## Global Component Styles
 
 Located in `src/styles/components/`, these are needed for elements that render outside component scope:

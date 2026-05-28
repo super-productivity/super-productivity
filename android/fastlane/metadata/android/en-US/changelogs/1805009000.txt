@@ -1,0 +1,13 @@
+- extract local sync helpers
+- fix concurrent time tracking assertion
+- Revert "refactor(sync): split sync coordinators"
+- refine secure secret storage plan
+- split sync coordinators
+- bump zod from 4.3.6 to 4.4.3 (#7431)
+- harden supersync completion wait
+- add background image blur slider
+- add provider mode discriminator
+- disable insecure Google Calendar web flow
+- share SuperSync HTTP contract
+- update locale translations
+- align wrapper wm class with desktop entry

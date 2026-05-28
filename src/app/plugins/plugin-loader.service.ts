@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { PluginManifest } from './plugin-api.model';
@@ -60,16 +60,29 @@ export class PluginLoaderService {
         });
       }
 
-      // Load plugin code
-      const codeUrl = `${pluginPath}/plugin.js`;
-      const code = await this._http
-        .get(codeUrl, { responseType: 'text' })
-        .pipe(first())
-        .toPromise();
-
       // Load optional assets
       let indexHtml: string | undefined;
       let icon: string | undefined;
+      let code = '';
+      let hasPluginJs = false;
+      let pluginJsLoadError: unknown;
+
+      // Load plugin code. Iframe-only plugins can omit plugin.js when index.html is
+      // available, so defer throwing until optional iframe assets have been checked.
+      const codeUrl = `${pluginPath}/plugin.js`;
+      try {
+        code =
+          (await this._http
+            .get(codeUrl, { responseType: 'text' })
+            .pipe(first())
+            .toPromise()) ?? '';
+        hasPluginJs = true;
+      } catch (error) {
+        if (!manifest.iFrame || !this._isOptionalAssetNotFound(error)) {
+          throw error;
+        }
+        pluginJsLoadError = error;
+      }
 
       if (manifest.iFrame) {
         try {
@@ -80,7 +93,16 @@ export class PluginLoaderService {
             .toPromise();
         } catch (e) {
           PluginLog.err(`No index.html for plugin ${manifest.id}`);
+          if (!hasPluginJs) {
+            throw pluginJsLoadError ?? e;
+          }
         }
+      }
+
+      if (!hasPluginJs && !this._hasPluginIndexHtml(indexHtml)) {
+        throw new Error(
+          `Plugin ${manifest.id} requires a non-empty index.html when plugin.js is missing`,
+        );
       }
 
       if (manifest.icon) {
@@ -157,5 +179,15 @@ export class PluginLoaderService {
    */
   async clearAllCaches(): Promise<void> {
     await this._cacheService.clearCache();
+  }
+
+  private _isOptionalAssetNotFound(error: unknown): boolean {
+    return (
+      error instanceof HttpErrorResponse && (error.status === 0 || error.status === 404)
+    );
+  }
+
+  private _hasPluginIndexHtml(indexHtml: string | undefined): boolean {
+    return indexHtml !== undefined && indexHtml.trim().length > 0;
   }
 }

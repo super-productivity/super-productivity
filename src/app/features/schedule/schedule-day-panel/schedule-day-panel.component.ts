@@ -105,10 +105,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   });
 
   events = computed(() => this._eventsAndBeyondBudget().eventsFlat);
+  beyondBudget = computed(() => this._eventsAndBeyondBudget().beyondBudgetDays);
 
   hasNoEvents = computed(() => {
-    const evs = this.events().filter((ev) => ev.type !== SVEType.LunchBreak);
-    return !evs || evs.length === 0;
+    const hasVisibleEvents = this.events().some((ev) => ev.type !== SVEType.LunchBreak);
+    const hasBeyondBudgetEvents = this.beyondBudget().some(
+      (beyondBudgetDay) => beyondBudgetDay.length > 0,
+    );
+    return !hasVisibleEvents && !hasBeyondBudgetEvents;
   });
 
   private _workStartEndHours = toSignal(

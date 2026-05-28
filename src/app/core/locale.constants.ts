@@ -32,6 +32,7 @@ export enum LanguageCode {
   zh_tw = 'zh-tw', // Chinese (Traditional)
   ro = 'ro',
   ro_md = 'ro-md', // Romanian (Moldova)
+  vi = 'vi', // Vietnamese
 }
 
 /**
@@ -130,6 +131,7 @@ export const LocaleImportFns: Record<
   ro: () => import('@angular/common/locales/ro'),
   ro_ro: () => import('@angular/common/locales/ro'),
   ro_md: () => import('@angular/common/locales/ro-MD'),
+  vi: () => import('@angular/common/locales/vi'),
 };
 
 /** Default locale data, statically imported for instant availability */

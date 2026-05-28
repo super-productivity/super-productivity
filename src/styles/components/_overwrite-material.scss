@@ -376,6 +376,16 @@ mat-tooltip-component {
   pointer-events: none;
 }
 
+// The tooltip's overlay PANE wrapper (not just the inner component) must
+// not swallow pointer events. A tooltip shown 'below' a button in the
+// vertical action strip lands directly over the next button — without
+// this it intercepts clicks for both real users and Playwright. Scoped
+// to the experimental flag so other tooltips in the app keep their
+// pane-level pointer events (interactive hover content, etc.).
+body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
+  pointer-events: none;
+}
+
 // SNACK
 // Move snack bar above mobile bottom nav for all touch devices
 @include media-queries.mq(xs, max) {

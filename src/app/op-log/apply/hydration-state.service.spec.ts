@@ -1,4 +1,5 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import type { RemoteApplyWindowPort } from '@sp/sync-core';
 import { HydrationStateService } from './hydration-state.service';
 import { getIsApplyingRemoteOps } from '../capture/operation-capture.meta-reducer';
 
@@ -21,6 +22,24 @@ describe('HydrationStateService', () => {
     it('should start with isApplyingRemoteOps as false', () => {
       expect(service.isApplyingRemoteOps()).toBeFalse();
     });
+  });
+
+  describe('RemoteApplyWindowPort contract', () => {
+    it('should expose remote apply window state through the port methods', fakeAsync(() => {
+      const port: RemoteApplyWindowPort = service;
+
+      port.startApplyingRemoteOps();
+      expect(port.isApplyingRemoteOps?.()).toBeTrue();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      port.startPostSyncCooldown(50);
+      port.endApplyingRemoteOps();
+      expect(port.isApplyingRemoteOps?.()).toBeFalse();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      tick(100);
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
   });
 
   describe('startApplyingRemoteOps', () => {

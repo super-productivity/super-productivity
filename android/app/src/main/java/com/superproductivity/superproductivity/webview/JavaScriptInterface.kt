@@ -3,7 +3,9 @@ package com.superproductivity.superproductivity.webview
 import android.app.Activity
 import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -15,6 +17,7 @@ import com.superproductivity.superproductivity.FullscreenActivity.Companion.WIND
 import com.superproductivity.superproductivity.app.LaunchDecider
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
+import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
@@ -23,6 +26,7 @@ import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.WidgetTaskQueue
+import org.json.JSONObject
 
 
 class JavaScriptInterface(
@@ -30,16 +34,43 @@ class JavaScriptInterface(
     private val webView: WebView,
 ) {
 
-    private inline fun safeCall(errorMsg: String, block: () -> Unit) {
+    private inline fun safeCall(
+        errorMsg: String,
+        foregroundService: String? = null,
+        block: () -> Unit
+    ) {
         try {
             block()
         } catch (e: Exception) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
+            val isStartNotAllowed =
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    e is ForegroundServiceStartNotAllowedException
+            if (isStartNotAllowed) {
                 Log.e(TAG, "$errorMsg - ForegroundService restrictions violated (Android 12+). App may be in background.", e)
             } else {
                 Log.e(TAG, errorMsg, e)
             }
+            foregroundService?.let {
+                emitForegroundServiceStartFailed(
+                    it,
+                    if (isStartNotAllowed) {
+                        ForegroundServiceFailure.REASON_START_NOT_ALLOWED
+                    } else {
+                        ForegroundServiceFailure.REASON_PROMOTION_FAILED
+                    }
+                )
+            }
         }
+    }
+
+    private fun emitForegroundServiceStartFailed(service: String, reason: String) {
+        val payload = "{service:${JSONObject.quote(service)},reason:${JSONObject.quote(reason)}}"
+        val subjectPath = "${FN_PREFIX}onForegroundServiceStartFailed${'$'}"
+        callJavaScriptFunction(
+            "if(window.$WINDOW_INTERFACE_PROPERTY && " +
+                "$subjectPath) " +
+                "$subjectPath.next($payload)"
+        )
     }
 
     @Suppress("unused")
@@ -100,7 +131,10 @@ class JavaScriptInterface(
     @Suppress("unused")
     @JavascriptInterface
     fun startTrackingService(taskId: String, taskTitle: String, timeSpentMs: Long) {
-        safeCall("Failed to start tracking service") {
+        safeCall(
+            "Failed to start tracking service",
+            ForegroundServiceFailure.SERVICE_TRACKING
+        ) {
             val intent = Intent(activity, TrackingForegroundService::class.java).apply {
                 action = TrackingForegroundService.ACTION_START
                 putExtra(TrackingForegroundService.EXTRA_TASK_ID, taskId)
@@ -155,7 +189,10 @@ class JavaScriptInterface(
         isPaused: Boolean,
         taskTitle: String?
     ) {
-        safeCall("Failed to start focus mode service") {
+        safeCall(
+            "Failed to start focus mode service",
+            ForegroundServiceFailure.SERVICE_FOCUS_MODE
+        ) {
             val intent = Intent(activity, FocusModeForegroundService::class.java).apply {
                 action = FocusModeForegroundService.ACTION_START
                 putExtra(FocusModeForegroundService.EXTRA_TITLE, title)
@@ -334,6 +371,23 @@ class JavaScriptInterface(
         safeCall("Failed to clear SuperSync credentials") {
             BackgroundSyncCredentialStore.clear(activity)
             SyncReminderScheduler.cancel(activity)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun openAppNotificationSettings() {
+        safeCall("Failed to open notification settings") {
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+                }
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${activity.packageName}")
+                }
+            }
+            activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 

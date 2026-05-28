@@ -68,6 +68,33 @@ describe('RuleRegistry', () => {
     expect(await registry.getRules()).toEqual(rules);
   });
 
+  it('should load rules with taskStarted/taskStopped triggers and removeTag action', async () => {
+    const rules: AutomationRule[] = [
+      {
+        id: 'r1',
+        name: 'Tag while running',
+        isEnabled: true,
+        trigger: { type: 'taskStarted' },
+        conditions: [],
+        actions: [{ type: 'addTag', value: 'in-progress' }],
+      },
+      {
+        id: 'r2',
+        name: 'Untag when stopped',
+        isEnabled: true,
+        trigger: { type: 'taskStopped' },
+        conditions: [],
+        actions: [{ type: 'removeTag', value: 'in-progress' }],
+      },
+    ];
+    (mockPlugin.loadSyncedData as any).mockResolvedValue(JSON.stringify(rules));
+
+    registry = new RuleRegistry(mockPlugin);
+    await new Promise(process.nextTick);
+
+    expect(await registry.getRules()).toEqual(rules);
+  });
+
   it('should load existing rules with deleteTask actions', async () => {
     const rules: AutomationRule[] = [
       {
@@ -104,6 +131,49 @@ describe('RuleRegistry', () => {
 
     expect(await registry.getRules()).toContainEqual(newRule);
     expect(mockPlugin.persistDataSynced).toHaveBeenCalledWith(JSON.stringify([newRule]));
+  });
+
+  it('addRules persists every rule with a single persistDataSynced call', async () => {
+    registry = new RuleRegistry(mockPlugin);
+    await new Promise(process.nextTick);
+
+    const rules: AutomationRule[] = [
+      {
+        id: 'r1',
+        name: 'A',
+        isEnabled: true,
+        trigger: { type: 'taskStarted' },
+        conditions: [],
+        actions: [{ type: 'addTag', value: 'in-progress' }],
+      },
+      {
+        id: 'r2',
+        name: 'B',
+        isEnabled: true,
+        trigger: { type: 'taskStopped' },
+        conditions: [],
+        actions: [{ type: 'removeTag', value: 'in-progress' }],
+      },
+    ];
+
+    // One persistDataSynced call (constructor init) before the batch.
+    expect((mockPlugin.persistDataSynced as any).mock.calls.length).toBe(1);
+
+    await registry.addRules(rules);
+
+    // Exactly one additional persist for the whole batch — no rate-limit risk.
+    expect((mockPlugin.persistDataSynced as any).mock.calls.length).toBe(2);
+    expect(await registry.getRules()).toEqual(rules);
+  });
+
+  it('addRules is a no-op for an empty array', async () => {
+    registry = new RuleRegistry(mockPlugin);
+    await new Promise(process.nextTick);
+    const before = (mockPlugin.persistDataSynced as any).mock.calls.length;
+
+    await registry.addRules([]);
+
+    expect((mockPlugin.persistDataSynced as any).mock.calls.length).toBe(before);
   });
 
   it('should update existing rule', async () => {

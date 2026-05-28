@@ -62,9 +62,6 @@ export class OperationLogHydratorService {
   private syncHydrationService = inject(SyncHydrationService);
   private archiveMigrationService = inject(ArchiveMigrationService);
 
-  // Mutex to prevent concurrent repair operations and re-validation during repair
-  private _repairMutex: Promise<void> | null = null;
-
   // Track if schema migration ran during this hydration (requires validation)
   private _migrationRanDuringHydration = false;
 
@@ -139,26 +136,21 @@ export class OperationLogHydratorService {
         // synchronously if a migration ran (schema changed).
         // TODO: Consider removing this validation after ops-log testing phase.
         // Checkpoint C validates the final state anyway, making this redundant.
-        let stateToLoad = snapshot.state as AppStateSnapshot;
+        const stateToLoad = snapshot.state as AppStateSnapshot;
         const snapshotSchemaVersion = (snapshot as { schemaVersion?: number })
           .schemaVersion;
         const needsSyncValidation =
           this._migrationRanDuringHydration ||
           snapshotSchemaVersion !== CURRENT_SCHEMA_VERSION;
 
-        if (needsSyncValidation && !this._repairMutex) {
+        if (needsSyncValidation) {
           OpLog.normal(
             'OperationLogHydratorService: Running synchronous validation (migration ran or schema mismatch)',
           );
-          const validationResult = await this._validateAndRepairState(
+          await this._validateStateForHydration(
             stateToLoad as unknown as Record<string, unknown>,
             'snapshot',
           );
-          if (validationResult.wasRepaired && validationResult.repairedState) {
-            stateToLoad = validationResult.repairedState as unknown as AppStateSnapshot;
-            // Update snapshot with repaired state
-            snapshot = { ...snapshot, state: stateToLoad };
-          }
         } else {
           OpLog.normal(
             'OperationLogHydratorService: Trusting snapshot (schema version matches, no migration)',
@@ -205,36 +197,25 @@ export class OperationLogHydratorService {
               `OperationLogHydratorService: Last of ${tailOps.length} tail ops is ${lastOp.opType}, loading directly`,
             );
 
-            // Validate and repair the full-state data BEFORE loading to NgRx
-            // This prevents corrupted SyncImport/Repair operations from breaking the app
-            if (!this._repairMutex) {
-              const validationResult = await this._validateAndRepairState(
-                appData as Record<string, unknown>,
-                'tail-full-state-op-load',
-              );
-              const tailStateToLoad =
-                validationResult.wasRepaired && validationResult.repairedState
-                  ? validationResult.repairedState
-                  : (appData as Record<string, unknown>);
-              // FIX: Merge vector clock BEFORE dispatching loadAllData
-              // This ensures any operations created synchronously during loadAllData
-              // (e.g., TODAY_TAG repair) will have the correct merged clock.
-              // Without this, those operations get superseded clocks and are rejected by the server.
-              await this.opLogStore.mergeRemoteOpClocks([lastOp]);
-              this.store.dispatch(
-                loadAllData({
-                  appDataComplete: tailStateToLoad as unknown as AppDataComplete,
-                }),
-              );
-            } else {
-              // FIX: Same fix for the else branch
-              await this.opLogStore.mergeRemoteOpClocks([lastOp]);
-              this.store.dispatch(
-                loadAllData({
-                  appDataComplete: appData as unknown as AppDataComplete,
-                }),
-              );
-            }
+            // Validate the full-state data before loading to NgRx.
+            // The check is non-fatal: we log issues but still dispatch so the user
+            // sees their data rather than a half-loaded UI. Repair is intentionally
+            // not attempted here (it requires a confirm dialog that breaks Electron
+            // focus on Windows — see issue #7631).
+            await this._validateStateForHydration(
+              appData as Record<string, unknown>,
+              'tail-full-state-op-load',
+            );
+            // FIX: Merge vector clock BEFORE dispatching loadAllData
+            // This ensures any operations created synchronously during loadAllData
+            // (e.g., TODAY_TAG repair) will have the correct merged clock.
+            // Without this, those operations get superseded clocks and are rejected by the server.
+            await this.opLogStore.mergeRemoteOpClocks([lastOp]);
+            this.store.dispatch(
+              loadAllData({
+                appDataComplete: appData as unknown as AppDataComplete,
+              }),
+            );
             // No snapshot save needed - full state ops already contain complete state
             // Snapshot will be saved after next batch of regular operations
           } else {
@@ -257,15 +238,15 @@ export class OperationLogHydratorService {
             // This ensures subsequent ops have clocks that dominate these tail ops
             await this.opLogStore.mergeRemoteOpClocks(opsToReplay);
 
-            // CHECKPOINT C: Validate state after replaying tail operations
-            // Must validate BEFORE saving snapshot to avoid persisting corrupted state
-            if (!this._repairMutex) {
-              await this._validateAndRepairCurrentState('tail-replay');
-            }
+            // CHECKPOINT C: Validate state after replaying tail operations.
+            // If invalid, we keep the data on screen but skip the snapshot save so
+            // we don't cache corrupted state for next boot.
+            const isStateValid =
+              await this._validateCurrentStateForHydration('tail-replay');
 
-            // 5. If we replayed many ops, save a new snapshot for faster future loads
-            // Snapshot is saved AFTER validation to ensure we persist valid/repaired state
-            if (opsToReplay.length > 10) {
+            // 5. If we replayed many ops AND state is valid, save a new snapshot
+            // for faster future loads.
+            if (isStateValid && opsToReplay.length > 10) {
               OpLog.normal(
                 `OperationLogHydratorService: Saving new snapshot after replaying ${opsToReplay.length} ops`,
               );
@@ -300,34 +281,19 @@ export class OperationLogHydratorService {
             `OperationLogHydratorService: Last of ${allOps.length} ops is ${lastOp.opType}, loading directly`,
           );
 
-          // Validate and repair the full-state data BEFORE loading to NgRx
-          // This prevents corrupted SyncImport/Repair operations from breaking the app
-          if (!this._repairMutex) {
-            const validationResult = await this._validateAndRepairState(
-              appData as Record<string, unknown>,
-              'full-state-op-load',
-            );
-            const stateToLoad =
-              validationResult.wasRepaired && validationResult.repairedState
-                ? validationResult.repairedState
-                : (appData as Record<string, unknown>);
-            // FIX: Merge vector clock BEFORE dispatching loadAllData
-            // Same fix as the tail ops branch - prevents superseded clock bug
-            await this.opLogStore.mergeRemoteOpClocks([lastOp]);
-            this.store.dispatch(
-              loadAllData({
-                appDataComplete: stateToLoad as unknown as AppDataComplete,
-              }),
-            );
-          } else {
-            // FIX: Same fix for the else branch
-            await this.opLogStore.mergeRemoteOpClocks([lastOp]);
-            this.store.dispatch(
-              loadAllData({
-                appDataComplete: appData as unknown as AppDataComplete,
-              }),
-            );
-          }
+          // Validate the full-state data before loading to NgRx (non-fatal).
+          await this._validateStateForHydration(
+            appData as Record<string, unknown>,
+            'full-state-op-load',
+          );
+          // FIX: Merge vector clock BEFORE dispatching loadAllData
+          // Same fix as the tail ops branch - prevents superseded clock bug
+          await this.opLogStore.mergeRemoteOpClocks([lastOp]);
+          this.store.dispatch(
+            loadAllData({
+              appDataComplete: appData as unknown as AppDataComplete,
+            }),
+          );
           // No snapshot save needed - full state ops already contain complete state
         } else {
           // A.7.13: Migrate all operations before replay
@@ -348,18 +314,19 @@ export class OperationLogHydratorService {
           // Merge replayed ops' clocks into local clock
           await this.opLogStore.mergeRemoteOpClocks(opsToReplay);
 
-          // CHECKPOINT C: Validate state after replaying all operations
-          // Must validate BEFORE saving snapshot to avoid persisting corrupted state
-          if (!this._repairMutex) {
-            await this._validateAndRepairCurrentState('full-replay');
-          }
+          // CHECKPOINT C: Validate state after replaying all operations.
+          // If invalid, we still proceed but skip the snapshot save so we don't
+          // cache corrupted state for next boot.
+          const isStateValid =
+            await this._validateCurrentStateForHydration('full-replay');
 
-          // Save snapshot after replay for faster future loads
-          // Snapshot is saved AFTER validation to ensure we persist valid/repaired state
-          OpLog.normal(
-            `OperationLogHydratorService: Saving snapshot after replaying ${opsToReplay.length} ops`,
-          );
-          await this.snapshotService.saveCurrentStateAsSnapshot();
+          // Save snapshot after replay for faster future loads (only when valid).
+          if (isStateValid) {
+            OpLog.normal(
+              `OperationLogHydratorService: Saving snapshot after replaying ${opsToReplay.length} ops`,
+            );
+            await this.snapshotService.saveCurrentStateAsSnapshot();
+          }
         }
 
         OpLog.normal('OperationLogHydratorService: Full replay complete.');
@@ -498,86 +465,44 @@ export class OperationLogHydratorService {
   }
 
   /**
-   * Validates a state object and repairs it if necessary.
-   * Used for validating snapshot state before dispatching.
-   * Uses a mutex to prevent concurrent repair operations.
+   * Validates a state object during hydration without attempting repair.
    *
-   * @param state - The state to validate
-   * @param context - Context string for logging (e.g., 'snapshot', 'tail-replay')
-   * @returns Validation result with optional repaired state
+   * Repair is intentionally not run here: it requires a native `confirm()` dialog
+   * which steals focus from the renderer on Windows and leaves the UI unresponsive
+   * to keyboard/mouse input until the window is refocused (issue #7631). Validation
+   * failures are logged but non-fatal — the caller continues with the original state
+   * so the user sees their data rather than a half-loaded UI.
+   *
+   * @returns Whether the state is valid.
    */
-  private async _validateAndRepairState(
+  private async _validateStateForHydration(
     state: Record<string, unknown>,
     context: string,
-  ): Promise<{ wasRepaired: boolean; repairedState?: Record<string, unknown> }> {
-    // Wait for any ongoing repair to complete before validating
-    if (this._repairMutex) {
-      await this._repairMutex;
+  ): Promise<boolean> {
+    const result = await this.validateStateService.validateState(state);
+    if (!result.isValid) {
+      OpLog.err(`[OperationLogHydratorService] Validation failed for ${context}`, {
+        typiaErrorCount: result.typiaErrors.length,
+        crossModelError: result.crossModelError,
+      });
+      return false;
     }
-
-    const result = await this.validateStateService.validateAndRepair(state as never);
-
-    if (!result.wasRepaired) {
-      return { wasRepaired: false };
-    }
-
-    if (!result.repairedState || !result.repairSummary) {
-      OpLog.err(
-        `[OperationLogHydratorService] Repair failed for ${context}:`,
-        result.error,
-      );
-      return { wasRepaired: false };
-    }
-
-    // DISABLED: Repair system is non-functional - this code path is unreachable
-    // because validateAndRepair() always returns wasRepaired: false
-    //
-    // const repairPromise = (async () => {
-    //   try {
-    //     const clientId = await this.pfapiService.pf.metaModel.loadClientId();
-    //     await this.repairOperationService.createRepairOperation(
-    //       result.repairedState!,
-    //       result.repairSummary!,
-    //       clientId,
-    //     );
-    //     OpLog.log(`[OperationLogHydratorService] Created REPAIR operation for ${context}`);
-    //   } catch (e) {
-    //     OpLog.err(`[OperationLogHydratorService] Failed to create REPAIR operation for ${context}:`, e);
-    //     throw e;
-    //   } finally {
-    //     this._repairMutex = null;
-    //   }
-    // })();
-    // this._repairMutex = repairPromise;
-    // await repairPromise;
-
-    // Should never reach here while repair is disabled
-    return { wasRepaired: false };
+    return true;
   }
 
   /**
-   * Validates the current NgRx state and repairs it if necessary.
-   * Used after replaying operations.
+   * Validates the current NgRx state after replay.
+   * Used to gate the snapshot save — we must not persist a corrupted snapshot.
    *
    * @param context - Context string for logging
+   * @returns Whether the current state is valid.
    */
-  private async _validateAndRepairCurrentState(context: string): Promise<void> {
-    // Get current state from NgRx
+  private async _validateCurrentStateForHydration(context: string): Promise<boolean> {
     const currentState = this.stateSnapshotService.getStateSnapshot();
-
-    const result = await this._validateAndRepairState(
+    return this._validateStateForHydration(
       currentState as unknown as Record<string, unknown>,
       context,
     );
-
-    if (result.wasRepaired && result.repairedState) {
-      // Dispatch the repaired state to NgRx
-      this.store.dispatch(
-        loadAllData({
-          appDataComplete: result.repairedState as unknown as AppDataComplete,
-        }),
-      );
-    }
   }
 
   /**

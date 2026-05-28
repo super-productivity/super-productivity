@@ -1,19 +1,20 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
+import { Router } from '@angular/router';
 import { FinishDayBeforeCloseEffects } from './finish-day-before-close.effects';
 import { ExecBeforeCloseService } from '../../core/electron/exec-before-close.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TaskService } from '../tasks/task.service';
 import { WorkContextService } from '../work-context/work-context.service';
-import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { DEFAULT_TASK, Task } from '../tasks/task.model';
 import { EMPTY } from 'rxjs';
 
 describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
   let effects: FinishDayBeforeCloseEffects;
   let execBeforeCloseService: jasmine.SpyObj<ExecBeforeCloseService>;
-  let confirmDialogSpy: jasmine.Spy;
+  let router: jasmine.SpyObj<Router>;
+  let showDialogSpy: jasmine.Spy;
 
   const doneTask: Task = {
     ...DEFAULT_TASK,
@@ -53,6 +54,8 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
     const translateServiceSpy = jasmine.createSpyObj('TranslateService', ['instant']);
     translateServiceSpy.instant.and.returnValue('Finish your day?');
 
+    const routerSpy = jasmine.createSpyObj('Router', ['navigateByUrl']);
+
     TestBed.configureTestingModule({
       providers: [
         FinishDayBeforeCloseEffects,
@@ -62,7 +65,7 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         { provide: TranslateService, useValue: translateServiceSpy },
-        { provide: LOCAL_ACTIONS, useValue: EMPTY },
+        { provide: Router, useValue: routerSpy },
       ],
     });
 
@@ -70,38 +73,51 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
     execBeforeCloseService = TestBed.inject(
       ExecBeforeCloseService,
     ) as jasmine.SpyObj<ExecBeforeCloseService>;
+    router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
 
-    confirmDialogSpy = spyOn(effects, '_confirm');
+    showDialogSpy = spyOn(effects, '_showDialog');
   });
 
   describe('when there are done tasks', () => {
-    it('calls setDone (allows close) when user clicks OK', () => {
-      confirmDialogSpy.and.returnValue(true);
+    it('calls setDone (allows close) when user picks "quit"', async () => {
+      showDialogSpy.and.returnValue(Promise.resolve('quit'));
 
-      effects._handleCloseDecision([doneTask, undoneTask]);
+      await effects._handleCloseDecision([doneTask, undoneTask]);
 
       expect(execBeforeCloseService.setDone).toHaveBeenCalledWith(
         'FINISH_DAY_BEFORE_CLOSE_EFFECT',
       );
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
     });
 
-    it('does NOT close when user clicks Cancel', () => {
-      confirmDialogSpy.and.returnValue(false);
+    it('does NOT close and does NOT navigate when user picks "cancel"', async () => {
+      showDialogSpy.and.returnValue(Promise.resolve('cancel'));
 
-      effects._handleCloseDecision([doneTask, undoneTask]);
+      await effects._handleCloseDecision([doneTask, undoneTask]);
 
+      expect(execBeforeCloseService.setDone).not.toHaveBeenCalled();
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
+    });
+
+    it('navigates to /daily-summary and does NOT close when user picks "finish-day"', async () => {
+      showDialogSpy.and.returnValue(Promise.resolve('finish-day'));
+
+      await effects._handleCloseDecision([doneTask, undoneTask]);
+
+      expect(router.navigateByUrl).toHaveBeenCalledWith('/daily-summary');
       expect(execBeforeCloseService.setDone).not.toHaveBeenCalled();
     });
   });
 
   describe('when there are no done tasks', () => {
-    it('calls setDone immediately without showing a dialog', () => {
-      effects._handleCloseDecision([undoneTask]);
+    it('calls setDone immediately without showing a dialog', async () => {
+      await effects._handleCloseDecision([undoneTask]);
 
-      expect(confirmDialogSpy).not.toHaveBeenCalled();
+      expect(showDialogSpy).not.toHaveBeenCalled();
       expect(execBeforeCloseService.setDone).toHaveBeenCalledWith(
         'FINISH_DAY_BEFORE_CLOSE_EFFECT',
       );
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
     });
   });
 });

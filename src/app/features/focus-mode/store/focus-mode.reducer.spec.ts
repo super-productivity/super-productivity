@@ -65,6 +65,34 @@ describe('FocusModeReducer', () => {
 
       expect(result.mode).toBe(FocusModeMode.Pomodoro);
     });
+
+    it('should clear a fixed-duration work timer when switching to Flowtime', () => {
+      const state = {
+        ...initialState,
+        mode: FocusModeMode.Pomodoro,
+        mainState: FocusMainUIState.InProgress,
+        timer: {
+          isRunning: true,
+          startedAt: Date.now(),
+          elapsed: 5 * 60 * 1000,
+          duration: FOCUS_MODE_DEFAULTS.SESSION_DURATION,
+          purpose: 'work' as const,
+        },
+        _isOvertimeEnabled: true,
+      };
+
+      const result = focusModeReducer(
+        state,
+        a.setFocusModeMode({ mode: FocusModeMode.Flowtime }),
+      );
+
+      expect(result.mode).toBe(FocusModeMode.Flowtime);
+      expect(result.timer).toEqual({
+        ...state.timer,
+        duration: 0,
+      });
+      expect(result._isOvertimeEnabled).toBe(false);
+    });
   });
 
   describe('overlay actions', () => {
@@ -160,6 +188,26 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(false);
     });
 
+    it('should update elapsed time when pausing a running focus session', () => {
+      spyOn(Date, 'now').and.returnValue(10 * 60 * 1000);
+      const runningState = {
+        ...initialState,
+        timer: {
+          isRunning: true,
+          startedAt: 2 * 60 * 1000,
+          elapsed: 0,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const action = a.pauseFocusSession({ pausedTaskId: null });
+      const result = focusModeReducer(runningState, action);
+
+      expect(result.timer.isRunning).toBe(false);
+      expect(result.timer.elapsed).toBe(8 * 60 * 1000);
+    });
+
     it('should pause break sessions', () => {
       const breakState = {
         ...initialState,
@@ -252,6 +300,26 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(true);
     });
 
+    it('should not unpause a BreakOffer state', () => {
+      const pausedBreakOfferState = {
+        ...initialState,
+        timer: {
+          isRunning: false,
+          startedAt: null,
+          elapsed: 0,
+          duration: 300000,
+          purpose: 'break' as const,
+        },
+        mainState: FocusMainUIState.BreakOffer,
+        currentScreen: FocusScreen.Break,
+      };
+
+      const action = a.unPauseFocusSession();
+      const result = focusModeReducer(pausedBreakOfferState, action);
+
+      expect(result).toBe(pausedBreakOfferState);
+    });
+
     it('should not unpause sessions with no purpose (idle)', () => {
       const idleState = {
         ...initialState,
@@ -292,6 +360,27 @@ describe('FocusModeReducer', () => {
       expect(result.lastCompletedDuration).toBe(60000);
     });
 
+    it('should use provided completedDuration when completing a focus session', () => {
+      const runningState = {
+        ...initialState,
+        timer: {
+          isRunning: true,
+          startedAt: Date.now() - 60000,
+          elapsed: 60000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const action = a.completeFocusSession({
+        isManual: false,
+        completedDuration: 1500000,
+      });
+      const result = focusModeReducer(runningState, action);
+
+      expect(result.lastCompletedDuration).toBe(1500000);
+    });
+
     it('should cancel focus session', () => {
       const runningState = {
         ...initialState,
@@ -318,6 +407,43 @@ describe('FocusModeReducer', () => {
   });
 
   describe('break actions', () => {
+    it('endFlowtimeSession should be a no-op when timer.purpose !== work', () => {
+      const state = {
+        ...initialState,
+        timer: { ...initialState.timer, purpose: 'break' as const, isRunning: true },
+      };
+      const action = a.endFlowtimeSession({ pausedTaskId: null });
+      const result = focusModeReducer(state, action);
+      expect(result).toBe(state);
+    });
+
+    it('endFlowtimeSession should pause timer but preserve state', () => {
+      const state = {
+        ...initialState,
+        timer: { ...initialState.timer, purpose: 'work' as const, isRunning: true },
+      };
+      const action = a.endFlowtimeSession({ pausedTaskId: 'task-abc' });
+      const result = focusModeReducer(state, action);
+      expect(result.timer.isRunning).toBe(false);
+      expect(result.pausedTaskId).toBe('task-abc');
+      expect(result.currentScreen).toBe(initialState.currentScreen);
+    });
+
+    it('offerFlowtimeBreak should switch currentScreen to Break and set break timer', () => {
+      const action = a.offerFlowtimeBreak({
+        duration: 5000,
+        isLongBreak: false,
+      });
+      const result = focusModeReducer(initialState, action);
+
+      expect(result.currentScreen).toBe(FocusScreen.Break);
+      expect(result.mainState).toBe(FocusMainUIState.BreakOffer);
+      expect(result.timer.isRunning).toBe(false);
+      expect(result.timer.elapsed).toBe(0);
+      expect(result.timer.purpose).toBe('break');
+      expect(result.timer.duration).toBe(5000);
+    });
+
     it('should start break with default duration', () => {
       const action = a.startBreak({});
       const result = focusModeReducer(initialState, action);
@@ -546,6 +672,7 @@ describe('FocusModeReducer', () => {
       const startTime = Date.now();
       const flowtimeState = {
         ...initialState,
+        mode: FocusModeMode.Flowtime,
         timer: {
           isRunning: true,
           startedAt: startTime,

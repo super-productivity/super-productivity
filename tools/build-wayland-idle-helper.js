@@ -25,11 +25,44 @@ const hasCargo = () => {
   return result.status === 0;
 };
 
+const isTruthyEnv = (value) => value === '1' || value?.toLowerCase() === 'true';
+
+const isExplicitlySkipped = () =>
+  isTruthyEnv(process.env.SP_SKIP_WAYLAND_IDLE_HELPER_BUILD);
+
+const isBuildRequired = () =>
+  isTruthyEnv(process.env.CI) ||
+  isTruthyEnv(process.env.SP_REQUIRE_WAYLAND_IDLE_HELPER_BUILD);
+
+const removeBuiltHelper = () => {
+  fs.rmSync(OUTPUT_PATH, { force: true });
+  fs.rmSync(`${OUTPUT_PATH}.tmp`, { force: true });
+};
+
 const buildHelper = () => {
-  if (!hasCargo()) {
+  if (isExplicitlySkipped()) {
+    removeBuiltHelper();
     console.warn(
-      '[build-wayland-idle-helper] Rust toolchain not found -- skipping Wayland idle helper. Install via https://rustup.rs if you need it.',
+      '[build-wayland-idle-helper] Skipping Wayland idle helper because SP_SKIP_WAYLAND_IDLE_HELPER_BUILD is set.',
     );
+    return;
+  }
+
+  if (!hasCargo()) {
+    const message =
+      '[build-wayland-idle-helper] Rust/Cargo is required to build the Wayland idle helper.';
+
+    if (isBuildRequired()) {
+      console.error(
+        `${message} Install rustup/cargo, or set SP_SKIP_WAYLAND_IDLE_HELPER_BUILD=1 for builds that intentionally omit ext-idle-notify support.`,
+      );
+      process.exit(1);
+    }
+
+    console.warn(
+      `${message} Skipping for this local build. Set SP_REQUIRE_WAYLAND_IDLE_HELPER_BUILD=1 to enforce helper builds outside CI.`,
+    );
+    removeBuiltHelper();
     return;
   }
 

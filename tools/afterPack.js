@@ -2,9 +2,10 @@
 //
 // Renames the main Electron binary to `superproductivity-bin` and installs
 // a shell wrapper at the original name. The wrapper forces
-// --ozone-platform=x11 when running in our Snap sandbox on a Wayland
-// session; non-Snap launches (AppImage, .deb, .rpm) and X11 sessions hit
-// a no-op passthrough, so behavior for those targets is unchanged.
+// --class=superproductivity for stable desktop-file matching and forces
+// --ozone-platform=x11 when running in our Snap sandbox on a Wayland session.
+// Non-Snap launches (AppImage, .deb, .rpm) and X11 sessions only receive the
+// stable class flag.
 //
 // Context: field reports on issue #7270 (v18.2.4/v18.2.5) show that
 // app.commandLine.appendSwitch('ozone-platform','x11') from inside the
@@ -30,6 +31,8 @@ const WAYLAND_IDLE_HELPER_SRC = join(
 );
 const WAYLAND_IDLE_HELPER_DEST = 'wayland-idle-helper';
 
+const isTruthyEnv = (value) => value === '1' || value?.toLowerCase() === 'true';
+
 async function afterPack(context) {
   if (context.electronPlatformName !== 'linux') return;
 
@@ -39,12 +42,18 @@ async function afterPack(context) {
   const helperDestPath = join(appOutDir, WAYLAND_IDLE_HELPER_DEST);
 
   const installWaylandIdleHelper = async () => {
-    const helperStat = await fs.stat(WAYLAND_IDLE_HELPER_SRC).catch(() => null);
-    if (!helperStat) {
+    if (isTruthyEnv(process.env.SP_SKIP_WAYLAND_IDLE_HELPER_BUILD)) {
       console.warn(
-        `[afterPack] ${WAYLAND_IDLE_HELPER_SRC} not found; skipping Wayland idle helper copy`,
+        '[afterPack] Skipping Wayland idle helper copy because SP_SKIP_WAYLAND_IDLE_HELPER_BUILD is set',
       );
       return;
+    }
+
+    const helperStat = await fs.stat(WAYLAND_IDLE_HELPER_SRC).catch(() => null);
+    if (!helperStat) {
+      throw new Error(
+        `[afterPack] ${WAYLAND_IDLE_HELPER_SRC} not found. Linux packages must include the Wayland idle helper; install Rust/Cargo before packaging or set SP_SKIP_WAYLAND_IDLE_HELPER_BUILD=1 to intentionally omit ext-idle-notify support.`,
+      );
     }
 
     await fs.copyFile(WAYLAND_IDLE_HELPER_SRC, helperDestPath);

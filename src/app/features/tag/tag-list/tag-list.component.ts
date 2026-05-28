@@ -152,7 +152,7 @@ export class TagListComponent {
         );
         chips.push({
           title: this._translateService.instant(key, params),
-          svgIcon: 'repeat',
+          icon: 'repeat',
         });
       }
     }

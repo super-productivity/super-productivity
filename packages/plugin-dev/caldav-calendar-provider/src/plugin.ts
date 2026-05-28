@@ -972,6 +972,30 @@ const isHttpStatus = (err: unknown, status: number): boolean =>
   'status' in err &&
   (err as { status: number }).status === status;
 
+const RETRY_MAX_ATTEMPTS = 4;
+
+/**
+ * Self-hosted CalDAV servers (Nextcloud, Baikal, Radicale, …) return 429
+ * (rate limited) or 503 (temporarily unavailable) under load. These are
+ * transient and should be retried with backoff; other errors must not.
+ */
+const isTransientError = (err: unknown): boolean =>
+  isHttpStatus(err, 429) || isHttpStatus(err, 503);
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Run `fn`, retrying with exponential backoff + jitter on transient errors. */
+const withTransientRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isTransientError(err) || attempt >= RETRY_MAX_ATTEMPTS) throw err;
+      await sleep(500 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+    }
+  }
+};
+
 // --- Load calendars for config dropdowns ---
 
 const loadCalendars = async (
@@ -1418,11 +1442,14 @@ PluginAPI.registerIssueProvider({
       });
 
       const eventUrl = buildNewEventUrl(cfg, calendarHref, uid);
-      // CalDAV PUT is inherently an upsert — creates if absent, replaces if present.
-      await http.put(eventUrl, icalData, {
-        headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
-        responseType: 'text',
-      });
+      // CalDAV PUT is inherently an upsert — creates if absent, replaces if
+      // present (single idempotent write; no insert/patch double-write).
+      await withTransientRetry(() =>
+        http.put(eventUrl, icalData, {
+          headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
+          responseType: 'text',
+        }),
+      );
     },
 
     async deleteEvent(
@@ -1435,11 +1462,13 @@ PluginAPI.registerIssueProvider({
       if (!calendarHref) return; // No calendar configured — nothing to delete
       const uid = taskIdToCaldavUid(taskId);
       const eventUrl = buildNewEventUrl(cfg, calendarHref, uid);
-      try {
-        await http.delete(eventUrl, { responseType: 'text' });
-      } catch (err: unknown) {
-        if (!isHttpStatus(err, 404)) throw err;
-      }
+      await withTransientRetry(async () => {
+        try {
+          await http.delete(eventUrl, { responseType: 'text' });
+        } catch (err: unknown) {
+          if (!isHttpStatus(err, 404)) throw err;
+        }
+      });
     },
   },
 

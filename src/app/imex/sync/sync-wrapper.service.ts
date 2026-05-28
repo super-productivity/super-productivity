@@ -38,6 +38,7 @@ import {
   DecryptNoPasswordError,
   LockPresentError,
   MissingCredentialsSPError,
+  NetworkUnavailableSPError,
   NoRemoteModelFile,
   PotentialCorsError,
   RevMismatchForModelError,
@@ -73,8 +74,9 @@ import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-downl
 import { IS_ELECTRON } from '../../app.constants';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
+import { SyncSessionValidationService } from '../../op-log/sync/sync-session-validation.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
-import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import { isSuperSyncWebSocketAccess } from '@sp/sync-providers/super-sync';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 
 /**
@@ -109,6 +111,7 @@ export class SyncWrapperService {
   private _wsDownloadService = inject(WsTriggeredDownloadService);
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
+  private _sessionValidation = inject(SyncSessionValidationService);
   private _wrappedProvider = inject(WrappedProviderService);
   private _hydrationState = inject(HydrationStateService);
 
@@ -282,9 +285,12 @@ export class SyncWrapperService {
       }
     });
 
-    // After successful sync, prompt for encryption if SuperSync is active without it.
-    // This ensures data is downloaded and merged first, preventing data loss.
-    if (result === SyncStatus.InSync) {
+    // After any successful sync, prompt for encryption if SuperSync is active
+    // without it. This ensures data is downloaded and merged first, preventing
+    // data loss. Note: a successful sync now returns UpdateRemote when data
+    // changed and InSync only when nothing changed (discussion #7196), so this
+    // gate must accept both — only HANDLED_ERROR skips the prompt.
+    if (result !== 'HANDLED_ERROR') {
       this._promptSuperSyncEncryptionIfNeeded().catch((err) => {
         SyncLog.err('Error prompting for encryption:', err);
       });
@@ -361,8 +367,13 @@ export class SyncWrapperService {
       return;
     }
 
-    const superSyncProvider = provider as unknown as SuperSyncProvider;
-    const wsParams = await superSyncProvider.getWebSocketParams();
+    if (!isSuperSyncWebSocketAccess(provider)) {
+      SyncLog.warn(
+        'SyncWrapperService: SuperSync provider does not expose WebSocket access',
+      );
+      return;
+    }
+    const wsParams = await provider.getWebSocketParams();
     if (!wsParams) {
       SyncLog.warn(
         'SyncWrapperService: No WebSocket params available from SuperSync provider',
@@ -388,6 +399,16 @@ export class SyncWrapperService {
       throw new Error('No Sync Provider for sync()');
     }
 
+    // Open a session-validation scope for this sync. Any post-sync
+    // validation failure during the session (download, upload, piggyback,
+    // retry, USE_REMOTE force-download) flips the latch; the wrapper reads
+    // it once before claiming IN_SYNC. (#7330)
+    return this._sessionValidation.withSession(() => this._syncBody(providerId));
+  }
+
+  private async _syncBody(
+    providerId: SyncProviderId,
+  ): Promise<SyncStatus | 'HANDLED_ERROR'> {
     try {
       // PERF: For legacy sync providers (WebDAV, Dropbox, LocalFile), sync the vector clock
       // from SUP_OPS to pf.META_MODEL before sync. This bridges the gap between the new
@@ -487,9 +508,30 @@ export class SyncWrapperService {
           `SyncWrapperService: LWW re-upload still has ${pendingLwwOps} pending ops after ` +
             `${MAX_LWW_REUPLOAD_RETRIES} retries. Will retry on next sync.`,
         );
+        // Issue #7521: validation failure is more serious than unuploaded
+        // ops — prefer ERROR over UNKNOWN_OR_CHANGED if the latch was
+        // flipped at any point during the session.
+        if (this._sessionValidation.hasFailed()) {
+          SyncLog.err(
+            'SyncWrapperService: Validation failed during sync (retry exhaustion path); reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+          return 'HANDLED_ERROR';
+        }
         // Don't claim IN_SYNC — there are known unuploaded ops.
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return SyncStatus.UpdateRemote;
+      }
+
+      // Issue #7330: post-sync state validation failure must not be reported
+      // as IN_SYNC. The latch is flipped by every validation site; we read it
+      // once here before claiming IN_SYNC.
+      if (this._sessionValidation.hasFailed()) {
+        SyncLog.err(
+          'SyncWrapperService: Post-sync state validation failed, not marking as IN_SYNC',
+        );
+        this._providerManager.setSyncStatus('ERROR');
+        return 'HANDLED_ERROR';
       }
 
       // 4. Check for permanent rejection failures
@@ -522,6 +564,20 @@ export class SyncWrapperService {
       this._providerManager.setSyncStatus('IN_SYNC');
       SyncLog.log('SyncWrapperService: Sync complete, status=IN_SYNC');
 
+      // Did this sync actually move any data (either direction)? Used by the
+      // sync button to show "Data successfully synced" vs "Already in sync"
+      // (discussion #7196). UpdateRemote is reused here as the generic
+      // "data changed this sync" status — the only consumer that inspects the
+      // return value (main-header) treats all UpdateLocal/UpdateRemote variants
+      // identically, so no new enum value is needed.
+      const didDownloadChanges =
+        downloadResult.kind === 'snapshot_hydrated' ||
+        downloadResult.kind === 'server_migration_handled' ||
+        (downloadResult.kind === 'ops_processed' && downloadResult.newOpsCount > 0);
+      const didUploadChanges =
+        uploadResult.kind === 'completed' && uploadResult.uploadedCount > 0;
+      const didChange = didDownloadChanges || didUploadChanges;
+
       // Connect WebSocket after first successful SuperSync sync (fire-and-forget)
       if (
         providerId === SyncProviderId.SuperSync &&
@@ -535,7 +591,7 @@ export class SyncWrapperService {
         });
       }
 
-      return SyncStatus.InSync;
+      return didChange ? SyncStatus.UpdateRemote : SyncStatus.InSync;
     } catch (error) {
       SyncLog.err(error);
 
@@ -567,7 +623,13 @@ export class SyncWrapperService {
         // SuperSync AuthFailSPError gets special handling: tolerate up to 2 transient 401s
         // (e.g. infrastructure errors returning 401 instead of 500), but on the 3rd
         // consecutive failure, clear the token to break the stale-credential loop.
-        // Other providers (Dropbox, WebDAV) clear immediately so their OAuth/re-auth flows work.
+        // Dropbox clears its refreshable OAuth token immediately so its re-auth flow
+        // works. WebDAV/Nextcloud intentionally do NOT clear: the credential is a
+        // user-typed (often irrecoverable) password, not a refreshable token — they
+        // expose no clearAuthCredentials hook, so clearAuthCredentials() below is a
+        // no-op for them and the actionable snackbar handles recovery without
+        // destroying the user's config. See issue #7616 — do NOT re-add a WebDAV
+        // clearAuthCredentials override.
         let skipClear = false;
         if (error instanceof AuthFailSPError && providerId === SyncProviderId.SuperSync) {
           this._consecutiveSuperSyncAuthFailures++;
@@ -738,6 +800,13 @@ export class SyncWrapperService {
           },
         });
         return 'HANDLED_ERROR';
+      } else if (error instanceof NetworkUnavailableSPError) {
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        this._snackService.open({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+          type: 'WARNING',
+        });
+        return 'HANDLED_ERROR';
       } else if (this._isPermissionError(error)) {
         this._snackService.open({
           msg: this._getPermissionErrorMessage(),
@@ -815,31 +884,42 @@ export class SyncWrapperService {
   private async _forceDownload(): Promise<void> {
     SyncLog.log('SyncWrapperService: forceDownload called - downloading remote state');
 
-    await this.runWithSyncBlocked(async () => {
-      try {
-        const rawProvider = this._providerManager.getActiveProvider();
-        const syncCapableProvider =
-          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
+    // Open a session-validation scope — read after forceDownloadRemoteState
+    // returns so a corrupt downloaded state is reported as ERROR. (#7330)
+    await this.runWithSyncBlocked(() =>
+      this._sessionValidation.withSession(async () => {
+        try {
+          const rawProvider = this._providerManager.getActiveProvider();
+          const syncCapableProvider =
+            await this._wrappedProvider.getOperationSyncCapable(rawProvider);
 
-        if (!syncCapableProvider) {
-          SyncLog.warn(
-            'SyncWrapperService: Cannot force download - provider not available',
-          );
-          return;
+          if (!syncCapableProvider) {
+            SyncLog.warn(
+              'SyncWrapperService: Cannot force download - provider not available',
+            );
+            return;
+          }
+
+          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+          if (this._sessionValidation.hasFailed()) {
+            SyncLog.err(
+              'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
+            );
+            this._providerManager.setSyncStatus('ERROR');
+          } else {
+            this._providerManager.setSyncStatus('IN_SYNC');
+          }
+          SyncLog.log('SyncWrapperService: Force download complete');
+        } catch (error) {
+          SyncLog.err('SyncWrapperService: Force download failed:', error);
+          const errStr = getSyncErrorStr(error);
+          this._snackService.open({
+            msg: errStr,
+            type: 'ERROR',
+          });
         }
-
-        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-        this._providerManager.setSyncStatus('IN_SYNC');
-        SyncLog.log('SyncWrapperService: Force download complete');
-      } catch (error) {
-        SyncLog.err('SyncWrapperService: Force download failed:', error);
-        const errStr = getSyncErrorStr(error);
-        this._snackService.open({
-          msg: errStr,
-          type: 'ERROR',
-        });
-      }
-    });
+      }),
+    );
   }
 
   async configuredAuthForSyncProviderIfNecessary(
@@ -1140,11 +1220,20 @@ export class SyncWrapperService {
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else if (resolution === 'USE_REMOTE') {
-        // User chose to discard local data and download remote
+        // User chose to discard local data and download remote.
+        // Reset latch — read after forceDownloadRemoteState returns. (#7330)
         SyncLog.log(
           'SyncWrapperService: User chose USE_REMOTE - downloading remote state, discarding local',
         );
+        this._sessionValidation.reset();
         await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        if (this._sessionValidation.hasFailed()) {
+          SyncLog.err(
+            'SyncWrapperService: USE_REMOTE applied but post-sync validation failed; reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+          return 'HANDLED_ERROR';
+        }
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else {

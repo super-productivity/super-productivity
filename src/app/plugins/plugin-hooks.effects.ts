@@ -5,6 +5,8 @@ import {
   distinctUntilChanged,
   filter,
   map,
+  pairwise,
+  startWith,
   switchMap,
   take,
   tap,
@@ -26,8 +28,6 @@ import { PluginHooks } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
 import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import {
-  setCurrentTask,
-  unsetCurrentTask,
   moveSubTask,
   moveSubTaskUp,
   moveSubTaskDown,
@@ -47,6 +47,11 @@ import {
 import { LOCAL_ACTIONS } from '../util/local-actions.token';
 import { PlannerActions } from '../features/planner/store/planner.actions';
 import { LanguageCode } from '../core/locale.constants';
+import { WorkContextService } from '../features/work-context/work-context.service';
+import { toActiveWorkContext } from './util/active-work-context.util';
+import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
+import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
+import { diffChangedPluginIds } from './util/plugin-data-diff.util';
 
 @Injectable()
 export class PluginHooksEffects {
@@ -54,6 +59,8 @@ export class PluginHooksEffects {
   private readonly store = inject(Store);
   private readonly pluginService = inject(PluginService);
   private readonly pluginI18nService = inject(PluginI18nService);
+  private readonly workContextService = inject(WorkContextService);
+  private readonly syncTrigger = inject(SyncTriggerService);
 
   taskComplete$ = createEffect(
     () =>
@@ -78,13 +85,29 @@ export class PluginHooksEffects {
     { dispatch: false },
   );
 
+  // Observe the current-task selector directly so we catch every transition,
+  // including those caused by reducer paths that don't dispatch
+  // setCurrentTask/unsetCurrentTask (e.g. loadAllData, project delete,
+  // bulk task delete). pairwise gives us { current, previous } for the
+  // payload — plugins react to a single, authoritative source of truth
+  // without needing to track previous state themselves.
   onCurrentTaskChange$ = createEffect(
     () =>
-      this.actions$.pipe(
-        ofType(setCurrentTask, unsetCurrentTask),
-        withLatestFrom(this.store.pipe(select(selectCurrentTask))),
-        map(([action, currentTask]) => {
-          this.pluginService.dispatchHook(PluginHooks.CURRENT_TASK_CHANGE, currentTask);
+      this.store.pipe(
+        select(selectCurrentTask),
+        startWith(null as Task | null),
+        pairwise(),
+        // Only fire on id transitions (start/stop/switch). Same-id emissions
+        // are dropped HERE rather than via distinctUntilChanged so that
+        // `previous` always carries the latest snapshot of the running task
+        // when it stops — including updates a plugin made to it while it
+        // was running (e.g. addTag → state mutation → selector re-emits).
+        filter(([prev, curr]) => prev?.id !== curr?.id),
+        tap(([previous, current]) => {
+          this.pluginService.dispatchHook(PluginHooks.CURRENT_TASK_CHANGE, {
+            current,
+            previous,
+          });
         }),
       ),
     { dispatch: false },
@@ -324,6 +347,61 @@ export class PluginHooksEffects {
             projectState,
           });
         }),
+      ),
+    { dispatch: false },
+  );
+
+  // Fires once per work-context navigation. Distincts by (id, type) so it
+  // doesn't fire when project/tag data changes (e.g. task added).
+  workContextChange$ = createEffect(
+    () =>
+      this.workContextService.activeWorkContext$.pipe(
+        distinctUntilChanged((a, b) => a?.id === b?.id && a?.type === b?.type),
+        tap((ctx) => {
+          this.pluginService.dispatchHook(
+            PluginHooks.WORK_CONTEXT_CHANGE,
+            toActiveWorkContext(ctx),
+          );
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  // Selector-based (not action-based) because remote `PLUGIN_USER_DATA`
+  // upserts arrive through `bulkApplyOperations` — an `ofType` filter on the
+  // local action wouldn't see them. The feature-state subscription catches
+  // local writes, remote incremental sync, and post-boot `loadAllData` paths
+  // (SYNC_IMPORT / BACKUP_IMPORT / validation repair / recovery) alike.
+  //
+  // Gated on `afterInitialSyncDoneAndDataLoadedInitially$` so the boot-time
+  // selector emission seeds `pairwise` as the baseline rather than producing
+  // a per-plugin flood at startup. House pattern, cf. `task-due.effects.ts`.
+  //
+  // No inner `waitForSyncWindow` / `skipDuringSyncWindow`: the effect is
+  // `{ dispatch: false }` and creates no ops, so sync rule 2 does not apply.
+  // Critically, `skipDuringSyncWindow` would suppress emissions during
+  // `_isApplyingRemoteOps` — exactly the remote-sync delivery this hook
+  // exists to fire on.
+  firePersistedDataChanged$ = createEffect(
+    () =>
+      this.syncTrigger.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
+        filter((done) => done),
+        switchMap(() =>
+          this.store.pipe(
+            select(selectPluginUserDataFeatureState),
+            pairwise(),
+            map(([prev, next]) => diffChangedPluginIds(prev, next)),
+            filter((ids) => ids.length > 0),
+            tap((ids) => {
+              for (const pluginId of ids) {
+                this.pluginService.dispatchHookToPlugin(
+                  pluginId,
+                  PluginHooks.PERSISTED_DATA_CHANGED,
+                );
+              }
+            }),
+          ),
+        ),
       ),
     { dispatch: false },
   );

@@ -39,13 +39,7 @@
     box-shadow 150ms ease-out;
 }
 
-:host-context(.isLightTheme).isCurrent {
-  border-color: var(--c-accent) !important;
-  border-width: 1px !important;
-  border-style: dashed;
-}
-
-:host-context(.isDarkTheme).isCurrent {
+:host.isCurrent {
   background: var(--task-c-current-bg);
   box-shadow: var(--task-current-shadow);
 }

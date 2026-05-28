@@ -3,7 +3,7 @@ import { Store } from '@ngrx/store';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { StateSnapshotService } from './state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { ClientIdService } from '../../core/util/client-id.service';
+import { generateClientId } from '../../core/util/generate-client-id';
 import { Operation, OpType, ActionType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { uuidv7 } from '../../util/uuid-v7';
@@ -16,8 +16,11 @@ import {
   AllModelConfig,
 } from '../model/model-config';
 import { CompleteBackup } from '../core/types/sync.types';
-import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
-import { ArchiveModel } from '../../features/archive/archive.model';
+import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/normalize-start-of-next-day-config';
+import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
+import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 /**
  * Service for handling backup import and export operations.
@@ -36,8 +39,8 @@ export class BackupService {
   private _store = inject(Store);
   private _stateSnapshotService = inject(StateSnapshotService);
   private _opLogStore = inject(OperationLogStoreService);
-  private _clientIdService = inject(ClientIdService);
-  private _archiveDbAdapter = inject(ArchiveDbAdapter);
+  private _operationWriteFlushService = inject(OperationWriteFlushService);
+  private _lockService = inject(LockService);
 
   /**
    * Loads a complete backup of all application data.
@@ -100,6 +103,16 @@ export class BackupService {
         );
       }
 
+      const normalizedGlobalConfig = normalizeGlobalConfigStartOfNextDay(
+        backupData.globalConfig,
+      );
+      if (normalizedGlobalConfig) {
+        backupData = {
+          ...backupData,
+          globalConfig: normalizedGlobalConfig,
+        };
+      }
+
       // 3. Validate data
       const { validateFull } = await import('../validation/validation-fn');
       const validationResult = validateFull(backupData);
@@ -129,7 +142,10 @@ export class BackupService {
       }
 
       // 4. Persist to operation log
-      await this._persistImportToOperationLog(validatedData);
+      await this._operationWriteFlushService.flushPendingWrites();
+      await this._lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+        await this._persistImportToOperationLog(validatedData);
+      });
 
       // 4b. Reset all sync providers' lastServerSeq to 0.
       // After a backup import, the client must re-sync from the beginning to ensure
@@ -141,11 +157,6 @@ export class BackupService {
 
       // 5. Dispatch to NgRx
       this._store.dispatch(loadAllData({ appDataComplete: validatedData }));
-
-      // 6. Write archive data to IndexedDB
-      // ArchiveOperationHandler._handleLoadAllData() skips local imports (isRemote=false),
-      // so we must write archive data here for local backup imports.
-      await this._writeArchivesToIndexedDB(validatedData);
 
       this._imexViewService.setDataImportInProgress(false);
 
@@ -164,31 +175,33 @@ export class BackupService {
   ): Promise<void> {
     OpLog.normal('BackupService: Persisting import to operation log...');
 
-    // 1. Backup current state before clearing operations
-    let backupSucceeded = true;
+    // 1. Backup current state before clearing operations. If this fails we
+    // throw — the caller unconditionally replaces NgRx + archives + sync seqs
+    // after this method returns, so silently skipping the destructive write
+    // would leave the device in a hybrid state (imported NgRx/archives, old
+    // op-log) that is worse than either outcome.
     try {
-      const existingStateCache = await this._opLogStore.loadStateCache();
-      if (existingStateCache?.state) {
-        OpLog.normal('BackupService: Backing up current state before import...');
-        await this._opLogStore.saveImportBackup(existingStateCache.state);
-      }
+      const currentState = await this._stateSnapshotService.getStateSnapshotAsync();
+      OpLog.normal('BackupService: Backing up current state before import...');
+      await this._opLogStore.saveImportBackup(currentState);
     } catch (e) {
-      OpLog.warn('BackupService: Failed to backup state before import:', e);
-      backupSucceeded = false;
+      // `message` is intentionally omitted: log history is user-exportable
+      // (CLAUDE.md sync rule 9), and a future validator/IDB error type could
+      // interpolate user content into its message. Log the error `name` only.
+      OpLog.warn('BackupService: Failed to backup state before import:', {
+        name: (e as Error | undefined)?.name,
+      });
+      throw new Error(
+        'BackupService: Pre-import backup failed; aborting import to preserve local state.',
+      );
     }
 
-    // 2. Clear all old operations to prevent IndexedDB bloat
-    if (backupSucceeded) {
-      OpLog.normal('BackupService: Clearing old operations before import...');
-      await this._opLogStore.clearAllOperations();
-    }
-
-    // Generate new client ID for both paths - imports are a fresh start
-    const clientId = await this._clientIdService.generateNewClientId();
-
-    // Fresh clock: new clientId with initial counter for clean baseline
+    // Mint a fresh clientId for the new sync baseline. It is pure here —
+    // persisted only inside runDestructiveStateReplacement's atomic SUP_OPS
+    // transaction, which also clears the ClientIdService cache. On a throw the
+    // tx aborts and the prior id stands.
+    const clientId = generateClientId();
     const newClock = { [clientId]: 1 };
-
     const opId = uuidv7();
     // IMPORTANT: Uses OpType.BackupImport which maps to reason='recovery' on the server.
     // This allows backup imports to succeed even when a SYNC_IMPORT already exists.
@@ -207,18 +220,16 @@ export class BackupService {
       syncImportReason: 'BACKUP_RESTORE',
     };
 
-    await this._opLogStore.append(op, 'local');
-    const lastSeq = await this._opLogStore.getLastSeq();
-
-    // Update vector clock store (append() doesn't do this, unlike appendWithVectorClockUpdate)
-    await this._opLogStore.setVectorClock(newClock);
-
-    await this._opLogStore.saveStateCache({
-      state: importedData,
-      lastAppliedOpSeq: lastSeq,
-      vectorClock: newClock,
-      compactedAt: Date.now(),
-      schemaVersion: CURRENT_SCHEMA_VERSION,
+    // Issue #7709: replace OPS + state_cache + vector_clock + clientId
+    // atomically so an interrupt during backup-restore can't leave the device
+    // in the `isWhollyFreshClient + meaningful store data` state that triggers
+    // the multi-device data-loss chain.
+    OpLog.normal('BackupService: Replacing op-log + state cache atomically');
+    await this._opLogStore.runDestructiveStateReplacement({
+      syncImportOp: op,
+      snapshotEntityKeys: extractEntityKeysFromState(importedData),
+      archiveYoung: importedData.archiveYoung,
+      archiveOld: importedData.archiveOld,
     });
 
     OpLog.normal('BackupService: Import persisted to operation log.');
@@ -250,27 +261,6 @@ export class BackupService {
       OpLog.normal(
         `BackupService: Reset ${keysToRemove.length} lastServerSeq(s) to 0 after backup import.`,
       );
-    }
-  }
-
-  /**
-   * Writes archive data from the imported backup to IndexedDB.
-   *
-   * This is necessary because ArchiveOperationHandler._handleLoadAllData() only
-   * processes remote operations (isRemote=true). For local backup imports, the
-   * archive data would otherwise never be persisted to IndexedDB.
-   */
-  private async _writeArchivesToIndexedDB(data: AppDataComplete): Promise<void> {
-    const archiveYoung = (data as { archiveYoung?: ArchiveModel }).archiveYoung;
-    const archiveOld = (data as { archiveOld?: ArchiveModel }).archiveOld;
-
-    // Check for both undefined AND null since backup might have null values
-    if (archiveYoung != null) {
-      await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
-    }
-
-    if (archiveOld != null) {
-      await this._archiveDbAdapter.saveArchiveOld(archiveOld);
     }
   }
 }

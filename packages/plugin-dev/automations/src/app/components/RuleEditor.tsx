@@ -47,6 +47,8 @@ export function RuleEditor(props: RuleEditorProps) {
     'taskCreated',
     'taskUpdated',
     'taskCompleted',
+    'taskStarted',
+    'taskStopped',
     'timeBased',
   ];
 
@@ -65,6 +67,7 @@ export function RuleEditor(props: RuleEditorProps) {
       'createTask',
       'deleteTask',
       'addTag',
+      'removeTag',
       'moveToProject',
       'displaySnack',
       'displayDialog',

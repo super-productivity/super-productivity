@@ -1,14 +1,17 @@
 .image-input-container {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  align-items: flex-start;
+  align-items: center;
 
   input {
-    flex: 1;
+    flex: 1 1 260px;
+    min-width: 220px;
   }
 
+  .select-button,
   .unsplash-button {
-    margin-top: 0.75rem;
+    margin-top: 0;
     white-space: nowrap;
   }
 }

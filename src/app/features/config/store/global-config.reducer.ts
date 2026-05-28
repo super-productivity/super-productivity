@@ -11,6 +11,7 @@ import {
   LocalizationConfig,
   MiscConfig,
   PomodoroConfig,
+  FlowtimeConfig,
   ReminderConfig,
   ScheduleConfig,
   ShortSyntaxConfig,
@@ -19,9 +20,11 @@ import {
   TakeABreakConfig,
   TasksConfig,
 } from '../global-config.model';
+import type { KeyboardConfig } from '../keyboard-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
+import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 
 /**
  * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
@@ -120,6 +123,10 @@ export const selectPomodoroConfig = createSelector(
   selectConfigFeatureState,
   (cfg): PomodoroConfig => cfg?.pomodoro ?? DEFAULT_GLOBAL_CONFIG.pomodoro,
 );
+export const selectFlowtimeConfig = createSelector(
+  selectConfigFeatureState,
+  (cfg): FlowtimeConfig => cfg?.flowtime ?? DEFAULT_GLOBAL_CONFIG.flowtime,
+);
 export const selectReminderConfig = createSelector(
   selectConfigFeatureState,
   (cfg): ReminderConfig => cfg?.reminder ?? DEFAULT_GLOBAL_CONFIG.reminder,
@@ -137,6 +144,26 @@ export const selectIsFocusModeEnabled = createSelector(
 
 export const initialGlobalConfigState: GlobalConfigState = {
   ...DEFAULT_GLOBAL_CONFIG,
+};
+
+const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig => {
+  const keyboard: KeyboardConfig = {
+    ...DEFAULT_GLOBAL_CONFIG.keyboard,
+    ...cfg,
+  };
+
+  if (
+    cfg?.addNewNote === 'N' &&
+    (cfg.taskOpenNotesPanel === undefined || cfg.taskOpenNotesPanel === null)
+  ) {
+    return {
+      ...keyboard,
+      addNewNote: DEFAULT_GLOBAL_CONFIG.keyboard.addNewNote,
+      taskOpenNotesPanel: DEFAULT_GLOBAL_CONFIG.keyboard.taskOpenNotesPanel,
+    };
+  }
+
+  return keyboard;
 };
 
 export const globalConfigReducer = createReducer<GlobalConfigState>(
@@ -171,8 +198,18 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       ? oldState.sync.isEncryptionEnabled
       : incomingSyncConfig.isEncryptionEnabled;
 
-    return {
+    const incomingGlobalConfig = {
+      ...DEFAULT_GLOBAL_CONFIG,
       ...appDataComplete.globalConfig,
+      misc: {
+        ...DEFAULT_GLOBAL_CONFIG.misc,
+        ...appDataComplete.globalConfig.misc,
+        ...normalizeStartOfNextDayConfig(appDataComplete.globalConfig.misc ?? {}),
+      },
+    };
+
+    return {
+      ...incomingGlobalConfig,
       // Merge defaults for tasks config to fill missing fields.
       // This handles data from older app versions or synced snapshots that
       // predate newly added fields (e.g., isAutoMarkParentAsDone, notesTemplate).
@@ -192,6 +229,7 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.focusMode,
         ...migrateFocusModeConfig(appDataComplete.globalConfig.focusMode),
       },
+      keyboard: migrateKeyboardConfig(appDataComplete.globalConfig.keyboard),
       sync: {
         ...incomingSyncConfig,
         syncProvider,
@@ -201,13 +239,20 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     };
   }),
 
-  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => ({
-    ...state,
-    [sectionKey]: {
-      ...state[sectionKey],
-      ...sectionCfg,
-    },
-  })),
+  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => {
+    const normalizedSectionCfg =
+      sectionKey === 'misc'
+        ? normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>)
+        : sectionCfg;
+
+    return {
+      ...state,
+      [sectionKey]: {
+        ...state[sectionKey],
+        ...normalizedSectionCfg,
+      },
+    };
+  }),
 );
 
 export const selectTimelineWorkStartEndHours = createSelector(

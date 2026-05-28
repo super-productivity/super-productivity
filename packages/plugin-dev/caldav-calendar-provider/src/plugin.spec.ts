@@ -811,4 +811,140 @@ END:VCALENDAR</cal:calendar-data>
       });
     });
   });
+
+  describe('timeBlock.upsertEvent', () => {
+    const cfg = {
+      serverUrl: 'https://dav.example.com/',
+      timeBlockCalendarId: 'https://dav.example.com/cal/',
+    };
+    const eventData = {
+      title: 'My Task',
+      dueWithTime: new Date('2026-05-14T15:00:00Z').getTime(),
+      durationMs: 30 * 60 * 1000,
+      isDone: false,
+    };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn().mockResolvedValue(''),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('does a single idempotent PUT (no double-write)', async () => {
+      await definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      expect(mockHttp.post).not.toHaveBeenCalled();
+    });
+
+    it('retries on a 429 (rate limited) and then succeeds', async () => {
+      vi.useFakeTimers();
+      mockHttp.put.mockRejectedValueOnce({ status: 429 }).mockResolvedValueOnce('');
+
+      const p = definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+      await vi.runAllTimersAsync();
+      await p;
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries on a 503 (server unavailable) and then succeeds', async () => {
+      vi.useFakeTimers();
+      mockHttp.put.mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce('');
+
+      const p = definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+      await vi.runAllTimersAsync();
+      await p;
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry a non-transient error (e.g. 403)', async () => {
+      mockHttp.put.mockRejectedValue({ status: 403 });
+
+      await expect(
+        definition.timeBlock!.upsertEvent(
+          'task-1',
+          eventData,
+          cfg as any,
+          mockHttp as any,
+        ),
+      ).rejects.toBeDefined();
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('timeBlock.deleteEvent', () => {
+    const cfg = {
+      serverUrl: 'https://dav.example.com/',
+      timeBlockCalendarId: 'https://dav.example.com/cal/',
+    };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn().mockResolvedValue(''),
+      };
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('swallows a 404 (event already gone)', async () => {
+      mockHttp.delete.mockRejectedValue({ status: 404 });
+
+      await expect(
+        definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any),
+      ).resolves.toBeUndefined();
+    });
+
+    it('retries on a 503 and then succeeds', async () => {
+      vi.useFakeTimers();
+      mockHttp.delete.mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce('');
+
+      const p = definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any);
+      await vi.runAllTimersAsync();
+      await p;
+
+      expect(mockHttp.delete).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry a non-transient error (e.g. 500)', async () => {
+      mockHttp.delete.mockRejectedValue({ status: 500 });
+
+      await expect(
+        definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any),
+      ).rejects.toBeDefined();
+      expect(mockHttp.delete).toHaveBeenCalledTimes(1);
+    });
+  });
 });

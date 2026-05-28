@@ -81,6 +81,45 @@ jobs:
         with:
           name: WinStoreRelease
           path: .tmp/app-builds/*.appx
+
+      # Pull the GitHub release body for this tag so the maintainer can paste it
+      # into Partner Center's "What's new" field during the manual appx upload.
+      # The release may not exist yet when this job runs (parallel release workflow);
+      # in that case we leave a clear pointer and don't fail the build.
+      - name: Collect release notes for Partner Center upload
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.github_token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          mkdir -p .tmp
+          notes_file=".tmp/RELEASE_NOTES.md"
+
+          if gh release view "$tag" --repo "${GITHUB_REPOSITORY}" --json body -q .body > "$notes_file" 2>/dev/null && [ -s "$notes_file" ]; then
+            echo "Found release notes for $tag ($(wc -c < "$notes_file") bytes)"
+          else
+            printf 'No GitHub release body for %s yet. Check %s/releases/tag/%s once it exists.\n' \
+              "$tag" "https://github.com/$GITHUB_REPOSITORY" "$tag" > "$notes_file"
+          fi
+
+          {
+            echo "## What's new for $tag - paste into Partner Center"
+            echo
+            echo "Partner Center's 'What's new' field accepts plain text up to ~1500 chars."
+            echo "Trim Markdown if needed."
+            echo
+            echo '```'
+            cat "$notes_file"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release notes alongside appx
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: WinStoreReleaseNotes
+          path: .tmp/RELEASE_NOTES.md
 #      - name: Upload to Microsoft Store
 #        if: startsWith(github.ref, 'refs/tags/v')
 #        uses: isaacrlevin/windows-store-action@1.0

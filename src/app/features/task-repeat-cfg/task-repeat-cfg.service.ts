@@ -39,8 +39,8 @@ import {
   selectAllUnprocessedTaskRepeatCfgs,
   selectTaskRepeatCfgsForExactDay,
 } from './store/task-repeat-cfg.selectors';
-import { devError } from '../../util/dev-error';
 import { getRepeatableTaskId } from './get-repeatable-task-id.util';
+import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 
 @Injectable({
   providedIn: 'root',
@@ -193,10 +193,9 @@ export class TaskRepeatCfgService {
       new Date(targetDayDate),
     );
 
-    // there is no creation date in the present
+    // No occurrence is due yet (e.g., completing a waitForCompletion task on the same day
+    // it was created). This is expected behavior, not an error.
     if (targetCreated === null) {
-      // not sure if we should always expect one when this is called, so we throw a dev error for evaluation
-      devError('No target creation date found for repeatable task');
       return [];
     } else if (!targetCreated) {
       throw new Error('Unable to getNewestPossibleDueDate()');
@@ -227,6 +226,21 @@ export class TaskRepeatCfgService {
     // NOTE: needs to run after deriving targetDateStr so deletions for overdue instances work.
     if (taskRepeatCfg.deletedInstanceDates?.includes(targetDateStr)) {
       return [];
+    }
+
+    // If waitForCompletion is enabled, only create the next task after the previous one is completed
+    if (taskRepeatCfg.waitForCompletion) {
+      // Check both live and archived instances for uncompleted tasks
+      const archivedInstances = await this._taskService.getArchiveTasksForRepeatCfgId(
+        taskRepeatCfg.id,
+      );
+      const allInstances = [...existingTaskInstances, ...archivedInstances];
+      const hasUncompletedInstances = allInstances.some((task) => !task.isDone);
+      if (hasUncompletedInstances) {
+        // Don't create the next task yet; wait for completion of the current instance
+        // IMPORTANT: Do NOT update lastTaskCreationDay here - we haven't processed this occurrence
+        return [];
+      }
     }
     // If skipOverdue is enabled, silently skip instances that are in the past (before today).
     // We still dispatch updateTaskRepeatCfg to advance lastTaskCreationDay so that the same
@@ -280,6 +294,11 @@ export class TaskRepeatCfgService {
           : (this._workContextService.activeWorkContextId as string),
         isAddToBacklog: false,
         isAddToBottom,
+        ...getDeadlineAutoPlanFields(
+          this._dateService,
+          taskWithTargetDates.deadlineDay,
+          taskWithTargetDates.deadlineWithTime,
+        ),
       }),
       updateTaskRepeatCfg({
         taskRepeatCfg: {

@@ -34,17 +34,96 @@ The server uses an **Append-Only Log** architecture backed by **PostgreSQL** (vi
 ### Docker (Recommended)
 
 The easiest way to run the server is using the provided Docker Compose configuration.
+Deploy hosts need Docker with the Compose plugin, `curl`, `git`, and `jq`.
+The image revision check requires Docker Compose support for
+`docker compose config --format json`.
 
 ```bash
 # 1. Copy environment example
-cp .env.example .env
+cp env.example .env
 
 # 2. Configure .env (Set JWT_SECRET, DOMAIN, POSTGRES_PASSWORD)
 nano .env
 
-# 3. Start the stack (Server + Postgres + Caddy)
-docker-compose up -d
+# 3. Deploy the stack and run database migrations
+./scripts/deploy.sh
 ```
+
+`docker compose up` is not a deployment substitute: container startup migrations
+are disabled by default so app restarts cannot race the deploy migrator.
+`./scripts/deploy.sh` runs `prisma migrate deploy` once before replacing the app
+container, then brings the stack up and verifies the health endpoint.
+
+Leave `DATABASE_URL` unset when using the bundled Postgres service. The default
+connection uses `postgres:5432`; existing installs that already set
+`DATABASE_URL` with `db:5432` keep working because the Compose service exposes
+`db` as a network alias.
+
+> **Upgrade note:** because `RUN_MIGRATIONS_ON_STARTUP` defaults to `false`,
+> `docker compose pull && docker compose up -d` can leave the app running
+> against unapplied migrations. Use `./scripts/deploy.sh` for production
+> updates, or `./scripts/deploy.sh --build` for local image builds.
+
+`deploy.sh` verifies that the pulled/built `supersync` image has an
+`org.opencontainers.image.revision` label matching the latest commit that
+affects the SuperSync image inputs. This prevents host deploy scripts from
+running migrations against a stale image, without requiring a new image for
+unrelated repo commits. If you publish custom images, pass the same source
+revision as `VCS_REF` during the Docker build or set
+`SUPERSYNC_SKIP_IMAGE_REVISION_CHECK=true` only for a deliberate manual
+override.
+
+Some migrations use `CREATE INDEX CONCURRENTLY`, which can block on long-running
+transactions on a busy database. Run deploys off-hours when applying schema
+changes, and raise `MIGRATION_TIMEOUT` (seconds, default `900`) if a large
+table requires more time. Exit code `124` from `deploy.sh` means the migration
+timed out — re-run after the blocking transaction clears.
+
+If a deploy was interrupted after Prisma recorded a migration as failed, later
+deploys can stop with `P3009`. Prisma can also stop migrations with `P3018`
+when they contain `CREATE/DROP INDEX CONCURRENTLY` statements, which cannot run
+in one transaction block. `scripts/migrate-deploy.sh` handles the safe
+drop-then-create concurrent-index case generically: it resolves the failed row
+when needed, applies the migration SQL outside Prisma migrate, marks the
+migration applied, and retries `migrate deploy`.
+
+For local `prisma migrate dev` shadow databases, apply migrations containing
+`CREATE INDEX CONCURRENTLY` through `prisma db execute` outside the transaction
+and then mark the migration applied, mirroring the production deploy workaround.
+
+If `DATABASE_URL` points to an external PostgreSQL server, set
+`POSTGRES_SERVICE=` to the empty value. `deploy.sh` then starts only the
+app/proxy services with compose dependencies disabled so the bundled Postgres
+container is not required. Prisma migrations still run against the configured
+`DATABASE_URL`.
+
+### Payload byte backfill and batch uploads
+
+The `payload_bytes` column must be fully backfilled before enabling batched
+uploads in production. During a partial backfill, quota reconciles use a slower
+fallback for old operation rows with `payload_bytes = 0`.
+
+Run the backfill to completion:
+
+```bash
+npm run migrate-payload-bytes
+```
+
+In a source checkout before `npm run build`, use:
+
+```bash
+npm run migrate-payload-bytes:dev
+```
+
+Only then set both rollout flags:
+
+```bash
+SUPERSYNC_BATCH_UPLOAD=true
+SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true
+```
+
+The server refuses to start with `SUPERSYNC_BATCH_UPLOAD=true` unless the
+completion flag is also set.
 
 ### Manual Setup (Development)
 
@@ -56,7 +135,7 @@ npm install
 npx prisma generate
 
 # Set up .env
-cp .env.example .env
+cp env.example .env
 # Edit .env to point to your PostgreSQL instance (DATABASE_URL)
 
 # Push schema to DB

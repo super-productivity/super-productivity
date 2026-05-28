@@ -18,6 +18,7 @@ export function ActionDialog(props: ActionDialogProps) {
     'createTask',
     'deleteTask',
     'addTag',
+    'removeTag',
     'moveToProject',
     'displaySnack',
     'displayDialog',
@@ -44,6 +45,7 @@ export function ActionDialog(props: ActionDialogProps) {
       case 'deleteTask':
         return 'Deletes the task that triggered this rule';
       case 'addTag':
+      case 'removeTag':
         return 'e.g. "review-needed"';
       case 'moveToProject':
         return 'e.g. "Project A"';

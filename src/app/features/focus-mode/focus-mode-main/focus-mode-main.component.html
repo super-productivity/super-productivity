@@ -13,7 +13,7 @@
   <div class="mode-selector-wrapper">
     <segmented-button-group
       class="focus-mode-select-mode"
-      [options]="modeOptions"
+      [options]="modeOptions()"
       [selectedId]="mode()"
       [ariaLabel]="T.F.FOCUS_MODE.SELECT_MODE | translate"
       (selectionChange)="selectMode($event)"
@@ -220,7 +220,19 @@
             mat-icon-button
             [matTooltip]="T.F.FOCUS_MODE.POMODORO_SETTINGS | translate"
             (click)="openPomodoroSettings()"
-            class="pomodoro-settings-btn"
+            class="mode-settings-btn"
+          >
+            <mat-icon>settings</mat-icon>
+          </button>
+        }
+
+        <!-- Flowtime settings cog (Preparation + Flowtime mode) -->
+        @if (isShowFlowtimeSettings()) {
+          <button
+            mat-icon-button
+            [matTooltip]="T.F.FOCUS_MODE.FLOWTIME_SETTINGS | translate"
+            (click)="openFlowtimeSettings()"
+            class="mode-settings-btn"
           >
             <mat-icon>settings</mat-icon>
           </button>
@@ -297,7 +309,7 @@
               <mat-icon>chat</mat-icon>
             }
             @if (isFocusNotes()) {
-              <mat-icon>expand_less</mat-icon>
+              <mat-icon>expand_more</mat-icon>
             }
           </button>
         }
@@ -330,7 +342,7 @@
         color=""
         mat-mini-fab
       >
-        <mat-icon>expand_less</mat-icon>
+        <mat-icon>expand_more</mat-icon>
       </button>
 
       <div class="notes-panel">

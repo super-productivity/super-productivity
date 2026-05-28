@@ -134,6 +134,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   // View children
   itemEls = viewChildren(TaskDetailItemComponent);
   attachmentPanelElRef = viewChild<TaskDetailItemComponent>('attachmentPanelElRef');
+  noteWrapperElRef = viewChild<TaskDetailItemComponent>('noteWrapperElRef');
 
   // Constants
   IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
@@ -151,6 +152,12 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   // Observable conversions
   private _task$ = toObservable(this.task);
+  private _taskDetailTargetPanel = toSignal(
+    this.taskService.taskDetailPanelTargetPanel$,
+    {
+      initialValue: null,
+    },
+  );
 
   @HostListener('keydown', ['$event'])
   onKeydown(ev: KeyboardEvent): void {
@@ -271,6 +278,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   });
 
   isExpandedNotesPanel = computed(() => {
+    if (this._taskDetailTargetPanel() === TaskDetailTargetPanel.Notes) {
+      return true;
+    }
+
     const task = this.task();
     return IS_MOBILE
       ? this.isMarkdownChecklist()
@@ -454,6 +465,15 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
             } else {
               this.focusItem(attachmentPanelElRef);
             }
+          } else if (v === TaskDetailTargetPanel.Notes) {
+            const noteWrapperElRef = this.noteWrapperElRef();
+            this.panelState.isFocusNotes.set(true);
+            if (!noteWrapperElRef) {
+              devError('this.noteWrapperElRef not ready');
+              this._focusFirst();
+            } else {
+              this.focusItem(noteWrapperElRef);
+            }
           } else {
             this._focusFirst();
           }
@@ -496,11 +516,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       restoreFocus: true,
       data: { task: this.task() },
     });
-  }
-
-  unscheduleTask(ev: Event): void {
-    ev.stopPropagation();
-    this._store.dispatch(TaskSharedActions.unscheduleTask({ id: this.task().id }));
   }
 
   removeDeadline(ev: Event): void {

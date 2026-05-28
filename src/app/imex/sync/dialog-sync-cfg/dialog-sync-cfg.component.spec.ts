@@ -207,6 +207,32 @@ describe('DialogSyncCfgComponent', () => {
     });
   });
 
+  describe('Nextcloud connection test', () => {
+    it('uses loginName for auth while preserving file username in the DAV URL', async () => {
+      const testWebDavConnection = jasmine
+        .createSpy('_testWebDavConnection')
+        .and.resolveTo();
+      (component as any)._testWebDavConnection = testWebDavConnection;
+
+      await (component as any)._testNextcloudConnection({
+        serverUrl: 'https://cloud.example.com',
+        loginName: 'alice@example.com',
+        userName: 'alice',
+        password: 'app-password',
+        syncFolderPath: 'super-productivity',
+      });
+
+      expect(testWebDavConnection).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({
+          baseUrl: 'https://cloud.example.com/remote.php/dav/files/alice/',
+          userName: 'alice@example.com',
+          password: 'app-password',
+          syncFolderPath: 'super-productivity',
+        }),
+      );
+    });
+  });
+
   describe('save() — already configured provider', () => {
     it('should close dialog when Dropbox is already configured (wasConfigured=false, isReady=true)', async () => {
       const alreadyConfigured = {

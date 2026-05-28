@@ -13,34 +13,40 @@
 
 import { test, expect } from '../../fixtures/test.fixture';
 import { Page } from '@playwright/test';
+import { ensureSettingState } from '../../utils/config-helpers';
 
 const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
   await page.goto('/#/config');
-  await page.waitForLoadState('domcontentloaded');
+  await page.locator('.page-settings').waitFor({ state: 'visible', timeout: 10000 });
 
   // The setting lives in the Productivity → Focus Mode section.
-  const productivityTab = page.locator('[role="tab"]', { hasText: /Productivity/i });
-  if (await productivityTab.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await productivityTab.click();
-  }
+  await page.getByRole('tab', { name: /Productivity/i }).click();
 
-  const focusModeHeader = page.locator('text=Focus Mode').first();
-  if (await focusModeHeader.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await focusModeHeader.click();
-    await page.waitForTimeout(300);
-  }
-
-  const toggle = page
-    .locator('mat-slide-toggle')
-    .filter({ hasText: 'Start a focus session when I start tracking a task' })
+  const focusModeSection = page
+    .locator('config-section')
+    .filter({
+      has: page.locator('.collapsible-title', { hasText: /^Focus Mode$/ }),
+    })
     .first();
+  await focusModeSection.scrollIntoViewIfNeeded();
 
-  await expect(toggle).toBeVisible({ timeout: 5000 });
-  const cls = (await toggle.getAttribute('class')) ?? '';
-  if (!cls.includes('mat-checked')) {
-    await toggle.click();
-    await page.waitForTimeout(300);
+  const collapsible = focusModeSection.locator('collapsible');
+  const isExpanded = await collapsible
+    .evaluate((el) => el.classList.contains('isExpanded'))
+    .catch(() => false);
+
+  if (!isExpanded) {
+    const header = collapsible.locator('.collapsible-header');
+    await header.click();
+    await page.waitForTimeout(500);
   }
+
+  // Use shared helper that handles both mat-slide-toggle and mat-checkbox
+  await ensureSettingState(
+    page,
+    'Start a focus session when I start tracking a task',
+    true,
+  );
 };
 
 test.describe('autoStartFocusOnPlay', () => {
@@ -67,7 +73,7 @@ test.describe('autoStartFocusOnPlay', () => {
 
     // Step 3: start tracking via the task's play button.
     await firstTask.hover();
-    const trackingPlayBtn = page.locator('.play-btn.tour-playBtn').first();
+    const trackingPlayBtn = firstTask.locator('.start-task-btn').first();
     await trackingPlayBtn.waitFor({ state: 'visible' });
     await trackingPlayBtn.click();
     await expect(firstTask).toHaveClass(/isCurrent/, { timeout: 5000 });
@@ -92,7 +98,7 @@ test.describe('autoStartFocusOnPlay', () => {
     await expect(firstTask).toBeVisible();
 
     await firstTask.hover();
-    const trackingPlayBtn = page.locator('.play-btn.tour-playBtn').first();
+    const trackingPlayBtn = firstTask.locator('.start-task-btn').first();
     await trackingPlayBtn.waitFor({ state: 'visible' });
     await trackingPlayBtn.click();
     await expect(firstTask).toHaveClass(/isCurrent/, { timeout: 5000 });

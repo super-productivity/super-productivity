@@ -67,4 +67,13 @@ export const runDbUpgrade = (
   if (oldVersion < 5) {
     db.createObjectStore(STORE_NAMES.PROFILE_DATA, { keyPath: 'id' });
   }
+
+  // Version 6: Add client_id store for atomic clientId rotation.
+  // Consolidates the sync clientId from legacy 'pf' (key '__client_id_') into
+  // SUP_OPS so destructive-flow rotation joins runDestructiveStateReplacement's
+  // atomic transaction. See issue #7732. The runtime copy from 'pf' happens in
+  // ClientIdService (a versionchange tx cannot read another database).
+  if (oldVersion < 6) {
+    db.createObjectStore(STORE_NAMES.CLIENT_ID);
+  }
 };

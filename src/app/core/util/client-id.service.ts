@@ -1,206 +1,274 @@
-import { Injectable, inject } from '@angular/core';
-import { openDB, IDBPDatabase } from 'idb';
+import { Injectable } from '@angular/core';
+import { IDBPDatabase, openDB } from 'idb';
 import { OpLog } from '../log';
-import { SnackService } from '../snack/snack.service';
-import { T } from '../../t.const';
+import { generateClientId, isValidClientIdFormat } from './generate-client-id';
+import {
+  DB_NAME as SUP_OPS_DB_NAME,
+  DB_VERSION as SUP_OPS_DB_VERSION,
+  SINGLETON_KEY,
+  STORE_NAMES,
+} from '../../op-log/persistence/db-keys.const';
+import { runDbUpgrade } from '../../op-log/persistence/db-upgrade';
 
-// Database constants - must match PFAPI's storage
-const DB_NAME = 'pf';
-const DB_STORE_NAME = 'main';
-const DB_VERSION = 1;
-const CLIENT_ID_KEY = '__client_id_';
+// Legacy 'pf' database — a read-only, one-time migration source for the
+// clientId. Never written or deleted by this service. See issue #7732.
+const PF_DB_NAME = 'pf';
+const PF_DB_STORE_NAME = 'main';
+const PF_DB_VERSION = 1;
+/**
+ * Key ClientIdService has always operated on in `pf`. On an op-log-era device
+ * this is the live identity.
+ */
+const PF_CLIENT_ID_KEY = '__client_id_';
+/**
+ * The original PFAPI key. Read only as a fallback to seed a legacy profile
+ * that never received a `__client_id_` entry.
+ */
+const PF_LEGACY_CLIENT_ID_KEY = 'CLIENT_ID';
 
 /**
- * Service for managing the sync client ID.
+ * Service for managing the sync client ID — the device's stable sync identity.
  *
- * Reads/writes directly to IndexedDB to preserve existing client IDs
- * and avoid dependency on PfapiService.
+ * The clientId lives in the `SUP_OPS` database (`client_id` store, schema v6).
+ * Storing it there lets destructive flows (clean-slate, backup-restore) rotate
+ * it atomically inside runDestructiveStateReplacement's transaction, instead of
+ * a hand-rolled cross-database two-phase commit (issue #7732).
  *
- * Uses the same database name ('pf') and key ('__client_id_') as the
- * legacy MetaModelCtrl to ensure backward compatibility.
+ * The legacy `pf` database is a read-only, one-time migration source: the first
+ * read on a device whose clientId still lives only in `pf` copies it forward
+ * into `SUP_OPS`. The clientId is non-regenerable (it keys the vector clock),
+ * so the resolver propagates IndexedDB read errors rather than risk minting a
+ * fresh id over a transient failure.
  */
 @Injectable({
   providedIn: 'root',
 })
 export class ClientIdService {
-  private _snackService = inject(SnackService, { optional: true });
-  private _db: IDBPDatabase | null = null;
+  private _supOpsDb: IDBPDatabase | null = null;
+  private _supOpsDbPromise: Promise<IDBPDatabase> | null = null;
   private _cachedClientId: string | null = null;
 
   /**
-   * Loads the client ID.
-   *
-   * Uses caching to avoid repeated IndexedDB reads. The client ID is
-   * immutable once generated, so caching is safe.
-   *
-   * @returns The client ID, or null if not yet generated
+   * Loads the client ID. Never throws — returns null on absence OR on a
+   * transient IndexedDB read failure. Callers (hydrator, sync readers) treat
+   * a null clientId as a tolerable, retryable condition.
    */
   async loadClientId(): Promise<string | null> {
     if (this._cachedClientId) {
       return this._cachedClientId;
     }
-
-    const db = await this._getDb();
-    const clientId = await db.get(DB_STORE_NAME, CLIENT_ID_KEY);
-
-    if (typeof clientId !== 'string') {
+    try {
+      const id = await this._resolve();
+      if (id) {
+        this._cachedClientId = id;
+      }
+      return id;
+    } catch {
+      // Read failure — never throw, never generate. Returning null lets the
+      // caller retry on a later launch without orphaning the real clientId.
       return null;
     }
-
-    if (!this._isValidClientIdFormat(clientId)) {
-      // Unrecognized format — log but treat as missing rather than throwing.
-      // Throwing here permanently blocks sync (issue #6197: "Invalid clientId loaded: B_H8AR").
-      // Returning null causes the caller to generate a fresh clientId, which unblocks sync.
-      OpLog.critical(
-        'ClientIdService.loadClientId() Invalid clientId format, will regenerate:',
-        {
-          clientId,
-          length: clientId.length,
-        },
-      );
-      this._snackService?.open({
-        msg: T.F.SYNC.S.WARN_CLIENT_ID_REGENERATED,
-        type: 'WARNING',
-      });
-      return null;
-    }
-
-    this._cachedClientId = clientId;
-    OpLog.normal('ClientIdService.loadClientId() loaded:', { clientId });
-    return clientId;
-  }
-
-  /**
-   * Generates a new client ID and saves it.
-   *
-   * Format: {platform}_{4-char-base62}
-   * Examples: "B_a7Kx", "E_m2Pq", "A_x9Yz"
-   *
-   * @returns The newly generated client ID
-   */
-  async generateNewClientId(): Promise<string> {
-    const newClientId = this._generateClientId();
-
-    const db = await this._getDb();
-    await db.put(DB_STORE_NAME, newClientId, CLIENT_ID_KEY);
-
-    this._cachedClientId = newClientId;
-    OpLog.normal('ClientIdService.generateNewClientId() generated:', { newClientId });
-    return newClientId;
-  }
-
-  /**
-   * Persists an existing client ID (e.g., from legacy migration).
-   *
-   * Validates the format before writing to prevent invalid IDs from
-   * being stored. loadClientId() treats an invalid stored ID as missing
-   * and returns null, causing the caller to regenerate a fresh clientId.
-   */
-  async persistClientId(clientId: string): Promise<void> {
-    if (!this._isValidClientIdFormat(clientId)) {
-      throw new Error(`Cannot persist invalid clientId: ${clientId}`);
-    }
-    const db = await this._getDb();
-    await db.put(DB_STORE_NAME, clientId, CLIENT_ID_KEY);
-    this._cachedClientId = clientId;
-    OpLog.normal('ClientIdService.persistClientId() persisted:', { clientId });
   }
 
   /**
    * Returns the existing client ID, or generates and persists a new one if
-   * none is stored or the stored value is invalid.
+   * none exists. The preferred entry point for callers that always need an ID.
    *
-   * This is the preferred entry point for callers that always need a valid ID.
+   * Propagates IndexedDB read failures: if a read throws, this throws too — it
+   * does NOT generate. Generating on a transient failure would mint a brand
+   * new clientId that orphans the device's real, history-bearing identity (the
+   * non-regenerable loss issue #7732 exists to prevent). Generation happens
+   * only after reads succeed and confirm no id exists anywhere.
    */
   async getOrGenerateClientId(): Promise<string> {
-    return (await this.loadClientId()) ?? (await this.generateNewClientId());
+    if (this._cachedClientId) {
+      return this._cachedClientId;
+    }
+    // PROPAGATES read failures — does not swallow, does not generate on error.
+    const existing = await this._resolve();
+    if (existing) {
+      this._cachedClientId = existing;
+      return existing;
+    }
+    // Reads succeeded and confirmed empty everywhere — safe to generate.
+    const id = await this._putClientIdIfAbsent(generateClientId);
+    this._cachedClientId = id;
+    OpLog.normal('ClientIdService.getOrGenerateClientId() generated');
+    return id;
   }
 
   /**
-   * Clears the cached client ID.
+   * Persists an existing client ID (legacy-migration genesis seed).
    *
-   * Used for testing or when the client ID storage needs to be re-read.
+   * Writes UNCONDITIONALLY (not a CAS) into SUP_OPS: it carries the
+   * authoritative legacy PFAPI `CLIENT_ID` value that OperationLogMigration's
+   * genesis op is built from, and must win over any `__client_id_`-derived
+   * migration copy so the genesis op stays consistent with its vectorClock.
+   */
+  async persistClientId(clientId: string): Promise<void> {
+    if (!isValidClientIdFormat(clientId)) {
+      // The clientId value is sensitive (it keys the vector clock) and log
+      // history is user-exportable — never interpolate it into the message.
+      throw new Error('Cannot persist invalid clientId');
+    }
+    const db = await this._getSupOpsDb();
+    await db.put(STORE_NAMES.CLIENT_ID, clientId, SINGLETON_KEY);
+    this._cachedClientId = clientId;
+    OpLog.normal('ClientIdService.persistClientId() persisted');
+  }
+
+  /**
+   * Invalidates the cached client ID so the next read re-resolves from
+   * IndexedDB. A documented production method (not just a test helper):
+   * runDestructiveStateReplacement calls it after rotating the clientId.
    */
   clearCache(): void {
     this._cachedClientId = null;
   }
 
   /**
-   * Returns true if the clientId matches a known valid format.
-   * Old format: any string of length >= 10 (legacy IDs).
-   * New format: {platform}_{4-char-base62} e.g. "B_a7Kx".
+   * Resolves "what is this device's clientId", migrating it forward from the
+   * legacy `pf` database if needed.
+   *
+   * Read failures propagate (the caller decides whether to swallow). Only a
+   * failed copy-forward is swallowed — the `pf` id is still valid and a later
+   * launch retries the copy.
    */
-  private _isValidClientIdFormat(clientId: string): boolean {
-    return clientId.length >= 10 || /^[BEAI]_[a-zA-Z0-9]{4}$/.test(clientId);
+  private async _resolve(): Promise<string | null> {
+    const fromOps = await this._readSupOps(); // throws on IndexedDB read error
+    if (fromOps) {
+      return fromOps;
+    }
+    const fromPf = await this._readPf(); // throws on IndexedDB read error
+    if (!fromPf) {
+      // Both reads succeeded -> confirmed: no id stored anywhere.
+      return null;
+    }
+    try {
+      return await this._putClientIdIfAbsent(() => fromPf);
+    } catch {
+      // Copy-forward to SUP_OPS failed (quota, closed connection). The `pf` id
+      // is valid — return it and let a later launch retry the copy. Worst case
+      // is a redundant copy, never a lost identity.
+      return fromPf;
+    }
   }
 
   /**
-   * Gets or opens the IndexedDB database.
+   * Reads the clientId from `SUP_OPS.client_id`. An invalid format is treated
+   * as absent (returns null — never throws on bad format; see issue #6197).
+   * IndexedDB *errors* propagate.
    */
-  private async _getDb(): Promise<IDBPDatabase> {
-    if (this._db) {
-      return this._db;
-    }
+  private async _readSupOps(): Promise<string | null> {
+    const db = await this._getSupOpsDb();
+    const raw = await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY);
+    return isValidClientIdFormat(raw) ? raw : null;
+  }
 
-    this._db = await openDB(DB_NAME, DB_VERSION, {
-      upgrade: (db) => {
-        if (!db.objectStoreNames.contains(DB_STORE_NAME)) {
-          db.createObjectStore(DB_STORE_NAME);
+  /**
+   * Reads the clientId from the legacy `pf` database, read-only, per-call.
+   *
+   * Routed directly through `openDB` rather than LegacyPfDbService because that
+   * service's load() swallows IndexedDB errors and returns null — which makes
+   * "key absent" indistinguishable from "read failed". This service needs that
+   * distinction: a read failure must propagate (it must never generate over a
+   * transient failure).
+   *
+   * `__client_id_` (the live identity on op-log-era devices) wins over the
+   * original PFAPI `CLIENT_ID` key. IndexedDB *errors* propagate.
+   */
+  private async _readPf(): Promise<string | null> {
+    const db = await openDB(PF_DB_NAME, PF_DB_VERSION, {
+      upgrade: (database) => {
+        if (!database.objectStoreNames.contains(PF_DB_STORE_NAME)) {
+          database.createObjectStore(PF_DB_STORE_NAME);
         }
       },
     });
-
-    return this._db;
+    try {
+      const live = await db.get(PF_DB_STORE_NAME, PF_CLIENT_ID_KEY);
+      if (isValidClientIdFormat(live)) {
+        return live;
+      }
+      const legacy = await db.get(PF_DB_STORE_NAME, PF_LEGACY_CLIENT_ID_KEY);
+      return isValidClientIdFormat(legacy) ? legacy : null;
+    } finally {
+      db.close();
+    }
   }
 
   /**
-   * Generates a compact 6-char client ID.
-   * Format: {platform}_{4-char-base62-random}
+   * Establish-if-absent writer: writes `factory()` into SUP_OPS.client_id only
+   * if no valid id is already there, in a single transaction.
+   *
+   * MULTI-TAB / ROTATION GUARD: the in-tx re-check is load-bearing. IndexedDB
+   * serializes same-store transactions across same-origin connections, so an
+   * id that committed first (another tab's generate, or a destructive
+   * rotation) is observed by `raced` and WINS — this helper never clobbers it.
+   *
+   * persistClientId and runDestructiveStateReplacement are the *unconditional*
+   * writers (they know the exact intended value); this is the conditional one.
    */
-  private _generateClientId(): string {
-    const prefix = this._getEnvironmentId();
-    const randomPart = this._generateBase62(4);
-    return `${prefix}_${randomPart}`;
+  private async _putClientIdIfAbsent(factory: () => string): Promise<string> {
+    const db = await this._getSupOpsDb();
+    const tx = db.transaction(STORE_NAMES.CLIENT_ID, 'readwrite');
+    const raced = await tx.store.get(SINGLETON_KEY);
+    // A valid id already there (another tab, a rotation) wins — never clobbered.
+    const resolved = isValidClientIdFormat(raced) ? raced : factory();
+    if (resolved !== raced) {
+      await tx.store.put(resolved, SINGLETON_KEY);
+    }
+    await tx.done;
+    return resolved;
   }
 
   /**
-   * Returns a single-character platform identifier for compact client IDs.
-   * B = Browser, E = Electron, A = Android, I = iOS
+   * Opens (and caches) an independent connection to the `SUP_OPS` database.
+   *
+   * Independent — not delegated to OperationLogStoreService — because that
+   * service injects CLIENT_ID_PROVIDER (-> this service), so delegating back
+   * would form a DI cycle. Two same-origin connections to one store are safe:
+   * IndexedDB serializes transactions across them. Collapsing onto a single
+   * shared connection (by breaking that DI cycle) is tracked in #7735.
+   *
+   * Concurrent first callers share one in-flight open via `_supOpsDbPromise`
+   * (mirrors OperationLogStoreService._ensureInit): without it each racing
+   * caller would open — and leak — its own connection. The in-flight promise
+   * is cleared on open failure so the next call retries, and in the
+   * close/versionchange handlers so a stale handle is never re-handed-out.
    */
-  private _getEnvironmentId(): string {
-    // Detect Electron
-    const isElectron =
-      typeof process !== 'undefined' && (process as any).versions?.electron;
-    if (isElectron) {
-      return 'E';
+  private async _getSupOpsDb(): Promise<IDBPDatabase> {
+    if (this._supOpsDb) {
+      return this._supOpsDb;
     }
-
-    // Detect Android WebView
-    if (/Android/.test(navigator.userAgent) && /wv/.test(navigator.userAgent)) {
-      return 'A';
+    if (!this._supOpsDbPromise) {
+      this._supOpsDbPromise = this._openSupOpsDb().catch((e) => {
+        // A failed open must be retryable — clear so the next call reopens.
+        this._supOpsDbPromise = null;
+        throw e;
+      });
     }
-
-    // Detect iOS
-    if (
-      navigator.userAgent.includes('iOS') ||
-      navigator.userAgent.includes('iPhone') ||
-      navigator.userAgent.includes('iPad')
-    ) {
-      return 'I';
-    }
-
-    // Default: Browser
-    return 'B';
+    return this._supOpsDbPromise;
   }
 
-  /**
-   * Generates a random base62 string of the specified length.
-   * Uses crypto.getRandomValues() for non-predictable randomness.
-   */
-  private _generateBase62(length: number): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    const bytes = new Uint8Array(length);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+  private async _openSupOpsDb(): Promise<IDBPDatabase> {
+    const db = await openDB(SUP_OPS_DB_NAME, SUP_OPS_DB_VERSION, {
+      upgrade: (database, oldVersion, _newVersion, transaction) => {
+        runDbUpgrade(database, oldVersion, transaction);
+      },
+    });
+    // Browser closed the connection — drop both handles, reopen on next access.
+    db.addEventListener('close', () => {
+      this._supOpsDb = null;
+      this._supOpsDbPromise = null;
+    });
+    // Don't block a future (v7) upgrade opened by another connection/tab.
+    db.addEventListener('versionchange', () => {
+      db.close();
+      this._supOpsDb = null;
+      this._supOpsDbPromise = null;
+    });
+    this._supOpsDb = db;
+    return db;
   }
 }

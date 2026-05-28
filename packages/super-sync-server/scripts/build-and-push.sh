@@ -33,6 +33,66 @@ GITHUB_USER="${GHCR_USER:-johannesjo}"
 GHCR_TOKEN="${GHCR_TOKEN:-}"
 IMAGE_NAME="ghcr.io/$GITHUB_USER/supersync"
 
+supersync_image_source_revision() {
+    git -C "$REPO_ROOT" log -1 --format=%H -- \
+        .dockerignore \
+        .github/workflows/supersync-docker.yml \
+        package.json \
+        package-lock.json \
+        packages/shared-schema \
+        packages/sync-core \
+        packages/super-sync-server 2>/dev/null ||
+        git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null ||
+        echo unknown
+}
+
+assert_clean_supersync_image_inputs() {
+    local untracked_files
+
+    if ! git -C "$REPO_ROOT" diff --quiet -- \
+        .dockerignore \
+        .github/workflows/supersync-docker.yml \
+        package.json \
+        package-lock.json \
+        packages/shared-schema \
+        packages/sync-core \
+        packages/super-sync-server ||
+        ! git -C "$REPO_ROOT" diff --cached --quiet -- \
+            .dockerignore \
+            .github/workflows/supersync-docker.yml \
+            package.json \
+            package-lock.json \
+            packages/shared-schema \
+            packages/sync-core \
+            packages/super-sync-server; then
+        echo ""
+        echo "ERROR: Refusing to build a labeled supersync image from dirty tracked input files."
+        echo "       Commit or stash changes under packages/super-sync-server,"
+        echo "       packages/sync-core, packages/shared-schema, package*.json, or"
+        echo "       .dockerignore/.github/workflows/supersync-docker.yml before building."
+        exit 1
+    fi
+
+    untracked_files="$(git -C "$REPO_ROOT" ls-files --others --exclude-standard -- \
+        .dockerignore \
+        .github/workflows/supersync-docker.yml \
+        package.json \
+        package-lock.json \
+        packages/shared-schema \
+        packages/sync-core \
+        packages/super-sync-server 2>/dev/null || true)"
+    if [ -n "$untracked_files" ]; then
+        echo ""
+        echo "ERROR: Refusing to build a labeled supersync image with untracked input files."
+        echo "       Commit, stash, remove, or ignore these files first:"
+        printf '%s\n' "$untracked_files" | sed 's/^/       - /'
+        exit 1
+    fi
+}
+
+assert_clean_supersync_image_inputs
+VCS_REF="$(supersync_image_source_revision)"
+
 # Parse arguments
 TAG="latest"
 BUILD_NO_CACHE=false
@@ -55,12 +115,14 @@ echo "==> Building image..."
 if [ "$BUILD_NO_CACHE" = true ]; then
     echo "    Using --no-cache flag to prevent layer caching"
     docker build --no-cache \
+        --build-arg "VCS_REF=$VCS_REF" \
         -t "$IMAGE_NAME:$TAG" \
         -t "$IMAGE_NAME:latest" \
         -f "$DOCKERFILE" \
         "$REPO_ROOT"
 else
     docker build \
+        --build-arg "VCS_REF=$VCS_REF" \
         -t "$IMAGE_NAME:$TAG" \
         -t "$IMAGE_NAME:latest" \
         -f "$DOCKERFILE" \

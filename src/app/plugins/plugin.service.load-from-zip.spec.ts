@@ -1,0 +1,169 @@
+import { HttpClient } from '@angular/common/http';
+import { TestBed } from '@angular/core/testing';
+import { MatDialog } from '@angular/material/dialog';
+import { Store } from '@ngrx/store';
+import { TranslateService } from '@ngx-translate/core';
+import { strToU8, zipSync } from 'fflate';
+import { of } from 'rxjs';
+import { GlobalThemeService } from '../core/theme/global-theme.service';
+import { SnackService } from '../core/snack/snack.service';
+import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+import { T } from '../t.const';
+import { PluginCacheService } from './plugin-cache.service';
+import { PluginCleanupService } from './plugin-cleanup.service';
+import { PluginHooksService } from './plugin-hooks';
+import { PluginI18nService } from './plugin-i18n.service';
+import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
+import { PluginLoaderService } from './plugin-loader.service';
+import { PluginManifest } from './plugin-api.model';
+import { PluginMetaPersistenceService } from './plugin-meta-persistence.service';
+import { PluginRunner } from './plugin-runner';
+import { PluginSecurityService } from './plugin-security';
+import { PluginService } from './plugin.service';
+import { PluginUserPersistenceService } from './plugin-user-persistence.service';
+
+describe('PluginService loadPluginFromZip iframe-only plugins', () => {
+  let service: PluginService;
+  let pluginRunner: jasmine.SpyObj<PluginRunner>;
+  let pluginCache: jasmine.SpyObj<PluginCacheService>;
+
+  const iframeManifest: PluginManifest = {
+    id: 'iframe-only',
+    name: 'Iframe Only',
+    manifestVersion: 1,
+    version: '1.0.0',
+    minSupVersion: '18.0.0',
+    hooks: [],
+    permissions: [],
+    iFrame: true,
+  };
+
+  const createZipFile = (files: Record<string, string>): File => {
+    const entries: Record<string, Uint8Array> = {};
+    for (const [path, content] of Object.entries(files)) {
+      entries[path] = strToU8(content);
+    }
+    const zipBytes = zipSync(entries);
+    const zipBuffer = new ArrayBuffer(zipBytes.byteLength);
+    new Uint8Array(zipBuffer).set(zipBytes);
+    return new File([zipBuffer], 'plugin.zip', { type: 'application/zip' });
+  };
+
+  beforeEach(() => {
+    pluginRunner = jasmine.createSpyObj<PluginRunner>('PluginRunner', [
+      'loadPlugin',
+      'triggerReady',
+      'unloadPlugin',
+      'pingNodeBridge',
+    ]);
+    pluginRunner.loadPlugin.and.callFake(
+      async (manifest, _pluginCode, _baseCfg, isEnabled = true) => ({
+        manifest,
+        loaded: true,
+        isEnabled,
+      }),
+    );
+    pluginRunner.triggerReady.and.resolveTo();
+
+    const pluginSecurity = jasmine.createSpyObj<PluginSecurityService>(
+      'PluginSecurityService',
+      ['analyzePluginCode', 'hasElevatedPermissions'],
+    );
+    pluginSecurity.analyzePluginCode.and.returnValue({ warnings: [], info: [] });
+    pluginSecurity.hasElevatedPermissions.and.returnValue(false);
+
+    pluginCache = jasmine.createSpyObj<PluginCacheService>('PluginCacheService', [
+      'storePlugin',
+      'getPlugin',
+      'removePlugin',
+    ]);
+    pluginCache.storePlugin.and.resolveTo();
+
+    const pluginMetaPersistence = jasmine.createSpyObj<PluginMetaPersistenceService>(
+      'PluginMetaPersistenceService',
+      ['isPluginEnabled', 'setPluginEnabled'],
+    );
+    pluginMetaPersistence.isPluginEnabled.and.resolveTo(true);
+
+    const translateService = jasmine.createSpyObj<TranslateService>('TranslateService', [
+      'instant',
+    ]);
+    translateService.instant.and.callFake((key: string | string[]) =>
+      Array.isArray(key) ? key.join(',') : key,
+    );
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginService,
+        { provide: HttpClient, useValue: { get: () => of(null) } },
+        { provide: PluginRunner, useValue: pluginRunner },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: PluginSecurityService, useValue: pluginSecurity },
+        { provide: GlobalThemeService, useValue: { darkMode: () => 'light' } },
+        { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistence },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginCacheService, useValue: pluginCache },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginCleanupService, useValue: {} },
+        { provide: PluginLoaderService, useValue: {} },
+        { provide: TranslateService, useValue: translateService },
+        { provide: PluginI18nService, useValue: {} },
+        { provide: Store, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: SnackService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginService);
+  });
+
+  it('loads an iframe plugin zip without plugin.js when index.html exists', async () => {
+    const indexHtml = '<!doctype html><html><body>Plugin UI</body></html>';
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(iframeManifest);
+    files['index.html'] = indexHtml;
+    const file = createZipFile(files);
+
+    const result = await service.loadPluginFromZip(file);
+
+    expect(result.loaded).toBeTrue();
+    expect(pluginRunner.loadPlugin).toHaveBeenCalledWith(
+      iframeManifest,
+      '',
+      jasmine.objectContaining({ theme: 'light', platform: 'web' }),
+      true,
+    );
+    expect(pluginCache.storePlugin).toHaveBeenCalledWith(
+      iframeManifest.id,
+      JSON.stringify(iframeManifest),
+      '',
+      indexHtml,
+      undefined,
+      undefined,
+      undefined,
+    );
+    expect(service.getPluginIndexHtml(iframeManifest.id)).toBe(indexHtml);
+  });
+
+  it('rejects a plugin zip without plugin.js when index.html is absent', async () => {
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(iframeManifest);
+    const file = createZipFile(files);
+
+    await expectAsync(service.loadPluginFromZip(file)).toBeRejectedWithError(
+      T.PLUGINS.PLUGIN_JS_NOT_FOUND,
+    );
+  });
+
+  it('rejects a plugin zip without plugin.js when index.html is empty', async () => {
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(iframeManifest);
+    files['index.html'] = ' ';
+    const file = createZipFile(files);
+
+    await expectAsync(service.loadPluginFromZip(file)).toBeRejectedWithError(
+      T.PLUGINS.INDEX_HTML_NOT_LOADED,
+    );
+  });
+});

@@ -16,7 +16,12 @@ module.exports = tseslint.config(
       'src/assets/bundled-plugins/**/*',
       'src/app/config/env.generated.ts',
       '.tmp/**/*',
-      'packages/**/*',
+      'packages/plugin-api/**/*',
+      'packages/plugin-dev/**/*',
+      'packages/shared-schema/**/*',
+      'packages/super-sync-server/**/*',
+      'packages/vite-plugin/**/*',
+      'packages/*/dist/**/*',
     ],
   },
   // TypeScript files
@@ -116,6 +121,96 @@ module.exports = tseslint.config(
       '@typescript-eslint/no-wrapper-object-types': 'error',
     },
   },
+  {
+    files: ['packages/sync-core/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@sp/shared-schema',
+              message:
+                '@sp/sync-core must stay domain-agnostic; shared-schema is SP-specific.',
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                '@angular/*',
+                '@ngrx/*',
+                '@sp/shared-schema/*',
+                '../shared-schema/*',
+                '../shared-schema/**',
+                '../../shared-schema/*',
+                '../../shared-schema/**',
+                '**/shared-schema/*',
+                '**/shared-schema/**',
+                'src/app/*',
+                'src/app/**',
+                '**/src/app/*',
+                '**/src/app/**',
+              ],
+              message:
+                '@sp/sync-core must not import Angular, NgRx, app code, or SP-specific schema packages.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression',
+          message:
+            '@sp/sync-core must not use dynamic imports; they bypass package-boundary checks.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/sync-providers/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@sp/shared-schema',
+              message: '@sp/sync-providers must not import SP-specific schema packages.',
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                '@angular/*',
+                '@ngrx/*',
+                '@sp/shared-schema/*',
+                '@sp/sync-core/*',
+                '**/shared-schema/*',
+                '**/shared-schema/**',
+                '**/sync-core/*',
+                '**/sync-core/**',
+                'src/app/*',
+                'src/app/**',
+                '**/src/app/*',
+                '**/src/app/**',
+              ],
+              message:
+                '@sp/sync-providers must use only public @sp/sync-core exports and must not import Angular, NgRx, app code, or SP-specific schema packages.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression',
+          message:
+            '@sp/sync-providers must not use dynamic imports; they bypass package-boundary checks.',
+        },
+      ],
+    },
+  },
   // NgRx effects files - require hydration guards on selector-based effects
   {
     files: ['**/*.effects.ts'],
@@ -125,6 +220,8 @@ module.exports = tseslint.config(
     rules: {
       'local-rules/require-hydration-guard': 'error',
       'local-rules/require-entity-registry': 'warn',
+      'local-rules/no-actions-in-effects': 'error',
+      'local-rules/no-multi-entity-effect': 'warn',
     },
   },
   // HTML files

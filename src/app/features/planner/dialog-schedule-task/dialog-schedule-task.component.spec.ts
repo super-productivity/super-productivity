@@ -7,8 +7,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
-import { provideMockStore } from '@ngrx/store/testing';
-import { Store } from '@ngrx/store';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { SnackService } from '../../../core/snack/snack.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
@@ -17,11 +16,16 @@ import { WorkContextService } from '../../../features/work-context/work-context.
 import { of } from 'rxjs';
 import { PlannerService } from '../planner.service';
 import { RootState } from '../../../root-store/root-state';
-import { CONFIG_FEATURE_NAME } from '../../config/store/global-config.reducer';
-import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
+import {
+  CONFIG_FEATURE_NAME,
+  selectTimelineConfig,
+} from '../../config/store/global-config.reducer';
+import { TaskCopy, TaskReminderOptionId, TaskWithDueTime } from '../../tasks/task.model';
 import { ReminderService } from '../../reminder/reminder.service';
 import { PlannerActions } from '../store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
+import { ScheduleConfig } from '../../config/global-config.model';
 
 describe('DialogScheduleTaskComponent', () => {
   let component: DialogScheduleTaskComponent;
@@ -32,13 +36,42 @@ describe('DialogScheduleTaskComponent', () => {
   let plannerServiceSpy: jasmine.SpyObj<PlannerService>;
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let reminderServiceSpy: jasmine.SpyObj<ReminderService>;
-  let store: Store;
+  let store: MockStore;
 
   const mockDialogData = {
     taskId: 'task123',
     title: 'Test Task',
     date: new Date(),
   };
+
+  const h = (hours: number): number => hours * 60 * 60 * 1000;
+  const createScheduledTask = (
+    partial: Partial<TaskWithDueTime> & Pick<TaskWithDueTime, 'id' | 'dueWithTime'>,
+  ): TaskWithDueTime =>
+    ({
+      projectId: 'DEFAULT',
+      timeSpentOnDay: {},
+      attachments: [],
+      title: partial.id,
+      tagIds: [],
+      created: 1640995200000,
+      timeSpent: 0,
+      timeEstimate: 0,
+      isDone: false,
+      subTaskIds: [],
+      ...partial,
+    }) as TaskWithDueTime;
+
+  const workHoursConfig = (partial: Partial<ScheduleConfig> = {}): ScheduleConfig =>
+    ({
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+      ...partial,
+    }) as ScheduleConfig;
 
   beforeEach(async () => {
     dialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['close']);
@@ -82,6 +115,10 @@ describe('DialogScheduleTaskComponent', () => {
               },
             } as any,
           },
+          selectors: [
+            { selector: selectAllTasksWithDueTimeSorted, value: [] },
+            { selector: selectTimelineConfig, value: null },
+          ],
         }),
         { provide: MatDialogRef, useValue: dialogRefSpy },
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },
@@ -98,7 +135,7 @@ describe('DialogScheduleTaskComponent', () => {
 
     fixture = TestBed.createComponent(DialogScheduleTaskComponent);
     component = fixture.componentInstance;
-    store = TestBed.inject(Store);
+    store = TestBed.inject(MockStore);
     const t = {
       id: 'task123',
       title: 'Test Task',
@@ -124,6 +161,73 @@ describe('DialogScheduleTaskComponent', () => {
     component.selectedDate = testDate;
     await component.submit();
     expect(dialogRefSpy.close).toHaveBeenCalledWith(true);
+  });
+
+  describe('schedule hints', () => {
+    it('should show an inline info hint when the selected time overlaps another task', () => {
+      const selectedDate = new Date(2026, 3, 15);
+      component.selectedDate = selectedDate;
+      component.selectedTime = '10:30';
+      component.task = {
+        ...(component.task as TaskCopy),
+        id: 'task123',
+        timeEstimate: h(1),
+      } as TaskCopy;
+      store.overrideSelector(selectAllTasksWithDueTimeSorted, [
+        createScheduledTask({
+          id: 'task123',
+          dueWithTime: new Date(2026, 3, 15, 9, 0).getTime(),
+          timeEstimate: h(1),
+        }),
+        createScheduledTask({
+          id: 'other',
+          dueWithTime: new Date(2026, 3, 15, 10, 0).getTime(),
+          timeEstimate: h(2),
+        }),
+      ]);
+      store.refreshState();
+      fixture.detectChanges();
+
+      expect(component.scheduleWarnings().hasOverlap).toBe(true);
+      expect(fixture.nativeElement.querySelector('.schedule-info')).toBeTruthy();
+    });
+
+    it('should exclude the edited task from overlap detection', () => {
+      const selectedDate = new Date(2026, 3, 15);
+      component.selectedDate = selectedDate;
+      component.selectedTime = '10:00';
+      component.task = {
+        ...(component.task as TaskCopy),
+        id: 'task123',
+        timeEstimate: h(1),
+      } as TaskCopy;
+      store.overrideSelector(selectAllTasksWithDueTimeSorted, [
+        createScheduledTask({
+          id: 'task123',
+          dueWithTime: new Date(2026, 3, 15, 10, 0).getTime(),
+          timeEstimate: h(1),
+        }),
+      ]);
+      store.refreshState();
+
+      expect(component.scheduleWarnings().hasOverlap).toBe(false);
+    });
+
+    it('should show an inline info hint when the selected time is outside work hours', () => {
+      component.selectedDate = new Date(2026, 3, 15);
+      component.selectedTime = '18:00';
+      component.task = {
+        ...(component.task as TaskCopy),
+        id: 'task123',
+        timeEstimate: h(1),
+      } as TaskCopy;
+      store.overrideSelector(selectTimelineConfig, workHoursConfig());
+      store.refreshState();
+      fixture.detectChanges();
+
+      expect(component.scheduleWarnings().isOutsideWorkHours).toBe(true);
+      expect(fixture.nativeElement.querySelector('.schedule-info')).toBeTruthy();
+    });
   });
 
   describe('submit()', () => {

@@ -83,6 +83,14 @@ export class ArchiveStoreService {
       this._db = undefined;
       this._initPromise = undefined;
     });
+    // A newer tab is upgrading SUP_OPS (a future schema bump). Close now so this
+    // connection does not block the upgrade; the next access reopens
+    // transparently via _ensureInit().
+    db.addEventListener('versionchange', () => {
+      db.close();
+      this._db = undefined;
+      this._initPromise = undefined;
+    });
     this._db = db;
   }
 

@@ -29,6 +29,8 @@ export interface JiraCfg extends BaseIssueProviderCfg {
   userName: string | null;
   password?: string | null;
   usePAT: boolean;
+  allowFetchFallback: boolean;
+  altPublicLinkHost: string | null;
 
   isAllowSelfSignedCertificate: boolean;
   searchJqlQuery: string;

@@ -4,6 +4,13 @@ import { BehaviorSubject, merge, Observable, ReplaySubject, Subject } from 'rxjs
 import { mapTo } from 'rxjs/operators';
 import { DroidLog } from '../../core/log';
 
+export interface AndroidShareData {
+  title: string;
+  subject: string;
+  type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
+  path: string;
+}
+
 export interface AndroidInterface {
   getVersion?(): string;
 
@@ -44,6 +51,7 @@ export interface AndroidInterface {
   stopTrackingService?(): void;
   updateTrackingService?(timeSpentMs: number): void;
   getTrackingElapsed?(): string;
+  openAppNotificationSettings?(): void;
 
   // Foreground service methods for focus mode timer
   startFocusModeService?(
@@ -99,12 +107,7 @@ export interface AndroidInterface {
   isInBackground$: Observable<boolean>;
   isKeyboardShown$: Subject<boolean>;
 
-  onShareWithAttachment$: Subject<{
-    title: string;
-    subject: string;
-    type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
-    path: string;
-  }>;
+  onShareWithAttachment$: Subject<AndroidShareData>;
 
   // Notification action callbacks
   onPauseTracking$: Subject<void>;
@@ -118,6 +121,7 @@ export interface AndroidInterface {
 
   // Focus mode timer completion (native service detected timer reached 0)
   onFocusModeTimerComplete$: Subject<boolean>; // boolean indicates isBreak
+  onForegroundServiceStartFailed$: ReplaySubject<ForegroundServiceStartFailure>;
 
   // Reminder notification action callbacks
   onReminderTap$: ReplaySubject<string>; // emits taskId
@@ -129,6 +133,11 @@ export interface AndroidInterface {
   setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
   clearSuperSyncCredentials?(): void;
 }
+
+export type ForegroundServiceStartFailure = {
+  service: 'tracking' | 'focusMode';
+  reason: 'startNotAllowed' | 'promotionFailed';
+};
 
 // setInterval(() => {
 //   androidInterface.updatePermanentNotification?.(new Date().toString(), '', -1);
@@ -150,6 +159,7 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onFocusSkip$ = new Subject();
   androidInterface.onFocusComplete$ = new Subject();
   androidInterface.onFocusModeTimerComplete$ = new Subject();
+  androidInterface.onForegroundServiceStartFailed$ = new ReplaySubject(3);
   androidInterface.onReminderTap$ = new ReplaySubject(5);
   androidInterface.onReminderDone$ = new ReplaySubject(20);
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);

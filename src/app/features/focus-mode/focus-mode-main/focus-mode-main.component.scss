@@ -27,10 +27,7 @@
   max-width: 600px;
 }
 
-// Pomodoro settings cog — lives inside the clock face during prep (Pomodoro
-// mode only), centered at the bottom. Fades in on hover like the other
-// in-circle controls.
-.pomodoro-settings-btn {
+.mode-settings-btn {
   position: absolute;
   bottom: calc(var(--clock-face-size) * 0.05);
   left: 50%;
@@ -359,7 +356,7 @@ breathing-dot {
 .simple-counter-buttons {
   display: flex;
   position: absolute;
-  top: 14px;
+  top: calc(var(--s2) + 80px);
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-focus-mode-simple-counter);
@@ -370,12 +367,14 @@ breathing-dot {
       transition: var(--transition-standard);
       opacity: 0;
       transform: translateY(-10px);
+      pointer-events: none;
     }
 
     :host:hover & {
       transition: var(--transition-standard);
       opacity: 1;
       transform: translateY(0);
+      pointer-events: auto;
     }
   }
 }

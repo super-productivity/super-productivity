@@ -71,6 +71,15 @@ export const focusModeReducer = createReducer(
   on(a.setFocusModeMode, (state, { mode }) => ({
     ...state,
     mode,
+    timer:
+      mode === FocusModeMode.Flowtime
+        ? {
+            ...state.timer,
+            duration: 0,
+          }
+        : state.timer,
+    _isOvertimeEnabled:
+      mode === FocusModeMode.Flowtime ? false : state._isOvertimeEnabled,
   })),
 
   // Overlay control
@@ -123,11 +132,12 @@ export const focusModeReducer = createReducer(
   on(a.pauseFocusSession, (state, { pausedTaskId }) => {
     // Allow pausing both work sessions and breaks
     if (state.timer.purpose === null) return state;
+    const timer = updateTimer(state.timer);
 
     return {
       ...state,
       timer: {
-        ...state.timer,
+        ...timer,
         isRunning: false,
       },
       // Store paused task ID if provided (for sync feature)
@@ -138,6 +148,7 @@ export const focusModeReducer = createReducer(
   on(a.unPauseFocusSession, (state) => {
     // Allow resuming both work sessions and breaks
     if (state.timer.purpose === null) return state;
+    if (state.mainState === FocusMainUIState.BreakOffer) return state;
 
     return {
       ...state,
@@ -146,10 +157,10 @@ export const focusModeReducer = createReducer(
         isRunning: true,
         startedAt: Date.now() - state.timer.elapsed,
       },
-      // Restore InProgress state for work sessions (fixes UI showing preparation instead of active session)
-      ...(state.timer.purpose === 'work'
-        ? { mainState: FocusMainUIState.InProgress, currentScreen: FocusScreen.Main }
-        : {}),
+      // Restore InProgress state (fixes UI showing preparation or BreakOffer instead of active session)
+      mainState: FocusMainUIState.InProgress,
+      currentScreen:
+        state.timer.purpose === 'work' ? FocusScreen.Main : FocusScreen.Break,
       // Set flag ONLY when resuming a break (not work sessions)
       _isResumingBreak: state.timer.purpose === 'break',
     };
@@ -160,8 +171,8 @@ export const focusModeReducer = createReducer(
     _isResumingBreak: false,
   })),
 
-  on(a.completeFocusSession, (state, { isManual }) => {
-    const duration = state.timer.elapsed;
+  on(a.completeFocusSession, (state, { completedDuration }) => {
+    const duration = completedDuration ?? state.timer.elapsed;
 
     return {
       ...state,
@@ -182,6 +193,23 @@ export const focusModeReducer = createReducer(
     pausedTaskId: null,
     _isOvertimeEnabled: false,
   })),
+
+  // Flowtime end-of-session: store elapsed duration, pause the timer, but DON'T
+  // reset the screen — offerFlowtimeBreak reads the current timer state and
+  // transitions to the Break screen.
+  //
+  // IMPORTANT:
+  // lastCompletedDuration must remain populated across the offerFlowtimeBreak
+  // transition because logFocusSession$ relies on it for session logging.
+  on(a.endFlowtimeSession, (state, { pausedTaskId }) => {
+    if (state.timer.purpose !== 'work') return state;
+    return {
+      ...state,
+      timer: { ...state.timer, isRunning: false },
+      pausedTaskId: pausedTaskId ?? state.pausedTaskId,
+      lastCompletedDuration: state.timer.elapsed,
+    };
+  }),
 
   on(a.setOvertimeEnabled, (state, { enabled }) => ({
     ...state,
@@ -221,6 +249,29 @@ export const focusModeReducer = createReducer(
     pausedTaskId: null,
   })),
 
+  // Flowtime break offer - show break screen but don't start timer yet
+  // Uses dedicated BreakOffer state so it can be distinguished from active/paused breaks
+  on(a.offerFlowtimeBreak, (state, { duration, isLongBreak, pausedTaskId }) => {
+    const breakTimer: TimerState = {
+      isRunning: false,
+      startedAt: null,
+      elapsed: 0,
+      duration,
+      purpose: 'break',
+      isLongBreak: isLongBreak ?? false,
+    };
+
+    return {
+      ...state,
+      timer: breakTimer,
+      currentScreen: FocusScreen.Break,
+      mainState: FocusMainUIState.BreakOffer,
+      pausedTaskId: pausedTaskId ?? state.pausedTaskId,
+      _isResumingBreak: false,
+      _isOvertimeEnabled: false,
+    };
+  }),
+
   // Timer updates - much simpler!
   on(a.tick, (state) => {
     if (!state.timer.isRunning || !state.timer.purpose) {
@@ -229,9 +280,13 @@ export const focusModeReducer = createReducer(
 
     const updatedTimer = updateTimer(state.timer);
 
-    // Check if timer completed - mark for completion but let effects handle the flow
-    if (updatedTimer.duration > 0 && updatedTimer.elapsed >= updatedTimer.duration) {
+    // Check if timer completed - mark for completion but let effects handle the flow.
+    if (updatedTimer.elapsed >= updatedTimer.duration) {
       if (updatedTimer.purpose === 'work') {
+        // Flowtime work sessions have no fixed duration and never auto-complete via tick.
+        if (state.mode === FocusModeMode.Flowtime) {
+          return { ...state, timer: updatedTimer };
+        }
         // When overtime is enabled, keep the timer running past duration
         if (state._isOvertimeEnabled) {
           return { ...state, timer: updatedTimer };
