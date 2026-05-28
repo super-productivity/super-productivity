@@ -17,7 +17,7 @@ describe('JiraUnloggedSummaryComponent', () => {
       issueId: 'PROJ-1',
       issueProviderId: 'p1',
       timeSpent: 3600000,
-      timeLoggedToJira: 0,
+      issueTimeLogged: 0,
       ...overrides,
     }) as Task;
 
@@ -40,23 +40,23 @@ describe('JiraUnloggedSummaryComponent', () => {
   });
 
   it('should show nothing when no tasks have unlogged time', () => {
-    fixture.componentRef.setInput('flatTasks', [makeTask({ timeLoggedToJira: 3600000 })]);
+    fixture.componentRef.setInput('flatTasks', [makeTask({ issueTimeLogged: 3600000 })]);
     fixture.detectChanges();
     expect(component.pendingTasks().length).toBe(0);
   });
 
   it('should show tasks with unlogged time', () => {
     fixture.componentRef.setInput('flatTasks', [
-      makeTask({ timeSpent: 7200000, timeLoggedToJira: 3600000 }),
+      makeTask({ timeSpent: 7200000, issueTimeLogged: 3600000 }),
       makeTask({ id: 'task2', issueType: 'GITHUB' as any }),
     ]);
     fixture.detectChanges();
     expect(component.pendingTasks().length).toBe(1);
   });
 
-  it('should exclude tasks where timeSpent <= timeLoggedToJira', () => {
+  it('should exclude tasks where timeSpent <= issueTimeLogged', () => {
     fixture.componentRef.setInput('flatTasks', [
-      makeTask({ timeSpent: 0, timeLoggedToJira: 0 }),
+      makeTask({ timeSpent: 0, issueTimeLogged: 0 }),
     ]);
     fixture.detectChanges();
     expect(component.pendingTasks().length).toBe(0);

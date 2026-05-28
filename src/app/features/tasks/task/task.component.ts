@@ -281,7 +281,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   unloggedToJiraMs = computed(() => {
     const t = this.task();
     if (t.issueType !== JIRA_TYPE) return 0;
-    return Math.max(0, t.timeSpent - (t.timeLoggedToJira ?? 0));
+    return Math.max(0, t.timeSpent - (t.issueTimeLogged ?? 0));
   });
 
   T: typeof T = T;

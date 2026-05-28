@@ -23,7 +23,7 @@ describe('JiraWorklogService', () => {
       issueId: 'PROJ-123',
       issueProviderId: 'provider1',
       timeSpent: 3600000,
-      timeLoggedToJira: 0,
+      issueTimeLogged: 0,
       ...overrides,
     }) as Task;
 
@@ -114,7 +114,7 @@ describe('JiraWorklogService', () => {
       expect(matDialog.open).toHaveBeenCalled();
     });
 
-    it('should NOT call TaskService.update (no timeLoggedToJira tracking)', async () => {
+    it('should NOT call TaskService.update (no issueTimeLogged tracking)', async () => {
       const task = {
         ...DEFAULT_TASK,
         id: 't1',

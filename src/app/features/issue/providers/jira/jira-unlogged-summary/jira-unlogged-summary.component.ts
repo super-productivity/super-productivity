@@ -30,12 +30,12 @@ export class JiraUnloggedSummaryComponent {
 
   pendingTasks = computed(() =>
     this.flatTasks().filter(
-      (t) => t.issueType === JIRA_TYPE && t.timeSpent > (t.timeLoggedToJira ?? 0),
+      (t) => t.issueType === JIRA_TYPE && t.timeSpent > (t.issueTimeLogged ?? 0),
     ),
   );
 
   unloggedMs(task: Task): number {
-    return Math.max(0, task.timeSpent - (task.timeLoggedToJira ?? 0));
+    return Math.max(0, task.timeSpent - (task.issueTimeLogged ?? 0));
   }
 
   logWork(task: Task): void {

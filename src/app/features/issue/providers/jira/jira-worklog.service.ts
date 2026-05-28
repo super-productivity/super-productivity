@@ -59,10 +59,10 @@ export class JiraWorklogService {
         const { DialogTrackTimeComponent } =
           await import('../../shared/dialog-track-time/dialog-track-time.component');
         // For subtask-done flow, task is the subtask but issueId is the parent's Jira issue.
-        // We track timeLoggedToJira on the subtask to prevent re-logging its own time.
-        const timeLoggedToJira = task.timeLoggedToJira ?? issue.timespent * 1000;
-        if (task.timeLoggedToJira === undefined) {
-          this._taskService.update(task.id, { timeLoggedToJira });
+        // We track issueTimeLogged on the subtask to prevent re-logging its own time.
+        const issueTimeLogged = task.issueTimeLogged ?? issue.timespent * 1000;
+        if (task.issueTimeLogged === undefined) {
+          this._taskService.update(task.id, { issueTimeLogged });
         }
         this._matDialog.open(DialogTrackTimeComponent, {
           restoreFocus: true,
@@ -70,7 +70,7 @@ export class JiraWorklogService {
             task,
             issueIcon: 'jira',
             issueLabel: `${issue.key} ${issue.summary}`,
-            timeLogged: timeLoggedToJira,
+            timeLogged: issueTimeLogged,
             defaultTime:
               jiraCfg.worklogDialogDefaultTime ??
               JiraWorklogExportDefaultTime.AllTimeMinusLogged,
@@ -87,7 +87,7 @@ export class JiraWorklogService {
                 .pipe(
                   tap(() =>
                     this._taskService.update(task.id, {
-                      timeLoggedToJira: timeLoggedToJira + params.timeSpent,
+                      issueTimeLogged: issueTimeLogged + params.timeSpent,
                     }),
                   ),
                 ),
