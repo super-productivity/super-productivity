@@ -27,7 +27,6 @@ import { devError } from '../../../util/dev-error';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { Log } from '../../../core/log';
 
 type Timeout = NodeJS.Timeout | number | undefined;
 
@@ -235,7 +234,6 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
   }
 
   private async createNewTask(title: string): Promise<void> {
-    Log.log('waza');
     try {
       if (this.isForDayMode()) {
         // Plan task for day (no specific time)

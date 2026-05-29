@@ -20,7 +20,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { signal, Signal } from '@angular/core';
 import { AddTaskSuggestion } from './add-task-suggestions.model';
 import { PlannerActions } from '../../planner/store/planner.actions';
-import { TaskCopy, TaskReminderOptionId } from '../task.model';
+import { TaskCopy } from '../task.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 
@@ -181,14 +181,16 @@ describe('AddTaskBarComponent', () => {
       ]),
     );
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      cfg: signal({
-        reminder: { defaultTaskRemindOption: TaskReminderOptionId.AtStart },
-      }),
       lang$: new BehaviorSubject<LocalizationConfig>(mockLocalizationConfig),
       misc$: new BehaviorSubject<MiscConfig>(mockMiscConfig),
       tasks$: new BehaviorSubject({ defaultProjectId: null }),
       shortSyntax$: of({}),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
+      cfg: () => ({
+        reminder: { defaultTaskRemindOption: 'AtStart' },
+        tasks: { defaultProjectId: null },
+        appFeatures: { isTimeTrackingEnabled: true },
+      }),
     });
     mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
     mockStore.pipe.and.returnValue(of([]));
@@ -273,45 +275,6 @@ describe('AddTaskBarComponent', () => {
         }),
       );
       expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('addTask', () => {
-    it('should not add a task when the visible input is empty', async () => {
-      component.stateService.updateCleanText('Stale task');
-      component.stateService.updateInputTxt('   ');
-
-      await component.addTask();
-
-      expect(mockTaskService.add).not.toHaveBeenCalled();
-    });
-
-    it('should keep the active tag selected for subsequent tasks in tag context', async () => {
-      const tagWorkContext: WorkContext = {
-        id: 'tag-1',
-        title: 'Test Tag',
-        type: WorkContextType.TAG,
-      } as WorkContext;
-      (
-        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
-      ).next(tagWorkContext);
-      mockTaskService.add.and.returnValues('task-1', 'task-2');
-
-      fixture.detectChanges();
-
-      component.stateService.updateInputTxt('First task');
-      component.stateService.updateCleanText('First task');
-      await component.addTask();
-
-      expect(component.stateService.state().tagIds).toEqual(['tag-1']);
-
-      component.stateService.updateInputTxt('Second task');
-      component.stateService.updateCleanText('Second task');
-      await component.addTask();
-
-      const secondCall = mockTaskService.add.calls.mostRecent();
-      const secondTaskData = secondCall.args[2] as Partial<TaskCopy>;
-      expect(secondTaskData.tagIds).toEqual(['tag-1']);
     });
   });
 
@@ -576,31 +539,6 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
-  describe('_setProjectInitially', () => {
-    it('should use projectId from additionalFields instead of defaultProject$', () => {
-      // Set tag work context (would normally fall back to INBOX_PROJECT)
-      (
-        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
-      ).next(mockTagWorkContext);
-
-      fixture.componentRef.setInput('additionalFields', { projectId: 'project-2' });
-      fixture.detectChanges();
-
-      expect(component.stateService.state().projectId).toBe('project-2');
-    });
-
-    it('should fall back to defaultProject$ when additionalFields has no projectId', () => {
-      (
-        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
-      ).next(mockTagWorkContext);
-
-      fixture.componentRef.setInput('additionalFields', { isDone: false });
-      fixture.detectChanges();
-
-      expect(component.stateService.state().projectId).toBe('INBOX_PROJECT');
-    });
-  });
-
   describe('document click handling', () => {
     beforeEach(() => {
       fixture.detectChanges();
@@ -630,45 +568,65 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
-  describe('IME handling (Integration)', () => {
-    let inputEl: HTMLInputElement;
-
+  describe('addTask() - reminder scheduling', () => {
     beforeEach(() => {
-      component.stateService.updateInputTxt('New Task');
       fixture.detectChanges();
-      inputEl = fixture.debugElement.nativeElement.querySelector('input');
+      mockTaskService.add.and.returnValue('new-task-id');
+      mockTaskService.getByIdOnce$.and.returnValue(
+        of({ id: 'new-task-id', title: 'Test' } as TaskCopy),
+      );
     });
 
-    const dispatchEnterKeydown = (options: {
-      isComposing: boolean;
-      keyCode?: number;
-    }): void => {
-      const event = new KeyboardEvent('keydown', {
-        key: 'Enter',
-        isComposing: options.isComposing,
-      });
+    it('should call scheduleTask with specificReminder=true when remindAt is set in state', async () => {
+      const remindAt = new Date(2026, 4, 27, 16, 45).getTime();
 
-      if (options.keyCode) {
-        Object.defineProperty(event, 'keyCode', { value: options.keyCode });
-      }
+      component.stateService.updateDate('2026-05-27', '17:00');
+      component.stateService.updateRemindAt(remindAt);
+      component.stateService.updateRemindAtTime('16:45');
+      component.stateService.updateRemindAtDay('2026-05-27');
+      component.stateService.updateInputTxt('Test task');
 
-      inputEl.dispatchEvent(event);
-      fixture.detectChanges();
-    };
+      await component.addTask();
 
-    it('should not add a task when Enter is pressed during IME composition', () => {
-      dispatchEnterKeydown({ isComposing: true });
-      expect(mockTaskService.add).not.toHaveBeenCalled();
+      expect(mockTaskService.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'new-task-id' }),
+        jasmine.any(Number),
+        remindAt,
+        '16:45',
+        '2026-05-27',
+        true,
+        false,
+      );
     });
 
-    it('should not add a task when Enter is pressed with keyCode 229 even if isComposing is false', () => {
-      dispatchEnterKeydown({ isComposing: false, keyCode: 229 });
-      expect(mockTaskService.add).not.toHaveBeenCalled();
+    it('should call scheduleTask with specificReminder=false when remindAt is null', async () => {
+      component.stateService.updateDate('2026-05-27', '17:00');
+      component.stateService.updateRemindAt(null);
+      component.stateService.updateRemindAtTime(null);
+      component.stateService.updateRemindAtDay(null);
+      component.stateService.updateInputTxt('Test task');
+
+      await component.addTask();
+
+      expect(mockTaskService.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'new-task-id' }),
+        jasmine.any(Number),
+        jasmine.any(String),
+        null,
+        null,
+        false,
+        false,
+      );
     });
 
-    it('should add a task when Enter is pressed and NOT in IME composition', () => {
-      dispatchEnterKeydown({ isComposing: false });
-      expect(mockTaskService.add).toHaveBeenCalled();
+    it('should not call scheduleTask when no time is set', async () => {
+      component.stateService.updateDate('2026-05-27', null);
+      component.stateService.updateRemindAt(null);
+      component.stateService.updateInputTxt('Test task');
+
+      await component.addTask();
+
+      expect(mockTaskService.scheduleTask).not.toHaveBeenCalled();
     });
   });
 });

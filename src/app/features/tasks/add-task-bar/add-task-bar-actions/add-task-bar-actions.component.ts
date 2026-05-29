@@ -201,7 +201,7 @@ export class AddTaskBarActionsComponent {
           this.stateService.updateRemindAtTime(result.reminderTime);
           this.stateService.updateRemindAtDay(result.reminderDate);
         } else if (result.remindOption) {
-          this.stateService.updateRemindAt(result.remindOption);
+          this.stateService.updateRemindAt(null);
           this.stateService.updateRemindAtTime(null);
           this.stateService.updateRemindAtDay(null);
         } else {

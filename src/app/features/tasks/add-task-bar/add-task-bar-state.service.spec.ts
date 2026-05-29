@@ -624,5 +624,101 @@ describe('AddTaskBarStateService', () => {
       expect(service.state().date).toBe('2024-01-15');
       expect(service.state().estimate).toBe(3600000);
     });
+
+    it('should clear remindAt after reset', () => {
+      const remindAt = new Date(2026, 4, 27, 16, 45).getTime();
+      service.updateRemindAt(remindAt);
+
+      service.resetAfterAdd();
+
+      expect(service.state().remindAt).toBe(null);
+    });
+
+    it('should clear remindAtTime and remindAtDay after reset', () => {
+      service.updateRemindAtTime('16:45');
+      service.updateRemindAtDay('2026-05-27');
+
+      service.resetAfterAdd();
+
+      expect(service.state().remindAtTime).toBe(null);
+      expect(service.state().remindAtDay).toBe(null);
+    });
+  });
+
+  describe('updateRemindAt', () => {
+    it('should update remindAt in state', () => {
+      const remindAt = new Date(2026, 4, 27, 16, 45).getTime();
+
+      service.updateRemindAt(remindAt);
+
+      expect(service.state().remindAt).toBe(remindAt);
+    });
+
+    it('should clear remindAt', () => {
+      const remindAt = new Date(2026, 4, 27, 16, 45).getTime();
+      service.updateRemindAt(remindAt);
+
+      service.updateRemindAt(null);
+
+      expect(service.state().remindAt).toBe(null);
+    });
+
+    it('should preserve other fields in state', () => {
+      const remindAt = new Date(2026, 4, 27, 16, 45).getTime();
+      service.updateProjectId('project-1');
+      service.updateDate('2026-05-27', '17:00');
+      service.updateEstimate(1800000);
+
+      service.updateRemindAt(remindAt);
+
+      expect(service.state().projectId).toBe('project-1');
+      expect(service.state().date).toBe('2026-05-27');
+      expect(service.state().time).toBe('17:00');
+      expect(service.state().estimate).toBe(1800000);
+    });
+
+    it('remindAt should start as null in initial state', () => {
+      expect(service.state().remindAt).toBe(null);
+    });
+  });
+
+  describe('updateRemindAtTime', () => {
+    it('should update remindAtTime in state', () => {
+      service.updateRemindAtTime('16:45');
+
+      expect(service.state().remindAtTime).toBe('16:45');
+    });
+
+    it('should clear remindAtTime when null passed', () => {
+      service.updateRemindAtTime('16:45');
+
+      service.updateRemindAtTime(null);
+
+      expect(service.state().remindAtTime).toBe(null);
+    });
+
+    it('should start as null in initial state', () => {
+      expect(service.state().remindAtTime).toBe(null);
+    });
+  });
+
+  describe('updateRemindAtDay', () => {
+    it('should update remindAtDay in state', () => {
+      service.updateRemindAtDay('2026-05-27');
+
+      expect(service.state().remindAtDay).toBe('2026-05-27');
+    });
+
+    it('should clear remindAtDay when null passed', () => {
+      service.updateRemindAtDay('2026-05-27');
+
+      service.updateRemindAtDay(null);
+
+      expect(service.state().remindAtDay).toBe(null);
+    });
+
+    it('should start as null in initial state', () => {
+      expect(service.state().remindAtDay).toBe(null);
+    });
   });
 });

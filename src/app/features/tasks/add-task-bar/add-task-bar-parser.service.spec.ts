@@ -137,6 +137,8 @@ describe('AddTaskBarParserService', () => {
           cleanText: null,
           remindOption: null,
           remindAt: null,
+          remindAtTime: null,
+          remindAtDay: null,
           attachments: [],
           repeatQuickSetting: null,
         };
@@ -176,6 +178,8 @@ describe('AddTaskBarParserService', () => {
           cleanText: null,
           remindOption: null,
           remindAt: null,
+          remindAtTime: null,
+          remindAtDay: null,
           attachments: [],
           repeatQuickSetting: null,
         };
@@ -212,6 +216,8 @@ describe('AddTaskBarParserService', () => {
           cleanText: null,
           remindOption: null,
           remindAt: null,
+          remindAtTime: null,
+          remindAtDay: null,
           attachments: [],
           repeatQuickSetting: null,
         };
@@ -634,6 +640,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -670,6 +678,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -708,6 +718,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -744,6 +756,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -779,6 +793,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -898,6 +914,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -933,6 +951,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -968,6 +988,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -1001,6 +1023,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -1035,6 +1059,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -1079,6 +1105,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -1108,6 +1136,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -1157,6 +1187,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };
@@ -1200,6 +1232,8 @@ describe('AddTaskBarParserService', () => {
         cleanText: null,
         remindOption: null,
         remindAt: null,
+        remindAtTime: null,
+        remindAtDay: null,
         attachments: [],
         repeatQuickSetting: null,
       };

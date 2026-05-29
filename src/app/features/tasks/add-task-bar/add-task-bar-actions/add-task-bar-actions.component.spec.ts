@@ -97,6 +97,8 @@ describe('AddTaskBarActionsComponent', () => {
       'updateEstimate',
       'updateRemindOption',
       'updateRemindAt',
+      'updateRemindAtTime',
+      'updateRemindAtDay',
       'clearDate',
       'clearTags',
       'clearEstimate',
@@ -1001,6 +1003,73 @@ describe('AddTaskBarActionsComponent', () => {
       component.openScheduleDialog();
 
       expect(mockStateService.updateDate).toHaveBeenCalledWith('2025-01-01', '00:00');
+    });
+  });
+
+  describe('openScheduleDialog - reminder handling', () => {
+    it('should get correct remindAt from reminderDate and reminderTime', () => {
+      const reminderDate = '2026-05-27';
+      const reminderTime = '16:45';
+      const expectedRemindAt = new Date(`${reminderDate}T${reminderTime}`).getTime();
+
+      const mockResult = {
+        date: new Date('2026-05-27'),
+        time: '17:00',
+        remindOption: null,
+        reminderDate,
+        reminderTime,
+      };
+      mockDialogRef.afterClosed.and.returnValue(of(mockResult));
+
+      component.openScheduleDialog();
+
+      expect(mockStateService.updateRemindAt).toHaveBeenCalledWith(expectedRemindAt);
+      expect(mockStateService.updateRemindAtTime).toHaveBeenCalledWith(reminderTime);
+      expect(mockStateService.updateRemindAtDay).toHaveBeenCalledWith(reminderDate);
+    });
+
+    it('Should store null in remindAt when no reminderDate', () => {
+      const mockResult = {
+        date: new Date('2026-05-27'),
+        time: '17:00',
+        remindOption: null,
+        reminderDate: null,
+        reminderTime: '16:45',
+      };
+      mockDialogRef.afterClosed.and.returnValue(of(mockResult));
+
+      component.openScheduleDialog();
+
+      expect(mockStateService.updateRemindAt).toHaveBeenCalledWith(null);
+      expect(mockStateService.updateRemindAtTime).toHaveBeenCalledWith(null);
+      expect(mockStateService.updateRemindAtDay).toHaveBeenCalledWith(null);
+    });
+
+    it('Should store null in remindAt when no reminderTime', () => {
+      const mockResult = {
+        date: new Date('2026-05-27'),
+        time: '17:00',
+        remindOption: null,
+        reminderDate: '2026-05-27',
+        reminderTime: null,
+      };
+      mockDialogRef.afterClosed.and.returnValue(of(mockResult));
+
+      component.openScheduleDialog();
+
+      expect(mockStateService.updateRemindAt).toHaveBeenCalledWith(null);
+      expect(mockStateService.updateRemindAtTime).toHaveBeenCalledWith(null);
+      expect(mockStateService.updateRemindAtDay).toHaveBeenCalledWith(null);
+    });
+
+    it('should not call updateRemindAt if dialog is canceled', () => {
+      mockDialogRef.afterClosed.and.returnValue(of(false));
+
+      component.openScheduleDialog();
+
+      expect(mockStateService.updateRemindAt).not.toHaveBeenCalled();
+      expect(mockStateService.updateRemindAtTime).not.toHaveBeenCalled();
+      expect(mockStateService.updateRemindAtDay).not.toHaveBeenCalled();
     });
   });
 });

@@ -156,6 +156,9 @@ export class AddTaskBarStateService {
       cleanText: null,
       attachments: [],
       repeatQuickSetting: null,
+      remindAt: null,
+      remindAtTime: null,
+      remindAtDay: null,
     }));
     this.inputTxt.set('');
     // Keep isAutoDetected as is to preserve project selection

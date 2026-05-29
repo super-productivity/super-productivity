@@ -270,7 +270,9 @@ describe('DialogScheduleTaskComponent', () => {
           subTaskIds: [],
         }),
         expectedDate.getTime(),
-        TaskReminderOptionId.AtStart,
+        jasmine.any(String),
+        null,
+        null,
         false,
         false,
       );
@@ -497,6 +499,66 @@ describe('DialogScheduleTaskComponent', () => {
       expect(selectedDate.getMonth()).toBe(originalDate.getMonth());
       expect(selectedDate.getDate()).toBe(originalDate.getDate());
       expect(component.selectedTime).toBe('14:45');
+    });
+  });
+
+  describe('ngAfterViewInit - reminder initialization', () => {
+    it('should initialize selectedReminderTime and selectedReminderDate from remindAtTime and remindAtDay', async () => {
+      const mockTask = {
+        id: 'taskWithReminder',
+        title: 'Task With Reminder',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: Date.now(),
+        subTaskIds: [],
+        dueWithTime: new Date(2025, 5, 15, 17, 0, 0).getTime(),
+        remindAtTime: '14:30',
+        remindAtDay: '2025-06-15',
+      } as unknown as TaskCopy;
+
+      component.data = { task: mockTask };
+      component.task = mockTask;
+      fixture.detectChanges();
+
+      await component.ngAfterViewInit();
+
+      expect(component.selectedReminderTime).toBe('14:30');
+      expect(component.selectedReminderDate).toBe('2025-06-15');
+    });
+
+    it('should call scheduleTask with selectedReminderCfgId when no specific reminder is set', async () => {
+      component.task = {
+        id: 'task123',
+        title: 'Test Task',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: 1640995200000,
+        subTaskIds: [],
+      } as TaskCopy;
+      component.selectedDate = new Date(2025, 5, 15);
+      component.selectedTime = '17:00';
+
+      await component.submit();
+
+      expect(taskServiceSpy.scheduleTask).toHaveBeenCalledWith(
+        jasmine.any(Object),
+        jasmine.any(Number),
+        jasmine.any(String),
+        null,
+        null,
+        false,
+        false,
+      );
     });
   });
 });

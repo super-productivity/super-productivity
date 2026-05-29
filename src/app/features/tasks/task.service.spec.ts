@@ -565,6 +565,8 @@ describe('TaskService', () => {
         task,
         due,
         remindTime: TaskReminderOptionId.AtStart,
+        remindAtTime: null,
+        remindAtDay: null,
         specificReminder: false,
         isMoveToBacklog: false,
       });
@@ -868,6 +870,87 @@ describe('TaskService', () => {
     });
   });
 
+  describe('scheduleTask - specificReminder', () => {
+    it('should pass remindAt directly when specificReminder is true', () => {
+      const task = createMockTask('task-1');
+      const due = Date.now() + 3600000;
+      const remindAt = due - 900000;
+
+      service.scheduleTask(task, due, remindAt, null, null, true);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.scheduleTaskWithTime.type,
+          dueWithTime: due,
+          remindAt: remindAt,
+        }),
+      );
+    });
+
+    it('should calculate remindAt with remindOptionToMilliseconds when specificReminder is false', () => {
+      const task = createMockTask('task-1');
+      const due = Date.now() + 3600000;
+
+      service.scheduleTask(task, due, TaskReminderOptionId.AtStart, null, null, false);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.scheduleTaskWithTime.type,
+          dueWithTime: due,
+          remindAt: due,
+        }),
+      );
+    });
+  });
+
+  describe('reScheduleTask - specificReminder', () => {
+    it('should pass remindAt directly when specificReminder is true', () => {
+      const task = createMockTask('task-1');
+      const due = Date.now() + 3600000;
+      const remindAt = due - 900000;
+
+      service.reScheduleTask({
+        task,
+        due,
+        remindTime: remindAt,
+        remindAtTime: null,
+        remindAtDay: null,
+        specificReminder: true,
+        isMoveToBacklog: false,
+      });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.reScheduleTaskWithTime.type,
+          dueWithTime: due,
+          remindAt: remindAt,
+        }),
+      );
+    });
+
+    it('should calculate remindAt with remindOptionToMilliseconds when specificReminder is false', () => {
+      const task = createMockTask('task-1');
+      const due = Date.now() + 3600000;
+
+      service.reScheduleTask({
+        task,
+        due,
+        remindTime: TaskReminderOptionId.AtStart,
+        remindAtTime: null,
+        remindAtDay: null,
+        specificReminder: false,
+        isMoveToBacklog: false,
+      });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.reScheduleTaskWithTime.type,
+          dueWithTime: due,
+          remindAt: due,
+        }),
+      );
+    });
+  });
   // Note: convertToMainTask requires complex selector mocking that doesn't work well
   // with the current test setup. It's better tested via integration tests.
 });

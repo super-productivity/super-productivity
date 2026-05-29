@@ -155,7 +155,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         this.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
       }
 
-      Log.log('BYE', this.data.task.dueWithTime, this.selectedTime);
       if (this.data.task.dueWithTime) {
         // dueWithTime is a UTC timestamp - Date constructor handles timezone conversion automatically
         // Do NOT add timezone offset here as it would double-apply the conversion (fixes #5515)
@@ -175,19 +174,16 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
           ? dateStrToUtcDate(this.plannedDayForTask)
           : null;
       }
-      Log.log('HIIII', this.data.task.remindAtTime, this.selectedReminderTime);
-      Log.log('HIIII2', this.data.task.remindAtDay, this.selectedReminderDate);
       if (this.data.task.remindAtTime) {
         this.selectedReminderTime = this.data.task.remindAtTime;
-        Log.log('HIIII3', this.selectedReminderTime);
       } else {
-        this.selectedReminderTime = this.selectedTime;
+        this.selectedReminderTime = null;
       }
 
       if (this.data.task.remindAtDay) {
         this.selectedReminderDate = this.data.task.remindAtDay;
       } else {
-        this.selectedReminderDate = new Date().toISOString().split('T')[0];
+        this.selectedReminderDate = null;
       }
     } else {
       this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
@@ -368,6 +364,15 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     this.selectedTime = null;
     this.isInitValOnTimeFocus = true;
   }
+  onReminderTimeClear(ev: MouseEvent): void {
+    ev.stopPropagation();
+    this.selectedReminderTime = null;
+  }
+
+  onReminderDateClear(ev: MouseEvent): void {
+    ev.stopPropagation();
+    this.selectedReminderDate = null;
+  }
 
   onTimeFocus(): void {
     Log.log('onTimeFocus');
@@ -393,6 +398,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       Log.err('no selected date');
       return;
     }
+    this._validateAndFixReminderTime();
     // If in select-due-only mode, return the selected values instead of dispatching actions
     if (this.data.isSelectDueOnly) {
       this.close({
@@ -403,10 +409,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         reminderDate: this.selectedReminderDate,
       });
       return;
-    } else {
-      this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
-      this.selectedReminderTime = this.selectedTime;
-      this.selectedReminderDate = new Date().toISOString().split('T')[0];
     }
 
     const newDayDate = new Date(this.selectedDate);
@@ -437,7 +439,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     }
 
     this.close(true);
-    Log.log(this.data.task);
   }
 
   private _handleReminderRemoval(): void {
@@ -459,11 +460,36 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     }
   }
 
+  private _validateAndFixReminderTime(): void {
+    if (
+      !this.selectedReminderDate ||
+      !this.selectedReminderTime ||
+      !this.selectedDate ||
+      !this.selectedTime
+    ) {
+      return;
+    }
+
+    const dueWithTime = new Date(
+      getDateTimeFromClockString(this.selectedTime, this.selectedDate as Date),
+    ).getTime();
+
+    const remindAt = new Date(
+      `${this.selectedReminderDate}T${this.selectedReminderTime}`,
+    ).getTime();
+
+    if (remindAt >= dueWithTime) {
+      this.selectedReminderTime = this.selectedTime;
+      this.selectedReminderDate = getDbDateStr(new Date(this.selectedDate as Date));
+    }
+  }
+
   private _scheduleWithTime(): void {
     // Only schedule if task is provided
     if (!this.data.task) {
       return;
     }
+    this._validateAndFixReminderTime();
 
     const task = this.data.task;
     const newDate = new Date(
