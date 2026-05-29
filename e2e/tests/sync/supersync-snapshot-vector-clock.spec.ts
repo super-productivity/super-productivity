@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import type { Page, Request, Response } from '@playwright/test';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -7,6 +8,107 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+
+// #7810 instrumentation: capture sync network traffic + state for Client A.
+// Captures full response bodies (not truncated) so encrypted op payloads are visible
+// when we need to inspect the failure. `mark()` inserts a divider so the dump can be
+// segmented by phase.
+const attachSyncDebug = (
+  page: Page,
+  label: string,
+): { dump: () => void; clear: () => void; mark: (note: string) => void } => {
+  const events: string[] = [];
+  const onRequest = (req: Request): void => {
+    const url = req.url();
+    if (!url.includes('/api/')) return;
+    const body = req.postData() || '';
+    events.push(
+      `[${label} REQ ${Date.now()}] ${req.method()} ${url} bodyLen=${body.length} body=${body.slice(0, 2000)}`,
+    );
+  };
+  const onResponse = async (res: Response): Promise<void> => {
+    const url = res.url();
+    if (!url.includes('/api/')) return;
+    let body = '';
+    try {
+      body = await res.text();
+    } catch {
+      body = '<unreadable>';
+    }
+    events.push(
+      `[${label} RES ${Date.now()}] ${res.status()} ${url} bodyLen=${body.length} body=${body}`,
+    );
+  };
+  page.on('request', onRequest);
+  page.on('response', onResponse);
+  return {
+    dump: () => {
+      console.log(`===== [${label}] sync network log (${events.length} entries) =====`);
+      for (const e of events) console.log(e);
+      console.log(`===== [${label}] end =====`);
+    },
+    clear: () => {
+      events.length = 0;
+    },
+    mark: (note: string) => {
+      events.push(`[${label} MARK ${Date.now()}] ${note}`);
+    },
+  };
+};
+
+const snapshotSyncState = async (page: Page, label: string): Promise<void> => {
+  try {
+    const state = await page.evaluate(async () => {
+      const seqKeys: Array<[string, string | null]> = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('super_sync_last_server_seq_')) {
+          seqKeys.push([k, localStorage.getItem(k)]);
+        }
+      }
+      // Inspect SUP_OPS IndexedDB if available
+      let idbOpCount: number | string = 'unavailable';
+      let idbLastSeqs: unknown = 'unavailable';
+      try {
+        const dbReq = indexedDB.open('SUP_OPS');
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          dbReq.onsuccess = () => resolve(dbReq.result);
+          dbReq.onerror = () => reject(dbReq.error);
+        });
+        if (db.objectStoreNames.contains('operations')) {
+          const tx = db.transaction('operations', 'readonly');
+          const store = tx.objectStore('operations');
+          const countReq = store.count();
+          idbOpCount = await new Promise<number>((resolve, reject) => {
+            countReq.onsuccess = () => resolve(countReq.result);
+            countReq.onerror = () => reject(countReq.error);
+          });
+          const allReq = store.getAll();
+          const all = await new Promise<unknown[]>((resolve, reject) => {
+            allReq.onsuccess = () => resolve(allReq.result as unknown[]);
+            allReq.onerror = () => reject(allReq.error);
+          });
+          // Dump all ops in IDB — the test creates a small number (≤7) so this is bounded.
+          // The full list lets us see exactly which ops were applied and from which clientId.
+          idbLastSeqs = all.map((entry: any) => ({
+            id: entry?.op?.id,
+            seq: entry?.serverSeq,
+            entityType: entry?.op?.entityType,
+            action: entry?.op?.action,
+            clientId: entry?.op?.clientId,
+          }));
+        }
+        db.close();
+      } catch (e) {
+        idbOpCount = `error: ${(e as Error).message}`;
+      }
+      return { seqKeys, idbOpCount, idbLastSeqs };
+    });
+    console.log(`[${label}] sync state:`, JSON.stringify(state, null, 2));
+  } catch (e) {
+    console.log(`[${label}] snapshotSyncState failed:`, (e as Error).message);
+  }
+};
 
 /**
  * SuperSync Snapshot Vector Clock E2E Tests
@@ -54,6 +156,9 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
     let clientB: SimulatedE2EClient | null = null;
     let clientC: SimulatedE2EClient | null = null;
 
+    let debugA: ReturnType<typeof attachSyncDebug> | null = null;
+    let debugB: ReturnType<typeof attachSyncDebug> | null = null;
+    let testFailed = false;
     try {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
@@ -61,6 +166,7 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       // === Phase 1: Client A creates initial data and syncs ===
       console.log('[SnapshotClock] Phase 1: Client A creates initial data');
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      debugA = attachSyncDebug(clientA.page, 'A');
       await clientA.sync.setupSuperSync(syncConfig);
 
       // Create several tasks to build up operation history
@@ -81,6 +187,7 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       // === Phase 2: Client B joins and makes changes ===
       console.log('[SnapshotClock] Phase 2: Client B joins and makes changes');
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      debugB = attachSyncDebug(clientB.page, 'B');
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
 
@@ -101,9 +208,44 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       await clientB.sync.syncAndWait();
       console.log('[SnapshotClock] Client B created and synced tasks');
 
+      // #7810 instrumentation. NB: this Phase-2 sync is plain A↔B replication.
+      // Server-side snapshot fast-forward (operation-download.service.ts ~L187-214) only
+      // triggers when a SYNC_IMPORT/BACKUP_IMPORT/REPAIR op exists. None has been written
+      // here, so the snapshot optimization is *not* in play at this assertion — the test
+      // name is misleading for this particular failure point. Failures here are about
+      // plain pairwise sync (B's upload durability vs A's download cursor).
+      console.log('[SnapshotClock-DEBUG] === Pre Phase-2 A.syncAndWait ===');
+      await snapshotSyncState(clientA.page, 'A pre-sync');
+      await snapshotSyncState(clientB.page, 'B pre-sync');
+
+      const t0 = Date.now();
+      debugA?.mark(`>>> calling clientA.sync.syncAndWait() at t=${t0}`);
+      debugB?.mark(`>>> A starting syncAndWait at t=${t0}`);
+
       // Client A syncs to get B's changes
       await clientA.sync.syncAndWait();
-      await waitForTask(clientA.page, taskB1);
+
+      const t1 = Date.now();
+      debugA?.mark(
+        `<<< clientA.sync.syncAndWait() returned at t=${t1} (dt=${t1 - t0}ms)`,
+      );
+      console.log(
+        `[SnapshotClock-DEBUG] === Post Phase-2 A.syncAndWait (dt=${t1 - t0}ms) ===`,
+      );
+      await snapshotSyncState(clientA.page, 'A post-sync');
+
+      try {
+        await waitForTask(clientA.page, taskB1);
+      } catch (e) {
+        testFailed = true;
+        console.log(
+          '[SnapshotClock-DEBUG] waitForTask(taskB1) failed — dumping diagnostics',
+        );
+        await snapshotSyncState(clientA.page, 'A on-failure');
+        debugA?.dump();
+        debugB?.dump();
+        throw e;
+      }
       await waitForTask(clientA.page, taskB2);
 
       // === Phase 3: Client C joins fresh (simulates snapshot optimization) ===
@@ -178,6 +320,13 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       expect(countC).toBe(7);
 
       console.log('[SnapshotClock] ✓ All clients converged with 7 tasks each');
+    } catch (e) {
+      if (!testFailed) {
+        console.log('[SnapshotClock-DEBUG] late failure — dumping diagnostics');
+        debugA?.dump();
+        debugB?.dump();
+      }
+      throw e;
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

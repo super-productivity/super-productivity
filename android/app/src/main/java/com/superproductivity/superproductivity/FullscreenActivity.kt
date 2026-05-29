@@ -33,6 +33,7 @@ import com.superproductivity.superproductivity.webview.JavaScriptInterface
 import com.superproductivity.superproductivity.webview.WebHelper
 import com.superproductivity.superproductivity.webview.WebViewBlockActivity
 import com.superproductivity.superproductivity.webview.WebViewCompatibilityChecker
+import com.superproductivity.superproductivity.webview.WebViewRecovery
 import com.superproductivity.superproductivity.webview.WebViewRequestHandler
 import org.json.JSONObject
 
@@ -101,8 +102,9 @@ class FullscreenActivity : AppCompatActivity() {
         }
 
         if (!initWebView()) {
-            showWebViewInitFailure(
+            recoverOrShowWebViewInitFailure(
                 message = "Failed to instantiate WebView",
+                error = null,
                 compatibility = compatibility,
             )
             return
@@ -326,7 +328,30 @@ class FullscreenActivity : AppCompatActivity() {
         if (!WebViewCompatibilityChecker.isLikelyWebViewInitFailure(error)) {
             throw error
         }
-        showWebViewInitFailure(message, error)
+        recoverOrShowWebViewInitFailure(message, error, null)
+    }
+
+    /**
+     * WebView init failures are usually transient, and the user's own workaround is
+     * to relaunch the app — so attempt that automatically once (via [WebViewRecovery])
+     * before surfacing the terminal block screen. [WebViewCompatibilityChecker]
+     * caps this at one relaunch per window so a genuinely broken provider still
+     * reaches the block screen instead of boot-looping. → issue #7518.
+     *
+     * No re-entry guard is needed here (unlike CapacitorMainActivity): every call
+     * site returns immediately, so this fires at most once per onCreate pass.
+     */
+    private fun recoverOrShowWebViewInitFailure(
+        message: String,
+        error: Throwable?,
+        compatibility: WebViewCompatibilityChecker.Result?,
+    ) {
+        if (WebViewCompatibilityChecker.canRetryInitFailure(this)) {
+            Log.w("SP-WebView", "$message - scheduling one-shot WebView recovery relaunch")
+            WebViewRecovery.scheduleRelaunch(this)
+            return
+        }
+        showWebViewInitFailure(message, error, compatibility)
     }
 
     private fun showWebViewInitFailure(

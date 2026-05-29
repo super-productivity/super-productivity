@@ -244,6 +244,7 @@ class WebViewCompatibilityCheckerTest {
         assertEquals(BlockScreenAction.OPEN_WEBVIEW_SETTINGS_WITH_WARNING, config.action)
         assertFalse(config.showTryAnyway)
         assertTrue(config.showSource)
+        assertTrue(config.showRetry)
     }
 
     @Test
@@ -255,6 +256,7 @@ class WebViewCompatibilityCheckerTest {
 
         assertEquals(R.string.webview_init_failure_details_without_provider, config.detailsIntroResId)
         assertFalse(config.showTryAnyway)
+        assertTrue(config.showRetry)
     }
 
     @Test
@@ -269,6 +271,7 @@ class WebViewCompatibilityCheckerTest {
         assertEquals(BlockScreenAction.UPDATE_WEBVIEW, config.action)
         assertTrue(config.showTryAnyway)
         assertFalse(config.showSource)
+        assertFalse(config.showRetry)
     }
 
     // Intent helper data ------------------------------------------------------
@@ -402,6 +405,54 @@ class WebViewCompatibilityCheckerTest {
         val error = RuntimeException("WebView factory failed", cause)
 
         assertFalse(WebViewCompatibilityChecker.isLikelyWebViewInitFailure(error))
+    }
+
+    // init-failure recovery guard --------------------------------------------
+
+    @Test
+    fun `shouldRetryInitFailure allows the first recovery attempt`() {
+        assertTrue(
+            WebViewCompatibilityChecker.shouldRetryInitFailure(
+                lastRetryAt = 0L,
+                now = 1_000L,
+                windowMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `shouldRetryInitFailure blocks a second attempt within the window`() {
+        // The relaunch we just triggered failed again immediately → don't boot-loop.
+        assertFalse(
+            WebViewCompatibilityChecker.shouldRetryInitFailure(
+                lastRetryAt = 1_000L,
+                now = 1_000L + 59_000L,
+                windowMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `shouldRetryInitFailure allows a fresh attempt once the window elapses`() {
+        assertTrue(
+            WebViewCompatibilityChecker.shouldRetryInitFailure(
+                lastRetryAt = 1_000L,
+                now = 1_000L + 60_000L,
+                windowMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `shouldRetryInitFailure allows retry when the wall clock moves backwards`() {
+        // A clock change must not wedge the user on the block screen forever.
+        assertTrue(
+            WebViewCompatibilityChecker.shouldRetryInitFailure(
+                lastRetryAt = 10_000L,
+                now = 5_000L,
+                windowMs = 60_000L,
+            ),
+        )
     }
 
     // parseMajorVersion ------------------------------------------------------

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
- * Unit-test runner for the document-mode plugin.
+ * Unit-test runner for the doc-mode plugin.
  *
  * The plugin has no browser-based test setup — its testable logic is the pure
  * `doc-transform` module. This script transpiles every `*.spec.ts` under

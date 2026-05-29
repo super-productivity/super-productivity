@@ -30,6 +30,17 @@
             android:textSize="14sp" />
 
         <Button
+            android:id="@+id/webview_block_retry"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:backgroundTint="#4285F4"
+            android:text="@string/webview_block_retry"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/webview_block_update"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -44,7 +55,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:backgroundTint="#424242"
+            android:backgroundTint="@color/webview_block_secondary"
             android:text="@string/webview_block_close"
             android:textAllCaps="false"
             android:textColor="#FFFFFF" />

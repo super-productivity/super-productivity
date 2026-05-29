@@ -83,6 +83,7 @@ import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-men
 import { Log, SyncLog } from './app/core/log';
 import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
+import { TaskService } from './app/features/tasks/task.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
@@ -496,6 +497,10 @@ if (IS_IOS_NATIVE) {
     }
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
+        // Dispatch any accumulated tracked time so it is enqueued before the
+        // op-log drain below. iOS suspends the WebView seconds after this, so
+        // both the dispatch and the persist must happen inside this budget.
+        appInjector?.get(TaskService).flushAccumulatedTimeSpent();
         await flushPendingOperations('iOS');
       } catch (e) {
         Log.err('iOS background: operation flush failed', e);

@@ -33,6 +33,15 @@ const config: CapacitorConfig = {
       // as fixed-position elements scrolling with content when the IME is up.
       insetsHandling: 'disable',
     },
+    EdgeToEdge: {
+      // Initial status/navigation bar background color, shown before the theme
+      // service boots and calls EdgeToEdge.set{Status,Navigation}BarColor.
+      // Without this the plugin's overlay views default to transparent, so the
+      // bottom navigation/gesture area shows the bare window background. Dark to
+      // match the most common mobile theme (cf. the ios backgroundColor below).
+      statusBarColor: '#131314',
+      navigationBarColor: '#131314',
+    },
   },
   android: {
     // Android keyboard visibility is handled by JavaScriptInterface. Keeping

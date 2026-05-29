@@ -1,7 +1,7 @@
 # Wire `PluginHooks.PERSISTED_DATA_CHANGED`
 
-**Status:** proposal (post multi-review v2)
-**Date:** 2026-05-23
+**Status:** proposal (post multi-review v6)
+**Date:** 2026-05-23 (v5–v6: 2026-05-27)
 **Trigger:** Multi-review of `199e816479` flagged that document-mode's
 editor goes stale on remote `PLUGIN_USER_DATA` updates because nothing
 notifies the plugin. The hook `PluginHooks.PERSISTED_DATA_UPDATE` is
@@ -26,6 +26,15 @@ Plugins receive a `void` signal and re-call `loadSyncedData()` to get
 fresh data. Rename the enum entry to `PERSISTED_DATA_CHANGED` for
 consistency with sibling hooks (`*_CHANGE`); the rename is free since
 nothing fires the hook today.
+
+**Prerequisite folded in:** widen `PluginHooksService._handlers` from
+`Map<Hooks, Map<pluginId, handler>>` to allow multiple handlers per
+`(hook, pluginId)`. Today `.set()` silently overwrites — so a plugin
+that registers from both its background script and its iframe (the
+document-mode case) loses one of the two registrations to whichever
+runs second. Discovered during the follow-up review (#7752); fixing
+it here keeps the host PR self-contained and unblocks doc-mode's
+adoption without a separate prereq merge.
 
 Estimated 3–4 hours including specs.
 
@@ -66,7 +75,7 @@ type is the bulk wrapper, not `upsertPluginUserData`, so an
 `ofType(upsertPluginUserData)` filter never fires for remote ops. The
 state still changes, so a state-selector subscription does observe it.
 
-> Note: this is a *new pattern* in the codebase. The existing
+> Note: this is a _new pattern_ in the codebase. The existing
 > `PROJECT_LIST_UPDATE` effect at `plugin-hooks.effects.ts:341` is
 > action-based, not selector-based, and is consequently blind to
 > remote project changes (likely a latent bug, not this PR's problem).
@@ -79,9 +88,9 @@ firePersistedDataChanged$ = createEffect(
   () =>
     this.store.pipe(
       select(selectPluginUserDataFeatureState),
-      startWith([] as PluginUserData[]),  // determinism for pairwise
+      startWith([] as PluginUserData[]), // determinism for pairwise
       pairwise(),
-      skipDuringSyncWindow(),             // see "Sync window" below
+      skipDuringSyncWindow(), // see "Sync window" below
       map(([prev, next]) => diffChangedPluginIds(prev, next)),
       filter((ids) => ids.length > 0),
       switchMap((ids) =>
@@ -112,7 +121,7 @@ Encoding is deterministic (gzip + base64; verified — same input →
 identical bytes), so a no-op local write that round-trips through the
 service produces identical `data` strings and is correctly skipped by
 the differ. **No separate dedupe cache is needed.** The differ alone
-suppresses self-echoes from no-op writes; for writes that *do* change
+suppresses self-echoes from no-op writes; for writes that _do_ change
 data, the plugin's own handler firing is harmless and idempotent per
 contract.
 
@@ -138,11 +147,56 @@ yet; revisit if a plugin asks for `SYNC_IMPORTED` explicitly.
 `require-hydration-guard` lint rule will accept `skipDuringSyncWindow()`
 without further action.
 
+### Multiple handlers per `(hook, pluginId)`
+
+`PluginHooksService._handlers` at `plugin-hooks.ts:14` is
+`Map<Hooks, Map<pluginId, PluginHookHandler<any>>>` and
+`registerHookHandler` calls `.set(pluginId, handler)` at line 27 —
+a second registration for the same `(hook, pluginId)` silently
+overwrites the first.
+
+This bites any plugin that registers from two JS contexts under the
+same id. document-mode is the concrete case: `background.ts` runs in
+the host page (registers directly via the host-side bridge) while
+`ui/editor.ts` runs in the iframe (registers via the
+`plugin-iframe.util.ts:622` proxy). Both use pluginId `document-mode`.
+Whichever runs second wipes the other.
+
+Widen to allow multiple handlers per slot:
+
+```ts
+// plugin-hooks.ts
+private _handlers = new Map<Hooks, Map<string, Set<PluginHookHandler<any>>>>();
+
+registerHookHandler<T extends Hooks>(pluginId, hook, handler) {
+  if (!this._handlers.has(hook)) this._handlers.set(hook, new Map());
+  const perPlugin = this._handlers.get(hook)!;
+  if (!perPlugin.has(pluginId)) perPlugin.set(pluginId, new Set());
+  perPlugin.get(pluginId)!.add(handler);
+}
+
+unregisterPluginHooks(pluginId): void {
+  for (const perPlugin of this._handlers.values()) perPlugin.delete(pluginId);
+}
+```
+
+Update `dispatchHook` and `dispatchHookToPlugin` (below) to iterate the
+`Set` rather than calling a single handler. Per-handler timeout +
+catch stays unchanged.
+
+No new public unregister API. `unregisterPluginHooks(pluginId)` already
+clears the whole set for that plugin and is the existing teardown path
+called by `PluginService.deactivatePlugin`. A surgical
+`unregisterHookHandler(pluginId, hook, handler)` was considered for
+iframe-teardown handler cleanup but cut as unused public surface — the
+host accepts a stale postMessage proxy as a 5 s timeout slot today,
+and if that cost ever becomes real, add the method then.
+
 ### Per-plugin dispatch
 
 `PluginHooksService.dispatchHook` (`plugin-hooks.ts:34-57`) currently
 fans out to **all** registered handlers for a hook. For per-plugin
-data, we want only the affected plugin's handler. Add:
+data, we want only the affected plugin's handler(s). Add:
 
 ```ts
 // plugin-hooks.ts
@@ -151,15 +205,18 @@ async dispatchHookToPlugin<T extends Hooks>(
   hook: T,
   payload?: HookPayloadMap[T],
 ): Promise<void> {
-  const handler = this._handlers.get(hook)?.get(pluginId);
-  if (!handler) return;
-  // Same 5 s timeout pattern as dispatchHook.
+  const handlers = this._handlers.get(hook)?.get(pluginId);
+  if (!handlers || handlers.size === 0) return;
+  for (const handler of handlers) {
+    // Same 5 s timeout + catch pattern as dispatchHook.
+  }
 }
 ```
 
 JSDoc both methods so the asymmetry is clear: `dispatchHook` is fan-out
 (task / project / language events affect all plugins); `dispatchHookToPlugin`
-is scoped (data events are per-owner).
+is scoped (data events are per-owner — but still fan out across all
+handlers that plugin registered).
 
 Expose on `PluginService` as `dispatchHookToPlugin(pluginId, hook, payload?)`,
 mirroring the existing `dispatchHook` passthrough at
@@ -204,52 +261,65 @@ In `packages/plugin-api/src/types.ts`:
 Tracked at [super-productivity#7752](https://github.com/super-productivity/super-productivity/issues/7752).
 Blocked on this PR landing.
 
-Scope of the follow-up — surfaced by the v3 multi-review (cut from
-this PR to keep host work small and reviewable):
+Scope (post v6 multi-review — "Option A: banner-only, minimum"):
 
-- **`background.ts`** — register the hook handler, re-run `loadState()`,
-  reconcile `enabledIds` and current-context visibility.
-- **`ui/editor.ts`** — register the hook handler, branch on
-  "current-context doc unchanged / clean editor / dirty editor."
+- **`background.ts`** — register `PERSISTED_DATA_CHANGED`; reconcile
+  `enabledIds`; call `showInWorkContext` / `closeWorkContextView`
+  only when the active context's membership flipped.
+- **`ui/editor.ts`** — register `PERSISTED_DATA_CHANGED`; on fire,
+  `loadSyncedData(docKey(currentCtx.id))` to get the raw stored
+  string; compare to a closure-scoped `lastSeenRemoteData` (also a
+  raw string); if equal noop (self-echo or another context's fire); if
+  different, show a one-button "Remote changes — reload" banner. When
+  `isDocCorrupt === true`, skip the banner and call
+  `setActiveContext(currentCtx)` directly (the corruption banner
+  already says "your saved data is untouched" — taking the remote may
+  be the fix).
+- **`lastSeenRemoteData`** is captured at two points (both as the
+  raw `loadSyncedData` string, not parsed JSON, not editor
+  `getJSON()`):
+  - In `setActiveContext` right after the `loadSyncedData(docKey)`
+    call resolves. This requires routing through `loadSyncedData`
+    directly rather than `loadContextDoc` (which parses internally
+    and discards the raw string), or refactoring `loadContextDoc` to
+    return `{ raw, parsed }`. ~5 LOC persistence-layer change.
+  - In `flushSave` right after `saveContextDoc` resolves, capturing
+    the exact stringified blob just persisted. Same shape change to
+    `saveContextDoc` to return / accept the raw string.
 
-Critical correctness notes for the follow-up implementer (do not lose
-these):
+Why this scope (versus what v3/v4 and even v5 reviewed):
 
-1. **Use the existing dirty signal**, not a new transaction flag.
-   `editor.ts:327` already has `saveTimer !== null || saveInFlight` as
-   the dirty predicate; reuse it. A new flag risks 1-keystroke-shows-banner
-   misfires given `SAVE_THROTTLE_MS = 30_000` (`editor.ts:47`).
-2. **`editor.commands.setContent` destroys selection + history.** A
-   silent swap as written is a stealth cursor-jump bug. Snapshot
-   `editor.state.selection` before and restore after, guarded by
-   doc-size bounds. Or use `replaceWith` against the doc range.
-3. **The hook does not deliver to a not-yet-mounted editor.** When
-   the user is on Project A and Project B updates remotely, then
-   switches to B → editor mounts → registers hook → never receives the
-   update (no replay-on-register). The fix: have `setActiveContext`
-   always call `readBlob()` for the freshly-active context, independent
-   of the hook. The hook only fixes the "remote update lands while the
-   editor is already open on that context" case.
-4. **A bare reload-only banner does not prevent the LWW clobber** — it
-   just makes the user aware. Two real choices, pick one:
-   (a) two-button banner "Reload (discard local) / Keep mine (force-flush
-       and win LWW deliberately)";
-   (b) gate `flushSave` while banner is up — saves pause until user
-       resolves.
-   Recommend (a) — gives the user agency and matches the conflict-resolver
-   mental model.
-5. **Coalesce multiple hook fires** with a ~250 ms trailing timer.
-   Five remote updates in 10 s should not be five silent swaps (each a
-   cursor jump + history wipe even with #2's selection restore).
-6. **Tests:** specs that require driving ProseMirror in `node --test`
-   are blocked — current infrastructure (`doc-nav.spec.ts` etc.) uses
-   hand-rolled `DocLike`, no jsdom/tiptap. Refactor the branch logic
-   into a pure `decideRemoteUpdateAction(remoteDoc, localDoc, isDirty)`
-   function and unit-test that. Manual-verify the actual `setContent`
-   call in the iframe, or add a Playwright E2E.
+- **No silent swap.** Selection preservation across `setContent` is
+  expensive ProseMirror surgery for "idle reader sees content change
+  under them" — Notion / Linear / Figma offline mode use a reload
+  prompt instead.
+- **No "Keep mine" button.** Dismissing the banner and continuing to
+  type already wins LWW on the next throttled save.
+- **No coalesce timer.** Host's deterministic differ suppresses no-op
+  writes; the 30 s save throttle on the writer device bounds real fire
+  rate. The byte-compare absorbs duplicate fires as a noop.
+- **No pre-reload backup** (cut in v6 multi-review). Reload is a
+  deliberate user action with a predictable result — the corruption-
+  banner "your saved data is untouched" ethos does not transfer. A
+  backup nobody finds in the UI is not insurance; it also added a new
+  persisted-key class that syncs cross-device with no GC story.
+- **No pure-function file** (`remote-update.ts` cut in v6). The
+  banner-fire decision is one `!==` and the show/close membership
+  diff is six lines of `Set.has` — inline in the call sites and cover
+  via integration specs.
 
-Estimated ~6 hours for the doc-mode side, of which 2–3 h is the banner
-UX + selection handling.
+Pre-existing invariants the follow-up must preserve (do not re-litigate):
+
+- `setActiveContext` (`editor.ts:344-410`) already calls
+  `loadContextDoc` on every switch — the "mount-race" concern raised
+  in v3 review is already handled. Don't remove the re-read.
+- Dirty predicate `saveTimer !== null || saveInFlight` stays for
+  `flushSaveSync`. Banner shows on byte-diff regardless of dirty.
+
+Estimated ~1.25 hours for the doc-mode side: ~30 min handlers +
+`lastSeenRemoteData` plumbing (including the `loadContextDoc` /
+`saveContextDoc` raw-string change), ~30 min banner + integration
+spec + E2E append.
 
 ## Plugin contract
 
@@ -292,18 +362,22 @@ In `plugin-hooks.spec.ts`:
 8. **`dispatchHookToPlugin` filters correctly.** Registers two
    plugins' handlers; dispatch to one fires only one handler;
    non-registered pluginId is a no-op (no error).
+9. **Multiple handlers per `(hook, pluginId)` all fire.** Register
+   two handlers under the same pluginId+hook; dispatch fires both
+   exactly once. `unregisterPluginHooks` clears the whole set for
+   that pluginId across all hooks. (No per-handler unregister API.)
 
 (Plugin-side specs live in the follow-up issue's PR, not here.)
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| `skipDuringSyncWindow` mis-applied — suppresses legitimate remote ops outside the SYNC_IMPORT window | Verify operator semantics in `src/app/util/skip-during-sync-window.operator.ts` before coding; spec #3 + #5 distinguish the two cases. |
-| Hook reentrancy: handler calls `persistDataSynced`, which triggers another emission | Persistence service already serializes per-plugin via `_commitChain` (`plugin-user-persistence.service.ts:62`); handler's write awaits its own commit. Hook fire is `tap`-based (fire-and-forget), so emissions are not blocked by slow handlers. Ordering across rapid emissions is not guaranteed — document on the contract. |
-| `pairwise` swallows first emission | `startWith([])` prepends an empty array so the first real state IS the second emission and `pairwise` yields `[[], firstState]`. Matches the `onCurrentTaskChange$` pattern at `plugin-hooks.effects.ts:94`. |
-| Plugin uninstall / re-register leaves stale handlers | Existing `unregisterPluginHooks` (`plugin-hooks.ts:65-68`) already clears all hooks per plugin. No additional work. |
-| Cross-tab "self-echo" | Tab B legitimately sees Tab A's write as remote — there is no self-echo to defend against. Spec the case as part of test #3. |
+| Risk                                                                                                 | Mitigation                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skipDuringSyncWindow` mis-applied — suppresses legitimate remote ops outside the SYNC_IMPORT window | Verify operator semantics in `src/app/util/skip-during-sync-window.operator.ts` before coding; spec #3 + #5 distinguish the two cases.                                                                                                                                                                                          |
+| Hook reentrancy: handler calls `persistDataSynced`, which triggers another emission                  | Persistence service already serializes per-plugin via `_commitChain` (`plugin-user-persistence.service.ts:62`); handler's write awaits its own commit. Hook fire is `tap`-based (fire-and-forget), so emissions are not blocked by slow handlers. Ordering across rapid emissions is not guaranteed — document on the contract. |
+| `pairwise` swallows first emission                                                                   | `startWith([])` prepends an empty array so the first real state IS the second emission and `pairwise` yields `[[], firstState]`. Matches the `onCurrentTaskChange$` pattern at `plugin-hooks.effects.ts:94`.                                                                                                                    |
+| Plugin uninstall / re-register leaves stale handlers                                                 | Existing `unregisterPluginHooks` (`plugin-hooks.ts:65-68`) already clears all hooks per plugin. No additional work.                                                                                                                                                                                                             |
+| Cross-tab "self-echo"                                                                                | Tab B legitimately sees Tab A's write as remote — there is no self-echo to defend against. Spec the case as part of test #3.                                                                                                                                                                                                    |
 
 ## Out of scope
 
@@ -332,18 +406,22 @@ In `plugin-hooks.spec.ts`:
 
 ## Implementation order
 
-1. `plugin-hooks.ts` — add `dispatchHookToPlugin`. ~15 LOC + JSDoc.
-2. `plugin.service.ts` — passthrough `dispatchHookToPlugin`. ~5 LOC.
-3. Helper file (`plugin-data-diff.util.ts` or inline in the effects
+1. `plugin-hooks.ts` — widen `_handlers` to `Set<handler>`; update
+   `registerHookHandler`, `dispatchHook`, `unregisterPluginHooks`. ~20
+   LOC.
+2. `plugin-hooks.ts` — add `dispatchHookToPlugin` (iterates Set). ~15
+   LOC + JSDoc on both dispatch methods.
+3. `plugin.service.ts` — passthrough `dispatchHookToPlugin`. ~5 LOC.
+4. Helper file (`plugin-data-diff.util.ts` or inline in the effects
    file) — `diffChangedPluginIds(prev, next): string[]`. Pure. ~20 LOC.
-4. `plugin-hooks.effects.ts` — the effect per "Skeleton" above. ~20 LOC.
-5. `packages/plugin-api/src/types.ts` — rename enum entry; payload to
+5. `plugin-hooks.effects.ts` — the effect per "Skeleton" above. ~20 LOC.
+6. `packages/plugin-api/src/types.ts` — rename enum entry; payload to
    `void`. ~3 LOC.
-6. `packages/plugin-api/README.md` — one paragraph per the snippet
+7. `packages/plugin-api/README.md` — one paragraph per the snippet
    under "API surface changes."
-7. Specs per the test plan.
+8. Specs per the test plan.
 
-Total: ~80 LOC + specs. Realistic estimate **3–4 hours** end to end.
+Total: ~85 LOC + specs. Realistic estimate **3–4 hours** end to end.
 
 ## Changelog
 
@@ -385,3 +463,31 @@ Total: ~80 LOC + specs. Realistic estimate **3–4 hours** end to end.
   3–4 hours. Doc-mode adoption notes preserved in "Follow-up" section
   so the follow-up implementer starts from the multi-reviewed
   insights, not a blank page.
+- 2026-05-27 v5 — multi-review of the doc-mode follow-up plan (#7752)
+  surfaced a host-side handler-collision bug: `_handlers` map keys
+  by `(hook, pluginId)` with a single handler slot, so document-mode's
+  background + iframe registrations clobber each other under the
+  shared pluginId. Folded the fix into this PR (widen to
+  `Set<handler>`) since it's small, in the same file, and blocks any
+  doc-mode adoption regardless of UX direction. Same review rejected
+  the elaborate UX previously sketched in the v3/v4 "Follow-up"
+  section ("Keep mine" promises durability LWW cannot deliver; silent
+  swap costs more than it's worth) — replaced with the leaner
+  "Option A" scope. Estimate revised to 3.5–4.5 h for this host PR;
+  doc-mode follow-up trimmed to ~2 h.
+- 2026-05-27 v6 — second multi-review pass verified all v5 round-1
+  closures and surfaced two new gaps: (a) the proposed
+  `lastSeenRemoteData` capture point ("raw stored blob after
+  `loadContextDoc`") is mechanically impossible because
+  `loadContextDoc` parses and discards the raw string, and editor
+  encoding via `getJSON()` is not byte-stable across the load path
+  (`prepareStoredDoc` mutates chip content against the local task
+  cache); (b) the pre-reload backup adds a cross-device-synced
+  persisted-key class with no GC, no UI to discover the backup, and a
+  load-encoding-dependent double-click race. Resolved by collapsing
+  both: drop the backup entirely; redefine `lastSeenRemoteData` to be
+  the raw `loadSyncedData()` string compared against itself (no
+  editor-side encoding involved). Also cut from this host PR:
+  `unregisterHookHandler` (unused public API surface — host plan
+  explicitly didn't wire iframe-side teardown to call it). Host PR
+  estimate back to 3–4 h; doc-mode follow-up to ~1.25 h.

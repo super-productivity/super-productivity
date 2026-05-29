@@ -1,5 +1,5 @@
 /**
- * Document-Mode background script. Runs once per plugin load in the host
+ * Doc-Mode background script. Runs once per plugin load in the host
  * page context. Responsible for:
  *  - Running the legacy → keyed persistence migration on first load
  *  - Registering the work-context header button
@@ -27,6 +27,7 @@ import {
   migrateToKeyedPersistence,
   saveEnabledCtxIds,
 } from './persistence';
+import { reconcileEnabledIds } from './reconcile-enabled';
 
 declare const PluginAPI: PluginAPI;
 
@@ -53,7 +54,7 @@ const init = async (): Promise<void> => {
   try {
     await migrateToKeyedPersistence(PluginAPI);
   } catch (err) {
-    PluginAPI.log.err('document-mode: migration failed', err);
+    PluginAPI.log.err('doc-mode: migration failed', err);
     // Continue anyway: a partial migration leaves the data in place
     // (corruption guard in persistence.ts) and the next session will retry.
   }
@@ -93,12 +94,12 @@ const onButtonClick = async (ctx: ActiveWorkContext): Promise<void> => {
       return [...set];
     });
   } catch (err) {
-    PluginAPI.log.err('document-mode: failed to persist toggle', err);
+    PluginAPI.log.err('doc-mode: failed to persist toggle', err);
   }
 };
 
 PluginAPI.registerWorkContextHeaderButton({
-  label: 'Document Mode',
+  label: 'Doc Mode',
   icon: 'description',
   showFor: ['PROJECT', 'TODAY'],
   onClick: (ctx) => {
@@ -106,14 +107,23 @@ PluginAPI.registerWorkContextHeaderButton({
   },
 });
 
-// Known gap: no hook for remote PLUGIN_USER_DATA updates. An edit on
-// another device arriving mid-session leaves this script's in-memory
-// `enabledIds` and the iframe editor's per-context doc stale until a
-// context switch or page reload. Acceptable while document-mode is
-// alpha + opt-in per context; revisit if conflicts are reported.
-// Tracked alongside Stage A in docs/plans/2026-05-23-stage-a-keyed-plugin-persistence.md.
+const onPersistedDataChanged = async (): Promise<void> => {
+  // Snapshot `enabledIds` at entry so two interleaved fires can't race on
+  // the closure read between awaits inside `reconcileEnabledIds`.
+  const { next, action } = await reconcileEnabledIds(PluginAPI, enabledIds);
+  enabledIds = next;
+  if (action === 'show') {
+    PluginAPI.showInWorkContext();
+  } else if (action === 'close') {
+    PluginAPI.closeWorkContextView();
+  }
+};
+
 PluginAPI.registerHook(PluginHooks.WORK_CONTEXT_CHANGE, (payload) => {
   onContextChange(payload as WorkContextChangePayload);
+});
+PluginAPI.registerHook(PluginHooks.PERSISTED_DATA_CHANGED, () => {
+  void onPersistedDataChanged();
 });
 
 void init();

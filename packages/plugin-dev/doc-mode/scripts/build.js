@@ -9,7 +9,7 @@ const SRC_DIR = path.join(ROOT_DIR, 'src');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
 async function buildPlugin() {
-  console.log('Building document-mode plugin with esbuild...');
+  console.log('Building doc-mode plugin with esbuild...');
 
   if (fs.existsSync(DIST_DIR)) {
     fs.rmSync(DIST_DIR, { recursive: true });
@@ -25,7 +25,7 @@ async function buildPlugin() {
     platform: 'browser',
     target: 'es2020',
     format: 'iife',
-    globalName: 'DocumentModePlugin',
+    globalName: 'DocModePlugin',
     logLevel: 'info',
     minify: true,
     sourcemap: false,

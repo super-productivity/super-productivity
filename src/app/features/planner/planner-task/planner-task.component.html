@@ -2,6 +2,7 @@
 
 <swipe-block
   [isDone]="task.isDone"
+  (swipeStart)="onSwipeStart()"
   (swipeRight)="toggleTaskDone()"
   (swipeRightTriggered)="onSwipeRightTriggered($event)"
   (swipeLeft)="openContextMenu()"

@@ -2,6 +2,7 @@
 <swipe-block
   [isDone]="t.isDone"
   [canSwipe]="!taskTitleEditEl?.isEditing()"
+  (swipeStart)="onSwipeStart()"
   (swipeRight)="toggleTaskDone()"
   (swipeRightTriggered)="onSwipeRightTriggered($event)"
   (swipeLeft)="openContextMenu()"

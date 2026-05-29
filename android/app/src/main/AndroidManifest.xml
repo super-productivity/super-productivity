@@ -12,6 +12,25 @@
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+  <!--
+    Android 11+ package visibility: without these the PackageManager fallback in
+    WebViewCompatibilityChecker can't read the WebView provider version, so a
+    transient getCurrentWebViewPackage() miss leaves the block screen with no
+    detected version. Listing the providers explicitly keeps us off
+    QUERY_ALL_PACKAGES. → issue #7518.
+    Keep this list in sync with KNOWN_WEBVIEW_PACKAGES in WebViewCompatibilityChecker.kt.
+  -->
+  <queries>
+    <package android:name="com.google.android.webview" />
+    <package android:name="com.android.webview" />
+    <package android:name="com.android.chrome" />
+    <package android:name="com.chrome.beta" />
+    <package android:name="com.chrome.dev" />
+    <package android:name="com.chrome.canary" />
+    <package android:name="com.sec.android.app.sbrowser" />
+    <package android:name="com.huawei.webview" />
+  </queries>
+
   <application
     android:name=".App"
     android:allowBackup="true"

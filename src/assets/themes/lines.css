@@ -138,16 +138,9 @@ body .scheduled-items > .scheduled-item:last-child {
   }
 }
 
-/* === Current task: suppress inherited border === */
-
-/* The base theme paints a dashed accent border around the current task's box —
-   too noisy for a hairline-only list. The task component already renders a
-   progress bar below the title, which is enough indication. */
-body task.isCurrent .box,
-body task.isCurrent.isCurrent.isCurrent.isCurrent.isCurrent .box {
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
+/* === Current task: inherit the default elevated style (accent bg + shadow)
+   from the base theme, same as Zen. Sharp corners still apply via the
+   `border-radius: 0` rule above. === */
 
 /* Planner/board tasks don't render a progress bar — without an indicator the
    running task disappears. Use a faint accent tint instead of a border. */

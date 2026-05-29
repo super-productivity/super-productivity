@@ -21,7 +21,7 @@ export enum PluginHooks {
   CURRENT_TASK_CHANGE = 'currentTaskChange',
   FINISH_DAY = 'finishDay',
   LANGUAGE_CHANGE = 'languageChange',
-  PERSISTED_DATA_UPDATE = 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED = 'persistedDataChanged',
   ACTION = 'action',
   ANY_TASK_UPDATE = 'anyTaskUpdate',
   PROJECT_LIST_UPDATE = 'projectListUpdate',
@@ -166,10 +166,6 @@ export interface LanguageChangePayload {
   [key: string]: unknown;
 }
 
-export interface PersistedDataUpdatePayload {
-  data: string;
-}
-
 export interface ActionPayload {
   action: string;
   payload?: unknown;
@@ -233,7 +229,7 @@ export interface HookPayloadMap {
   [PluginHooks.CURRENT_TASK_CHANGE]: CurrentTaskChangePayload;
   [PluginHooks.FINISH_DAY]: FinishDayPayload;
   [PluginHooks.LANGUAGE_CHANGE]: LanguageChangePayload;
-  [PluginHooks.PERSISTED_DATA_UPDATE]: PersistedDataUpdatePayload;
+  [PluginHooks.PERSISTED_DATA_CHANGED]: void;
   [PluginHooks.ACTION]: ActionPayload;
   [PluginHooks.ANY_TASK_UPDATE]: AnyTaskUpdatePayload;
   [PluginHooks.PROJECT_LIST_UPDATE]: ProjectListUpdatePayload;
@@ -413,6 +409,61 @@ export interface OAuthTokenResult {
   expiresAt: number; // unix ms
 }
 
+export interface PluginNote {
+  id: string;
+  projectId: string | null;
+  isPinnedToToday: boolean;
+  content: string;
+  imgUrl?: string;
+  backgroundColor?: string;
+  created: number;
+  modified: number;
+}
+
+export interface PluginTaskRepeatCfg {
+  id: string;
+  projectId: string | null;
+  title: string | null;
+  tagIds: string[];
+  isPaused: boolean;
+  repeatCycle: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  repeatEvery: number;
+  startDate?: string;
+  startTime?: string;
+  defaultEstimate?: number;
+  monday?: boolean;
+  tuesday?: boolean;
+  wednesday?: boolean;
+  thursday?: boolean;
+  friday?: boolean;
+  saturday?: boolean;
+  sunday?: boolean;
+  lastTaskCreationDay?: string;
+  quickSetting?: string;
+  remindAt?: string;
+}
+
+export interface PluginSimpleCounterFull {
+  id: string;
+  title: string;
+  type: string;
+  isEnabled: boolean;
+  isOn?: boolean;
+  countOnDay: { [day: string]: number };
+}
+
+export interface PluginAppState {
+  readonly tasks: Readonly<{ [id: string]: Readonly<Task> }>;
+  readonly projects: Readonly<{ [id: string]: Readonly<Project> }>;
+  readonly tags: Readonly<{ [id: string]: Readonly<Tag> }>;
+  readonly notes: Readonly<{ [id: string]: Readonly<PluginNote> }>;
+  readonly taskRepeatCfgs: Readonly<{ [id: string]: Readonly<PluginTaskRepeatCfg> }>;
+  readonly simpleCounters: Readonly<{
+    [id: string]: Readonly<PluginSimpleCounterFull>;
+  }>;
+  readonly globalConfig: Readonly<Record<string, unknown>>;
+}
+
 export interface PluginAPI {
   cfg: PluginBaseCfg;
 
@@ -500,6 +551,14 @@ export interface PluginAPI {
   getArchivedTasks(): Promise<Task[]>;
 
   getCurrentContextTasks(): Promise<Task[]>;
+
+  /**
+   * Returns a complete read-only snapshot of the application state including
+   * tasks, projects, tags, notes, task repeat configurations, simple counters
+   * and global config. The snapshot is taken at the moment of the call and
+   * does not update reactively.
+   */
+  getAppState(): Promise<PluginAppState>;
 
   /**
    * Select a task, opening its detail panel in the app's right-hand panel.

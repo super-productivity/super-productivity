@@ -70,27 +70,51 @@ export const saveEnabledCtxIds = async (
 };
 
 /**
- * Read one context's editor doc. Returns null when the entry is missing or
- * unparseable — caller falls back to a seed doc and (in editor.ts) gates
- * saves so the fallback can't overwrite a recoverable original.
+ * Read one context's editor doc. Returns both the raw stored string and the
+ * parsed value so callers can byte-compare against a `lastSeenDocBytes`
+ * snapshot (#7752) without round-tripping through `JSON.stringify` — which
+ * is not byte-stable across `prepareStoredDoc`'s task-cache reshaping.
+ *
+ * `raw` is null when the entry is missing; `parsed` is null when the entry
+ * is missing OR unparseable (caller falls back to a seed doc and, in
+ * editor.ts, gates saves so the fallback can't overwrite the original).
+ * The `raw !== null && parsed === null` shape is "corrupt entry present"
+ * — keep `raw` for the byte-compare invariant but don't try to render it.
  */
-export const loadContextDoc = async (api: PluginAPI, ctxId: string): Promise<unknown> => {
+export const loadContextDoc = async (
+  api: PluginAPI,
+  ctxId: string,
+): Promise<{ raw: string | null; parsed: unknown }> => {
   const raw = await api.loadSyncedData(docKey(ctxId));
-  if (!raw) return null;
+  if (!raw) return { raw: null, parsed: null };
   try {
-    return JSON.parse(raw) as unknown;
+    return { raw, parsed: JSON.parse(raw) as unknown };
   } catch {
-    return null;
+    return { raw, parsed: null };
   }
 };
 
-export const saveContextDoc = async (
+/**
+ * Serialise an editor doc to the exact bytes that will land in storage.
+ * Extracted so `flushSave` and `flushSaveSync` produce byte-identical output
+ * — the self-echo baseline (#7752) compares raw against raw and silently
+ * desyncs if the two paths ever diverge on encoding. Also used by both flush
+ * paths to short-circuit no-op saves (#7815) by comparing the would-be-written
+ * bytes against `lastSeenDocBytes` before dispatching.
+ */
+export const serializeContextDoc = (doc: unknown): string => JSON.stringify(doc);
+
+/**
+ * Persist a pre-serialised raw doc string under `doc:${ctxId}`. The caller
+ * is expected to have already computed the bytes via `serializeContextDoc`
+ * (so a no-op short-circuit against `lastSeenDocBytes` can run before this
+ * is invoked — see editor.ts `flushSave` for #7815).
+ */
+export const persistContextDocRaw = (
   api: PluginAPI,
   ctxId: string,
-  doc: unknown,
-): Promise<void> => {
-  await api.persistDataSynced(JSON.stringify(doc), docKey(ctxId));
-};
+  raw: string,
+): Promise<void> => api.persistDataSynced(raw, docKey(ctxId));
 
 /**
  * One-shot migration from the legacy single-blob shape to keyed entries.

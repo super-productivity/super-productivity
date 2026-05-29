@@ -347,3 +347,93 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
     expect(Log.exportLogHistory()).toContain(updateGlobalConfigSection.type);
   });
 });
+
+describe('PluginBridgeService - getAppState credential redaction', () => {
+  let service: PluginBridgeService;
+  let store: MockStore;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: {} },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+    store = TestBed.inject(MockStore);
+  });
+
+  it('drops sync, misc.unsplashApiKey, and project.issueIntegrationCfgs', async () => {
+    store.setState({
+      tasks: { entities: {}, ids: [] },
+      projects: {
+        entities: {
+          'p-1': {
+            id: 'p-1',
+            title: 'Work',
+            issueIntegrationCfgs: {
+              JIRA: { password: 'JIRA-PWD' },
+              GITLAB: { token: 'GITLAB-TOKEN' },
+            },
+          },
+        },
+        ids: ['p-1'],
+      },
+      tag: { entities: {}, ids: [] },
+      note: { entities: {}, ids: [], todayOrder: [] },
+      taskRepeatCfg: { entities: {}, ids: [] },
+      simpleCounter: { entities: {}, ids: [] },
+      globalConfig: {
+        misc: { isDarkMode: false, unsplashApiKey: 'UNSPLASH-KEY' },
+        sync: {
+          encryptKey: 'ENCRYPT-KEY',
+          webDav: { password: 'WEBDAV-PWD' },
+        },
+      },
+    });
+
+    const snapshot = await service.getAppState();
+    const json = JSON.stringify(snapshot);
+
+    // Sentinels from the seeded credential surfaces must not appear anywhere.
+    expect(json).not.toContain('JIRA-PWD');
+    expect(json).not.toContain('GITLAB-TOKEN');
+    expect(json).not.toContain('UNSPLASH-KEY');
+    expect(json).not.toContain('ENCRYPT-KEY');
+    expect(json).not.toContain('WEBDAV-PWD');
+
+    expect(snapshot.globalConfig.sync).toBeUndefined();
+    expect((snapshot.globalConfig.misc as Record<string, unknown>).unsplashApiKey).toBe(
+      undefined,
+    );
+    expect(
+      (snapshot.projects['p-1'] as Record<string, unknown>).issueIntegrationCfgs,
+    ).toBe(undefined);
+
+    // Non-sensitive data still flows through.
+    expect(snapshot.projects['p-1'].title).toBe('Work');
+    expect((snapshot.globalConfig.misc as Record<string, unknown>).isDarkMode).toBe(
+      false,
+    );
+  });
+});

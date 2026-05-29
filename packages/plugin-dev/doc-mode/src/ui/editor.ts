@@ -1,5 +1,5 @@
 /**
- * Document-Mode editor — runs inside the plugin iframe. Notion-style UX:
+ * Doc-Mode editor — runs inside the plugin iframe. Notion-style UX:
  * inline bubble menu on text selection, block hover gutter with insert
  * (`+`) and grip (`⋮⋮`) buttons, slash menu for inserts and turn-into,
  * and a custom taskRef atom node tied to Super Productivity tasks.
@@ -29,9 +29,11 @@ import {
   type TaskLookup,
 } from '../doc-transform';
 import {
+  docKey,
   loadContextDoc,
   migrateToKeyedPersistence,
-  saveContextDoc,
+  persistContextDocRaw,
+  serializeContextDoc,
 } from '../persistence';
 import { iconSvg } from './icons';
 import * as docNav from './doc-nav';
@@ -88,6 +90,14 @@ let activeContextSeq = 0;
 // (transition absent→present) and avoid re-appending chips the user has
 // already removed.
 let lastSeenTaskIds = new Set<string>();
+// Last raw blob the editor either loaded or wrote for the *active* context,
+// used to byte-compare an incoming PERSISTED_DATA_CHANGED fire against the
+// current baseline (#7752). Must be the raw `loadSyncedData` string — the
+// editor's own `JSON.stringify(getJSON())` is NOT byte-stable across the
+// load path because `prepareStoredDoc` reshapes chip content against the
+// local task cache. Cleared on context switch; refreshed by `setActiveContext`
+// (load) and `flushSave` / `flushSaveSync` (write).
+let lastSeenDocBytes: string | null = null;
 
 /**
  * Safe error log: PluginAPI.log is declared on the type but currently not
@@ -103,7 +113,7 @@ const logErr = (msg: string, err?: unknown): void => {
     // ignore — fall through to console
   }
   // eslint-disable-next-line no-console
-  console.error('[document-mode]', msg, err);
+  console.error('[doc-mode]', msg, err);
 };
 
 /**
@@ -234,13 +244,34 @@ const flushSave = async (): Promise<void> => {
     saveTimer = null;
   }
   if (!currentCtx || !editor) return;
+  // Same guard as scheduleSave + flushSaveSync — never overwrite a doc we
+  // couldn't read. The schedule gate normally prevents flushSave from firing
+  // on a corrupt doc, but corruption can be set between schedule and fire
+  // (e.g. a remote update reload turning up an unparseable blob), so the
+  // guard is repeated here for symmetry.
+  if (isDocCorrupt) return;
+  const savedCtxId = currentCtx.id;
+  // Compute the would-be-written bytes before the await so we can short-circuit
+  // no-op saves (#7815): a typed-then-reverted cycle inside the 30s throttle
+  // window produces bytes byte-identical to the baseline. Skipping here avoids
+  // an unnecessary postMessage round-trip, IDB transaction, and op-log entry.
+  // The baseline is NOT updated on a skip — it already equals these bytes, so
+  // the self-echo invariant is preserved.
+  const raw = serializeContextDoc(stripChipContent(editor.getJSON()));
+  if (raw === lastSeenDocBytes) return;
   saveInFlight = true;
   try {
     // Keyed storage (Stage A): write only this context's doc. No need to
     // read+merge any sibling state — the meta entry (enabledCtxIds) lives
     // in its own LWW-resolved entity owned by background.ts, and sibling
     // contexts each have their own `doc:${ctxId}` entry.
-    await saveContextDoc(PluginAPI, currentCtx.id, stripChipContent(editor.getJSON()));
+    await persistContextDocRaw(PluginAPI, savedCtxId, raw);
+    // Update the self-echo baseline only if we still own this context; a
+    // mid-flight context switch would otherwise stamp the new context's
+    // baseline with the old context's bytes.
+    if (currentCtx && currentCtx.id === savedCtxId) {
+      lastSeenDocBytes = raw;
+    }
   } catch (err) {
     logErr('persistDataSynced failed', err);
   } finally {
@@ -277,7 +308,22 @@ const flushSaveSync = (): void => {
   // Same guard as scheduleSave — never overwrite a doc we couldn't read.
   if (isDocCorrupt) return;
   try {
-    void saveContextDoc(PluginAPI, currentCtx.id, stripChipContent(editor.getJSON()));
+    // Compute first, then short-circuit no-op saves (#7815) before stamping
+    // the baseline — stamping unconditionally would still be correct (the new
+    // value equals the old) but the early return also skips the fire-and-forget
+    // persist dispatch and the op-log entry it produces.
+    const raw = serializeContextDoc(stripChipContent(editor.getJSON()));
+    if (raw === lastSeenDocBytes) return;
+    // Stamp the self-echo baseline BEFORE the dispatch. Asymmetric vs
+    // flushSave, which stamps AFTER `await`: this path is fire-and-forget —
+    // the iframe can be torn down mid-call and the promise never resolves,
+    // so a post-dispatch stamp would silently drop on teardown. Pre-stamping
+    // is safe because the host serialises to the exact same string we compute
+    // here, so an inbound hook caused by this write recognises itself when
+    // matched against `lastSeenDocBytes`. Shared `serializeContextDoc` keeps
+    // the sync + async flush paths byte-equal.
+    lastSeenDocBytes = raw;
+    void persistContextDocRaw(PluginAPI, currentCtx.id, raw);
   } catch (err) {
     logErr('persistDataSynced (sync flush) failed', err);
   }
@@ -321,6 +367,12 @@ const refreshTaskCache = async (): Promise<void> => {
 // corrupt / future-version blob renders as a blank editor, which reads as
 // silent data loss — the banner makes clear the data is safe and untouched.
 let bannerEl: HTMLDivElement | null = null;
+// Sibling banner for the remote-update state (#7752). Kept distinct so the
+// corruption banner and the remote-update banner never share DOM, and so
+// that a remote update arriving while corrupt doesn't overwrite the
+// corruption message (the corrupt path auto-reloads instead — see the hook
+// handler).
+let remoteBannerEl: HTMLDivElement | null = null;
 
 const updateDocStatusBanner = (): void => {
   const message = isDocCorrupt
@@ -339,6 +391,84 @@ const updateDocStatusBanner = (): void => {
     document.body.insertBefore(bannerEl, document.body.firstChild);
   }
   bannerEl.textContent = message;
+};
+
+const removeRemoteUpdateBanner = (): void => {
+  remoteBannerEl?.remove();
+  remoteBannerEl = null;
+};
+
+const showRemoteUpdateBanner = (): void => {
+  if (remoteBannerEl) {
+    // Idempotent on repeat fires — banner text is invariant ("updated on
+    // another device"), so a newer remote arriving while the banner is up
+    // is a noop. Keeps the existing DOM element so focus / scroll position
+    // aren't disturbed. Reload always re-reads the latest bytes regardless
+    // of how many fires we collapsed.
+    return;
+  }
+  remoteBannerEl = document.createElement('div');
+  remoteBannerEl.className = 'doc-banner doc-banner--remote-update';
+  remoteBannerEl.setAttribute('role', 'status');
+
+  const text = document.createElement('span');
+  text.textContent = 'This document was updated on another device. ';
+  remoteBannerEl.appendChild(text);
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = 'Reload';
+  button.addEventListener('click', () => {
+    if (!currentCtx) return;
+    // setActiveContext re-reads the blob, refreshes lastSeenDocBytes via
+    // the load-path capture, and clears the banner via the seq guard +
+    // explicit removal below. Disable the button so a double-click can't
+    // race the in-flight reload.
+    button.disabled = true;
+    void setActiveContext(currentCtx).finally(() => {
+      removeRemoteUpdateBanner();
+    });
+  });
+  remoteBannerEl.appendChild(button);
+
+  document.body.insertBefore(remoteBannerEl, document.body.firstChild);
+};
+
+/**
+ * `PERSISTED_DATA_CHANGED` arrives once per pluginId for any change across
+ * the Stage A keyspace (`meta`, `doc:${ctxId}`, `__meta__`). We re-read the
+ * current context's `doc:` entry and byte-compare against `lastSeenDocBytes`
+ * — equal means "fire was about another key, or this is the host's echo of
+ * our own write" (host's deterministic encoding round-trips identically),
+ * different means a real remote change to *this* doc.
+ *
+ * Skips while the editor is mid-load or unmounted, and short-circuits the
+ * corrupt-doc case to a direct reload (corruption banner already promises
+ * the saved data is untouched — taking the remote may be the fix).
+ */
+const onRemotePersistedDataChanged = async (): Promise<void> => {
+  if (!currentCtx || !editor || isLoadingDoc) return;
+  const ctxId = currentCtx.id;
+  if (isDocCorrupt) {
+    // Short-circuit: re-run the load path. Auto-recovery — if the remote
+    // blob now parses, the corruption flag clears and the user sees the
+    // remote content without having to click anything. Without this branch
+    // the user is stuck on the corruption banner until they manually
+    // disable + re-enable doc mode, even when the remote already fixed the
+    // entry. If it still doesn't parse, the corruption banner is restored.
+    await setActiveContext(currentCtx);
+    return;
+  }
+  // No try/catch — `loadSyncedData` rejecting would just hit the registration
+  // wrapper at `dispatchHookToPlugin` which already catches + logs. Matches
+  // the `loadContextDoc` convention elsewhere in this file.
+  const raw = await PluginAPI.loadSyncedData(docKey(ctxId));
+  // Bail if the user switched contexts during the async read.
+  if (!currentCtx || currentCtx.id !== ctxId) return;
+  // null can come from a missing or empty entry — both indistinguishable
+  // from "this fire wasn't about our doc"; treat equal-to-baseline as noop.
+  if (raw === lastSeenDocBytes) return;
+  showRemoteUpdateBanner();
 };
 
 const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> => {
@@ -377,13 +507,19 @@ const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> =>
   // (a task gaining the TODAY tag, a dueDay being set, etc.).
   lastSeenTaskIds = snapshotInContextTaskIds(taskCache.values(), ctx);
 
-  const stored = await loadContextDoc(PluginAPI, ctx.id);
+  const { raw, parsed } = await loadContextDoc(PluginAPI, ctx.id);
   if (seq !== activeContextSeq) {
     isLoadingDoc = false;
     return;
   }
-  const docJson = stored
-    ? prepareStoredDoc(stored, ctx, lookupTask)
+  // Reset the remote-update baseline + banner for the freshly-active context.
+  // From here on, an incoming PERSISTED_DATA_CHANGED that loads bytes equal to
+  // `raw` is a self-echo (we just read them); a different load is a remote
+  // change since this point.
+  lastSeenDocBytes = raw;
+  removeRemoteUpdateBanner();
+  const docJson = parsed
+    ? prepareStoredDoc(parsed, ctx, lookupTask)
     : buildSeedDoc(ctx, lookupTask);
   try {
     editor.commands.setContent(
@@ -1774,14 +1910,14 @@ const mount = async (): Promise<void> => {
   try {
     await migrateToKeyedPersistence(PluginAPI);
   } catch (err) {
-    logErr('document-mode: migration failed', err);
+    logErr('doc-mode: migration failed', err);
   }
   updateDocStatusBanner();
   const initialCtx = await PluginAPI.getActiveWorkContext();
 
   const root = document.getElementById('editor-root');
   if (!root) {
-    logErr('Document mode: #editor-root not found');
+    logErr('doc-mode: #editor-root not found');
     isMounted = false;
     return;
   }
@@ -1969,6 +2105,9 @@ const mount = async (): Promise<void> => {
   PluginAPI.registerHook(PluginHooks.ANY_TASK_UPDATE, (payload) => {
     onAnyTaskUpdate(payload as AnyTaskUpdatePayload);
   });
+  PluginAPI.registerHook(PluginHooks.PERSISTED_DATA_CHANGED, () => {
+    void onRemotePersistedDataChanged();
+  });
 
   // Flush triggers. `flushSaveSync` is idempotent, so overlap is harmless.
   //
@@ -2010,7 +2149,7 @@ const waitForPluginAPI = (): Promise<void> =>
       if (attempts >= MAX_ATTEMPTS) {
         // eslint-disable-next-line no-console
         console.error(
-          '[document-mode] PluginAPI not injected after',
+          '[doc-mode] PluginAPI not injected after',
           MAX_ATTEMPTS * INTERVAL_MS,
           'ms — giving up',
         );
@@ -2034,7 +2173,7 @@ void waitForPluginAPI()
       const msg = document.createElement('div');
       msg.className = 'doc-error-state';
       msg.textContent =
-        'Document Mode could not connect to Super Productivity. ' +
+        'Doc Mode could not connect to Super Productivity. ' +
         'Try closing and reopening this panel.';
       root.appendChild(msg);
     }
