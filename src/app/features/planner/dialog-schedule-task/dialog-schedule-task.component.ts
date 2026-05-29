@@ -403,6 +403,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         reminderDate: this.selectedReminderDate,
       });
       return;
+    } else {
+      this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
+      this.selectedReminderTime = this.selectedTime;
+      this.selectedReminderDate = new Date().toISOString().split('T')[0];
     }
 
     const newDayDate = new Date(this.selectedDate);

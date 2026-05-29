@@ -15,6 +15,8 @@ export interface AddTaskBarState {
   cleanText: string | null;
   remindOption: TaskReminderOptionId | null;
   remindAt: number | null;
+  remindAtTime: string | null;
+  remindAtDay: string | null;
   attachments: TaskAttachment[];
   repeatQuickSetting: RepeatQuickSetting | null;
 }
@@ -44,6 +46,8 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   cleanText: null,
   remindOption: null,
   remindAt: null,
+  remindAtTime: null,
+  remindAtDay: null,
   attachments: [],
   repeatQuickSetting: null,
 };

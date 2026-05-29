@@ -54,6 +54,14 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({ ...state, remindAt }));
   }
 
+  updateRemindAtTime(remindAtTime: string | null): void {
+    this._taskInputState.update((state) => ({ ...state, remindAtTime }));
+  }
+
+  updateRemindAtDay(remindAtDay: string | null): void {
+    this._taskInputState.update((state) => ({ ...state, remindAtDay }));
+  }
+
   updateEstimate(estimate: number | null): void {
     this._taskInputState.update((state) => ({ ...state, estimate }));
   }
