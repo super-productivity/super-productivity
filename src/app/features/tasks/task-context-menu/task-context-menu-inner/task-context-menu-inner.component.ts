@@ -778,6 +778,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         newDate.getTime(),
         this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
           DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+        null,
+        null,
         false,
       );
     } else {

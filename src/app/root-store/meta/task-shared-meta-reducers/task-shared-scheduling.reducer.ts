@@ -39,6 +39,8 @@ const handleScheduleTaskWithTime = (
   task: { id: string; projectId?: string | null },
   dueWithTime: number,
   remindAt?: number,
+  remindAtTime?: string | null,
+  remindAtDay?: string | null,
   isMoveToBacklog?: boolean,
 ): RootState => {
   // Check if task already has the same dueWithTime
@@ -61,6 +63,8 @@ const handleScheduleTaskWithTime = (
   if (
     currentTask.dueWithTime === dueWithTime &&
     currentTask.remindAt === remindAt &&
+    currentTask.remindAtTime === remindAtTime &&
+    currentTask.remindAtDay === remindAtDay &&
     isScheduledForToday === isCurrentlyInToday &&
     !isMoveToBacklog
   ) {
@@ -80,6 +84,8 @@ const handleScheduleTaskWithTime = (
           // See: docs/ai/dueDay-dueWithTime-mutual-exclusivity.md
           dueDay: undefined,
           remindAt,
+          remindAtTime: remindAtTime ?? undefined,
+          remindAtDay: remindAtDay ?? undefined,
         },
       },
       state[TASK_FEATURE_NAME],
@@ -308,26 +314,28 @@ const handleMoveTaskInTodayTagList = (
 
 const createActionHandlers = (state: RootState, action: Action): ActionHandlerMap => ({
   [TaskSharedActions.scheduleTaskWithTime.type]: () => {
-    const { task, dueWithTime, remindAt, isMoveToBacklog } = action as ReturnType<
-      typeof TaskSharedActions.scheduleTaskWithTime
-    >;
+    const { task, dueWithTime, remindAt, isMoveToBacklog, remindAtTime, remindAtDay } =
+      (action = action as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>);
     return handleScheduleTaskWithTime(
       state,
       task,
       dueWithTime,
       remindAt,
+      remindAtTime,
+      remindAtDay,
       isMoveToBacklog,
     );
   },
   [TaskSharedActions.reScheduleTaskWithTime.type]: () => {
-    const { task, dueWithTime, remindAt, isMoveToBacklog } = action as ReturnType<
-      typeof TaskSharedActions.reScheduleTaskWithTime
-    >;
+    const { task, dueWithTime, remindAt, isMoveToBacklog, remindAtTime, remindAtDay } =
+      action as ReturnType<typeof TaskSharedActions.reScheduleTaskWithTime>;
     return handleScheduleTaskWithTime(
       state,
       task,
       dueWithTime,
       remindAt,
+      remindAtTime,
+      remindAtDay,
       isMoveToBacklog,
     );
   },

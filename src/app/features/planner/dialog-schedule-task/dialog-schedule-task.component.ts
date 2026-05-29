@@ -141,9 +141,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
   async ngAfterViewInit(): Promise<void> {
     // Handle case when task is provided
-    Log.log(this.data);
     if (this.data.task) {
-      Log.log('hi');
       if (this.data.task.remindAt) {
         if (this.data.task.dueWithTime) {
           this.selectedReminderCfgId = millisecondsDiffToRemindOption(
@@ -157,6 +155,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         this.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
       }
 
+      Log.log('BYE', this.data.task.dueWithTime, this.selectedTime);
       if (this.data.task.dueWithTime) {
         // dueWithTime is a UTC timestamp - Date constructor handles timezone conversion automatically
         // Do NOT add timezone offset here as it would double-apply the conversion (fixes #5515)
@@ -176,15 +175,11 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
           ? dateStrToUtcDate(this.plannedDayForTask)
           : null;
       }
-      Log.log('hi2');
+      Log.log('HIIII', this.data.task.remindAtTime, this.selectedReminderTime);
+      Log.log('HIIII2', this.data.task.remindAtDay, this.selectedReminderDate);
       if (this.data.task.remindAtTime) {
-        this.selectedReminderTime = new Date(
-          this.data.task.remindAtTime,
-        ).toLocaleTimeString('en-GB', {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        });
+        this.selectedReminderTime = this.data.task.remindAtTime;
+        Log.log('HIIII3', this.selectedReminderTime);
       } else {
         this.selectedReminderTime = this.selectedTime;
       }
@@ -327,7 +322,11 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       return;
     }
 
-    if (this.data.task.remindAt) {
+    if (
+      this.data.task.remindAt ||
+      this.data.task.remindAtTime ||
+      this.data.task.remindAtDay
+    ) {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: this.data.task.id,
@@ -394,7 +393,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       Log.err('no selected date');
       return;
     }
-
     // If in select-due-only mode, return the selected values instead of dispatching actions
     if (this.data.isSelectDueOnly) {
       this.close({
@@ -435,6 +433,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     }
 
     this.close(true);
+    Log.log(this.data.task);
   }
 
   private _handleReminderRemoval(): void {
@@ -488,6 +487,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       task,
       newDate.getTime(),
       remindAt,
+      this.selectedReminderTime,
+      this.selectedReminderDate,
       specificReminder,
       false,
     );

@@ -493,7 +493,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
                 task,
                 taskData.dueWithTime!,
                 state.remindAt,
-                true,
+                null,
+                null,
+                false,
                 this.isAddToBacklog(),
               );
             } else {
@@ -501,6 +503,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
                 task,
                 taskData.dueWithTime!,
                 resolvedRemindOption,
+                null,
+                null,
                 false,
                 this.isAddToBacklog(),
               );

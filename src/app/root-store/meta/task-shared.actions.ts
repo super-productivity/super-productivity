@@ -127,6 +127,8 @@ export const TaskSharedActions = createActionGroup({
       task: Task;
       dueWithTime: number;
       remindAt?: number;
+      remindAtTime?: string | null;
+      remindAtDay?: string | null;
       isMoveToBacklog: boolean;
       isSkipAutoRemoveFromToday?: boolean;
     }) => ({
@@ -143,6 +145,8 @@ export const TaskSharedActions = createActionGroup({
       task: Task;
       dueWithTime: number;
       remindAt?: number;
+      remindAtTime?: string | null;
+      remindAtDay?: string | null;
       isMoveToBacklog: boolean;
       isSkipAutoRemoveFromToday?: boolean;
     }) => ({

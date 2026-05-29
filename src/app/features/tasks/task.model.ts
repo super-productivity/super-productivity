@@ -138,7 +138,7 @@ export interface TaskCopy
   doneOn?: number;
   parentId?: string;
   remindAt?: number;
-  remindAtTime?: number;
+  remindAtTime?: string;
   remindAtDay?: string;
   repeatCfgId?: string;
   _hideSubTasksMode?: HideSubTasksMode;
@@ -170,7 +170,7 @@ export interface TaskWithReminder extends Task {
 
 export interface TaskWithSetReminder extends Task {
   remindAt: undefined;
-  remindAtTime?: number;
+  remindAtTime?: string;
   remindAtDay?: string;
 }
 

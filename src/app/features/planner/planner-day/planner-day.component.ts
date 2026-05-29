@@ -165,6 +165,14 @@ export class PlannerDayComponent {
       task.dueWithTime as number,
       task.remindAt,
     );
-    this._taskService.scheduleTask(task, newDate.getTime(), selectedReminderCfgId, false);
+    this._taskService.scheduleTask(
+      task,
+      newDate.getTime(),
+      selectedReminderCfgId,
+      null,
+      null,
+      false,
+      false,
+    );
   }
 }

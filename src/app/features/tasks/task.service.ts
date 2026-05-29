@@ -1027,6 +1027,8 @@ export class TaskService {
     task: Task | TaskWithSubTasks,
     due: number,
     remindTime: TaskReminderOptionId | number,
+    remindAtTime: string | null = null,
+    remindAtDay: string | null = null,
     specificReminder: boolean = false,
     isMoveToBacklog: boolean = false,
   ): void {
@@ -1037,6 +1039,8 @@ export class TaskService {
         remindAt: !specificReminder
           ? remindOptionToMilliseconds(due, remindTime as TaskReminderOptionId)
           : (remindTime as number),
+        remindAtTime: specificReminder ? remindAtTime : null,
+        remindAtDay: specificReminder ? remindAtDay : null,
         isMoveToBacklog,
       }),
     );
@@ -1046,12 +1050,16 @@ export class TaskService {
     task,
     due,
     remindTime,
+    remindAtTime,
+    remindAtDay,
     specificReminder,
     isMoveToBacklog = false,
   }: {
     task: Task;
     due: number;
     remindTime: TaskReminderOptionId | number;
+    remindAtTime: string | null;
+    remindAtDay: string | null;
     specificReminder: boolean;
     isMoveToBacklog: boolean;
   }): void {
@@ -1062,6 +1070,8 @@ export class TaskService {
         remindAt: !specificReminder
           ? remindOptionToMilliseconds(due, remindTime as TaskReminderOptionId)
           : (remindTime as number),
+        remindAtTime: specificReminder ? remindAtTime : null,
+        remindAtDay: specificReminder ? remindAtDay : null,
         isMoveToBacklog,
       }),
     );
