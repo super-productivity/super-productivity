@@ -106,6 +106,10 @@ import {
   REMINDER_FEATURE_NAME,
   reminderReducer,
 } from '../features/reminder/store/reminder.reducer';
+import { UNDO_REDO_FEATURE_KEY } from './root-state';
+import { undoRedoReducer } from './undo-redo/undo-redo.reducer';
+import { UndoRedoSnackEffects } from './undo-redo/undo-redo-snack.effects';
+
 @NgModule({
   declarations: [],
   imports: [
@@ -171,6 +175,9 @@ import {
 
     StoreModule.forFeature(plannerFeature),
     EffectsModule.forFeature([PlannerEffects]),
+
+    StoreModule.forFeature(UNDO_REDO_FEATURE_KEY, undoRedoReducer),
+    EffectsModule.forFeature([UndoRedoSnackEffects]),
 
     StoreModule.forFeature(PLUGIN_USER_DATA_FEATURE_NAME, pluginUserDataReducer),
     StoreModule.forFeature(PLUGIN_METADATA_FEATURE_NAME, pluginMetadataReducer),

@@ -44,6 +44,7 @@ import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creat
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { devError } from '../../../util/dev-error';
 import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
+import { isCompensatingAction } from '../../../op-log/core/persistent-action.interface';
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { clampPastTimedOccurrence } from './clamp-past-timed-occurrence.util';
 
@@ -413,6 +414,7 @@ export class TaskRepeatCfgEffects {
           TaskSharedActions.updateTask,
           TaskSharedActions.deleteTask,
         ),
+        filter((action) => !isCompensatingAction(action)),
         // Ignore delete for parent tasks (no need to sync after parent removed)
         filter((action) => this._isRelevantSubtaskAction(action)),
         // Only consider updates relevant to subtasks or parent content updates
@@ -584,6 +586,7 @@ export class TaskRepeatCfgEffects {
   updateStartDateOnComplete$ = createEffect(() =>
     this._localActions$.pipe(
       ofType(TaskSharedActions.updateTask),
+      filter((action) => !isCompensatingAction(action)),
       filter((a) => a.task.changes.isDone === true),
       switchMap(({ task }) =>
         this._taskService.getByIdOnce$(task.id as string).pipe(

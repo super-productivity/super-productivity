@@ -31,7 +31,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { WorkContextService } from '../../work-context/work-context.service';
-
+import { isCompensatingAction } from '../../../op-log/core/persistent-action.interface';
 import { INBOX_PROJECT } from '../../project/project.const';
 import { devError } from '../../../util/dev-error';
 import { TaskLog } from '../../../core/log';
@@ -51,6 +51,7 @@ export class ShortSyntaxEffects {
   shortSyntax$ = createEffect(() =>
     this._actions$.pipe(
       ofType(TaskSharedActions.addTask, TaskSharedActions.updateTask),
+      filter((action) => !isCompensatingAction(action)),
       filter((action): boolean => {
         if (action.isIgnoreShortSyntax) {
           return false;

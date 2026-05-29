@@ -2,7 +2,7 @@ import { MetaReducer } from '@ngrx/store';
 import { isDevMode } from '@angular/core';
 import { operationCaptureMetaReducer } from '../../op-log/capture/operation-capture.meta-reducer';
 import { bulkOperationsMetaReducer } from '../../op-log/apply/bulk-hydration.meta-reducer';
-import { undoTaskDeleteMetaReducer } from './undo-task-delete.meta-reducer';
+import { undoOperationPayloadMetaReducer } from './undo-operation-payload.meta-reducer';
 import { taskSharedCrudMetaReducer } from './task-shared-meta-reducers/task-shared-crud.reducer';
 import { taskBatchUpdateMetaReducer } from './task-shared-meta-reducers/task-batch-update.reducer';
 import { taskSharedLifecycleMetaReducer } from './task-shared-meta-reducers/task-shared-lifecycle.reducer';
@@ -34,9 +34,9 @@ import { actionLoggerReducer } from './action-logger.reducer';
  * Unwraps bulk dispatches for hydration/sync into individual actions.
  * Must run early so all subsequent meta-reducers see individual actions.
  *
- * ## Phase 3: Undo/Delete Capture
- * Captures task context before deletion for undo functionality.
- * Must run before CRUD operations that actually delete.
+ * ## Phase 3: Undo Payload Capture
+ * Captures operation-specific undo payloads before CRUD reducers mutate state.
+ * Must run before CRUD operations that delete/update/move entities.
  *
  * ## Phase 3.5: Pre-CRUD Entity-Cascade Snapshots
  * Meta-reducers that must read task/project/tag state BEFORE Phase 4
@@ -92,10 +92,10 @@ export const META_REDUCERS: MetaReducer[] = [
   bulkOperationsMetaReducer,
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PHASE 3: UNDO/DELETE CAPTURE
+  // PHASE 3: UNDO PAYLOAD CAPTURE
   // ═══════════════════════════════════════════════════════════════════════════
-  // Captures task context before deletion for undo/restore.
-  undoTaskDeleteMetaReducer,
+  // Captures operation-specific undo payloads for later op-log persistence.
+  undoOperationPayloadMetaReducer,
 
   // sectionSharedMetaReducer must run BEFORE taskSharedCrudMetaReducer because
   // it needs to expand subTaskIds via state.task.entities for the deleteTasks

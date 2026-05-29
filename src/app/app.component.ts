@@ -165,7 +165,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _dataInitStateService = inject(DataInitStateService);
   private _materialIconsLoaderService = inject(MaterialIconsLoaderService);
   readonly onboardingHintService = inject(OnboardingHintService);
-
   private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);

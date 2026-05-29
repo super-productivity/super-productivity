@@ -6,9 +6,12 @@ import { PROJECT_FEATURE_NAME } from '../../features/project/store/project.reduc
 import { TASK_FEATURE_NAME } from '../../features/tasks/store/task.reducer';
 import { TAG_FEATURE_NAME } from '../../features/tag/store/tag.reducer';
 import { Project } from '../../features/project/project.model';
-import { Action, ActionReducer } from '@ngrx/store';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { Log } from '../../core/log';
+import { Action } from '@ngrx/store';
+import type { UndoPayloadBuilder } from './undo-operation-payload.meta-reducer';
+
+export const TASK_DELETE_UNDO_PAYLOAD_TYPE = 'TASK_DELETE';
 
 /**
  * Payload structure for restoring a deleted task.
@@ -38,36 +41,32 @@ export interface RestoreDeletedTaskPayload {
   deletedTaskEntities: Dictionary<Task>;
 }
 
-let lastDeletePayload: RestoreDeletedTaskPayload | null = null;
+export interface TaskDeleteUndoPayload {
+  type: typeof TASK_DELETE_UNDO_PAYLOAD_TYPE;
+  restorePayload: RestoreDeletedTaskPayload;
+}
 
-/**
- * Gets and clears the last captured delete payload.
- * Used by the snackbar effect to dispatch restoreDeletedTask with full data.
- */
-export const getLastDeletePayload = (): RestoreDeletedTaskPayload | null => {
-  const payload = lastDeletePayload;
-  lastDeletePayload = null;
-  return payload;
+export const isTaskDeleteUndoPayload = (
+  payload: unknown,
+): payload is TaskDeleteUndoPayload => {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+
+  const p = payload as Partial<TaskDeleteUndoPayload>;
+  return p.type === TASK_DELETE_UNDO_PAYLOAD_TYPE && !!p.restorePayload?.task?.id;
 };
 
-/**
- * Meta-reducer that captures task state before deletion.
- * This runs before the main reducer, allowing us to capture project/tag context
- * that would be lost after the delete reducer runs.
- *
- * The captured payload is retrieved via getLastDeletePayload() and used
- * by the snackbar effect to dispatch restoreDeletedTask with full data.
- */
-export const undoTaskDeleteMetaReducer = (
-  reducer: ActionReducer<any, any>,
-): ActionReducer<any, any> => {
-  return (state: RootState, action: Action) => {
-    if (action.type === TaskSharedActions.deleteTask.type) {
-      const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
-      lastDeletePayload = captureTaskDeletePayload(state, task);
-    }
-    return reducer(state, action);
-  };
+export const taskDeleteUndoPayloadBuilder: UndoPayloadBuilder = {
+  actionType: TaskSharedActions.deleteTask.type,
+  build: (state, action: Action) => {
+    const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
+
+    return {
+      type: TASK_DELETE_UNDO_PAYLOAD_TYPE,
+      restorePayload: captureTaskDeletePayload(state, task),
+    };
+  },
 };
 
 // =============================================================================
