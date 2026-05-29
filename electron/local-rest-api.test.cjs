@@ -61,19 +61,14 @@ test('isAllInterfaces: 0.0.0.0 is all-interfaces', () => {
   assert.equal(isAllInterfaces('0.0.0.0'), true);
 });
 
-test('isAllInterfaces: :: is all-interfaces', () => {
-  const { isAllInterfaces } = loadModule();
-  assert.equal(isAllInterfaces('::'), true);
-});
-
-test('isAllInterfaces: ::0 is all-interfaces', () => {
-  const { isAllInterfaces } = loadModule();
-  assert.equal(isAllInterfaces('::0'), true);
-});
-
 test('isAllInterfaces: 127.0.0.1 is not all-interfaces', () => {
   const { isAllInterfaces } = loadModule();
   assert.equal(isAllInterfaces('127.0.0.1'), false);
+});
+
+test('isAllInterfaces: :: is not all-interfaces (IPv6 not supported)', () => {
+  const { isAllInterfaces } = loadModule();
+  assert.equal(isAllInterfaces('::'), false);
 });
 
 // --- buildLocalhostAllowedHosts ---------------------------------------------
@@ -131,6 +126,21 @@ test('isAllowedHost: localhost mode rejects attacker hostname', () => {
   assert.equal(isAllowedHost('evil.attacker.com:3876'), false);
 });
 
+test('isAllowedHost: all-interfaces mode accepts local IPv4 address', () => {
+  // Simulate currentHost === '0.0.0.0' by loading the module and invoking
+  // buildAllInterfacesAllowedHosts directly — the function drives the same
+  // allowlist that isAllowedHost uses in all-interfaces mode.
+  const { buildAllInterfacesAllowedHosts } = loadModule();
+  const set = buildAllInterfacesAllowedHosts();
+  assert.ok(set.has('192.168.1.100:3876'), 'LAN IP with port should be allowed');
+  assert.ok(set.has('192.168.1.100'), 'LAN IP without port should be allowed');
+  assert.equal(
+    set.has('evil.attacker.com:3876'),
+    false,
+    'attacker hostname should be rejected',
+  );
+});
+
 // --- resolveHost ------------------------------------------------------------
 
 /** Minimal GlobalConfigState-shaped object */
@@ -180,4 +190,11 @@ test('resolveHost: env override with 0.0.0.0 is valid', () => {
   mockIsIpResult = (_ip) => 4;
   const { resolveHost } = loadModule();
   assert.equal(resolveHost(makeCfg(false, false)), '0.0.0.0');
+});
+
+test('resolveHost: IPv6 env override is rejected, falls back to 127.0.0.1', () => {
+  process.env.SP_LOCAL_REST_API_HOST = '::1';
+  mockIsIpResult = (_ip) => 6;
+  const { resolveHost } = loadModule();
+  assert.equal(resolveHost(makeCfg(true, true)), '127.0.0.1');
 });
