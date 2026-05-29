@@ -563,6 +563,14 @@
         "TASK_NAME": "Task name:",
         "TITLE": "Jira: Update Status"
       },
+      "DIALOG_PICKER": {
+        "TITLE": "Select Jira issue",
+        "PROVIDER_LABEL": "Jira provider",
+        "SEARCH_LABEL": "Search Jira issues",
+        "SEARCH_PLACEHOLDER": "e.g. PROJ-123 or login page",
+        "CANCEL": "Cancel",
+        "NO_PROVIDERS": "No Jira providers configured. Please add a Jira integration in Settings."
+      },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
           "ALL_TIME": "Always use all time spent on task as default",
@@ -638,6 +646,7 @@
       },
       "S": {
         "ADDED_WORKLOG_FOR": "Jira: Added worklog for {{issueKey}}",
+        "ASSIGN_AS_SUBTASK_ERROR": "Jira: Could not find or create the parent Jira task",
         "EXTENSION_NOT_LOADED": "Super Productivity Extension not loaded. Reloading the page may help",
         "INSUFFICIENT_SETTINGS": "Insufficient settings provided for Jira",
         "INVALID_RESPONSE": "Jira: Response contained invalid data",
@@ -655,6 +664,11 @@
         "LOGIN_SUCCESS": "Login successful!",
         "TEST_CREDENTIALS": "Test Credentials",
         "WELCOME_USER": "Welcome {{user}}!"
+      },
+      "UNLOGGED_SUMMARY": {
+        "TITLE": "Jira — unlogged work",
+        "LOG_WORK_BTN": "Log work",
+        "UNLOGGED_TIME": "Unlogged: {{time}}"
       }
     },
     "MARKDOWN_PASTE": {
@@ -1686,7 +1700,10 @@
         "TRACK_TIME": "Start tracking time",
         "TRACK_TIME_STOP": "Pause tracking time",
         "UNSCHEDULE_TASK": "Unschedule task",
-        "UPDATE_ISSUE_DATA": "Update issue data"
+        "UPDATE_ISSUE_DATA": "Update issue data",
+        "LOG_WORK_TO_JIRA": "Log work to Jira",
+        "LOG_TIME_TO_JIRA_TICKET": "Log time to Jira ticket…",
+        "ASSIGN_AS_SUBTASK_OF_JIRA": "Assign as subtask of Jira issue…"
       },
       "D_CONFIRM_DELETE": {
         "MSG": "Are you sure you want to delete the task \"{{title}}\"?",
@@ -1770,7 +1787,8 @@
         "ESTIMATE": "Estimate",
         "TIME_SPENT": "Time Spent",
         "TIME_SPENT_ON": "Time Spent {{date}}",
-        "TITLE": "Duration"
+        "TITLE": "Duration",
+        "SAVE_AND_LOG_TO_JIRA": "Save & log to Jira"
       },
       "D_TIME_FOR_DAY": {
         "ADD_ENTRY_FOR": "Add new entry for {{date}}",

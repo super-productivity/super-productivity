@@ -214,6 +214,33 @@
       {{ T.F.TASK.CMP.UPDATE_ISSUE_DATA | translate }}
     </button>
   }
+  @if (task.issueId && task.issueType === JIRA_TYPE) {
+    <button
+      (click)="logWorkToJira()"
+      mat-menu-item
+    >
+      <mat-icon [svgIcon]="task.issueType | issueIcon"></mat-icon>
+      {{ T.F.TASK.CMP.LOG_WORK_TO_JIRA | translate }}
+    </button>
+  }
+  @if (task.timeSpent > 0 && task.issueType !== JIRA_TYPE) {
+    <button
+      (click)="logTimeToJiraTicket()"
+      mat-menu-item
+    >
+      <mat-icon svgIcon="jira"></mat-icon>
+      {{ T.F.TASK.CMP.LOG_TIME_TO_JIRA_TICKET | translate }}
+    </button>
+  }
+  @if (!task.parentId && !task.subTaskIds.length && task.issueType !== JIRA_TYPE) {
+    <button
+      (click)="assignAsSubtaskOfJiraIssue()"
+      mat-menu-item
+    >
+      <mat-icon svgIcon="jira"></mat-icon>
+      {{ T.F.TASK.CMP.ASSIGN_AS_SUBTASK_OF_JIRA | translate }}
+    </button>
+  }
   @if (
     isAdvancedControls() &&
     !task.parentId &&

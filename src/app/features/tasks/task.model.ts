@@ -68,6 +68,7 @@ export interface IssueFieldsForTask {
   issueTimeTracked?: IssueTaskTimeTracked;
   issuePoints?: number;
   issueLastSyncedValues?: Record<string, unknown>;
+  issueTimeLogged?: number; // ms logged to the linked issue provider via SP; undefined = 0
 }
 
 // Extend the plugin Task type with app-specific fields

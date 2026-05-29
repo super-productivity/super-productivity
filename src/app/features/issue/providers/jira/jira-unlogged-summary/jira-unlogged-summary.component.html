@@ -1,0 +1,24 @@
+@if (pendingTasks().length > 0) {
+  <section class="jira-unlogged-summary">
+    <h3 class="title">{{ T.F.JIRA.UNLOGGED_SUMMARY.TITLE | translate }}</h3>
+    @for (task of pendingTasks(); track task.id) {
+      <div class="summary-row">
+        <span class="task-title">{{ task.title }}</span>
+        <span class="unlogged-time">
+          {{
+            T.F.JIRA.UNLOGGED_SUMMARY.UNLOGGED_TIME
+              | translate: { time: (unloggedMs(task) | msToString) }
+          }}
+        </span>
+        <button
+          mat-stroked-button
+          color="primary"
+          (click)="logWork(task)"
+        >
+          <mat-icon svgIcon="jira"></mat-icon>
+          {{ T.F.JIRA.UNLOGGED_SUMMARY.LOG_WORK_BTN | translate }}
+        </button>
+      </div>
+    }
+  </section>
+}

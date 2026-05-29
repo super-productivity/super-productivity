@@ -36,6 +36,9 @@ import { MatInput } from '@angular/material/input';
 import { KeysPipe } from '../../../ui/pipes/keys.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { take } from 'rxjs/operators';
+import { JiraWorklogService } from '../../issue/providers/jira/jira-worklog.service';
+import { JIRA_TYPE } from '../../issue/issue.const';
 
 @Component({
   selector: 'dialog-time-estimate',
@@ -69,9 +72,11 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   private _taskService = inject(TaskService);
   private _cd = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
+  private readonly _jiraWorklogService = inject(JiraWorklogService);
   data = inject(MAT_DIALOG_DATA);
 
   T: typeof T = T;
+  protected readonly JIRA_TYPE = JIRA_TYPE;
   todayStr: string;
   task: Task;
   taskCopy: TaskCopy;
@@ -102,6 +107,51 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
       timeEstimate: this.taskCopy.timeEstimate,
       timeSpentOnDay: this.timeSpentOnDayCopy,
     });
+  }
+
+  private _taskWithCurrentTime(): Task {
+    const updatedTimeSpent = Object.values(this.timeSpentOnDayCopy).reduce(
+      (sum: number, ms) => sum + ms,
+      0,
+    );
+    return {
+      ...this.task,
+      timeSpentOnDay: this.timeSpentOnDayCopy,
+      timeSpent: updatedTimeSpent,
+    };
+  }
+
+  submitAndLogToJira(): void {
+    const updatedTask = this._taskWithCurrentTime();
+    this.submit();
+    this._jiraWorklogService.openWorklogDialogForTask(updatedTask);
+  }
+
+  logToJiraTicket(): void {
+    const updatedTask = this._taskWithCurrentTime();
+    this.submit();
+    import('../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component')
+      .then(({ DialogJiraIssuePickerComponent }) => {
+        this._matDialog
+          .open(DialogJiraIssuePickerComponent, {
+            restoreFocus: true,
+            data: {},
+          })
+          .afterClosed()
+          .pipe(take(1))
+          .subscribe((result) => {
+            if (!result) return;
+            this._jiraWorklogService.openWorklogDialogForExternalTask(
+              updatedTask,
+              result.issueId,
+              result.issueProviderId,
+              `${result.issueKey} ${result.issueSummary}`,
+            );
+          });
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load Jira issue picker', err);
+      });
   }
 
   showAddForAnotherDayForm(): void {

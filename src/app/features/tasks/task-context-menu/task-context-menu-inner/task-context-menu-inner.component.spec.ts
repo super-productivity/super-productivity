@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { TaskService } from '../../task.service';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { ProjectService } from '../../../project/project.service';
@@ -15,15 +15,27 @@ import { TaskFocusService } from '../../task-focus.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateAdapter } from '@angular/material/core';
 import { of } from 'rxjs';
-import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
+import {
+  selectTaskByIdWithSubTaskData,
+  selectAllTasks,
+} from '../../store/task.selectors';
 import { addSubTask } from '../../store/task.actions';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { JiraApiService } from '../../../issue/providers/jira/jira-api.service';
+import { IssueProviderService } from '../../../issue/issue-provider.service';
+import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
+import type { JiraIssuePickerResult } from '../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.model';
 
 describe('TaskContextMenuInnerComponent', () => {
   let component: TaskContextMenuInnerComponent;
   let fixture: ComponentFixture<TaskContextMenuInnerComponent>;
   let taskService: jasmine.SpyObj<TaskService>;
   let store: MockStore;
+  let matDialog: jasmine.SpyObj<MatDialog>;
+  let issueService: jasmine.SpyObj<IssueService>;
+  let jiraApiService: jasmine.SpyObj<JiraApiService>;
+  let issueProviderService: jasmine.SpyObj<IssueProviderService>;
+  let snackService: jasmine.SpyObj<SnackService>;
 
   beforeEach(async () => {
     taskService = jasmine.createSpyObj('TaskService', [
@@ -32,6 +44,29 @@ describe('TaskContextMenuInnerComponent', () => {
       'currentTaskId',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
+
+    matDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    matDialog.open.and.returnValue({
+      afterClosed: () => of(undefined),
+    } as unknown as MatDialogRef<unknown>);
+
+    issueService = jasmine.createSpyObj('IssueService', [
+      'issueLink',
+      'addTaskFromIssue',
+      'refreshIssueTask',
+    ]);
+    issueService.issueLink.and.resolveTo('');
+    issueService.addTaskFromIssue.and.resolveTo(undefined);
+
+    jiraApiService = jasmine.createSpyObj('JiraApiService', ['getReducedIssueById$']);
+    jiraApiService.getReducedIssueById$.and.returnValue(of({ id: 'JIRA-123' } as any));
+
+    issueProviderService = jasmine.createSpyObj('IssueProviderService', ['getCfgOnce$']);
+    issueProviderService.getCfgOnce$.and.returnValue(
+      of({ host: 'https://jira.example.com' } as any),
+    );
+
+    snackService = jasmine.createSpyObj('SnackService', ['open']);
 
     await TestBed.configureTestingModule({
       imports: [
@@ -46,12 +81,9 @@ describe('TaskContextMenuInnerComponent', () => {
           provide: TaskRepeatCfgService,
           useValue: { getTaskRepeatCfgById$: () => of(null) },
         },
-        { provide: MatDialog, useValue: { open: () => ({ afterClosed: () => of() }) } },
-        {
-          provide: IssueService,
-          useValue: { issueLink: () => Promise.resolve('') },
-        },
-        { provide: SnackService, useValue: {} },
+        { provide: MatDialog, useValue: matDialog },
+        { provide: IssueService, useValue: issueService },
+        { provide: SnackService, useValue: snackService },
         {
           provide: ProjectService,
           useValue: {
@@ -70,10 +102,15 @@ describe('TaskContextMenuInnerComponent', () => {
         { provide: WorkContextService, useValue: { activeWorkContext$: of({}) } },
         {
           provide: TaskFocusService,
-          useValue: { focusedTaskId: { set: () => {} } },
+          useValue: {
+            focusedTaskId: { set: () => {} },
+            isTaskContextMenuOpen: { set: () => {} },
+          },
         },
         { provide: LocaleDatePipe, useValue: {} },
         { provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 0 } },
+        { provide: JiraApiService, useValue: jiraApiService },
+        { provide: IssueProviderService, useValue: issueProviderService },
       ],
     }).compileComponents();
 
@@ -212,5 +249,170 @@ describe('TaskContextMenuInnerComponent', () => {
 
       expect(getByIdSpy).toHaveBeenCalledWith('t-task-with-{special}-chars');
     }));
+  });
+
+  describe('assignAsSubtaskOfJiraIssue()', () => {
+    const mockTask = {
+      id: 'TASK_ID',
+      title: 'My Task',
+      projectId: 'P1',
+      tagIds: [],
+      subTaskIds: [],
+      issueId: null,
+      issueProviderId: null,
+    } as any;
+
+    const mockPickerResult: JiraIssuePickerResult = {
+      issueId: 'JIRA-123',
+      issueProviderId: 'provider-1',
+      issueKey: 'PROJ-123',
+      issueSummary: 'Fix the bug',
+    };
+
+    const mockCfg = { host: 'https://jira.example.com' } as any;
+
+    const setupDialogWithPickerResult = (
+      pickerResult: JiraIssuePickerResult | undefined,
+    ): void => {
+      matDialog.open.and.returnValue({
+        afterClosed: () => of(pickerResult),
+      } as unknown as MatDialogRef<unknown>);
+    };
+
+    beforeEach(() => {
+      component.task = mockTask;
+      // Reset call counts between tests
+      matDialog.open.calls.reset();
+      issueProviderService.getCfgOnce$.calls.reset();
+      jiraApiService.getReducedIssueById$.calls.reset();
+      issueService.addTaskFromIssue.calls.reset();
+      snackService.open.calls.reset();
+
+      // Default happy-path dialog: returns a picker result
+      setupDialogWithPickerResult(mockPickerResult);
+      // Default: addTaskFromIssue succeeds
+      issueService.addTaskFromIssue.and.resolveTo('JIRA_TASK_ID');
+    });
+
+    const waitForAsyncOperations = async (): Promise<void> => {
+      // Allow dynamic import to resolve, then drain promise/microtask queues
+      // Multiple macrotask yields are needed for the async chain:
+      // dynamic import → afterClosed subscribe → _assignAsSubtask awaits
+      // → getCfgOnce$ firstValueFrom → getReducedIssueById$ firstValueFrom
+      // → addTaskFromIssue → selectAllTasks firstValueFrom → snackService.open
+      for (let i = 0; i < 8; i++) {
+        await new Promise((r) => setTimeout(r, 0));
+        fixture.detectChanges();
+      }
+    };
+
+    it('should open MatDialog when called', async () => {
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(matDialog.open).toHaveBeenCalled();
+    });
+
+    it('should call IssueProviderService.getCfgOnce$ with issueProviderId and JIRA when picker returns a result', async () => {
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(issueProviderService.getCfgOnce$).toHaveBeenCalledWith(
+        mockPickerResult.issueProviderId,
+        'JIRA',
+      );
+    });
+
+    it('should call JiraApiService.getReducedIssueById$ with issueId after picker result', async () => {
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(jiraApiService.getReducedIssueById$).toHaveBeenCalledWith(
+        mockPickerResult.issueId,
+        mockCfg,
+      );
+    });
+
+    it('should dispatch convertToSubTask when addTaskFromIssue returns a task ID', async () => {
+      issueService.addTaskFromIssue.and.resolveTo('JIRA_TASK_ID');
+      spyOn(store, 'dispatch');
+
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.convertToSubTask({
+          task: mockTask,
+          parentId: 'JIRA_TASK_ID',
+        }),
+      );
+    });
+
+    it('should fall back to selectAllTasks scan and dispatch convertToSubTask when addTaskFromIssue returns undefined', async () => {
+      issueService.addTaskFromIssue.and.resolveTo(undefined);
+      const existingJiraTask = {
+        id: 'EXISTING_JIRA_TASK_ID',
+        issueId: mockPickerResult.issueId,
+        issueProviderId: mockPickerResult.issueProviderId,
+      } as any;
+      store.overrideSelector(selectAllTasks, [existingJiraTask]);
+      store.refreshState();
+      spyOn(store, 'dispatch');
+
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.convertToSubTask({
+          task: mockTask,
+          parentId: 'EXISTING_JIRA_TASK_ID',
+        }),
+      );
+    });
+
+    it('should show error snack and not dispatch when jiraTaskId cannot be found', async () => {
+      issueService.addTaskFromIssue.and.resolveTo(undefined);
+      store.overrideSelector(selectAllTasks, []);
+      store.refreshState();
+      spyOn(store, 'dispatch');
+
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR' }),
+      );
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should show error snack and not dispatch when the only matching task in selectAllTasks is itself a subtask', async () => {
+      issueService.addTaskFromIssue.and.resolveTo(undefined);
+      const subtaskMatch = {
+        id: 'EXISTING_JIRA_TASK_ID',
+        issueId: mockPickerResult.issueId,
+        issueProviderId: mockPickerResult.issueProviderId,
+        parentId: 'SOME_PARENT_ID',
+      } as any;
+      store.overrideSelector(selectAllTasks, [subtaskMatch]);
+      store.refreshState();
+      spyOn(store, 'dispatch');
+
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR' }),
+      );
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not call getCfgOnce$ when picker is cancelled (returns undefined)', async () => {
+      setupDialogWithPickerResult(undefined);
+
+      component.assignAsSubtaskOfJiraIssue();
+      await waitForAsyncOperations();
+
+      expect(issueProviderService.getCfgOnce$).not.toHaveBeenCalled();
+    });
   });
 });

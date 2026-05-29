@@ -53,6 +53,7 @@ export enum ActionType {
   TASK_SHARED_RESTORE = '[Task Shared] restoreTask',
   TASK_SHARED_RESTORE_DELETED = '[Task Shared] restoreDeletedTask',
   TASK_SHARED_CONVERT_TO_MAIN = '[Task Shared] convertToMainTask',
+  TASK_SHARED_CONVERT_TO_SUBTASK = '[Task Shared] convertToSubTask',
   TASK_SHARED_SCHEDULE_WITH_TIME = '[Task Shared] scheduleTaskWithTime',
   TASK_SHARED_RESCHEDULE_WITH_TIME = '[Task Shared] reScheduleTaskWithTime',
   TASK_SHARED_UNSCHEDULE = '[Task Shared] unscheduleTask',

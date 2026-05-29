@@ -82,6 +82,29 @@
         {{ T.G.CANCEL | translate }}
       </button>
 
+      @if (task.issueType === JIRA_TYPE) {
+        <button
+          (click)="submitAndLogToJira()"
+          color="primary"
+          mat-stroked-button
+          type="button"
+        >
+          <mat-icon svgIcon="jira"></mat-icon>
+          {{ T.F.TASK.D_TIME.SAVE_AND_LOG_TO_JIRA | translate }}
+        </button>
+      }
+      @if (task.issueType !== JIRA_TYPE && task.timeSpent > 0) {
+        <button
+          (click)="logToJiraTicket()"
+          color="primary"
+          mat-stroked-button
+          type="button"
+        >
+          <mat-icon svgIcon="jira"></mat-icon>
+          {{ T.F.TASK.CMP.LOG_TIME_TO_JIRA_TICKET | translate }}
+        </button>
+      }
+
       <button
         (click)="submit()"
         color="primary"

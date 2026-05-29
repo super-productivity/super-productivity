@@ -57,7 +57,13 @@ import { isTouchActive } from 'src/app/util/input-intent';
 import { T } from 'src/app/t.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Store } from '@ngrx/store';
-import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
+import {
+  selectAllTasks,
+  selectTaskByIdWithSubTaskData,
+} from '../../store/task.selectors';
+import { firstValueFrom } from 'rxjs';
+import { JiraApiService } from '../../../issue/providers/jira/jira-api.service';
+import { IssueProviderService } from '../../../issue/issue-provider.service';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
@@ -65,7 +71,8 @@ import { PlannerActions } from '../../../planner/store/planner.actions';
 import { addSubTask } from '../../../tasks/store/task.actions';
 import { combineDateAndTime } from '../../../../util/combine-date-and-time';
 import { DateAdapter } from '@angular/material/core';
-import { ICAL_TYPE } from '../../../issue/issue.const';
+import { ICAL_TYPE, JIRA_TYPE } from '../../../issue/issue.const';
+import { JiraWorklogService } from '../../../issue/providers/jira/jira-worklog.service';
 import { IssueIconPipe } from '../../../issue/issue-icon/issue-icon.pipe';
 import { showFocusOverlay } from '../../../focus-mode/store/focus-mode.actions';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -79,6 +86,7 @@ import { TaskLog } from '../../../../core/log';
 import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
 import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
+import type { JiraIssuePickerResult } from '../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.model';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -107,6 +115,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
+  private readonly _jiraWorklogService = inject(JiraWorklogService);
+  private readonly _jiraApiService = inject(JiraApiService);
+  private readonly _issueProviderService = inject(IssueProviderService);
   private readonly _elementRef = inject(ElementRef);
   private readonly _snackService = inject(SnackService);
   private readonly _projectService = inject(ProjectService);
@@ -383,6 +394,107 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   updateIssueData(): void {
     this._issueService.refreshIssueTask(this.task, true, true);
+  }
+
+  logWorkToJira(): void {
+    this._jiraWorklogService.openWorklogDialogForTask(this.task);
+  }
+
+  logTimeToJiraTicket(): void {
+    import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component')
+      .then(({ DialogJiraIssuePickerComponent }) => {
+        this._matDialog
+          .open(DialogJiraIssuePickerComponent, {
+            restoreFocus: true,
+            data: {},
+          })
+          .afterClosed()
+          .pipe(take(1))
+          .subscribe((result) => {
+            if (!result) return;
+            this._jiraWorklogService.openWorklogDialogForExternalTask(
+              this.task,
+              result.issueId,
+              result.issueProviderId,
+              `${result.issueKey} ${result.issueSummary}`,
+            );
+          });
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load Jira issue picker', err);
+      });
+  }
+
+  assignAsSubtaskOfJiraIssue(): void {
+    import('../../../issue/providers/jira/dialog-jira-issue-picker/dialog-jira-issue-picker.component')
+      .then(({ DialogJiraIssuePickerComponent }) => {
+        this._matDialog
+          .open(DialogJiraIssuePickerComponent, {
+            restoreFocus: true,
+            data: {},
+          })
+          .afterClosed()
+          .pipe(take(1))
+          .subscribe((result) => {
+            if (!result) return;
+            void this._assignAsSubtask(result).catch((err: unknown) => {
+              console.error('Failed to assign subtask:', err);
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.JIRA.S.ASSIGN_AS_SUBTASK_ERROR,
+              });
+            });
+          });
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load Jira issue picker', err);
+      });
+  }
+
+  private async _assignAsSubtask(result: JiraIssuePickerResult): Promise<void> {
+    // 1. Get Jira provider config
+    const cfg = await firstValueFrom(
+      this._issueProviderService.getCfgOnce$(result.issueProviderId, 'JIRA'),
+    );
+
+    // 2. Fetch full reduced issue data
+    const reducedIssue = await firstValueFrom(
+      this._jiraApiService.getReducedIssueById$(result.issueId, cfg),
+    );
+
+    // 3. Import (or deduplicate) the Jira issue as a task
+    let jiraTaskId = await this._issueService.addTaskFromIssue({
+      issueDataReduced: reducedIssue,
+      issueProviderId: result.issueProviderId,
+      issueProviderKey: 'JIRA',
+    });
+
+    // 4. If already imported, find the existing task by issueId + issueProviderId
+    if (!jiraTaskId) {
+      const allTasks = await firstValueFrom(this._store.select(selectAllTasks));
+      jiraTaskId = allTasks.find(
+        (t) =>
+          t.issueId === result.issueId &&
+          t.issueProviderId === result.issueProviderId &&
+          !t.parentId,
+      )?.id;
+    }
+
+    if (!jiraTaskId) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.JIRA.S.ASSIGN_AS_SUBTASK_ERROR,
+      });
+      return;
+    }
+
+    // 5. Reparent this task as a subtask
+    this._store.dispatch(
+      TaskSharedActions.convertToSubTask({
+        task: this.task,
+        parentId: jiraTaskId,
+      }),
+    );
   }
 
   async deleteTask(): Promise<void> {
@@ -804,4 +916,5 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   protected readonly ICAL_TYPE = ICAL_TYPE;
+  protected readonly JIRA_TYPE = JIRA_TYPE;
 }

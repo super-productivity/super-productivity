@@ -77,6 +77,7 @@ import {
 } from './simple-counter-summary-item/simple-counter-summary-item.component';
 import { MetricService } from '../../features/metric/metric.service';
 import { isWithinYesterdayMargin } from './is-include-yesterday.util';
+import { JiraUnloggedSummaryComponent } from '../../features/issue/providers/jira/jira-unlogged-summary/jira-unlogged-summary.component';
 
 @Component({
   selector: 'daily-summary',
@@ -104,6 +105,7 @@ import { isWithinYesterdayMargin } from './is-include-yesterday.util';
     InlineMarkdownComponent,
     MatIconButton,
     SimpleCounterSummaryItemComponent,
+    JiraUnloggedSummaryComponent,
   ],
   animations: [expandAnimation],
 })

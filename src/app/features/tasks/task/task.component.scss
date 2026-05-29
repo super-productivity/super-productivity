@@ -3,6 +3,22 @@
 @use './task-base';
 @use './task-controls';
 
+.jira-unlogged-badge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  opacity: 0.7;
+  color: var(--c-accent);
+  margin-left: 4px;
+
+  mat-icon {
+    font-size: 12px;
+    width: 12px;
+    height: 12px;
+  }
+}
+
 :host.isDragReady:not(.cdk-drag-placeholder) {
   background: var(--bg-lighter);
   box-shadow: var(--whiteframe-shadow-8dp);
