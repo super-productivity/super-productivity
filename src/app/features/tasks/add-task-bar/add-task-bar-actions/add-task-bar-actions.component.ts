@@ -193,6 +193,14 @@ export class AddTaskBarActionsComponent {
         this.stateService.updateDate(getDbDateStr(result.date), result.time);
         // No UI access to reminder without a time being set
         this.stateService.updateRemindOption(result.remindOption);
+        if (result.reminderDate && result.reminderTime) {
+          const remindAt = new Date(
+            `${result.reminderDate}T${result.reminderTime}`,
+          ).getTime();
+          this.stateService.updateRemindAt(remindAt);
+        } else {
+          this.stateService.updateRemindAt(null);
+        }
       }
       this.refocus.emit();
       window.setTimeout(() => {

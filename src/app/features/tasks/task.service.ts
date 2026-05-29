@@ -1034,7 +1034,7 @@ export class TaskService {
       TaskSharedActions.scheduleTaskWithTime({
         task,
         dueWithTime: due,
-        remindAt: specificReminder
+        remindAt: !specificReminder
           ? remindOptionToMilliseconds(due, remindTime as TaskReminderOptionId)
           : (remindTime as number),
         isMoveToBacklog,
@@ -1059,7 +1059,7 @@ export class TaskService {
       TaskSharedActions.reScheduleTaskWithTime({
         task,
         dueWithTime: due,
-        remindAt: specificReminder
+        remindAt: !specificReminder
           ? remindOptionToMilliseconds(due, remindTime as TaskReminderOptionId)
           : (remindTime as number),
         isMoveToBacklog,

@@ -50,6 +50,10 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({ ...state, remindOption }));
   }
 
+  updateRemindAt(remindAt: number | null): void {
+    this._taskInputState.update((state) => ({ ...state, remindAt }));
+  }
+
   updateEstimate(estimate: number | null): void {
     this._taskInputState.update((state) => ({ ...state, estimate }));
   }

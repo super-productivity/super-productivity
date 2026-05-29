@@ -96,6 +96,7 @@ describe('AddTaskBarActionsComponent', () => {
       'updateDate',
       'updateEstimate',
       'updateRemindOption',
+      'updateRemindAt',
       'clearDate',
       'clearTags',
       'clearEstimate',

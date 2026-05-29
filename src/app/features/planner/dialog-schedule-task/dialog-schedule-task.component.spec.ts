@@ -272,6 +272,7 @@ describe('DialogScheduleTaskComponent', () => {
         expectedDate.getTime(),
         TaskReminderOptionId.AtStart,
         false,
+        false,
       );
     });
 

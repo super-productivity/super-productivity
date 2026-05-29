@@ -488,12 +488,23 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           .getByIdOnce$(taskId)
           .pipe(timeout(1000))
           .subscribe((task) => {
-            this._taskService.scheduleTask(
-              task,
-              taskData.dueWithTime!,
-              resolvedRemindOption,
-              this.isAddToBacklog(),
-            );
+            if (state.remindAt) {
+              this._taskService.scheduleTask(
+                task,
+                taskData.dueWithTime!,
+                state.remindAt,
+                true,
+                this.isAddToBacklog(),
+              );
+            } else {
+              this._taskService.scheduleTask(
+                task,
+                taskData.dueWithTime!,
+                resolvedRemindOption,
+                false,
+                this.isAddToBacklog(),
+              );
+            }
           });
       }
 

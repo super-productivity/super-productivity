@@ -564,7 +564,8 @@ describe('TaskService', () => {
       service.reScheduleTask({
         task,
         due,
-        remindCfg: TaskReminderOptionId.AtStart,
+        remindTime: TaskReminderOptionId.AtStart,
+        specificReminder: false,
         isMoveToBacklog: false,
       });
 
