@@ -159,6 +159,7 @@
         "CALDAV_URL": "CalDAV URL (the base URL)",
         "CALDAV_USER": "Your CalDAV username",
         "IS_ADD_SUB_TASKS": "Also import subtasks when a task is added",
+        "POLL_INTERVAL_MINUTES": "Poll interval (minutes)",
         "TWO_WAY_SYNC_BOTH": "Both (bidirectional)",
         "TWO_WAY_SYNC_NOTES": "Notes / Description sync direction",
         "TWO_WAY_SYNC_OFF": "Off",
