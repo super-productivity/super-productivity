@@ -1,6 +1,17 @@
 # CalDAV VEVENT Expansion — Design Document
 
-> **Status: Planned**
+> **Status: Implemented — via a separate bundled plugin, not by extending the core provider.**
+>
+> Two-way **VEVENT** sync and task→event **time-blocking** shipped in the bundled **"CalDAV Events"**
+> plugin (`packages/plugin-dev/caldav-calendar-provider`), a `type: 'issueProvider'` plugin with
+> `searchIssues`/`getById`/`createIssue`/`updateIssue`/`deleteIssue`, an iCal VEVENT builder plus an
+> RRULE/EXDATE/RECURRENCE-ID-aware reader, PROPFIND calendar discovery, and a working
+> `timeBlock.upsertEvent`/`deleteEvent` (default `pollIntervalMs: 60000`; `allowPrivateNetwork: true`
+> for self-hosters). The **core** CalDAV provider (`src/app/features/issue/providers/caldav/`) remains
+> **VTODO-only**, so a self-hosted household configures the same server twice — the core provider for
+> shared tasks and the bundled plugin for shared events. The original "extend the existing CalDAV
+> provider" approach described below was therefore **not** the path taken; this document is retained for
+> design history.
 
 ## Overview
 
