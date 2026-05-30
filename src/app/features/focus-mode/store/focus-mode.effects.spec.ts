@@ -737,6 +737,29 @@ describe('FocusModeEffects', () => {
             done();
           });
       });
+
+      it('should dispatch only completeFocusSession when isAutoStartFlowtimeBreak is false', (done) => {
+        actions$ = of(actions.endFlowtimeSession({ pausedTaskId: 'task-123' }));
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
+        store.overrideSelector(
+          selectors.selectTimer,
+          createMockTimer({ purpose: 'work', elapsed: 1500000 }),
+        );
+        store.overrideSelector(selectFocusModeConfig, {
+          isAutoStartFlowtimeBreak: false,
+        } as any);
+        store.refreshState();
+
+        strategyFactoryMock.getStrategy.and.returnValue({
+          shouldStartBreakAfterSession: true,
+          getBreakDuration: () => ({ duration: 300000, isLong: false }),
+        });
+
+        effects.offerFlowtimeBreakOnSessionEnd$.pipe(take(1)).subscribe((action) => {
+          expect(action).toEqual(actions.completeFocusSession({ isManual: true }));
+          done();
+        });
+      });
     });
 
     describe('edge cases', () => {

@@ -98,6 +98,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isPauseTrackingDuringBreak: true,
     autoStartFocusOnPlay: false,
     isManualBreakStart: false,
+    isAutoStartFlowtimeBreak: true,
   },
   flowtime: {
     isBreakEnabled: false,

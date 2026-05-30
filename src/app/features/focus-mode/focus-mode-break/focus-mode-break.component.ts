@@ -57,7 +57,9 @@ export class FocusModeBreakComponent {
   });
 
   readonly isBreakPaused = computed(() => this.focusModeService.isSessionPaused());
-  readonly isBreakOffer = computed(() => !this.focusModeService.isSessionRunning());
+  readonly isFlowtime = computed(
+    () => this.focusModeService.mode() === FocusModeMode.Flowtime,
+  );
   readonly isPomodoro = computed(
     () => this.focusModeService.mode() === FocusModeMode.Pomodoro,
   );

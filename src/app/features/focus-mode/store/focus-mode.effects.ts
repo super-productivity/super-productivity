@@ -415,7 +415,8 @@ export class FocusModeEffects {
     ),
   );
 
-  // Effect 3b: Offer Flowtime breaks when user explicitly ends their session
+  // Effect 3b: Auto-start Flowtime breaks when user explicitly ends their session,
+  // unless the user has opted out via isAutoStartFlowtimeBreak.
   // Triggers on endFlowtimeSession — NOT pauseFocusSession (which is fired by
   // sync-stop, idle, and the regular pause button)
   offerFlowtimeBreakOnSessionEnd$ = createEffect(() =>
@@ -424,17 +425,22 @@ export class FocusModeEffects {
       withLatestFrom(
         this.store.select(selectors.selectMode),
         this.store.select(selectors.selectTimer),
+        this.store.select(selectFocusModeConfig),
       ),
-      filter(([_action, mode, timer]) => {
+      filter(([_action, mode, timer, _config]) => {
         if (mode !== FocusModeMode.Flowtime) return false;
         if (timer.purpose !== 'work') return false;
         return true;
       }),
-      switchMap(([action, mode, timer]) => {
+      switchMap(([action, mode, timer, config]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
         const breakInfo = strategy.getBreakDuration(timer.elapsed);
 
-        if (!strategy.shouldStartBreakAfterSession || !breakInfo) {
+        if (
+          !strategy.shouldStartBreakAfterSession ||
+          !breakInfo ||
+          config?.isAutoStartFlowtimeBreak === false
+        ) {
           return [actions.completeFocusSession({ isManual: true })];
         }
 
