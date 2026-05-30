@@ -70,6 +70,9 @@ export interface AndroidInterface {
     isBreak: boolean,
     taskTitle: string | null,
   ): void;
+  // Read back the live focus session for cold-start/resume recovery (#7855).
+  // Returns a JSON string, or 'null' when no focus session is running.
+  getFocusModeElapsed?(): string;
 
   // Native reminder scheduling (snooze handled entirely in background)
   scheduleNativeReminder?(

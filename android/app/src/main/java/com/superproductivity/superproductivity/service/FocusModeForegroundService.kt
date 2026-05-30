@@ -33,15 +33,56 @@ class FocusModeForegroundService : Service() {
         @Volatile
         var isRunning: Boolean = false
             private set
+
+        // Live timer state mirrored into the companion so JavaScriptInterface
+        // can read it back after the WebView is recreated (app reopened from
+        // recents). Mirrors TrackingForegroundService's static-state pattern so
+        // a focus session can be recovered into the Angular store (#7855).
+        // `remainingMs` and `lastUpdateTimestamp` cannot use `private set`
+        // because the tick Runnable (a nested anonymous object) mutates them;
+        // the other three are written only from instance methods, so they keep
+        // `private set`.
+        @Volatile
+        var durationMs: Long = 0
+            private set
+
+        @Volatile
+        var remainingMs: Long = 0
+
+        @Volatile
+        var isBreak: Boolean = false
+            private set
+
+        @Volatile
+        var isPaused: Boolean = false
+            private set
+
+        @Volatile
+        var lastUpdateTimestamp: Long = 0
+
+        /**
+         * Live remaining time (countdown) or elapsed time (Flowtime, where
+         * durationMs is 0 and remainingMs accumulates). Accounts for the time
+         * since the last 1-second tick so a cold-start read stays accurate.
+         *
+         * Named `liveRemainingMs` rather than `getRemainingMs` to avoid a JVM
+         * signature clash with the `remainingMs` property's generated getter.
+         */
+        fun liveRemainingMs(): Long {
+            if (!isRunning || isPaused || lastUpdateTimestamp <= 0) {
+                return remainingMs
+            }
+            val sinceLastTick = System.currentTimeMillis() - lastUpdateTimestamp
+            return if (durationMs > 0) {
+                (remainingMs - sinceLastTick).coerceAtLeast(0)
+            } else {
+                remainingMs + sinceLastTick
+            }
+        }
     }
 
     private var title: String = ""
     private var taskTitle: String? = null
-    private var durationMs: Long = 0
-    private var remainingMs: Long = 0
-    private var isBreak: Boolean = false
-    private var isPaused: Boolean = false
-    private var lastUpdateTimestamp: Long = 0
     private var hasNotifiedCompletion: Boolean = false
 
     private val handler = Handler(Looper.getMainLooper())
@@ -240,6 +281,14 @@ class FocusModeForegroundService : Service() {
 
         isRunning = false
         handler.removeCallbacks(updateRunnable)
+
+        // Clear the mirrored state so a stale session can't be recovered after
+        // it has legitimately ended (#7855).
+        durationMs = 0
+        remainingMs = 0
+        isBreak = false
+        isPaused = false
+        lastUpdateTimestamp = 0
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

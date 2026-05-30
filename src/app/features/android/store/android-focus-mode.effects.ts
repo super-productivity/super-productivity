@@ -13,13 +13,74 @@ import {
   selectTimer,
 } from '../../focus-mode/store/focus-mode.selectors';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
-import { selectCurrentTask, selectCurrentTaskId } from '../../tasks/store/task.selectors';
+import {
+  selectCurrentTask,
+  selectCurrentTaskId,
+  selectIsTaskDataLoaded,
+} from '../../tasks/store/task.selectors';
 import { combineLatest } from 'rxjs';
 import { FocusModeMode, TimerState } from '../../focus-mode/focus-mode.model';
 import { DroidLog } from '../../../core/log';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+
+export type NativeFocusModeData = {
+  durationMs: number;
+  /** Countdown remainder, or elapsed time for Flowtime (durationMs === 0). */
+  remainingMs: number;
+  isBreak: boolean;
+  isPaused: boolean;
+};
+
+/**
+ * Parse the JSON string returned by `androidInterface.getFocusModeElapsed()`.
+ * Returns null for any falsy/`'null'` input or shape mismatch — the caller
+ * treats null as "native is not running a focus session".
+ *
+ * Exported so unit tests can exercise it without instantiating the effect
+ * (which is gated behind IS_ANDROID_WEB_VIEW).
+ */
+export const parseNativeFocusModeData = (
+  json: string | null | undefined,
+): NativeFocusModeData | null => {
+  if (!json || json === 'null') {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (e) {
+    DroidLog.err('Failed to parse native focus mode data', e);
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    DroidLog.warn('Native service returned non-object focus data', {
+      length: json.length,
+    });
+    return null;
+  }
+
+  const { durationMs, remainingMs, isBreak, isPaused } =
+    parsed as Partial<NativeFocusModeData>;
+  if (
+    typeof durationMs !== 'number' ||
+    !Number.isFinite(durationMs) ||
+    typeof remainingMs !== 'number' ||
+    !Number.isFinite(remainingMs) ||
+    typeof isBreak !== 'boolean' ||
+    typeof isPaused !== 'boolean'
+  ) {
+    DroidLog.warn('Native service returned invalid focus data', {
+      length: json.length,
+    });
+    return null;
+  }
+
+  return { durationMs, remainingMs, isBreak, isPaused };
+};
 
 @Injectable()
 export class AndroidFocusModeEffects {
@@ -70,7 +131,11 @@ export class AndroidFocusModeEffects {
 
             // Check if focus mode is active (has a purpose)
             const isFocusModeActive = timer.purpose !== null;
-            const wasFocusModeActive = prev?.timer?.purpose !== null;
+            // `prev` is null on the `startWith(null)` seed (cold start). Treat
+            // that as "not active" — otherwise the first emission of an idle
+            // store would wrongly fire the stop branch below and tear down a
+            // native session that survived the app swipe (#7855).
+            const wasFocusModeActive = !!prev && prev.timer.purpose !== null;
 
             if (isFocusModeActive) {
               const title = this._getNotificationTitle(mode, isBreakActive, isLongBreak);
@@ -129,6 +194,48 @@ export class AndroidFocusModeEffects {
           }),
         ),
       { dispatch: false },
+    );
+
+  // Re-adopt a focus session that kept running in the native foreground
+  // service after the app was swiped from recents and reopened (#7855). The
+  // WebView is recreated with an idle store, so without this the session (and
+  // its notification, once syncFocusModeToNotification$ re-syncs) would be lost.
+  //
+  // onResume$ is a ReplaySubject so the cold-start emission is delivered even
+  // if it fired before this subscriber attached; combining it with
+  // selectIsTaskDataLoaded re-triggers once hydration settles. We only recover
+  // while the store is idle, so a live in-app session is never clobbered and a
+  // single restore flips the guard off (synchronous dispatch closes it before
+  // any duplicate emission — no exhaustMap/coalescing needed, unlike the async
+  // tracking recovery). After restore, syncFocusModeToNotification$ re-issues
+  // startFocusModeService with the same remaining time the native service
+  // already holds — an intentional, idempotent round-trip (no countdown reset).
+  recoverFocusSession$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(() =>
+      combineLatest([
+        androidInterface.onResume$.pipe(startWith(undefined)),
+        this._store.select(selectTimer),
+        this._store.select(selectIsTaskDataLoaded),
+      ]).pipe(
+        filter(
+          ([, timer, isTaskDataLoaded]) =>
+            isTaskDataLoaded &&
+            timer.purpose === null &&
+            !this._hydrationState.isApplyingRemoteOps(),
+        ),
+        map(() => parseNativeFocusModeData(androidInterface.getFocusModeElapsed?.())),
+        filter((data): data is NativeFocusModeData => data !== null),
+        tap((data) =>
+          DroidLog.log('AndroidFocusModeEffects: Recovering focus session from native', {
+            durationMs: data.durationMs,
+            remainingMs: data.remainingMs,
+            isBreak: data.isBreak,
+            isPaused: data.isPaused,
+          }),
+        ),
+        map((data) => focusModeActions.restoreFocusSessionFromNative(data)),
+      ),
     );
 
   // Handle notification action callbacks
