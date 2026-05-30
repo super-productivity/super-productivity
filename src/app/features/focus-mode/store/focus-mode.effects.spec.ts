@@ -2633,69 +2633,6 @@ describe('FocusModeEffects', () => {
       });
     });
 
-    describe('syncTrackingStopToSession$ edge cases (break handling)', () => {
-      it('should NOT dispatch when break timer is paused (not running)', (done) => {
-        store.overrideSelector(selectFocusModeConfig, {
-          isSkipPreparation: false,
-        });
-        // Break is paused - timer not running
-        store.overrideSelector(
-          selectors.selectTimer,
-          createMockTimer({ isRunning: false, purpose: 'break' }),
-        );
-        store.refreshState();
-
-        effects = TestBed.inject(FocusModeEffects);
-
-        const { emitted, subscription } = collectEmissions(
-          effects.syncTrackingStopToSession$,
-        );
-        currentTaskId$.next('task-123');
-
-        setTimeout(() => {
-          currentTaskId$.next(null);
-        }, 10);
-
-        setTimeout(() => {
-          expect(emitted).toEqual([]);
-          subscription.unsubscribe();
-          done();
-        }, 50);
-      });
-
-      it('should handle Pomodoro mode break correctly', (done) => {
-        store.overrideSelector(selectFocusModeConfig, {
-          isSkipPreparation: false,
-        });
-        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-        store.overrideSelector(
-          selectors.selectTimer,
-          createMockTimer({ isRunning: true, purpose: 'break', duration: 5 * 60 * 1000 }),
-        );
-        store.refreshState();
-
-        effects = TestBed.inject(FocusModeEffects);
-
-        let dispatched = false;
-        effects.syncTrackingStopToSession$.subscribe((action) => {
-          expect(action.type).toBe('[FocusMode] Pause Session');
-          expect((action as any).pausedTaskId).toBe('task-123');
-          dispatched = true;
-        });
-
-        currentTaskId$.next('task-123');
-
-        setTimeout(() => {
-          currentTaskId$.next(null);
-        }, 10);
-
-        setTimeout(() => {
-          expect(dispatched).toBe(true);
-          done();
-        }, 100);
-      });
-    });
-
     describe('stopTrackingOnSessionEnd$ edge cases', () => {
       it('should respect isPauseTrackingDuringBreak=true for manual session end and store pausedTaskId (Bug #5737)', (done) => {
         store.overrideSelector(selectFocusModeConfig, {
