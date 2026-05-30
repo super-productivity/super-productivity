@@ -71,6 +71,14 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
       },
     },
     {
+      key: 'isVerticalActionBar',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.MISC.IS_VERTICAL_ACTION_BAR,
+        description: T.GCF.MISC.IS_VERTICAL_ACTION_BAR_HINT,
+      },
+    },
+    {
       key: 'isDisableCelebration',
       type: 'checkbox',
       templateOptions: {

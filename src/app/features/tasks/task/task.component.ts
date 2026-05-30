@@ -1058,6 +1058,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   onHostTouchEnd(): void {
+    this._cancelDragReady();
+  }
+
+  // A confirmed horizontal swipe (open menu / mark done) is not a drag, so
+  // cancel the pending long-press drag-ready state before it can fire mid-swipe.
+  onSwipeStart(): void {
+    this._cancelDragReady();
+  }
+
+  private _cancelDragReady(): void {
     window.clearTimeout(this._dragReadyTimeout);
     this.isDragReady.set(false);
   }

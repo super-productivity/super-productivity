@@ -3,12 +3,13 @@ package com.superproductivity.superproductivity.webview
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.superproductivity.superproductivity.FullscreenActivity
+import androidx.core.content.ContextCompat
 import com.superproductivity.superproductivity.R
 
 class WebViewBlockActivity : AppCompatActivity() {
@@ -64,9 +65,22 @@ class WebViewBlockActivity : AppCompatActivity() {
         }.trim()
         findViewById<TextView>(R.id.webview_block_details).text = details
 
+        val retryButton = findViewById<Button>(R.id.webview_block_retry)
+        if (config.showRetry) {
+            retryButton.visibility = View.VISIBLE
+            retryButton.setOnClickListener { relaunchApp() }
+        } else {
+            retryButton.visibility = View.GONE
+        }
+
         val updateButton = findViewById<Button>(R.id.webview_block_update)
         if (config.action == WebViewCompatibilityChecker.BlockScreenAction.OPEN_WEBVIEW_SETTINGS_WITH_WARNING) {
             updateButton.setText(R.string.webview_block_open_settings)
+            // This branch is only reached for init failures, where Retry is the
+            // primary recovery, so render the settings action as secondary to
+            // keep a single clear primary action.
+            updateButton.backgroundTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.webview_block_secondary))
             updateButton.setOnClickListener {
                 showOpenWebViewConfirmation(provider, useUpdatePage = false)
             }
@@ -129,15 +143,7 @@ class WebViewBlockActivity : AppCompatActivity() {
     }
 
     private fun relaunchApp() {
-        // Always launch FullscreenActivity (the manifest's MAIN/LAUNCHER) explicitly
-        // rather than via PackageManager.getLaunchIntentForPackage, which can return
-        // null in stripped Android variants and would leave the user with an empty
-        // screen after tapping confirm. FullscreenActivity itself routes via
-        // LaunchDecider to CapacitorMainActivity when appropriate.
-        val launchIntent = Intent(this, FullscreenActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        startActivity(launchIntent)
-        finish()
+        WebViewRecovery.relaunchNow(this)
     }
 
     companion object {

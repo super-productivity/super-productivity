@@ -308,10 +308,18 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
       await clientB.sync.setupSuperSync(getSuperSyncConfig(user3));
       await clientB.sync.syncAndWait();
 
-      // Client B should have ALL tasks from all migrations
-      await waitForTask(clientB.page, task1);
-      await waitForTask(clientB.page, task2);
-      await waitForTask(clientB.page, task3);
+      // Client B should have ALL tasks from all migrations. Under parallel CI
+      // load B's initial download can settle a beat before A's most recent op
+      // is pullable, so re-sync once if a task hasn't arrived yet (B has no
+      // auto-sync, so DOM polling alone can't recover a not-yet-downloaded op).
+      for (const task of [task1, task2, task3]) {
+        try {
+          await waitForTask(clientB.page, task, 15000);
+        } catch {
+          await clientB.sync.syncAndWait();
+          await waitForTask(clientB.page, task);
+        }
+      }
 
       console.log('[Test] SUCCESS: Multiple migrations preserved all data');
     } finally {

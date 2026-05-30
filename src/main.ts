@@ -26,7 +26,11 @@ import { DataInitStateService } from './app/core/data-init/data-init-state.servi
 import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
 import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import {
+  HTTP_INTERCEPTORS,
+  provideHttpClient,
+  withInterceptorsFromDi,
+} from '@angular/common/http';
 import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
@@ -79,6 +83,7 @@ import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-men
 import { Log, SyncLog } from './app/core/log';
 import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
+import { TaskService } from './app/features/tasks/task.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
@@ -86,6 +91,7 @@ import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
 import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapter';
 import { unlockAudioContext } from './app/util/audio-context';
+import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
 
 if (environment.production || environment.stage) {
   enableProdMode();
@@ -188,6 +194,11 @@ bootstrapApplication(AppComponent, {
     ),
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideHttpClient(withInterceptorsFromDi()),
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: NetworkRetryInterceptorService,
+      multi: true,
+    },
     LocaleDatePipe,
     ShortTimeHtmlPipe,
     ShortTimePipe,
@@ -486,6 +497,10 @@ if (IS_IOS_NATIVE) {
     }
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
+        // Dispatch any accumulated tracked time so it is enqueued before the
+        // op-log drain below. iOS suspends the WebView seconds after this, so
+        // both the dispatch and the persist must happen inside this budget.
+        appInjector?.get(TaskService).flushAccumulatedTimeSpent();
         await flushPendingOperations('iOS');
       } catch (e) {
         Log.err('iOS background: operation flush failed', e);

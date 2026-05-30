@@ -493,25 +493,6 @@ describe('Sync System Fixes', () => {
   });
 
   // =============================================================================
-  // Issue 4: Encrypted ops blocking restore
-  // NOTE: These tests require integration tests against real database
-  // The mock layer doesn't fully support the restore endpoint behavior.
-  // See tests/integration/ for full restore tests.
-  // =============================================================================
-  describe('Issue 4: Encrypted ops blocking restore', () => {
-    it.skip('should reject restore when encrypted ops exist in range (requires integration test)', async () => {
-      // This test requires the real database to test the encrypted ops check
-      // in generateSnapshotAtSeq. The mock doesn't implement operation.count.
-      // See integration tests for full coverage.
-    });
-
-    it.skip('should allow restore when no encrypted ops exist (requires integration test)', async () => {
-      // This test requires the real database to test restore functionality.
-      // See integration tests for full coverage.
-    });
-  });
-
-  // =============================================================================
   // Issue 5: Dedup before quota check
   // Tests that deduplication happens before quota check to allow retries
   // =============================================================================
@@ -624,18 +605,8 @@ describe('Sync System Fixes', () => {
 
   // =============================================================================
   // Issue 6: Vector-clock EQUAL from different client
-  // NOTE: Conflict detection requires the mock to properly implement
-  // operation.findFirst to return existing operations. The current mock
-  // doesn't support this, so these tests are skipped in favor of
-  // integration tests.
   // =============================================================================
   describe('Issue 6: Vector-clock EQUAL from different client', () => {
-    it.skip('should reject EQUAL clocks from different clients as conflict (requires integration test)', async () => {
-      // This test requires the mock's operation.findFirst to return
-      // the existing operation for conflict detection.
-      // See integration tests for full coverage.
-    });
-
     it('should allow operations when no prior operation exists', async () => {
       const clientA = uuidv7();
       const entityId = 'task-' + uuidv7();

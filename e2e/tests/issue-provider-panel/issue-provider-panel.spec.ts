@@ -1,7 +1,7 @@
-import { test } from '../../fixtures/test.fixture';
+import { expect, test } from '../../fixtures/test.fixture';
+import { expectNoGlobalError } from '../../utils/assertions';
 
 const PANEL_BTN = '.e2e-toggle-issue-provider-panel';
-const CANCEL_BTN = 'mat-dialog-actions button:first-child';
 
 test.describe('Issue Provider Panel', () => {
   test('should open all dialogs without error', async ({ page, workViewPage }) => {
@@ -21,54 +21,51 @@ test.describe('Issue Provider Panel', () => {
       .first()
       .waitFor({ state: 'visible', timeout: 5000 });
 
+    // Start capturing page errors only after the panel is settled so we don't
+    // pick up unrelated startup noise (vite overlay, lazy-chunk warnings, etc.)
+    // that the surrounding suite tolerates.
+    const pageErrors: string[] = [];
+    const onPageError = (error: Error): void => {
+      pageErrors.push(error.message);
+    };
+    page.on('pageerror', onPageError);
+
     // Get all buttons in the issue provider setup overview
     const setupButtons = page.locator('issue-provider-setup-overview button');
     const buttonCount = await setupButtons.count();
+    expect(buttonCount).toBeGreaterThan(0);
 
     // Click each button and close the dialog
+    let openedDialogCount = 0;
     for (let i = 0; i < buttonCount; i++) {
       const button = setupButtons.nth(i);
 
-      // Skip if button is not visible or enabled
-      const isVisible = await button.isVisible().catch(() => false);
-      const isEnabled = await button.isEnabled().catch(() => false);
+      await expect(button).toBeVisible();
+      await expect(button).toBeEnabled();
+      await button.click();
 
-      if (isVisible && isEnabled) {
-        await button.click();
+      // Wait for dialog to open
+      const dialogContainer = page.locator('mat-dialog-container');
+      await expect(dialogContainer).toBeVisible({ timeout: 5000 });
+      openedDialogCount++;
 
-        // Wait for dialog to open
-        const dialogOpened = await page
-          .waitForSelector(CANCEL_BTN, {
-            state: 'visible',
-            timeout: 5000,
-          })
-          .catch(() => null);
+      // Close the dialog from within the dialog container.
+      const cancelBtn = dialogContainer.locator('mat-dialog-actions button').first();
+      await expect(cancelBtn).toBeVisible({ timeout: 5000 });
+      await cancelBtn.click();
 
-        if (dialogOpened) {
-          // Wait for dialog container to be stable
-          const dialogContainer = page.locator('mat-dialog-container');
-          await dialogContainer.waitFor({ state: 'visible', timeout: 5000 });
+      // Wait for dialog to close
+      await expect(dialogContainer).toBeHidden({ timeout: 5000 });
 
-          // Try to click cancel within the dialog container
-          const cancelBtn = dialogContainer.locator('mat-dialog-actions button').first();
-          const cancelClicked = await cancelBtn
-            .click({ timeout: 5000 })
-            .catch(() => false);
-
-          if (cancelClicked !== false) {
-            // Wait for dialog to close
-            await dialogContainer.waitFor({ state: 'detached', timeout: 5000 });
-          }
-
-          // Ensure we're back on the issue provider panel
-          await page.waitForSelector('issue-provider-setup-overview', {
-            state: 'visible',
-            timeout: 3000,
-          });
-        }
-      }
+      // Ensure we're back on the issue provider panel
+      await expect(page.locator('issue-provider-setup-overview')).toBeVisible({
+        timeout: 3000,
+      });
     }
 
-    // No error check is implicit - test will fail if any error occurs
+    expect(openedDialogCount).toBe(buttonCount);
+    page.off('pageerror', onPageError);
+    await expectNoGlobalError(page);
+    expect(pageErrors).toEqual([]);
   });
 });

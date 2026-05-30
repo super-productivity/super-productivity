@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
+  ElementRef,
   inject,
   OnDestroy,
   signal,
@@ -72,6 +74,9 @@ import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
   ],
 })
 export class MainHeaderComponent implements OnDestroy {
+  private readonly _elRef = inject(ElementRef<HTMLElement>);
+  private _teleportedNav: HTMLElement | null = null;
+  private _teleportObserver: MutationObserver | null = null;
   readonly projectService = inject(ProjectService);
   readonly matDialog = inject(MatDialog);
   readonly workContextService = inject(WorkContextService);
@@ -199,8 +204,76 @@ export class MainHeaderComponent implements OnDestroy {
 
   private _subs: Subscription = new Subscription();
 
+  // Vertical action bar is desktop-only and opt-in via misc config.
+  private readonly _isVerticalActionBar = computed(
+    () => !this.isXs() && !!this.globalConfigService.misc()?.isVerticalActionBar,
+  );
+
+  constructor() {
+    // Teleport the action nav to document.body (and back) so the fixed
+    // vertical strip escapes any ancestor containing-block
+    // (transform/filter/contain) and reliably anchors to the viewport.
+    // Reacts live to the config toggle and the desktop/mobile breakpoint;
+    // also re-runs once the nav enters the DOM (it sits behind
+    // @if(isDataLoaded())).
+    effect(() => {
+      const enabled = this._isVerticalActionBar();
+      this.isDataLoaded();
+      this._syncTeleport(enabled);
+    });
+  }
+
+  private _syncTeleport(enabled: boolean): void {
+    if (enabled) {
+      if (this._teleportedNav?.isConnected) return;
+      if (!this._teleportNav()) {
+        this._teleportObserver?.disconnect();
+        this._teleportObserver = new MutationObserver(() => {
+          if (this._teleportNav()) this._teleportObserver?.disconnect();
+        });
+        this._teleportObserver.observe(this._elRef.nativeElement, {
+          childList: true,
+          subtree: true,
+        });
+      }
+    } else {
+      this._teleportObserver?.disconnect();
+      this._teleportObserver = null;
+      this._restoreNav();
+    }
+  }
+
+  private _teleportNav(): boolean {
+    if (this._teleportedNav?.isConnected) return true;
+    this._teleportedNav = null;
+    const nav = (this._elRef.nativeElement as HTMLElement).querySelector(
+      'nav.action-nav-right',
+    ) as HTMLElement | null;
+    if (!nav) return false;
+    nav.classList.add('action-nav-right--teleported');
+    document.body.appendChild(nav);
+    this._teleportedNav = nav;
+    return true;
+  }
+
+  private _restoreNav(): void {
+    const nav = this._teleportedNav;
+    if (!nav) return;
+    this._teleportedNav = null;
+    nav.classList.remove('action-nav-right--teleported');
+    const wrapper = (this._elRef.nativeElement as HTMLElement).querySelector('.wrapper');
+    if (wrapper) {
+      wrapper.appendChild(nav);
+    } else {
+      nav.remove();
+    }
+  }
+
   ngOnDestroy(): void {
     this._subs.unsubscribe();
+    this._teleportObserver?.disconnect();
+    this._teleportedNav?.remove();
+    this._teleportedNav = null;
   }
 
   trackById(i: number, item: SimpleCounter): string {
@@ -222,6 +295,15 @@ export class MainHeaderComponent implements OnDestroy {
         });
       }
     });
+  }
+
+  onSyncButtonClick(): void {
+    const ready = !!this.syncIsEnabledAndReady();
+    if (ready) {
+      this.sync();
+    } else {
+      this.setupSync();
+    }
   }
 
   private dialogSyncCfgRef: MatDialogRef<unknown> | null = null;

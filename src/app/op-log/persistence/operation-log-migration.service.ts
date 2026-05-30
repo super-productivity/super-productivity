@@ -15,6 +15,7 @@ import {
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { download } from '../../util/download';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
+import { recordCriticalErrorTime } from '../../util/critical-error-signal';
 import { uuidv7 } from '../../util/uuid-v7';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
@@ -211,6 +212,8 @@ export class OperationLogMigrationService {
     let dataToMigrate = legacyData as unknown as AppDataComplete;
 
     if (!validationResult.isValid) {
+      // Damaged legacy data on migration — hold off the rating prompt.
+      recordCriticalErrorTime();
       OpLog.warn(
         'OperationLogMigrationService: Legacy data validation failed, attempting repair',
       );

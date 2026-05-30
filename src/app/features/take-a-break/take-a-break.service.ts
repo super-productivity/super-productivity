@@ -26,7 +26,6 @@ import { GlobalConfigState, TakeABreakConfig } from '../config/global-config.mod
 import { T } from '../../t.const';
 import { NotifyService } from '../../core/notify/notify.service';
 import { UiHelperService } from '../ui-helper/ui-helper.service';
-import { WorkContextService } from '../work-context/work-context.service';
 import { Tick } from '../../core/global-tracking-interval/tick.model';
 import { ofType } from '@ngrx/effects';
 import { idleDialogResult, triggerResetBreakTimer } from '../idle/store/idle.actions';
@@ -57,7 +56,6 @@ export class TakeABreakService {
   private _idleService = inject(IdleService);
   private _actions$ = inject(LOCAL_ACTIONS);
   private _configService = inject(GlobalConfigService);
-  private _workContextService = inject(WorkContextService);
   private _notifyService = inject(NotifyService);
   private _bannerService = inject(BannerService);
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
@@ -296,8 +294,8 @@ export class TakeABreakService {
           time: msToString(cfg.takeABreak.takeABreakSnoozeTime),
         },
         action: {
-          label: T.F.TIME_TRACKING.B.ALREADY_DID,
-          fn: () => this.resetTimerAndCountAsBreak(),
+          label: T.F.FOCUS_MODE.START_BREAK,
+          fn: () => this.startBreak(),
         },
         action2: {
           label: T.F.TIME_TRACKING.B.SNOOZE,
@@ -324,13 +322,9 @@ export class TakeABreakService {
     this._triggerManualReset$.next(0);
   }
 
-  resetTimerAndCountAsBreak(): void {
-    const min5 = 1000 * 60 * 5;
-    this._workContextService.addToBreakTimeForActiveContext(undefined, min5);
+  startBreak(): void {
+    this._taskService.pauseCurrent();
     this.resetTimer();
-
-    this._triggerLockScreenCounter$.next(false);
-    this._triggerFullscreenBlocker$.next(false);
   }
 
   private _createMessage(duration: number, cfg: TakeABreakConfig): string | undefined {

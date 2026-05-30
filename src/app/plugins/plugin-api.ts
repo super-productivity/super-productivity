@@ -8,6 +8,7 @@ import {
   OAuthFlowConfig,
   OAuthTokenResult,
   PluginAPI as PluginAPIInterface,
+  PluginAppState,
   PluginBaseCfg,
   PluginCreateTaskData,
   PluginHeaderBtnCfg,
@@ -200,6 +201,11 @@ export class PluginAPI implements PluginAPIInterface {
     return tasks.map(taskCopyToTaskData);
   }
 
+  async getAppState(): Promise<PluginAppState> {
+    PluginLog.log(`Plugin ${this._pluginId} requested app state snapshot`);
+    return this._pluginBridge.getAppState();
+  }
+
   async reInitData(): Promise<void> {
     PluginLog.log(`Plugin ${this._pluginId} requested data re-init`);
     return this._pluginBridge.reInitData();
@@ -289,14 +295,21 @@ export class PluginAPI implements PluginAPIInterface {
     return this._pluginBridge.notify(notifyCfg);
   }
 
-  persistDataSynced(dataStr: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to persist data`);
-    return this._boundMethods.persistDataSynced(dataStr);
+  persistDataSynced(dataStr: string, key?: string): Promise<void> {
+    // Log keyLen, not key — plugins may use user-supplied content as keys
+    // (search queries, document titles), and the log history is exportable.
+    // CLAUDE.md rule 9: only ids, never user content.
+    PluginLog.log(`Plugin ${this._pluginId} requested to persist data`, {
+      keyLen: key?.length ?? 0,
+    });
+    return this._boundMethods.persistDataSynced(dataStr, key);
   }
 
-  loadSyncedData(): Promise<string | null> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to load persisted data:`);
-    return this._boundMethods.loadPersistedData();
+  loadSyncedData(key?: string): Promise<string | null> {
+    PluginLog.log(`Plugin ${this._pluginId} requested to load persisted data`, {
+      keyLen: key?.length ?? 0,
+    });
+    return this._boundMethods.loadPersistedData(key);
   }
 
   async getConfig(): Promise<any> {

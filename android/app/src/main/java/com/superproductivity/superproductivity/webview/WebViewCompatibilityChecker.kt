@@ -21,7 +21,16 @@ object WebViewCompatibilityChecker {
     private const val PREFS_NAME = "webview_compatibility"
     private const val KEY_LAST_GOOD_VERSION = "last_known_good_major_version"
     private const val KEY_BLOCK_OVERRIDE = "block_override"
+    private const val KEY_INIT_RETRY_AT = "init_failure_retry_at"
     private const val DEFAULT_WEBVIEW_PACKAGE = "com.google.android.webview"
+
+    // A WebView init failure is frequently transient: the OS WebView provider can be
+    // mid-update or not yet resolved at the instant the activity starts (this is the
+    // INIT_FAILURE the user sees, with no readable version). We allow exactly ONE
+    // automatic recovery relaunch per this window; a failure that persists past it
+    // falls through to the block screen instead of boot-looping. Reset on the next
+    // successful load. → issue #7518.
+    private const val INIT_FAILURE_RETRY_WINDOW_MS = 60_000L
 
     const val MIN_CHROMIUM_VERSION = 107
     const val RECOMMENDED_CHROMIUM_VERSION = 110
@@ -30,6 +39,9 @@ object WebViewCompatibilityChecker {
     // reasonable proxy when WebView.getCurrentWebViewPackage() is unavailable.
     // The match is treated as non-authoritative (canBlockBasedOnVersion = false),
     // so a wrong match here can only ever produce WARN, never BLOCK.
+    // NOTE: keep this list in sync with the <queries> block in AndroidManifest.xml —
+    // on Android 11+ a package missing there is invisible to getPackageInfo() and the
+    // fallback silently can't read its version. → issue #7518.
     private val KNOWN_WEBVIEW_PACKAGES = listOf(
         "com.google.android.webview",
         "com.android.webview",
@@ -69,6 +81,11 @@ object WebViewCompatibilityChecker {
         val action: BlockScreenAction,
         val showTryAnyway: Boolean,
         val showSource: Boolean,
+        // Offered only for INIT_FAILURE: these failures are frequently transient
+        // (e.g. the WebView provider not being ready on the first launch after a
+        // cold boot), so a relaunch usually succeeds. Harmless for a genuinely
+        // broken provider — it just returns to this screen.
+        val showRetry: Boolean,
     )
 
     data class Result(
@@ -159,8 +176,13 @@ object WebViewCompatibilityChecker {
      * version, so a future genuine block (e.g. WebView downgrade) is not silently bypassed.
      */
     fun recordSuccessfulLoad(context: Context, majorVersion: Int?) {
-        if (majorVersion == null || majorVersion <= 0) return
         val prefs = preferences(context)
+        // A successful load proves any prior transient init failure is resolved, so
+        // clear the recovery guard regardless of whether the version is readable.
+        if (prefs.getLong(KEY_INIT_RETRY_AT, 0L) != 0L) {
+            prefs.edit().remove(KEY_INIT_RETRY_AT).apply()
+        }
+        if (majorVersion == null || majorVersion <= 0) return
         val needsVersionUpdate = majorVersion > prefs.getInt(KEY_LAST_GOOD_VERSION, -1)
         val needsOverrideClear = majorVersion >= MIN_CHROMIUM_VERSION &&
             prefs.getBoolean(KEY_BLOCK_OVERRIDE, false)
@@ -179,6 +201,42 @@ object WebViewCompatibilityChecker {
      */
     fun setBlockOverride(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_BLOCK_OVERRIDE, enabled).commit()
+    }
+
+    /**
+     * Whether the single automatic recovery relaunch allowed per transient WebView
+     * init failure is still available. Read-only: returns false once a relaunch was
+     * recorded within [INIT_FAILURE_RETRY_WINDOW_MS], so the caller shows the block
+     * screen instead of looping. The budget is spent separately by
+     * [recordInitFailureRetry] (only when a relaunch actually happens) and reset by
+     * [recordSuccessfulLoad] on the next healthy load.
+     */
+    fun canRetryInitFailure(context: Context, now: Long = System.currentTimeMillis()): Boolean =
+        shouldRetryInitFailure(
+            preferences(context).getLong(KEY_INIT_RETRY_AT, 0L),
+            now,
+            INIT_FAILURE_RETRY_WINDOW_MS,
+        )
+
+    /**
+     * Spends the recovery-relaunch budget. Called at the moment of an actual
+     * relaunch (not when merely deciding to schedule one) so a user who kills the
+     * app during the settle delay doesn't burn the one shot.
+     *
+     * Uses [SharedPreferences.Editor.commit] (sync) because the caller relaunches
+     * immediately — an async write could be lost to the relaunch and re-arm the loop.
+     */
+    fun recordInitFailureRetry(context: Context, now: Long = System.currentTimeMillis()) {
+        preferences(context).edit().putLong(KEY_INIT_RETRY_AT, now).commit()
+    }
+
+    @VisibleForTesting
+    internal fun shouldRetryInitFailure(lastRetryAt: Long, now: Long, windowMs: Long): Boolean {
+        if (lastRetryAt <= 0L) return true
+        val elapsed = now - lastRetryAt
+        // elapsed < 0 means the wall clock moved backwards since the last attempt;
+        // treat it as stale and allow a retry rather than wedging the user.
+        return elapsed < 0L || elapsed >= windowMs
     }
 
     @VisibleForTesting
@@ -224,6 +282,7 @@ object WebViewCompatibilityChecker {
             },
             showTryAnyway = canBypassBlock(source),
             showSource = source != VersionSource.UNKNOWN,
+            showRetry = isInitFailure,
         )
     }
 

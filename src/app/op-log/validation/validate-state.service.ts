@@ -13,6 +13,7 @@ import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { T } from '../../t.const';
 import { alertDialog, confirmDialog } from '../../util/native-dialogs';
+import { recordCriticalErrorTime } from '../../util/critical-error-signal';
 
 let _validateFullPromise:
   | Promise<typeof import('./validation-fn').validateFull>
@@ -216,6 +217,12 @@ export class ValidateStateService {
       };
     }
 
+    // Detected data damage — hold off the rating prompt. Central seam: every
+    // service-level validation entry (hydration, repair, recovery, snapshot
+    // migration) goes through here, so they all get the signal whether the
+    // caller repairs, throws, or continues with the original state.
+    recordCriticalErrorTime();
+
     const result: StateValidationResult = {
       isValid: false,
       typiaErrors: [],
@@ -280,6 +287,7 @@ export class ValidateStateService {
     }
 
     // State is invalid - ask user for confirmation before repair
+    // (the rating-prompt suppression is recorded centrally in validateState).
     OpLog.log('[ValidateStateService] State invalid, asking user for confirmation...');
 
     // Check if repair is possible

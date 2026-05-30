@@ -17,6 +17,22 @@ const sanitizeBoardsState = (state: BoardsState): BoardsState => ({
   boardCfgs: state.boardCfgs.map(sanitizeBoard),
 });
 
+// #7666: corrupted IndexedDB payloads were leaving `boardCfgs` or a board's
+// `panels` undefined. The crash happened inside the synchronous dispatch and
+// surfaced via RxJS reportUnhandledError, bypassing Angular's ErrorHandler —
+// so the app appeared "frozen" with no alert. Coerce arrays before any helper
+// runs so the load path can never throw on shape.
+const normalizeLoadedBoardsState = (state: BoardsState): BoardsState => {
+  const boardCfgs = Array.isArray(state?.boardCfgs) ? state.boardCfgs : [];
+  return {
+    ...state,
+    boardCfgs: boardCfgs.map((board) => ({
+      ...board,
+      panels: Array.isArray(board?.panels) ? board.panels : [],
+    })),
+  };
+};
+
 export const BOARDS_FEATURE_NAME = 'boards';
 
 export interface BoardsState {
@@ -119,7 +135,9 @@ export const boardsReducer = createReducer(
   on(loadAllData, (state, { appDataComplete }) =>
     appDataComplete.boards
       ? sanitizeBoardsState(
-          fixBuggyDefaultBoardFilters(deduplicatePanelIds(appDataComplete.boards)),
+          fixBuggyDefaultBoardFilters(
+            deduplicatePanelIds(normalizeLoadedBoardsState(appDataComplete.boards)),
+          ),
         )
       : state,
   ),

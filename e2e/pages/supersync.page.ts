@@ -777,8 +777,21 @@ export class SuperSyncPage extends BasePage {
           // Continue loop to re-check for dialogs
         }
 
-        // Final check for check icon
-        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+        // Final check for check icon — generous timeout because the inner
+        // race above already used the 30s budget, and on saturated CI runners
+        // the sync state icon can take noticeably longer to render. If the very
+        // first sync stalls entirely (a setup flake seen under parallel CI load),
+        // clear any leftover dialog and re-trigger sync once before giving up.
+        try {
+          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+        } catch {
+          console.log(
+            '[SuperSyncPage] Sync check icon not visible after 60s — re-triggering sync once',
+          );
+          await this._handleSyncDialogs(config.syncImportChoice === 'local');
+          await this.syncBtn.click();
+          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+        }
       }
     } else if (waitForInitialSync) {
       // Encryption is mandatory for SuperSync, so even when the caller doesn't
@@ -1318,6 +1331,10 @@ export class SuperSyncPage extends BasePage {
     // Click the confirm button (mat-flat-button with color="primary")
     // In setup mode the button text is "Set Password", in full mode it's "Enable Encryption"
     const confirmBtn = dialog.locator('button[mat-flat-button][color="primary"]');
+    // Wait for [(ngModel)] propagation to flip [disabled]="!isPasswordValid"
+    // — fill() resolves before Angular CD ticks, so the click can otherwise
+    // burn the full retry window against a still-disabled button.
+    await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
     await confirmBtn.click();
 
     await this.page.waitForTimeout(500);
@@ -2015,13 +2032,20 @@ export class SuperSyncPage extends BasePage {
       'input[name="confirmPassword"]',
     );
 
-    await newPasswordInput.fill(newPassword);
-    await newPasswordInput.blur(); // Trigger ngModel update
-    await confirmPasswordInput.fill(newPassword);
-    await confirmPasswordInput.blur(); // Trigger ngModel update
-
-    // Wait for Angular to process form validation
-    await this.page.waitForTimeout(200);
+    // fill() can resolve before the OnPush dialog's [(ngModel)] two-way
+    // binding commits the value, intermittently leaving a field empty (and
+    // the confirm button permanently disabled) even though the fill itself
+    // succeeded. Re-fill each field until its value is committed in the DOM
+    // before relying on the confirm button's enabled state.
+    for (const input of [newPasswordInput, confirmPasswordInput]) {
+      await expect(async () => {
+        if ((await input.inputValue()) !== newPassword) {
+          await input.fill(newPassword);
+          await input.blur(); // Trigger ngModel update
+        }
+        await expect(input).toHaveValue(newPassword, { timeout: 1000 });
+      }).toPass({ timeout: 5000 });
+    }
 
     // Click the "Change Password" confirm button (mat-flat-button, not the "Disable Encryption" button which is mat-stroked-button)
     const confirmBtn = changePasswordDialog.locator(

@@ -14,6 +14,23 @@
   min-height: -webkit-fill-available;
 }
 
+// Vertical action bar (opt-in via misc.isVerticalActionBar): reserve a
+// column on the right for the fixed action strip teleported by main-header
+// (desktop only). The strip is position: fixed, so this padding keeps the
+// main content + right-panel to the left of it.
+.app-container.has-vertical-action-bar {
+  @include mq(xs) {
+    padding-right: var(--vertical-action-bar-width);
+  }
+}
+
+:host-context([dir='rtl']) .app-container.has-vertical-action-bar {
+  @include mq(xs) {
+    padding-right: 0;
+    padding-left: var(--vertical-action-bar-width);
+  }
+}
+
 // Native mobile: body has safe area padding that pushes content down,
 // so the container must be shorter than 100vh to stay within the visible viewport.
 // Without this, bottom items (like Settings) in the sidebar are clipped off-screen.

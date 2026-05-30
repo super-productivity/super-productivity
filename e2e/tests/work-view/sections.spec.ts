@@ -70,6 +70,37 @@ test.describe('Sections', () => {
     page.locator('.section-container').filter({ hasText: title });
 
   /**
+   * Read a locator's bounding box defensively. `boundingBox()` takes a
+   * one-shot snapshot and returns `null` whenever the element has no
+   * layout box at that instant — which happens constantly here because
+   * the section task-list re-renders after every CDK drop (Angular's
+   * `@for track` reorders nodes) and freshly-dropped tasks run an
+   * `expandInOnly` enter animation that holds them at `height: 0`. Wait
+   * for the element to be visible, then poll until it reports a real box
+   * so the read can't race the re-render. This is the failure the two
+   * `test.fixme`s below hit; keeping the guard here lets the active tests
+   * stay reliable instead of throwing "no bounding box".
+   */
+  const stableBoundingBox = async (
+    locator: import('@playwright/test').Locator,
+  ): Promise<{ x: number; y: number; width: number; height: number }> => {
+    await locator.waitFor({ state: 'visible', timeout: 10000 });
+    await expect
+      .poll(
+        async () => {
+          const b = await locator.boundingBox();
+          return !!b && b.width > 0 && b.height > 0;
+        },
+        { timeout: 10000 },
+      )
+      .toBe(true);
+    // The poll guarantees a real box exists; re-read it for the gesture.
+    const box = await locator.boundingBox();
+    if (!box) throw new Error('drag source/target has no bounding box');
+    return box;
+  };
+
+  /**
    * CDK drag-drop is event-driven via Angular CDK's own pointer-event
    * handling. Playwright's `dragTo` uses HTML5 drag-and-drop events,
    * which CDK ignores. Drive the gesture manually with multi-step mouse
@@ -80,9 +111,8 @@ test.describe('Sections', () => {
     source: import('@playwright/test').Locator,
     target: import('@playwright/test').Locator,
   ): Promise<void> => {
-    const sBox = await source.boundingBox();
-    const tBox = await target.boundingBox();
-    if (!sBox || !tBox) throw new Error('drag source/target has no bounding box');
+    const sBox = await stableBoundingBox(source);
+    const tBox = await stableBoundingBox(target);
     /* eslint-disable no-mixed-operators */
     const sx = sBox.x + sBox.width / 2;
     const sy = sBox.y + sBox.height / 2;
@@ -293,9 +323,11 @@ test.describe('Sections', () => {
     expect(before.length).toBe(3);
 
     // Drag the first task onto the last task. After the drop, the first
-    // task should no longer be at index 0.
-    const firstTask = section.locator('task').nth(0);
-    const lastTask = section.locator('task').nth(2);
+    // task should no longer be at index 0. Exclude `.ng-animating` nodes
+    // (matching the `before` capture) so we never target a task that's
+    // still running its enter animation at `height: 0`.
+    const firstTask = section.locator('task:not(.ng-animating)').nth(0);
+    const lastTask = section.locator('task:not(.ng-animating)').nth(2);
     await cdkDragTo(page, firstTask.locator('done-toggle').first(), lastTask);
 
     await expect

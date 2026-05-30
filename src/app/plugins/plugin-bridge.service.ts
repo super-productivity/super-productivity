@@ -21,6 +21,10 @@ import {
   Task,
 } from './plugin-api.model';
 import { toActiveWorkContext } from './util/active-work-context.util';
+import {
+  assertPluginPersistenceKey,
+  composeId,
+} from './util/plugin-persistence-key.util';
 
 import {
   BatchTaskCreate,
@@ -28,16 +32,22 @@ import {
   BatchUpdateResult,
   OAuthFlowConfig,
   OAuthTokenResult,
+  PluginAppState,
   PluginManifest,
+  PluginNote,
+  PluginSimpleCounterFull,
+  PluginTaskRepeatCfg,
   SnackCfg,
 } from '@super-productivity/plugin-api';
 import { snackCfgToSnackParams } from './plugin-api-mapper';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
 import { addSubTask } from '../features/tasks/store/task.actions';
+import { selectTaskFeatureState } from '../features/tasks/store/task.selectors';
 import { parseTimeSpentChanges } from '../features/tasks/short-syntax';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
+import { selectConfigFeatureState } from '../features/config/store/global-config.reducer';
 import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import { nanoid } from 'nanoid';
 import { WorkContextService } from '../features/work-context/work-context.service';
@@ -46,6 +56,9 @@ import { TagService } from '../features/tag/tag.service';
 import typia from 'typia';
 import { distinctUntilChanged, first, map, take, timeout } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
+import { selectProjectFeatureState } from '../features/project/store/project.selectors';
+import { selectNoteFeatureState } from '../features/note/store/note.reducer';
+import { selectTagFeatureState } from '../features/tag/store/tag.reducer';
 import { selectTaskByIdWithSubTaskData } from '../features/tasks/store/task.selectors';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginConfigService } from './plugin-config.service';
@@ -74,6 +87,7 @@ import { PluginService } from './plugin.service';
 
 // New imports for simple counters
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
+import { selectTaskRepeatCfgFeatureState } from '../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import {
   SimpleCounter,
   SimpleCounterType,
@@ -192,8 +206,8 @@ export class PluginBridgeService implements OnDestroy {
     pluginId: string,
     manifest?: PluginManifest,
   ): {
-    persistDataSynced: (dataStr: string) => Promise<void>;
-    loadPersistedData: () => Promise<string | null>;
+    persistDataSynced: (dataStr: string, key?: string) => Promise<void>;
+    loadPersistedData: (key?: string) => Promise<string | null>;
     getConfig: () => Promise<unknown>;
     downloadFile: (filename: string, data: string) => Promise<void>;
     registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
@@ -236,8 +250,9 @@ export class PluginBridgeService implements OnDestroy {
   } {
     return {
       // Data persistence
-      persistDataSynced: (dataStr: string) => this._persistDataSynced(pluginId, dataStr),
-      loadPersistedData: () => this._loadPersistedData(pluginId),
+      persistDataSynced: (dataStr: string, key?: string) =>
+        this._persistDataSynced(pluginId, dataStr, key),
+      loadPersistedData: (key?: string) => this._loadPersistedData(pluginId, key),
       getConfig: () => this._getConfig(pluginId),
       downloadFile: (filename: string, data: string) =>
         this._downloadFile(filename, data),
@@ -608,6 +623,82 @@ export class PluginBridgeService implements OnDestroy {
       .pipe(first())
       .toPromise();
     return contextTasks || [];
+  }
+
+  /**
+   * Returns a read-only snapshot of the application state for plugins.
+   *
+   * Credential surfaces are stripped before returning:
+   * - `globalConfig.sync` (WebDAV/Nextcloud passwords, SuperSync access
+   *   tokens, encryption keys)
+   * - `globalConfig.misc.unsplashApiKey`
+   * - per-project `issueIntegrationCfgs` (Jira/CalDAV passwords,
+   *   GitLab/Redmine tokens, OpenProject/Trello/Linear keys)
+   */
+  async getAppState(): Promise<PluginAppState> {
+    const [
+      taskState,
+      projectState,
+      tagState,
+      noteState,
+      taskRepeatCfgState,
+      allSimpleCounters,
+      globalConfig,
+    ] = await Promise.all([
+      firstValueFrom(this._store.select(selectTaskFeatureState)),
+      firstValueFrom(this._store.select(selectProjectFeatureState)),
+      firstValueFrom(this._store.select(selectTagFeatureState)),
+      firstValueFrom(this._store.select(selectNoteFeatureState)),
+      firstValueFrom(this._store.select(selectTaskRepeatCfgFeatureState)),
+      firstValueFrom(this._store.select(selectAllSimpleCounters)),
+      firstValueFrom(this._store.select(selectConfigFeatureState)),
+    ]);
+
+    const simpleCounters: Record<string, PluginSimpleCounterFull> = {};
+    (allSimpleCounters ?? []).forEach((counter) => {
+      simpleCounters[counter.id] = {
+        id: counter.id,
+        title: counter.title,
+        type: String(counter.type),
+        isEnabled: counter.isEnabled,
+        isOn: (counter as { isOn?: boolean }).isOn,
+        countOnDay: counter.countOnDay ?? {},
+      };
+    });
+
+    const projects: Record<string, ProjectCopy> = {};
+    const rawProjects = (projectState?.entities ?? {}) as Record<
+      string,
+      ProjectCopy | undefined
+    >;
+    for (const id of Object.keys(rawProjects)) {
+      const p = rawProjects[id];
+      if (!p) continue;
+      const safe = { ...p };
+      delete (safe as { issueIntegrationCfgs?: unknown }).issueIntegrationCfgs;
+      projects[id] = safe as ProjectCopy;
+    }
+
+    const safeGlobalConfig: Record<string, unknown> = { ...(globalConfig ?? {}) };
+    delete safeGlobalConfig['sync'];
+    if (safeGlobalConfig['misc']) {
+      const safeMisc = { ...(safeGlobalConfig['misc'] as Record<string, unknown>) };
+      delete safeMisc['unsplashApiKey'];
+      safeGlobalConfig['misc'] = safeMisc;
+    }
+
+    return {
+      tasks: (taskState?.entities ?? {}) as Record<string, Task>,
+      projects,
+      tags: (tagState?.entities ?? {}) as Record<string, TagCopy>,
+      notes: (noteState?.entities ?? {}) as Record<string, PluginNote>,
+      taskRepeatCfgs: (taskRepeatCfgState?.entities ?? {}) as Record<
+        string,
+        PluginTaskRepeatCfg
+      >,
+      simpleCounters,
+      globalConfig: safeGlobalConfig,
+    };
   }
 
   async reInitData(): Promise<void> {
@@ -1028,20 +1119,31 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
-   * Internal method to persist plugin data
-   * Includes size and rate limit validation
+   * Internal method to persist plugin data.
+   * Includes size and rate limit validation; composeId enforces the
+   * `pluginId` keyspace contract at this transport boundary so the throw
+   * covers both iframe and direct API callers.
    */
-  private async _persistDataSynced(pluginId: string, dataStr: string): Promise<void> {
+  private async _persistDataSynced(
+    pluginId: string,
+    dataStr: string,
+    key?: string,
+  ): Promise<void> {
     typia.assert<string>(dataStr);
+    assertPluginPersistenceKey(key);
 
     try {
-      this._pluginUserPersistenceService.persistPluginUserData(pluginId, dataStr);
+      // Validates the pluginId synchronously; bubbles through the try/catch
+      // below as a normal Error.
+      const entityId = composeId(pluginId, key);
+      this._pluginUserPersistenceService.persistPluginUserData(entityId, dataStr);
       console.log('PluginBridge: Plugin data persisted successfully', {
         pluginId,
+        keyLen: key?.length ?? 0,
         dataSize: new Blob([dataStr]).size,
       });
     } catch (error) {
-      // Log the specific error (rate limit or size exceeded)
+      // Log the specific error (rate limit, size, or composeId)
       PluginLog.err('PluginBridge: Failed to persist plugin data:', error);
 
       // Rethrow with the original error message for better debugging
@@ -1053,11 +1155,21 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
-   * Internal method to load persisted plugin data
+   * Internal method to load persisted plugin data.
+   *
+   * `composeId` runs outside the try/catch so a bad pluginId throws to the
+   * caller symmetrically with the persist path — silently returning `null`
+   * for "your pluginId is malformed" would look indistinguishable from "no
+   * data yet" and could mask a misconfiguration.
    */
-  private async _loadPersistedData(pluginId: string): Promise<string | null> {
+  private async _loadPersistedData(
+    pluginId: string,
+    key?: string,
+  ): Promise<string | null> {
+    assertPluginPersistenceKey(key);
+    const entityId = composeId(pluginId, key);
     try {
-      return await this._pluginUserPersistenceService.loadPluginUserData(pluginId);
+      return await this._pluginUserPersistenceService.loadPluginUserData(entityId);
     } catch (error) {
       PluginLog.err('PluginBridge: Failed to get persisted plugin data:', error);
       return null;

@@ -296,6 +296,10 @@ Iframe plugins automatically receive:
 - `addTask(task)` - Create a new task
 - `updateTask(taskId, updates)` - Update existing task
 
+#### Application State
+
+- `getAppState()` - Get the current application state (read-only; returns `PluginAppState`). An overview of the data returned is the JSON file exported via `Settings > Sync & Backup > Import/Export > Export data`. Example: `const state = await PluginAPI.getAppState();`
+
 #### Projects
 
 - `getAllProjects()` - Get all projects
@@ -463,10 +467,21 @@ const hooks = {
   CURRENT_TASK_CHANGE: 'currentTaskChange',
   FINISH_DAY: 'finishDay',
   LANGUAGE_CHANGE: 'languageChange',
-  PERSISTED_DATA_UPDATE: 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
 };
+```
 
+`PERSISTED_DATA_CHANGED` fires whenever this plugin's persisted data
+changes — local writes, remote sync deliveries, and bulk imports —
+_after_ the host has finished its initial boot load. The handler
+receives no payload; re-call `loadSyncedData(key?)` for any key your
+plugin tracks to get fresh data. There is no replay-on-register and no
+guaranteed ordering across rapid changes, so handlers must be
+idempotent. The typical pattern is: call `loadSyncedData()` once on
+plugin init, then subscribe to this hook for subsequent updates.
+
+```javascript
 // Register hook listener
 PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
   console.log(`Task ${taskId} completed!`);

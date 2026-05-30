@@ -1,57 +1,39 @@
 For all current downloads, package links, and platform-specific notes: [check the wiki](https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install).
 
-## Super Productivity 18.6.0
+### Features
 
-### Highlights
+- Added OneDrive as a sync provider and marked it as desktop/mobile-only.
+- Improved the project archive flow.
+- Added a Start break action to break reminders.
+- Improved the task swipe menu appearance.
+- Improved the task attachment dialog and URL handling.
+- Delayed rating prompts for 30 days after crashes or data damage.
+- Added plugin persistence improvements, persisted-data change hooks, and support for multiple handlers per plugin hook.
+- Improved plugin sync data size.
 
-- Added scheduling warnings for overlapping tasks and tasks outside work hours (#7559).
-- Added repeat-after-completion for repeating tasks (#7524).
-- Added configurable dynamic breaks for Flowtime (#7402).
-- Added an image picker for choosing background images (#7564).
-- Added per-provider include/exclude regex filters for iCal calendars (#7528).
+### Fixes
 
-### Tasks, Focus & UI
+- Fixed Android edge-to-edge, keyboard inset, startup overlay, and dark-theme keyboard resize issues.
+- Improved Android recovery from transient WebView startup failures.
+- Kept Android foreground services alive when the app task is removed.
+- Fixed iOS time tracking and focus mode state after app resume.
+- Restored iOS local notifications and fixed notification timing after the permission dialog.
+- Prevented the iOS tag picker from opening automatically when opening tasks in portrait mode.
+- Fixed macOS app quit behavior.
+- Updated search results immediately when a task is marked done.
+- Guarded the schedule dialog against malformed time input.
+- Retried transient client-side network GET failures once.
+- Hardened OneDrive sync follow-ups and encrypted sync retry handling.
+- Fixed recurring task cases around start dates moved to today and overdue untracked instances from yesterday.
+- Preserved issue-number prefixes on imported issue tasks.
+- Fixed the label shown when re-opening a completed task.
+- Preserved the visible default notes template when toggling checklist mode.
+- Fixed browser blocking when sync removes the active project.
+- Guarded boards loading against malformed payloads.
+- Allowed parent tasks and subtasks to share tags independently.
+- Improved selected-subtask highlighting, current-task styling in Zen and Lines, and habit tracker day-circle readability.
+- Improved German, Turkish, and mismatched translation wording.
 
-- Show the Pomodoro timer in the browser tab title (#7579).
-- Added a notes panel shortcut.
-- Prevented task creation during IME conversion (#7557).
-- Persist collapsed sections across project switches (#7600).
-- Restored ArrowRight focus into the task detail panel.
-- Format add-task-bar times using the user's locale (#7563).
-- Improved UI consistency, wording capitalization, task done-toggle styling, plugin dialog backgrounds, and Velvet/liquid-glass theme details.
+### Performance
 
-### Calendar & Worklog
-
-- Prevent Google time-block sync from hitting write rate limits.
-- Request verified Google OAuth scopes.
-- Harden iCal regex filters against ReDoS.
-- Reload worklog on context changes so metrics stay per project.
-
-### Sync & SuperSync
-
-- Improved SuperSync server speed and correctness (#7621), faster uploads, and optimized status/conflict checks.
-- Fixed WebSocket reconnect storms caused by shared client IDs.
-- Preserve WebDAV credentials on transient auth errors and improve WebDAV connection tests (#7617).
-- Retry transient web fetch failures/rate-limited uploads and surface warnings.
-- Hardened SuperSync snapshot replay, storage quota accounting, retry idempotency, cleanup, and deploy/migration recovery.
-- Handle wrapped backup encryption imports and filter stale ops after synced import.
-
-### Plugins & Integrations
-
-- Added plugin automation triggers for task start/stop and a removeTag action.
-- Added plugin onReady() API with IPC ping and fixed consent write delay (#7578).
-- Improved plugin tag ID handling and protected the virtual TODAY tag from plugin sync.
-- Use template tray icons on macOS (#7609).
-- Retry Wayland idle helper startup on Electron/Linux (#7527).
-- Handle Android WebView initialization and foreground service failures safely.
-
-### Privacy & Security
-
-- Prevent exported logs from leaking user content (#7619).
-- Sanitized sync-related logging and hardened SuperSync error handling, quota paths, rate limits, and content-encoding handling.
-- Avoid PWA startup stalls during network changes.
-
-### Localization
-
-- Updated Vietnamese translation (#7576).
-- Moved collapsed subtasks label to translations and improved capitalization.
+- Skipped no-op plugin document-mode saves.

@@ -81,11 +81,13 @@ import type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
 import type { LocalFileSyncPrivateCfg as PackageLocalFileSyncPrivateCfg } from '@sp/sync-providers/local-file';
 import type { NextcloudPrivateCfg, WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
+import type { OneDrivePrivateCfg } from '@sp/sync-providers/onedrive';
 
 export type LocalFileSyncPrivateCfg = PackageLocalFileSyncPrivateCfg;
 
 export type SyncProviderPrivateCfg =
   | DropboxPrivateCfg
+  | OneDrivePrivateCfg
   | WebdavPrivateCfg
   | SuperSyncPrivateCfg
   | LocalFileSyncPrivateCfg
@@ -98,11 +100,13 @@ export type PrivateCfgByProviderId<T extends SyncProviderId> =
       ? WebdavPrivateCfg
       : T extends SyncProviderId.Dropbox
         ? DropboxPrivateCfg
-        : T extends SyncProviderId.SuperSync
-          ? SuperSyncPrivateCfg
-          : T extends SyncProviderId.Nextcloud
-            ? NextcloudPrivateCfg
-            : never;
+        : T extends SyncProviderId.OneDrive
+          ? OneDrivePrivateCfg
+          : T extends SyncProviderId.SuperSync
+            ? SuperSyncPrivateCfg
+            : T extends SyncProviderId.Nextcloud
+              ? NextcloudPrivateCfg
+              : never;
 
 // ============================================================================
 // Current Provider Config (for observable emissions)

@@ -205,6 +205,14 @@ export const isSameDuplicateOperation = (
   originalTimestamp: number = op.timestamp,
 ): boolean => {
   const storedVectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+  const incomingEncrypted = op.isPayloadEncrypted ?? false;
+
+  // encrypt() uses a fresh random IV per call, so retried ciphertext differs
+  // from the stored bytes. Skip byte-equality when both sides are encrypted;
+  // the structural fields below still guard against id collisions.
+  const payloadsMatch =
+    (existingOp.isPayloadEncrypted && incomingEncrypted) ||
+    areJsonValuesEqual(existingOp.payload, op.payload);
 
   return (
     existingOp.userId === userId &&
@@ -213,7 +221,7 @@ export const isSameDuplicateOperation = (
     existingOp.opType === op.opType &&
     existingOp.entityType === op.entityType &&
     existingOp.entityId === (op.entityId ?? null) &&
-    areJsonValuesEqual(existingOp.payload, op.payload) &&
+    payloadsMatch &&
     areJsonValuesEqual(existingOp.vectorClock, storedVectorClock) &&
     existingOp.schemaVersion === op.schemaVersion &&
     isSameDuplicateTimestamp(
@@ -223,7 +231,7 @@ export const isSameDuplicateOperation = (
       originalTimestamp,
       maxClockDriftMs,
     ) &&
-    existingOp.isPayloadEncrypted === (op.isPayloadEncrypted ?? false) &&
+    existingOp.isPayloadEncrypted === incomingEncrypted &&
     existingOp.syncImportReason === (op.syncImportReason ?? null)
   );
 };

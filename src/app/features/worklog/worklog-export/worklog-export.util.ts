@@ -7,6 +7,7 @@ import { unique } from '../../../util/unique';
 import { ProjectCopy } from '../../project/project.model';
 import { TagCopy } from '../../tag/tag.model';
 import { WorklogTask } from '../../tasks/task.model';
+import { resolveDisplayTagIds } from '../../tasks/util/resolve-display-tag-ids.util';
 import { WorklogExportSettingsCopy, WorklogGrouping } from '../worklog.model';
 import { Log } from '../../../core/log';
 import {
@@ -204,11 +205,10 @@ const getTaskFields = (task: WorklogTask, data: WorklogExportData): TaskFields =
       ]
     : [];
 
-  // by design subtasks don't have tags, so we must set its parent's tags
-  let tags = parentTask ? parentTask.tagIds : task.tagIds;
-  tags = tags.map(
-    (tagId) => (data.tags.find((tag) => tag.id === tagId) as TagCopy).title,
-  );
+  const tags = resolveDisplayTagIds(
+    task,
+    typeof parentTask === 'object' ? parentTask : undefined,
+  ).map((tagId) => (data.tags.find((tag) => tag.id === tagId) as TagCopy).title);
 
   const tasks = [task];
   return { tasks, titlesWithSub, titles, notes, projects, tags };

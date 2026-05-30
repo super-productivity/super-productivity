@@ -27,6 +27,7 @@ import {
   saveRateDialogState,
   shouldShowRateDialog,
 } from '../../features/dialog-please-rate/rate-dialog-state';
+import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
 import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
@@ -429,7 +430,7 @@ export class StartupService {
     }
 
     const state = loadRateDialogState();
-    if (!shouldShowRateDialog(state, appStarts)) {
+    if (!shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError())) {
       return;
     }
     this._matDialog

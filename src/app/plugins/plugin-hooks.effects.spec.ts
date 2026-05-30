@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { EMPTY, Observable, of } from 'rxjs';
+import { EMPTY, Observable, of, ReplaySubject } from 'rxjs';
 import { PluginHooksEffects } from './plugin-hooks.effects';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
@@ -13,12 +13,17 @@ import {
   selectCurrentTask,
   selectTaskById,
 } from '../features/tasks/store/task.selectors';
+import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
+import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
+import { HydrationStateService } from '../op-log/apply/hydration-state.service';
+import { PluginUserData } from './plugin-persistence.model';
 
 describe('PluginHooksEffects', () => {
   let effects: PluginHooksEffects;
   let actions$: Observable<any>;
   let pluginServiceMock: jasmine.SpyObj<PluginService>;
   let store: MockStore;
+  let gateSubject: ReplaySubject<boolean>;
 
   const createMockTask = (overrides: Partial<TaskWithSubTasks> = {}): TaskWithSubTasks =>
     ({
@@ -55,7 +60,16 @@ describe('PluginHooksEffects', () => {
 
   beforeEach(() => {
     mockTask = createMockTask();
-    pluginServiceMock = jasmine.createSpyObj('PluginService', ['dispatchHook']);
+    pluginServiceMock = jasmine.createSpyObj('PluginService', [
+      'dispatchHook',
+      'dispatchHookToPlugin',
+    ]);
+
+    // MUST be a ReplaySubject(1) / Subject — NOT BehaviorSubject(true) or
+    // of(true). The boot-suppression spec depends on the gate being un-emitted
+    // at boot `loadAllData` time; a BehaviorSubject(true) would emit on
+    // subscribe and make that spec pass for the wrong reason.
+    gateSubject = new ReplaySubject<boolean>(1);
 
     TestBed.configureTestingModule({
       providers: [
@@ -76,6 +90,26 @@ describe('PluginHooksEffects', () => {
         // workContextChange$ reads activeWorkContext$ at construction; an
         // empty stream keeps that effect inert for the other effects' tests.
         { provide: WorkContextService, useValue: { activeWorkContext$: EMPTY } },
+        {
+          provide: SyncTriggerService,
+          useValue: {
+            afterInitialSyncDoneAndDataLoadedInitially$: gateSubject.asObservable(),
+          },
+        },
+        // Provided with isInSyncWindow=true so a future regression that adds
+        // `skipDuringSyncWindow`/`waitForSyncWindow` to the effect would
+        // silently drop/defer emissions and fail the firePersistedDataChanged$
+        // specs. See plan §"Boot gate" — the hook must fire during the sync
+        // window because remote-sync deliveries are exactly the motivating
+        // case.
+        {
+          provide: HydrationStateService,
+          useValue: {
+            isInSyncWindow: () => true,
+            isInSyncWindow$: of(true),
+            isApplyingRemoteOps: () => true,
+          },
+        },
       ],
     });
 
@@ -339,6 +373,171 @@ describe('PluginHooksEffects', () => {
         expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
           PluginHooks.CURRENT_TASK_CHANGE,
           { current: null, previous: mutatedTask },
+        );
+        sub.unsubscribe();
+        done();
+      }, 0);
+    });
+  });
+
+  describe('firePersistedDataChanged$', () => {
+    const entry = (id: string, data: string): PluginUserData => ({ id, data });
+
+    const setPluginData = (data: PluginUserData[]): void => {
+      store.overrideSelector(selectPluginUserDataFeatureState, data);
+      store.refreshState();
+    };
+
+    it('does not fire while the gate has not emitted (boot suppression)', (done) => {
+      actions$ = of();
+      store.overrideSelector(selectPluginUserDataFeatureState, [entry('a', 'gz:1')]);
+
+      const sub = effects.firePersistedDataChanged$.subscribe();
+      // Drive a "loadAllData" boot dispatch by swapping the selector before the
+      // gate fires. Effect must NOT emit because the gate is still un-emitted.
+      setPluginData([entry('a', 'gz:2')]);
+
+      setTimeout(() => {
+        expect(pluginServiceMock.dispatchHookToPlugin).not.toHaveBeenCalled();
+
+        // Now open the gate. The current state becomes the pairwise baseline;
+        // still no fire because pairwise needs a second emission.
+        gateSubject.next(true);
+
+        setTimeout(() => {
+          expect(pluginServiceMock.dispatchHookToPlugin).not.toHaveBeenCalled();
+          sub.unsubscribe();
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('fires once per changed pluginId on local writes after the gate opens', (done) => {
+      actions$ = of();
+      store.overrideSelector(selectPluginUserDataFeatureState, [entry('a', 'gz:1')]);
+
+      const sub = effects.firePersistedDataChanged$.subscribe();
+      gateSubject.next(true);
+
+      // Baseline established; a second emission with changed data fires.
+      setPluginData([entry('a', 'gz:2')]);
+
+      setTimeout(() => {
+        expect(pluginServiceMock.dispatchHookToPlugin).toHaveBeenCalledTimes(1);
+        expect(pluginServiceMock.dispatchHookToPlugin).toHaveBeenCalledWith(
+          'a',
+          PluginHooks.PERSISTED_DATA_CHANGED,
+        );
+        sub.unsubscribe();
+        done();
+      }, 0);
+    });
+
+    it('fires the diff after a post-boot wholesale load (SYNC_IMPORT / BACKUP_IMPORT / recovery)', (done) => {
+      // Same code path as #post-boot loadAllData — selector emits a new array,
+      // differ reports only the entries whose data actually changed.
+      actions$ = of();
+      store.overrideSelector(selectPluginUserDataFeatureState, [
+        entry('keep', 'gz:s'),
+        entry('change', 'gz:old'),
+        entry('removed', 'gz:gone'),
+      ]);
+
+      const sub = effects.firePersistedDataChanged$.subscribe();
+      gateSubject.next(true);
+
+      setPluginData([
+        entry('keep', 'gz:s'), // unchanged → no fire
+        entry('change', 'gz:new'), // updated → fire
+        entry('added', 'gz:fresh'), // added → fire
+        // 'removed' missing → fire
+      ]);
+
+      setTimeout(() => {
+        const dispatched = pluginServiceMock.dispatchHookToPlugin.calls
+          .allArgs()
+          .map(([pluginId]) => pluginId)
+          .sort();
+        expect(dispatched).toEqual(['added', 'change', 'removed']);
+        sub.unsubscribe();
+        done();
+      }, 0);
+    });
+
+    it('isolates handlers per plugin — a change in A does not fire B', (done) => {
+      actions$ = of();
+      store.overrideSelector(selectPluginUserDataFeatureState, [
+        entry('a', 'gz:1'),
+        entry('b', 'gz:1'),
+      ]);
+
+      const sub = effects.firePersistedDataChanged$.subscribe();
+      gateSubject.next(true);
+
+      setPluginData([entry('a', 'gz:2'), entry('b', 'gz:1')]);
+
+      setTimeout(() => {
+        expect(pluginServiceMock.dispatchHookToPlugin).toHaveBeenCalledTimes(1);
+        expect(pluginServiceMock.dispatchHookToPlugin).toHaveBeenCalledWith(
+          'a',
+          PluginHooks.PERSISTED_DATA_CHANGED,
+        );
+        expect(pluginServiceMock.dispatchHookToPlugin).not.toHaveBeenCalledWith(
+          'b',
+          jasmine.anything(),
+        );
+        sub.unsubscribe();
+        done();
+      }, 0);
+    });
+
+    it('fires on delete', (done) => {
+      actions$ = of();
+      store.overrideSelector(selectPluginUserDataFeatureState, [
+        entry('a', 'gz:1'),
+        entry('b', 'gz:1'),
+      ]);
+
+      const sub = effects.firePersistedDataChanged$.subscribe();
+      gateSubject.next(true);
+
+      setPluginData([entry('a', 'gz:1')]);
+
+      setTimeout(() => {
+        expect(pluginServiceMock.dispatchHookToPlugin).toHaveBeenCalledTimes(1);
+        expect(pluginServiceMock.dispatchHookToPlugin).toHaveBeenCalledWith(
+          'b',
+          PluginHooks.PERSISTED_DATA_CHANGED,
+        );
+        sub.unsubscribe();
+        done();
+      }, 0);
+    });
+
+    it('collapses keyed entityIds to the owner pluginId and fires once', (done) => {
+      // Stage A keyed storage: a plugin with multiple `pluginId:key` entries
+      // changing in one emission must fire its handler (registered under the
+      // bare pluginId) exactly once.
+      actions$ = of();
+      store.overrideSelector(selectPluginUserDataFeatureState, [
+        entry('foo:doc-1', 'gz:1'),
+        entry('foo:doc-2', 'gz:1'),
+      ]);
+
+      const sub = effects.firePersistedDataChanged$.subscribe();
+      gateSubject.next(true);
+
+      setPluginData([
+        entry('foo:doc-1', 'gz:2'), // updated
+        entry('foo:doc-2', 'gz:2'), // updated
+        entry('foo:doc-3', 'gz:new'), // added
+      ]);
+
+      setTimeout(() => {
+        expect(pluginServiceMock.dispatchHookToPlugin).toHaveBeenCalledTimes(1);
+        expect(pluginServiceMock.dispatchHookToPlugin).toHaveBeenCalledWith(
+          'foo',
+          PluginHooks.PERSISTED_DATA_CHANGED,
         );
         sub.unsubscribe();
         done();

@@ -1,5 +1,6 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { IDBPDatabase, unwrap } from 'idb';
+import { forceCloseDatabase } from 'fake-indexeddb';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
@@ -109,7 +110,13 @@ describe('OperationLogStoreService', () => {
       expect((service as any)._initPromise).toBeDefined();
 
       const raw = unwrap((service as any)._db as IDBPDatabase);
-      raw.dispatchEvent(new Event('versionchange'));
+      // fake-indexeddb's FakeEventTarget rejects native DOM `Event` (no
+      // `initialized` flag), so dispatch its own `IDBVersionChangeEvent`
+      // (installed globally by `fake-indexeddb/auto`) which derives from
+      // the polyfill's `FakeEvent`.
+      raw.dispatchEvent(
+        new IDBVersionChangeEvent('versionchange', { oldVersion: 1, newVersion: 2 }),
+      );
 
       // The handler runs synchronously: cached state cleared and the
       // connection actually closed (so it cannot block a schema upgrade).
@@ -131,12 +138,18 @@ describe('OperationLogStoreService', () => {
       await openViaLazyInit();
 
       const raw = unwrap((service as any)._db as IDBPDatabase);
-      raw.dispatchEvent(new Event('close'));
+      // Drive the spec-compliant forced-close path; fake-indexeddb fires a real
+      // `close` event through its internal pipeline (unlike dispatchEvent of a
+      // synthetic DOM Event, which its FakeEventTarget shim rejects). The cast
+      // works around an incorrect `(db: typeof FDBDatabase)` type declaration
+      // in fake-indexeddb's types.d.ts — the runtime expects an instance.
+      forceCloseDatabase(raw as unknown as Parameters<typeof forceCloseDatabase>[0]);
+      // Let queued tasks (connection bookkeeping) settle before reopening.
+      await new Promise((r) => setTimeout(r, 0));
 
       expect((service as any)._db).toBeUndefined();
       expect((service as any)._initPromise).toBeUndefined();
       await expectAsync(service.getLastSeq()).toBeResolved();
-      raw.close();
     });
   });
 

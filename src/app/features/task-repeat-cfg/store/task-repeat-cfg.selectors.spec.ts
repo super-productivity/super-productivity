@@ -6,6 +6,7 @@ import {
   selectAllUnprocessedTaskRepeatCfgs,
   selectTaskRepeatCfgsForExactDay,
   selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   selectTaskRepeatCfgById,
   selectTaskRepeatCfgByIdAllowUndefined,
   selectTaskRepeatCfgsWithStartTime,
@@ -995,6 +996,34 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
   });
 });
 
+describe('selectActiveTaskRepeatCfgs', () => {
+  it('should exclude repeat configs belonging to archived projects', () => {
+    const cfg1 = dummyRepeatable('R1', { title: 'Active Task', projectId: 'proj1' });
+    const cfg2 = dummyRepeatable('R2', {
+      title: 'Archived Task',
+      projectId: 'archivedProj',
+    });
+    const cfg3 = dummyRepeatable('R3', { title: 'No Project Task', projectId: null });
+
+    const result = selectActiveTaskRepeatCfgs.projector(
+      [cfg1, cfg2, cfg3],
+      new Set<string>(['archivedProj']),
+    );
+
+    expect(result).not.toContain(cfg2);
+    expect(result).toContain(cfg1);
+    expect(result).toContain(cfg3);
+  });
+
+  it('should return all cfgs when no archived projects', () => {
+    const cfg1 = dummyRepeatable('R1', { projectId: 'proj1' });
+    const cfg2 = dummyRepeatable('R2', { projectId: 'proj2' });
+
+    const result = selectActiveTaskRepeatCfgs.projector([cfg1, cfg2], new Set<string>());
+    expect(result).toEqual([cfg1, cfg2]);
+  });
+});
+
 // Issue #5806: Planner shows less scheduled tasks than scheduled/planned view
 describe('Issue #5806 - Weekly tasks with correct weekday show in planner', () => {
   it('should show task on Sunday when sunday=true and checking Sunday', () => {
@@ -1298,5 +1327,73 @@ describe('Timezone Edge Cases for selectTaskRepeatCfgsForExactDay', () => {
     const sameDayStr = getDbDateStr(laterSameDay); // '2025-08-01'
     const shouldNotCreate = taskConfig.lastTaskCreationDay === sameDayStr;
     expect(shouldNotCreate).toBe(true);
+  });
+});
+
+describe('archived projects filter for selectActiveTaskRepeatCfgs', () => {
+  it('should NOT return cfg belonging to an archived project', () => {
+    const result = selectActiveTaskRepeatCfgs.projector(
+      [
+        dummyRepeatable('R1', {
+          repeatCycle: 'DAILY',
+          startDate: '2022-01-10',
+          projectId: 'ARCHIVED_PROJECT',
+        }),
+      ],
+      new Set<string>(['ARCHIVED_PROJECT']),
+    );
+    expect(result.map((item) => item.id)).toEqual([]);
+  });
+
+  it('should return cfg belonging to a non-archived project', () => {
+    const result = selectActiveTaskRepeatCfgs.projector(
+      [
+        dummyRepeatable('R1', {
+          repeatCycle: 'DAILY',
+          startDate: '2022-01-10',
+          projectId: 'ACTIVE_PROJECT',
+        }),
+      ],
+      new Set<string>(['ARCHIVED_PROJECT']),
+    );
+    expect(result.map((item) => item.id)).toEqual(['R1']);
+  });
+
+  it('should return cfg with no project even when archived projects exist', () => {
+    const result = selectActiveTaskRepeatCfgs.projector(
+      [
+        dummyRepeatable('R1', {
+          repeatCycle: 'DAILY',
+          startDate: '2022-01-10',
+          projectId: null,
+        }),
+      ],
+      new Set<string>(['ARCHIVED_PROJECT']),
+    );
+    expect(result.map((item) => item.id)).toEqual(['R1']);
+  });
+
+  it('should filter out only archived projects keeping active ones', () => {
+    const result = selectActiveTaskRepeatCfgs.projector(
+      [
+        dummyRepeatable('R1', {
+          repeatCycle: 'DAILY',
+          startDate: '2022-01-10',
+          projectId: 'ACTIVE',
+        }),
+        dummyRepeatable('R2', {
+          repeatCycle: 'DAILY',
+          startDate: '2022-01-10',
+          projectId: 'ARCHIVED',
+        }),
+        dummyRepeatable('R3', {
+          repeatCycle: 'DAILY',
+          startDate: '2022-01-10',
+          projectId: null,
+        }),
+      ],
+      new Set<string>(['ARCHIVED']),
+    );
+    expect(result.map((item) => item.id)).toEqual(['R1', 'R3']);
   });
 });

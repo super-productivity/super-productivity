@@ -275,13 +275,6 @@ describe('SnapshotService', () => {
       });
     });
 
-    // Skip: Testing size limit requires mocking zlib which is a native module.
-    // The size check is a simple comparison and is implicitly tested by integration tests.
-    it.skip('should skip caching if snapshot is too large', async () => {
-      // This test is skipped because zlib cannot be easily mocked
-      // The MAX_SNAPSHOT_SIZE_BYTES check is a simple comparison
-    });
-
     it('should clear a previously-cached snapshot when the new one is oversized', async () => {
       // Regression for W11: when prepared.cacheable is false, the stale
       // snapshot row must be cleared (otherwise callers see an outdated blob

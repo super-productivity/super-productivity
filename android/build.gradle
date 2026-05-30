@@ -1,6 +1,6 @@
 buildscript {
 
-    ext.kotlin_version = "1.9.20"
+    ext.kotlin_version = "2.2.20"
     repositories {
         google()
         mavenCentral()

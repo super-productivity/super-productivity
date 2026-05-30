@@ -41,24 +41,26 @@ describe('DateService timezone test', () => {
     });
 
     it('should handle startOfNextDayDiff correctly', () => {
-      // Set startOfNextDayDiff to 2 hours (simulating work day ending at 2 AM)
-      service.setStartOfNextDayDiff(2);
+      jasmine.clock().install();
 
-      // Test at 1 AM local time
-      const now = new Date();
-      now.setHours(1, 0, 0, 0);
+      try {
+        // Set startOfNextDayDiff to 2 hours (simulating work day ending at 2 AM).
+        service.setStartOfNextDayDiff(2);
+        jasmine.clock().mockDate(new Date(2025, 0, 17, 1, 0, 0));
 
-      const result = service.todayStr(now);
+        const result = service.todayStr();
 
-      console.log('DateService with startOfNextDayDiff:', {
-        startOfNextDayDiffMs: service.getStartOfNextDayDiffMs(),
-        localTime: now.toString(),
-        result: result,
-        expectedBehavior: 'Should treat 1 AM as previous day due to 2-hour offset',
-      });
+        console.log('DateService with startOfNextDayDiff:', {
+          startOfNextDayDiffMs: service.getStartOfNextDayDiffMs(),
+          localTime: new Date().toString(),
+          result: result,
+          expectedBehavior: 'Should treat 1 AM as previous day due to 2-hour offset',
+        });
 
-      // This is working as intended - adjusting the date based on work day settings
-      expect(result).toBeDefined();
+        expect(result).toBe('2025-01-16');
+      } finally {
+        jasmine.clock().uninstall();
+      }
     });
   });
 });

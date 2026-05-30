@@ -426,6 +426,56 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
   });
 
+  describe('startDate min floor (#7768 Bug 4)', () => {
+    const getStartDateMin = (
+      fixture: ComponentFixture<DialogEditTaskRepeatCfgComponent>,
+    ): unknown => {
+      const fields = fixture.componentInstance.essentialFormFields();
+      const startDateField = fields.find((f) => f.key === 'startDate');
+      return (startDateField?.templateOptions as Record<string, unknown> | undefined)?.[
+        'min'
+      ];
+    };
+
+    const todayStr = (): string => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    it('floors startDate to today for a new repeat cfg created from a task', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      expect(getStartDateMin(fixture)).toBe(todayStr());
+    });
+
+    it('keeps the past startDate as the floor when editing an existing past cfg', async () => {
+      const pastCfg: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startDate: '2020-01-15',
+      };
+      const fixture = await setupTestBed({ repeatCfg: pastCfg });
+      expect(getStartDateMin(fixture)).toBe('2020-01-15');
+    });
+
+    it('floors to today when editing a cfg whose startDate is in the future', async () => {
+      const future = new Date();
+      future.setFullYear(future.getFullYear() + 1);
+      const yyyy = future.getFullYear();
+      const mm = String(future.getMonth() + 1).padStart(2, '0');
+      const dd = String(future.getDate()).padStart(2, '0');
+      const futureStr = `${yyyy}-${mm}-${dd}`;
+      const futureCfg: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startDate: futureStr,
+      };
+      const fixture = await setupTestBed({ repeatCfg: futureCfg });
+      expect(getStartDateMin(fixture)).toBe(todayStr());
+    });
+  });
+
   describe('save button disabled state (issue #5828)', () => {
     it('should not allow save while isLoading is true', fakeAsync(async () => {
       const taskWithRepeatCfg = {

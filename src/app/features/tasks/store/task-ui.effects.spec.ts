@@ -73,6 +73,12 @@ describe('TaskUiEffects', () => {
       isAddToBottom: false,
     });
 
+  // overrideSelector pins values on the module-level selector via setResult().
+  // Reset after each test so the override doesn't leak into other spec files.
+  afterEach(() => {
+    TestBed.inject(MockStore).resetSelectors();
+  });
+
   describe('taskCreatedSnack$ with visible task', () => {
     beforeEach(() => {
       actions$ = new Subject<Action>();

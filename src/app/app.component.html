@@ -36,6 +36,7 @@
   <div
     class="app-container"
     [class.has-mobile-bottom-nav]="isShowMobileButtonNav()"
+    [class.has-vertical-action-bar]="isVerticalActionBar()"
     [class.app-entrance]="isAppEntrance()"
     [dir]="isRTL ? 'rtl' : 'ltr'"
   >
@@ -46,16 +47,16 @@
     </magic-side-nav>
 
     <main class="main-content">
-      <header
-        [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
-        class="header-wrapper"
-      >
-        <main-header></main-header>
-
-        <banner></banner>
-      </header>
-
       <right-panel>
+        <header
+          [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
+          class="header-wrapper"
+        >
+          <main-header></main-header>
+
+          <banner></banner>
+        </header>
+
         <div
           #routeWrapper
           [@warpRoute]="getPage(o)"

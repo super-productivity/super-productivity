@@ -347,15 +347,15 @@ const plugins = [
     },
   },
   {
-    name: 'document-mode',
-    path: 'document-mode',
+    name: 'doc-mode',
+    path: 'doc-mode',
     needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
       const targetDir = path.join(
         __dirname,
-        '../../../src/assets/bundled-plugins/document-mode',
+        '../../../src/assets/bundled-plugins/doc-mode',
       );
       if (!fs.existsSync(targetDir)) {
         fs.mkdirSync(targetDir, { recursive: true });
