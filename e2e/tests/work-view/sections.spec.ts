@@ -80,22 +80,29 @@ test.describe('Sections', () => {
    * so the read can't race the re-render. This is the failure the two
    * `test.fixme`s below hit; keeping the guard here lets the active tests
    * stay reliable instead of throwing "no bounding box".
+   *
+   * The box captured *inside* the poll is the one returned — re-reading
+   * after the poll reopens the very race the poll closes (the list can
+   * re-render in the gap, making the second read return `null`).
    */
   const stableBoundingBox = async (
     locator: import('@playwright/test').Locator,
   ): Promise<{ x: number; y: number; width: number; height: number }> => {
     await locator.waitFor({ state: 'visible', timeout: 10000 });
+    let box: { x: number; y: number; width: number; height: number } | null = null;
     await expect
       .poll(
         async () => {
           const b = await locator.boundingBox();
-          return !!b && b.width > 0 && b.height > 0;
+          if (b && b.width > 0 && b.height > 0) {
+            box = b;
+            return true;
+          }
+          return false;
         },
         { timeout: 10000 },
       )
       .toBe(true);
-    // The poll guarantees a real box exists; re-read it for the gesture.
-    const box = await locator.boundingBox();
     if (!box) throw new Error('drag source/target has no bounding box');
     return box;
   };
