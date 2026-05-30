@@ -257,7 +257,7 @@
         "PAUSE": "Pausa",
         "POMODORO_BREAK_RUNNING": "El descanso #{{cycleNr}} está en curso",
         "POMODORO_SESSION_RUNNING": "La sesión Pomodoro #{{cycleNr}} está en curso",
-        "RESUME": "Currículum",
+        "RESUME": "Reanudar",
         "SESSION_RUNNING": "La sesión de enfoque está en curso",
         "START": "INICIO",
         "TO_FOCUS_OVERLAY": "A superposición de enfoque",
