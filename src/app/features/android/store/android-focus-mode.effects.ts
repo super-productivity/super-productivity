@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
-import { Store } from '@ngrx/store';
+import { Action, Store } from '@ngrx/store';
 import { filter, map, pairwise, startWith, tap, withLatestFrom } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
@@ -14,12 +14,21 @@ import {
 } from '../../focus-mode/store/focus-mode.selectors';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import { selectCurrentTask, selectCurrentTaskId } from '../../tasks/store/task.selectors';
-import { combineLatest } from 'rxjs';
+import { combineLatest, Observable } from 'rxjs';
 import { FocusModeMode, TimerState } from '../../focus-mode/focus-mode.model';
 import { DroidLog } from '../../../core/log';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+
+/**
+ * On app resume, fire a single `tick()` so the wall-clock-based focus reducer
+ * snaps the in-app countdown back to the truth after the WebView interval was
+ * frozen in the background (#7856). The `tick` reducer is a no-op when the timer
+ * is idle or paused, so no extra guard is needed here.
+ */
+export const createFocusResumeTick$ = (onResume$: Observable<void>): Observable<Action> =>
+  onResume$.pipe(map(() => focusModeActions.tick()));
 
 @Injectable()
 export class AndroidFocusModeEffects {
@@ -164,6 +173,15 @@ export class AndroidFocusModeEffects {
         map(() => focusModeActions.unPauseFocusSession()),
       ),
     );
+
+  // When the app returns to the foreground, the WebView's interval(1000) may have
+  // been frozen while backgrounded, leaving the in-app focus countdown stale and
+  // adrift from the still-accurate native notification (#7856). Fire one tick so
+  // the wall-clock reducer snaps the countdown back to the truth — mirroring how
+  // time tracking re-syncs from native on resume (syncOnResume$).
+  resyncFocusTimerOnResume$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(() => createFocusResumeTick$(androidInterface.onResume$));
 
   handleFocusSkip$ =
     IS_ANDROID_WEB_VIEW &&
