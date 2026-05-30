@@ -30,6 +30,26 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 export const createFocusResumeTick$ = (onResume$: Observable<void>): Observable<Action> =>
   onResume$.pipe(map(() => focusModeActions.tick()));
 
+/**
+ * Whether the focus-mode notification needs a fresh push to the native service.
+ * Elapsed-only changes are throttled to 5s (the native handler already ticks
+ * every second), but pause/purpose changes — and the large elapsed jump a resume
+ * `tick()` produces (#7856) — must propagate immediately so the notification
+ * reconciles with the corrected in-app countdown.
+ */
+export const hasFocusNotificationStateChanged = (
+  prevTimer: TimerState | undefined,
+  currTimer: TimerState,
+): boolean => {
+  if (!prevTimer) return true;
+  // Pause state changed
+  if (prevTimer.isRunning !== currTimer.isRunning) return true;
+  // Purpose changed (work -> break or vice versa)
+  if (prevTimer.purpose !== currTimer.purpose) return true;
+  // Otherwise throttle elapsed-only updates to every 5 seconds
+  return Math.abs(currTimer.elapsed - prevTimer.elapsed) >= 5000;
+};
+
 @Injectable()
 export class AndroidFocusModeEffects {
   private _store = inject(Store);
@@ -107,7 +127,7 @@ export class AndroidFocusModeEffects {
                   'Failed to start focus mode notification',
                   true,
                 );
-              } else if (this._hasStateChanged(prev?.timer, timer, taskTitle, curr)) {
+              } else if (hasFocusNotificationStateChanged(prev?.timer, timer)) {
                 // Only update if something significant changed
                 DroidLog.log('AndroidFocusModeEffects: Updating focus mode service', {
                   title,
@@ -181,7 +201,15 @@ export class AndroidFocusModeEffects {
   // time tracking re-syncs from native on resume (syncOnResume$).
   resyncFocusTimerOnResume$ =
     IS_ANDROID_WEB_VIEW &&
-    createEffect(() => createFocusResumeTick$(androidInterface.onResume$));
+    createEffect(() =>
+      createFocusResumeTick$(
+        androidInterface.onResume$.pipe(
+          tap(() =>
+            DroidLog.log('AndroidFocusModeEffects: App resumed, re-syncing focus timer'),
+          ),
+        ),
+      ),
+    );
 
   handleFocusSkip$ =
     IS_ANDROID_WEB_VIEW &&
@@ -284,34 +312,5 @@ export class AndroidFocusModeEffects {
       default:
         return 'Focus';
     }
-  }
-
-  private _hasStateChanged(
-    prevTimer: TimerState | undefined,
-    currTimer: TimerState,
-    taskTitle: string | null,
-    curr: {
-      timer: TimerState;
-      mode: FocusModeMode;
-      currentTask: { title: string } | null;
-      isBreakActive: boolean;
-      isLongBreak: boolean;
-      timeRemaining: number;
-    },
-  ): boolean {
-    if (!prevTimer) return true;
-
-    // Check if pause state changed
-    if (prevTimer.isRunning !== currTimer.isRunning) return true;
-
-    // Check if purpose changed (work -> break or vice versa)
-    if (prevTimer.purpose !== currTimer.purpose) return true;
-
-    // Only update notification every 5 seconds to reduce overhead
-    // (native service already updates every second)
-    const elapsedDiff = Math.abs(currTimer.elapsed - prevTimer.elapsed);
-    if (elapsedDiff >= 5000) return true;
-
-    return false;
   }
 }

@@ -21,8 +21,22 @@
 
 import { Subject } from 'rxjs';
 import { Action } from '@ngrx/store';
-import { createFocusResumeTick$ } from './android-focus-mode.effects';
+import {
+  createFocusResumeTick$,
+  hasFocusNotificationStateChanged,
+} from './android-focus-mode.effects';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
+import { TimerState } from '../../focus-mode/focus-mode.model';
+
+const MIN = 60_000;
+const workTimer = (elapsed: number, over: Partial<TimerState> = {}): TimerState => ({
+  isRunning: true,
+  startedAt: 0,
+  elapsed,
+  duration: 25 * MIN,
+  purpose: 'work',
+  ...over,
+});
 
 describe('AndroidFocusModeEffects: focus timer resume re-sync (#7856)', () => {
   let onResume$: Subject<void>;
@@ -51,5 +65,44 @@ describe('AndroidFocusModeEffects: focus timer resume re-sync (#7856)', () => {
 
     expect(emitted.length).toBe(3);
     emitted.forEach((a) => expect(a).toEqual(focusModeActions.tick()));
+  });
+});
+
+// The notification reconciles with the in-app countdown only when
+// syncFocusModeToNotification$ decides state changed. Elapsed-only updates are
+// throttled to 5s, but the large elapsed jump produced by a resume tick (#7856)
+// must cross that threshold so the corrected value is pushed to native — closing
+// the loop so BOTH the app and the notification end up correct.
+describe('hasFocusNotificationStateChanged (notification reconciliation, #7856)', () => {
+  it('pushes a native update after a resume tick (elapsed jumps well past 5s)', () => {
+    // Backgrounded at 5 min elapsed; resume tick recomputes elapsed to 15 min.
+    const beforeResume = workTimer(5 * MIN);
+    const afterResume = workTimer(15 * MIN);
+
+    expect(hasFocusNotificationStateChanged(beforeResume, afterResume)).toBe(true);
+  });
+
+  it('throttles a normal 1-second tick (elapsed diff < 5s)', () => {
+    expect(hasFocusNotificationStateChanged(workTimer(60_000), workTimer(61_000))).toBe(
+      false,
+    );
+  });
+
+  it('pushes immediately when the timer is paused/resumed (isRunning flips)', () => {
+    const running = workTimer(5 * MIN);
+    const paused = workTimer(5 * MIN, { isRunning: false });
+
+    expect(hasFocusNotificationStateChanged(running, paused)).toBe(true);
+  });
+
+  it('pushes immediately when purpose changes (work -> break)', () => {
+    const work = workTimer(5 * MIN);
+    const brk = workTimer(5 * MIN, { purpose: 'break' });
+
+    expect(hasFocusNotificationStateChanged(work, brk)).toBe(true);
+  });
+
+  it('always pushes the first emission (no previous state)', () => {
+    expect(hasFocusNotificationStateChanged(undefined, workTimer(0))).toBe(true);
   });
 });
