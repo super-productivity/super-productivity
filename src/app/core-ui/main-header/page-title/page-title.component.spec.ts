@@ -1,3 +1,4 @@
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Subject, of } from 'rxjs';
 import { NavigationEnd, Router } from '@angular/router';
@@ -141,15 +142,112 @@ describe('PageTitleComponent', () => {
     });
   });
 
-  describe('layout styles', () => {
-    it('allows long work-context titles to shrink before pushing header actions off screen', () => {
-      const componentDef = PageTitleComponent as unknown as {
-        ɵcmp: { styles: string[] };
-      };
-      const styles = componentDef.ɵcmp.styles.join('\n');
+  describe('layout', () => {
+    // Regression test for the bug where a long active-work-context title
+    // refused to shrink and pushed the trailing header actions off screen.
+    // We render the real component in a constrained-width flex row, then
+    // assert observable behavior: the title actually ellipsizes, and the
+    // trailing actions stay fully inside the row.
+    it('truncates long titles instead of pushing trailing actions off screen', async () => {
+      const LONG_TITLE = 'A very long project title '.repeat(20);
 
-      expect(styles).toContain('flex: 1 1 auto;');
-      expect(styles).toContain('min-width: 0;');
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        providers: [
+          {
+            provide: Router,
+            useValue: { events: new Subject<NavigationEnd>(), url: '/active/tasks' },
+          },
+          {
+            provide: BreakpointObserver,
+            useValue: { observe: () => of({ matches: false }) },
+          },
+          {
+            provide: WorkContextService,
+            useValue: {
+              activeWorkContextTitle$: of(LONG_TITLE),
+              activeWorkContextTypeAndId$: of({
+                activeId: 'p1',
+                activeType: 'PROJECT',
+              }),
+            },
+          },
+          {
+            provide: TaskViewCustomizerService,
+            useValue: { isCustomized: () => false },
+          },
+          {
+            provide: GlobalConfigService,
+            useValue: { cfg: () => ({ keyboard: {} }) },
+          },
+          {
+            provide: TranslateService,
+            useValue: { instant: (key: string) => key },
+          },
+        ],
+      })
+        // Strip Material/Router-dependent children but keep the structural
+        // markup (and crucially the component's `styles` array) so that the
+        // flex rules under test (`flex: 1 1 auto; min-width: 0;` on
+        // `.page-title`, `flex: 0 0 auto;` on `.page-title-actions`) are
+        // applied to real DOM nodes.
+        .overrideComponent(PageTitleComponent, {
+          set: {
+            imports: [],
+            template: `
+              <div class="page-title">{{ displayTitle() }}</div>
+              <div class="page-title-actions">
+                <button type="button">x</button>
+              </div>
+            `,
+          },
+        })
+        .compileComponents();
+
+      @Component({
+        standalone: true,
+        imports: [PageTitleComponent],
+        template: `
+          <div
+            #row
+            style="display: flex; align-items: center; width: 220px; box-sizing: border-box;"
+          >
+            <page-title></page-title>
+            <div
+              #trailing
+              class="trailing-actions"
+              style="flex: 0 0 auto; width: 40px;"
+            >
+              R
+            </div>
+          </div>
+        `,
+      })
+      class HostComponent {}
+
+      const fixture = TestBed.createComponent(HostComponent);
+      // Layout must be computed in the live DOM for width measurements.
+      document.body.appendChild(fixture.nativeElement);
+      try {
+        fixture.detectChanges();
+
+        const row = fixture.nativeElement.firstElementChild as HTMLElement;
+        const title = fixture.nativeElement.querySelector('.page-title') as HTMLElement;
+        const trailing = fixture.nativeElement.querySelector(
+          '.trailing-actions',
+        ) as HTMLElement;
+
+        // Title actually overflows its rendered box -> ellipsis is active.
+        expect(title.scrollWidth).toBeGreaterThan(title.clientWidth);
+
+        // Trailing actions are still fully contained within the row.
+        const rowRect = row.getBoundingClientRect();
+        const trailingRect = trailing.getBoundingClientRect();
+        expect(trailingRect.right).toBeLessThanOrEqual(rowRect.right + 0.5);
+        expect(trailingRect.left).toBeGreaterThanOrEqual(rowRect.left - 0.5);
+      } finally {
+        document.body.removeChild(fixture.nativeElement);
+      }
     });
   });
 });
