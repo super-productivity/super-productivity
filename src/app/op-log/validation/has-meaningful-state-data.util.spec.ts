@@ -1,11 +1,19 @@
 import { hasMeaningfulStateData } from './has-meaningful-state-data.util';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 
+// The default app ships with only the INBOX project and the built-in system
+// tags (TODAY, EM_URGENT, EM_IMPORTANT, KANBAN_IN_PROGRESS — see SYSTEM_TAG_IDS).
+const SYSTEM_TAG_IDS_FIXTURE = [
+  'TODAY',
+  'EM_URGENT',
+  'EM_IMPORTANT',
+  'KANBAN_IN_PROGRESS',
+];
+
 const initialState = (): Record<string, unknown> => ({
   task: { ids: [], entities: {} },
-  // The default app ships with only the INBOX project and the system tags.
   project: { ids: [INBOX_PROJECT.id], entities: {} },
-  tag: { ids: ['TODAY', 'NO_LIST'], entities: {} },
+  tag: { ids: [...SYSTEM_TAG_IDS_FIXTURE], entities: {} },
   note: { ids: [], entities: {} },
 });
 
@@ -39,7 +47,7 @@ describe('hasMeaningfulStateData', () => {
 
   it('returns true for a non-system tag', () => {
     const s = initialState();
-    s.tag = { ids: ['TODAY', 'NO_LIST', 'tag1'], entities: {} };
+    s.tag = { ids: [...SYSTEM_TAG_IDS_FIXTURE, 'tag1'], entities: {} };
     expect(hasMeaningfulStateData(s)).toBe(true);
   });
 
