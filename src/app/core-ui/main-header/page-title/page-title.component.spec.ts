@@ -140,4 +140,16 @@ describe('PageTitleComponent', () => {
       expect(c.isWorkViewPage()).toBe(false);
     });
   });
+
+  describe('layout styles', () => {
+    it('allows long work-context titles to shrink before pushing header actions off screen', () => {
+      const componentDef = PageTitleComponent as unknown as {
+        ɵcmp: { styles: string[] };
+      };
+      const styles = componentDef.ɵcmp.styles.join('\n');
+
+      expect(styles).toContain('flex: 1 1 auto;');
+      expect(styles).toContain('min-width: 0;');
+    });
+  });
 });
