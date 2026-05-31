@@ -495,6 +495,151 @@ describe('taskSharedCrudMetaReducer', () => {
     });
   });
 
+  describe('convertToSubTask action', () => {
+    const createConvertToSubTaskState = (
+      taskOverrides: Partial<Task> = {},
+      parentOverrides: Partial<Task> = {},
+    ): RootState => {
+      const task = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        subTaskIds: [],
+        ...taskOverrides,
+      });
+      const parentTask = createMockTask({
+        id: 'parent-task',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        subTaskIds: [],
+        ...parentOverrides,
+      });
+
+      return {
+        ...baseState,
+        [TASK_FEATURE_NAME]: {
+          ...baseState[TASK_FEATURE_NAME],
+          ids: ['parent-task', 'task1'],
+          entities: {
+            'parent-task': parentTask,
+            task1: task,
+          },
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ...baseState[PROJECT_FEATURE_NAME],
+          entities: {
+            ...baseState[PROJECT_FEATURE_NAME].entities,
+            project1: {
+              ...baseState[PROJECT_FEATURE_NAME].entities.project1,
+              taskIds: ['parent-task', 'task1'],
+              backlogTaskIds: ['task1'],
+            } as Project,
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseState[TAG_FEATURE_NAME],
+          entities: {
+            ...baseState[TAG_FEATURE_NAME].entities,
+            tag1: {
+              ...baseState[TAG_FEATURE_NAME].entities.tag1,
+              taskIds: ['parent-task', 'task1'],
+            } as Tag,
+            TODAY: {
+              ...baseState[TAG_FEATURE_NAME].entities.TODAY,
+              taskIds: ['task1'],
+            } as Tag,
+          },
+        },
+      };
+    };
+
+    const createConvertToSubTaskAction = (afterTaskId: string | null = null) =>
+      TaskSharedActions.convertToSubTask({
+        taskId: 'task1',
+        targetParentId: 'parent-task',
+        afterTaskId,
+      });
+
+    it('should move a main task under the target parent', () => {
+      const testState = createConvertToSubTaskState();
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', {
+            parentId: 'parent-task',
+            projectId: 'project1',
+            tagIds: [],
+          }),
+          ...expectTaskUpdate('parent-task', { subTaskIds: ['task1'] }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should remove converted task from project and tag top-level lists', () => {
+      const testState = createConvertToSubTaskState();
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', {
+            taskIds: ['parent-task'],
+            backlogTaskIds: [],
+          }),
+          ...expectTagUpdates({
+            tag1: { taskIds: ['parent-task'] },
+            TODAY: { taskIds: [] },
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should place the converted task after the target anchor', () => {
+      const existingSubTask = createMockTask({
+        id: 'existing-sub',
+        parentId: 'parent-task',
+        tagIds: [],
+      });
+      const base = createConvertToSubTaskState({}, { subTaskIds: ['existing-sub'] });
+      const testState = {
+        ...base,
+        [TASK_FEATURE_NAME]: {
+          ...base[TASK_FEATURE_NAME],
+          ids: ['parent-task', 'existing-sub', 'task1'],
+          entities: {
+            ...base[TASK_FEATURE_NAME].entities,
+            'existing-sub': existingSubTask,
+          },
+        },
+      };
+      const action = createConvertToSubTaskAction('existing-sub');
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        expectTaskUpdate('parent-task', { subTaskIds: ['existing-sub', 'task1'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should not convert a task that already has subtasks', () => {
+      const testState = createConvertToSubTaskState({ subTaskIds: ['child-task'] });
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+    });
+  });
+
   describe('deleteTask action', () => {
     const createDeleteAction = (taskOverrides: Partial<TaskWithSubTasks> = {}) =>
       TaskSharedActions.deleteTask({

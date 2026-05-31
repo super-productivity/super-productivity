@@ -213,12 +213,16 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return false;
     }
 
-    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS or to sections (parent-level
-    // lists with a non-reserved id). Subtask drop-lists (listId === 'SUB') are
-    // rejected so a top-level task can't be nested into another task's subtree.
+    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS, to sections (parent-level
+    // lists with a non-reserved id), or to a task's subtask list if the dragged
+    // task is not itself already a parent.
     const srcModelId = drag.dropContainer?.data?.listModelId;
     const srcListIdRaw = drag.dropContainer?.data?.listId;
     const isSrcSection = srcListIdRaw === 'PARENT' && !RESERVED_LIST_IDS.has(srcModelId);
+
+    if (targetListId === 'SUB') {
+      return targetModelId !== task.id && !task.subTaskIds?.length;
+    }
 
     if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
       // Reject section → BACKLOG: _move() dispatches `removeTaskFromSection`
@@ -359,6 +363,18 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     // Handle LATER_TODAY - prevent any moves to or from this list
     if (src === 'LATER_TODAY' || target === 'LATER_TODAY') {
+      return;
+    }
+
+    if (srcListId === 'PARENT' && targetListId === 'SUB') {
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        TaskSharedActions.convertToSubTask({
+          taskId,
+          targetParentId: target as string,
+          afterTaskId,
+        }),
+      );
       return;
     }
 

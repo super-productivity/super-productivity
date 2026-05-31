@@ -361,6 +361,10 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     >;
     return handleMoveToOtherProject(state, task.id, targetProjectId);
   },
+  [TaskSharedActions.convertToSubTask.type]: (state, action) => {
+    const { taskId } = action as ReturnType<typeof TaskSharedActions.convertToSubTask>;
+    return handleTaskRemoval(state, [taskId]);
+  },
   [SectionActions.removeTaskFromSection.type]: (state, action) => {
     const { workContextType, workContextId, taskId, workContextAfterTaskId } =
       action as ReturnType<typeof SectionActions.removeTaskFromSection>;

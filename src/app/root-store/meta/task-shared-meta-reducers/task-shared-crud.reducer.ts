@@ -14,6 +14,7 @@ import {
 import {
   deleteTaskHelper,
   removeTaskFromParentSideEffects,
+  reCalcTimesForParentIfParent,
   updateDoneOnForTask,
   updateTimeEstimateForTask,
   updateTimeSpentForTask,
@@ -26,6 +27,7 @@ import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { unique } from '../../../util/unique';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
 import {
   ActionHandlerMap,
   addTaskToList,
@@ -206,6 +208,80 @@ const handleConvertToMainTask = (
   );
 
   return updateTags(updatedState, tagUpdates);
+};
+
+const handleConvertToSubTask = (
+  state: RootState,
+  taskId: string,
+  targetParentId: string,
+  afterTaskId: string | null,
+): RootState => {
+  const task = state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
+  const targetParent = state[TASK_FEATURE_NAME].entities[targetParentId] as
+    | Task
+    | undefined;
+
+  if (
+    !task ||
+    !targetParent ||
+    task.parentId ||
+    task.id === targetParent.id ||
+    !!task.subTaskIds?.length
+  ) {
+    return state;
+  }
+
+  let updatedState = state;
+
+  if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
+    const project = getProject(state, task.projectId);
+    updatedState = updateProject(updatedState, task.projectId, {
+      taskIds: removeTasksFromList(project.taskIds, [task.id]),
+      backlogTaskIds: removeTasksFromList(project.backlogTaskIds, [task.id]),
+    });
+  }
+
+  const taskIdSet = new Set([task.id]);
+  const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[])
+    .map((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
+    .filter((tag): tag is Tag => !!tag && tag.taskIds.some((id) => taskIdSet.has(id)))
+    .map(
+      (tag): Update<Tag> => ({
+        id: tag.id,
+        changes: {
+          taskIds: removeTasksFromList(tag.taskIds, [task.id]),
+        },
+      }),
+    );
+  updatedState = updateTags(updatedState, tagUpdates);
+
+  let taskState = updatedState[TASK_FEATURE_NAME];
+  taskState = taskAdapter.updateMany(
+    [
+      {
+        id: targetParent.id,
+        changes: {
+          subTaskIds: moveItemAfterAnchor(task.id, afterTaskId, targetParent.subTaskIds),
+        },
+      },
+      {
+        id: task.id,
+        changes: {
+          parentId: targetParent.id,
+          projectId: targetParent.projectId,
+          tagIds: [],
+          modified: Date.now(),
+        },
+      },
+    ],
+    taskState,
+  );
+  taskState = reCalcTimesForParentIfParent(targetParent.id, taskState);
+
+  return {
+    ...updatedState,
+    [TASK_FEATURE_NAME]: taskState,
+  };
 };
 
 const handleDeleteTask = (
@@ -719,6 +795,12 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
       typeof TaskSharedActions.convertToMainTask
     >;
     return handleConvertToMainTask(state, task, parentTagIds, isPlanForToday);
+  },
+  [TaskSharedActions.convertToSubTask.type]: () => {
+    const { taskId, targetParentId, afterTaskId } = action as ReturnType<
+      typeof TaskSharedActions.convertToSubTask
+    >;
+    return handleConvertToSubTask(state, taskId, targetParentId, afterTaskId);
   },
   [TaskSharedActions.deleteTask.type]: () => {
     const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
