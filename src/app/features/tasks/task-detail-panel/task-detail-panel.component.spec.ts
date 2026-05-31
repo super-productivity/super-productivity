@@ -112,14 +112,21 @@ describe('TaskDetailPanelComponent paste handler', () => {
     fixture.detectChanges();
   });
 
-  const createPasteEvent = (target: HTMLElement): ClipboardEvent => {
+  const createPasteEvent = (
+    target: HTMLElement,
+    types: string[] = [],
+  ): ClipboardEvent => {
     const event = new ClipboardEvent('paste', { bubbles: true });
     Object.defineProperty(event, 'target', { value: target, configurable: true });
+    Object.defineProperty(event, 'clipboardData', {
+      value: { types },
+      configurable: true,
+    });
     return event;
   };
 
   describe('onPaste', () => {
-    it('should add attachment when image is pasted on panel', fakeAsync(async () => {
+    it('should add attachment when image is pasted on panel', fakeAsync(() => {
       const imageUrl = 'indexeddb://clipboard-images/test-id';
       mockClipboardImageService.handlePasteWithProgress.and.returnValue({
         placeholderText: '![Saving image...]()',
@@ -127,9 +134,9 @@ describe('TaskDetailPanelComponent paste handler', () => {
       });
 
       const divTarget = document.createElement('div');
-      const event = createPasteEvent(divTarget);
+      const event = createPasteEvent(divTarget, ['Files']);
 
-      await component.onPaste(event);
+      component.onPaste(event);
       tick();
 
       expect(mockClipboardImageService.handlePasteWithProgress).toHaveBeenCalledWith(
@@ -141,62 +148,73 @@ describe('TaskDetailPanelComponent paste handler', () => {
       );
     }));
 
-    it('should NOT intercept paste when target is textarea', fakeAsync(async () => {
+    it('should NOT intercept paste when target is textarea', fakeAsync(() => {
       const textarea = document.createElement('textarea');
       const event = createPasteEvent(textarea);
 
-      await component.onPaste(event);
+      component.onPaste(event);
       tick();
 
       expect(mockClipboardImageService.handlePasteWithProgress).not.toHaveBeenCalled();
       expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();
     }));
 
-    it('should NOT intercept paste when target is input', fakeAsync(async () => {
+    it('should NOT intercept paste when target is input', fakeAsync(() => {
       const input = document.createElement('input');
       const event = createPasteEvent(input);
 
-      await component.onPaste(event);
+      component.onPaste(event);
       tick();
 
       expect(mockClipboardImageService.handlePasteWithProgress).not.toHaveBeenCalled();
       expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();
     }));
 
-    it('should NOT intercept paste when target is contenteditable', fakeAsync(async () => {
+    it('should NOT intercept paste when target is contenteditable', fakeAsync(() => {
       const div = document.createElement('div');
       div.contentEditable = 'true';
       const event = createPasteEvent(div);
 
-      await component.onPaste(event);
+      component.onPaste(event);
       tick();
 
       expect(mockClipboardImageService.handlePasteWithProgress).not.toHaveBeenCalled();
       expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();
     }));
 
-    it('should NOT add attachment when clipboard has no image', fakeAsync(async () => {
+    it('should NOT intercept paste when clipboard contains text (e.g. OneNote)', fakeAsync(() => {
+      const divTarget = document.createElement('div');
+      const event = createPasteEvent(divTarget, ['text/plain', 'Files']);
+
+      component.onPaste(event);
+      tick();
+
+      expect(mockClipboardImageService.handlePasteWithProgress).not.toHaveBeenCalled();
+      expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();
+    }));
+
+    it('should NOT add attachment when clipboard has no image', fakeAsync(() => {
       mockClipboardImageService.handlePasteWithProgress.and.returnValue(null);
 
       const divTarget = document.createElement('div');
-      const event = createPasteEvent(divTarget);
+      const event = createPasteEvent(divTarget, ['Files']);
 
-      await component.onPaste(event);
+      component.onPaste(event);
       tick();
 
       expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();
     }));
 
-    it('should NOT add attachment when image save fails', fakeAsync(async () => {
+    it('should NOT add attachment when image save fails', fakeAsync(() => {
       mockClipboardImageService.handlePasteWithProgress.and.returnValue({
         placeholderText: '![Saving image...]()',
         resultPromise: Promise.resolve({ success: false }),
       });
 
       const divTarget = document.createElement('div');
-      const event = createPasteEvent(divTarget);
+      const event = createPasteEvent(divTarget, ['Files']);
 
-      await component.onPaste(event);
+      component.onPaste(event);
       tick();
 
       expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();

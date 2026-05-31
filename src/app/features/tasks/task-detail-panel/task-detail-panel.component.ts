@@ -78,6 +78,7 @@ import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checkl
 import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
 import { checkKeyCombo } from '../../../util/check-key-combo';
+import { IS_MAC } from '../../../util/is-mac';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model';
 
@@ -137,6 +138,9 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   ShowSubTasksMode = HideSubTasksMode;
   T = T;
   ICAL_TYPE = ICAL_TYPE;
+  pasteImageHintKey = IS_MAC
+    ? T.F.TASK.ADDITIONAL_INFO.PASTE_IMAGE_HINT_MAC
+    : T.F.TASK.ADDITIONAL_INFO.PASTE_IMAGE_HINT;
 
   // Panel state signals grouped together
   panelState = {
@@ -425,11 +429,17 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   @HostListener('paste', ['$event']) async onPaste(ev: ClipboardEvent): Promise<void> {
     // Let existing textarea/input/contenteditable paste handlers work normally
     const target = ev.target as HTMLElement;
-    if (
-      target.tagName === 'TEXTAREA' ||
-      target.tagName === 'INPUT' ||
-      target.isContentEditable
-    ) {
+    if (isInputElement(target)) {
+      return;
+    }
+
+    // Prioritize text over images (e.g. OneNote puts both on the clipboard).
+    // Otherwise a text paste would be silently turned into an image attachment.
+    const hasText =
+      !!ev.clipboardData &&
+      (ev.clipboardData.types.includes('text/plain') ||
+        ev.clipboardData.types.includes('text/html'));
+    if (hasText) {
       return;
     }
 
@@ -437,15 +447,21 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     if (!progress) return;
 
     ev.preventDefault();
-    const result = await progress.resultPromise;
-    if (result.success && result.imageUrl) {
-      this.attachmentService.addAttachment(this.task().id, {
-        id: null,
-        type: 'IMG',
-        path: result.imageUrl,
-        title: 'Pasted image',
-        icon: DropPasteIcons.IMG,
-      });
+    try {
+      const result = await progress.resultPromise;
+      if (result.success && result.imageUrl) {
+        this.attachmentService.addAttachment(this.task().id, {
+          id: null,
+          type: 'IMG',
+          path: result.imageUrl,
+          title: this._translateService.instant(
+            T.F.TASK.ADDITIONAL_INFO.PASTED_IMAGE_TITLE,
+          ),
+          icon: DropPasteIcons.IMG,
+        });
+      }
+    } catch (err) {
+      Log.err('[CLIPBOARD] Paste attachment failed:', err);
     }
   }
 
