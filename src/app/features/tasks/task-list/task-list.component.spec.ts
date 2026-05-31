@@ -14,6 +14,7 @@ import { TaskWithSubTasks } from '../task.model';
 import { SectionService } from '../../section/section.service';
 import { moveSubTask } from '../store/task.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 describe('TaskListComponent', () => {
   let component: TaskListComponent;
@@ -22,7 +23,11 @@ describe('TaskListComponent', () => {
   let store: MockStore;
 
   // Helper to create mock CdkDrag
-  const createMockDrag = (task: { id: string; parentId: string | null }): CdkDrag =>
+  const createMockDrag = (task: {
+    id: string;
+    parentId: string | null;
+    subTaskIds?: string[];
+  }): CdkDrag =>
     ({
       data: task,
     }) as unknown as CdkDrag;
@@ -194,10 +199,17 @@ describe('TaskListComponent', () => {
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block parent task from dropping to subtask list', () => {
-        const task = { id: 'task1', parentId: null };
+      it('should allow parent task without subtasks to drop to subtask list', () => {
+        const task = { id: 'task1', parentId: null, subTaskIds: [] };
         const drag = createMockDrag(task);
         // Task ID listed as a subtask drop-list (listId='SUB').
+        const drop = createMockDrop('some-task-id', [], 'SUB');
+        expect(component.enterPredicate(drag, drop)).toBe(true);
+      });
+
+      it('should block parent task with subtasks from dropping to subtask list', () => {
+        const task = { id: 'task1', parentId: null, subTaskIds: ['sub1'] };
+        const drag = createMockDrag(task);
         const drop = createMockDrop('some-task-id', [], 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
@@ -358,6 +370,18 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.taskId).toBe('sub1');
       expect(dispatchedAction.srcTaskId).toBe('parentA');
       expect(dispatchedAction.targetTaskId).toBe('parentB');
+    });
+
+    it('routes a parent drop into a subtask list to convertToSubTask', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB', ['before', 'task1']);
+
+      expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.convertToSubTask>;
+      expect(dispatchedAction.type).toBe(TaskSharedActions.convertToSubTask.type);
+      expect(dispatchedAction.taskId).toBe('task1');
+      expect(dispatchedAction.targetParentId).toBe('parentB');
+      expect(dispatchedAction.afterTaskId).toBe('before');
     });
 
     it('routes a parent drop into a section drop-list (PARENT + non-reserved id) to addTaskToSection', () => {
