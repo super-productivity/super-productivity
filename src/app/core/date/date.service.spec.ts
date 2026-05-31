@@ -10,6 +10,8 @@ describe('DateService', () => {
   describe('isToday', () => {
     const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
+    afterEach(() => jasmine.clock().uninstall());
+
     it('should return true for a date today (Date input)', () => {
       expect(service.isToday(new Date())).toBe(true);
     });
@@ -34,7 +36,6 @@ describe('DateService', () => {
       jasmine.clock().mockDate(fixed);
       service.setStartOfNextDayDiff(3);
       expect(service.isToday(service.getLogicalTomorrowMs())).toBe(false);
-      jasmine.clock().uninstall();
     });
 
     it('should treat post-midnight as previous day when offset is set', () => {
