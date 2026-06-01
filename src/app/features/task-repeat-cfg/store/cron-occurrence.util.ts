@@ -142,4 +142,30 @@ export const getNextCronOccurrence = (
   }
 };
 
+/**
+ * First fire time on or after `startDate` (ignoring lastTaskCreation) — used to
+ * decide when a CRON task's first instance should be scheduled. Returns the
+ * matching Date at noon, or null.
+ */
+export const getFirstCronOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | null => {
+  if (!isCronValid(taskRepeatCfg.cronExpression)) return null;
+
+  const startDateDate = dateStrToUtcDate(getEffectiveRepeatStartDate(taskRepeatCfg));
+  startDateDate.setHours(0, 0, 0, 0);
+
+  // Seed 1 ms before startDate's midnight so a fire scheduled exactly at
+  // startDate 00:00 stays eligible (cron-parser next() excludes the boundary).
+  const cursor = new Date(startDateDate.getTime() - 1);
+  const iter = safeParse(taskRepeatCfg.cronExpression as string, cursor);
+  if (!iter) return null;
+
+  try {
+    const next = iter.next().toDate();
+    next.setHours(12, 0, 0, 0);
+    return next;
+  } catch {
+    return null;
+  }
+};
+
 export const isCronExpressionValid = isCronValid;

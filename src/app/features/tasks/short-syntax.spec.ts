@@ -2061,4 +2061,32 @@ describe('shortSyntax cron (@+)', () => {
     // No short syntax at all → undefined, and certainly no cron.
     expect(r?.cronExpression ?? null).toBeNull();
   });
+
+  it('accepts a raw cron expression after @+', async () => {
+    const r = await shortSyntax({ ...TASK, title: 'Deploy @+0 9 * * 1' }, CONFIG);
+    expect(r!.cronExpression).toBe('0 9 * * 1');
+    expect(r!.taskChanges.title).toBe('Deploy');
+  });
+
+  it('does NOT treat a bare @ (no +) as cron', async () => {
+    const r = await shortSyntax({ ...TASK, title: 'Call mom @every day' }, CONFIG);
+    expect(r?.cronExpression ?? null).toBeNull();
+  });
+
+  it('ignores @+ followed by an unrecognized phrase (no cron, clause kept)', async () => {
+    const r = await shortSyntax({ ...TASK, title: 'Task @+blargle wat' }, CONFIG);
+    expect(r?.cronExpression ?? null).toBeNull();
+    // Nothing parseable → shortSyntax reports no changes at all.
+    expect(r).toBeUndefined();
+  });
+
+  it('stops the cron clause at the next short-syntax delimiter (estimate)', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Run report @+every monday /2h' },
+      CONFIG,
+    );
+    expect(r!.cronExpression).toBeTruthy();
+    expect(r!.taskChanges.title).not.toContain('every monday');
+    expect(r!.taskChanges.title).toContain('Run report');
+  });
 });

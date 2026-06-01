@@ -4,6 +4,7 @@ import {
   findMonthlyNthWeekdayOccurrence,
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
+import { getFirstCronOccurrence } from './cron-occurrence.util';
 
 /**
  * Returns the first valid repeat occurrence on or after `cfg.startDate`.
@@ -53,6 +54,9 @@ export const getFirstRepeatOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | n
       }
       return checkDate;
     }
+
+    case 'CRON':
+      return getFirstCronOccurrence(taskRepeatCfg);
 
     case 'DAILY':
     case 'YEARLY':

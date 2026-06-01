@@ -67,6 +67,42 @@ const addTaskRaw = async (page: Page, rawInput: string): Promise<void> => {
   await page.locator('.e2e-add-task-submit').click();
 };
 
+// Creates a task, opens its repeat-config dialog, switches the quick-setting to
+// CRON, and returns the dialog + cron input locators.
+const openRepeatCronDialog = async (
+  page: Page,
+  workViewPage: { addTask: (t: string) => Promise<void> },
+  taskPage: {
+    getTaskByText: (t: string) => { first: () => ReturnType<Page['locator']> };
+    openTaskDetail: (t: ReturnType<Page['locator']>) => Promise<void>;
+  },
+  title: string,
+): Promise<{
+  dialog: ReturnType<Page['locator']>;
+  cronInput: ReturnType<Page['locator']>;
+}> => {
+  await workViewPage.addTask(title);
+  const task = taskPage.getTaskByText(title).first();
+  await expect(task).toBeVisible({ timeout: 10000 });
+  await taskPage.openTaskDetail(task);
+  const repeatItem = page
+    .locator('task-detail-item')
+    .filter({ has: page.locator('mat-icon', { hasText: 'repeat' }) })
+    .first();
+  await expect(repeatItem).toBeVisible({ timeout: 5000 });
+  await repeatItem.click();
+  const dialog = page.locator('mat-dialog-container');
+  await expect(dialog).toBeVisible({ timeout: 10000 });
+  await dialog.locator('mat-select').first().click();
+  await page
+    .getByRole('option', { name: /natural language|cron/i })
+    .first()
+    .click();
+  const cronInput = dialog.locator('input[id*="cronExpression"]').first();
+  await expect(cronInput).toBeVisible({ timeout: 5000 });
+  return { dialog, cronInput };
+};
+
 test.describe('Cron / natural-language recurring tasks', () => {
   test('attaches a CRON repeat cfg via the @+ short syntax', async ({
     page,
@@ -154,5 +190,69 @@ test.describe('Cron / natural-language recurring tasks', () => {
       .toBe('CRON');
     const snap = await getRepeatCfgForTask(page, title);
     expect(snap!.cronExpression ?? '').toMatch(CRON_RE);
+  });
+
+  test('invalid phrase blocks save and shows an inline error', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const title = `${testPrefix}-Bad Cron`;
+    const { dialog, cronInput } = await openRepeatCronDialog(
+      page,
+      workViewPage,
+      taskPage,
+      title,
+    );
+
+    await cronInput.fill('blargle nonsense not a schedule');
+    await cronInput.blur();
+
+    // No live preview for unrecognized input.
+    await expect(dialog.locator('.cron-preview')).toHaveCount(0);
+    // Inline validator error is shown.
+    await expect(dialog.locator('mat-error')).toBeVisible({ timeout: 5000 });
+    // Save is disabled (form invalid) → the schedule cannot be saved.
+    await expect(dialog.locator('button[type="submit"]')).toBeDisabled();
+    // Dialog stays open; no cron cfg persisted.
+    await expect(dialog).toBeVisible();
+    expect((await getRepeatCfgForTask(page, title))?.repeatCfgId ?? null).toBeNull();
+  });
+
+  test('raw cron expression: preview + save', async ({
+    page,
+    workViewPage,
+    taskPage,
+    dialogPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const title = `${testPrefix}-Raw Cron`;
+    const { dialog, cronInput } = await openRepeatCronDialog(
+      page,
+      workViewPage,
+      taskPage,
+      title,
+    );
+
+    await cronInput.fill('0 9 * * 1');
+    const preview = dialog.locator('.cron-preview');
+    await expect(preview).toBeVisible({ timeout: 5000 });
+    await expect(preview).toContainText('0 9 * * 1');
+    await expect(preview).toContainText(/Monday/i);
+
+    await dialogPage.clickSaveButton();
+    await dialogPage.waitForDialogToClose();
+
+    await expect
+      .poll(
+        async () => (await getRepeatCfgForTask(page, title))?.cronExpression ?? null,
+        {
+          timeout: 10000,
+        },
+      )
+      .toBe('0 9 * * 1');
   });
 });
