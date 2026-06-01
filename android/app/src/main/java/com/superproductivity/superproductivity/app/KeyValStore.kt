@@ -42,7 +42,10 @@ class KeyValStore(private val context: Context) :
             val values = ContentValues()
             values.put(KEY, newKey)
             values.put(VALUE, value)
-            values.put(KEY_CREATED_AT, "time('now')")
+            // Store real epoch millis. The previous "time('now')" literal was
+            // never evaluated by SQLite (ContentValues binds it as text), so the
+            // column held a constant string instead of a usable write timestamp.
+            values.put(KEY_CREATED_AT, System.currentTimeMillis())
             row = db.replace(DATABASE_TABLE, null, values)
             Log.v(TAG, "save db value size: " + value?.length)
             db.close()
