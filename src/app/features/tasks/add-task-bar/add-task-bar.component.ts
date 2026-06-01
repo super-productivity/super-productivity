@@ -518,6 +518,24 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             remindAt: state.time ? resolvedRemindOption : undefined,
           });
         }
+      } else if (state.cronExpression) {
+        // `@+<cron>` short-syntax path: attach a CRON-cycle repeat cfg using
+        // the canonicalized expression the parser already produced. Skipped
+        // when the user also picked a quickSetting (above) so manual choice
+        // wins.
+        const startDate = state.date || getDbDateStr();
+        this._taskRepeatCfgService.addTaskRepeatCfgToTask(taskId, state.projectId, {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          startDate,
+          title,
+          quickSetting: 'CRON',
+          repeatCycle: 'CRON',
+          cronExpression: state.cronExpression,
+          tagIds: taskData.tagIds ?? [],
+          defaultEstimate: state.estimate || 0,
+          startTime: state.time || undefined,
+          remindAt: state.time ? resolvedRemindOption : undefined,
+        });
       }
 
       this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });

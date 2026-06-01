@@ -6,6 +6,53 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { TaskReminderOptionId } from '../../tasks/task.model';
+import { isCronExpressionValid } from '../store/cron-occurrence.util';
+import { naturalLanguageToCron } from '../util/parse-natural-cron.util';
+import cronstrue from 'cronstrue';
+import { CronExpressionParser } from 'cron-parser';
+
+// Accept either a raw cron expression or natural-language that
+// `naturalLanguageToCron` can resolve. Stored value is canonicalized to cron.
+const isCronOrNaturalValid = (val: unknown): boolean => {
+  if (typeof val !== 'string' || !val.trim()) return false;
+  if (isCronExpressionValid(val)) return true;
+  return naturalLanguageToCron(val) !== null;
+};
+
+// Does the expression fire more than once on the same calendar day? The
+// recurrence engine is day-granular (one task per day max), so sub-daily crons
+// like "every minute" effectively run once a day — worth warning the user.
+const isSubDailyCron = (expr: string): boolean => {
+  try {
+    const it = CronExpressionParser.parse(expr);
+    const a = it.next().toDate();
+    const b = it.next().toDate();
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  } catch {
+    return false;
+  }
+};
+
+// Live preview shown under the input. Resolves the (possibly natural-language)
+// value to its canonical cron + a humanized description so the user can sanity
+// check what they typed as they type it.
+const cronPreview = (
+  val: unknown,
+): { cron: string; human: string; subDaily: boolean } | null => {
+  if (typeof val !== 'string' || !val.trim()) return null;
+  const canonical = isCronExpressionValid(val) ? val.trim() : naturalLanguageToCron(val);
+  if (!canonical) return null;
+  try {
+    const human = cronstrue.toString(canonical, { use24HourTimeFormat: false });
+    return { cron: canonical, human, subDaily: isSubDailyCron(canonical) };
+  } catch {
+    return null;
+  }
+};
 
 const updateParent = (
   field: FormlyFieldConfig,
@@ -57,6 +104,46 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
     },
   },
 
+  // CRON QUICK-SETTING CFG
+  {
+    fieldGroupClassName: 'cron-config-container',
+    resetOnHide: false,
+    hideExpression: (model: any) =>
+      model.quickSetting !== 'CRON' &&
+      !(model.quickSetting === 'CUSTOM' && model.repeatCycle === 'CRON'),
+    fieldGroup: [
+      {
+        key: 'cronExpression',
+        type: 'input',
+        defaultValue: '',
+        templateOptions: {
+          required: true,
+          label: T.F.TASK_REPEAT.F.CRON_EXPRESSION,
+          description: T.F.TASK_REPEAT.F.CRON_EXPRESSION_DESCRIPTION,
+          placeholder: '0 0 * 3-11 6',
+        },
+        validators: {
+          validCron: {
+            expression: (c: { value: unknown }) =>
+              !c.value || isCronOrNaturalValid(c.value),
+            message: () => T.F.TASK_REPEAT.F.CRON_INVALID,
+          },
+        },
+        // `expressionProperties` makes the description react to model changes so
+        // the interpreted cron expression + humanized reading update live as the
+        // user types. Falls back to the static format hint when unrecognized.
+        expressionProperties: {
+          ['templateOptions.description']: (model: any) => {
+            const p = cronPreview(model.cronExpression);
+            if (!p) return T.F.TASK_REPEAT.F.CRON_EXPRESSION_DESCRIPTION;
+            const base = `→ ${p.cron} · ${p.human}`;
+            return p.subDaily ? `${base} ⚠ runs once per day` : base;
+          },
+        },
+      },
+    ],
+  },
+
   // REPEAT CUSTOM CFG - Wrapped in container
   {
     fieldGroupClassName: 'repeat-config-container',
@@ -65,6 +152,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
     fieldGroup: [
       {
         fieldGroupClassName: 'repeat-cycle',
+        hideExpression: (model: any) => model.repeatCycle === 'CRON',
         fieldGroup: [
           {
             key: 'repeatEvery',
@@ -90,6 +178,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
                 { value: 'WEEKLY', label: T.F.TASK_REPEAT.F.C_WEEK },
                 { value: 'MONTHLY', label: T.F.TASK_REPEAT.F.C_MONTH },
                 { value: 'YEARLY', label: T.F.TASK_REPEAT.F.C_YEAR },
+                { value: 'CRON', label: T.F.TASK_REPEAT.F.C_CRON },
               ],
             },
           },

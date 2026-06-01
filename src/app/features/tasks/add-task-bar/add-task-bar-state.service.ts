@@ -134,6 +134,10 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({ ...state, repeatQuickSetting: null }));
   }
 
+  updateCronExpression(cronExpression: string | null): void {
+    this._taskInputState.update((state) => ({ ...state, cronExpression }));
+  }
+
   resetAfterAdd(): void {
     // Only clear input text and tags, preserve project, date, and estimate
     this._taskInputState.update((state) => ({
@@ -144,6 +148,7 @@ export class AddTaskBarStateService {
       cleanText: null,
       attachments: [],
       repeatQuickSetting: null,
+      cronExpression: null,
     }));
     this.inputTxt.set('');
     // Keep isAutoDetected as is to preserve project selection

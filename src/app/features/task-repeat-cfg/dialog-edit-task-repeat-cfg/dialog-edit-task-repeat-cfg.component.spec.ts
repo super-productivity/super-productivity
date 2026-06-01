@@ -21,6 +21,7 @@ import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model
 import { TaskCopy } from '../../tasks/task.model';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
+import { SnackService } from '../../../core/snack/snack.service';
 
 describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskRepeatCfgComponent>>;
@@ -110,6 +111,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
         { provide: DateAdapter, useClass: CustomDateAdapter },
+        { provide: SnackService, useValue: { open: () => undefined } },
       ],
     })
       .overrideComponent(DialogEditTaskRepeatCfgComponent, {

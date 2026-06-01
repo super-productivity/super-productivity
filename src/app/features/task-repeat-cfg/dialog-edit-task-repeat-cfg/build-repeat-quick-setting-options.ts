@@ -67,6 +67,10 @@ export const buildRepeatQuickSettingOptions = (
       }),
     },
     {
+      value: 'CRON',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_CRON),
+    },
+    {
       value: 'CUSTOM',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_CUSTOM),
     },

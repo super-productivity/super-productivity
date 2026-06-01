@@ -12,7 +12,7 @@ export const TASK_REPEAT_WEEKDAY_MAP: (keyof TaskRepeatCfg)[] = [
   'saturday',
 ];
 
-export type RepeatCycleOption = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+export type RepeatCycleOption = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CRON';
 export type RepeatQuickSetting =
   | 'DAILY'
   | 'WEEKLY_CURRENT_WEEKDAY'
@@ -22,6 +22,7 @@ export type RepeatQuickSetting =
   | 'MONTHLY_NTH_WEEKDAY'
   | 'MONDAY_TO_FRIDAY'
   | 'YEARLY_CURRENT_DATE'
+  | 'CRON'
   | 'CUSTOM';
 
 // MONTHLY Nth-weekday anchor (issue #6040). Both fields together form an
@@ -99,6 +100,13 @@ export interface TaskRepeatCfgCopy {
   deletedInstanceDates?: string[];
   // When true, missed/overdue instances are silently skipped instead of being created
   skipOverdue?: boolean;
+
+  // CRON-cycle field: standard 5-field cron expression (minute hour day-of-month
+  // month day-of-week). Only consulted when repeatCycle === 'CRON'; all other
+  // schedule fields (repeatEvery, weekday flags, monthly anchors) are ignored.
+  // Lets users express "every Saturday from March through November" as
+  // `0 0 * 3-11 6` in one config instead of dozens of yearly configs.
+  cronExpression?: string;
 }
 
 export type TaskRepeatCfg = Readonly<TaskRepeatCfgCopy>;

@@ -16,6 +16,10 @@ export interface AddTaskBarState {
   remindOption: TaskReminderOptionId | null;
   attachments: TaskAttachment[];
   repeatQuickSetting: RepeatQuickSetting | null;
+  // Cron expression sourced from `@+...` short syntax in the title. When set,
+  // the add-task flow attaches a CRON-cycle repeat config to the new task
+  // after creation (mirrors the `repeatQuickSetting === 'CRON'` path).
+  cronExpression: string | null;
 }
 const M = 60 * 1000;
 const H = 60 * M;
@@ -44,6 +48,7 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   remindOption: null,
   attachments: [],
   repeatQuickSetting: null,
+  cronExpression: null,
 };
 
 export const CHRONO_SUGGESTIONS: string[] = [

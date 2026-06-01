@@ -39,6 +39,12 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
+import { isCronExpressionValid } from '../store/cron-occurrence.util';
+import {
+  initEnglishToCron,
+  naturalLanguageToCron,
+} from '../util/parse-natural-cron.util';
+import { SnackService } from '../../../core/snack/snack.service';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { MatButton } from '@angular/material/button';
@@ -92,6 +98,7 @@ export class DialogEditTaskRepeatCfgComponent {
     inject<MatDialogRef<DialogEditTaskRepeatCfgComponent>>(MatDialogRef);
   private _translateService = inject(TranslateService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _snackService = inject(SnackService);
   private _data = inject<{
     task?: Task;
     repeatCfg?: TaskRepeatCfg;
@@ -151,6 +158,10 @@ export class DialogEditTaskRepeatCfgComponent {
   constructor() {
     // Initialize form config
     this._initializeFormConfig();
+
+    // Warm up the English→cron WASM translator so the CRON field's live
+    // preview and validation are ready by the time the user types.
+    void initEnglishToCron();
 
     // Set up effect to load task repeat config if editing
     effect(() => {
@@ -280,6 +291,23 @@ export class DialogEditTaskRepeatCfgComponent {
     const formGroup1 = this.formGroup1();
     const formGroup2 = this.formGroup2();
 
+    // CRON guard: a cron cycle must resolve to a valid expression (raw cron or
+    // a recognized natural-language phrase). Notify + block save otherwise so
+    // the user isn't left with a silently broken schedule.
+    const cronCfg = this.repeatCfg();
+    if (cronCfg.repeatCycle === 'CRON') {
+      const raw = (cronCfg.cronExpression || '').trim();
+      const canonical = isCronExpressionValid(raw) ? raw : naturalLanguageToCron(raw);
+      if (!canonical) {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.TASK_REPEAT.F.CRON_INVALID,
+        });
+        formGroup1.markAllAsTouched();
+        return;
+      }
+    }
+
     // Check if both forms are valid
     if (!formGroup1.valid || !formGroup2.valid) {
       // Mark all fields as touched to show validation errors
@@ -311,7 +339,19 @@ export class DialogEditTaskRepeatCfgComponent {
 
     // Normalize the monthly anchor fields at the boundary: convert the form's
     // `null` sentinel to `undefined`, and strip a stale `monthlyLastDay` flag.
-    const finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
+    let finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
+
+    // Canonicalize the cron expression at the boundary: if the user typed a
+    // natural-language form, persist its cron equivalent so the recurrence
+    // engine never re-parses English.
+    if (finalRepeatCfg.repeatCycle === 'CRON' && finalRepeatCfg.cronExpression) {
+      if (!isCronExpressionValid(finalRepeatCfg.cronExpression)) {
+        const canonical = naturalLanguageToCron(finalRepeatCfg.cronExpression);
+        if (canonical) {
+          finalRepeatCfg = { ...finalRepeatCfg, cronExpression: canonical };
+        }
+      }
+    }
 
     if (this.isEdit()) {
       const initial = this.repeatCfgInitial();

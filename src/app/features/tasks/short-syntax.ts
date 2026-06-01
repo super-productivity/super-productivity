@@ -22,6 +22,8 @@ type DueChanges = {
   dueDay?: string | null;
 };
 
+import { naturalLanguageToCron } from '../task-repeat-cfg/util/parse-natural-cron.util';
+
 const CH_TSP = '/';
 // Due how this expression capture clusters of duration units, be mindful of
 // match boundary whitespace during processing
@@ -110,6 +112,35 @@ const SHORT_SYNTAX_URL_REG_EX = new RegExp(
 const SHORT_SYNTAX_MARKDOWN_LINK_REG_EX =
   /\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 
+/**
+ * Pulls a `@+<cron-or-natural-language>` clause off the title and returns the
+ * cron expression separately. The clause runs to end-of-title or until the
+ * next short-syntax delimiter (`+project`, `#tag`, `@date`, `/2h`); this lets
+ * users type natural-language phrases like
+ *   "Mow Lawn +Maint #Out @+once a week on saturday from March through November /2h"
+ * without the cron text colliding with the existing project/tag/date parsers.
+ * Natural-language input is canonicalized to a 5-field cron expression.
+ */
+export const extractCronFromTitle = (
+  title: string,
+): { stripped: string; cron: string } | null => {
+  const m = title.match(/(?:^|\s)@\+/);
+  if (!m) return null;
+  const atIdx = m.index! + (m[0].length - 2);
+  const afterPlus = atIdx + 2;
+  const remaining = title.slice(afterPlus);
+  // Boundary: next short-syntax delimiter introduced by whitespace.
+  // `\/\d` catches `/2h`, `/1.5h`, etc; `[+#@]` catches another project/tag/date.
+  const boundaryMatch = remaining.match(/\s+(?:[+#@]|\/\d)/);
+  const end = boundaryMatch ? afterPlus + (boundaryMatch.index as number) : title.length;
+  const raw = title.slice(afterPlus, end).trim();
+  if (!raw) return null;
+  const canonical = naturalLanguageToCron(raw);
+  if (!canonical) return null;
+  const stripped = (title.slice(0, atIdx) + title.slice(end)).replace(/\s+/g, ' ').trim();
+  return { stripped, cron: canonical };
+};
+
 export const shortSyntax = async (
   task: Task | Partial<Task>,
   config: ShortSyntaxConfig,
@@ -124,6 +155,7 @@ export const shortSyntax = async (
       remindAt: number | null;
       projectId: string | undefined;
       attachments: TaskAttachment[];
+      cronExpression?: string;
     }
   | undefined
 > => {
@@ -139,6 +171,17 @@ export const shortSyntax = async (
   let changesForProject: ProjectChanges = {};
   let changesForTag: TagChanges = {};
   let attachments: TaskAttachment[] = [];
+  let cronExpression: string | undefined;
+
+  // Cron parser runs first so the bare `@` date parser does not eat
+  // `@+<expr>`. Strip the matched clause from the title before downstream
+  // parsers see it.
+  const cronExtract = extractCronFromTitle(task.title);
+  if (cronExtract) {
+    cronExpression = cronExtract.cron;
+    taskChanges.title = cronExtract.stripped;
+    task = { ...task, title: cronExtract.stripped };
+  }
 
   if (config.isEnableDue) {
     taskChanges = parseTimeSpentChanges(task);
@@ -201,7 +244,11 @@ export const shortSyntax = async (
   //   };
   // }
 
-  if (Object.keys(taskChanges).length === 0 && attachments.length === 0) {
+  if (
+    Object.keys(taskChanges).length === 0 &&
+    attachments.length === 0 &&
+    !cronExpression
+  ) {
     return undefined;
   }
 
@@ -211,6 +258,7 @@ export const shortSyntax = async (
     remindAt: null,
     projectId: changesForProject.projectId,
     attachments,
+    cronExpression,
     // remindAt: changesForDue.remindAt
   };
 };

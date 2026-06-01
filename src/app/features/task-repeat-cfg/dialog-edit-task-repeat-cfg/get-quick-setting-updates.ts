@@ -136,6 +136,18 @@ export const getQuickSettingUpdates = (
       };
     }
 
+    case 'CRON': {
+      // CRON cycle. cronExpression is left untouched here so the user's
+      // currently-entered value survives a quickSetting round-trip; the form
+      // seeds an empty string default elsewhere.
+      return {
+        repeatCycle: 'CRON',
+        repeatEvery: 1,
+        startDate: getDbDateStr(referenceDate || today),
+        ...MONTHLY_ANCHOR_RESET,
+      };
+    }
+
     case 'CUSTOM':
     default:
   }

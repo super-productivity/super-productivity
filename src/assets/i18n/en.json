@@ -1861,10 +1861,14 @@
         "TIME_SPENT_TOTAL": "Total"
       },
       "F": {
+        "C_CRON": "Cron",
         "C_DAY": "Day",
         "C_MONTH": "Month",
         "C_WEEK": "Week",
         "C_YEAR": "Year",
+        "CRON_EXPRESSION": "Cron expression",
+        "CRON_EXPRESSION_DESCRIPTION": "Cron format: minute hour day-of-month month day-of-week. Example: 0 0 * 3-11 6 (every Saturday, March-November).",
+        "CRON_INVALID": "Invalid cron expression or unrecognized schedule phrase.",
         "DEFAULT_ESTIMATE": "Default Estimate",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "Disable auto-updating subtasks",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "Do not update inherited subtasks automatically when the newest instance changes",
@@ -1879,6 +1883,7 @@
         "ORD_LAST": "last",
         "ORD_SECOND": "second",
         "ORD_THIRD": "third",
+        "Q_CRON": "Cron / natural language",
         "Q_CUSTOM": "Custom recurring config",
         "Q_DAILY": "Every day",
         "Q_MONDAY_TO_FRIDAY": "Every Monday through Friday",

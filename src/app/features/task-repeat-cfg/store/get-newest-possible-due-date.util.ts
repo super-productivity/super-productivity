@@ -11,6 +11,7 @@ import {
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
 import { Log } from '../../../core/log';
+import { getNewestPossibleCronDueDate } from './cron-occurrence.util';
 
 export const getNewestPossibleDueDate = (
   taskRepeatCfg: TaskRepeatCfg,
@@ -18,6 +19,11 @@ export const getNewestPossibleDueDate = (
 ): Date | null => {
   // FOR DEBUG
   // return new Date();
+
+  if (taskRepeatCfg.repeatCycle === 'CRON') {
+    // CRON ignores repeatEvery; defer entirely to the cron-parser branch.
+    return getNewestPossibleCronDueDate(taskRepeatCfg, today);
+  }
 
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
     Log.warn(
