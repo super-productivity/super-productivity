@@ -255,9 +255,10 @@ const decodeRow = <T>(plan: SqlTablePlan, row: Record<string, unknown>): T => {
   // The autoinc PK (`seq`) lives in its own column, never the JSON `value` blob
   // — inject it back (from the `__pk` alias every read selects) so callers see
   // `.seq`, exactly like IDB's keyPath+autoIncrement store. keyPath stores keep
-  // their key inside the value already, so they need no injection.
+  // their key inside the value already, so they need no injection. The autoinc
+  // keyPath is a top-level field (`seq`); strip the `$.` prefix like extractPath.
   if (plan.primaryKey === 'autoinc' && plan.keyJsonPath && '__pk' in row) {
-    value[plan.keyJsonPath.slice(2)] = row['__pk'] as number;
+    value[plan.keyJsonPath.replace(/^\$\./, '')] = row['__pk'] as number;
   }
   return value as T;
 };
