@@ -353,60 +353,46 @@ export class StartupService {
   }
 
   private _requestPersistence(): void {
+    // A1 (#7925): always log the outcome so a #7892-style report carries the
+    // durability state of the WebView store. Snack gating below is unchanged.
+    const isNative = this._platformService.isNative;
     if (!navigator.storage) {
-      // No StorageManager at all — record it so #7892-style reports carry signal.
-      Log.log('Persistence: navigator.storage unavailable', {
-        isNative: this._platformService.isNative,
-        isElectron: IS_ELECTRON,
-      });
+      Log.log('Persistence: navigator.storage unavailable', { isNative, IS_ELECTRON });
       return;
     }
-    // A1 (#7925): always log {persisted, granted} on every branch — including
-    // native and Electron — so exported logs from a "woke up blank" report
-    // carry the durability state of the WebView store. The user-facing snack
-    // remains gated as before; this is logging only.
-    const context = {
-      isNative: this._platformService.isNative,
-      isElectron: IS_ELECTRON,
-    };
     navigator.storage
       .persisted()
       .then((persisted) => {
         if (persisted) {
-          Log.log('Persistence: already granted', { persisted, ...context });
+          Log.log('Persistence: already granted', { isNative, IS_ELECTRON });
           return;
         }
         return navigator.storage.persist().then((granted) => {
           Log.log('Persistence: persist() resolved', {
-            persisted,
             granted,
-            ...context,
+            isNative,
+            IS_ELECTRON,
           });
-          // NOTE: we never show this warning for native mobile apps or Electron,
-          // because persistence is managed by the OS and not subject to browser eviction.
-          // Also suppress during active onboarding to avoid confusing first-time users.
+          // Native + Electron persistence is OS-managed (not subject to browser
+          // eviction); also suppress during onboarding.
           if (
             !granted &&
-            !this._platformService.isNative &&
+            !isNative &&
             !IS_ELECTRON &&
             !OnboardingHintService.isOnboardingInProgress()
           ) {
-            const msg = T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED;
             Log.warn('Persistence not allowed');
-            this._snackService.open({ msg });
+            this._snackService.open({ msg: T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED });
           }
         });
       })
       .catch((e) => {
-        Log.log('Persistence: error', { ...context, error: e });
+        Log.log('Persistence: error', { isNative, IS_ELECTRON, error: e });
         const err = e && e.toString ? e.toString() : 'UNKNOWN';
-        const msg = T.GLOBAL_SNACK.PERSISTENCE_ERROR;
         this._snackService.open({
           type: 'ERROR',
-          msg,
-          translateParams: {
-            err,
-          },
+          msg: T.GLOBAL_SNACK.PERSISTENCE_ERROR,
+          translateParams: { err },
         });
       });
   }
