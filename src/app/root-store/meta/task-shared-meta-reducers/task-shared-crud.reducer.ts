@@ -28,7 +28,7 @@ import { unique } from '../../../util/unique';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
-import { canConvertTaskToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
+import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
   ActionHandlerMap,
   addTaskToList,
@@ -140,6 +140,28 @@ const handleAddTask = (
   return updatedState;
 };
 
+/**
+ * Removes the given task IDs from every tag's `taskIds`. Scans all tags from
+ * the CURRENT state (not a payload-provided list) so sync replays with
+ * divergent tag associations are fully cleaned up. Uses a Set for O(1) lookup.
+ * Returns state unchanged when no tag references the tasks.
+ */
+const removeTasksFromAllTags = (state: RootState, taskIds: string[]): RootState => {
+  const taskIdSet = new Set(taskIds);
+  const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[])
+    .map((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
+    .filter((tag): tag is Tag => !!tag && tag.taskIds.some((id) => taskIdSet.has(id)))
+    .map(
+      (tag): Update<Tag> => ({
+        id: tag.id,
+        changes: {
+          taskIds: removeTasksFromList(tag.taskIds, taskIds),
+        },
+      }),
+    );
+  return updateTags(state, tagUpdates);
+};
+
 const handleConvertToMainTask = (
   state: RootState,
   task: Task,
@@ -157,13 +179,13 @@ const handleConvertToMainTask = (
   const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   const resolvedParentTagIds = parentTagIds ?? parentTask.tagIds;
   const positionConvertedTask = (taskIds: string[]): string[] => {
-    if (afterTaskId === undefined) {
-      return unique([task.id, ...taskIds]);
-    }
-    if (afterTaskId === null && isDone) {
+    // Dropped at the start of DONE → append to the bottom of the done list.
+    if (afterTaskId == null && isDone) {
       return [...removeTasksFromList(taskIds, [task.id]), task.id];
     }
-    return moveItemAfterAnchor(task.id, afterTaskId, taskIds);
+    // afterTaskId === undefined (legacy callers) and null both mean "prepend",
+    // which moveItemAfterAnchor already does for a null anchor.
+    return moveItemAfterAnchor(task.id, afterTaskId ?? null, taskIds);
   };
 
   // Handle parent-child relationship cleanup and task entity updates
@@ -248,12 +270,10 @@ const handleConvertToSubTask = (
     | Task
     | undefined;
 
-  if (
-    !task ||
-    !targetParent ||
-    task.id === targetParent.id ||
-    !canConvertTaskToSubTask(task)
-  ) {
+  // The `!task || !targetParent` checks also narrow the types below; the full
+  // eligibility rule (incl. self-target and not-a-subtask) lives in the shared
+  // guard so the section meta-reducer stays in lock-step.
+  if (!task || !targetParent || !canApplyConvertToSubTask(task, targetParent)) {
     return state;
   }
 
@@ -267,19 +287,7 @@ const handleConvertToSubTask = (
     });
   }
 
-  const taskIdSet = new Set([task.id]);
-  const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[])
-    .map((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
-    .filter((tag): tag is Tag => !!tag && tag.taskIds.some((id) => taskIdSet.has(id)))
-    .map(
-      (tag): Update<Tag> => ({
-        id: tag.id,
-        changes: {
-          taskIds: removeTasksFromList(tag.taskIds, [task.id]),
-        },
-      }),
-    );
-  updatedState = updateTags(updatedState, tagUpdates);
+  updatedState = removeTasksFromAllTags(updatedState, [task.id]);
   updatedState = removeTaskFromPlannerDays(updatedState, task.id);
 
   let taskState = updatedState[TASK_FEATURE_NAME];
@@ -346,34 +354,10 @@ const handleDeleteTask = (
     });
   }
 
-  // Update tags - find affected tags from CURRENT STATE, not payload.
-  // During sync, the receiving client may have different tag associations
-  // (e.g. an LWW Update recreated the task with different tags), so we must
-  // iterate all tags to ensure complete cleanup. This matches handleDeleteTasks.
-  const taskIdsToRemove = [task.id, ...(task.subTaskIds || [])];
-  const taskIdsToRemoveSet = new Set(taskIdsToRemove);
-
-  const affectedTagIds = (updatedState[TAG_FEATURE_NAME].ids as string[]).filter(
-    (tagId) => {
-      const tag = updatedState[TAG_FEATURE_NAME].entities[tagId];
-      if (!tag) return false;
-      return tag.taskIds.some((taskId) => taskIdsToRemoveSet.has(taskId));
-    },
-  );
-
-  const tagUpdates = affectedTagIds.map(
-    (tagId): Update<Tag> => ({
-      id: tagId,
-      changes: {
-        taskIds: removeTasksFromList(
-          getTag(updatedState, tagId).taskIds,
-          taskIdsToRemove,
-        ),
-      },
-    }),
-  );
-
-  return updateTags(updatedState, tagUpdates);
+  // Find affected tags from CURRENT STATE, not payload — during sync the
+  // receiving client may have different tag associations, so all tags are
+  // scanned (incl. the task's subtask ids) for complete cleanup.
+  return removeTasksFromAllTags(updatedState, [task.id, ...(task.subTaskIds || [])]);
 };
 
 const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
@@ -432,26 +416,8 @@ const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
     }
   }
 
-  // Only update tags that actually contain at least one of the tasks being deleted
-  // Use allIds (includes subtasks) to ensure subtask IDs are also removed from tags
-  // PERF: Use Set for O(1) lookup instead of O(n) Array.includes() - fixes O(n³) bottleneck
-  const allIdsSet = new Set(allIds);
-  const affectedTags = (state[TAG_FEATURE_NAME].ids as string[]).filter((tagId) => {
-    const tag = state[TAG_FEATURE_NAME].entities[tagId];
-    if (!tag) return false;
-    return tag.taskIds.some((taskId) => allIdsSet.has(taskId));
-  });
-
-  const tagUpdates = affectedTags.map(
-    (tagId): Update<Tag> => ({
-      id: tagId,
-      changes: {
-        taskIds: removeTasksFromList(getTag(state, tagId).taskIds, allIds),
-      },
-    }),
-  );
-
-  return updateTags(updatedState, tagUpdates);
+  // Remove the deleted task ids (incl. subtasks via allIds) from all tags.
+  return removeTasksFromAllTags(updatedState, allIds);
 };
 
 /**
