@@ -100,8 +100,18 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun loadFromDb(requestId: String, key: String) {
         val r = (activity.application as App).keyValStore.get(key, "")
-        // NOTE: ' are important as otherwise the json messes up
-        callJavaScriptFunction(FN_PREFIX + "loadFromDbCallback('" + requestId + "', '" + key + "', '" + r + "')")
+        // Use JSONObject.quote() so the stored value can contain ' / \ / newlines /
+        // </script> without breaking out of the JS literal (#7925). The previous
+        // raw single-quote interpolation broke on any value with a literal '
+        // (JSON.stringify does not escape apostrophes), so an apostrophe in a
+        // backup blob silently corrupted the load. quote() produces a properly
+        // escaped double-quoted JS string.
+        callJavaScriptFunction(
+            FN_PREFIX + "loadFromDbCallback(" +
+                JSONObject.quote(requestId) + ", " +
+                JSONObject.quote(key) + ", " +
+                JSONObject.quote(r) + ")"
+        )
     }
 
     @Suppress("unused")
