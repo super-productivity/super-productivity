@@ -542,11 +542,11 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
     let storedEntries: StoredOperationLogEntry[];
     try {
-      // Type assertion needed for compound index key - idb's types don't fully support this
-      storedEntries = await this.db.getAllFromIndex(
+      // Exact compound-key match expressed as a degenerate [k, k] range.
+      storedEntries = await this._adapter.getAllFromIndex<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'pending'],
+        { lower: ['remote', 'pending'], upper: ['remote', 'pending'] },
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -554,7 +554,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       Log.warn(
         'OperationLogStoreService: bySourceAndStatus index not found, using fallback scan',
       );
-      const allOps = await this.db.getAll(STORE_NAMES.OPS);
+      const allOps = await this._adapter.getAll<StoredOperationLogEntry>(STORE_NAMES.OPS);
       storedEntries = allOps.filter(
         (entry) => entry.source === 'remote' && entry.applicationStatus === 'pending',
       );
@@ -565,7 +565,11 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   async hasOp(id: string): Promise<boolean> {
     await this._ensureInit();
-    const entry = await this.db.getFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_ID, id);
+    const entry = await this._adapter.getFromIndex(
+      STORE_NAMES.OPS,
+      OPS_INDEXES.BY_ID,
+      id,
+    );
     return !!entry;
   }
 
@@ -586,15 +590,19 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async getOpById(id: string): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
-    const stored = await this.db.getFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_ID, id);
+    const stored = await this._adapter.getFromIndex<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      OPS_INDEXES.BY_ID,
+      id,
+    );
     return stored ? decodeStoredEntry(stored) : undefined;
   }
 
   async getOpsAfterSeq(seq: number): Promise<OperationLogEntry[]> {
     await this._ensureInit();
-    const storedEntries = await this.db.getAll(
+    const storedEntries = await this._adapter.getAll<StoredOperationLogEntry>(
       STORE_NAMES.OPS,
-      IDBKeyRange.lowerBound(seq, true),
+      { lower: seq, lowerOpen: true },
     );
     return storedEntries.map(decodeStoredEntry);
   }
@@ -619,30 +627,27 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     // Use reverse cursor to iterate from newest to oldest by seq
     // This is more memory-efficient than getAll() and we can exit early
     // once we've found a full-state op that's older than our current best
-    let cursor = await this.db
-      .transaction(STORE_NAMES.OPS)
-      .store.openCursor(null, 'prev');
-
     let latestFullStateOp: Operation | undefined;
 
-    while (cursor) {
-      const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp = isFullStateOpType(entry.op.opType);
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      { direction: 'prev' },
+      (value) => {
+        const entry = decodeStoredEntry(value);
+        const isFullStateOp = isFullStateOpType(entry.op.opType);
 
-      if (isFullStateOp) {
-        // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
-        if (!latestFullStateOp || entry.op.id > latestFullStateOp.id) {
-          latestFullStateOp = entry.op;
+        if (isFullStateOp) {
+          // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
+          if (!latestFullStateOp || entry.op.id > latestFullStateOp.id) {
+            latestFullStateOp = entry.op;
+          }
+          // NOTE: We don't early-exit because UUIDv7 order may differ from seq
+          // order if remote ops with earlier timestamps arrive later. We must
+          // check all full-state ops to find the one with the latest UUIDv7 ID.
         }
-        // NOTE: We don't early-exit here because UUIDv7 order may differ from seq order
-        // if remote ops with earlier timestamps arrive later. We must check all full-state
-        // ops to find the one with the latest UUIDv7 ID. However, we continue using
-        // reverse cursor to still benefit from early exit if the first full-state op found
-        // has the highest UUIDv7 (which is the common case).
-      }
-
-      cursor = await cursor.continue();
-    }
+        return 'continue';
+      },
+    );
 
     return latestFullStateOp;
   }
@@ -664,25 +669,24 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   async getLatestFullStateOpEntry(): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
 
-    let cursor = await this.db
-      .transaction(STORE_NAMES.OPS)
-      .store.openCursor(null, 'prev');
-
     let latestEntry: OperationLogEntry | undefined;
 
-    while (cursor) {
-      const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp = isFullStateOpType(entry.op.opType);
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      { direction: 'prev' },
+      (value) => {
+        const entry = decodeStoredEntry(value);
+        const isFullStateOp = isFullStateOpType(entry.op.opType);
 
-      if (isFullStateOp) {
-        // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
-        if (!latestEntry || entry.op.id > latestEntry.op.id) {
-          latestEntry = entry;
+        if (isFullStateOp) {
+          // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
+          if (!latestEntry || entry.op.id > latestEntry.op.id) {
+            latestEntry = entry;
+          }
         }
-      }
-
-      cursor = await cursor.continue();
-    }
+        return 'continue';
+      },
+    );
 
     return latestEntry;
   }
@@ -702,33 +706,38 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const opsToDelete: string[] = [];
 
     // Find all full-state ops
-    let cursor = await this.db.transaction(STORE_NAMES.OPS).store.openCursor();
-
-    while (cursor) {
-      const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp = isFullStateOpType(entry.op.opType);
-
-      if (isFullStateOp) {
+    await this._adapter.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value) => {
+      const entry = decodeStoredEntry(value);
+      if (isFullStateOpType(entry.op.opType)) {
         opsToDelete.push(entry.op.id);
       }
+      return 'continue';
+    });
 
-      cursor = await cursor.continue();
-    }
-
-    // Delete them in a write transaction
-    if (opsToDelete.length > 0) {
-      const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-      for (const id of opsToDelete) {
-        await tx.store
-          .index(OPS_INDEXES.BY_ID)
-          .openCursor(id)
-          .then((c) => c?.delete());
-      }
-      await tx.done;
-      this._invalidateUnsyncedCache();
-    }
-
+    await this._deleteOpsByIds(opsToDelete);
     return opsToDelete.length;
+  }
+
+  /**
+   * Deletes ops by their `op.id` via the unique byId index, atomically.
+   * Mirrors the original keyed-index-cursor delete used by the
+   * clearFullStateOps* methods. No-op (and no cache invalidation) for an
+   * empty list, matching prior behavior.
+   */
+  private async _deleteOpsByIds(ids: string[]): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const id of ids) {
+        await tx.iterate<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          { index: OPS_INDEXES.BY_ID, query: id },
+          () => 'delete-stop',
+        );
+      }
+    });
+    this._invalidateUnsyncedCache();
   }
 
   /**
@@ -755,32 +764,15 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const opsToDelete: string[] = [];
 
     // Find all full-state ops except the excluded ones
-    let cursor = await this.db.transaction(STORE_NAMES.OPS).store.openCursor();
-
-    while (cursor) {
-      const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp = isFullStateOpType(entry.op.opType);
-
-      if (isFullStateOp && !excludeIdSet.has(entry.op.id)) {
+    await this._adapter.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value) => {
+      const entry = decodeStoredEntry(value);
+      if (isFullStateOpType(entry.op.opType) && !excludeIdSet.has(entry.op.id)) {
         opsToDelete.push(entry.op.id);
       }
+      return 'continue';
+    });
 
-      cursor = await cursor.continue();
-    }
-
-    // Delete them in a write transaction
-    if (opsToDelete.length > 0) {
-      const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-      for (const id of opsToDelete) {
-        await tx.store
-          .index(OPS_INDEXES.BY_ID)
-          .openCursor(id)
-          .then((c) => c?.delete());
-      }
-      await tx.done;
-      this._invalidateUnsyncedCache();
-    }
-
+    await this._deleteOpsByIds(opsToDelete);
     return opsToDelete.length;
   }
 
