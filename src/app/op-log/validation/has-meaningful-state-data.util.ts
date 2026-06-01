@@ -18,6 +18,13 @@ const isEntityState = (obj: unknown): obj is { ids: string[] } =>
  * - the snapshot/compaction empty-overwrite guard (prevents a transient degraded
  *   NgRx state from being cached over a good snapshot — see issue #7892).
  *
+ * Scope is intentionally narrow (these four collections only) and is always consumed
+ * in the "safe" direction: a false negative merely SKIPS work (a snapshot save, a
+ * compaction, or a fresh-client sync prompt) — it can never cache empty-over-good or
+ * delete data. Omitting models like simpleCounter / taskRepeatCfg / timeTracking
+ * therefore cannot lose data; it would only forgo the snapshot/compaction optimization
+ * for a data-less-but-active store, so it is left out of this safety fix by design.
+ *
  * Accepts an arbitrary object so callers can pass an NgRx snapshot, a loaded
  * state cache, or a remote payload without type juggling.
  */
