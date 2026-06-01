@@ -155,6 +155,36 @@ const translate = (ex, s) => {
     }
   }
 
+  // 5. Buffer reuse — the module reuses static input/output buffers across
+  // calls. A short translation after a long one must not be contaminated by
+  // leftover bytes, and results must be stable under heavy interleaving.
+  const REUSE_PAIRS = [
+    ['every saturday from march through november', 'every day'],
+    ['at 1:00 on the 12 days before the last day of the month.', 'every minute'],
+    ['x'.repeat(900), 'every monday at 9am'],
+  ];
+  for (const [long, short] of REUSE_PAIRS) {
+    const canonical = translate(ex, short);
+    translate(ex, long); // pollute the shared buffers with a longer call
+    const after = translate(ex, short);
+    check(
+      'buffer-reuse',
+      JSON.stringify(after) === JSON.stringify(canonical),
+      `"${short}" after a longer call`,
+    );
+  }
+  // Heavy alternating loop — results must stay deterministic under reuse.
+  const CYCLE = ['every day', 'every monday at 9am', 'every 5 minutes'];
+  const baseline = CYCLE.map((p) => JSON.stringify(translate(ex, p)));
+  for (let i = 0; i < 600; i++) {
+    const idx = i % CYCLE.length;
+    check(
+      'reuse-loop',
+      JSON.stringify(translate(ex, CYCLE[idx])) === baseline[idx],
+      `${CYCLE[idx]} @${i}`,
+    );
+  }
+
   console.log(`\nCorpus: ${corpus.length} · simulated ${simulated} runnable crons`);
   if (failures.length) {
     console.log(RED(`\n${failures.length} property failure(s):`));

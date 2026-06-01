@@ -227,4 +227,20 @@ describe('cron-occurrence invariants', () => {
       ).toBeNull();
     });
   });
+
+  describe('serialization integrity (sync / backup)', () => {
+    it('a CRON cfg survives a JSON round-trip with identical occurrence behavior', () => {
+      const cfg = cronCfg('0 0 9 ? * MON', { startDate: '2024-06-01' });
+      const roundTripped = JSON.parse(JSON.stringify(cfg)) as TaskRepeatCfg;
+      expect(roundTripped.cronExpression).toBe(cfg.cronExpression);
+      expect(roundTripped.repeatCycle).toBe('CRON');
+      // Occurrence engine yields the same day before and after serialization.
+      expect(getDbDateStr(getNextCronOccurrence(roundTripped, BASE)!)).toBe(
+        getDbDateStr(getNextCronOccurrence(cfg, BASE)!),
+      );
+      expect(getDbDateStr(getFirstCronOccurrence(roundTripped)!)).toBe(
+        getDbDateStr(getFirstCronOccurrence(cfg)!),
+      );
+    });
+  });
 });
