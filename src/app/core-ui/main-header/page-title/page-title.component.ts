@@ -91,9 +91,7 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
       }
 
       .page-title {
-        flex: 1 1 auto;
         font-size: 18px;
-        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -115,6 +113,8 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
       .page-title-actions {
         display: flex;
         align-items: center;
+        /* Don't let the menu/filter buttons shrink; the title absorbs the
+           squeeze instead (#7477). */
         flex: 0 0 auto;
         gap: var(--s-quarter);
         margin-left: calc(-1 * var(--s));
