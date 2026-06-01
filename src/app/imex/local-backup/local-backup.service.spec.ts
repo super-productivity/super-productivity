@@ -214,6 +214,59 @@ describe('LocalBackupService', () => {
     });
   });
 
+  describe('iOS backup ring (#7901)', () => {
+    const PRIMARY = 'super-productivity-backup.json';
+    const PREV = 'super-productivity-backup.prev.json';
+
+    type LocalBackupServiceWithIosRing = {
+      _readIOSFileOrNull: (path: string) => Promise<string | null>;
+      _writeIOSFile: (path: string, data: string) => Promise<void>;
+    };
+
+    beforeEach(() => {
+      (
+        service as unknown as {
+          _platformService: Pick<CapacitorPlatformService, 'isIOS'>;
+        }
+      )._platformService = { isIOS: () => true };
+    });
+
+    it('promotes the existing backup to the prev slot before overwriting', async () => {
+      const existing = JSON.stringify({ task: { ids: ['existing'] } });
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSFileOrNull',
+      ).and.resolveTo(existing);
+      const writeSpy = spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_writeIOSFile',
+      ).and.resolveTo();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      // First write promotes the existing blob to prev, second writes the new primary.
+      expect(writeSpy).toHaveBeenCalledTimes(2);
+      expect(writeSpy.calls.first().args).toEqual([PREV, existing]);
+      expect(writeSpy.calls.mostRecent().args[0]).toBe(PRIMARY);
+    });
+
+    it('skips promotion when there is no existing backup yet', async () => {
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSFileOrNull',
+      ).and.resolveTo(null);
+      const writeSpy = spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_writeIOSFile',
+      ).and.resolveTo();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(writeSpy).toHaveBeenCalledTimes(1);
+      expect(writeSpy.calls.mostRecent().args[0]).toBe(PRIMARY);
+    });
+  });
+
   describe('automatic backup timer', () => {
     it('should stop creating automatic backups when disabled after being enabled', fakeAsync(() => {
       const cfg$ = new BehaviorSubject({

@@ -14,6 +14,7 @@ import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
+import { selectBestBackupStr } from './backup-ring.util';
 import { SnackService } from '../../core/snack/snack.service';
 import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
@@ -22,7 +23,12 @@ import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 
 const DEFAULT_BACKUP_INTERVAL = 5 * 60 * 1000;
 const ANDROID_DB_KEY = 'backup';
+// Previous-generation slot for the two-generation ring (#7901): the current
+// `backup` is promoted here before being overwritten, so one bad/corrupt write
+// cycle can never erase the only good copy.
+const ANDROID_DB_KEY_PREV = 'backup_prev';
 const IOS_BACKUP_FILENAME = 'super-productivity-backup.json';
+const IOS_BACKUP_PREV_FILENAME = 'super-productivity-backup.prev.json';
 
 // const DEFAULT_BACKUP_INTERVAL = 6 * 1000;
 
@@ -52,7 +58,14 @@ export class LocalBackupService {
 
   checkBackupAvailable(): Promise<boolean | LocalBackupMeta> {
     if (IS_ANDROID_WEB_VIEW) {
-      return androidInterface.loadFromDbWrapped(ANDROID_DB_KEY).then((r) => !!r);
+      // Available if either ring slot holds a backup (#7901).
+      return androidInterface.loadFromDbWrapped(ANDROID_DB_KEY).then(async (primary) => {
+        if (primary) {
+          return true;
+        }
+        const prev = await androidInterface.loadFromDbWrapped(ANDROID_DB_KEY_PREV);
+        return !!prev;
+      });
     }
     if (this._platformService.isIOS()) {
       return this._checkBackupAvailableIOS();
@@ -67,30 +80,41 @@ export class LocalBackupService {
     return window.ea.loadBackupData(backupPath) as Promise<string>;
   }
 
-  loadBackupAndroid(): Promise<string> {
-    return androidInterface.loadFromDbWrapped(ANDROID_DB_KEY).then((r) => r as string);
+  async loadBackupAndroid(): Promise<string> {
+    // Restore from the newest usable ring slot (#7901). The Android bridge can
+    // hand back literal newlines, so usability is judged on the escaped form the
+    // importer also uses. We return that escaped winner; the caller's own
+    // re-escape is then an idempotent no-op.
+    const [primaryRaw, prevRaw] = await Promise.all([
+      androidInterface.loadFromDbWrapped(ANDROID_DB_KEY),
+      androidInterface.loadFromDbWrapped(ANDROID_DB_KEY_PREV),
+    ]);
+    const best = selectBestBackupStr(
+      this._escapeAndroidNewlines(primaryRaw),
+      this._escapeAndroidNewlines(prevRaw),
+    );
+    return best ?? '';
   }
 
   async loadBackupIOS(): Promise<string> {
-    const result = await Filesystem.readFile({
-      path: IOS_BACKUP_FILENAME,
-      directory: Directory.Data,
-      encoding: Encoding.UTF8,
-    });
-    return result.data as string;
+    const [primary, prev] = await Promise.all([
+      this._readIOSFileOrNull(IOS_BACKUP_FILENAME),
+      this._readIOSFileOrNull(IOS_BACKUP_PREV_FILENAME),
+    ]);
+    const best = selectBestBackupStr(primary, prev);
+    if (best === null) {
+      throw new Error('No iOS backup available');
+    }
+    return best;
   }
 
   private async _checkBackupAvailableIOS(): Promise<boolean> {
-    try {
-      const stat = await Filesystem.stat({
-        path: IOS_BACKUP_FILENAME,
-        directory: Directory.Data,
-      });
-      return !!stat;
-    } catch {
-      // File doesn't exist
-      return false;
-    }
+    // Available if either ring slot exists (#7901).
+    const [primary, prev] = await Promise.all([
+      this._iosFileExists(IOS_BACKUP_FILENAME),
+      this._iosFileExists(IOS_BACKUP_PREV_FILENAME),
+    ]);
+    return primary || prev;
   }
 
   async askForFileStoreBackupIfAvailable(): Promise<void> {
@@ -167,27 +191,78 @@ export class LocalBackupService {
     }
 
     if (IS_ELECTRON) {
+      // Electron keeps its own rotated, timestamped backups (electron/backup.ts),
+      // so it needs no ring here.
       window.ea.backupAppData(data);
     }
     if (IS_ANDROID_WEB_VIEW) {
-      await androidInterface.saveToDbWrapped(ANDROID_DB_KEY, JSON.stringify(data));
+      await this._backupAndroid(JSON.stringify(data));
     }
     if (this._platformService.isIOS()) {
       await this._backupIOS(data);
     }
   }
 
+  /**
+   * Android two-generation ring (#7901): promote the current backup to the prev
+   * slot before overwriting it, so a single bad write can't erase the only copy.
+   */
+  private async _backupAndroid(dataStr: string): Promise<void> {
+    const existing = await androidInterface.loadFromDbWrapped(ANDROID_DB_KEY);
+    if (existing) {
+      await androidInterface.saveToDbWrapped(ANDROID_DB_KEY_PREV, existing);
+    }
+    await androidInterface.saveToDbWrapped(ANDROID_DB_KEY, dataStr);
+  }
+
   private async _backupIOS(data: AppDataComplete): Promise<void> {
     try {
-      await Filesystem.writeFile({
-        path: IOS_BACKUP_FILENAME,
-        data: JSON.stringify(data),
-        directory: Directory.Data,
-        encoding: Encoding.UTF8,
-      });
+      // Two-generation ring (#7901): promote the current backup file to the prev
+      // slot before overwriting, so a single bad write can't erase the only copy.
+      const existing = await this._readIOSFileOrNull(IOS_BACKUP_FILENAME);
+      if (existing) {
+        await this._writeIOSFile(IOS_BACKUP_PREV_FILENAME, existing);
+      }
+      await this._writeIOSFile(IOS_BACKUP_FILENAME, JSON.stringify(data));
       Log.log('iOS backup saved successfully');
     } catch (error) {
       Log.err('Failed to save iOS backup', error);
+    }
+  }
+
+  private async _writeIOSFile(path: string, data: string): Promise<void> {
+    await Filesystem.writeFile({
+      path,
+      data,
+      directory: Directory.Data,
+      encoding: Encoding.UTF8,
+    });
+  }
+
+  /** Re-escapes literal newlines from the Android bridge so the blob parses as JSON. */
+  private _escapeAndroidNewlines(raw: string | null): string | null {
+    return raw === null ? null : raw.replace(/\n/g, '\\n');
+  }
+
+  private async _readIOSFileOrNull(path: string): Promise<string | null> {
+    try {
+      const result = await Filesystem.readFile({
+        path,
+        directory: Directory.Data,
+        encoding: Encoding.UTF8,
+      });
+      return result.data as string;
+    } catch {
+      // File doesn't exist
+      return null;
+    }
+  }
+
+  private async _iosFileExists(path: string): Promise<boolean> {
+    try {
+      return !!(await Filesystem.stat({ path, directory: Directory.Data }));
+    } catch {
+      return false;
     }
   }
 
