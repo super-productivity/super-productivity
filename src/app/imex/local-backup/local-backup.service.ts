@@ -1,9 +1,10 @@
 import { DestroyRef, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { EMPTY, interval, Observable } from 'rxjs';
+import { EMPTY, interval, merge, Observable } from 'rxjs';
 import { LocalBackupConfig } from '../../features/config/global-config.model';
-import { map, switchMap, tap } from 'rxjs/operators';
+import { debounceTime, map, switchMap, tap } from 'rxjs/operators';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { LocalBackupMeta } from './local-backup.model';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../app.constants';
@@ -22,6 +23,14 @@ import { CapacitorPlatformService } from '../../core/platform/capacitor-platform
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 
 const DEFAULT_BACKUP_INTERVAL = 5 * 60 * 1000;
+// A2 (#7925): debounce window for the on-data-change backup trigger. The
+// existing 5-min interval still bounds the worst case; this catches the
+// typical "user made changes then put phone down" pattern before the next
+// tick, so a subsequent overnight WebView eviction doesn't lose the most
+// recent edits. Long enough that a flurry of UI actions settles into one
+// backup; short enough that a real change is captured before the user
+// backgrounds the app.
+const DATA_CHANGE_BACKUP_DEBOUNCE = 30 * 1000;
 const ANDROID_DB_KEY = 'backup';
 // Previous-generation slot for the two-generation ring (#7901): the current
 // `backup` is promoted here before being overwritten, so one bad/corrupt write
@@ -43,12 +52,28 @@ export class LocalBackupService {
   private _snackService = inject(SnackService);
   private _translateService = inject(TranslateService);
   private _platformService = inject(CapacitorPlatformService);
+  private _localActions$ = inject(LOCAL_ACTIONS);
 
   private _cfg$: Observable<LocalBackupConfig> = this._configService.cfg$.pipe(
     map((cfg) => cfg.localBackup),
   );
   private _triggerBackupSave$: Observable<unknown> = this._cfg$.pipe(
-    switchMap((cfg) => (cfg.isEnabled ? interval(DEFAULT_BACKUP_INTERVAL) : EMPTY)),
+    switchMap((cfg) =>
+      cfg.isEnabled
+        ? merge(
+            interval(DEFAULT_BACKUP_INTERVAL),
+            // A2 (#7925): debounced data-change trigger. Any local action
+            // settles into a backup DATA_CHANGE_BACKUP_DEBOUNCE after the last
+            // one. LOCAL_ACTIONS already filters out remote/sync replays, so
+            // we never back up intermediate hydration state. The empty-state
+            // guard in _backup() prevents writing a degraded post-eviction
+            // snapshot over a good backup. _backup() also early-returns on
+            // platforms without a target (web/PWA), so this trigger is safe
+            // to subscribe everywhere; it's a no-op off Electron/Android/iOS.
+            this._localActions$.pipe(debounceTime(DATA_CHANGE_BACKUP_DEBOUNCE)),
+          )
+        : EMPTY,
+    ),
     tap(() => this._backup()),
   );
 

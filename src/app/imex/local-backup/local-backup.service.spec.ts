@@ -1,5 +1,5 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 import { LocalBackupService } from './local-backup.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
@@ -11,8 +11,11 @@ import { initialTimeTrackingState } from '../../features/time-tracking/store/tim
 import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { T } from '../../t.const';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { Action } from '@ngrx/store';
 
 const BACKUP_INTERVAL = 5 * 60 * 1000;
+const DATA_CHANGE_DEBOUNCE = 30 * 1000;
 
 type LocalBackupServiceWithPrivate = {
   _backup: () => Promise<void>;
@@ -118,6 +121,8 @@ describe('LocalBackupService', () => {
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: TranslateService, useValue: translateServiceSpy },
         { provide: CapacitorPlatformService, useValue: platformServiceSpy },
+        // Default is an inert stream; the data-change trigger specs override.
+        { provide: LOCAL_ACTIONS, useValue: new Subject<Action>() },
       ],
     });
 
@@ -297,6 +302,7 @@ describe('LocalBackupService', () => {
           { provide: SnackService, useValue: snackServiceSpy },
           { provide: TranslateService, useValue: translateServiceSpy },
           { provide: CapacitorPlatformService, useValue: platformServiceSpy },
+          { provide: LOCAL_ACTIONS, useValue: new Subject<Action>() },
         ],
       });
       service = TestBed.inject(LocalBackupService);
@@ -318,6 +324,79 @@ describe('LocalBackupService', () => {
       expect(
         (service as unknown as LocalBackupServiceWithPrivate)._backup,
       ).toHaveBeenCalledTimes(1);
+    }));
+  });
+
+  describe('debounced data-change trigger (A2, #7925)', () => {
+    const setup = (
+      isEnabled: boolean,
+    ): { actions$: Subject<Action>; backupSpy: jasmine.Spy } => {
+      const actions$ = new Subject<Action>();
+      const cfg$ = new BehaviorSubject({ localBackup: { isEnabled } });
+      globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+        cfg$,
+      });
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          LocalBackupService,
+          { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
+          { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
+          { provide: BackupService, useValue: backupServiceSpy },
+          { provide: SnackService, useValue: snackServiceSpy },
+          { provide: TranslateService, useValue: translateServiceSpy },
+          { provide: CapacitorPlatformService, useValue: platformServiceSpy },
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+        ],
+      });
+      service = TestBed.inject(LocalBackupService);
+      const backupSpy = spyOn(
+        service as unknown as LocalBackupServiceWithPrivate,
+        '_backup',
+      ).and.resolveTo();
+      service.init();
+      return { actions$, backupSpy };
+    };
+
+    it('fires one backup after the debounce settles, regardless of action count', fakeAsync(() => {
+      const { actions$, backupSpy } = setup(true);
+
+      actions$.next({ type: 'SomeAction' });
+      actions$.next({ type: 'AnotherAction' });
+      actions$.next({ type: 'YetAnother' });
+
+      // Inside the debounce window — no backup yet.
+      tick(DATA_CHANGE_DEBOUNCE - 1);
+      expect(backupSpy).not.toHaveBeenCalled();
+
+      // Window settles — exactly one backup.
+      tick(1);
+      expect(backupSpy).toHaveBeenCalledTimes(1);
+    }));
+
+    it('resets the debounce on each new action', fakeAsync(() => {
+      const { actions$, backupSpy } = setup(true);
+
+      actions$.next({ type: 'A' });
+      tick(DATA_CHANGE_DEBOUNCE - 1);
+      // New action just before the window closes — debounce resets.
+      actions$.next({ type: 'B' });
+      tick(DATA_CHANGE_DEBOUNCE - 1);
+      expect(backupSpy).not.toHaveBeenCalled();
+
+      tick(1);
+      expect(backupSpy).toHaveBeenCalledTimes(1);
+    }));
+
+    it('does not fire when isEnabled is false', fakeAsync(() => {
+      const { actions$, backupSpy } = setup(false);
+
+      actions$.next({ type: 'SomeAction' });
+      tick(DATA_CHANGE_DEBOUNCE);
+      tick(BACKUP_INTERVAL);
+
+      expect(backupSpy).not.toHaveBeenCalled();
     }));
   });
 
