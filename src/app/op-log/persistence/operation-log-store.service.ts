@@ -371,7 +371,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     };
     // seq is auto-incremented, returned for later reference
     try {
-      return await this.db.add(STORE_NAMES.OPS, entry as StoredOperationLogEntry);
+      return await this._adapter.add(STORE_NAMES.OPS, entry);
     } catch (e) {
       if (e instanceof DOMException && e.name === 'ConstraintError') {
         this._appliedOpIdsCache = null;
@@ -391,32 +391,33 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     options?: { pendingApply?: boolean },
   ): Promise<number[]> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    const seqs: number[] = [];
-
     try {
-      for (const op of ops) {
-        // Encode operation to compact format for storage efficiency
-        const compactOp = encodeOperation(op);
-        const entry: Omit<StoredOperationLogEntry, 'seq'> = {
-          op: compactOp,
-          appliedAt: Date.now(),
-          source,
-          syncedAt: source === 'remote' ? Date.now() : undefined,
-          applicationStatus:
-            source === 'remote'
-              ? options?.pendingApply
-                ? 'pending'
-                : 'applied'
-              : undefined,
-        };
-        const seq = await store.add(entry as StoredOperationLogEntry);
-        seqs.push(seq as number);
-      }
-
-      await tx.done;
-      return seqs;
+      return await this._adapter.transaction(
+        [STORE_NAMES.OPS],
+        'readwrite',
+        async (tx) => {
+          const seqs: number[] = [];
+          for (const op of ops) {
+            // Encode operation to compact format for storage efficiency
+            const compactOp = encodeOperation(op);
+            const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+              op: compactOp,
+              appliedAt: Date.now(),
+              source,
+              syncedAt: source === 'remote' ? Date.now() : undefined,
+              applicationStatus:
+                source === 'remote'
+                  ? options?.pendingApply
+                    ? 'pending'
+                    : 'applied'
+                  : undefined,
+            };
+            const seq = await tx.add(STORE_NAMES.OPS, entry);
+            seqs.push(seq);
+          }
+          return seqs;
+        },
+      );
     } catch (e) {
       // Cache is stale if we hit a constraint error - invalidate to force refresh
       // This handles the case where a previous sync partially wrote ops before failing,
@@ -457,41 +458,42 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     }
 
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    const byIdIndex = store.index(OPS_INDEXES.BY_ID);
-    const seqs: number[] = [];
-    const writtenOps: Operation[] = [];
-    let skippedCount = 0;
-
     try {
-      for (const op of ops) {
-        // Check if op already exists in the same transaction (atomic)
-        const existingKey = await byIdIndex.getKey(op.id);
-        if (existingKey !== undefined) {
-          skippedCount++;
-          continue;
+      const seqs: number[] = [];
+      const writtenOps: Operation[] = [];
+      let skippedCount = 0;
+
+      await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+        for (const op of ops) {
+          // Check if op already exists in the same transaction (atomic)
+          const existingKey = await tx.getKeyFromIndex(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_ID,
+            op.id,
+          );
+          if (existingKey !== undefined) {
+            skippedCount++;
+            continue;
+          }
+
+          const compactOp = encodeOperation(op);
+          const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+            op: compactOp,
+            appliedAt: Date.now(),
+            source,
+            syncedAt: source === 'remote' ? Date.now() : undefined,
+            applicationStatus:
+              source === 'remote'
+                ? options?.pendingApply
+                  ? 'pending'
+                  : 'applied'
+                : undefined,
+          };
+          const seq = await tx.add(STORE_NAMES.OPS, entry);
+          seqs.push(seq);
+          writtenOps.push(op);
         }
-
-        const compactOp = encodeOperation(op);
-        const entry: Omit<StoredOperationLogEntry, 'seq'> = {
-          op: compactOp,
-          appliedAt: Date.now(),
-          source,
-          syncedAt: source === 'remote' ? Date.now() : undefined,
-          applicationStatus:
-            source === 'remote'
-              ? options?.pendingApply
-                ? 'pending'
-                : 'applied'
-              : undefined,
-        };
-        const seq = await store.add(entry as StoredOperationLogEntry);
-        seqs.push(seq as number);
-        writtenOps.push(op);
-      }
-
-      await tx.done;
+      });
 
       if (skippedCount > 0) {
         Log.warn(
@@ -515,21 +517,20 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async markApplied(seqs: number[]): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    for (const seq of seqs) {
-      const entry = await store.get(seq);
-      // Allow transitioning from 'pending' or 'failed' to 'applied'
-      // 'failed' ops can be retried and need to be cleared when successful
-      if (
-        entry &&
-        (entry.applicationStatus === 'pending' || entry.applicationStatus === 'failed')
-      ) {
-        entry.applicationStatus = 'applied';
-        await store.put(entry);
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const seq of seqs) {
+        const entry = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, seq);
+        // Allow transitioning from 'pending' or 'failed' to 'applied'
+        // 'failed' ops can be retried and need to be cleared when successful
+        if (
+          entry &&
+          (entry.applicationStatus === 'pending' || entry.applicationStatus === 'failed')
+        ) {
+          entry.applicationStatus = 'applied';
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
       }
-    }
-    await tx.done;
+    });
   }
 
   /**
