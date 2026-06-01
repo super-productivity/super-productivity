@@ -206,7 +206,7 @@
     "@angular/cdk": "^21.2.9",
     "@angular/cli": "^21.2.9",
     "@angular/common": "^21.2.11",
-    "@angular/compiler": "^21.2.11",
+    "@angular/compiler": "^21.2.15",
     "@angular/compiler-cli": "^21.2.11",
     "@angular/core": "^21.2.11",
     "@angular/forms": "^21.2.11",
