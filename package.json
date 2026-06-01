@@ -183,7 +183,7 @@
     "@capacitor/keyboard": "8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@capawesome/capacitor-android-edge-to-edge-support": "^8.0.8",
-    "@material-symbols/font-400": "^0.44.4",
+    "@material-symbols/font-400": "^0.44.10",
     "@noble/ciphers": "^2.2.0",
     "capacitor-plugin-safe-area": "^5.0.0",
     "electron-dl": "^3.5.2",
