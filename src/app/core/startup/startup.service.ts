@@ -353,46 +353,62 @@ export class StartupService {
   }
 
   private _requestPersistence(): void {
-    if (navigator.storage) {
-      // try to avoid data-loss
-      Promise.all([navigator.storage.persisted()])
-        .then(([persisted]) => {
-          if (!persisted) {
-            return navigator.storage.persist().then((granted) => {
-              if (granted) {
-                Log.log('Persistent store granted');
-              }
-              // NOTE: we never show this warning for native mobile apps or Electron,
-              // because persistence is managed by the OS and not subject to browser eviction.
-              // Also suppress during active onboarding to avoid confusing first-time users.
-              else if (
-                !this._platformService.isNative &&
-                !IS_ELECTRON &&
-                !OnboardingHintService.isOnboardingInProgress()
-              ) {
-                const msg = T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED;
-                Log.warn('Persistence not allowed');
-                this._snackService.open({ msg });
-              }
-            });
-          } else {
-            Log.log('Persistence already allowed');
-            return;
-          }
-        })
-        .catch((e) => {
-          Log.log(e);
-          const err = e && e.toString ? e.toString() : 'UNKNOWN';
-          const msg = T.GLOBAL_SNACK.PERSISTENCE_ERROR;
-          this._snackService.open({
-            type: 'ERROR',
-            msg,
-            translateParams: {
-              err,
-            },
-          });
-        });
+    if (!navigator.storage) {
+      // No StorageManager at all — record it so #7892-style reports carry signal.
+      Log.log('Persistence: navigator.storage unavailable', {
+        isNative: this._platformService.isNative,
+        isElectron: IS_ELECTRON,
+      });
+      return;
     }
+    // A1 (#7925): always log {persisted, granted} on every branch — including
+    // native and Electron — so exported logs from a "woke up blank" report
+    // carry the durability state of the WebView store. The user-facing snack
+    // remains gated as before; this is logging only.
+    const context = {
+      isNative: this._platformService.isNative,
+      isElectron: IS_ELECTRON,
+    };
+    navigator.storage
+      .persisted()
+      .then((persisted) => {
+        if (persisted) {
+          Log.log('Persistence: already granted', { persisted, ...context });
+          return;
+        }
+        return navigator.storage.persist().then((granted) => {
+          Log.log('Persistence: persist() resolved', {
+            persisted,
+            granted,
+            ...context,
+          });
+          // NOTE: we never show this warning for native mobile apps or Electron,
+          // because persistence is managed by the OS and not subject to browser eviction.
+          // Also suppress during active onboarding to avoid confusing first-time users.
+          if (
+            !granted &&
+            !this._platformService.isNative &&
+            !IS_ELECTRON &&
+            !OnboardingHintService.isOnboardingInProgress()
+          ) {
+            const msg = T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED;
+            Log.warn('Persistence not allowed');
+            this._snackService.open({ msg });
+          }
+        });
+      })
+      .catch((e) => {
+        Log.log('Persistence: error', { ...context, error: e });
+        const err = e && e.toString ? e.toString() : 'UNKNOWN';
+        const msg = T.GLOBAL_SNACK.PERSISTENCE_ERROR;
+        this._snackService.open({
+          type: 'ERROR',
+          msg,
+          translateParams: {
+            err,
+          },
+        });
+      });
   }
 
   private _checkAvailableStorage(): void {
