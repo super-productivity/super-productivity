@@ -8,16 +8,21 @@
 >
 > - ✅ `OpLogDbAdapter` / `OpLogTx` port + declarative schema descriptor.
 > - ✅ `IndexedDbOpLogAdapter` (faithful `idb` backend) + 26 specs.
-> - ✅ `adoptConnection()` seam: the adapter shares the store's single
->   connection, so the store migrates method-by-method with one connection and
->   no spec breakage.
-> - ✅ Migrated method groups: import-backup; state_cache + migration-safety
->   backup + compaction counter (incl. the two atomic read-modify-write
->   methods via `transaction()`).
-> - ⏳ Remaining: the ops-table methods (append\*, getUnsynced, cursors,
->   `appendWithVectorClockUpdate`, `runDestructiveStateReplacement`),
->   client_id, profile_data, vector_clock, and `ArchiveStoreService`.
-> - Gate after each group: 170 store unit + 367 op-log integration specs green.
+> - ✅ `adoptConnection()` seam: the adapter shares the owning service's single
+>   connection, so each service migrates method-by-method with one connection
+>   and no spec breakage.
+> - ✅ **`OperationLogStoreService` fully migrated** — every method routes
+>   through the adapter, including the two flagship atomic flows
+>   (`appendWithVectorClockUpdate`, `runDestructiveStateReplacement`). No direct
+>   `this.db` calls remain.
+> - ✅ **`ArchiveStoreService` fully migrated** (own adopted connection +
+>   `_withRetryOnClose` re-adopt path).
+> - ⏳ Remaining for Phase B: bind the adapter via DI (so the store/archive take
+>   an injected `OpLogDbAdapter` rather than constructing their own), then add
+>   `SqliteOpLogAdapter`. The other small IDB consumers (theme, credential,
+>   oauth, client-id) are out of the data-loss scope (Phase D).
+> - Gate after each group: 170 store unit + 3 archive unit + 367 op-log
+>   integration specs green.
 
 ## 0. Goal & non-goal
 
