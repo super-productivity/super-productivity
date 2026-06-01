@@ -201,13 +201,21 @@ export class AndroidFocusModeEffects {
   // WebView is recreated with an idle store, so without this the session (and
   // its notification, once syncFocusModeToNotification$ re-syncs) would be lost.
   //
-  // onResume$ is a ReplaySubject so the cold-start emission is delivered even
-  // if it fired before this subscriber attached; combining it with
-  // selectIsTaskDataLoaded re-triggers once hydration settles. We only recover
-  // while the store is idle, so a live in-app session is never clobbered and a
-  // single restore flips the guard off (synchronous dispatch closes it before
-  // any duplicate emission — no exhaustMap/coalescing needed, unlike the async
-  // tracking recovery). After restore, syncFocusModeToNotification$ re-issues
+  // Triggers ONLY on the resume/cold-start edge:
+  //   - onResume$ (ReplaySubject + startWith) fires on every app resume and
+  //     replays the cold-start emission even if it fired before we subscribed;
+  //   - selectIsTaskDataLoaded flips false→true once when hydration settles.
+  // `selectTimer` is SAMPLED via withLatestFrom, NOT used as a trigger. This is
+  // load-bearing: if the timer were a combineLatest source, *ending* a session
+  // (cancel/complete) would re-emit an idle store and re-run this read. Because
+  // the native stop is asynchronous (stopFocusModeService → stopService →
+  // onDestroy on the UI thread), getFocusModeElapsed() would still see
+  // isRunning === true and wrongly re-adopt the session that just ended —
+  // resurrecting a cancelled session / double-logging a completed one. Sampling
+  // the timer means only a genuine resume/cold-start can trigger recovery.
+  //
+  // We recover only while the store is idle, so a live in-app session is never
+  // clobbered. After restore, syncFocusModeToNotification$ re-issues
   // startFocusModeService with the same remaining time the native service
   // already holds — an intentional, idempotent round-trip (no countdown reset).
   recoverFocusSession$ =
@@ -215,14 +223,13 @@ export class AndroidFocusModeEffects {
     createEffect(() =>
       combineLatest([
         androidInterface.onResume$.pipe(startWith(undefined)),
-        this._store.select(selectTimer),
         this._store.select(selectIsTaskDataLoaded),
       ]).pipe(
+        filter(([, isTaskDataLoaded]) => isTaskDataLoaded),
+        withLatestFrom(this._store.select(selectTimer)),
         filter(
-          ([, timer, isTaskDataLoaded]) =>
-            isTaskDataLoaded &&
-            timer.purpose === null &&
-            !this._hydrationState.isApplyingRemoteOps(),
+          ([, timer]) =>
+            timer.purpose === null && !this._hydrationState.isApplyingRemoteOps(),
         ),
         map(() => parseNativeFocusModeData(androidInterface.getFocusModeElapsed?.())),
         filter((data): data is NativeFocusModeData => data !== null),
