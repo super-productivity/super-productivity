@@ -3,6 +3,11 @@ import { CdkDropList } from '@angular/cdk/drag-drop';
 import { BehaviorSubject, merge, of, Subject, timer } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 
+export interface DragPointer {
+  x: number;
+  y: number;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -22,13 +27,13 @@ export class DropListService {
 
   private _list: CdkDropList[] = [];
   private _flushScheduled = false;
-  private _activeDragPointer: { x: number; y: number } | null = null;
+  private _activeDragPointer: DragPointer | null = null;
 
-  activeDragPointer(): { x: number; y: number } | null {
+  activeDragPointer(): DragPointer | null {
     return this._activeDragPointer;
   }
 
-  setActiveDragPointer(pointer: { x: number; y: number } | null): void {
+  setActiveDragPointer(pointer: DragPointer | null): void {
     this._activeDragPointer = pointer;
   }
 

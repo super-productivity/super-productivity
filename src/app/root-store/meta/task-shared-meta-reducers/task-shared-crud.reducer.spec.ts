@@ -801,6 +801,28 @@ describe('taskSharedCrudMetaReducer', () => {
         mockReducer.calls.reset();
       });
     });
+
+    it('should not convert under a target parent that is itself a subtask', () => {
+      // Nesting under a subtask would create a third level the UI cannot render
+      // (orphaning the task) and leave the grandparent's time aggregation stale.
+      const testState = createConvertToSubTaskState({}, { parentId: 'grandparent' });
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+    });
+
+    it('should not convert a task onto itself', () => {
+      const testState = createConvertToSubTaskState();
+      const action = TaskSharedActions.convertToSubTask({
+        taskId: 'task1',
+        targetParentId: 'task1',
+        afterTaskId: null,
+      });
+
+      metaReducer(testState, action);
+      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+    });
   });
 
   describe('deleteTask action', () => {
