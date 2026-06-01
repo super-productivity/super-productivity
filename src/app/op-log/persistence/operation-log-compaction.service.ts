@@ -15,6 +15,7 @@ import { OpLog } from '../../core/log';
 import { extractEntityKeysFromState } from './extract-entity-keys';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { limitVectorClockSize } from '../../core/util/vector-clock';
+import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 
 /**
  * Manages the compaction (garbage collection) of the operation log.
@@ -64,6 +65,25 @@ export class OperationLogCompactionService {
       // 1. Get current state from NgRx store
       const currentState = this.stateSnapshot.getStateSnapshot();
       this.checkCompactionTimeout(startTime, `${label}state snapshot`);
+
+      // GUARD (#7892): never compact against an empty/degraded state. Compaction
+      // both writes the state cache AND deletes old synced ops — if the live
+      // state were a transient empty/initial state, we would cache emptiness and
+      // then prune the very ops needed to recover. Skipping is always safe for
+      // correctness: the op-log stays the source of truth and replaying the
+      // un-pruned log reconstructs the correct state, including legitimate full
+      // wipes. Trade-off: a store that is *genuinely* empty-but-active (e.g. the
+      // user deleted everything yet keeps generating synced ops) will never get
+      // its old synced ops pruned while it stays empty, so the log can grow. That
+      // is an accepted cost — preventing empty-over-good is worth more than GC for
+      // this rare case, and pruning resumes as soon as real data exists again.
+      if (!hasMeaningfulStateData(currentState)) {
+        OpLog.warn(
+          'OperationLogCompactionService: Skipping compaction — current state has no ' +
+            'meaningful data (refusing to overwrite cache and prune ops against empty state)',
+        );
+        return;
+      }
 
       // 2. Get current vector clock (max of all ops)
       const currentVectorClock = await this.vectorClockService.getCurrentVectorClock();

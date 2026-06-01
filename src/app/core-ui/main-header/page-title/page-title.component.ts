@@ -113,6 +113,9 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
       .page-title-actions {
         display: flex;
         align-items: center;
+        /* Don't let the menu/filter buttons shrink; the title absorbs the
+           squeeze instead (#7477). */
+        flex: 0 0 auto;
         gap: var(--s-quarter);
         margin-left: calc(-1 * var(--s));
         margin-right: var(--s2);

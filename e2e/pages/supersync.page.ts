@@ -2032,27 +2032,29 @@ export class SuperSyncPage extends BasePage {
       'input[name="confirmPassword"]',
     );
 
-    // fill() can resolve before the OnPush dialog's [(ngModel)] two-way
-    // binding commits the value, intermittently leaving a field empty (and
-    // the confirm button permanently disabled) even though the fill itself
-    // succeeded. Re-fill each field until its value is committed in the DOM
-    // before relying on the confirm button's enabled state.
-    for (const input of [newPasswordInput, confirmPasswordInput]) {
-      await expect(async () => {
-        if ((await input.inputValue()) !== newPassword) {
-          await input.fill(newPassword);
-          await input.blur(); // Trigger ngModel update
-        }
-        await expect(input).toHaveValue(newPassword, { timeout: 1000 });
-      }).toPass({ timeout: 5000 });
-    }
-
     // Click the "Change Password" confirm button (mat-flat-button, not the "Disable Encryption" button which is mat-stroked-button)
     const confirmBtn = changePasswordDialog.locator(
       'button[mat-flat-button][color="warn"]',
     );
     await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
-    await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
+
+    // fill() can resolve before the OnPush dialog's [(ngModel)] two-way
+    // binding commits the value, intermittently leaving a field empty — or
+    // committed-but-with-the-form-validity-still-lagging — which leaves the
+    // confirm button disabled even though the fill itself succeeded. Re-fill
+    // both fields until the confirm button is actually enabled, folding the
+    // value-commit and validity waits together so a lagging button re-triggers
+    // a re-fill instead of failing the assertion.
+    await expect(async () => {
+      for (const input of [newPasswordInput, confirmPasswordInput]) {
+        if ((await input.inputValue()) !== newPassword) {
+          await input.fill(newPassword);
+          await input.blur(); // Trigger ngModel update
+        }
+      }
+      await expect(confirmBtn).toBeEnabled({ timeout: 1000 });
+    }).toPass({ timeout: 10000 });
+
     await confirmBtn.click();
 
     // Wait for the dialog to close (password change complete)

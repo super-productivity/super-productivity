@@ -122,3 +122,6 @@ data/
 /.secrets.example
 
 .worktrees/
+
+# Generated App Store Connect "What's New" notes (see tools/prepare-appstore-release-notes.js)
+/fastlane/appstore_metadata

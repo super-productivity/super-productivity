@@ -466,6 +466,46 @@ describe('validateAndFixDataConsistencyAfterBatchUpdate', () => {
       expect(tag1?.taskIds).toContain('valid-task');
     });
 
+    it('should not mutate original tag state when orphan cleanup removes tag references', () => {
+      const state = createStateWithExistingTasks(['orphan-with-tag', 'valid-task']);
+
+      state[TASK_FEATURE_NAME].entities['orphan-with-tag'] = {
+        ...state[TASK_FEATURE_NAME].entities['orphan-with-tag']!,
+        parentId: 'non-existent-parent',
+        tagIds: ['tag1'],
+      };
+
+      state[TAG_FEATURE_NAME].entities = {
+        tag1: createMockTag({
+          id: 'tag1',
+          title: 'Tag 1',
+          taskIds: ['orphan-with-tag', 'valid-task'],
+        }),
+      };
+
+      const originalTagState = state[TAG_FEATURE_NAME];
+      const originalTagEntities = state[TAG_FEATURE_NAME].entities;
+      const originalTag = state[TAG_FEATURE_NAME].entities['tag1'];
+
+      const result = validateAndFixDataConsistencyAfterBatchUpdate(
+        state,
+        'project1',
+        [], // tasksToAdd
+        [], // tasksToUpdate
+        [], // taskIdsToDelete
+        null, // newTaskOrder
+      );
+
+      expect(result[TAG_FEATURE_NAME]).not.toBe(originalTagState);
+      expect(result[TAG_FEATURE_NAME].entities).not.toBe(originalTagEntities);
+      expect(result[TAG_FEATURE_NAME].entities['tag1']).not.toBe(originalTag);
+      expect(state[TAG_FEATURE_NAME].entities['tag1']?.taskIds).toEqual([
+        'orphan-with-tag',
+        'valid-task',
+      ]);
+      expect(result[TAG_FEATURE_NAME].entities['tag1']?.taskIds).toEqual(['valid-task']);
+    });
+
     it('should handle cascading deletion of orphaned subtasks', () => {
       const state = createStateWithExistingTasks(['parent', 'child', 'grandchild']);
 

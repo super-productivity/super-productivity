@@ -1017,24 +1017,67 @@ describe('OperationLogHydratorService', () => {
     });
 
     describe('invalid snapshot handling', () => {
-      it('should attempt recovery if snapshot is invalid', async () => {
+      it('should attempt recovery if snapshot is invalid and there are no ops', async () => {
         const invalidSnapshot = createMockSnapshot();
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
         mockSnapshotService.isValidSnapshot.and.returnValue(false);
+        // #7892: recovery-to-empty is only taken when the op-log is also empty.
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(0));
 
         await service.hydrateStore();
 
         expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
       });
 
-      it('should not dispatch loadAllData if snapshot is invalid', async () => {
+      it('should not dispatch loadAllData if snapshot is invalid and there are no ops', async () => {
         const invalidSnapshot = createMockSnapshot();
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
         mockSnapshotService.isValidSnapshot.and.returnValue(false);
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(0));
 
         await service.hydrateStore();
 
         // Only dispatch should NOT happen because recovery takes over
+        expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+      });
+
+      // #7892: when the snapshot/state-cache is corrupt but the op-log is intact
+      // (lastSeq > 0), the hydrator must DISCARD the corrupt snapshot and replay
+      // the op-log instead of dropping to recovery-to-empty. This is the core
+      // data-saving fix; the recovery-to-empty path is reserved for lastSeq === 0.
+      it('should discard a corrupt snapshot and replay the op-log when lastSeq > 0 (#7892)', async () => {
+        const invalidSnapshot = createMockSnapshot();
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
+        mockSnapshotService.isValidSnapshot.and.returnValue(false);
+
+        // Op-log is intact: lastSeq > 0 and getOpsAfterSeq(0) returns the ops.
+        const allOps = [
+          createMockEntry(1, createMockOperation('op-1')),
+          createMockEntry(2, createMockOperation('op-2')),
+        ];
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(2));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(allOps));
+
+        await service.hydrateStore();
+
+        // Must NOT drop to recovery-to-empty.
+        expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+        // Must replay the whole op-log from seq 0.
+        expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({ operations: allOps.map((e) => e.op) }),
+        );
+      });
+
+      it('should attempt recovery for an invalid snapshot only when no ops exist (lastSeq === 0) (#7892)', async () => {
+        const invalidSnapshot = createMockSnapshot();
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
+        mockSnapshotService.isValidSnapshot.and.returnValue(false);
+        // No op-log to replay.
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(0));
+
+        await service.hydrateStore();
+
         expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
       });
     });

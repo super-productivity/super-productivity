@@ -19,6 +19,36 @@ const arraysHaveSameElements = (a: string[], b: string[]): boolean => {
   return b.every((id) => setA.has(id));
 };
 
+type TagUpdate = { id: string; changes: Partial<Tag> };
+
+const applyTagUpdates = (state: RootState, updates: TagUpdate[]): RootState => {
+  if (updates.length === 0) {
+    return state;
+  }
+
+  const tagState = {
+    ...state[TAG_FEATURE_NAME],
+    entities: {
+      ...state[TAG_FEATURE_NAME].entities,
+    },
+  };
+
+  updates.forEach((update) => {
+    const tag = tagState.entities[update.id];
+    if (tag) {
+      tagState.entities[update.id] = {
+        ...tag,
+        ...update.changes,
+      };
+    }
+  });
+
+  return {
+    ...state,
+    [TAG_FEATURE_NAME]: tagState,
+  };
+};
+
 /**
  * Validates and fixes data consistency across tasks, projects, and tags
  * Ensures bidirectional consistency: project.taskIds ↔ task.projectId, tag.taskIds ↔ task.tagIds
@@ -31,7 +61,6 @@ export const validateAndFixDataConsistencyAfterBatchUpdate = (
   taskIdsToDelete: string[],
   newTaskOrder: string[] | null,
 ): RootState => {
-  // eslint-disable-next-line prefer-const
   let newState = { ...state };
 
   // Get all affected task IDs for validation
@@ -125,7 +154,7 @@ export const validateAndFixDataConsistencyAfterBatchUpdate = (
   });
 
   // Apply tag updates
-  const tagUpdates: { id: string; changes: Partial<Tag> }[] = [];
+  const tagUpdates: TagUpdate[] = [];
   tagsToUpdate.forEach((taskIds, tagId) => {
     const currentTag = newState[TAG_FEATURE_NAME].entities[tagId];
     if (currentTag) {
@@ -142,21 +171,7 @@ export const validateAndFixDataConsistencyAfterBatchUpdate = (
     }
   });
 
-  if (tagUpdates.length > 0) {
-    newState[TAG_FEATURE_NAME] = {
-      ...newState[TAG_FEATURE_NAME],
-      entities: {
-        ...newState[TAG_FEATURE_NAME].entities,
-      },
-    };
-
-    tagUpdates.forEach((update) => {
-      newState[TAG_FEATURE_NAME].entities[update.id] = {
-        ...newState[TAG_FEATURE_NAME].entities[update.id]!,
-        ...update.changes,
-      };
-    });
-  }
+  newState = applyTagUpdates(newState, tagUpdates);
 
   // =========================================================================
   // 3. PARENT-CHILD CONSISTENCY: Validate parent.subTaskIds ↔ child.parentId
@@ -319,7 +334,7 @@ export const validateAndFixDataConsistencyAfterBatchUpdate = (
   }
 
   // Clean up non-existent task references from tags
-  const tagCleanupUpdates: { id: string; changes: Partial<Tag> }[] = [];
+  const tagCleanupUpdates: TagUpdate[] = [];
   const remainingTaskIds = new Set(Object.keys(newState[TASK_FEATURE_NAME].entities));
 
   Object.values(newState[TAG_FEATURE_NAME].entities).forEach((tag) => {
@@ -334,15 +349,7 @@ export const validateAndFixDataConsistencyAfterBatchUpdate = (
     }
   });
 
-  // Apply tag cleanup updates
-  if (tagCleanupUpdates.length > 0) {
-    tagCleanupUpdates.forEach((update) => {
-      newState[TAG_FEATURE_NAME].entities[update.id] = {
-        ...newState[TAG_FEATURE_NAME].entities[update.id]!,
-        ...update.changes,
-      };
-    });
-  }
+  newState = applyTagUpdates(newState, tagCleanupUpdates);
 
   return newState;
 };

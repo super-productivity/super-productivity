@@ -69,10 +69,8 @@ import { EffectsModule } from '@ngrx/effects';
 import { ReactiveFormsModule } from '@angular/forms';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
-import {
-  TRANSLATE_HTTP_LOADER_CONFIG,
-  TranslateHttpLoader,
-} from '@ngx-translate/http-loader';
+import { TRANSLATE_HTTP_LOADER_CONFIG } from '@ngx-translate/http-loader';
+import { TranslateHttpLoaderWithFallback } from './app/core/http/translate-http-loader-with-fallback.class';
 import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { AppComponent } from './app/app.component';
 import { ShortTimeHtmlPipe } from './app/ui/pipes/short-time-html.pipe';
@@ -187,7 +185,7 @@ bootstrapApplication(AppComponent, {
         fallbackLang: DEFAULT_LANGUAGE,
         loader: {
           provide: TranslateLoader,
-          useClass: TranslateHttpLoader,
+          useClass: TranslateHttpLoaderWithFallback,
         },
       }),
       CdkDropListGroup,

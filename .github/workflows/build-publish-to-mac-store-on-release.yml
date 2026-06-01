@@ -23,8 +23,13 @@ jobs:
             github.com:443
             objects.githubusercontent.com:443
             registry.npmjs.org:443
+            rubygems.org:443
+            index.rubygems.org:443
             www.apple.com:443
             appstoreconnect.apple.com:443
+            api.appstoreconnect.apple.com:443
+            contentdelivery.itunes.apple.com:443
+            idmsa.apple.com:443
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -172,14 +177,38 @@ jobs:
       - run: ls .tmp/app-builds
         shell: bash
 
-      - name: Validate App
-        run: ls .tmp/app-builds; ls .tmp/app-builds/mas-universal; xcrun altool --type macos --validate-app -f .tmp/app-builds/mas-universal/super*.pkg -u ${{secrets.APPLE_ID}} -p ${{secrets.APPLE_APP_SPECIFIC_PASSWORD}}
-        env:
-          APPLE_ID: ${{secrets.APPLE_ID}}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{secrets.APPLE_APP_SPECIFIC_PASSWORD}}
+      - name: Set up Ruby and fastlane
+        # Pinned by SHA per repo policy. ruby-version is required: with no
+        # .ruby-version file in the repo the action errors out rather than
+        # using system Ruby. bundler-cache runs `bundle install` and caches the
+        # ~210-gem fastlane tree so it isn't reinstalled each run.
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
 
-      - name: Push to Store
-        run: xcrun altool --type macos --upload-app -f .tmp/app-builds/mas-universal/super*.pkg -u ${{secrets.APPLE_ID}} -p ${{secrets.APPLE_APP_SPECIFIC_PASSWORD}}
+      - name: Prepare App Store release notes
+        run: node tools/prepare-appstore-release-notes.js
+
+      # Upload the MAS .pkg to App Store Connect and (for final release tags)
+      # submit it for review with automatic release on approval. Pre-release
+      # tags (any tag containing "-", e.g. -rc.0/-beta.1) and manual runs only
+      # upload the build. The "-" check is case-insensitive by construction,
+      # unlike contains(...,'RC'); the repo's RC tags are mostly lowercase.
+      - name: Upload to App Store Connect and submit for review
         env:
-          APPLE_ID: ${{secrets.APPLE_ID}}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{secrets.APPLE_APP_SPECIFIC_PASSWORD}}
+          ASC_KEY_ID: ${{ secrets.mac_api_key_id }}
+          ASC_ISSUER_ID: ${{ secrets.mac_api_key_issuer_id }}
+          ASC_KEY_CONTENT: ${{ secrets.mac_api_key }}
+          SUBMIT_FOR_REVIEW: ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          pkgs=(.tmp/app-builds/mas-universal/super*.pkg)
+          if [ ${#pkgs[@]} -ne 1 ]; then
+            echo "Expected exactly 1 .pkg, found ${#pkgs[@]}: ${pkgs[*]:-none}"
+            exit 1
+          fi
+          export PKG_PATH="${pkgs[0]}"
+          echo "Submitting $PKG_PATH (submit_for_review=$SUBMIT_FOR_REVIEW)"
+          bundle exec fastlane mac release

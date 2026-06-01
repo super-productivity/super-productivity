@@ -80,22 +80,29 @@ test.describe('Sections', () => {
    * so the read can't race the re-render. This is the failure the two
    * `test.fixme`s below hit; keeping the guard here lets the active tests
    * stay reliable instead of throwing "no bounding box".
+   *
+   * The box captured *inside* the poll is the one returned — re-reading
+   * after the poll reopens the very race the poll closes (the list can
+   * re-render in the gap, making the second read return `null`).
    */
   const stableBoundingBox = async (
     locator: import('@playwright/test').Locator,
   ): Promise<{ x: number; y: number; width: number; height: number }> => {
     await locator.waitFor({ state: 'visible', timeout: 10000 });
+    let box: { x: number; y: number; width: number; height: number } | null = null;
     await expect
       .poll(
         async () => {
           const b = await locator.boundingBox();
-          return !!b && b.width > 0 && b.height > 0;
+          if (b && b.width > 0 && b.height > 0) {
+            box = b;
+            return true;
+          }
+          return false;
         },
         { timeout: 10000 },
       )
       .toBe(true);
-    // The poll guarantees a real box exists; re-read it for the gesture.
-    const box = await locator.boundingBox();
     if (!box) throw new Error('drag source/target has no bounding box');
     return box;
   };
@@ -127,6 +134,60 @@ test.describe('Sections', () => {
     // Smooth move to target so each `mousemove` re-evaluates drop target.
     await page.mouse.move(tx, ty, { steps: 20 });
     await page.mouse.up();
+  };
+
+  /**
+   * Disable Angular animations for the current session before driving CDK
+   * drag gestures that reorder tasks *already inside* a section. Each drop
+   * re-creates the moved task as a fresh `@for` `:enter`, so it replays the
+   * `expandInOnly` animation (`height: 0 -> *`, expand.ani.ts) and has a
+   * zero-height layout box mid-animation. `boundingBox()` returns `null` for
+   * that, which is the root cause of the "drag source/target has no bounding
+   * box" flake (and why the cross-section tests below are fixme'd).
+   *
+   * Flipping the app's own `isDisableAnimations` config toggles the
+   * `@HostBinding('@.disabled')` on the root component (app.component.ts),
+   * which disables every `@trigger` including `expandInOnly` — so dropped
+   * tasks render at full height instantly and their box never collapses.
+   *
+   * NOTE: only the intra-section reorder test uses this. The "drops a task
+   * into a section" test intentionally keeps animations on: it drags out of
+   * the no-section list into an *empty* section, and with animations off the
+   * source-removal reflow is instant, so the empty drop target can jump out
+   * from under the in-flight pointer and the drop misses.
+   */
+  const disableAnimations = async (
+    page: import('@playwright/test').Page,
+  ): Promise<void> => {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const store = (
+              window as unknown as {
+                __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
+              }
+            ).__e2eTestHelpers?.store;
+            if (!store) return false;
+            store.dispatch({
+              // updateGlobalConfigSection
+              // (src/app/features/config/store/global-config.actions.ts)
+              type: '[Global Config] Update Global Config Section',
+              sectionKey: 'misc',
+              sectionCfg: { isDisableAnimations: true },
+              isSkipSnack: true,
+            });
+            return true;
+          }),
+        { timeout: 10000 },
+      )
+      .toBe(true);
+    // `global-theme.service` mirrors the config onto a body class via an
+    // `effect()`. Waiting for it confirms the `@.disabled` binding has flipped
+    // before the first gesture reads layout.
+    await page
+      .locator('body.isDisableAnimations')
+      .waitFor({ state: 'attached', timeout: 5000 });
   };
 
   test('creates a section via the project context menu', async ({
@@ -286,6 +347,7 @@ test.describe('Sections', () => {
     projectPage,
   }) => {
     await setupTestProject(workViewPage, projectPage);
+    await disableAnimations(page);
 
     await openProjectContextMenu(page);
     await clickAddSection(page);

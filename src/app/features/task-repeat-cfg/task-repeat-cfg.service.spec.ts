@@ -30,6 +30,8 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { TODAY_TAG } from '../tag/tag.const';
 import { getRepeatableTaskId } from './get-repeatable-task-id.util';
 import { DateService } from '../../core/date/date.service';
+import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
+import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
 
 describe('TaskRepeatCfgService', () => {
   let service: TaskRepeatCfgService;
@@ -704,6 +706,51 @@ describe('TaskRepeatCfgService', () => {
 
       expect(actions.length).toBe(3);
       expect(actions[2].type).toBe(TaskSharedActions.scheduleTaskWithTime.type);
+    });
+
+    // #7850 cross-path contract: the mobile pre-scheduler (scheduleRepeatReminders$)
+    // registers the OS alarm BEFORE the instance exists, keyed on the deterministic
+    // id + trigger time it derives from the config. That alarm is only idempotent
+    // with scheduleNotifications$ (same notificationId → overwrite, never doubled) if
+    // it lands on EXACTLY the id, dueWithTime and remindAt the instance path produces.
+    // This locks that equality against the REAL instance-creation path.
+    it('matches the mobile pre-scheduler (#7850) on id, dueWithTime and remindAt', async () => {
+      const tomorrowNoon = new Date();
+      tomorrowNoon.setHours(12, 0, 0, 0);
+      tomorrowNoon.setDate(tomorrowNoon.getDate() + 1);
+      const targetDayDate = tomorrowNoon.getTime();
+
+      const cfg = {
+        ...mockTaskRepeatCfg,
+        startTime: '09:00',
+        remindAt: TaskReminderOptionId.AtStart,
+      } as TaskRepeatCfg;
+
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      // Honour the deterministic id the service passes in (the real impl does too).
+      taskService.createNewTaskWithDefaults.and.callFake(
+        (args: { id?: string }) => ({ ...mockTask, id: args.id }) as Task,
+      );
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, targetDayDate);
+      const scheduleAction = actions.find(
+        (a) => a.type === TaskSharedActions.scheduleTaskWithTime.type,
+      ) as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>;
+      expect(scheduleAction).toBeDefined();
+
+      // What scheduleRepeatReminders$ computes for the same (cfg, day) — see
+      // _getUpcomingRepeatReminders in mobile-notification.effects.ts.
+      const dueDayStr = getDbDateStr(targetDayDate);
+      const expectedId = getRepeatableTaskId(cfg.id, dueDayStr);
+      const expectedDueWithTime = getDateTimeFromClockString('09:00', targetDayDate);
+      const expectedRemindAt = remindOptionToMilliseconds(
+        expectedDueWithTime,
+        TaskReminderOptionId.AtStart,
+      );
+
+      expect(scheduleAction.task.id).toBe(expectedId);
+      expect(scheduleAction.dueWithTime).toBe(expectedDueWithTime);
+      expect(scheduleAction.remindAt).toBe(expectedRemindAt);
     });
 
     it('should throw error if no id', async () => {

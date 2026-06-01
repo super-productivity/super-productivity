@@ -23,6 +23,9 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskCopy, TaskReminderOptionId } from '../task.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
+import { DateService } from '../../../core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -55,6 +58,7 @@ describe('AddTaskBarComponent', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockAddTaskBarIssueSearchService: jasmine.SpyObj<AddTaskBarIssueSearchService>;
+  let mockDateService: jasmine.SpyObj<DateService>;
 
   // Mock data
   const mockProjects: Project[] = [
@@ -199,6 +203,14 @@ describe('AddTaskBarComponent', () => {
       'AddTaskBarIssueSearchService',
       ['getFilteredIssueSuggestions$', 'addTaskFromExistingTaskOrIssue'],
     );
+    mockDateService = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+      'getLogicalTodayDate',
+    ]);
+    mockDateService.todayStr.and.callFake(() => getDbDateStr(new Date()));
+    mockDateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    mockDateService.getLogicalTodayDate.and.callFake(() => new Date());
     // Setup method returns
     mockAddTaskBarIssueSearchService.getFilteredIssueSuggestions$.and.returnValue(of([]));
 
@@ -210,6 +222,7 @@ describe('AddTaskBarComponent', () => {
         { provide: ProjectService, useValue: mockProjectService },
         { provide: TagService, useValue: mockTagService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+        { provide: DateService, useValue: mockDateService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: Store, useValue: mockStore },
         { provide: MatDialog, useValue: mockMatDialog },
@@ -313,9 +326,58 @@ describe('AddTaskBarComponent', () => {
       const secondTaskData = secondCall.args[2] as Partial<TaskCopy>;
       expect(secondTaskData.tagIds).toEqual(['tag-1']);
     });
+
+    // #5461: a repeat-preset task with no explicit date must default to the
+    // logical "today" (offset-aware), not the calendar date. These assert the
+    // component reads DateService.todayStr() — a regression to getDbDateStr()
+    // would yield the real wall-clock date instead of the mocked '2024-05-19'.
+    it('should use logical today for the dueDay of a repeat-preset task without a date', async () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Daily standup');
+      component.stateService.updateCleanText('Daily standup');
+      component.stateService.updateRepeatSetting('DAILY');
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.dueDay).toBe('2024-05-19');
+    });
+
+    it('should use logical today for the repeat-config startDate when no date is set', async () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Daily standup');
+      component.stateService.updateCleanText('Daily standup');
+      component.stateService.updateRepeatSetting('DAILY');
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy).toHaveBeenCalled();
+      const repeatCfg = addRepeatCfgSpy.calls.mostRecent().args[2];
+      expect(repeatCfg.startDate).toBe('2024-05-19');
+    });
   });
 
   describe('defaultProject$ observable', () => {
+    it('should use logical today for the default date in TODAY context', () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      fixture.detectChanges();
+
+      expect(component.stateService.state().date).toBe('2024-05-19');
+    });
+
     it('should return current project when in project work context', async () => {
       // Set project work context
       (
@@ -522,6 +584,7 @@ describe('AddTaskBarComponent', () => {
           { provide: TagService, useValue: mockTagService },
           { provide: GlobalConfigService, useValue: mockGlobalConfigService },
           { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+          { provide: DateService, useValue: mockDateService },
           { provide: Store, useValue: mockStore },
           { provide: MatDialog, useValue: mockMatDialog },
           { provide: SnackService, useValue: mockSnackService },
