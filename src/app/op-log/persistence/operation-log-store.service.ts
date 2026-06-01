@@ -788,9 +788,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     // If cache exists but is stale (new ops added), incrementally add new unsynced ops
     if (this._unsyncedCache && this._unsyncedCacheLastSeq > 0) {
-      const newStoredEntries = await this.db.getAll(
+      const newStoredEntries = await this._adapter.getAll<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
-        IDBKeyRange.lowerBound(this._unsyncedCacheLastSeq, true),
+        { lower: this._unsyncedCacheLastSeq, lowerOpen: true },
       );
       const newUnsynced = newStoredEntries
         .filter((e) => !e.syncedAt && !e.rejectedAt)
@@ -801,7 +801,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     }
 
     // Initial cache build - full scan required
-    const all = await this.db.getAll(STORE_NAMES.OPS);
+    const all = await this._adapter.getAll<StoredOperationLogEntry>(STORE_NAMES.OPS);
     this._unsyncedCache = all
       .filter((e) => !e.syncedAt && !e.rejectedAt)
       .map(decodeStoredEntry);
@@ -849,9 +849,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     // If cache exists but is stale, incrementally add new IDs
     if (this._appliedOpIdsCache && this._cacheLastSeq > 0) {
-      const newEntries = await this.db.getAll(
+      const newEntries = await this._adapter.getAll<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
-        IDBKeyRange.lowerBound(this._cacheLastSeq, true),
+        { lower: this._cacheLastSeq, lowerOpen: true },
       );
       for (const entry of newEntries) {
         // Handle both compact and full operation formats
@@ -862,7 +862,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     }
 
     // Initial cache build - full scan required
-    const entries = await this.db.getAll(STORE_NAMES.OPS);
+    const entries = await this._adapter.getAll<StoredOperationLogEntry>(STORE_NAMES.OPS);
     // Handle both compact and full operation formats
     this._appliedOpIdsCache = new Set(entries.map((e) => getOpId(e.op)));
     this._cacheLastSeq = currentLastSeq;
@@ -872,36 +872,35 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   async markSynced(seqs: number[]): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
     const now = Date.now();
-    for (const seq of seqs) {
-      const entry = await store.get(seq);
-      if (entry) {
-        entry.syncedAt = now;
-        await store.put(entry);
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const seq of seqs) {
+        const entry = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, seq);
+        if (entry) {
+          entry.syncedAt = now;
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
       }
-    }
-    await tx.done;
+    });
     this._invalidateUnsyncedCache();
   }
 
   async markRejected(opIds: string[]): Promise<void> {
     await this._ensureInit();
-
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    const index = store.index(OPS_INDEXES.BY_ID);
     const now = Date.now();
-
-    for (const opId of opIds) {
-      const entry = await index.get(opId);
-      if (entry) {
-        entry.rejectedAt = now;
-        await store.put(entry);
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const opId of opIds) {
+        const entry = await tx.getFromIndex<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          OPS_INDEXES.BY_ID,
+          opId,
+        );
+        if (entry) {
+          entry.rejectedAt = now;
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
       }
-    }
-    await tx.done;
+    });
     this._invalidateUnsyncedCache();
   }
 
@@ -915,18 +914,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const unsynced = await this.getUnsynced();
     if (unsynced.length === 0) return;
 
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
     const now = Date.now();
-
-    for (const entry of unsynced) {
-      const stored = await store.get(entry.seq);
-      if (stored) {
-        stored.rejectedAt = now;
-        await store.put(stored);
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const entry of unsynced) {
+        const stored = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, entry.seq);
+        if (stored) {
+          stored.rejectedAt = now;
+          await tx.put(STORE_NAMES.OPS, stored);
+        }
       }
-    }
-    await tx.done;
+    });
     this._invalidateUnsyncedCache();
   }
 
@@ -937,28 +934,29 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async markFailed(opIds: string[], maxRetries?: number): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    const index = store.index(OPS_INDEXES.BY_ID);
     const now = Date.now();
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const opId of opIds) {
+        const entry = await tx.getFromIndex<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          OPS_INDEXES.BY_ID,
+          opId,
+        );
+        if (entry) {
+          const newRetryCount = (entry.retryCount ?? 0) + 1;
 
-    for (const opId of opIds) {
-      const entry = await index.get(opId);
-      if (entry) {
-        const newRetryCount = (entry.retryCount ?? 0) + 1;
-
-        // If max retries reached, mark as rejected permanently
-        if (maxRetries !== undefined && newRetryCount >= maxRetries) {
-          entry.rejectedAt = now;
-          entry.applicationStatus = undefined;
-        } else {
-          entry.applicationStatus = 'failed';
-          entry.retryCount = newRetryCount;
+          // If max retries reached, mark as rejected permanently
+          if (maxRetries !== undefined && newRetryCount >= maxRetries) {
+            entry.rejectedAt = now;
+            entry.applicationStatus = undefined;
+          } else {
+            entry.applicationStatus = 'failed';
+            entry.retryCount = newRetryCount;
+          }
+          await tx.put(STORE_NAMES.OPS, entry);
         }
-        await store.put(entry);
       }
-    }
-    await tx.done;
+    });
   }
 
   /**
@@ -970,18 +968,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
     let storedEntries: StoredOperationLogEntry[];
     try {
-      // Type assertion needed for compound index key - idb's types don't fully support this
-      storedEntries = await this.db.getAllFromIndex(
+      // Exact compound-key match expressed as a degenerate [k, k] range.
+      storedEntries = await this._adapter.getAllFromIndex<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'failed'],
+        { lower: ['remote', 'failed'], upper: ['remote', 'failed'] },
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
       Log.warn(
         'OperationLogStoreService: bySourceAndStatus index not found, using fallback scan',
       );
-      const allOps = await this.db.getAll(STORE_NAMES.OPS);
+      const allOps = await this._adapter.getAll<StoredOperationLogEntry>(STORE_NAMES.OPS);
       storedEntries = allOps.filter(
         (entry) => entry.source === 'remote' && entry.applicationStatus === 'failed',
       );
@@ -992,24 +990,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   async deleteOpsWhere(predicate: (entry: OperationLogEntry) => boolean): Promise<void> {
     await this._ensureInit();
-    // This requires iterating and deleting.
-    // Ideally we delete by range (older than X).
-    // The predicate in plan: syncedAt && appliedAt < old && seq <= lastSeq
-    // We can iterate via cursor.
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    let cursor = await store.openCursor();
+    // Iterate the whole store, deleting entries that match the predicate.
+    // (A range delete isn't possible — the predicate is on decoded fields.)
     let deletedCount = 0;
-    while (cursor) {
+    await this._adapter.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value) => {
       // Decode stored entry before applying predicate
-      const decoded = decodeStoredEntry(cursor.value);
+      const decoded = decodeStoredEntry(value);
       if (predicate(decoded)) {
-        await cursor.delete();
         deletedCount++;
+        return 'delete';
       }
-      cursor = await cursor.continue();
-    }
-    await tx.done;
+      return 'continue';
+    });
 
     // Invalidate caches if any ops were deleted to prevent stale data
     if (deletedCount > 0) {
@@ -1021,10 +1013,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   async getLastSeq(): Promise<number> {
     await this._ensureInit();
-    const cursor = await this.db
-      .transaction(STORE_NAMES.OPS)
-      .store.openCursor(null, 'prev');
-    return cursor ? (cursor.key as number) : 0;
+    let lastSeq = 0;
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      { direction: 'prev' },
+      (_value, key) => {
+        lastSeq = key as number;
+        return 'stop';
+      },
+    );
+    return lastSeq;
   }
 
   /**
