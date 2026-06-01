@@ -291,10 +291,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     );
   });
 
-  isEmptySubTaskDropTargetVisible = computed(() =>
-    this.isEmptySubTaskDropTargetMounted(),
-  );
-
   hasDeadline = computed(() => {
     const t = this.task();
     return !!(t.deadlineDay || t.deadlineWithTime);

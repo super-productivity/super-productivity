@@ -6,6 +6,7 @@ import {
   forwardRef,
   inject,
   input,
+  NgZone,
   OnDestroy,
   viewChild,
 } from '@angular/core';
@@ -16,13 +17,7 @@ import { filterDoneTasks } from '../filter-done-tasks.pipe';
 import { T } from '../../../t.const';
 import { taskListAnimation } from './task-list-ani';
 import { toSignal } from '@angular/core/rxjs-interop';
-import {
-  CdkDrag,
-  CdkDragDrop,
-  CdkDragMove,
-  CdkDragStart,
-  CdkDropList,
-} from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, CdkDragStart, CdkDropList } from '@angular/cdk/drag-drop';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
 import { getAnchorFromDragDrop } from '../../work-context/store/work-context-meta.helper';
@@ -112,6 +107,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
   private _dateService = inject(DateService);
+  private _ngZone = inject(NgZone);
   dropListService = inject(DropListService);
   private _layoutService = inject(LayoutService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
@@ -159,6 +155,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
   readonly dropList = viewChild(CdkDropList);
   private _clearSubTaskDropCandidate: (() => void) | undefined;
+  private _clearDragPointerTracking: (() => void) | undefined;
 
   T: typeof T = T;
 
@@ -168,6 +165,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this._clearSubTaskDropCandidate?.();
+    this._clearDragPointerTracking?.();
     this.dropListService.unregisterDropList(this.dropList()!);
     this._scheduleExternalDragService.setActiveTask(null);
     this.dropListService.setActiveDragPointer(null);
@@ -177,8 +175,12 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     return task.id;
   }
 
-  onDragPointerDown(task: TaskWithSubTasks): void {
+  onDragPointerDown(task: TaskWithSubTasks, event: PointerEvent): void {
     this._clearSubTaskDropCandidate?.();
+    if (task.parentId) {
+      this.dropListService.setActiveDragPointer({ x: event.clientX, y: event.clientY });
+      return;
+    }
     if (!canConvertTaskToSubTask(task)) {
       return;
     }
@@ -197,16 +199,34 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   onDragStarted(task: TaskWithSubTasks, event: CdkDragStart): void {
     this._clearSubTaskDropCandidate?.();
     this._scheduleExternalDragService.setActiveTask(task, event.source._dragRef);
-  }
-
-  onDragMoved(event: CdkDragMove): void {
-    this.dropListService.setActiveDragPointer(event.pointerPosition);
+    if (task.parentId) {
+      this._startDragPointerTracking();
+    }
   }
 
   onDragEnded(): void {
     this._clearSubTaskDropCandidate?.();
+    this._clearDragPointerTracking?.();
     this._scheduleExternalDragService.setActiveTask(null);
     this.dropListService.setActiveDragPointer(null);
+  }
+
+  private _startDragPointerTracking(): void {
+    this._clearDragPointerTracking?.();
+    this._ngZone.runOutsideAngular(() => {
+      const updatePointer = (event: PointerEvent): void => {
+        this.dropListService.setActiveDragPointer({
+          x: event.clientX,
+          y: event.clientY,
+        });
+      };
+      window.addEventListener('pointermove', updatePointer, { passive: true });
+      this._clearDragPointerTracking = (): void => {
+        window.removeEventListener('pointermove', updatePointer);
+        this.dropListService.setActiveDragPointer(null);
+        this._clearDragPointerTracking = undefined;
+      };
+    });
   }
 
   enterPredicate = (drag: CdkDrag, drop: CdkDropList): boolean => {

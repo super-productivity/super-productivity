@@ -257,7 +257,6 @@
       <div
         class="sub-tasks"
         [class.is-empty-sub-task-drop-target]="!t.subTasks?.length"
-        [class.is-drop-visible]="isEmptySubTaskDropTargetVisible()"
       >
         @if (t.subTasks?.length) {
           <button

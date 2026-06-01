@@ -204,6 +204,29 @@ describe('sectionSharedMetaReducer', () => {
     expect(updated.entities['s1']?.taskIds).toEqual(['t2']);
   });
 
+  it('keeps section membership when convertToSubTask is rejected by task eligibility', () => {
+    const state = stateWith({ parent: {}, t1: { subTaskIds: ['child'] }, child: {} }, [
+      {
+        id: 's1',
+        contextId: 'p1',
+        contextType: WorkContextType.PROJECT,
+        title: 'A',
+        taskIds: ['t1'],
+      },
+    ]);
+
+    metaReducer(
+      state,
+      TaskSharedActions.convertToSubTask({
+        taskId: 't1',
+        targetParentId: 'parent',
+        afterTaskId: null,
+      }),
+    );
+
+    expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
+  });
+
   it('passes through unrelated actions unchanged', () => {
     const state = stateWith({ t1: {} }, [
       {

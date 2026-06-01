@@ -548,7 +548,12 @@ describe('taskSharedCrudMetaReducer', () => {
         {
           ...expectProjectUpdate('project1', { taskIds: ['existing-task', 'task1'] }),
           ...expectTagUpdate('tag1', { taskIds: ['existing-task', 'task1'] }),
-          ...expectTaskUpdate('task1', { isDone: true }),
+          ...expectTaskUpdate('task1', {
+            isDone: true,
+            doneOn: jasmine.any(Number) as unknown as number,
+            dueDay: getDbDateStr(),
+            dueWithTime: undefined,
+          }),
         },
         action,
         mockReducer,

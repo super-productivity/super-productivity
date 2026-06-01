@@ -23,14 +23,8 @@
   z-index: 1;
   height: 14px;
   margin: 0;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--transition-duration-s) ease-out;
-
-  &.is-drop-visible {
-    opacity: 0.85;
-    pointer-events: auto;
-  }
+  opacity: 0.85;
+  pointer-events: auto;
 
   task-list.empty-sub-task-list {
     height: 14px;

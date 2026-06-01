@@ -189,6 +189,15 @@ const handleConvertToMainTask = (
         ...(isDone !== undefined
           ? {
               isDone,
+              ...(isDone
+                ? {
+                    doneOn: Date.now(),
+                    dueDay: todayStr,
+                    dueWithTime: undefined,
+                  }
+                : {
+                    doneOn: undefined,
+                  }),
             }
           : {}),
       },

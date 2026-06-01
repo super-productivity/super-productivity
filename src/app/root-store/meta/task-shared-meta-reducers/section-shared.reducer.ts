@@ -18,6 +18,7 @@ import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
+import { canConvertTaskToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 
 // Must run before taskSharedCrudMetaReducer — handlers read pre-update
 // task state to compute cleanups. Position pinned by
@@ -363,6 +364,10 @@ const ACTION_HANDLERS: Record<string, Handler> = {
   },
   [TaskSharedActions.convertToSubTask.type]: (state, action) => {
     const { taskId } = action as ReturnType<typeof TaskSharedActions.convertToSubTask>;
+    const task = state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
+    if (!task || !canConvertTaskToSubTask(task)) {
+      return state;
+    }
     return handleTaskRemoval(state, [taskId]);
   },
   [SectionActions.removeTaskFromSection.type]: (state, action) => {
