@@ -103,15 +103,32 @@ export const getNextCronOccurrence = (
   startDateDate.setHours(12, 0, 0, 0);
   lastTaskCreation.setHours(12, 0, 0, 0);
 
-  // Anchor search at the later of: day-after-lastTaskCreation, startDate,
-  // fromDate+1 (matches the existing "start checking day after" convention).
-  const cursor = new Date(fromDate);
-  cursor.setHours(0, 0, 0, 0);
-  cursor.setDate(cursor.getDate() + 1);
-  const afterLastCreation = new Date(lastTaskCreation);
-  afterLastCreation.setDate(afterLastCreation.getDate() + 1);
-  if (afterLastCreation > cursor) cursor.setTime(afterLastCreation.getTime());
-  if (startDateDate > cursor) cursor.setTime(startDateDate.getTime());
+  // Earliest DAY (local midnight) the next occurrence may fall on. The engine
+  // is day-granular, so we reason in whole days and match the non-cron
+  // convention (get-next-repeat-occurrence.util): the next occurrence is
+  // strictly after fromDate's day and the last-created day, and on/after the
+  // start day.
+  const startOfDay = (d: Date): Date => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const nextDay = (d: Date): Date => {
+    const x = startOfDay(d);
+    x.setDate(x.getDate() + 1);
+    return x;
+  };
+  let lowerBound = nextDay(fromDate);
+  const afterLastCreation = nextDay(lastTaskCreation);
+  if (afterLastCreation > lowerBound) lowerBound = afterLastCreation;
+  const startDay = startOfDay(startDateDate);
+  if (startDay > lowerBound) lowerBound = startDay;
+
+  // Seed 1 ms before the lower-bound midnight: cron-parser's next() is
+  // exclusive of an exact-boundary currentDate, so seeding *at* midnight would
+  // skip a fire scheduled for 00:00 on the lower-bound day (off-by-one for
+  // midnight crons). Stepping back 1 ms keeps that fire eligible.
+  const cursor = new Date(lowerBound.getTime() - 1);
 
   const iter = safeParse(taskRepeatCfg.cronExpression, cursor);
   if (!iter) return null;

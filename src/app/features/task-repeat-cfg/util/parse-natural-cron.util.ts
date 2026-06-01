@@ -278,10 +278,17 @@ const builtinEnglishToCron = (text: string): string | null => {
  *      the canonical Quartz output crono-eng itself emits).
  *   2. crono-eng WASM translator (primary).
  *   3. Builtin regex parser (fallback, used until WASM is ready / on failure).
+ *
+ * The result is gated on `isCronValid` (cron-parser): crono-eng can translate
+ * phrases into Quartz forms the recurrence engine cannot execute — e.g. a
+ * specific year (`… 2026`), `W` (nearest weekday), `L-n` (n-to-last day), or
+ * `#`-lists (biweekly). Returning such a cron would pass UI validation yet
+ * silently never fire, so we reject it here (callers treat it as unsupported).
  */
 export const naturalLanguageToCron = (input: string): string | null => {
   const text = input.trim();
   if (!text) return null;
   if (isCronValid(text)) return text;
-  return cronoEngTranslate(text) ?? builtinEnglishToCron(text);
+  const candidate = cronoEngTranslate(text) ?? builtinEnglishToCron(text);
+  return candidate && isCronValid(candidate) ? candidate : null;
 };

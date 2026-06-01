@@ -1868,7 +1868,7 @@
         "C_YEAR": "Year",
         "CRON_EXPRESSION": "Cron expression",
         "CRON_EXPRESSION_DESCRIPTION": "Cron format: minute hour day-of-month month day-of-week. Example: 0 0 * 3-11 6 (every Saturday, March-November).",
-        "CRON_INVALID": "Invalid cron expression or unrecognized schedule phrase.",
+        "CRON_INVALID": "Hmm, couldn't read that schedule. Try a phrase like “every Monday at 9am”, “every weekday”, or “first day of every month” — or a cron expression like “0 9 * * 1”.",
         "DEFAULT_ESTIMATE": "Default Estimate",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "Disable auto-updating subtasks",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "Do not update inherited subtasks automatically when the newest instance changes",

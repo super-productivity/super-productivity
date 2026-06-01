@@ -19,36 +19,41 @@ const isCronOrNaturalValid = (val: unknown): boolean => {
   return naturalLanguageToCron(val) !== null;
 };
 
-// Does the expression fire more than once on the same calendar day? The
-// recurrence engine is day-granular (one task per day max), so sub-daily crons
-// like "every minute" effectively run once a day — worth warning the user.
-const isSubDailyCron = (expr: string): boolean => {
+// The recurrence engine is day-granular: a task is created at most once a day,
+// when the app opens or the day rolls over — never at a cron's time-of-day.
+// So any time component (a specific hour/minute, or a sub-daily cron that fires
+// many times a day) is informational only. Detect that to warn the user.
+//   subDaily  → fires more than once on the same calendar day
+//   timed     → fires at a specific time other than midnight
+const cronTimeInfo = (expr: string): { subDaily: boolean; timed: boolean } => {
   try {
     const it = CronExpressionParser.parse(expr);
     const a = it.next().toDate();
     const b = it.next().toDate();
-    return (
+    const subDaily =
       a.getFullYear() === b.getFullYear() &&
       a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate()
-    );
+      a.getDate() === b.getDate();
+    const timed =
+      a.getHours() !== 0 || a.getMinutes() !== 0 || a.getSeconds() !== 0 || subDaily;
+    return { subDaily, timed };
   } catch {
-    return false;
+    return { subDaily: false, timed: false };
   }
 };
 
 // Live preview shown under the input. Resolves the (possibly natural-language)
-// value to its canonical cron + a humanized description so the user can sanity
-// check what they typed as they type it.
+// value to its canonical cron + a humanized English description so the user can
+// sanity check what they typed as they type it.
 const cronPreview = (
   val: unknown,
-): { cron: string; human: string; subDaily: boolean } | null => {
+): { cron: string; human: string; subDaily: boolean; timed: boolean } | null => {
   if (typeof val !== 'string' || !val.trim()) return null;
   const canonical = isCronExpressionValid(val) ? val.trim() : naturalLanguageToCron(val);
   if (!canonical) return null;
   try {
     const human = cronstrue.toString(canonical, { use24HourTimeFormat: false });
-    return { cron: canonical, human, subDaily: isSubDailyCron(canonical) };
+    return { cron: canonical, human, ...cronTimeInfo(canonical) };
   } catch {
     return null;
   }
@@ -130,14 +135,18 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           },
         },
         // `expressionProperties` makes the description react to model changes so
-        // the interpreted cron expression + humanized reading update live as the
-        // user types. Falls back to the static format hint when unrecognized.
+        // the interpreted cron + its plain-English reading update live as the
+        // user types, and persist below the field after applying. Falls back to
+        // the static format hint when unrecognized.
         expressionProperties: {
           ['templateOptions.description']: (model: any) => {
             const p = cronPreview(model.cronExpression);
             if (!p) return T.F.TASK_REPEAT.F.CRON_EXPRESSION_DESCRIPTION;
-            const base = `→ ${p.cron} · ${p.human}`;
-            return p.subDaily ? `${base} ⚠ runs once per day` : base;
+            let s = `→ ${p.cron} · ${p.human}`;
+            if (p.subDaily) s += ` · ⚠ runs at most once per day`;
+            if (p.timed)
+              s += ` · ⚠ time of day is ignored (tasks are created when the app opens / the day changes)`;
+            return s;
           },
         },
       },
