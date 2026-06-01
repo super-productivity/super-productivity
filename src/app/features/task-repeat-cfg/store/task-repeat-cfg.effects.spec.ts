@@ -476,6 +476,48 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       });
     });
 
+    it('should compute the first occurrence for a CRON cfg via the effect path', () => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const taskCreatedYesterday: TaskWithSubTasks = {
+        ...mockTask,
+        subTasks: [],
+        dueDay: todayStr,
+        created: yesterday.getTime(),
+      };
+
+      // Daily-midnight CRON starting today → first occurrence is today.
+      const cronRepeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'CRON',
+        quickSetting: 'CRON',
+        cronExpression: '0 0 0 * * ?',
+        repeatEvery: 1,
+        startDate: todayStr,
+      };
+
+      const firstOccurrence = getFirstRepeatOccurrence(cronRepeatCfg as any)!;
+      expect(getDbDateStr(firstOccurrence)).toBe(todayStr);
+
+      actions$ = of(
+        addTaskRepeatCfgToTask({
+          taskRepeatCfg: cronRepeatCfg,
+          taskId: 'parent-task-id',
+        }),
+      );
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskCreatedYesterday));
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      effects.updateTaskAfterMakingItRepeatable$.subscribe().unsubscribe();
+
+      expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
+        created: firstOccurrence.getTime(),
+      });
+    });
+
     it('should dispatch planTaskForDay and update created for daily repeat with future start date (#6433)', (done) => {
       // Scenario: Task created today, but start date is 7 days in the future
       const today = new Date();

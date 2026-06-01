@@ -160,31 +160,37 @@ describe('cron-occurrence invariants', () => {
       expect(getNewestPossibleCronDueDate(cfg, BASE)).toBeNull();
     });
 
-    it('DST spring-forward: next() is correct; documents cron-parser prev() skip', () => {
-      // US spring-forward 2024-03-10. next() correctly lands on Mar 10.
+    it('DST spring-forward: next() AND newest both resolve the exact day', () => {
+      // US spring-forward 2024-03-10. The day-walk getNewest is DST-safe (uses
+      // next(), not the prev() that skips the spring-forward midnight).
       expect(
         getDbDateStr(
           getNextCronOccurrence(cronCfg('0 0 0 * * ?'), new Date(2024, 2, 9, 12))!,
         ),
       ).toBe('2024-03-10');
-      // Known upstream quirk: cron-parser's prev() skips the spring-forward
-      // midnight (Mar 10 00:00) in DST zones, so "newest due" can land on Mar 9
-      // rather than Mar 10. Day-granular creation still yields a valid recent
-      // day (and lastTaskCreationDay prevents duplicates). Accept either so the
-      // test is meaningful in both DST and non-DST runner timezones.
-      const newest = getNewestPossibleCronDueDate(
-        cronCfg('0 0 0 * * ?'),
-        new Date(2024, 2, 10, 12),
-      );
-      expect(newest).not.toBeNull();
-      expect(['2024-03-09', '2024-03-10']).toContain(getDbDateStr(newest!));
+      expect(
+        getDbDateStr(
+          getNewestPossibleCronDueDate(
+            cronCfg('0 0 0 * * ?'),
+            new Date(2024, 2, 10, 12),
+          )!,
+        ),
+      ).toBe('2024-03-10');
     });
 
-    it('DST fall-back week: daily cron still resolves the right days', () => {
+    it('DST fall-back: next() and newest both resolve the exact day', () => {
       // US fall-back 2024-11-03.
       expect(
         getDbDateStr(
           getNextCronOccurrence(cronCfg('0 0 0 * * ?'), new Date(2024, 10, 2, 12))!,
+        ),
+      ).toBe('2024-11-03');
+      expect(
+        getDbDateStr(
+          getNewestPossibleCronDueDate(
+            cronCfg('0 0 0 * * ?'),
+            new Date(2024, 10, 3, 12),
+          )!,
         ),
       ).toBe('2024-11-03');
     });

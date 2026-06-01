@@ -110,6 +110,26 @@ function runBattery() {
     fails.push(`year iteration threw: ${e.message}`);
   }
 
+  // getNewestPossibleCronDueDate's DST-safe day predicate: a daily cron must
+  // "fire on" EVERY calendar day of the year — including each zone's DST
+  // transition days. This is the regression guard for the prev() spring-forward
+  // skip that previously made getNewest report the day before.
+  const firesOnDay = (cron, day) => {
+    const ds = startOfDay(day);
+    const de = startOfDay(day);
+    de.setDate(de.getDate() + 1);
+    const it = CronExpressionParser.parse(cron, {
+      currentDate: new Date(ds.getTime() - 1),
+    });
+    const n = it.next().toDate().getTime();
+    return n >= ds.getTime() && n < de.getTime();
+  };
+  const probe = new Date(2024, 0, 1, 12);
+  for (let i = 0; i < 366; i++) {
+    if (!firesOnDay('0 0 0 * * ?', probe)) fails.push(`daily missed ${dayStr(probe)}`);
+    probe.setDate(probe.getDate() + 1);
+  }
+
   return fails;
 }
 

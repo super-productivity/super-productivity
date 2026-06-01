@@ -3,7 +3,6 @@ import { TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creation-day.util';
 import { getEffectiveRepeatStartDate } from './get-effective-repeat-start-date.util';
-import { isSameDay } from '../../../util/is-same-day';
 import { Log } from '../../../core/log';
 
 const safeParse = (
@@ -28,14 +27,42 @@ const isCronValid = (expr: string | undefined): expr is string => {
   }
 };
 
+const startOfLocalDay = (d: Date): Date => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+
 /**
- * Walks backward from `today` looking for the most recent fire time that
- * matches the cron expression and is on or after `startDate` and strictly
- * after `lastTaskCreation`. Returns the matching Date or null.
+ * Does the cron fire at some point during the local calendar day of `day`?
+ *
+ * Uses cron-parser's `next()` (monotonic across DST transitions) rather than
+ * `prev()`, which skips the spring-forward midnight in DST zones and would
+ * make a daily cron appear not to fire on that day.
+ */
+const cronFiresOnDay = (expr: string, day: Date): boolean => {
+  const dayStart = startOfLocalDay(day);
+  const dayEnd = startOfLocalDay(day);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  // Seed 1 ms before midnight so a fire exactly at 00:00 is included.
+  const iter = safeParse(expr, new Date(dayStart.getTime() - 1));
+  if (!iter) return false;
+  try {
+    const next = iter.next().toDate().getTime();
+    return next >= dayStart.getTime() && next < dayEnd.getTime();
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Walks backward day-by-day from `today` for the most recent day the cron
+ * fires, on or after `startDate` and strictly after `lastTaskCreation`.
+ * Returns that day at noon, or null.
  *
  * Mirrors the contract of the non-cron `getNewestPossibleDueDate` branches:
- * the returned day is the day a task should be created for if not yet
- * created.
+ * the returned day is the day a task should be created for if not yet created.
+ * The day-by-day `next()` probe is DST-safe (see cronFiresOnDay).
  */
 export const getNewestPossibleCronDueDate = (
   taskRepeatCfg: TaskRepeatCfg,
@@ -43,42 +70,30 @@ export const getNewestPossibleCronDueDate = (
 ): Date | null => {
   if (!isCronValid(taskRepeatCfg.cronExpression)) return null;
 
-  const startDateStr = getEffectiveRepeatStartDate(taskRepeatCfg);
-  const startDateDate = dateStrToUtcDate(startDateStr);
-  const lastTaskCreationDateStr =
-    getEffectiveLastTaskCreationDay(taskRepeatCfg) || '1970-01-01';
-  const lastTaskCreation = dateStrToUtcDate(lastTaskCreationDateStr);
-
+  const startDateDate = dateStrToUtcDate(getEffectiveRepeatStartDate(taskRepeatCfg));
+  const lastTaskCreation = dateStrToUtcDate(
+    getEffectiveLastTaskCreationDay(taskRepeatCfg) || '1970-01-01',
+  );
   startDateDate.setHours(12, 0, 0, 0);
   lastTaskCreation.setHours(12, 0, 0, 0);
 
   if (startDateDate > today) return null;
 
-  // Search from end of today downward — cron-parser's `prev()` returns the
-  // fire time strictly before `currentDate`, so seed at tomorrow 00:00 to
-  // include today's fires.
+  const expr = taskRepeatCfg.cronExpression as string;
+  const startDay = startOfLocalDay(startDateDate).getTime();
+
+  // Walk back at most a year. The first firing day on/before today is the
+  // newest candidate; bail once we cross before startDate.
   const cursor = new Date(today);
-  cursor.setHours(0, 0, 0, 0);
-  cursor.setDate(cursor.getDate() + 1);
-
-  const iter = safeParse(taskRepeatCfg.cronExpression, cursor);
-  if (!iter) return null;
-
-  // Walk back at most a year of fires to bound runtime on pathological
-  // expressions; well-formed weekly/monthly crons converge in <60 hops.
   for (let i = 0; i < 366; i++) {
-    let prev: Date;
-    try {
-      prev = iter.prev().toDate();
-    } catch {
-      return null;
+    if (startOfLocalDay(cursor).getTime() < startDay) return null;
+    if (cronFiresOnDay(expr, cursor)) {
+      const due = new Date(cursor);
+      due.setHours(12, 0, 0, 0);
+      // Strictly after the last created day — otherwise it was already created.
+      return due <= lastTaskCreation ? null : due;
     }
-    prev.setHours(12, 0, 0, 0);
-    if (prev < startDateDate) return null;
-    if (prev <= lastTaskCreation) return null;
-    if (prev <= today || isSameDay(prev, today)) {
-      return prev;
-    }
+    cursor.setDate(cursor.getDate() - 1);
   }
   return null;
 };
