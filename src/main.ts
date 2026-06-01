@@ -323,6 +323,28 @@ bootstrapApplication(AppComponent, {
       // production by this guard.
       import('./app/features/task-repeat-cfg/store/cron-occurrence.util'),
     ]).then(([m, cron]) => {
+      // Dev-only manual clock fast-forward for testing recurring / day-change
+      // behavior without touching the OS clock. Overrides Date.now() (the basis
+      // for the app's logical "today") by a cumulative day offset, then forces a
+      // day-change re-sample so addAllDueToday() runs. Reload — or resetClock() —
+      // to undo. Call from the console: __e2eTestHelpers.jumpDay() / jumpDay(7).
+      const realNow = Date.now.bind(Date);
+      let clockOffsetMs = 0;
+      const reSampleDay = (): void => {
+        window.dispatchEvent(new Event('focus'));
+      };
+      const jumpDay = (days = 1): string => {
+        clockOffsetMs += days * 24 * 60 * 60 * 1000;
+        Date.now = () => realNow() + clockOffsetMs;
+        reSampleDay();
+        return new Date(realNow() + clockOffsetMs).toDateString();
+      };
+      const resetClock = (): void => {
+        clockOffsetMs = 0;
+        Date.now = realNow;
+        reSampleDay();
+      };
+
       (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
         store: storeRef,
         hydrationState: appRef.injector.get(m.HydrationStateService),
@@ -331,6 +353,8 @@ bootstrapApplication(AppComponent, {
           getNewestPossibleCronDueDate: cron.getNewestPossibleCronDueDate,
           getFirstCronOccurrence: cron.getFirstCronOccurrence,
         },
+        jumpDay,
+        resetClock,
       };
     });
   }

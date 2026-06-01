@@ -9,6 +9,7 @@ type RepeatSnapshot = {
   repeatCfgId: string | null;
   repeatCycle: string | null;
   cronExpression: string | null;
+  lastTaskCreationDay: string | null;
 };
 
 // Reads the live NgRx store via the e2e helper to inspect the repeat cfg
@@ -19,7 +20,11 @@ const getRepeatCfgForTask = async (
 ): Promise<RepeatSnapshot | null> =>
   page.evaluate((title) => {
     type TaskLike = { title?: string; repeatCfgId?: string | null };
-    type CfgLike = { repeatCycle?: string; cronExpression?: string | null };
+    type CfgLike = {
+      repeatCycle?: string;
+      cronExpression?: string | null;
+      lastTaskCreationDay?: string | null;
+    };
     type StoreState = {
       tasks?: { entities?: Record<string, TaskLike | undefined> };
       taskRepeatCfg?: { entities?: Record<string, CfgLike | undefined> };
@@ -47,6 +52,7 @@ const getRepeatCfgForTask = async (
       repeatCfgId: task.repeatCfgId ?? null,
       repeatCycle: cfg?.repeatCycle ?? null,
       cronExpression: cfg?.cronExpression ?? null,
+      lastTaskCreationDay: cfg?.lastTaskCreationDay ?? null,
     };
   }, titlePart);
 
@@ -254,5 +260,48 @@ test.describe('Cron / natural-language recurring tasks', () => {
         },
       )
       .toBe('0 9 * * 1');
+  });
+
+  test('jumpDay fast-forward creates the next daily instance (live day-change path)', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await page.waitForFunction(
+      () =>
+        !!(window as unknown as { __e2eTestHelpers?: { jumpDay?: unknown } })
+          .__e2eTestHelpers?.jumpDay,
+      undefined,
+      { timeout: 10000 },
+    );
+
+    const title = `${testPrefix}-Daily Cron`;
+    await addTaskRaw(page, `${title} @+every day`);
+
+    // Wait until the CRON cfg exists and record the day its first instance was created.
+    await expect
+      .poll(async () => (await getRepeatCfgForTask(page, title))?.repeatCycle ?? null, {
+        timeout: 10000,
+      })
+      .toBe('CRON');
+    const before = await getRepeatCfgForTask(page, title);
+    expect(before!.lastTaskCreationDay).not.toBeNull();
+
+    // Fast-forward a day: Date.now() shifts, the day-change effect runs
+    // addAllDueToday(), and the next instance is created (lastTaskCreationDay
+    // advances). This exercises the real live day-change → creation path.
+    await page.evaluate(() =>
+      (
+        window as unknown as { __e2eTestHelpers: { jumpDay: (n?: number) => string } }
+      ).__e2eTestHelpers.jumpDay(1),
+    );
+
+    await expect
+      .poll(
+        async () => (await getRepeatCfgForTask(page, title))?.lastTaskCreationDay ?? null,
+        { timeout: 15000 },
+      )
+      .not.toBe(before!.lastTaskCreationDay);
   });
 });
