@@ -13,6 +13,7 @@ import { BackupService } from '../../op-log/backup/backup.service';
 import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
+import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
 import { SnackService } from '../../core/snack/snack.service';
 import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
@@ -148,6 +149,23 @@ export class LocalBackupService {
     // Use async method to include archives from IndexedDB (not empty DEFAULT_ARCHIVE)
     const data =
       (await this._stateSnapshotService.getAllSyncModelDataFromStoreAsync()) as AppDataComplete;
+
+    // GUARD (#7901/#7892): never overwrite a good on-device backup with an
+    // empty/degraded store. The local backups live in durable, non-evictable
+    // storage (Android SQLite KeyValStore, iOS file, Electron file), but after a
+    // WebView IndexedDB eviction the live NgRx store can boot empty — and the
+    // 5-min timer would then clobber the last good backup with nothing. Skipping
+    // the write is always safe: the previous backup stays intact (this mirrors
+    // the snapshot/compaction empty-overwrite guard). Trade-off: a deliberate
+    // full wipe is not captured in the local backup until real data exists again.
+    if (!hasMeaningfulStateData(data)) {
+      Log.warn(
+        'LocalBackupService: Skipping backup — current state has no meaningful ' +
+          'data (refusing to overwrite backup with empty state)',
+      );
+      return;
+    }
+
     if (IS_ELECTRON) {
       window.ea.backupAppData(data);
     }

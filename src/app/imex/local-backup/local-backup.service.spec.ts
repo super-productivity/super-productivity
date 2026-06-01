@@ -173,6 +173,47 @@ describe('LocalBackupService', () => {
     });
   });
 
+  describe('empty-state guard (#7901)', () => {
+    const setIosPlatform = (): jasmine.Spy => {
+      (
+        service as unknown as {
+          _platformService: Pick<CapacitorPlatformService, 'isIOS'>;
+        }
+      )._platformService = { isIOS: () => true };
+      return spyOn(
+        service as unknown as LocalBackupServiceWithBackupIos,
+        '_backupIOS',
+      ).and.resolveTo();
+    };
+
+    it('should NOT write a backup when the store has no meaningful data', async () => {
+      // Simulates a post-eviction boot: empty store (no tasks, only INBOX
+      // project, only system tags, no notes). hasMeaningfulStateData → false.
+      stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync.and.resolveTo({
+        task: { ids: [], entities: {} },
+        project: { ids: [], entities: {} },
+        tag: { ids: [], entities: {} },
+        note: { ids: [], entities: {} },
+        archiveYoung: DEFAULT_ARCHIVE,
+        archiveOld: DEFAULT_ARCHIVE,
+      } as any);
+      const backupIosSpy = setIosPlatform();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(backupIosSpy).not.toHaveBeenCalled();
+    });
+
+    it('should write a backup when the store has meaningful data', async () => {
+      // Default mock has task1 → hasMeaningfulStateData → true.
+      const backupIosSpy = setIosPlatform();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(backupIosSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('automatic backup timer', () => {
     it('should stop creating automatic backups when disabled after being enabled', fakeAsync(() => {
       const cfg$ = new BehaviorSubject({
