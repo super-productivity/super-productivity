@@ -80,7 +80,11 @@ test.describe('autoStartFocusOnPlay', () => {
 
     // Expected: focus session spawns and the header countdown becomes the
     // surface (per the rework, the overlay must NOT auto-open here).
-    await expect(focusRunningLabel).toBeVisible({ timeout: 5000 });
+    // The indicator appears only after an async effect chain
+    // (syncTrackingStartToSession$ → startFocusSession → reducer → selector →
+    // OnPush render), so use the suite's default expect timeout (20s, set for
+    // slow rendering) rather than a tight 5s that flakes under CI parallel load.
+    await expect(focusRunningLabel).toBeVisible();
     await expect(focusOverlay).not.toBeVisible();
   });
 

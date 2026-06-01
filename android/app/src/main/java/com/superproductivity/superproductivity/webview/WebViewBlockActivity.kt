@@ -10,6 +10,8 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.superproductivity.superproductivity.R
 
 class WebViewBlockActivity : AppCompatActivity() {
@@ -22,6 +24,19 @@ class WebViewBlockActivity : AppCompatActivity() {
         // permanently disable the WebView block, so we drop touches when the window
         // is partially obscured by an overlay app.
         findViewById<View>(android.R.id.content).filterTouchesWhenObscured = true
+
+        // This is a plain native screen with no action bar, so on edge-to-edge devices
+        // (enforced for targetSdk 35+; not opt-out-able on Android 16) the content would
+        // otherwise draw under the status/navigation bars and clip the title. Inset the
+        // scroll container by the system bars + display cutout. → issue #7840.
+        val scrollView = findViewById<View>(R.id.webview_block_scroll)
+        ViewCompat.setOnApplyWindowInsetsListener(scrollView) { view, windowInsets ->
+            val bars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
 
         val minVersion = intent.getIntExtra(EXTRA_MIN_VERSION, WebViewCompatibilityChecker.MIN_CHROMIUM_VERSION)
         val detectedVersion = intent.getIntExtra(EXTRA_VERSION_MAJOR, -1)

@@ -57,7 +57,7 @@ import { Note } from '../note/note.model';
 import { selectNotesById } from '../note/store/note.reducer';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
-import { distinctUntilChangedSimpleArray } from '../../util/distinct-until-changed-simple-array';
+import { fastArrayCompare } from '../../util/fast-array-compare';
 import { isShallowEqual } from '../../util/is-shallow-equal';
 import { distinctUntilChangedObject } from '../../util/distinct-until-changed-object';
 import { DateService } from 'src/app/core/date/date.service';
@@ -261,7 +261,7 @@ export class WorkContextService {
   // -----------
   notes$: Observable<Note[]> = this.activeWorkContext$.pipe(
     map((ac) => ac.noteIds),
-    distinctUntilChanged(distinctUntilChangedSimpleArray),
+    distinctUntilChanged(fastArrayCompare),
     switchMap((taskIds) => this._getNotesByIds$(taskIds)),
     shareReplay(1),
   );
@@ -270,13 +270,13 @@ export class WorkContextService {
   // ----------
   mainListTaskIds$: Observable<string[]> = this.activeWorkContext$.pipe(
     map((ac) => ac.taskIds),
-    distinctUntilChanged(distinctUntilChangedSimpleArray),
+    distinctUntilChanged(fastArrayCompare),
     shareReplay(1),
   );
 
   backlogTaskIds$: Observable<string[]> = this.activeWorkContext$.pipe(
     map((ac) => ac.backlogTaskIds || []),
-    distinctUntilChanged(distinctUntilChangedSimpleArray),
+    distinctUntilChanged(fastArrayCompare),
     shareReplay(1),
   );
 

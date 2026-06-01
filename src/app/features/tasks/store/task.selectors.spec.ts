@@ -379,11 +379,6 @@ describe('Task Selectors', () => {
       expect(result[0].id).toBe('task6');
     });
 
-    it('should select all tasks due and overdue', () => {
-      const result = fromSelectors.selectAllTasksDueAndOverdue(mockState);
-      expect(result.length).toBe(2); // task3 (due today) and task6 (overdue)
-    });
-
     it('should select undone overdue tasks', () => {
       const result = fromSelectors.selectUndoneOverdue(mockState);
       expect(result.length).toBe(1);
@@ -828,13 +823,6 @@ describe('Task Selectors', () => {
       expect(projectIds).toContain('project2');
       expect(projectIds).toContain('project3');
     });
-
-    it('should select tasks worked on or done for a day', () => {
-      const result = fromSelectors.selectTasksWorkedOnOrDoneFlat(mockState, {
-        day: today,
-      });
-      expect(result?.length).toBe(2); // task2 (done and worked on) and subtask2 (done)
-    });
   });
 
   // Repeatable task selectors
@@ -910,16 +898,6 @@ describe('Task Selectors', () => {
       const result = fromSelectors.selectOverdueTasksOnToday(stateWithOverdueOnToday);
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('overdueOnToday');
-    });
-
-    it('selectAllTasksDueAndOverdue should use Set for today tag filtering', () => {
-      const result = fromSelectors.selectAllTasksDueAndOverdue(mockState);
-      // Should include task3 (due today) and task6 (overdue yesterday)
-      // task2 is excluded because it's in TODAY_TAG.taskIds (ordering list) AND isDone=true
-      expect(result.map((t) => t.id)).toEqual(
-        jasmine.arrayContaining(['task3', 'task6']),
-      );
-      expect(result.find((t) => t.id === 'task2')).toBeUndefined();
     });
   });
 

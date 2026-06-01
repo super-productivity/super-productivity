@@ -557,33 +557,38 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  moveTaskUp(): void {
+  private _moveAndRefocus(
+    move: (id: string, parentId: string | undefined, isBacklog: boolean) => void,
+  ): void {
     const t = this.task();
-    this._taskService.moveUp(t.id, t.parentId, this.isBacklog());
+    move(t.id, t.parentId, this.isBacklog());
     // timeout required to let changes take place
     setTimeout(() => this.focusSelf());
     setTimeout(() => this.focusSelf(), 10);
   }
 
+  moveTaskUp(): void {
+    this._moveAndRefocus((id, parentId, isBacklog) =>
+      this._taskService.moveUp(id, parentId, isBacklog),
+    );
+  }
+
   moveTaskDown(): void {
-    const t = this.task();
-    this._taskService.moveDown(t.id, t.parentId, this.isBacklog());
-    setTimeout(() => this.focusSelf());
-    setTimeout(() => this.focusSelf(), 10);
+    this._moveAndRefocus((id, parentId, isBacklog) =>
+      this._taskService.moveDown(id, parentId, isBacklog),
+    );
   }
 
   moveTaskToTop(): void {
-    const t = this.task();
-    this._taskService.moveToTop(t.id, t.parentId, this.isBacklog());
-    setTimeout(() => this.focusSelf());
-    setTimeout(() => this.focusSelf(), 10);
+    this._moveAndRefocus((id, parentId, isBacklog) =>
+      this._taskService.moveToTop(id, parentId, isBacklog),
+    );
   }
 
   moveTaskToBottom(): void {
-    const t = this.task();
-    this._taskService.moveToBottom(t.id, t.parentId, this.isBacklog());
-    setTimeout(() => this.focusSelf());
-    setTimeout(() => this.focusSelf(), 10);
+    this._moveAndRefocus((id, parentId, isBacklog) =>
+      this._taskService.moveToBottom(id, parentId, isBacklog),
+    );
   }
 
   handleArrowUp(): void {
@@ -861,7 +866,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   hideDetailPanel(): void {
-    this._taskService.setSelectedId(this.task().id);
+    // Explicitly deselect to close the panel; do NOT re-select (that's showDetailPanel's job).
+    this._taskService.setSelectedId(null);
     this.focusSelf();
   }
 
@@ -912,15 +918,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     setTimeout(() => {
       this.tagToggleMenuList()?.openMenu();
     });
-
-    // this._matDialog
-    //   .open(DialogEditTagsForTaskComponent, {
-    //     data: {
-    //       task: this.task(),
-    //     },
-    //   })
-    //   .afterClosed()
-    //   .subscribe(() => this.focusSelf());
   }
 
   toggleTag(tagId: string): void {

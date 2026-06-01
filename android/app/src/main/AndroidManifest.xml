@@ -128,7 +128,7 @@
     <activity
       android:name=".webview.WebViewBlockActivity"
       android:exported="false"
-      android:theme="@style/AppTheme" />
+      android:theme="@style/AppTheme.NoActionBar" />
 
     <service
       android:name=".service.TrackingForegroundService"

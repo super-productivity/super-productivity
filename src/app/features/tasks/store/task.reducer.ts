@@ -131,6 +131,36 @@ const normalizeSubTaskIds = (state: TaskState): TaskState => {
   return { ...state, entities };
 };
 
+const reorderSubTask = (
+  state: TaskState,
+  id: string,
+  parentId: string,
+  moveFn: (subTaskIds: string[], id: string) => string[],
+): TaskState => {
+  const parentTask = state.entities[parentId];
+  if (!parentTask) {
+    TaskLog.err(`Parent task ${parentId} not found`);
+    return state;
+  }
+  const parentSubTaskIds = parentTask.subTaskIds;
+
+  // Check if the subtask is actually in the parent's subtask list
+  if (!parentSubTaskIds.includes(id)) {
+    TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
+    return state;
+  }
+
+  return taskAdapter.updateOne(
+    {
+      id: parentId,
+      changes: {
+        subTaskIds: moveFn(parentSubTaskIds, id),
+      },
+    },
+    state,
+  );
+};
+
 // REDUCER
 // -------
 export const initialTaskState: TaskState = taskAdapter.getInitialState({
@@ -446,105 +476,21 @@ export const taskReducer = createReducer<TaskState>(
     return newState;
   }),
 
-  on(moveSubTaskUp, (state, { id, parentId }) => {
-    const parentTask = state.entities[parentId];
-    if (!parentTask) {
-      TaskLog.err(`Parent task ${parentId} not found`);
-      return state;
-    }
-    const parentSubTaskIds = parentTask.subTaskIds;
+  on(moveSubTaskUp, (state, { id, parentId }) =>
+    reorderSubTask(state, id, parentId, arrayMoveLeft),
+  ),
 
-    // Check if the subtask is actually in the parent's subtask list
-    if (!parentSubTaskIds.includes(id)) {
-      TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
-      return state;
-    }
+  on(moveSubTaskDown, (state, { id, parentId }) =>
+    reorderSubTask(state, id, parentId, arrayMoveRight),
+  ),
 
-    return taskAdapter.updateOne(
-      {
-        id: parentId,
-        changes: {
-          subTaskIds: arrayMoveLeft(parentSubTaskIds, id),
-        },
-      },
-      state,
-    );
-  }),
+  on(moveSubTaskToTop, (state, { id, parentId }) =>
+    reorderSubTask(state, id, parentId, arrayMoveToStart),
+  ),
 
-  on(moveSubTaskDown, (state, { id, parentId }) => {
-    const parentTask = state.entities[parentId];
-    if (!parentTask) {
-      TaskLog.err(`Parent task ${parentId} not found`);
-      return state;
-    }
-    const parentSubTaskIds = parentTask.subTaskIds;
-
-    // Check if the subtask is actually in the parent's subtask list
-    if (!parentSubTaskIds.includes(id)) {
-      TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
-      return state;
-    }
-
-    return taskAdapter.updateOne(
-      {
-        id: parentId,
-        changes: {
-          subTaskIds: arrayMoveRight(parentSubTaskIds, id),
-        },
-      },
-      state,
-    );
-  }),
-
-  on(moveSubTaskToTop, (state, { id, parentId }) => {
-    const parentTask = state.entities[parentId];
-    if (!parentTask) {
-      TaskLog.err(`Parent task ${parentId} not found`);
-      return state;
-    }
-    const parentSubTaskIds = parentTask.subTaskIds;
-
-    // Check if the subtask is actually in the parent's subtask list
-    if (!parentSubTaskIds.includes(id)) {
-      TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
-      return state;
-    }
-
-    return taskAdapter.updateOne(
-      {
-        id: parentId,
-        changes: {
-          subTaskIds: arrayMoveToStart(parentSubTaskIds, id),
-        },
-      },
-      state,
-    );
-  }),
-
-  on(moveSubTaskToBottom, (state, { id, parentId }) => {
-    const parentTask = state.entities[parentId];
-    if (!parentTask) {
-      TaskLog.err(`Parent task ${parentId} not found`);
-      return state;
-    }
-    const parentSubTaskIds = parentTask.subTaskIds;
-
-    // Check if the subtask is actually in the parent's subtask list
-    if (!parentSubTaskIds.includes(id)) {
-      TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
-      return state;
-    }
-
-    return taskAdapter.updateOne(
-      {
-        id: parentId,
-        changes: {
-          subTaskIds: arrayMoveToEnd(parentSubTaskIds, id),
-        },
-      },
-      state,
-    );
-  }),
+  on(moveSubTaskToBottom, (state, { id, parentId }) =>
+    reorderSubTask(state, id, parentId, arrayMoveToEnd),
+  ),
 
   on(removeTimeSpent, (state, { id, date, duration }) => {
     const task = getTaskById(id, state);

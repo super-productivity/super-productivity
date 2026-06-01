@@ -320,9 +320,10 @@ export class CaldavClientService {
   }
 
   getByIds$(ids: string[], cfg: CaldavCfg): Observable<CaldavIssue[]> {
+    const idSet = new Set(ids);
     return from(
       this._getTasks(cfg, false, false).then((tasks) =>
-        tasks.filter((task) => task.id in ids),
+        tasks.filter((task) => idSet.has(task.id)),
       ),
     ).pipe(
       catchError((err) => throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err })),

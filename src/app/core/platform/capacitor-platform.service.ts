@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import {
   ANDROID_CAPABILITIES,
@@ -8,6 +8,7 @@ import {
   PlatformType,
   WEB_CAPABILITIES,
 } from './platform-capabilities.model';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
 /**
  * Service for detecting platform and exposing platform-specific capabilities.
@@ -26,6 +27,8 @@ import {
   providedIn: 'root',
 })
 export class CapacitorPlatformService {
+  private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
+
   /**
    * The current platform type
    */
@@ -49,7 +52,7 @@ export class CapacitorPlatformService {
   constructor() {
     this.platform = this._detectPlatform();
     // Include legacy Android WebView in isNative check
-    this.isNative = Capacitor.isNativePlatform() || this._isAndroidWebView();
+    this.isNative = Capacitor.isNativePlatform() || this._isAndroidWebView;
     this.isMobile = this.platform === 'ios' || this.platform === 'android';
     this.capabilities = this._getCapabilities();
   }
@@ -129,7 +132,7 @@ export class CapacitorPlatformService {
     }
 
     // Check for Android WebView (legacy check for existing Android implementation)
-    if (this._isAndroidWebView()) {
+    if (this._isAndroidWebView) {
       return 'android';
     }
 
@@ -163,13 +166,6 @@ export class CapacitorPlatformService {
    */
   private _isElectron(): boolean {
     return navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
-  }
-
-  /**
-   * Check if running in Android WebView (legacy detection)
-   */
-  private _isAndroidWebView(): boolean {
-    return !!(window as any).SUPAndroid;
   }
 
   /**

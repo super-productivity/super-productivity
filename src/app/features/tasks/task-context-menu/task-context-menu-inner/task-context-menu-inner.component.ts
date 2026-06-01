@@ -165,13 +165,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   );
   toggleTagList = this._tagService.tagsNoMyDayAndNoListSorted;
 
-  // isShowMoveFromAndToBacklogBtns$: Observable<boolean> = this._task$.pipe(
-  //   take(1),
-  //   switchMap((task) =>
-  //     task.projectId ? this._projectService.getByIdOnce$(task.projectId) : EMPTY,
-  //   ),
-  //   map((project) => project.isEnableBacklog),
-  // );
   isShowMoveFromAndToBacklogBtns$: Observable<boolean> =
     this._workContextService.activeWorkContext$.pipe(
       take(1),
@@ -326,7 +319,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     const btns = Array.from(
       t?.closest('.quick-access')?.querySelectorAll('button') || [],
     );
-    //   const btns = Array.from(t?.querySelectorAll('button') || []);
 
     const currentIndex = btns.indexOf(t as HTMLButtonElement);
 
@@ -728,11 +720,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         nextFirstDayOfWeek.setDate(nextFirstDayOfWeek.getDate() + dayOffset);
         this._schedule(nextFirstDayOfWeek);
         break;
-      // case 4:
-      //   const nextMonth = tDate;
-      //   nextMonth.setMonth(nextMonth.getMonth() + 1);
-      //   this._schedule(nextMonth);
-      //   break;
     }
   }
 

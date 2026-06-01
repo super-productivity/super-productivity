@@ -535,11 +535,7 @@ const sanitizeDoneScheduleChanges = (
   };
 };
 
-const handleUpdateTask = (
-  state: RootState,
-  taskUpdate: Update<Task>,
-  isIgnoreShortSyntax?: boolean,
-): RootState => {
+const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState => {
   const taskId = taskUpdate.id as string;
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
 
@@ -739,10 +735,8 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     );
   },
   [TaskSharedActions.updateTask.type]: () => {
-    const { task, isIgnoreShortSyntax } = action as ReturnType<
-      typeof TaskSharedActions.updateTask
-    >;
-    return handleUpdateTask(state, task, isIgnoreShortSyntax);
+    const { task } = action as ReturnType<typeof TaskSharedActions.updateTask>;
+    return handleUpdateTask(state, task);
   },
 });
 

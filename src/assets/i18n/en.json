@@ -159,6 +159,7 @@
         "CALDAV_URL": "CalDAV URL (the base URL)",
         "CALDAV_USER": "Your CalDAV username",
         "IS_ADD_SUB_TASKS": "Also import subtasks when a task is added",
+        "POLL_INTERVAL_MINUTES": "Poll interval (minutes)",
         "TWO_WAY_SYNC_BOTH": "Both (bidirectional)",
         "TWO_WAY_SYNC_NOTES": "Notes / Description sync direction",
         "TWO_WAY_SYNC_OFF": "Off",
@@ -2542,16 +2543,8 @@
     "UNPLANNED_TODAY_TASKS": "Unplanned all tasks from Today"
   },
   "GPB": {
-    "ASSETS": "Loading assets...",
-    "DBX_DOWNLOAD": "Dropbox: Download file...",
-    "DBX_GEN_TOKEN": "Dropbox: Generate token...",
-    "DBX_META": "Dropbox: Get file meta...",
-    "DBX_UPLOAD": "Dropbox: Upload file...",
     "JIRA_LOAD_ISSUE": "Jira: Load issue data...",
-    "SYNC": "Syncing data...",
-    "UNKNOWN": "Loading remote data",
-    "WEB_DAV_DOWNLOAD": "WebDAV: Downloading data...",
-    "WEB_DAV_UPLOAD": "WebDAV: Uploading data..."
+    "UNKNOWN": "Loading remote data"
   },
   "MH": {
     "ADD_NEW_TASK": "Add new Task",

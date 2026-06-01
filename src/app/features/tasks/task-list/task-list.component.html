@@ -28,7 +28,7 @@
   [cdkDropListSortingDisabled]="isSortingDisabled()"
   [cdkDropListEnterPredicate]="enterPredicate"
   [cdkDropListData]="dropModelDataForList()"
-  (cdkDropListDropped)="drop(filteredTasks(), $event)"
+  (cdkDropListDropped)="drop($event)"
   [@taskList]="
     (dropListService.isBlockAniAfterDrop$ | async) ? 'BLOCK' : filteredTasks()?.length
   "

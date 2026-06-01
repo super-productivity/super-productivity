@@ -1,5 +1,5 @@
 import { devError } from './dev-error';
-import { arrayEquals } from './array-equals';
+import { fastArrayCompare } from './fast-array-compare';
 import { Dictionary } from '@ngrx/entity';
 import { Log } from '../core/log';
 
@@ -12,7 +12,7 @@ export const isEntityStateConsistent = <T extends Dictionary<any>>(
     !data.entities ||
     !data.ids ||
     Object.keys(data.entities).length !== data.ids.length ||
-    !arrayEquals(Object.keys(data.entities).sort(), [...data.ids].sort())
+    !fastArrayCompare(Object.keys(data.entities).sort(), [...data.ids].sort())
   ) {
     Log.log(
       `Inconsistent entity state "${additionalStr}": ids=${data?.ids?.length}, entities=${data?.entities ? Object.keys(data.entities).length : 0}`,
@@ -29,7 +29,7 @@ export const fixEntityStateConsistency = <T extends Dictionary<any>>(data: T): T
     !data.entities ||
     !data.ids ||
     Object.keys(data.entities).length !== data.ids.length ||
-    !arrayEquals(Object.keys(data.entities).sort(), [...data.ids].sort())
+    !fastArrayCompare(Object.keys(data.entities).sort(), [...data.ids].sort())
   ) {
     Log.err(
       `FIXING ENTITY STATE: ids=${data?.ids?.length}, entities=${Object.keys(data.entities).length}`,
@@ -51,7 +51,7 @@ export const fixEntityStateConsistencyOrError = <T extends Dictionary<any>>(
     !data.entities ||
     !data.ids ||
     Object.keys(data.entities).length !== data.ids.length ||
-    !arrayEquals(Object.keys(data.entities).sort(), [...data.ids].sort())
+    !fastArrayCompare(Object.keys(data.entities).sort(), [...data.ids].sort())
   ) {
     Log.log(
       `Fixing entity state: ids=${data?.ids?.length}, entities=${Object.keys(data.entities).length}`,

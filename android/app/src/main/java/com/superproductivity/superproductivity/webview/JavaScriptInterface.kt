@@ -231,6 +231,26 @@ class JavaScriptInterface(
         }
     }
 
+    /**
+     * Read back the live focus-mode session so the WebView can recover it after
+     * being recreated (app reopened from recents). Returns "null" when no focus
+     * session is running. Intentionally omits the task title — no user content
+     * crosses the bridge here; the Angular store re-derives it (#7855).
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getFocusModeElapsed(): String {
+        return if (FocusModeForegroundService.isRunning) {
+            val durationMs = FocusModeForegroundService.durationMs
+            val remainingMs = FocusModeForegroundService.liveRemainingMs()
+            val isBreak = FocusModeForegroundService.isBreak
+            val isPaused = FocusModeForegroundService.isPaused
+            """{"durationMs":$durationMs,"remainingMs":$remainingMs,"isBreak":$isBreak,"isPaused":$isPaused}"""
+        } else {
+            "null"
+        }
+    }
+
     @Suppress("unused")
     @JavascriptInterface
     fun scheduleNativeReminder(

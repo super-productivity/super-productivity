@@ -34,6 +34,7 @@ import { OperationApplierService } from '../apply/operation-applier.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { OpLog } from '../../core/log';
 import { toEntityKey } from '../util/entity-key.util';
+import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -893,11 +894,7 @@ export class ConflictResolutionService {
       hasNoSnapshotClock: boolean;
     },
   ): Promise<{ isSupersededOrDuplicate: boolean; conflict: EntityConflict | null }> {
-    const entityIdsToCheck = remoteOp.entityIds?.length
-      ? remoteOp.entityIds
-      : remoteOp.entityId
-        ? [remoteOp.entityId]
-        : [];
+    const entityIdsToCheck = getOpEntityIds(remoteOp);
 
     for (const entityId of entityIdsToCheck) {
       const entityKey = toEntityKey(remoteOp.entityType, entityId);

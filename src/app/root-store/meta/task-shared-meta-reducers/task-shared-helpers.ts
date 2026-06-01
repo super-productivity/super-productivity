@@ -65,13 +65,6 @@ export const getTag = (state: RootState, tagId: string): Tag => {
 };
 
 /**
- * Gets a tag entity from state, or undefined if it doesn't exist.
- * Use this when the tag may not exist (e.g., during remote sync).
- */
-export const getTagOrUndefined = (state: RootState, tagId: string): Tag | undefined =>
-  state[TAG_FEATURE_NAME].entities[tagId] as Tag | undefined;
-
-/**
  * Gets a project entity from state. Throws if project doesn't exist.
  * Callers should check existence before calling if project may not exist.
  */

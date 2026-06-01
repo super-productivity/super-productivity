@@ -47,10 +47,6 @@ import {
 export class PluginAPI implements PluginAPIInterface {
   readonly Hooks = PluginHooks;
   private _hookHandlers = new Map<string, Map<Hooks, Array<PluginHookHandler<Hooks>>>>();
-  private _headerButtons: Array<PluginHeaderBtnCfg> = [];
-  private _menuEntries: Array<PluginMenuEntryCfg> = [];
-  private _shortcuts: Array<PluginShortcutCfg> = [];
-  private _sidePanelButtons: Array<PluginSidePanelBtnCfg> = [];
   private _messageHandler?: (message: unknown) => Promise<unknown>;
   private _boundMethods: ReturnType<
     typeof PluginBridgeService.prototype.createBoundMethods
@@ -107,14 +103,11 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   registerHeaderButton(headerBtnCfg: PluginHeaderBtnCfg): void {
-    this._headerButtons.push({ ...headerBtnCfg, pluginId: this._pluginId });
     PluginLog.log(`Plugin ${this._pluginId} registered header button`);
     this._boundMethods.registerHeaderButton(headerBtnCfg);
   }
 
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void {
-    const fullMenuEntry = { ...menuEntryCfg, pluginId: this._pluginId };
-    this._menuEntries.push(fullMenuEntry);
     PluginLog.log(`Plugin ${this._pluginId} registered menu entry`);
     this._boundMethods.registerMenuEntry(menuEntryCfg);
   }
@@ -137,7 +130,6 @@ export class PluginAPI implements PluginAPIInterface {
       pluginId: this._pluginId,
     };
 
-    this._shortcuts.push(shortcut);
     PluginLog.log(`Plugin ${this._pluginId} registered shortcut`);
 
     // Register shortcut with bridge
@@ -147,7 +139,6 @@ export class PluginAPI implements PluginAPIInterface {
   registerSidePanelButton(
     sidePanelBtnCfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>,
   ): void {
-    this._sidePanelButtons.push({ ...sidePanelBtnCfg, pluginId: this._pluginId });
     PluginLog.log(`Plugin ${this._pluginId} registered side panel button`);
     this._boundMethods.registerSidePanelButton(sidePanelBtnCfg);
   }
@@ -590,12 +581,6 @@ export class PluginAPI implements PluginAPIInterface {
 
     // Clear all hook handlers
     this._hookHandlers.clear();
-
-    // Clear all UI registrations
-    this._headerButtons.length = 0;
-    this._menuEntries.length = 0;
-    this._shortcuts.length = 0;
-    this._sidePanelButtons.length = 0;
 
     // Unregister issue provider if one was registered
     this._boundMethods.unregisterIssueProvider();

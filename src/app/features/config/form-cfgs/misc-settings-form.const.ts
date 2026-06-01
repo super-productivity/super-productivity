@@ -104,6 +104,18 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
           {
             key: 'isUseCustomWindowTitleBar',
             type: 'checkbox',
+            // Display-only default: seed the checkbox so it reflects the actual
+            // window state on a fresh install (the custom title bar is on by
+            // default here -- this field is only shown on non-GNOME Electron, see
+            // the enclosing guard). formly seeds the control without an initial
+            // modelChange, so nothing is persisted on load.
+            // KNOWN RESIDUAL (#7891): saving any *other* Misc setting emits the
+            // whole model and persists this seeded value too. We accept that over a
+            // persisted DEFAULT_GLOBAL_CONFIG default, which would be pushed to
+            // Electron on *every* launch and override a legacy `isUseObsidianStyleHeader`
+            // choice. So a pre-2025-12 non-GNOME user who had disabled the old
+            // header may see it re-enabled after editing Misc settings (reversible here).
+            defaultValue: true,
             templateOptions: {
               label: T.GCF.MISC.IS_USE_CUSTOM_WINDOW_TITLE_BAR,
               description: T.GCF.MISC.IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT,

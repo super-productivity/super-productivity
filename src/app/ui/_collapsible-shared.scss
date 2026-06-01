@@ -1,0 +1,41 @@
+// Shared structural styles for the collapsible widgets.
+// Used by: collapsible, formly-collapsible
+// Consumers are expected to bind the `isExpanded` host class; the `isInline`
+// variant lives in collapsible.component.scss since only that component has it.
+
+@mixin collapsible-shared {
+  :host {
+    display: block;
+  }
+
+  .collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .collapsible-title {
+    flex-grow: 1;
+  }
+
+  .collapsible-expand-icon {
+    margin-right: var(--s);
+    // --transition-standard already embeds `all`; do not prefix a property
+    transition: var(--transition-standard);
+
+    :host.isExpanded & {
+      transform: rotate(180deg);
+    }
+  }
+
+  .collapsible-panel {
+    height: auto;
+    display: block;
+
+    // make sure we don't produce clunky animations
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}

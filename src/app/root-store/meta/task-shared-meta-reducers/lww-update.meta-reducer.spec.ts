@@ -335,6 +335,33 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreated.projectId).toBe('INBOX_PROJECT');
     });
 
+    it('should add recreated task to backfilled project taskIds when partial TASK LWW Update lacks projectId', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'rpt_no_project_visible',
+        dueDay: '2026-04-29',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'rpt_no_project_visible',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[TASK_FEATURE_NAME]?.entities[
+        'rpt_no_project_visible'
+      ] as Task;
+      const inboxProject = updatedState[PROJECT_FEATURE_NAME]?.entities[
+        INBOX_PROJECT.id
+      ] as Project;
+
+      expect(recreated.projectId).toBe(INBOX_PROJECT.id);
+      expect(inboxProject.taskIds).toContain('rpt_no_project_visible');
+    });
+
     // #7330 follow-up #2: a producer that emits `title: null` (rather than
     // omitting it) used to slip past the partial-keys check (=== undefined)
     // AND have `null` overwrite the DEFAULT_TASK default in the spread.
@@ -1380,6 +1407,59 @@ describe('lwwUpdateMetaReducer', () => {
       // Project B should still be empty
       expect(projectB.taskIds).not.toContain(TASK_ID);
     });
+
+    it('should preserve project.taskIds when projectId is omitted from partial LWW payload', () => {
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Updated Task Title Only',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const projectA = updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A] as Project;
+
+      expect(projectA.taskIds).toContain(TASK_ID);
+    });
+
+    it('should preserve backlog membership when projectId is omitted from partial LWW payload', () => {
+      const state = {
+        ...createStateWithProjects(PROJECT_A, [], []),
+        [PROJECT_FEATURE_NAME]: {
+          ids: [PROJECT_A, PROJECT_B],
+          entities: {
+            [PROJECT_A]: createMockProject({
+              id: PROJECT_A,
+              title: 'Project A',
+              taskIds: [],
+              backlogTaskIds: [TASK_ID],
+            }),
+            [PROJECT_B]: createMockProject({
+              id: PROJECT_B,
+              title: 'Project B',
+              taskIds: [],
+            }),
+          },
+        },
+      } as Partial<RootState>;
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Updated Backlog Task Title Only',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const projectA = updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A] as Project;
+
+      expect(projectA.taskIds).not.toContain(TASK_ID);
+      expect(projectA.backlogTaskIds).toContain(TASK_ID);
+    });
   });
 
   describe('tag.taskIds sync on task tagIds change', () => {
@@ -1559,6 +1639,25 @@ describe('lwwUpdateMetaReducer', () => {
       expect(tagC.taskIds).not.toContain(TASK_ID);
     });
 
+    it('should preserve tag.taskIds when tagIds is omitted from partial LWW payload', () => {
+      const state = createStateWithTags([TAG_A, TAG_B], [TASK_ID], [TASK_ID]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Updated Task Title Only',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const tagA = updatedState[TAG_FEATURE_NAME]?.entities[TAG_A] as Tag;
+      const tagB = updatedState[TAG_FEATURE_NAME]?.entities[TAG_B] as Tag;
+
+      expect(tagA.taskIds).toContain(TASK_ID);
+      expect(tagB.taskIds).toContain(TASK_ID);
+    });
+
     it('should handle task with no previous tags getting tags', () => {
       const state = createStateWithTags([], [], []);
       const action = {
@@ -1726,9 +1825,8 @@ describe('lwwUpdateMetaReducer', () => {
       expect(projectA.taskIds).not.toContain(SUBTASK_ID);
     });
 
-    it('should handle subtask becoming orphan (parentId removed via LWW, same project)', () => {
+    it('should add promoted subtask to project.taskIds when parentId is removed in same project', () => {
       // Subtask loses its parent via LWW update but stays in same project.
-      // Since oldProjectId === newProjectId, syncProjectTaskIds returns early — no taskIds change.
       const state = {
         [TASK_FEATURE_NAME]: {
           ids: [SUBTASK_ID],
@@ -1774,8 +1872,61 @@ describe('lwwUpdateMetaReducer', () => {
 
       // Task should now be a top-level task
       expect(subtask.parentId).toBeNull();
-      // projectId didn't change (same project), so syncProjectTaskIds exits early
+      expect(projectA.taskIds).toContain(SUBTASK_ID);
+    });
+
+    it('should remove task from project.taskIds when it becomes a subtask in same project', () => {
+      const state = {
+        [TASK_FEATURE_NAME]: {
+          ids: [SUBTASK_ID, PARENT_TASK],
+          entities: {
+            [SUBTASK_ID]: createMockTask({
+              id: SUBTASK_ID,
+              parentId: undefined,
+              projectId: PROJECT_A,
+            }),
+            [PARENT_TASK]: createMockTask({
+              id: PARENT_TASK,
+              parentId: undefined,
+              projectId: PROJECT_A,
+              subTaskIds: [],
+            }),
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+          lastCurrentTaskId: null,
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ids: [PROJECT_A],
+          entities: {
+            [PROJECT_A]: createMockProject({ id: PROJECT_A, taskIds: [SUBTASK_ID] }),
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ids: [],
+          entities: {},
+        },
+      } as Partial<RootState>;
+
+      const action = {
+        type: '[TASK] LWW Update',
+        id: SUBTASK_ID,
+        parentId: PARENT_TASK,
+        projectId: PROJECT_A,
+        title: 'Now a subtask',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: SUBTASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const projectA = updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A] as Project;
+      const parent = updatedState[TASK_FEATURE_NAME]?.entities[PARENT_TASK] as Task;
+
       expect(projectA.taskIds).not.toContain(SUBTASK_ID);
+      expect(parent.subTaskIds).toContain(SUBTASK_ID);
     });
 
     it('should add promoted subtask to new project.taskIds when parentId is cleared and projectId changes', () => {
@@ -2330,6 +2481,23 @@ describe('lwwUpdateMetaReducer', () => {
 
       expect(todayTag.taskIds).not.toContain(TASK_ID);
     });
+
+    it('should preserve TODAY_TAG.taskIds when due fields are omitted from partial LWW payload', () => {
+      const state = createStateWithTodayTag(TODAY_STR, [TASK_ID]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Updated Task Title Only',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const todayTag = updatedState[TAG_FEATURE_NAME]?.entities[TODAY_TAG.id] as Tag;
+
+      expect(todayTag.taskIds).toContain(TASK_ID);
+    });
   });
 
   describe('TODAY_TAG.taskIds sync on task dueWithTime change', () => {
@@ -2444,6 +2612,23 @@ describe('lwwUpdateMetaReducer', () => {
       const todayTag = updatedState[TAG_FEATURE_NAME]?.entities[TODAY_TAG.id] as Tag;
 
       expect(todayTag.taskIds).toEqual([TASK_ID, 'other-task']);
+    });
+
+    it('should preserve TODAY_TAG.taskIds when dueWithTime is omitted from partial LWW payload', () => {
+      const state = createStateWithDueWithTime(undefined, TODAY_TIMESTAMP, [TASK_ID]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Updated Task Title Only',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const todayTag = updatedState[TAG_FEATURE_NAME]?.entities[TODAY_TAG.id] as Tag;
+
+      expect(todayTag.taskIds).toContain(TASK_ID);
     });
 
     it('should use dueWithTime over dueDay when both present (mutual exclusivity)', () => {
@@ -2638,6 +2823,23 @@ describe('lwwUpdateMetaReducer', () => {
       expect(parentA.subTaskIds).toContain(SUBTASK_ID);
       // Parent B should still be empty
       expect(parentB.subTaskIds).not.toContain(SUBTASK_ID);
+    });
+
+    it('should preserve parent.subTaskIds when parentId is omitted from partial LWW payload', () => {
+      const state = createStateWithParents(PARENT_A, [SUBTASK_ID], []);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: SUBTASK_ID,
+        title: 'Updated Subtask Title Only',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: SUBTASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const parentA = updatedState[TASK_FEATURE_NAME]?.entities[PARENT_A] as Task;
+
+      expect(parentA.subTaskIds).toContain(SUBTASK_ID);
     });
 
     it('should handle parentId change when old parent does not exist', () => {

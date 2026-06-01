@@ -1,7 +1,7 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { of } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 import { WorkContextMenuComponent } from './work-context-menu.component';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { ProjectService } from '../../features/project/project.service';
@@ -15,19 +15,32 @@ import { WorkContextType } from '../../features/work-context/work-context.model'
 
 describe('WorkContextMenuComponent', () => {
   let component: WorkContextMenuComponent;
+  let fixture: ComponentFixture<WorkContextMenuComponent>;
   let mockProjectService: jasmine.SpyObj<ProjectService>;
   let mockWorkContextService: { activeWorkContextId: string | undefined };
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let confirmResult$: any;
   let router: Router;
 
+  // Finds the rendered mat-menu-item whose icon matches `iconName`.
+  const menuButtonByIcon = (iconName: string): HTMLButtonElement | null => {
+    const icon = Array.from(fixture.nativeElement.querySelectorAll('mat-icon')).find(
+      (el) => (el as HTMLElement).textContent?.trim() === iconName,
+    );
+    return (icon as HTMLElement)?.closest('button') ?? null;
+  };
+
   beforeEach(() => {
     mockProjectService = jasmine.createSpyObj('ProjectService', [
       'archive',
       'unarchive',
       'getByIdOnce$',
+      'getByIdLive$',
     ]);
     mockProjectService.getByIdOnce$.and.returnValue(
+      of({ id: 'project-123', title: 'Demo project' } as any),
+    );
+    mockProjectService.getByIdLive$.and.returnValue(
       of({ id: 'project-123', title: 'Demo project' } as any),
     );
     mockWorkContextService = { activeWorkContextId: undefined };
@@ -59,7 +72,7 @@ describe('WorkContextMenuComponent', () => {
       ],
     });
 
-    const fixture = TestBed.createComponent(WorkContextMenuComponent);
+    fixture = TestBed.createComponent(WorkContextMenuComponent);
     component = fixture.componentInstance;
     component.contextId = 'project-123';
     component.contextTypeSet = WorkContextType.PROJECT;
@@ -92,6 +105,67 @@ describe('WorkContextMenuComponent', () => {
       await component.archiveProject();
       expect(mockProjectService.archive).not.toHaveBeenCalled();
       expect(router.navigateByUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('archived state', () => {
+    it('detects an archived project on init', async () => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', title: 'Demo project', isArchived: true } as any),
+      );
+      await component.ngOnInit();
+      expect(await firstValueFrom(component.isArchived$)).toBe(true);
+    });
+
+    it('stays false for a non-archived project', async () => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', title: 'Demo project', isArchived: false } as any),
+      );
+      await component.ngOnInit();
+      expect(await firstValueFrom(component.isArchived$)).toBe(false);
+    });
+
+    it('does not look up a project when the context is a tag', async () => {
+      component.contextTypeSet = WorkContextType.TAG;
+      mockProjectService.getByIdLive$.calls.reset();
+      await component.ngOnInit();
+      expect(mockProjectService.getByIdLive$).not.toHaveBeenCalled();
+      expect(await firstValueFrom(component.isArchived$)).toBe(false);
+    });
+  });
+
+  describe('restoreProject()', () => {
+    it('unarchives the project', async () => {
+      mockProjectService.unarchive.and.returnValue(Promise.resolve());
+      await component.restoreProject();
+      expect(mockProjectService.unarchive).toHaveBeenCalledWith('project-123');
+    });
+  });
+
+  describe('rendered archive/restore action', () => {
+    it('renders Restore (and wires it up) for an archived project', () => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', isArchived: true } as any),
+      );
+      mockProjectService.unarchive.and.returnValue(Promise.resolve());
+      fixture.detectChanges();
+
+      expect(menuButtonByIcon('archive')).toBeNull();
+      const restoreBtn = menuButtonByIcon('unarchive');
+      expect(restoreBtn).toBeTruthy();
+
+      restoreBtn!.click();
+      expect(mockProjectService.unarchive).toHaveBeenCalledWith('project-123');
+    });
+
+    it('renders Archive for a non-archived project', () => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', isArchived: false } as any),
+      );
+      fixture.detectChanges();
+
+      expect(menuButtonByIcon('unarchive')).toBeNull();
+      expect(menuButtonByIcon('archive')).toBeTruthy();
     });
   });
 });

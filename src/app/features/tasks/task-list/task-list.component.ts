@@ -239,7 +239,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   };
 
   async drop(
-    srcFilteredTasks: TaskWithSubTasks[],
     ev: CdkDragDrop<
       DropModelDataForList,
       DropModelDataForList | string,
