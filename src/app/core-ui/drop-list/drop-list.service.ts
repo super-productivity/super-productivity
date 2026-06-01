@@ -22,6 +22,15 @@ export class DropListService {
 
   private _list: CdkDropList[] = [];
   private _flushScheduled = false;
+  private _activeDragPointer: { x: number; y: number } | null = null;
+
+  activeDragPointer(): { x: number; y: number } | null {
+    return this._activeDragPointer;
+  }
+
+  setActiveDragPointer(pointer: { x: number; y: number } | null): void {
+    this._activeDragPointer = pointer;
+  }
 
   registerDropList(dropList: CdkDropList, isSubTaskList = false): void {
     if (isSubTaskList) {

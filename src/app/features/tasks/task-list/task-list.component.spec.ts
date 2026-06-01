@@ -21,6 +21,13 @@ describe('TaskListComponent', () => {
   let component: TaskListComponent;
   let fixture: ComponentFixture<TaskListComponent>;
   let sectionServiceMock: jasmine.SpyObj<SectionService>;
+  let dropListServiceMock: {
+    registerDropList: jasmine.Spy;
+    unregisterDropList: jasmine.Spy;
+    activeDragPointer: jasmine.Spy;
+    setActiveDragPointer: jasmine.Spy;
+    blockAniTrigger$: { next: jasmine.Spy };
+  };
   let store: MockStore;
 
   type MockDragTask = Omit<Partial<Task>, 'parentId'> & {
@@ -50,6 +57,13 @@ describe('TaskListComponent', () => {
       'addTaskToSection',
       'removeTaskFromSection',
     ]);
+    dropListServiceMock = {
+      registerDropList: jasmine.createSpy('registerDropList'),
+      unregisterDropList: jasmine.createSpy('unregisterDropList'),
+      activeDragPointer: jasmine.createSpy('activeDragPointer').and.returnValue(null),
+      setActiveDragPointer: jasmine.createSpy('setActiveDragPointer'),
+      blockAniTrigger$: { next: jasmine.createSpy('next') },
+    };
 
     await TestBed.configureTestingModule({
       imports: [TaskListComponent, NoopAnimationsModule],
@@ -79,11 +93,7 @@ describe('TaskListComponent', () => {
         },
         {
           provide: DropListService,
-          useValue: {
-            registerDropList: () => {},
-            unregisterDropList: () => {},
-            blockAniTrigger$: { next: () => {} },
-          },
+          useValue: dropListServiceMock,
         },
         { provide: SectionService, useValue: sectionServiceMock },
       ],
@@ -145,6 +155,27 @@ describe('TaskListComponent', () => {
         const drag = createMockDrag(subtask);
         const drop = createMockDrop('DONE', [{ id: 'parent1' }]);
         expect(component.enterPredicate(drag, drop)).toBe(true);
+      });
+
+      it('should block the enclosing parent list while pointer is over a subtask list', () => {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML =
+          '<div class="task-list-inner" data-list-id="SUB"><div id="hit"></div></div>';
+        document.body.appendChild(wrapper);
+        const hitEl = wrapper.querySelector('#hit') as Element;
+        spyOn(document, 'elementFromPoint').and.returnValue(hitEl);
+        dropListServiceMock.activeDragPointer.and.returnValue({ x: 10, y: 20 });
+        const drag = createMockDrag({ id: 'sub1', parentId: 'parent1' });
+        Object.assign(drag, {
+          dropContainer: { data: { listId: 'SUB', listModelId: 'parent1' } },
+        });
+        const drop = createMockDrop('UNDONE', [{ id: 'parent1' }], 'PARENT');
+
+        try {
+          expect(component.enterPredicate(drag, drop)).toBe(false);
+        } finally {
+          wrapper.remove();
+        }
       });
 
       it('should allow subtask to reorder within same parent subtask list', () => {

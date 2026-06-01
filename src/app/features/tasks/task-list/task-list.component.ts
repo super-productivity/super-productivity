@@ -16,7 +16,13 @@ import { filterDoneTasks } from '../filter-done-tasks.pipe';
 import { T } from '../../../t.const';
 import { taskListAnimation } from './task-list-ani';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { CdkDrag, CdkDragDrop, CdkDragStart, CdkDropList } from '@angular/cdk/drag-drop';
+import {
+  CdkDrag,
+  CdkDragDrop,
+  CdkDragMove,
+  CdkDragStart,
+  CdkDropList,
+} from '@angular/cdk/drag-drop';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
 import { getAnchorFromDragDrop } from '../../work-context/store/work-context-meta.helper';
@@ -174,8 +180,13 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     this._scheduleExternalDragService.setActiveTask(task, event.source._dragRef);
   }
 
+  onDragMoved(event: CdkDragMove): void {
+    this.dropListService.setActiveDragPointer(event.pointerPosition);
+  }
+
   onDragEnded(): void {
     this._scheduleExternalDragService.setActiveTask(null);
+    this.dropListService.setActiveDragPointer(null);
   }
 
   enterPredicate = (drag: CdkDrag, drop: CdkDropList): boolean => {
@@ -193,6 +204,12 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       const isToTopLevelList = targetModelId === 'DONE' || targetModelId === 'UNDONE';
 
       if (isToTopLevelList) {
+        if (
+          drag.dropContainer?.data?.listId === 'SUB' &&
+          this._isPointerOverSubTaskList()
+        ) {
+          return false;
+        }
         return true;
       }
 
@@ -233,6 +250,16 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     return true;
   };
+
+  private _isPointerOverSubTaskList(): boolean {
+    const pointer = this.dropListService.activeDragPointer();
+    if (!pointer) {
+      return false;
+    }
+    const element = document.elementFromPoint(pointer.x, pointer.y);
+    const dropListElement = element?.closest<HTMLElement>('.task-list-inner');
+    return dropListElement?.dataset['listId'] === 'SUB';
+  }
 
   async drop(
     ev: CdkDragDrop<
