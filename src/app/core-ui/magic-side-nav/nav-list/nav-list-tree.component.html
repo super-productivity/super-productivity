@@ -157,17 +157,15 @@
 }
 
 <!-- Project Visibility Menu -->
+<!-- Hidden-project opacity style in src/styles/components/_overwrite-material.scss -->
 <mat-menu #visibilityMenu="matMenu">
   @for (project of allUnarchivedProjects(); track project.id) {
     <button
       mat-menu-item
+      [class.is-hidden-from-menu]="project.isHiddenFromMenu"
       (click)="toggleProjectVisibility(project.id)"
     >
-      @if (!project.isHiddenFromMenu) {
-        <mat-icon>visibility</mat-icon>
-      } @else {
-        <mat-icon>visibility_off</mat-icon>
-      }
+      <mat-icon>{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon>
       <span>{{ project.title }}</span>
     </button>
   }
