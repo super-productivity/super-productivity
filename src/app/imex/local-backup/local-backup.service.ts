@@ -14,7 +14,7 @@ import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
-import { selectBestBackupStr } from './backup-ring.util';
+import { selectBestBackupStr, summarizeBackupStr } from './backup-ring.util';
 import { SnackService } from '../../core/snack/snack.service';
 import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
@@ -123,50 +123,57 @@ export class LocalBackupService {
       return;
     }
 
-    const backupMeta = await this.checkBackupAvailable();
-    // ELECTRON
-    // --------
-    if (IS_ELECTRON && typeof backupMeta !== 'boolean') {
-      if (
-        confirmDialog(
-          this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP, {
-            dir: backupMeta.folder,
-            from: new Date(backupMeta.created).toLocaleString(),
-          }),
-        )
-      ) {
-        const backupData = await this.loadBackupElectron(backupMeta.path);
-        Log.log('backupData loaded from Electron backup');
-        await this._importBackup(backupData);
+    // ELECTRON — has its own rotated meta (folder + date) in the prompt.
+    if (IS_ELECTRON) {
+      const backupMeta = await this.checkBackupAvailable();
+      if (typeof backupMeta !== 'boolean') {
+        if (
+          confirmDialog(
+            this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP, {
+              dir: backupMeta.folder,
+              from: new Date(backupMeta.created).toLocaleString(),
+            }),
+          )
+        ) {
+          const backupData = await this.loadBackupElectron(backupMeta.path);
+          Log.log('backupData loaded from Electron backup');
+          await this._importBackup(backupData);
+        }
       }
-
-      // ANDROID
-      // -------
-    } else if (IS_ANDROID_WEB_VIEW && backupMeta === true) {
-      if (
-        confirmDialog(
-          this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID),
-        )
-      ) {
-        // loadBackupAndroid already returns parse-ready (newline-escaped) text.
-        const backupData = await this.loadBackupAndroid();
-        Log.log('backupData loaded from Android, length: ' + backupData.length);
-        await this._importBackup(backupData);
-      }
-
-      // iOS
-      // ---
-    } else if (this._platformService.isIOS() && backupMeta === true) {
-      if (
-        confirmDialog(
-          this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID),
-        )
-      ) {
-        const backupData = await this.loadBackupIOS();
-        Log.log('iOS backupData loaded');
-        await this._importBackup(backupData);
-      }
+      return;
     }
+
+    // MOBILE (Android / iOS) — load the best ring generation first so the prompt
+    // can tell the user what they would restore (#7901). Loading is cheap and
+    // lets a blind "discard my data?" dialog become an informed one — they should
+    // never dismiss the only copy of their data without seeing it exists.
+    const backupData = IS_ANDROID_WEB_VIEW
+      ? await this.loadBackupAndroid()
+      : await this.loadBackupIOS();
+    if (!backupData) {
+      // Nothing usable to restore — stay silent rather than prompt for nothing.
+      return;
+    }
+    if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
+      Log.log('mobile backupData loaded, length: ' + backupData.length);
+      await this._importBackup(backupData);
+    }
+  }
+
+  /**
+   * Builds the mobile restore prompt. When the backup parses, it names the task
+   * and project counts so the user can judge what they would restore; otherwise
+   * falls back to the generic prompt.
+   */
+  private _restoreMobilePromptMsg(backupData: string): string {
+    const summary = summarizeBackupStr(backupData);
+    if (!summary) {
+      return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID);
+    }
+    return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE, {
+      tasks: summary.taskCount,
+      projects: summary.projectCount,
+    });
   }
 
   private async _backup(): Promise<void> {

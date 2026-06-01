@@ -10,6 +10,7 @@ import { ArchiveModel } from '../../features/archive/archive.model';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
 import { AppDataComplete } from '../../op-log/model/model-config';
+import { T } from '../../t.const';
 
 const BACKUP_INTERVAL = 5 * 60 * 1000;
 
@@ -318,6 +319,41 @@ describe('LocalBackupService', () => {
         (service as unknown as LocalBackupServiceWithPrivate)._backup,
       ).toHaveBeenCalledTimes(1);
     }));
+  });
+
+  describe('informed mobile restore prompt (#7901)', () => {
+    type LocalBackupServiceWithPrompt = {
+      _restoreMobilePromptMsg: (backupData: string) => string;
+    };
+
+    it('names the task and project counts when the backup parses', () => {
+      translateServiceSpy.instant.and.returnValue('msg');
+      const backupData = JSON.stringify({
+        task: { ids: ['a', 'b'], entities: {} },
+        project: { ids: ['p1'], entities: {} },
+      });
+
+      (service as unknown as LocalBackupServiceWithPrompt)._restoreMobilePromptMsg(
+        backupData,
+      );
+
+      expect(translateServiceSpy.instant).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE,
+        { tasks: 2, projects: 1 },
+      );
+    });
+
+    it('falls back to the generic prompt for an unparseable backup', () => {
+      translateServiceSpy.instant.and.returnValue('msg');
+
+      (service as unknown as LocalBackupServiceWithPrompt)._restoreMobilePromptMsg(
+        '{corrupt',
+      );
+
+      expect(translateServiceSpy.instant).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID,
+      );
+    });
   });
 
   describe('import backup', () => {
