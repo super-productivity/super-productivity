@@ -12,8 +12,8 @@ describe('ActionType enum', () => {
   const enumValues = Object.values(ActionType) as string[];
   const mappingKeys = Object.keys(ACTION_TYPE_TO_CODE);
 
-  it('should have exactly 143 members', () => {
-    expect(enumValues.length).toBe(143);
+  it('should have exactly 144 members', () => {
+    expect(enumValues.length).toBe(144);
   });
 
   it('should have 1:1 correspondence with ACTION_TYPE_TO_CODE', () => {
@@ -42,6 +42,9 @@ describe('ActionType enum', () => {
       expect(ActionType.TASK_SHARED_ADD).toBe('[Task Shared] addTask');
       expect(ActionType.TASK_SHARED_UPDATE).toBe('[Task Shared] updateTask');
       expect(ActionType.TASK_SHARED_DELETE).toBe('[Task Shared] deleteTask');
+      expect(ActionType.TASK_SHARED_CONVERT_TO_SUB).toBe(
+        '[Task Shared] convertToSubTask',
+      );
       expect(ActionType.TASK_SHARED_PLAN_DEADLINE_FOR_TODAY).toBe(
         '[Task Shared] planDeadlineTasksForToday',
       );

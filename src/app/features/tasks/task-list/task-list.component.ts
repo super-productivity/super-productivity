@@ -84,7 +84,6 @@ const PARENT_ALLOWED_LISTS = ['DONE', 'UNDONE', 'OVERDUE', 'BACKLOG', 'ADD_TASK_
 export interface DropModelDataForList {
   listId: TaskListId;
   listModelId: ListModelId;
-  allTasks: TaskWithSubTasks[];
   filteredTasks: TaskWithSubTasks[];
 }
 
@@ -138,7 +137,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     return {
       listId: this.listId(),
       listModelId: this.listModelId(),
-      allTasks: this.tasks(),
       filteredTasks: this.filteredTasks(),
     };
   });
@@ -160,6 +158,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   allTasksLength = computed(() => this.tasks()?.length ?? 0);
 
   readonly dropList = viewChild(CdkDropList);
+  private _clearSubTaskDropCandidate: (() => void) | undefined;
 
   T: typeof T = T;
 
@@ -168,15 +167,35 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    this._clearSubTaskDropCandidate?.();
     this.dropListService.unregisterDropList(this.dropList()!);
     this._scheduleExternalDragService.setActiveTask(null);
+    this.dropListService.setActiveDragPointer(null);
   }
 
   trackByFn(i: number, task: Task): string {
     return task.id;
   }
 
+  onDragPointerDown(task: TaskWithSubTasks): void {
+    this._clearSubTaskDropCandidate?.();
+    if (!canConvertTaskToSubTask(task)) {
+      return;
+    }
+    this._scheduleExternalDragService.setSubTaskDropCandidate(task);
+    const clearCandidate = (): void => {
+      this._scheduleExternalDragService.setSubTaskDropCandidate(null);
+      window.removeEventListener('pointerup', clearCandidate);
+      window.removeEventListener('pointercancel', clearCandidate);
+      this._clearSubTaskDropCandidate = undefined;
+    };
+    window.addEventListener('pointerup', clearCandidate);
+    window.addEventListener('pointercancel', clearCandidate);
+    this._clearSubTaskDropCandidate = clearCandidate;
+  }
+
   onDragStarted(task: TaskWithSubTasks, event: CdkDragStart): void {
+    this._clearSubTaskDropCandidate?.();
     this._scheduleExternalDragService.setActiveTask(task, event.source._dragRef);
   }
 
@@ -185,6 +204,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   onDragEnded(): void {
+    this._clearSubTaskDropCandidate?.();
     this._scheduleExternalDragService.setActiveTask(null);
     this.dropListService.setActiveDragPointer(null);
   }
@@ -252,6 +272,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   };
 
   private _isPointerOverSubTaskList(): boolean {
+    // CDK intentionally excludes the source list from normal sibling enter
+    // resolution. For subtask -> parent-list drags we still need to know when
+    // the pointer is physically over the source subtask list, otherwise the
+    // parent DONE/UNDONE list accepts the drag and prevents in-list sorting.
     const pointer = this.dropListService.activeDragPointer();
     if (!pointer) {
       return false;
