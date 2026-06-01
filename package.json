@@ -203,7 +203,7 @@
     "@angular-eslint/schematics": "^21.3.1",
     "@angular-eslint/template-parser": "^21.3.1",
     "@angular/animations": "^21.2.11",
-    "@angular/cdk": "^21.2.9",
+    "@angular/cdk": "^21.2.13",
     "@angular/cli": "^21.2.9",
     "@angular/common": "^21.2.11",
     "@angular/compiler": "^21.2.11",
