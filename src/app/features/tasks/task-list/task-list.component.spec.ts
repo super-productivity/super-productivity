@@ -87,8 +87,6 @@ describe('TaskListComponent', () => {
           useValue: {
             activeTask: () => null,
             setActiveTask: () => {},
-            subTaskDropCandidate: () => null,
-            setSubTaskDropCandidate: () => {},
             isCancelNextDrop: () => false,
             setCancelNextDrop: () => {},
           },

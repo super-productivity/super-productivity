@@ -14,30 +14,3 @@
     box-shadow: none;
   }
 }
-
-.sub-tasks.is-empty-sub-task-drop-target {
-  position: absolute;
-  left: var(--s3);
-  right: var(--s);
-  bottom: -7px;
-  z-index: 1;
-  height: 14px;
-  margin: 0;
-  opacity: 0.85;
-  pointer-events: auto;
-
-  task-list.empty-sub-task-list {
-    height: 14px;
-    min-height: 14px;
-    padding: 0;
-  }
-
-  task-list.empty-sub-task-list ::ng-deep .task-list-inner {
-    height: 14px;
-    min-height: 14px;
-    border: 1px dashed var(--palette-primary-400);
-    border-radius: var(--task-border-radius);
-    background: color-mix(in srgb, var(--palette-primary-400) 18%, transparent);
-    box-sizing: border-box;
-  }
-}

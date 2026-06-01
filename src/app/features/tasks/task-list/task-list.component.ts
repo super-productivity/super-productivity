@@ -154,7 +154,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   allTasksLength = computed(() => this.tasks()?.length ?? 0);
 
   readonly dropList = viewChild(CdkDropList);
-  private _clearSubTaskDropCandidate: (() => void) | undefined;
   private _clearDragPointerTracking: (() => void) | undefined;
 
   T: typeof T = T;
@@ -164,7 +163,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
-    this._clearSubTaskDropCandidate?.();
     this._clearDragPointerTracking?.();
     this.dropListService.unregisterDropList(this.dropList()!);
     this._scheduleExternalDragService.setActiveTask(null);
@@ -176,28 +174,15 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   onDragPointerDown(task: TaskWithSubTasks, event: PointerEvent): void {
-    this._clearSubTaskDropCandidate?.();
+    // Seed the pointer position so subtask -> parent-list drags can hit-test
+    // the source subtask list before the first pointermove (see
+    // _isPointerOverSubTaskList).
     if (task.parentId) {
       this.dropListService.setActiveDragPointer({ x: event.clientX, y: event.clientY });
-      return;
     }
-    if (!canConvertTaskToSubTask(task)) {
-      return;
-    }
-    this._scheduleExternalDragService.setSubTaskDropCandidate(task);
-    const clearCandidate = (): void => {
-      this._scheduleExternalDragService.setSubTaskDropCandidate(null);
-      window.removeEventListener('pointerup', clearCandidate);
-      window.removeEventListener('pointercancel', clearCandidate);
-      this._clearSubTaskDropCandidate = undefined;
-    };
-    window.addEventListener('pointerup', clearCandidate);
-    window.addEventListener('pointercancel', clearCandidate);
-    this._clearSubTaskDropCandidate = clearCandidate;
   }
 
   onDragStarted(task: TaskWithSubTasks, event: CdkDragStart): void {
-    this._clearSubTaskDropCandidate?.();
     this._scheduleExternalDragService.setActiveTask(task, event.source._dragRef);
     if (task.parentId) {
       this._startDragPointerTracking();
@@ -205,7 +190,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   onDragEnded(): void {
-    this._clearSubTaskDropCandidate?.();
     this._clearDragPointerTracking?.();
     this._scheduleExternalDragService.setActiveTask(null);
     this.dropListService.setActiveDragPointer(null);

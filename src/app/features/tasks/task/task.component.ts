@@ -89,8 +89,6 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
 import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
-import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
-import { canConvertTaskToSubTask } from '../util/can-convert-task-to-sub-task';
 
 @Component({
   selector: 'task',
@@ -148,7 +146,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
-  private readonly _scheduleExternalDragService = inject(ScheduleExternalDragService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -275,21 +272,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       this.globalTrackingIntervalService.todayDateStr(),
     ),
   );
-
-  isEmptySubTaskDropTargetMounted = computed(() => {
-    const t = this.task();
-    const dragTask =
-      this._scheduleExternalDragService.activeTask() ??
-      this._scheduleExternalDragService.subTaskDropCandidate();
-    return (
-      !this.isInSubTaskList() &&
-      !t.parentId &&
-      !t.subTasks?.length &&
-      !!dragTask &&
-      dragTask.id !== t.id &&
-      canConvertTaskToSubTask(dragTask)
-    );
-  });
 
   hasDeadline = computed(() => {
     const t = this.task();
