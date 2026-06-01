@@ -48,19 +48,14 @@ the grant is often not honored, so today a report like #7892 carries no signal.
   and the telemetry decides whether the next protective steps (e.g. the
   near-empty write guard below) are worth the added complexity.
 
-### A2 (remaining gap). Debounced on-data-change backup trigger
+### A2 (shipped). Debounced on-data-change backup trigger
 
-The periodic + app-private backup ring shipped in #7924. The remaining gap is
-that the only trigger today is the 5-min `interval()` — so a destructive event
-in the minutes before an eviction can be lost from the latest backup even
-though the live store had it.
-
-- **Do:** add a debounced "data changed" stream alongside the existing
-  `interval(DEFAULT_BACKUP_INTERVAL)` in `LocalBackupService._triggerBackupSave$`
-  so high-signal changes (task add/edit/complete, project add/delete) settle
-  into a backup within seconds rather than minutes.
-- **Size:** small. **Risk:** low (the empty-state write guard already prevents
-  a flurry of meaningless writes from clobbering a good backup).
+✅ Shipped in #7925: `LocalBackupService._triggerBackupSave$` merges a
+`LOCAL_ACTIONS`-driven trigger with the existing 5-min interval — any local
+action settles into a backup after a 30s quiet period. `LOCAL_ACTIONS`
+already filters out remote/hydration replays, and the existing empty-state
+guard in `_backup()` prevents writing a degraded post-eviction snapshot
+over a good backup, so the trigger strictly adds frequency without spam.
 
 ### A3. Near-empty write-time overwrite guard
 
@@ -84,9 +79,9 @@ they uninstall/reinstall).
 - **Sequence:** **after A1**, so the diagnostics confirm the gap is worth
   closing before tuning the threshold.
 
-> A1 → A2 (remaining) → A3 are the recommended near-term fix for #7892. SQLite
-> (Track B) is the durable architectural fix but is weeks of on-device work
-> behind these.
+> A1 + A2 are shipped; A3 is the remaining near-term safeguard for #7892.
+> SQLite (Track B) is the durable architectural fix but is weeks of on-device
+> work behind these.
 
 ---
 
@@ -163,8 +158,8 @@ and the `adoptConnection` bridge once SQLite is the sole native backend.
 
 ## Suggested order
 
-1. **A1** (trivial logging; unblocks #7892 diagnosis) → **A2 remaining**
-   (debounced data-change trigger) → **A3** (near-empty write guard, threshold
+1. ✅ **A1** (storage-persistence diagnostics, shipped) → ✅ **A2** (debounced
+   data-change trigger, shipped) → **A3** (near-empty write guard, threshold
    tuned with A1 evidence).
 2. **B1 → B2 → B3** (gets SQLite runnable + validated behind a flag).
 3. **C1 → C2** (migrate real users' data, staged).
