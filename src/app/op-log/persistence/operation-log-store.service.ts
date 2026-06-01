@@ -53,6 +53,25 @@ interface VectorClockEntry {
 }
 
 /**
+ * Shape stored in the `state_cache` store (keyPath `id`).
+ *
+ * `id` is optional in the type so the read-side return types stay assignable
+ * from the looser snapshot shapes callers/tests construct (the pre-migration
+ * return types did not surface `id`); the field is always present on rows
+ * actually written here.
+ */
+interface StateCacheEntry {
+  id?: string;
+  state: unknown;
+  lastAppliedOpSeq: number;
+  vectorClock: VectorClock;
+  compactedAt: number;
+  schemaVersion?: number;
+  compactionCounter?: number;
+  snapshotEntityKeys?: string[];
+}
+
+/**
  * Stored operation log entry that can hold either compact or full operation format.
  * Used internally for backwards compatibility with existing data.
  */
@@ -1057,22 +1076,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     snapshotEntityKeys?: string[];
   }): Promise<void> {
     await this._ensureInit();
-    await this.db.put(STORE_NAMES.STATE_CACHE, {
+    await this._adapter.put(STORE_NAMES.STATE_CACHE, {
       id: SINGLETON_KEY,
       ...snapshot,
     });
   }
 
-  async loadStateCache(): Promise<{
-    state: unknown;
-    lastAppliedOpSeq: number;
-    vectorClock: VectorClock;
-    compactedAt: number;
-    schemaVersion?: number;
-    snapshotEntityKeys?: string[];
-  } | null> {
+  async loadStateCache(): Promise<StateCacheEntry | null> {
     await this._ensureInit();
-    const cache = await this.db.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+    const cache = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      SINGLETON_KEY,
+    );
     // Return null if cache doesn't exist or if state is null/undefined.
     // incrementCompactionCounter() may create a cache entry with state: null
     // just to track the counter - this shouldn't be treated as a valid snapshot.
@@ -1092,9 +1107,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async saveStateCacheBackup(): Promise<void> {
     await this._ensureInit();
-    const current = await this.db.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+    const current = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      SINGLETON_KEY,
+    );
     if (current) {
-      await this.db.put(STORE_NAMES.STATE_CACHE, {
+      await this._adapter.put(STORE_NAMES.STATE_CACHE, {
         ...current,
         id: BACKUP_KEY,
       });
@@ -1105,16 +1123,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * Loads the backup state cache, if one exists.
    * Used for crash recovery during migration.
    */
-  async loadStateCacheBackup(): Promise<{
-    state: unknown;
-    lastAppliedOpSeq: number;
-    vectorClock: VectorClock;
-    compactedAt: number;
-    schemaVersion?: number;
-    snapshotEntityKeys?: string[];
-  } | null> {
+  async loadStateCacheBackup(): Promise<StateCacheEntry | null> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+    const backup = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      BACKUP_KEY,
+    );
     return backup || null;
   }
 
@@ -1123,7 +1137,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async clearStateCacheBackup(): Promise<void> {
     await this._ensureInit();
-    await this.db.delete(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+    await this._adapter.delete(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
   }
 
   /**
@@ -1131,7 +1145,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async hasStateCacheBackup(): Promise<boolean> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+    const backup = await this._adapter.get(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
     return !!backup;
   }
 
@@ -1141,13 +1155,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async restoreStateCacheFromBackup(): Promise<void> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+    const backup = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      BACKUP_KEY,
+    );
     if (backup) {
-      await this.db.put(STORE_NAMES.STATE_CACHE, {
+      await this._adapter.put(STORE_NAMES.STATE_CACHE, {
         ...backup,
         id: SINGLETON_KEY,
       });
-      await this.db.delete(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+      await this._adapter.delete(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
     }
   }
 
@@ -1161,7 +1178,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async getCompactionCounter(): Promise<number> {
     await this._ensureInit();
-    const cache = await this.db.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+    const cache = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      SINGLETON_KEY,
+    );
     return cache?.compactionCounter ?? 0;
   }
 
@@ -1172,32 +1192,37 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async incrementCompactionCounter(): Promise<number> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.STATE_CACHE, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.STATE_CACHE);
-    const cache = await store.get('current');
+    return this._adapter.transaction(
+      [STORE_NAMES.STATE_CACHE],
+      'readwrite',
+      async (tx) => {
+        const cache = await tx.get<StateCacheEntry>(
+          STORE_NAMES.STATE_CACHE,
+          SINGLETON_KEY,
+        );
 
-    if (!cache) {
-      // No state cache yet - create one with counter starting at 1
-      // Provide default values for required schema fields
-      await store.put({
-        id: SINGLETON_KEY,
-        state: null,
-        lastAppliedOpSeq: 0,
-        vectorClock: {},
-        compactedAt: 0,
-        compactionCounter: 1,
-      });
-      await tx.done;
-      return 1;
-    }
+        if (!cache) {
+          // No state cache yet - create one with counter starting at 1
+          // Provide default values for required schema fields
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            id: SINGLETON_KEY,
+            state: null,
+            lastAppliedOpSeq: 0,
+            vectorClock: {},
+            compactedAt: 0,
+            compactionCounter: 1,
+          });
+          return 1;
+        }
 
-    const newCount = (cache.compactionCounter ?? 0) + 1;
-    await store.put({
-      ...cache,
-      compactionCounter: newCount,
-    });
-    await tx.done;
-    return newCount;
+        const newCount = (cache.compactionCounter ?? 0) + 1;
+        await tx.put(STORE_NAMES.STATE_CACHE, {
+          ...cache,
+          compactionCounter: newCount,
+        });
+        return newCount;
+      },
+    );
   }
 
   /**
@@ -1206,16 +1231,22 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async resetCompactionCounter(): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.STATE_CACHE, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.STATE_CACHE);
-    const cache = await store.get(SINGLETON_KEY);
-    if (cache) {
-      await store.put({
-        ...cache,
-        compactionCounter: 0,
-      });
-    }
-    await tx.done;
+    await this._adapter.transaction(
+      [STORE_NAMES.STATE_CACHE],
+      'readwrite',
+      async (tx) => {
+        const cache = await tx.get<StateCacheEntry>(
+          STORE_NAMES.STATE_CACHE,
+          SINGLETON_KEY,
+        );
+        if (cache) {
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            ...cache,
+            compactionCounter: 0,
+          });
+        }
+      },
+    );
   }
 
   /**
