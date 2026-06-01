@@ -602,6 +602,42 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    it('should clear dueDay and planner placement from a converted task', () => {
+      const testState = {
+        ...createConvertToSubTaskState({ dueDay: '2099-12-25' }),
+        planner: {
+          ...baseState.planner,
+          days: {
+            '2099-12-25': ['other-task', 'task1'],
+          },
+        },
+      };
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', {
+            parentId: 'parent-task',
+            dueDay: undefined,
+            tagIds: [],
+          }),
+          ...expectTagUpdates({
+            tag1: { taskIds: ['parent-task'] },
+            TODAY: { taskIds: [] },
+          }),
+          planner: jasmine.objectContaining({
+            days: jasmine.objectContaining({
+              '2099-12-25': ['other-task'],
+            }),
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should place the converted task after the target anchor', () => {
       const existingSubTask = createMockTask({
         id: 'existing-sub',
@@ -637,6 +673,27 @@ describe('taskSharedCrudMetaReducer', () => {
 
       metaReducer(testState, action);
       expect(mockReducer).toHaveBeenCalledWith(testState, action);
+    });
+
+    it('should not convert scheduled, repeating, or issue-linked tasks', () => {
+      const blockedCases: Partial<Task>[] = [
+        { dueWithTime: 4070908800000 },
+        { reminderId: 'reminder1' },
+        { remindAt: 4070908800000 },
+        { repeatCfgId: 'repeat1' },
+        { issueId: 'ISSUE-1' },
+        { issueProviderId: 'github' },
+        { issueType: 'GITHUB' as Task['issueType'] },
+      ];
+
+      blockedCases.forEach((taskOverrides) => {
+        const testState = createConvertToSubTaskState(taskOverrides);
+        const action = createConvertToSubTaskAction();
+
+        metaReducer(testState, action);
+        expect(mockReducer).toHaveBeenCalledWith(testState, action);
+        mockReducer.calls.reset();
+      });
     });
   });
 

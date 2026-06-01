@@ -28,6 +28,7 @@ import { unique } from '../../../util/unique';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
+import { canConvertTaskToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
   ActionHandlerMap,
   addTaskToList,
@@ -224,9 +225,8 @@ const handleConvertToSubTask = (
   if (
     !task ||
     !targetParent ||
-    task.parentId ||
     task.id === targetParent.id ||
-    !!task.subTaskIds?.length
+    !canConvertTaskToSubTask(task)
   ) {
     return state;
   }
@@ -254,6 +254,7 @@ const handleConvertToSubTask = (
       }),
     );
   updatedState = updateTags(updatedState, tagUpdates);
+  updatedState = removeTaskFromPlannerDays(updatedState, task.id);
 
   let taskState = updatedState[TASK_FEATURE_NAME];
   taskState = taskAdapter.updateMany(
@@ -261,7 +262,11 @@ const handleConvertToSubTask = (
       {
         id: targetParent.id,
         changes: {
-          subTaskIds: moveItemAfterAnchor(task.id, afterTaskId, targetParent.subTaskIds),
+          subTaskIds: moveItemAfterAnchor(
+            task.id,
+            afterTaskId,
+            targetParent.subTaskIds ?? [],
+          ),
         },
       },
       {
@@ -270,6 +275,7 @@ const handleConvertToSubTask = (
           parentId: targetParent.id,
           projectId: targetParent.projectId,
           tagIds: [],
+          dueDay: undefined,
           modified: Date.now(),
         },
       },

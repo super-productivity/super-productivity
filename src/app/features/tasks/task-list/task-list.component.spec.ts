@@ -15,6 +15,7 @@ import { SectionService } from '../../section/section.service';
 import { moveSubTask } from '../store/task.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { Task } from '../task.model';
 
 describe('TaskListComponent', () => {
   let component: TaskListComponent;
@@ -22,12 +23,13 @@ describe('TaskListComponent', () => {
   let sectionServiceMock: jasmine.SpyObj<SectionService>;
   let store: MockStore;
 
-  // Helper to create mock CdkDrag
-  const createMockDrag = (task: {
+  type MockDragTask = Omit<Partial<Task>, 'parentId'> & {
     id: string;
-    parentId: string | null;
-    subTaskIds?: string[];
-  }): CdkDrag =>
+    parentId?: string | null;
+  };
+
+  // Helper to create mock CdkDrag
+  const createMockDrag = (task: MockDragTask): CdkDrag =>
     ({
       data: task,
     }) as unknown as CdkDrag;
@@ -69,6 +71,7 @@ describe('TaskListComponent', () => {
         {
           provide: ScheduleExternalDragService,
           useValue: {
+            activeTask: () => null,
             setActiveTask: () => {},
             isCancelNextDrop: () => false,
             setCancelNextDrop: () => {},
@@ -212,6 +215,58 @@ describe('TaskListComponent', () => {
         const drag = createMockDrag(task);
         const drop = createMockDrop('some-task-id', [], 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(false);
+      });
+
+      it('should allow parent task with a plain due day to drop to subtask list', () => {
+        const task = {
+          id: 'task1',
+          parentId: null,
+          subTaskIds: [],
+          dueDay: '2099-12-25',
+        };
+        const drag = createMockDrag(task);
+        const drop = createMockDrop('some-task-id', [], 'SUB');
+        expect(component.enterPredicate(drag, drop)).toBe(true);
+      });
+
+      it('should block timed, repeating, and issue-linked parent tasks from dropping to subtask list', () => {
+        const drop = createMockDrop('some-task-id', [], 'SUB');
+
+        expect(
+          component.enterPredicate(
+            createMockDrag({
+              id: 'timed-task',
+              parentId: null,
+              subTaskIds: [],
+              dueWithTime: 4070908800000,
+            }),
+            drop,
+          ),
+        ).toBe(false);
+
+        expect(
+          component.enterPredicate(
+            createMockDrag({
+              id: 'repeat-task',
+              parentId: null,
+              subTaskIds: [],
+              repeatCfgId: 'repeat1',
+            }),
+            drop,
+          ),
+        ).toBe(false);
+
+        expect(
+          component.enterPredicate(
+            createMockDrag({
+              id: 'issue-task',
+              parentId: null,
+              subTaskIds: [],
+              issueId: 'ISSUE-1',
+            }),
+            drop,
+          ),
+        ).toBe(false);
       });
 
       it('should allow parent task to drop into a section drop-list', () => {
