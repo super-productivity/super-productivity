@@ -9,6 +9,47 @@ const entityCount = (val: unknown): number => {
 const archiveTaskCount = (archive: unknown): number =>
   entityCount((archive as { task?: unknown })?.task);
 
+/**
+ * Counts active + young-archived + old-archived tasks on a backup-shaped
+ * object. Single source of truth for the "how many tasks?" question used
+ * by both the informed restore prompt (`summarizeBackupStr`) and the A3
+ * near-empty write-time overwrite guard (#7925), so "near-empty" means the
+ * same thing on the read side and the write side.
+ */
+export const countAllTasks = (data: unknown): number => {
+  if (!data || typeof data !== 'object') {
+    return 0;
+  }
+  const d = data as {
+    task?: unknown;
+    archiveYoung?: unknown;
+    archiveOld?: unknown;
+  };
+  return (
+    entityCount(d.task) +
+    archiveTaskCount(d.archiveYoung) +
+    archiveTaskCount(d.archiveOld)
+  );
+};
+
+/**
+ * Parse-and-count for the A3 guard: returns null when the stored blob is
+ * empty/corrupt (treat as "no existing backup", so we don't skip the write
+ * and lose the chance to capture a real first backup).
+ */
+export const countAllTasksInBackupStr = (
+  str: string | null | undefined,
+): number | null => {
+  if (!str) {
+    return null;
+  }
+  try {
+    return countAllTasks(JSON.parse(str));
+  } catch {
+    return null;
+  }
+};
+
 /** A human-meaningful summary of a backup blob, used for the restore prompt. */
 export interface BackupSummary {
   taskCount: number;
@@ -37,10 +78,7 @@ export const summarizeBackupStr = (
     const s = JSON.parse(str) as Record<string, unknown>;
     const projectIds = (s.project as { ids?: unknown })?.ids;
     return {
-      taskCount:
-        entityCount(s.task) +
-        archiveTaskCount(s.archiveYoung) +
-        archiveTaskCount(s.archiveOld),
+      taskCount: countAllTasks(s),
       projectCount: Array.isArray(projectIds)
         ? projectIds.filter((id) => id !== INBOX_PROJECT.id).length
         : 0,

@@ -327,6 +327,136 @@ describe('LocalBackupService', () => {
     }));
   });
 
+  describe('near-empty overwrite guard (A3, #7925)', () => {
+    type LocalBackupServiceWithA3 = {
+      _isNearEmptyOverwrite: (
+        newData: AppDataComplete,
+        existingRaw: string | null,
+      ) => boolean;
+    };
+
+    type LocalBackupServiceWithIosRing = {
+      _readIOSFileOrNull: (path: string) => Promise<string | null>;
+      _writeIOSFile: (path: string, data: string) => Promise<void>;
+    };
+
+    const makeData = (taskCount: number): AppDataComplete =>
+      ({
+        task: {
+          ids: Array.from({ length: taskCount }, (_, i) => `t${i}`),
+          entities: {},
+        },
+        archiveYoung: { task: { ids: [], entities: {} } },
+        archiveOld: { task: { ids: [], entities: {} } },
+      }) as unknown as AppDataComplete;
+
+    const makeStoredBackup = (activeTasks: number, archivedTasks: number = 0): string =>
+      JSON.stringify({
+        task: {
+          ids: Array.from({ length: activeTasks }, (_, i) => `t${i}`),
+          entities: {},
+        },
+        archiveYoung: {
+          task: {
+            ids: Array.from({ length: archivedTasks }, (_, i) => `a${i}`),
+            entities: {},
+          },
+        },
+        archiveOld: { task: { ids: [], entities: {} } },
+      });
+
+    describe('_isNearEmptyOverwrite (pure)', () => {
+      it('blocks when new < 3 tasks AND existing >= 10 tasks', () => {
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(0), makeStoredBackup(10))).toBe(true);
+        expect(guard.call(service, makeData(2), makeStoredBackup(10))).toBe(true);
+        expect(guard.call(service, makeData(2), makeStoredBackup(50))).toBe(true);
+      });
+
+      it('counts archived tasks toward the "substantial" threshold', () => {
+        // 4 active + 8 archived = 12 → still substantial.
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(1), makeStoredBackup(4, 8))).toBe(true);
+      });
+
+      it('allows when the new snapshot is not near-empty', () => {
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(3), makeStoredBackup(100))).toBe(false);
+        expect(guard.call(service, makeData(10), makeStoredBackup(10))).toBe(false);
+      });
+
+      it('allows when the existing backup is not substantial', () => {
+        // A legitimate fresh-start scenario: existing has only a few tasks too.
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(1), makeStoredBackup(9))).toBe(false);
+        expect(guard.call(service, makeData(0), makeStoredBackup(0))).toBe(false);
+      });
+
+      it('allows when there is no existing backup or it is corrupt', () => {
+        // First-ever write must not be blocked, and a corrupt slot must not
+        // pretend to be a substantial backup.
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(0), null)).toBe(false);
+        expect(guard.call(service, makeData(0), '')).toBe(false);
+        expect(guard.call(service, makeData(0), '{broken')).toBe(false);
+      });
+    });
+
+    describe('integration via _backupIOS', () => {
+      beforeEach(() => {
+        (
+          service as unknown as {
+            _platformService: Pick<CapacitorPlatformService, 'isIOS'>;
+          }
+        )._platformService = { isIOS: () => true };
+      });
+
+      it('skips the overwrite when a near-empty snapshot would clobber a substantial backup', async () => {
+        stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync.and.resolveTo(
+          makeData(1) as any,
+        );
+        spyOn(
+          service as unknown as LocalBackupServiceWithIosRing,
+          '_readIOSFileOrNull',
+        ).and.resolveTo(makeStoredBackup(20));
+        const writeSpy = spyOn(
+          service as unknown as LocalBackupServiceWithIosRing,
+          '_writeIOSFile',
+        ).and.resolveTo();
+
+        await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+        // Guard fired before any write — neither the prev promotion nor the
+        // primary overwrite happened, so the good backup is preserved.
+        expect(writeSpy).not.toHaveBeenCalled();
+      });
+
+      it('writes normally when the new snapshot is not near-empty', async () => {
+        stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync.and.resolveTo(
+          makeData(5) as any,
+        );
+        spyOn(
+          service as unknown as LocalBackupServiceWithIosRing,
+          '_readIOSFileOrNull',
+        ).and.resolveTo(makeStoredBackup(20));
+        const writeSpy = spyOn(
+          service as unknown as LocalBackupServiceWithIosRing,
+          '_writeIOSFile',
+        ).and.resolveTo();
+
+        await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+        // Prev-promotion + primary write = 2 calls.
+        expect(writeSpy).toHaveBeenCalledTimes(2);
+      });
+    });
+  });
+
   describe('debounced data-change trigger (A2, #7925)', () => {
     const setup = (
       isEnabled: boolean,

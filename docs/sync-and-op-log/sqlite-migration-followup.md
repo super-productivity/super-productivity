@@ -57,31 +57,21 @@ already filters out remote/hydration replays, and the existing empty-state
 guard in `_backup()` prevents writing a degraded post-eviction snapshot
 over a good backup, so the trigger strictly adds frequency without spam.
 
-### A3. Near-empty write-time overwrite guard
+### A3 (shipped). Near-empty write-time overwrite guard
 
-The empty-state guard in `LocalBackupService._backup()` refuses to overwrite a
-good backup with an **exactly** empty store. The residual gap is a store that
-boots **near-empty** after eviction, the user adds 1–2 tasks before the 5-min
-timer fires, and the degraded state then overwrites the good primary (the prev
-slot is still safe, and the informed restore prompt only fires on a wholly
-fresh launch — so the user has lost direct access to the better backup until
-they uninstall/reinstall).
+✅ Shipped in #7925: `LocalBackupService._backupAndroid()` and `_backupIOS()`
+each read the existing primary slot before promoting/overwriting, and bail
+when a near-empty snapshot (< 3 tasks) would clobber a substantial existing
+backup (≥ 10 tasks). Counts include active + young-archived + old-archived
+tasks via the shared `countAllTasks` helper, so the threshold is the same
+on the read side (`summarizeBackupStr`) and the write side. Electron is
+unchanged — its rotated, timestamped backup chain isn't a single-slot
+overwrite. Fail-safe: skipping never loses data; the guard self-clears
+once the store grows back past 3 tasks, so a legitimate bulk-delete is
+captured on the next tick.
 
-- **Do:** widen the existing `hasMeaningfulStateData` guard to "**near-empty
-  vs. a substantial existing backup**" — e.g. refuse to overwrite an
-  ≥N-entity backup with a ≤k-entity one (suggested starting point: refuse
-  when `newTaskCount < 3` AND `existingBackupTaskCount >= 10`; counts include
-  archived tasks to match `summarizeBackupStr`). Threshold should fail safe:
-  skipping a write only delays capturing a real wipe, never loses data.
-- **Size:** small. **Risk:** low. The pathological case — user intentionally
-  bulk-deletes most tasks — is recovered by them adding more later (the
-  guard self-clears once the store grows back above the threshold).
-- **Sequence:** **after A1**, so the diagnostics confirm the gap is worth
-  closing before tuning the threshold.
-
-> A1 + A2 are shipped; A3 is the remaining near-term safeguard for #7892.
-> SQLite (Track B) is the durable architectural fix but is weeks of on-device
-> work behind these.
+> A1, A2, and A3 have shipped — Track A is complete. SQLite (Track B) is
+> the durable architectural fix and is tracked in #7931.
 
 ---
 
@@ -158,14 +148,16 @@ and the `adoptConnection` bridge once SQLite is the sole native backend.
 
 ## Suggested order
 
-1. ✅ **A1** (storage-persistence diagnostics, shipped) → ✅ **A2** (debounced
-   data-change trigger, shipped) → **A3** (near-empty write guard, threshold
-   tuned with A1 evidence).
-2. **B1 → B2 → B3** (gets SQLite runnable + validated behind a flag).
-3. **C1 → C2** (migrate real users' data, staged).
-4. **D** (tidy up once SQLite is the native default).
+1. ✅ Track A complete — **A1** (storage-persistence diagnostics) → **A2**
+   (debounced data-change trigger) → **A3** (near-empty write-time overwrite
+   guard) all shipped.
+2. **B1 → B2 → B3** (gets SQLite runnable + validated behind a flag) —
+   tracked in #7931.
+3. **C1 → C2** (migrate real users' data, staged) — tracked in #7931.
+4. **D** (tidy up once SQLite is the native default) — tracked in #7931.
 
-Tracks A and B/C/D are independent — A can ship while B is still in progress.
+Tracks A and B/C/D are independent — A shipped while B/C/D moves at its own
+device-gated cadence.
 
 ## Cross-cutting / hardening
 

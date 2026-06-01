@@ -1,4 +1,6 @@
 import {
+  countAllTasks,
+  countAllTasksInBackupStr,
   isUsableBackupStr,
   selectBestBackupStr,
   summarizeBackupStr,
@@ -94,6 +96,55 @@ describe('backup-ring.util', () => {
     it('returns null when both slots are empty', () => {
       expect(selectBestBackupStr(null, undefined)).toBeNull();
       expect(selectBestBackupStr('', '')).toBeNull();
+    });
+  });
+
+  describe('countAllTasks (A3 / #7925)', () => {
+    it('returns 0 for null / undefined / non-object input', () => {
+      expect(countAllTasks(null)).toBe(0);
+      expect(countAllTasks(undefined)).toBe(0);
+      expect(countAllTasks(42)).toBe(0);
+      expect(countAllTasks('str')).toBe(0);
+    });
+
+    it('counts active + young-archived + old-archived tasks', () => {
+      expect(
+        countAllTasks({
+          task: { ids: ['t1', 't2'] },
+          archiveYoung: { task: { ids: ['a1', 'a2'] } },
+          archiveOld: { task: { ids: ['a3'] } },
+        }),
+      ).toBe(5);
+    });
+
+    it('treats missing slots as zero rather than throwing', () => {
+      expect(countAllTasks({})).toBe(0);
+      expect(countAllTasks({ task: { ids: ['t1'] } })).toBe(1);
+    });
+
+    it('matches summarizeBackupStr.taskCount on a representative blob', () => {
+      // Single-source-of-truth invariant: both call sites must agree on
+      // "how many tasks?" so the A3 write-time threshold lines up with
+      // what summarizeBackupStr shows in the restore prompt.
+      expect(summarizeBackupStr(WITH_ARCHIVE_AND_INBOX)?.taskCount).toBe(5);
+      expect(countAllTasksInBackupStr(WITH_ARCHIVE_AND_INBOX)).toBe(5);
+    });
+  });
+
+  describe('countAllTasksInBackupStr (A3 / #7925)', () => {
+    it('returns null for empty / corrupt blobs (= no existing backup to compare against)', () => {
+      expect(countAllTasksInBackupStr(null)).toBeNull();
+      expect(countAllTasksInBackupStr(undefined)).toBeNull();
+      expect(countAllTasksInBackupStr('')).toBeNull();
+      expect(countAllTasksInBackupStr('{broken')).toBeNull();
+    });
+
+    it('returns 0 for a parseable but task-less blob', () => {
+      expect(countAllTasksInBackupStr(EMPTY_STATE)).toBe(0);
+    });
+
+    it('returns the active+archive sum for a normal backup', () => {
+      expect(countAllTasksInBackupStr(MEANINGFUL)).toBe(1);
     });
   });
 });

@@ -15,7 +15,12 @@ import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
-import { selectBestBackupStr, summarizeBackupStr } from './backup-ring.util';
+import {
+  countAllTasks,
+  countAllTasksInBackupStr,
+  selectBestBackupStr,
+  summarizeBackupStr,
+} from './backup-ring.util';
 import { SnackService } from '../../core/snack/snack.service';
 import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
@@ -38,6 +43,23 @@ const ANDROID_DB_KEY = 'backup';
 const ANDROID_DB_KEY_PREV = 'backup_prev';
 const IOS_BACKUP_FILENAME = 'super-productivity-backup.json';
 const IOS_BACKUP_PREV_FILENAME = 'super-productivity-backup.prev.json';
+
+// A3 (#7925) near-empty write-time overwrite guard. The exact-empty guard in
+// `_backup()` only catches a fully-degraded store; this catches the harder
+// case where a post-eviction boot leaves the store near-empty and the user
+// adds 1–2 tasks before the 5-min timer fires. Refuse to overwrite an
+// existing backup that has at least SUBSTANTIAL_EXISTING_TASKS tasks with a
+// snapshot that has fewer than NEAR_EMPTY_NEW_TASKS tasks. Counts include
+// archived tasks (via `countAllTasks`) so a heavily-archived backup doesn't
+// look near-empty.
+//
+// Fail-safe: skipping a write only delays capturing a legitimate fresh start
+// (the existing backup stays intact, the user's new tasks remain in the live
+// store until the next tick), never loses data. The guard self-clears once
+// the store grows back above NEAR_EMPTY_NEW_TASKS, so a deliberate
+// bulk-delete is captured as soon as the user adds enough new tasks.
+const NEAR_EMPTY_NEW_TASKS = 3;
+const SUBSTANTIAL_EXISTING_TASKS = 10;
 
 // const DEFAULT_BACKUP_INTERVAL = 6 * 1000;
 
@@ -224,11 +246,12 @@ export class LocalBackupService {
 
     if (IS_ELECTRON) {
       // Electron keeps its own rotated, timestamped backups (electron/backup.ts),
-      // so it needs no ring here.
+      // so it needs no ring here. The A3 guard is mobile-only — Electron's
+      // backup chain is not a single-slot overwrite.
       window.ea.backupAppData(data);
     }
     if (IS_ANDROID_WEB_VIEW) {
-      await this._backupAndroid(JSON.stringify(data));
+      await this._backupAndroid(data);
     }
     if (this._platformService.isIOS()) {
       await this._backupIOS(data);
@@ -236,15 +259,49 @@ export class LocalBackupService {
   }
 
   /**
+   * A3 (#7925): returns true when writing `newData` over `existingRaw` would
+   * shrink a substantial backup to a near-empty one — the post-eviction
+   * "boot empty, user adds 1–2 tasks, timer fires" pattern. Returns false
+   * (allow the write) when there is no existing backup, when the existing
+   * blob is empty/corrupt (so we don't block the first ever capture), or
+   * when the new snapshot is not near-empty.
+   */
+  private _isNearEmptyOverwrite(
+    newData: AppDataComplete,
+    existingRaw: string | null,
+  ): boolean {
+    const newTaskCount = countAllTasks(newData);
+    if (newTaskCount >= NEAR_EMPTY_NEW_TASKS) {
+      return false;
+    }
+    const existingTaskCount = countAllTasksInBackupStr(existingRaw);
+    if (existingTaskCount === null) {
+      return false;
+    }
+    return existingTaskCount >= SUBSTANTIAL_EXISTING_TASKS;
+  }
+
+  /**
    * Android two-generation ring (#7901): promote the current backup to the prev
    * slot before overwriting it, so a single bad write can't erase the only copy.
+   * A3 guard (#7925) skips the overwrite when the snapshot is near-empty
+   * vs. a substantial existing backup.
    */
-  private async _backupAndroid(dataStr: string): Promise<void> {
-    const existing = await androidInterface.loadFromDbWrapped(ANDROID_DB_KEY);
-    if (existing) {
-      await androidInterface.saveToDbWrapped(ANDROID_DB_KEY_PREV, existing);
+  private async _backupAndroid(data: AppDataComplete): Promise<void> {
+    const existingRaw = await androidInterface.loadFromDbWrapped(ANDROID_DB_KEY);
+    const existing = this._escapeAndroidNewlines(existingRaw);
+    if (this._isNearEmptyOverwrite(data, existing)) {
+      Log.warn(
+        'LocalBackupService: Skipping Android backup — near-empty snapshot ' +
+          `(${countAllTasks(data)} tasks) would overwrite a substantial backup ` +
+          `(${countAllTasksInBackupStr(existing)} tasks). #7925 A3 guard.`,
+      );
+      return;
     }
-    await androidInterface.saveToDbWrapped(ANDROID_DB_KEY, dataStr);
+    if (existingRaw) {
+      await androidInterface.saveToDbWrapped(ANDROID_DB_KEY_PREV, existingRaw);
+    }
+    await androidInterface.saveToDbWrapped(ANDROID_DB_KEY, JSON.stringify(data));
   }
 
   private async _backupIOS(data: AppDataComplete): Promise<void> {
@@ -252,6 +309,14 @@ export class LocalBackupService {
       // Two-generation ring (#7901): promote the current backup file to the prev
       // slot before overwriting, so a single bad write can't erase the only copy.
       const existing = await this._readIOSFileOrNull(IOS_BACKUP_FILENAME);
+      if (this._isNearEmptyOverwrite(data, existing)) {
+        Log.warn(
+          'LocalBackupService: Skipping iOS backup — near-empty snapshot ' +
+            `(${countAllTasks(data)} tasks) would overwrite a substantial backup ` +
+            `(${countAllTasksInBackupStr(existing)} tasks). #7925 A3 guard.`,
+        );
+        return;
+      }
       if (existing) {
         await this._writeIOSFile(IOS_BACKUP_PREV_FILENAME, existing);
       }
