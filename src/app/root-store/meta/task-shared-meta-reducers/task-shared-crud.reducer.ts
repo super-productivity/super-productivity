@@ -143,8 +143,10 @@ const handleAddTask = (
 const handleConvertToMainTask = (
   state: RootState,
   task: Task,
-  parentTagIds: string[],
+  parentTagIds: string[] | undefined,
   isPlanForToday?: boolean,
+  afterTaskId?: string | null,
+  isDone?: boolean,
 ): RootState => {
   // First, get the parent task to copy its properties
   const parentTask = state[TASK_FEATURE_NAME].entities[task.parentId as string] as Task;
@@ -153,6 +155,16 @@ const handleConvertToMainTask = (
   }
 
   const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const resolvedParentTagIds = parentTagIds ?? parentTask.tagIds;
+  const positionConvertedTask = (taskIds: string[]): string[] => {
+    if (afterTaskId === undefined) {
+      return unique([task.id, ...taskIds]);
+    }
+    if (afterTaskId === null && isDone) {
+      return [...removeTasksFromList(taskIds, [task.id]), task.id];
+    }
+    return moveItemAfterAnchor(task.id, afterTaskId, taskIds);
+  };
 
   // Handle parent-child relationship cleanup and task entity updates
   const taskStateAfterParentCleanup = removeTaskFromParentSideEffects(
@@ -174,6 +186,11 @@ const handleConvertToMainTask = (
               dueDay: todayStr,
             }
           : {}),
+        ...(isDone !== undefined
+          ? {
+              isDone,
+            }
+          : {}),
       },
     },
     taskStateAfterParentCleanup,
@@ -188,13 +205,13 @@ const handleConvertToMainTask = (
   if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
     const project = getProject(state, task.projectId);
     updatedState = updateProject(updatedState, task.projectId, {
-      taskIds: unique([task.id, ...project.taskIds]),
+      taskIds: positionConvertedTask(project.taskIds),
     });
   }
 
   // Update tags - only update tags that exist
   const tagIdsToUpdate = [
-    ...parentTagIds,
+    ...resolvedParentTagIds,
     ...(isPlanForToday ? [TODAY_TAG.id] : []),
   ].filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]);
 
@@ -203,7 +220,7 @@ const handleConvertToMainTask = (
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: unique([task.id, ...getTag(updatedState, tagId).taskIds]),
+        taskIds: positionConvertedTask(getTag(updatedState, tagId).taskIds),
       },
     }),
   );
@@ -797,10 +814,16 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     return handleAddTask(state, task, isAddToBottom, isAddToBacklog);
   },
   [TaskSharedActions.convertToMainTask.type]: () => {
-    const { task, parentTagIds, isPlanForToday } = action as ReturnType<
-      typeof TaskSharedActions.convertToMainTask
-    >;
-    return handleConvertToMainTask(state, task, parentTagIds, isPlanForToday);
+    const { task, parentTagIds, isPlanForToday, afterTaskId, isDone } =
+      action as ReturnType<typeof TaskSharedActions.convertToMainTask>;
+    return handleConvertToMainTask(
+      state,
+      task,
+      parentTagIds,
+      isPlanForToday,
+      afterTaskId,
+      isDone,
+    );
   },
   [TaskSharedActions.convertToSubTask.type]: () => {
     const { taskId, targetParentId, afterTaskId } = action as ReturnType<

@@ -47,6 +47,7 @@ import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { DateService } from '../../../core/date/date.service';
 import { canConvertTaskToSubTask } from '../util/can-convert-task-to-sub-task';
+import { TODAY_TAG } from '../../tag/tag.const';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
@@ -192,17 +193,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       const isToTopLevelList = targetModelId === 'DONE' || targetModelId === 'UNDONE';
 
       if (isToTopLevelList) {
-        // Check if subtask is appearing as a top-level item in the target list
-        // by checking if its parent is NOT in the target list's tasks
-        const targetTasks: TaskWithSubTasks[] = drop.data.allTasks || [];
-        const parentInTargetList = targetTasks.some((t) => t.id === task.parentId);
-
-        // If parent is NOT in the target list, subtask appears as top-level, allow move
-        if (!parentInTargetList) {
-          return true;
-        }
-        // Parent is in the list, so this subtask should stay nested under parent
-        return false;
+        return true;
       }
 
       // Subtasks may drop into another subtask list (listId === 'SUB' with a
@@ -330,6 +321,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       srcListData.listId,
       targetListData.listId,
       newIds.map((p) => p.id),
+      draggedTask as TaskWithSubTasks,
     );
 
     this._taskViewCustomizerService.setSort(DEFAULT_OPTIONS.sort);
@@ -357,6 +349,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     srcListId: TaskListId,
     targetListId: TaskListId,
     newOrderedIds: string[],
+    draggedTask?: TaskWithSubTasks,
   ): void {
     const isSrcRegularList = src === 'DONE' || src === 'UNDONE';
     const isTargetRegularList = target === 'DONE' || target === 'UNDONE';
@@ -364,6 +357,23 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     // Handle LATER_TODAY - prevent any moves to or from this list
     if (src === 'LATER_TODAY' || target === 'LATER_TODAY') {
+      return;
+    }
+
+    if (
+      srcListId === 'SUB' &&
+      targetListId === 'PARENT' &&
+      (target === 'DONE' || target === 'UNDONE')
+    ) {
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        TaskSharedActions.convertToMainTask({
+          task: draggedTask ?? ({ id: taskId, parentId: src } as TaskWithSubTasks),
+          isPlanForToday: this._workContextService.activeWorkContextId === TODAY_TAG.id,
+          afterTaskId,
+          isDone: target === 'DONE',
+        }),
+      );
       return;
     }
 

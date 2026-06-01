@@ -455,6 +455,107 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    it('should place a converted task after the drag anchor', () => {
+      const { action, testState: baseTestState } = createConvertAction(
+        {},
+        { afterTaskId: 'existing-task' },
+      );
+
+      const testState = {
+        ...baseTestState,
+        [TASK_FEATURE_NAME]: {
+          ...baseTestState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TASK_FEATURE_NAME].entities,
+            'existing-task': createMockTask({ id: 'existing-task' }),
+          },
+          ids: [...baseTestState[TASK_FEATURE_NAME].ids, 'existing-task'],
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ...baseTestState[PROJECT_FEATURE_NAME],
+          entities: {
+            ...baseTestState[PROJECT_FEATURE_NAME].entities,
+            project1: {
+              ...baseTestState[PROJECT_FEATURE_NAME].entities.project1,
+              taskIds: ['existing-task'],
+            } as Project,
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseTestState[TAG_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TAG_FEATURE_NAME].entities,
+            tag1: {
+              ...baseTestState[TAG_FEATURE_NAME].entities.tag1,
+              taskIds: ['existing-task'],
+            } as Tag,
+          },
+        },
+      };
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: ['existing-task', 'task1'] }),
+          ...expectTagUpdate('tag1', { taskIds: ['existing-task', 'task1'] }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should append a converted done task when dropped at the start of DONE', () => {
+      const { action, testState: baseTestState } = createConvertAction(
+        {},
+        { afterTaskId: null, isDone: true },
+      );
+
+      const testState = {
+        ...baseTestState,
+        [TASK_FEATURE_NAME]: {
+          ...baseTestState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TASK_FEATURE_NAME].entities,
+            task1: action.task,
+          },
+          ids: [...baseTestState[TASK_FEATURE_NAME].ids, 'task1'],
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ...baseTestState[PROJECT_FEATURE_NAME],
+          entities: {
+            ...baseTestState[PROJECT_FEATURE_NAME].entities,
+            project1: {
+              ...baseTestState[PROJECT_FEATURE_NAME].entities.project1,
+              taskIds: ['existing-task'],
+            } as Project,
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseTestState[TAG_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TAG_FEATURE_NAME].entities,
+            tag1: {
+              ...baseTestState[TAG_FEATURE_NAME].entities.tag1,
+              taskIds: ['existing-task'],
+            } as Tag,
+          },
+        },
+      };
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: ['existing-task', 'task1'] }),
+          ...expectTagUpdate('tag1', { taskIds: ['existing-task', 'task1'] }),
+          ...expectTaskUpdate('task1', { isDone: true }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should not duplicate task ID in project or tag taskIds when task already exists', () => {
       const { action, testState: baseTestState } = createConvertAction();
 

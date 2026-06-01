@@ -37,8 +37,10 @@ export const TaskSharedActions = createActionGroup({
 
     convertToMainTask: (taskProps: {
       task: Task;
-      parentTagIds: string[];
+      parentTagIds?: string[];
       isPlanForToday?: boolean;
+      afterTaskId?: string | null;
+      isDone?: boolean;
     }) => ({
       ...taskProps,
       meta: {

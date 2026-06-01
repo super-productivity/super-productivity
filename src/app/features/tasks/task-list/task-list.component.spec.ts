@@ -133,19 +133,18 @@ describe('TaskListComponent', () => {
     });
 
     describe('nested subtasks (parent IS in target list)', () => {
-      it('should block subtask from dropping to UNDONE when parent is in list', () => {
+      it('should allow subtask to drop to UNDONE so it can become a main task', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        // Parent IS in allTasks - subtask should stay nested
         const drop = createMockDrop('UNDONE', [{ id: 'parent1' }, { id: 'other-task' }]);
-        expect(component.enterPredicate(drag, drop)).toBe(false);
+        expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block subtask from dropping to DONE when parent is in list', () => {
+      it('should allow subtask to drop to DONE so it can become a completed main task', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
         const drop = createMockDrop('DONE', [{ id: 'parent1' }]);
-        expect(component.enterPredicate(drag, drop)).toBe(false);
+        expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
       it('should allow subtask to reorder within same parent subtask list', () => {
@@ -409,9 +408,13 @@ describe('TaskListComponent', () => {
             sl: 'PARENT' | 'SUB',
             tl: 'PARENT' | 'SUB',
             ids: string[],
+            draggedTask?: TaskWithSubTasks,
           ) => void;
         }
-      )._move(taskId, src, target, srcListId, targetListId, newOrderedIds);
+      )._move(taskId, src, target, srcListId, targetListId, newOrderedIds, {
+        id: taskId,
+        parentId: srcListId === 'SUB' ? src : undefined,
+      } as TaskWithSubTasks);
     };
 
     it('routes a subtask drop into another subtask list to moveSubTask (not addTaskToSection)', () => {
@@ -437,6 +440,19 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.taskId).toBe('task1');
       expect(dispatchedAction.targetParentId).toBe('parentB');
       expect(dispatchedAction.afterTaskId).toBe('before');
+    });
+
+    it('routes a subtask drop into a parent list to convertToMainTask', () => {
+      callMove('sub1', 'parentA', 'UNDONE', 'SUB', 'PARENT', ['before', 'sub1']);
+
+      expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.convertToMainTask>;
+      expect(dispatchedAction.type).toBe(TaskSharedActions.convertToMainTask.type);
+      expect(dispatchedAction.task.id).toBe('sub1');
+      expect(dispatchedAction.task.parentId).toBe('parentA');
+      expect(dispatchedAction.afterTaskId).toBe('before');
+      expect(dispatchedAction.isDone).toBe(false);
     });
 
     it('routes a parent drop into a section drop-list (PARENT + non-reserved id) to addTaskToSection', () => {
