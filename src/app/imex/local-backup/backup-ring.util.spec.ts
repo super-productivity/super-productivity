@@ -10,11 +10,12 @@ const MEANINGFUL = JSON.stringify({
 const MEANINGFUL_2 = JSON.stringify({
   task: { ids: ['t2'], entities: { t2: { id: 't2', title: 'Another task' } } },
 });
-// More data than MEANINGFUL: two tasks + a project + a note.
-const MEANINGFUL_BIG = JSON.stringify({
+// 2 active + 3 archived tasks, and a real project plus the always-present INBOX.
+const WITH_ARCHIVE_AND_INBOX = JSON.stringify({
   task: { ids: ['t1', 't2'], entities: {} },
-  project: { ids: ['p1'], entities: {} },
-  note: { ids: ['n1'], entities: {} },
+  project: { ids: ['INBOX_PROJECT', 'p1'], entities: {} },
+  archiveYoung: { task: { ids: ['a1', 'a2'] } },
+  archiveOld: { task: { ids: ['a3'] } },
 });
 // Default/initial state: no tasks, no notes, only structural empties.
 const EMPTY_STATE = JSON.stringify({
@@ -55,11 +56,10 @@ describe('backup-ring.util', () => {
       expect(summarizeBackupStr('{not json')).toBeNull();
     });
 
-    it('counts tasks, projects and notes', () => {
-      expect(summarizeBackupStr(MEANINGFUL_BIG)).toEqual({
-        taskCount: 2,
+    it('counts active + archived tasks and excludes the INBOX project', () => {
+      expect(summarizeBackupStr(WITH_ARCHIVE_AND_INBOX)).toEqual({
+        taskCount: 5,
         projectCount: 1,
-        noteCount: 1,
       });
     });
 
@@ -67,24 +67,16 @@ describe('backup-ring.util', () => {
       expect(summarizeBackupStr(MEANINGFUL)).toEqual({
         taskCount: 1,
         projectCount: 0,
-        noteCount: 0,
       });
     });
   });
 
   describe('selectBestBackupStr', () => {
-    it('prefers a usable primary over an equally-sized previous generation', () => {
+    it('prefers the usable primary (newest) over the previous generation', () => {
+      // Newest-wins: a legitimately smaller newer backup (bulk-archive/delete)
+      // must not be overridden by the older/larger prev (#7901).
       expect(selectBestBackupStr(MEANINGFUL, MEANINGFUL_2)).toBe(MEANINGFUL);
-    });
-
-    it('prefers the more complete generation when prev holds more data', () => {
-      // Post-eviction shape: primary holds a degraded 1-task state, prev still
-      // holds the full backup — restore must surface the full one (#7901).
-      expect(selectBestBackupStr(MEANINGFUL, MEANINGFUL_BIG)).toBe(MEANINGFUL_BIG);
-    });
-
-    it('keeps the primary when it holds at least as much as prev', () => {
-      expect(selectBestBackupStr(MEANINGFUL_BIG, MEANINGFUL)).toBe(MEANINGFUL_BIG);
+      expect(selectBestBackupStr(MEANINGFUL, WITH_ARCHIVE_AND_INBOX)).toBe(MEANINGFUL);
     });
 
     it('falls back to the previous generation when the primary is corrupt', () => {

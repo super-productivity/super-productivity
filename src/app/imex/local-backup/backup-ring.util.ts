@@ -1,21 +1,31 @@
 import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
+import { INBOX_PROJECT } from '../../features/project/project.const';
 
 const entityCount = (val: unknown): number => {
   const ids = (val as { ids?: unknown })?.ids;
   return Array.isArray(ids) ? ids.length : 0;
 };
 
-/** A human-meaningful summary of a backup blob, for restore prompts and ranking. */
+const archiveTaskCount = (archive: unknown): number =>
+  entityCount((archive as { task?: unknown })?.task);
+
+/** A human-meaningful summary of a backup blob, used for the restore prompt. */
 export interface BackupSummary {
   taskCount: number;
   projectCount: number;
-  noteCount: number;
 }
 
 /**
- * Parses a backup blob and counts the user-visible entities it holds. Returns
- * null for empty/corrupt blobs. Used both to show the user what a backup
- * contains before they restore it (#7901) and to rank two ring generations.
+ * Parses a backup blob and counts the user-visible entities it holds, so the
+ * restore prompt can tell the user what they would restore (#7901). Returns null
+ * for empty/corrupt blobs.
+ *
+ * Counts are chosen to be honest and to match the "has user data?" notion the
+ * restore path already relies on:
+ * - tasks include archived tasks, so a heavily-archived backup doesn't read as
+ *   empty and scare the user into declining a good restore;
+ * - projects exclude the always-present INBOX, mirroring hasMeaningfulStateData,
+ *   so a user with no projects of their own doesn't see a phantom "1 project".
  */
 export const summarizeBackupStr = (
   str: string | null | undefined,
@@ -25,10 +35,15 @@ export const summarizeBackupStr = (
   }
   try {
     const s = JSON.parse(str) as Record<string, unknown>;
+    const projectIds = (s.project as { ids?: unknown })?.ids;
     return {
-      taskCount: entityCount(s.task),
-      projectCount: entityCount(s.project),
-      noteCount: entityCount(s.note),
+      taskCount:
+        entityCount(s.task) +
+        archiveTaskCount(s.archiveYoung) +
+        archiveTaskCount(s.archiveOld),
+      projectCount: Array.isArray(projectIds)
+        ? projectIds.filter((id) => id !== INBOX_PROJECT.id).length
+        : 0,
     };
   } catch {
     return null;
@@ -54,44 +69,28 @@ export const isUsableBackupStr = (str: string | null | undefined): boolean => {
   }
 };
 
-/** Total user-visible entity weight, used to rank two usable generations. */
-const backupWeight = (str: string | null | undefined): number => {
-  const s = summarizeBackupStr(str);
-  return s ? s.taskCount + s.projectCount + s.noteCount : 0;
-};
-
 /**
- * Picks the best backup to restore from the two-generation ring.
+ * Picks the newest usable backup from the two-generation ring: the primary
+ * (current) slot first, then the promoted previous generation. If neither slot
+ * is usable, falls back to whichever raw blob exists so the caller can still
+ * surface or attempt to parse it explicitly. Returns null only when both slots
+ * are empty.
  *
- * When both slots are usable, prefers the one carrying MORE data, tie-breaking
- * to the primary (newest). This matters after an eviction: if the live store
- * boots near-empty and a 5-min backup writes that degraded state to the primary,
- * the ring still holds the full copy in `prev` — and restore must surface the
- * full copy, not the newer-but-smaller one. Preferring "more complete" is the
- * safe default for an explicit recovery action (the caller shows the user the
- * counts first, so a deliberate shrink can still be cancelled).
- *
- * If only one slot is usable, returns it. If neither is usable, falls back to
- * whichever raw blob exists so the caller can still surface or parse it; returns
- * null only when both slots are empty.
- *
- * See issue #7901.
+ * Newest-wins is intentional: the user expects to restore their latest backup.
+ * The previous generation exists only as a fallback for when the newest slot is
+ * empty/corrupt (e.g. a half-written eviction artifact) — NOT to second-guess a
+ * legitimately smaller newer backup (a bulk-archive or delete makes the newer
+ * generation smaller, and silently restoring the older/larger one would
+ * resurrect data the user removed). See issue #7901.
  */
 export const selectBestBackupStr = (
   primary: string | null | undefined,
   prev: string | null | undefined,
 ): string | null => {
-  const isPrimaryUsable = isUsableBackupStr(primary);
-  const isPrevUsable = isUsableBackupStr(prev);
-  if (isPrimaryUsable && isPrevUsable) {
-    return backupWeight(prev) > backupWeight(primary)
-      ? (prev as string)
-      : (primary as string);
-  }
-  if (isPrimaryUsable) {
+  if (isUsableBackupStr(primary)) {
     return primary as string;
   }
-  if (isPrevUsable) {
+  if (isUsableBackupStr(prev)) {
     return prev as string;
   }
   // Neither slot is usable — return any non-empty raw blob so the caller can
