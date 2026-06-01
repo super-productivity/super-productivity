@@ -26,6 +26,8 @@ describe('TaskListComponent', () => {
     unregisterDropList: jasmine.Spy;
     activeDragPointer: jasmine.Spy;
     setActiveDragPointer: jasmine.Spy;
+    isSubTaskDragStarting: jasmine.Spy;
+    markSubTaskDragStarting: jasmine.Spy;
     blockAniTrigger$: { next: jasmine.Spy };
   };
   let store: MockStore;
@@ -62,6 +64,10 @@ describe('TaskListComponent', () => {
       unregisterDropList: jasmine.createSpy('unregisterDropList'),
       activeDragPointer: jasmine.createSpy('activeDragPointer').and.returnValue(null),
       setActiveDragPointer: jasmine.createSpy('setActiveDragPointer'),
+      isSubTaskDragStarting: jasmine
+        .createSpy('isSubTaskDragStarting')
+        .and.returnValue(false),
+      markSubTaskDragStarting: jasmine.createSpy('markSubTaskDragStarting'),
       blockAniTrigger$: { next: jasmine.createSpy('next') },
     };
 
@@ -157,7 +163,94 @@ describe('TaskListComponent', () => {
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block the enclosing parent list while pointer is over a subtask list', () => {
+      // Mounts a detached `.task-list-inner[data-list-id=SUB]` and points
+      // `elementFromPoint` at either a real subtask row or the list's empty
+      // padding, so enterPredicate exercises the live pointer hit-test.
+      const withPointerOverSubList = (
+        opts: { listModelId: string; overRow: boolean; enclosingParentTask?: boolean },
+        run: () => void,
+      ): void => {
+        const hit = opts.overRow ? '<task id="hit"></task>' : '<div id="hit"></div>';
+        const subList = `<div class="task-list-inner" data-list-id="SUB" data-id="${opts.listModelId}">${hit}</div>`;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = opts.enclosingParentTask
+          ? `<div class="task-list-inner" data-list-id="PARENT" data-id="UNDONE"><task>${subList}</task></div>`
+          : subList;
+        document.body.appendChild(wrapper);
+        const hitEl = wrapper.querySelector('#hit') as Element;
+        spyOn(document, 'elementFromPoint').and.returnValue(hitEl);
+        dropListServiceMock.activeDragPointer.and.returnValue({ x: 10, y: 20 });
+        try {
+          run();
+        } finally {
+          wrapper.remove();
+        }
+      };
+
+      const subtaskDragFrom = (sourceModelId: string): CdkDrag => {
+        const drag = createMockDrag({ id: 'sub1', parentId: 'parent1' });
+        Object.assign(drag, {
+          dropContainer: { data: { listId: 'SUB', listModelId: sourceModelId } },
+        });
+        return drag;
+      };
+
+      it('should block the top-level list while the pointer is over the SOURCE subtask list (even its padding) so in-list sorting keeps working', () => {
+        withPointerOverSubList({ listModelId: 'parent1', overRow: false }, () => {
+          const drag = subtaskDragFrom('parent1');
+          const drop = createMockDrop('UNDONE', [{ id: 'parent1' }], 'PARENT');
+          expect(component.enterPredicate(drag, drop)).toBe(false);
+        });
+      });
+
+      it('should block the top-level list while the pointer is over a foreign subtask ROW (re-parent intent)', () => {
+        withPointerOverSubList({ listModelId: 'parent2', overRow: true }, () => {
+          const drag = subtaskDragFrom('parent1');
+          const drop = createMockDrop('UNDONE', [{ id: 'parent2' }], 'PARENT');
+          expect(component.enterPredicate(drag, drop)).toBe(false);
+        });
+      });
+
+      it('should accept the top-level list over a foreign subtask list trailing padding — the dead-band above the next parent (regression: #7905)', () => {
+        withPointerOverSubList({ listModelId: 'parent2', overRow: false }, () => {
+          const drag = subtaskDragFrom('parent1');
+          const drop = createMockDrop('UNDONE', [{ id: 'parent2' }], 'PARENT');
+          expect(component.enterPredicate(drag, drop)).toBe(true);
+        });
+      });
+
+      it('should not mistake the enclosing parent task for a row when over a foreign subtask list padding', () => {
+        withPointerOverSubList(
+          { listModelId: 'parent2', overRow: false, enclosingParentTask: true },
+          () => {
+            const drag = subtaskDragFrom('parent1');
+            const drop = createMockDrop('UNDONE', [{ id: 'parent2' }], 'PARENT');
+            expect(component.enterPredicate(drag, drop)).toBe(true);
+          },
+        );
+      });
+
+      it('should reject a foreign subtask list as drop target over its trailing padding (so the drag converts instead of re-parenting)', () => {
+        withPointerOverSubList({ listModelId: 'parent2', overRow: false }, () => {
+          const drag = subtaskDragFrom('parent1');
+          const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
+          expect(component.enterPredicate(drag, drop)).toBe(false);
+        });
+      });
+
+      it('should accept a foreign subtask list as drop target over one of its rows (re-parent)', () => {
+        withPointerOverSubList({ listModelId: 'parent2', overRow: true }, () => {
+          const drag = subtaskDragFrom('parent1');
+          const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
+          expect(component.enterPredicate(drag, drop)).toBe(true);
+        });
+      });
+
+      it('should accept the enclosing parent list during the drag-start window even while the pointer is over a subtask list', () => {
+        // At drag start the pointer is always over the source subtask list, so
+        // the pointer guard alone would keep CDK from ever caching the parent
+        // list geometry, leaving subtask -> main-task conversion broken until an
+        // unrelated parent drag warmed the cache (regression: #7905).
         const wrapper = document.createElement('div');
         wrapper.innerHTML =
           '<div class="task-list-inner" data-list-id="SUB"><div id="hit"></div></div>';
@@ -165,6 +258,7 @@ describe('TaskListComponent', () => {
         const hitEl = wrapper.querySelector('#hit') as Element;
         spyOn(document, 'elementFromPoint').and.returnValue(hitEl);
         dropListServiceMock.activeDragPointer.and.returnValue({ x: 10, y: 20 });
+        dropListServiceMock.isSubTaskDragStarting.and.returnValue(true);
         const drag = createMockDrag({ id: 'sub1', parentId: 'parent1' });
         Object.assign(drag, {
           dropContainer: { data: { listId: 'SUB', listModelId: 'parent1' } },
@@ -172,7 +266,7 @@ describe('TaskListComponent', () => {
         const drop = createMockDrop('UNDONE', [{ id: 'parent1' }], 'PARENT');
 
         try {
-          expect(component.enterPredicate(drag, drop)).toBe(false);
+          expect(component.enterPredicate(drag, drop)).toBe(true);
         } finally {
           wrapper.remove();
         }
@@ -413,6 +507,33 @@ describe('TaskListComponent', () => {
         // Empty string is falsy, so treated as parent task
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
+    });
+  });
+
+  describe('onDragStarted', () => {
+    const createStartEvent = (): { source: { _dragRef: unknown } } => ({
+      source: { _dragRef: {} },
+    });
+
+    afterEach(() => {
+      // Tear down the window pointermove listener registered for subtask drags.
+      component.onDragEnded();
+    });
+
+    it('opens the drag-start window for a subtask drag', () => {
+      component.onDragStarted(
+        { id: 'sub1', parentId: 'parent1' } as TaskWithSubTasks,
+        createStartEvent() as never,
+      );
+      expect(dropListServiceMock.markSubTaskDragStarting).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT open the drag-start window for a top-level task drag', () => {
+      component.onDragStarted(
+        { id: 'top1' } as TaskWithSubTasks,
+        createStartEvent() as never,
+      );
+      expect(dropListServiceMock.markSubTaskDragStarting).not.toHaveBeenCalled();
     });
   });
 

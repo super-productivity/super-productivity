@@ -176,7 +176,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   onDragPointerDown(task: TaskWithSubTasks, event: PointerEvent): void {
     // Seed the pointer position so subtask -> parent-list drags can hit-test
     // the source subtask list before the first pointermove (see
-    // _isPointerOverSubTaskList).
+    // _pointerSubTaskList).
     if (task.parentId) {
       this.dropListService.setActiveDragPointer({ x: event.clientX, y: event.clientY });
     }
@@ -185,6 +185,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   onDragStarted(task: TaskWithSubTasks, event: CdkDragStart): void {
     this._scheduleExternalDragService.setActiveTask(task, event.source._dragRef);
     if (task.parentId) {
+      // Runs synchronously before CDK's `_startReceiving` pass, so the
+      // top-level lists get their geometry cached even though the pointer is
+      // still over the source subtask list (see markSubTaskDragStarting).
+      this.dropListService.markSubTaskDragStarting();
       this._startDragPointerTracking();
     }
   }
@@ -228,11 +232,26 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       const isToTopLevelList = targetModelId === 'DONE' || targetModelId === 'UNDONE';
 
       if (isToTopLevelList) {
+        // Accept during the drag-start window so CDK caches this list's
+        // geometry (see markSubTaskDragStarting).
         if (
           drag.dropContainer?.data?.listId === 'SUB' &&
-          this._isPointerOverSubTaskList()
+          !this.dropListService.isSubTaskDragStarting()
         ) {
-          return false;
+          const overList = this._pointerSubTaskList();
+          const sourceModelId = drag.dropContainer?.data?.listModelId;
+          // Keep the drag inside a subtask list (reject this top-level list)
+          // while the pointer is over the SOURCE list — anywhere, so in-list
+          // sorting keeps routing to the subtask list — or over an actual row
+          // of a foreign list (the user is re-parenting). Over a foreign list's
+          // trailing padding (the dead-band just above the next parent task),
+          // fall through so the subtask converts to a main task there.
+          if (
+            overList &&
+            (overList.listModelId === sourceModelId || overList.isOverRow)
+          ) {
+            return false;
+          }
         }
         return true;
       }
@@ -241,6 +260,14 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       // task id as listModelId). Reject section drop-lists (listId === 'PARENT'
       // with a non-reserved id) — section.taskIds is parent-only.
       if (targetListId === 'SUB' && !PARENT_ALLOWED_LISTS.includes(targetModelId)) {
+        // Only claim the drop while the pointer is over an actual row of THIS
+        // list. Over its trailing padding, fall through so the enclosing
+        // top-level list can convert the subtask to a main task instead of this
+        // list greedily re-parenting it (see _pointerSubTaskList).
+        const overList = this._pointerSubTaskList();
+        if (overList && overList.listModelId === targetModelId && !overList.isOverRow) {
+          return false;
+        }
         return true;
       }
       return false;
@@ -275,18 +302,37 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     return true;
   };
 
-  private _isPointerOverSubTaskList(): boolean {
-    // CDK intentionally excludes the source list from normal sibling enter
-    // resolution. For subtask -> parent-list drags we still need to know when
-    // the pointer is physically over the source subtask list, otherwise the
-    // parent DONE/UNDONE list accepts the drag and prevents in-list sorting.
+  /**
+   * Resolves which subtask list (if any) the drag pointer is currently over,
+   * and whether it sits over an actual subtask *row* rather than the list's
+   * empty trailing padding.
+   *
+   * CDK excludes the source list from normal sibling enter-resolution, so we
+   * hit-test the live pointer ourselves to keep the enclosing top-level list
+   * from stealing in-list sorting. The row distinction matters for the
+   * dead-band just above a parent task: an expanded neighbour's subtask-list
+   * box (and its host padding) overshoots a few px below its last row, and
+   * because subtask lists are resolved before the top-level list (sibling
+   * order), a pointer aimed at "the slot above the next parent" would be
+   * greedily claimed by that neighbour and re-parent the subtask. Treating only
+   * a real row as "inside" a list lets that trailing padding convert to a main
+   * task instead.
+   */
+  private _pointerSubTaskList(): { listModelId: string; isOverRow: boolean } | null {
     const pointer = this.dropListService.activeDragPointer();
     if (!pointer) {
-      return false;
+      return null;
     }
     const element = document.elementFromPoint(pointer.x, pointer.y);
-    const dropListElement = element?.closest<HTMLElement>('.task-list-inner');
-    return dropListElement?.dataset['listId'] === 'SUB';
+    const listEl = element?.closest<HTMLElement>('.task-list-inner');
+    if (listEl?.dataset['listId'] !== 'SUB') {
+      return null;
+    }
+    // A `task` ancestor only counts as a row of *this* list — the enclosing
+    // parent task is also a `task`, but its nearest list is the top-level one.
+    const rowEl = element?.closest('task');
+    const isOverRow = !!rowEl && rowEl.closest('.task-list-inner') === listEl;
+    return { listModelId: listEl.dataset['id'] ?? '', isOverRow };
   }
 
   async drop(

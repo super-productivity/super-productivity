@@ -28,6 +28,7 @@ export class DropListService {
   private _list: CdkDropList[] = [];
   private _flushScheduled = false;
   private _activeDragPointer: DragPointer | null = null;
+  private _isSubTaskDragStarting = false;
 
   activeDragPointer(): DragPointer | null {
     return this._activeDragPointer;
@@ -35,6 +36,36 @@ export class DropListService {
 
   setActiveDragPointer(pointer: DragPointer | null): void {
     this._activeDragPointer = pointer;
+  }
+
+  /**
+   * True only for the microtask in which a subtask drag begins.
+   *
+   * CDK caches a sibling drop-list's geometry (`DropListRef._domRect`) lazily,
+   * and for a non-source list only when its `enterPredicate` passes at drag
+   * start (`_startReceiving`). An uncached list can never be entered, so it can
+   * never receive the item. The parent DONE/UNDONE list normally rejects a
+   * subtask drag while the pointer is over the source subtask list (so in-list
+   * sorting keeps working) — but at the *instant* a subtask drag starts the
+   * pointer is always over that subtask list, so that guard would block the
+   * parent list from ever being cached, and converting a subtask back to a main
+   * task would silently fail until some unrelated parent drag warmed the cache.
+   *
+   * This flag opens a one-microtask window at drag start during which the
+   * top-level lists accept the drag (letting CDK cache their geometry); the
+   * pointer guard then resumes for the rest of the drag.
+   */
+  isSubTaskDragStarting(): boolean {
+    return this._isSubTaskDragStarting;
+  }
+
+  markSubTaskDragStarting(): void {
+    this._isSubTaskDragStarting = true;
+    // Clear after CDK's synchronous `_startReceiving` pass (which runs right
+    // after the `cdkDragStarted` output) but before the first pointer move.
+    queueMicrotask(() => {
+      this._isSubTaskDragStarting = false;
+    });
   }
 
   registerDropList(dropList: CdkDropList, isSubTaskList = false): void {
