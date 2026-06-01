@@ -709,14 +709,21 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     const opsToDelete: string[] = [];
 
-    // Find all full-state ops
-    await this._adapter.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value) => {
-      const entry = decodeStoredEntry(value);
-      if (isFullStateOpType(entry.op.opType)) {
-        opsToDelete.push(entry.op.id);
-      }
-      return 'continue';
-    });
+    // Find all full-state ops. Pure read scan — the delete happens in a
+    // separate transaction below — so readonly to avoid taking a write lock
+    // on the hot ops store (parity with the pre-adapter cursor, which was
+    // readonly).
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      { mode: 'readonly' },
+      (value) => {
+        const entry = decodeStoredEntry(value);
+        if (isFullStateOpType(entry.op.opType)) {
+          opsToDelete.push(entry.op.id);
+        }
+        return 'continue';
+      },
+    );
 
     await this._deleteOpsByIds(opsToDelete);
     return opsToDelete.length;
@@ -767,14 +774,21 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const excludeIdSet = new Set(excludeIds);
     const opsToDelete: string[] = [];
 
-    // Find all full-state ops except the excluded ones
-    await this._adapter.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value) => {
-      const entry = decodeStoredEntry(value);
-      if (isFullStateOpType(entry.op.opType) && !excludeIdSet.has(entry.op.id)) {
-        opsToDelete.push(entry.op.id);
-      }
-      return 'continue';
-    });
+    // Find all full-state ops except the excluded ones. Pure read scan — the
+    // delete happens in a separate transaction below — so readonly to avoid
+    // taking a write lock on the hot ops store (parity with the pre-adapter
+    // cursor, which was readonly).
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      { mode: 'readonly' },
+      (value) => {
+        const entry = decodeStoredEntry(value);
+        if (isFullStateOpType(entry.op.opType) && !excludeIdSet.has(entry.op.id)) {
+          opsToDelete.push(entry.op.id);
+        }
+        return 'continue';
+      },
+    );
 
     await this._deleteOpsByIds(opsToDelete);
     return opsToDelete.length;
