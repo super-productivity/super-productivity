@@ -265,6 +265,16 @@ describe('LocalBackupService', () => {
       expect(writeSpy).toHaveBeenCalledTimes(1);
       expect(writeSpy.calls.mostRecent().args[0]).toBe(PRIMARY);
     });
+
+    it('loadBackupIOS resolves to "" (never throws) when no usable backup exists', async () => {
+      // Guards the fire-and-forget startup path from an unhandled rejection.
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSFileOrNull',
+      ).and.resolveTo(null);
+
+      await expectAsync(service.loadBackupIOS()).toBeResolvedTo('');
+    });
   });
 
   describe('automatic backup timer', () => {

@@ -82,9 +82,10 @@ export class LocalBackupService {
 
   async loadBackupAndroid(): Promise<string> {
     // Restore from the newest usable ring slot (#7901). The Android bridge can
-    // hand back literal newlines, so usability is judged on the escaped form the
-    // importer also uses. We return that escaped winner; the caller's own
-    // re-escape is then an idempotent no-op.
+    // hand back literal newlines, so we escape them here (the single escape site)
+    // and judge usability on that parse-ready form; the returned string is ready
+    // for JSON.parse. Returns '' when nothing usable exists (degrades to the
+    // existing import-error snack rather than throwing on the startup path).
     const [primaryRaw, prevRaw] = await Promise.all([
       androidInterface.loadFromDbWrapped(ANDROID_DB_KEY),
       androidInterface.loadFromDbWrapped(ANDROID_DB_KEY_PREV),
@@ -101,11 +102,11 @@ export class LocalBackupService {
       this._readIOSFileOrNull(IOS_BACKUP_FILENAME),
       this._readIOSFileOrNull(IOS_BACKUP_PREV_FILENAME),
     ]);
-    const best = selectBestBackupStr(primary, prev);
-    if (best === null) {
-      throw new Error('No iOS backup available');
-    }
-    return best;
+    // Mirror loadBackupAndroid: return '' rather than throwing when nothing
+    // usable exists. askForFileStoreBackupIfAvailable() runs from the
+    // fire-and-forget _initBackups() at startup, so a throw here would surface as
+    // an unhandled rejection; '' instead flows to the existing import-error snack.
+    return selectBestBackupStr(primary, prev) ?? '';
   }
 
   private async _checkBackupAvailableIOS(): Promise<boolean> {
@@ -147,11 +148,10 @@ export class LocalBackupService {
           this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID),
         )
       ) {
+        // loadBackupAndroid already returns parse-ready (newline-escaped) text.
         const backupData = await this.loadBackupAndroid();
         Log.log('backupData loaded from Android, length: ' + backupData.length);
-        const lineBreaksReplaced = backupData.replace(/\n/g, '\\n');
-        Log.log('lineBreaksReplaced, length: ' + lineBreaksReplaced.length);
-        await this._importBackup(lineBreaksReplaced);
+        await this._importBackup(backupData);
       }
 
       // iOS
