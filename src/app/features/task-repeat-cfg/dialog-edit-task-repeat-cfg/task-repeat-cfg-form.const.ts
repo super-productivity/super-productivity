@@ -8,55 +8,16 @@ import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { TaskReminderOptionId } from '../../tasks/task.model';
 import { isCronExpressionValid } from '../store/cron-occurrence.util';
 import { naturalLanguageToCron } from '../util/parse-natural-cron.util';
-import cronstrue from 'cronstrue';
-import { CronExpressionParser } from 'cron-parser';
 
 // Accept either a raw cron expression or natural-language that
 // `naturalLanguageToCron` can resolve. Stored value is canonicalized to cron.
+// The live humanized preview is rendered by the dialog component (see
+// cron-preview.util) — Formly's mat-hint does not reliably reflect a dynamic
+// `expressionProperties.description`, so the description stays static here.
 const isCronOrNaturalValid = (val: unknown): boolean => {
   if (typeof val !== 'string' || !val.trim()) return false;
   if (isCronExpressionValid(val)) return true;
   return naturalLanguageToCron(val) !== null;
-};
-
-// The recurrence engine is day-granular: a task is created at most once a day,
-// when the app opens or the day rolls over — never at a cron's time-of-day.
-// So any time component (a specific hour/minute, or a sub-daily cron that fires
-// many times a day) is informational only. Detect that to warn the user.
-//   subDaily  → fires more than once on the same calendar day
-//   timed     → fires at a specific time other than midnight
-const cronTimeInfo = (expr: string): { subDaily: boolean; timed: boolean } => {
-  try {
-    const it = CronExpressionParser.parse(expr);
-    const a = it.next().toDate();
-    const b = it.next().toDate();
-    const subDaily =
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-    const timed =
-      a.getHours() !== 0 || a.getMinutes() !== 0 || a.getSeconds() !== 0 || subDaily;
-    return { subDaily, timed };
-  } catch {
-    return { subDaily: false, timed: false };
-  }
-};
-
-// Live preview shown under the input. Resolves the (possibly natural-language)
-// value to its canonical cron + a humanized English description so the user can
-// sanity check what they typed as they type it.
-const cronPreview = (
-  val: unknown,
-): { cron: string; human: string; subDaily: boolean; timed: boolean } | null => {
-  if (typeof val !== 'string' || !val.trim()) return null;
-  const canonical = isCronExpressionValid(val) ? val.trim() : naturalLanguageToCron(val);
-  if (!canonical) return null;
-  try {
-    const human = cronstrue.toString(canonical, { use24HourTimeFormat: false });
-    return { cron: canonical, human, ...cronTimeInfo(canonical) };
-  } catch {
-    return null;
-  }
 };
 
 const updateParent = (
@@ -132,21 +93,6 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
             expression: (c: { value: unknown }) =>
               !c.value || isCronOrNaturalValid(c.value),
             message: () => T.F.TASK_REPEAT.F.CRON_INVALID,
-          },
-        },
-        // `expressionProperties` makes the description react to model changes so
-        // the interpreted cron + its plain-English reading update live as the
-        // user types, and persist below the field after applying. Falls back to
-        // the static format hint when unrecognized.
-        expressionProperties: {
-          ['templateOptions.description']: (model: any) => {
-            const p = cronPreview(model.cronExpression);
-            if (!p) return T.F.TASK_REPEAT.F.CRON_EXPRESSION_DESCRIPTION;
-            let s = `→ ${p.cron} · ${p.human}`;
-            if (p.subDaily) s += ` · ⚠ runs at most once per day`;
-            if (p.timed)
-              s += ` · ⚠ time of day is ignored (tasks are created when the app opens / the day changes)`;
-            return s;
           },
         },
       },

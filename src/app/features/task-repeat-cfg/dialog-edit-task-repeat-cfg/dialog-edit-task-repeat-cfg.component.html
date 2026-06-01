@@ -32,6 +32,23 @@
         [model]="repeatCfg()"
       ></formly-form>
 
+      @if (cronPreview(); as p) {
+        <div class="cron-preview">
+          <div class="cron-preview__expr">&rarr; {{ p.cron }}</div>
+          <div class="cron-preview__human">{{ p.human }}</div>
+          @if (p.subDaily) {
+            <div class="cron-preview__warn">
+              ⚠ {{ T.F.TASK_REPEAT.F.CRON_WARN_SUBDAILY | translate }}
+            </div>
+          }
+          @if (p.timed) {
+            <div class="cron-preview__warn">
+              ⚠ {{ T.F.TASK_REPEAT.F.CRON_WARN_TIME_IGNORED | translate }}
+            </div>
+          }
+        </div>
+      }
+
       <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
         <chip-list-input
           (addItem)="addTag($event)"

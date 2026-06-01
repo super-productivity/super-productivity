@@ -41,6 +41,29 @@ mat-dialog-actions {
   max-width: 620px;
 }
 
+.cron-preview {
+  margin: calc(-1 * var(--s2)) 0 var(--s2);
+  padding: var(--s) var(--s2);
+  border-radius: var(--card-border-radius);
+  background: var(--extra-border-color);
+  font-size: 13px;
+  line-height: 1.4;
+
+  &__expr {
+    font-family: monospace;
+    font-weight: bold;
+  }
+
+  &__human {
+    opacity: 0.85;
+  }
+
+  &__warn {
+    margin-top: var(--s-quarter, 2px);
+    opacity: 0.75;
+  }
+}
+
 :host collapsible {
   margin-top: var(--s2);
   margin-bottom: var(--s2);

@@ -1,10 +1,11 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG } from './task-repeat-cfg-form.const';
-import { T } from '../../../t.const';
+import { getCronPreview } from '../util/cron-preview.util';
 
-// Exercises the cronExpression field's validator + live-preview description via
-// the exported form config, using raw cron values so the assertions do not
-// depend on the (browser-only) WASM translator.
+// Covers the cronExpression field's validator (via the exported form config)
+// and the live-preview helper (getCronPreview) the dialog renders below the
+// field. Raw cron values keep these assertions independent of the browser-only
+// WASM translator.
 
 const findField = (
   fields: FormlyFieldConfig[],
@@ -29,11 +30,11 @@ describe('task-repeat cron field config', () => {
 
   const field = findField(TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG, 'cronExpression');
   const validate = (value: unknown): boolean =>
-    (field as any).validators.validCron.expression({ value });
-  const describeFor = (cronExpression: string): string =>
-    (field as any).expressionProperties['templateOptions.description']({
-      cronExpression,
-    });
+    (
+      field as {
+        validators: { validCron: { expression: (c: { value: unknown }) => boolean } };
+      }
+    ).validators.validCron.expression({ value });
 
   it('the cronExpression field exists', () => {
     expect(field).toBeDefined();
@@ -54,31 +55,36 @@ describe('task-repeat cron field config', () => {
       expect(validate('definitely not a cron')).toBe(false);
     });
   });
+});
 
-  describe('live preview description', () => {
-    it('shows the interpreted cron and an English reading', () => {
-      const d = describeFor('0 0 0 ? * MON');
-      expect(d).toContain('0 0 0 ? * MON');
-      expect(d.toLowerCase()).toContain('monday');
-    });
+describe('getCronPreview()', () => {
+  it('returns the interpreted cron and an English reading', () => {
+    const p = getCronPreview('0 0 0 ? * MON');
+    expect(p).not.toBeNull();
+    expect(p!.cron).toBe('0 0 0 ? * MON');
+    expect(p!.human.toLowerCase()).toContain('monday');
+  });
 
-    it('warns that time of day is ignored when a time is specified', () => {
-      expect(describeFor('0 0 9 ? * MON')).toContain('time of day is ignored');
-    });
+  it('flags a specific time of day as timed', () => {
+    const p = getCronPreview('0 0 9 ? * MON');
+    expect(p!.timed).toBe(true);
+    expect(p!.subDaily).toBe(false);
+  });
 
-    it('does NOT warn about time for a plain midnight schedule', () => {
-      expect(describeFor('0 0 0 ? * MON')).not.toContain('time of day is ignored');
-    });
+  it('does not flag a plain midnight schedule as timed', () => {
+    const p = getCronPreview('0 0 0 ? * MON');
+    expect(p!.timed).toBe(false);
+  });
 
-    it('warns "once per day" for a sub-daily schedule', () => {
-      const d = describeFor('0 * * * * ?');
-      expect(d).toContain('once per day');
-    });
+  it('flags a sub-daily schedule (and treats it as timed)', () => {
+    const p = getCronPreview('0 * * * * ?');
+    expect(p!.subDaily).toBe(true);
+    expect(p!.timed).toBe(true);
+  });
 
-    it('falls back to the static hint for unrecognized input', () => {
-      expect(describeFor('definitely not a cron')).toBe(
-        T.F.TASK_REPEAT.F.CRON_EXPRESSION_DESCRIPTION,
-      );
-    });
+  it('returns null for empty / unrecognized input', () => {
+    expect(getCronPreview('')).toBeNull();
+    expect(getCronPreview('   ')).toBeNull();
+    expect(getCronPreview(undefined)).toBeNull();
   });
 });

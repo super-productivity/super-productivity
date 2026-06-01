@@ -1,4 +1,4 @@
-import { initEnglishToCron, naturalLanguageToCron } from './parse-natural-cron.util';
+import { naturalLanguageToCron } from './parse-natural-cron.util';
 import { isCronExpressionValid } from '../store/cron-occurrence.util';
 
 // In the Karma/ChromeHeadless test environment the WASM asset is not served, so
@@ -56,11 +56,7 @@ describe('naturalLanguageToCron()', () => {
 
   // Note: rejection of engine-unsupported Quartz forms (year/W/L-n/#-lists) is a
   // WASM-path behavior verified end-to-end by `npm run test:crono`; the builtin
-  // fallback used here cannot produce those forms.
-
-  describe('initEnglishToCron()', () => {
-    it('resolves without throwing even when the WASM asset is unavailable', async () => {
-      await expectAsync(initEnglishToCron()).toBeResolved();
-    });
-  });
+  // fallback used here cannot produce those forms. The async WASM loader's
+  // resilience is covered by the app/E2E rather than a unit assertion, since its
+  // module-level load promise is shared across specs.
 });

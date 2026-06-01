@@ -2028,3 +2028,37 @@ describe('parseTimeSpentChanges', () => {
     expect(result.title).toBe('Task');
   });
 });
+
+describe('shortSyntax cron (@+)', () => {
+  // The lazy WASM translator would fetch its asset; stub fetch so the builtin
+  // fallback handles the (simple) phrases used here without a hanging request.
+  beforeEach(() => {
+    spyOn(window, 'fetch').and.rejectWith(new Error('no network in test'));
+  });
+
+  it('extracts a bare "@+<phrase>" into cronExpression and strips the title', async () => {
+    const r = await shortSyntax({ ...TASK, title: 'Mow Lawn @+every day' }, CONFIG);
+    expect(r).toBeDefined();
+    expect(r!.cronExpression).toBeTruthy();
+    // builtin fallback maps "every day" → "0 0 * * *"
+    expect(r!.cronExpression).toBe('0 0 * * *');
+    expect(r!.taskChanges.title).toBe('Mow Lawn');
+  });
+
+  it('keeps the title clean when combined with other short syntax', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Mow Lawn @+every monday #bla' },
+      CONFIG,
+      ALL_TAGS,
+    );
+    expect(r!.cronExpression).toBeTruthy();
+    expect(r!.taskChanges.title).toBe('Mow Lawn');
+    expect(r!.taskChanges.tagIds).toContain('bla_id');
+  });
+
+  it('leaves input untouched when there is no @+ clause', async () => {
+    const r = await shortSyntax({ ...TASK, title: 'Just a task' }, CONFIG);
+    // No short syntax at all → undefined, and certainly no cron.
+    expect(r?.cronExpression ?? null).toBeNull();
+  });
+});

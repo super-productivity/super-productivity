@@ -174,12 +174,13 @@ export const shortSyntax = async (
   let cronExpression: string | undefined;
 
   // Cron parser runs first so the bare `@` date parser does not eat
-  // `@+<expr>`. Strip the matched clause from the title before downstream
-  // parsers see it.
+  // `@+<expr>`. Strip the matched clause from the working title so downstream
+  // parsers never see it. We do NOT set taskChanges.title here — the
+  // parseTimeSpentChanges reassignment below would wipe it; the cleaned title
+  // is emitted at the end instead.
   const cronExtract = extractCronFromTitle(task.title);
   if (cronExtract) {
     cronExpression = cronExtract.cron;
-    taskChanges.title = cronExtract.stripped;
     task = { ...task, title: cronExtract.stripped };
   }
 
@@ -244,6 +245,13 @@ export const shortSyntax = async (
   //   };
   // }
 
+  // Emit the cron-stripped title even when no other parser produced a title
+  // change (e.g. a bare "Foo @+every day" with no date/project/tag/url) —
+  // otherwise the caller falls back to the original, un-stripped input.
+  if (cronExpression && taskChanges.title == null) {
+    taskChanges.title = task.title;
+  }
+
   if (
     Object.keys(taskChanges).length === 0 &&
     attachments.length === 0 &&
@@ -258,7 +266,9 @@ export const shortSyntax = async (
     remindAt: null,
     projectId: changesForProject.projectId,
     attachments,
-    cronExpression,
+    // Only present when a `@+` clause was parsed — keeping the key off the
+    // result otherwise avoids breaking exact-match assertions on the return.
+    ...(cronExpression ? { cronExpression } : {}),
     // remindAt: changesForDue.remindAt
   };
 };

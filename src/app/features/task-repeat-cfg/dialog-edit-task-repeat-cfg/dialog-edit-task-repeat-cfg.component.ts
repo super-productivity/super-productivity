@@ -45,6 +45,7 @@ import {
   naturalLanguageToCron,
 } from '../util/parse-natural-cron.util';
 import { SnackService } from '../../../core/snack/snack.service';
+import { CronPreview, getCronPreview } from '../util/cron-preview.util';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { MatButton } from '@angular/material/button';
@@ -134,6 +135,27 @@ export class DialogEditTaskRepeatCfgComponent {
   formGroup1 = signal(new UntypedFormGroup({}));
   formGroup2 = signal(new UntypedFormGroup({}));
   tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
+
+  // Live cron preview, rendered below the cron field in the template. Driven off
+  // the essential form's valueChanges so it updates on every keystroke (Formly's
+  // mat-hint does not reliably reflect a dynamic description).
+  private _cronFormValue = toSignal(this.formGroup1().valueChanges, {
+    initialValue: null as {
+      quickSetting?: string;
+      repeatCycle?: string;
+      cronExpression?: string;
+    } | null,
+  });
+  cronPreview = computed<CronPreview | null>(() => {
+    const v = this._cronFormValue();
+    const cfg = this.repeatCfg();
+    const quickSetting = v?.quickSetting ?? cfg.quickSetting;
+    const repeatCycle = v?.repeatCycle ?? cfg.repeatCycle;
+    const expr = v?.cronExpression ?? cfg.cronExpression;
+    const isCron =
+      quickSetting === 'CRON' || (quickSetting === 'CUSTOM' && repeatCycle === 'CRON');
+    return isCron ? getCronPreview(expr) : null;
+  });
   canRemoveInstance = signal<boolean>(false);
   skipInstanceButtonText = computed(() => {
     if (!this._data.targetDate) {

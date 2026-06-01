@@ -53,6 +53,12 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     attachments: [],
   } as unknown as TaskCopy;
 
+  // The component constructor warms up the English→cron WASM loader; stub fetch
+  // so specs never make a real (hanging) network request for the asset.
+  beforeEach(() => {
+    spyOn(window, 'fetch').and.rejectWith(new Error('no network in test'));
+  });
+
   const setupTestBed = async (
     dialogData: {
       task?: TaskCopy;
