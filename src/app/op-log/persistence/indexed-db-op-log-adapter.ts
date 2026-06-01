@@ -150,6 +150,23 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
     await this._initPromise;
   }
 
+  /**
+   * Operate on a connection owned by someone else (the existing
+   * `OperationLogStoreService`) instead of opening our own.
+   *
+   * This is the seam for the incremental Phase A migration: the store keeps
+   * owning/retrying/re-opening its single `IDBPDatabase`, and routes
+   * already-migrated methods through this adapter so both share one connection.
+   * It avoids a second connection to `SUP_OPS` (which would risk
+   * `versionchange` deadlocks and doubled close/upgrade handling) during the
+   * transition. Pass `undefined` when the owner drops its handle (close/
+   * versionchange) so we don't operate on a dead connection.
+   */
+  adoptConnection(db: IDBPDatabase | undefined): void {
+    this._db = db;
+    this._initPromise = db ? Promise.resolve() : undefined;
+  }
+
   private async _doInit(): Promise<void> {
     const db = await this._openDbWithRetry();
     // The browser can close the connection (tab eviction, iOS backgrounding).

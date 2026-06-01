@@ -32,6 +32,7 @@ import {
   isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { runDbUpgrade } from './db-upgrade';
+import { IndexedDbOpLogAdapter } from './indexed-db-op-log-adapter';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
@@ -186,6 +187,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
+  // Phase A migration seam: methods migrated off direct `idb` route through
+  // this adapter, which operates on the SAME connection adopted in init().
+  private readonly _adapter = new IndexedDbOpLogAdapter();
 
   // Cache for getAppliedOpIds() to avoid full table scans on every download
   private _appliedOpIdsCache: Set<string> | null = null;
@@ -206,6 +210,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       );
       this._db = undefined;
       this._initPromise = undefined;
+      this._adapter.adoptConnection(undefined);
     });
     // A newer tab is upgrading SUP_OPS (a future schema bump). Close now so this
     // connection does not block the upgrade; the next access reopens
@@ -214,8 +219,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       db.close();
       this._db = undefined;
       this._initPromise = undefined;
+      this._adapter.adoptConnection(undefined);
     });
     this._db = db;
+    // Route already-migrated methods through the shared adapter on this same
+    // connection (Phase A incremental migration; see indexed-db-op-log-adapter).
+    this._adapter.adoptConnection(db as unknown as IDBPDatabase);
   }
 
   /**
@@ -1252,10 +1261,13 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   /**
    * Saves a backup of the current state before an import operation.
    * This allows manual recovery if the import causes issues.
+   *
+   * Migrated to route through `_adapter` (Phase A). Behavior is identical:
+   * the adapter operates on the same connection adopted in `init()`.
    */
   async saveImportBackup(state: unknown): Promise<void> {
     await this._ensureInit();
-    await this.db.put(STORE_NAMES.IMPORT_BACKUP, {
+    await this._adapter.put(STORE_NAMES.IMPORT_BACKUP, {
       id: SINGLETON_KEY,
       state,
       savedAt: Date.now(),
@@ -1267,7 +1279,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async loadImportBackup(): Promise<{ state: unknown; savedAt: number } | null> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
+    const backup = await this._adapter.get<{ state: unknown; savedAt: number }>(
+      STORE_NAMES.IMPORT_BACKUP,
+      SINGLETON_KEY,
+    );
     return backup ? { state: backup.state, savedAt: backup.savedAt } : null;
   }
 
@@ -1276,7 +1291,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async clearImportBackup(): Promise<void> {
     await this._ensureInit();
-    await this.db.delete(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
+    await this._adapter.delete(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
   }
 
   /**
@@ -1284,7 +1299,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async hasImportBackup(): Promise<boolean> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
+    const backup = await this._adapter.get(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
     return !!backup;
   }
 
