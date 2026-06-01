@@ -187,6 +187,40 @@ describe('TaskListComponent', () => {
         }
       };
 
+      // Mounts a parent <task> with a `.sub-tasks` wrapper around the SUB
+      // list, and points `elementFromPoint` at the wrapper itself — i.e.,
+      // inside the leading strip that lives BETWEEN the parent header and
+      // the first subtask row. That strip is the `.sub-tasks` margin plus
+      // the inner `task-list` host padding (see task-list.component.scss /
+      // _task-base.scss), outside `.task-list-inner`'s clientRect.
+      const withPointerOverSubListWrapper = (
+        opts: { listModelId: string; sourceModelId?: string },
+        run: () => void,
+      ): void => {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+          <div class="task-list-inner" data-list-id="PARENT" data-id="UNDONE">
+            <task>
+              <div class="sub-tasks">
+                <div id="hit"></div>
+                <div class="task-list-inner" data-list-id="SUB" data-id="${opts.listModelId}">
+                  <task></task>
+                </div>
+              </div>
+            </task>
+          </div>
+        `;
+        document.body.appendChild(wrapper);
+        const hitEl = wrapper.querySelector('#hit') as Element;
+        spyOn(document, 'elementFromPoint').and.returnValue(hitEl);
+        dropListServiceMock.activeDragPointer.and.returnValue({ x: 10, y: 20 });
+        try {
+          run();
+        } finally {
+          wrapper.remove();
+        }
+      };
+
       const subtaskDragFrom = (sourceModelId: string): CdkDrag => {
         const drag = createMockDrag({ id: 'sub1', parentId: 'parent1' });
         Object.assign(drag, {
@@ -243,6 +277,34 @@ describe('TaskListComponent', () => {
           const drag = subtaskDragFrom('parent1');
           const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
           expect(component.enterPredicate(drag, drop)).toBe(true);
+        });
+      });
+
+      it('should accept a foreign subtask list when the pointer is in the LEADING `.sub-tasks` wrapper strip (drop as first child instead of converting at parent slot)', () => {
+        // The strip between the parent header and the first subtask sits
+        // OUTSIDE `.task-list-inner` but inside `.sub-tasks`. Without the
+        // wrapper fallback, hit-test falls through to the top-level list
+        // and the drag converts to a main task at the parent's slot.
+        withPointerOverSubListWrapper({ listModelId: 'parent2' }, () => {
+          const drag = subtaskDragFrom('parent1');
+          const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
+          expect(component.enterPredicate(drag, drop)).toBe(true);
+        });
+      });
+
+      it('should block the top-level list when the pointer is in a foreign sublist LEADING wrapper strip (let the foreign SUB claim it for re-parent)', () => {
+        withPointerOverSubListWrapper({ listModelId: 'parent2' }, () => {
+          const drag = subtaskDragFrom('parent1');
+          const drop = createMockDrop('UNDONE', [{ id: 'parent2' }], 'PARENT');
+          expect(component.enterPredicate(drag, drop)).toBe(false);
+        });
+      });
+
+      it('should block the top-level list when the pointer is in the SOURCE sublist leading wrapper strip (keep in-list sorting)', () => {
+        withPointerOverSubListWrapper({ listModelId: 'parent1' }, () => {
+          const drag = subtaskDragFrom('parent1');
+          const drop = createMockDrop('UNDONE', [{ id: 'parent1' }], 'PARENT');
+          expect(component.enterPredicate(drag, drop)).toBe(false);
         });
       });
 

@@ -317,6 +317,15 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
    * greedily claimed by that neighbour and re-parent the subtask. Treating only
    * a real row as "inside" a list lets that trailing padding convert to a main
    * task instead.
+   *
+   * Symmetric to the trailing case, the strip BETWEEN a parent's header and
+   * its first subtask row lives outside `.task-list-inner` (it's the
+   * `.sub-tasks` wrapper margin plus the inner `task-list` host padding) — so
+   * a drop there would otherwise fall through to the top-level list and
+   * convert the subtask to a main task at the parent's slot. The wrapper
+   * fallback below treats that strip as `isOverRow: true` for the SUB list,
+   * so the foreign SUB claims the drop (re-parent as first child) and the
+   * source SUB blocks the top-level (in-list sort stays intact).
    */
   private _pointerSubTaskList(): { listModelId: string; isOverRow: boolean } | null {
     const pointer = this.dropListService.activeDragPointer();
@@ -324,15 +333,31 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return null;
     }
     const element = document.elementFromPoint(pointer.x, pointer.y);
-    const listEl = element?.closest<HTMLElement>('.task-list-inner');
-    if (listEl?.dataset['listId'] !== 'SUB') {
+    if (!element) {
       return null;
     }
-    // A `task` ancestor only counts as a row of *this* list — the enclosing
-    // parent task is also a `task`, but its nearest list is the top-level one.
-    const rowEl = element?.closest('task');
-    const isOverRow = !!rowEl && rowEl.closest('.task-list-inner') === listEl;
-    return { listModelId: listEl.dataset['id'] ?? '', isOverRow };
+    const listEl = element.closest<HTMLElement>('.task-list-inner');
+    if (listEl?.dataset['listId'] === 'SUB') {
+      // A `task` ancestor only counts as a row of *this* list — the enclosing
+      // parent task is also a `task`, but its nearest list is the top-level one.
+      const rowEl = element.closest('task');
+      const isOverRow = !!rowEl && rowEl.closest('.task-list-inner') === listEl;
+      return { listModelId: listEl.dataset['id'] ?? '', isOverRow };
+    }
+    // Leading-strip fallback: the `.sub-tasks` wrapper extends visually above
+    // the cdkDropList element. Each wrapper holds exactly one SUB list (the
+    // two-level nesting cap is enforced by `canApplyConvertToSubTask`), so
+    // the descendant query is unambiguous.
+    const wrapper = element.closest<HTMLElement>('.sub-tasks');
+    if (wrapper) {
+      const subListEl = wrapper.querySelector<HTMLElement>(
+        '.task-list-inner[data-list-id="SUB"]',
+      );
+      if (subListEl) {
+        return { listModelId: subListEl.dataset['id'] ?? '', isOverRow: true };
+      }
+    }
+    return null;
   }
 
   async drop(

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { CdkDropList } from '@angular/cdk/drag-drop';
 import { BehaviorSubject, merge, of, Subject, timer } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
+import { applyMidpointSortPatch } from './midpoint-sort-patch';
 
 export interface DragPointer {
   x: number;
@@ -69,6 +70,9 @@ export class DropListService {
   }
 
   registerDropList(dropList: CdkDropList, isSubTaskList = false): void {
+    // Idempotent on second call; reaches into CDK internals to swap the
+    // sort hit-test for a midpoint-crossing rule. See file header.
+    applyMidpointSortPatch(dropList);
     if (isSubTaskList) {
       this._list.unshift(dropList);
     } else {
