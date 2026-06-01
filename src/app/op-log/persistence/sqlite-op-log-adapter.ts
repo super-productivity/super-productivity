@@ -229,6 +229,17 @@ const buildInsert = (
     const key = plan.keyJsonPath ? extractPath(value, plan.keyJsonPath) : explicitKey;
     columns.push(KEY_COLUMN);
     params.push(toSqlValue(key));
+  } else {
+    // autoinc (`ops`): bind `seq` only when the value already carries one — a
+    // re-put (mark*/clearUnsynced) or an explicit-seq add — so ON CONFLICT(seq)
+    // updates in place instead of inserting a duplicate. Otherwise omit it and
+    // let AUTOINCREMENT assign a fresh, monotonic, never-reused seq, matching
+    // IDB's keyPath+autoIncrement store.
+    const seq = plan.keyJsonPath ? extractPath(value, plan.keyJsonPath) : undefined;
+    if (seq != null) {
+      columns.push(plan.pkColumn);
+      params.push(toSqlValue(seq));
+    }
   }
   columns.push(VALUE_COLUMN);
   params.push(JSON.stringify(value));
@@ -239,8 +250,17 @@ const buildInsert = (
   return { columns, params };
 };
 
-const decodeRow = <T>(row: Record<string, unknown>): T =>
-  JSON.parse(row[VALUE_COLUMN] as string) as T;
+const decodeRow = <T>(plan: SqlTablePlan, row: Record<string, unknown>): T => {
+  const value = JSON.parse(row[VALUE_COLUMN] as string) as Record<string, unknown>;
+  // The autoinc PK (`seq`) lives in its own column, never the JSON `value` blob
+  // — inject it back (from the `__pk` alias every read selects) so callers see
+  // `.seq`, exactly like IDB's keyPath+autoIncrement store. keyPath stores keep
+  // their key inside the value already, so they need no injection.
+  if (plan.primaryKey === 'autoinc' && plan.keyJsonPath && '__pk' in row) {
+    value[plan.keyJsonPath.slice(2)] = row['__pk'] as number;
+  }
+  return value as T;
+};
 
 /** Map a sql.js error to the DOMException name the store's catch blocks expect. */
 const mapSqliteError = (e: unknown): never => {
@@ -326,7 +346,8 @@ const sqlPut = async (
   key?: DbKey,
 ): Promise<void> => {
   const { columns, params } = buildInsert(plan, value, key);
-  const updateCols = columns.filter((c) => c !== KEY_COLUMN);
+  // Never overwrite the primary-key column on conflict (it is the match key).
+  const updateCols = columns.filter((c) => c !== plan.pkColumn);
   const sql =
     `INSERT INTO ${plan.table} (${columns.join(', ')}) VALUES (${columns
       .map(() => '?')
@@ -347,10 +368,10 @@ const sqlGet = async <T>(
   key: DbKey,
 ): Promise<T | undefined> => {
   const rows = await db.query(
-    `SELECT ${VALUE_COLUMN} FROM ${plan.table} WHERE ${plan.pkColumn} = ? LIMIT 1`,
+    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table} WHERE ${plan.pkColumn} = ? LIMIT 1`,
     [toSqlValue(key)],
   );
-  return rows.length ? decodeRow<T>(rows[0]) : undefined;
+  return rows.length ? decodeRow<T>(plan, rows[0]) : undefined;
 };
 
 const sqlGetAll = async <T>(
@@ -360,10 +381,10 @@ const sqlGetAll = async <T>(
 ): Promise<T[]> => {
   const { clause, params } = whereRange([plan.pkColumn], range);
   const rows = await db.query(
-    `SELECT ${VALUE_COLUMN} FROM ${plan.table}${whereClause(clause)} ORDER BY ${plan.pkColumn} ASC`,
+    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}${whereClause(clause)} ORDER BY ${plan.pkColumn} ASC`,
     params,
   );
-  return rows.map((r) => decodeRow<T>(r));
+  return rows.map((r) => decodeRow<T>(plan, r));
 };
 
 const sqlDelete = async (db: SqliteDb, plan: SqlTablePlan, key: DbKey): Promise<void> => {
@@ -406,10 +427,10 @@ const sqlGetFromIndex = async <T>(
   const idx = indexPlan(plan, indexName);
   const { clause, params } = whereExact(idx.columns, key);
   const rows = await db.query(
-    `SELECT ${VALUE_COLUMN} FROM ${plan.table} WHERE ${clause} LIMIT 1`,
+    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table} WHERE ${clause} LIMIT 1`,
     params,
   );
-  return rows.length ? decodeRow<T>(rows[0]) : undefined;
+  return rows.length ? decodeRow<T>(plan, rows[0]) : undefined;
 };
 
 const sqlGetKeyFromIndex = async (
@@ -440,10 +461,10 @@ const sqlGetAllFromIndex = async <T>(
   );
   const order = idx.columns.map((c) => c.column).join(', ');
   const rows = await db.query(
-    `SELECT ${VALUE_COLUMN} FROM ${plan.table}${whereClause(clause)} ORDER BY ${order} ASC`,
+    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}${whereClause(clause)} ORDER BY ${order} ASC`,
     params,
   );
-  return rows.map((r) => decodeRow<T>(r));
+  return rows.map((r) => decodeRow<T>(plan, r));
 };
 
 /**
@@ -479,8 +500,17 @@ const sqlIterate = async <T>(
 
   const toDelete: DbKey[] = [];
   for (const row of rows) {
-    const action: DbCursorAction = visit(decodeRow<T>(row), row['__pk'] as DbKey);
+    const action: DbCursorAction = visit(decodeRow<T>(plan, row), row['__pk'] as DbKey);
     if (action === 'delete' || action === 'delete-stop') {
+      // Honor the port contract: a delete under a readonly scan must reject
+      // (parity with IDB, which throws ReadOnlyError) rather than silently
+      // mutating outside any transaction.
+      if (options.mode === 'readonly') {
+        throw new DOMException(
+          `Cannot delete during a readonly scan of '${plan.table}'`,
+          'ReadOnlyError',
+        );
+      }
       toDelete.push(row['__pk'] as DbKey);
     }
     if (action === 'stop' || action === 'delete-stop') {
@@ -610,12 +640,12 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
   }
 
   async transaction<T>(
-    _stores: string[],
+    stores: string[],
     mode: DbTxMode,
     fn: (tx: OpLogTx) => Promise<T>,
   ): Promise<T> {
     return this._inTransaction(mode === 'readonly' ? 'DEFERRED' : 'IMMEDIATE', () =>
-      fn(new SqliteOpLogTx(this._db, this._plans)),
+      fn(new SqliteOpLogTx(this._db, this._plans, new Set(stores), mode)),
     );
   }
 
@@ -649,9 +679,18 @@ class SqliteOpLogTx implements OpLogTx {
   constructor(
     private readonly _db: SqliteDb,
     private readonly _plans: Map<string, SqlTablePlan>,
+    private readonly _stores: ReadonlySet<string>,
+    private readonly _mode: DbTxMode,
   ) {}
 
   private _plan(store: string): SqlTablePlan {
+    // Enforce the transaction's declared store scope (parity with IDB, where a
+    // store omitted from transaction(stores) throws when touched).
+    if (!this._stores.has(store)) {
+      throw new Error(
+        `SqliteOpLogTx: store '${store}' is outside this transaction's declared scope`,
+      );
+    }
     const plan = this._plans.get(store);
     if (!plan) {
       throw new Error(`SqliteOpLogTx: unknown store '${store}'`);
@@ -708,8 +747,15 @@ class SqliteOpLogTx implements OpLogTx {
     options: DbIterateOptions,
     visit: DbCursorVisitor<T>,
   ): Promise<void> {
-    // Already inside the enclosing transaction — no nested BEGIN.
-    return sqlIterate(this._db, this._plan(store), options, visit);
+    // Already inside the enclosing transaction — no nested BEGIN. The
+    // transaction's mode governs (so a delete inside a readonly tx rejects)
+    // unless the caller overrides it per-scan.
+    return sqlIterate(
+      this._db,
+      this._plan(store),
+      { ...options, mode: options.mode ?? this._mode },
+      visit,
+    );
   }
 }
 

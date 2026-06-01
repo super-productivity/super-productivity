@@ -114,9 +114,11 @@ class FakeSqliteDb implements SqliteDb {
     const upsert = /ON CONFLICT/i.test(sql);
     const uniq = this.uniqueCols.get(table) ?? [];
 
-    // PK conflict (key tables): upsert or replace.
-    if ('key' in row) {
-      const existing = rows.find((r) => r['key'] === row['key']);
+    // Primary-key conflict. 'key' tables key on `key`; the autoinc (`ops`)
+    // table keys on `seq` when one was supplied (a re-put / explicit-seq add).
+    const pkCol = 'key' in row ? 'key' : 'seq' in row ? 'seq' : null;
+    if (pkCol) {
+      const existing = rows.find((r) => r[pkCol] === row[pkCol]);
       if (existing) {
         if (upsert) {
           Object.assign(existing, row);
@@ -131,11 +133,20 @@ class FakeSqliteDb implements SqliteDb {
         throw new Error(`UNIQUE constraint failed: ${table}.${uc}`);
       }
     }
+    // AUTOINCREMENT semantics for the keyless `ops` table: an explicit seq is
+    // honored and advances the high-water mark (so a later auto seq never
+    // reuses it); an absent seq is assigned the next monotonic value.
     if (!('key' in row)) {
-      const next = (this.autoinc.get(table) ?? 0) + 1;
-      this.autoinc.set(table, next);
-      row['seq'] = next;
-      this._lastId = next;
+      if ('seq' in row) {
+        const seq = row['seq'] as number;
+        this.autoinc.set(table, Math.max(this.autoinc.get(table) ?? 0, seq));
+        this._lastId = seq;
+      } else {
+        const next = (this.autoinc.get(table) ?? 0) + 1;
+        this.autoinc.set(table, next);
+        row['seq'] = next;
+        this._lastId = next;
+      }
     }
     rows.push(row);
     return { changes: 1, lastId: this._lastId };
@@ -541,6 +552,54 @@ describe('SqliteOpLogAdapter', () => {
       return { byId: byId?.op.id, count: all.length, ids: ids.sort() };
     });
     expect(out).toEqual({ byId: 'r1', count: 2, ids: ['r1', 'r2'] });
+  });
+
+  // ── autoinc seq round-trip + in-place update (the mark*/clearUnsynced path) ─
+
+  it('reads of the ops table carry their seq (the autoinc PK), like IDB', async () => {
+    const seq = await adapter.add(STORE_NAMES.OPS, makeOpEntry('s', 'local'));
+    const got = await adapter.get<{ seq: number }>(STORE_NAMES.OPS, seq);
+    expect(got?.seq).toBe(seq);
+    const fromIndex = await adapter.getFromIndex<{ seq: number }>(
+      STORE_NAMES.OPS,
+      OPS_INDEXES.BY_ID,
+      's',
+    );
+    expect(fromIndex?.seq).toBe(seq);
+  });
+
+  it('put() on the ops table updates in place by seq, not inserting a duplicate', async () => {
+    const seq = await adapter.add(STORE_NAMES.OPS, makeOpEntry('m', 'remote', 'pending'));
+    // The mark*/clearUnsynced flow: read the entry, mutate it, put it back.
+    const entry = await adapter.get<Record<string, unknown>>(STORE_NAMES.OPS, seq);
+    entry!['applicationStatus'] = 'applied';
+    await adapter.put(STORE_NAMES.OPS, entry);
+    expect(await adapter.count(STORE_NAMES.OPS)).toBe(1);
+    const after = await adapter.get<{ applicationStatus: string }>(STORE_NAMES.OPS, seq);
+    expect(after?.applicationStatus).toBe('applied');
+  });
+
+  // ── port-contract hardening: readonly-delete + transaction store scope ──────
+
+  it('iterate under mode:readonly rejects a delete action and does not mutate', async () => {
+    await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'local'));
+    await expectAsync(
+      adapter.iterate<{ op: { id: string } }>(
+        STORE_NAMES.OPS,
+        { mode: 'readonly' },
+        () => 'delete',
+      ),
+    ).toBeRejectedWith(jasmine.objectContaining({ name: 'ReadOnlyError' }));
+    expect(await adapter.count(STORE_NAMES.OPS)).toBe(1);
+  });
+
+  it('transaction rejects touching a store outside its declared scope', async () => {
+    await expectAsync(
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+        await tx.put(STORE_NAMES.VECTOR_CLOCK, { clock: { a: 1 } }, 'current');
+      }),
+    ).toBeRejectedWithError(/outside this transaction's declared scope/);
+    expect(db.log.some((e) => e.sql === 'ROLLBACK')).toBeTrue();
   });
 
   it('does not implement adoptConnection (SQLite self-manages its handle)', () => {
