@@ -50,6 +50,22 @@ export const hasFocusNotificationStateChanged = (
   return Math.abs(currTimer.elapsed - prevTimer.elapsed) >= 5000;
 };
 
+/**
+ * Whether a native timer-complete event should drive a state change. The native
+ * foreground service fires this when its countdown reaches 0; we act on it only
+ * while the matching session is still active in app state — a break event needs an
+ * active break, a work event needs a still-running work session. The work guard is
+ * what makes the native completion a no-op once a resume `tick()` has already
+ * completed the session on return from the background (#7856), so the two never
+ * double-complete. Pure + exported so the `IS_ANDROID_WEB_VIEW`-gated effect's guard
+ * is unit-testable.
+ */
+export const shouldHandleNativeTimerComplete = (
+  isBreak: boolean,
+  timer: TimerState,
+): boolean =>
+  isBreak ? timer.purpose === 'break' : timer.purpose === 'work' && timer.isRunning;
+
 @Injectable()
 export class AndroidFocusModeEffects {
   private _store = inject(Store);
@@ -254,11 +270,7 @@ export class AndroidFocusModeEffects {
           this._store.select(selectTimer),
           this._store.select(selectPausedTaskId),
         ),
-        filter(([isBreak, timer]) =>
-          isBreak
-            ? timer.purpose === 'break'
-            : timer.purpose === 'work' && timer.isRunning,
-        ),
+        filter(([isBreak, timer]) => shouldHandleNativeTimerComplete(isBreak, timer)),
         map(([isBreak, timer, pausedTaskId]) => {
           if (isBreak) {
             return focusModeActions.skipBreak({ pausedTaskId });

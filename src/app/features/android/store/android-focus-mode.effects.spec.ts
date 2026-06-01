@@ -24,6 +24,7 @@ import { Action } from '@ngrx/store';
 import {
   createFocusResumeTick$,
   hasFocusNotificationStateChanged,
+  shouldHandleNativeTimerComplete,
 } from './android-focus-mode.effects';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import { TimerState } from '../../focus-mode/focus-mode.model';
@@ -104,5 +105,40 @@ describe('hasFocusNotificationStateChanged (notification reconciliation, #7856)'
 
   it('always pushes the first emission (no previous state)', () => {
     expect(hasFocusNotificationStateChanged(undefined, workTimer(0))).toBe(true);
+  });
+});
+
+// handleNativeTimerComplete$ acts on a native completion only while the matching
+// session is still active. The work-session guard is what prevents a double
+// completion when a resume tick (#7856) already finished the session before the
+// buffered native event is delivered.
+describe('shouldHandleNativeTimerComplete (native completion guard, #7856)', () => {
+  it('handles a work completion while the work timer is still running', () => {
+    expect(shouldHandleNativeTimerComplete(false, workTimer(25 * MIN))).toBe(true);
+  });
+
+  it('ignores a work completion once the timer has stopped (resume tick already completed it)', () => {
+    expect(
+      shouldHandleNativeTimerComplete(false, workTimer(34 * MIN, { isRunning: false })),
+    ).toBe(false);
+  });
+
+  it('ignores a work completion when the session is already idle (purpose null)', () => {
+    expect(
+      shouldHandleNativeTimerComplete(
+        false,
+        workTimer(0, { isRunning: false, purpose: null }),
+      ),
+    ).toBe(false);
+  });
+
+  it('handles a break completion while a break is active', () => {
+    expect(
+      shouldHandleNativeTimerComplete(true, workTimer(5 * MIN, { purpose: 'break' })),
+    ).toBe(true);
+  });
+
+  it('ignores a break completion when the active session is work, not break', () => {
+    expect(shouldHandleNativeTimerComplete(true, workTimer(5 * MIN))).toBe(false);
   });
 });
