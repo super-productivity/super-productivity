@@ -127,12 +127,11 @@ test.describe('Cron / natural-language recurring tasks', () => {
     const title = `${testPrefix}-Mow Lawn`;
     await addTaskRaw(page, `${title} @+every monday`);
 
-    // The task is created (today) with the @+ clause stripped from its title.
-    const task = page.locator('task').filter({ hasText: title }).first();
-    await expect(task).toBeVisible({ timeout: 10000 });
-    await expect(task.locator('task-title')).not.toContainText('@+');
-
-    // A CRON repeat cfg with a runnable cron expression must be attached.
+    // Verify via the store, not the Today view: a non-daily schedule's first
+    // instance can be a future day (e.g. `every monday` when today is not a
+    // Monday), so the task legitimately won't appear in Today on most days.
+    // A CRON repeat cfg with a runnable cron expression must be attached, and
+    // the @+ clause stripped from the stored title.
     await expect
       .poll(async () => (await getRepeatCfgForTask(page, title))?.repeatCycle ?? null, {
         timeout: 10000,
@@ -141,6 +140,7 @@ test.describe('Cron / natural-language recurring tasks', () => {
 
     const snap = await getRepeatCfgForTask(page, title);
     expect(snap).not.toBeNull();
+    expect(snap!.taskTitle).not.toContain('@+');
     expect(snap!.repeatCfgId).not.toBeNull();
     expect(snap!.cronExpression ?? '').toMatch(CRON_RE);
   });
