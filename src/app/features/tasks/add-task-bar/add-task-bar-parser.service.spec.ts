@@ -20,6 +20,8 @@ describe('AddTaskBarParserService', () => {
       'updateEstimate',
       'updateDate',
       'updateAttachments',
+      'updateDeadline',
+      'updateDeadlineRemindOption',
       'isAutoDetected',
       'state',
     ]);
@@ -30,11 +32,15 @@ describe('AddTaskBarParserService', () => {
     const defaultMockState = {
       projectId: null,
       tagIds: [],
+      tagIdsFromTxt: [],
       newTagTitles: [],
       date: null,
       time: null,
       estimate: null,
       cleanText: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
     };
     mockStateServiceSpy.state.and.returnValue(defaultMockState);
 
@@ -91,6 +97,8 @@ describe('AddTaskBarParserService', () => {
       mockStateService.setAutoDetectedProjectId.calls.reset();
       mockStateService.updateProjectId.calls.reset();
       mockStateService.updateAttachments.calls.reset();
+      mockStateService.updateDeadline.calls.reset();
+      mockStateService.updateDeadlineRemindOption.calls.reset();
     });
 
     it('should handle empty text', async () => {
@@ -277,6 +285,55 @@ describe('AddTaskBarParserService', () => {
         const [date, time] = mockStateService.updateDate.calls.mostRecent().args;
         expect(typeof date).toBe('string');
         expect(time).toBe(defaultTime);
+      });
+    });
+
+    describe('Deadline Parsing', () => {
+      it('should parse deadline date with !friday', async () => {
+        const text = 'Do taxes !friday';
+        await service.parseAndUpdateText(
+          text,
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalled();
+        const [deadlineDate, deadlineTime] =
+          mockStateService.updateDeadline.calls.mostRecent().args;
+        expect(typeof deadlineDate).toBe('string');
+        expect(deadlineTime).toBeNull();
+      });
+
+      it('should ignore bare trailing !', async () => {
+        const text = 'Task done!';
+        await service.parseAndUpdateText(
+          text,
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(null, null);
+      });
+
+      it('should handle simple hour match like !12', async () => {
+        const text = 'Meeting !12';
+        await service.parseAndUpdateText(
+          text,
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalled();
+        const [deadlineDate, deadlineTime] =
+          mockStateService.updateDeadline.calls.mostRecent().args;
+        expect(typeof deadlineDate).toBe('string');
+        expect(deadlineTime).toBe('12:00');
       });
     });
 
@@ -495,6 +552,32 @@ describe('AddTaskBarParserService', () => {
       it('should handle date at end', async () => {
         const input = 'Task content @today';
         const result = service.removeShortSyntaxFromInput(input, 'date');
+        expect(result).toBe('Task content');
+      });
+    });
+
+    describe('deadline removal', () => {
+      it('should remove deadline syntax', async () => {
+        const input = 'Task !today !16:30 !2024-01-15';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
+        expect(result).toBe('Task');
+      });
+
+      it('should handle complex date formats', async () => {
+        const input = 'Meeting !tomorrow !next-week !2024-12-25';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
+        expect(result).toBe('Meeting');
+      });
+
+      it('should handle deadline at beginning', async () => {
+        const input = '!today Task content';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
+        expect(result).toBe('Task content');
+      });
+
+      it('should handle deadline at end', async () => {
+        const input = 'Task content !today';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
         expect(result).toBe('Task content');
       });
     });

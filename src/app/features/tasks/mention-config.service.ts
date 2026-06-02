@@ -41,6 +41,11 @@ export class MentionConfigService {
           labelKey: 'title',
           triggerChar: '@',
         });
+        mentions.push({
+          items: CHRONO_SUGGESTIONS,
+          labelKey: 'title',
+          triggerChar: '!',
+        });
       }
       if (cfg.isEnableProject) {
         mentions.push({

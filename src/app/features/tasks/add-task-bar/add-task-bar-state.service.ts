@@ -146,13 +146,16 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({ ...state, deadlineRemindOption }));
   }
 
-  clearDeadline(): void {
+  clearDeadline(cleanedInputTxt?: string): void {
     this._taskInputState.update((state) => ({
       ...state,
       deadlineDate: null,
       deadlineTime: null,
       deadlineRemindOption: null,
     }));
+    if (cleanedInputTxt !== undefined) {
+      this.inputTxt.set(cleanedInputTxt);
+    }
   }
 
   resetAfterAdd(): void {

@@ -141,6 +141,16 @@
       opacity: 1;
     }
 
+    &.deadline-chip {
+      color: var(--c-warn) !important;
+      opacity: 1 !important;
+      background-color: var(--bg-lightest) !important;
+
+      mat-icon {
+        color: var(--c-warn) !important;
+      }
+    }
+
     // Project button is always active since we always have a project selected
     &.project-btn {
       background-color: var(--bg-lightest);

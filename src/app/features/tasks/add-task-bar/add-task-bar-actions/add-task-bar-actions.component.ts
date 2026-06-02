@@ -381,8 +381,13 @@ export class AddTaskBarActionsComponent {
     }
   }
 
-  clearDeadline(): void {
-    this.stateService.clearDeadline();
+  clearDeadlineWithSyntax(): void {
+    const currentInput = this.stateService.inputTxt();
+    const cleanedInput = this._parserService.removeShortSyntaxFromInput(
+      currentInput,
+      'deadline',
+    );
+    this.stateService.clearDeadline(cleanedInput);
     this.refocus.emit();
   }
 
