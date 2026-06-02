@@ -215,6 +215,7 @@
         "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}",
         "CAL_PROVIDER_NOT_ICAL": "Calendar URL did not return iCal data. The share link may be expired, revoked, or require sign-in — try generating a new share URL.",
         "EVENT_HIDDEN": "Calendar event hidden",
+        "EVENT_MOVED": "Event moved",
         "EVENT_RESCHEDULED": "Event rescheduled",
         "EVENT_DELETED": "Event deleted",
         "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}"

@@ -6,6 +6,7 @@ import { IssueTwoWaySyncEffects } from './issue-two-way-sync.effects';
 import { TaskService } from '../../tasks/task.service';
 import { IssueProviderService } from '../issue-provider.service';
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
+import { IssueSyncAdapterResolverService } from './issue-sync-adapter-resolver.service';
 import { CaldavSyncAdapterService } from '../providers/caldav/caldav-sync-adapter.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -136,6 +137,13 @@ describe('IssueTwoWaySyncEffects', () => {
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
         { provide: CaldavSyncAdapterService, useValue: caldavSpy },
         { provide: SnackService, useValue: snackServiceSpy },
+        {
+          provide: IssueSyncAdapterResolverService,
+          useFactory: (registry: IssueSyncAdapterRegistryService) => ({
+            getAdapter: (issueType: string) => registry.get(issueType),
+          }),
+          deps: [IssueSyncAdapterRegistryService],
+        },
       ],
     });
 

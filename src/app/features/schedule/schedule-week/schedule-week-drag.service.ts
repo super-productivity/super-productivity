@@ -16,14 +16,27 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { calculateTimeFromYPosition } from '../schedule-utils';
 import { isTouchActive } from '../../../util/input-intent';
 import type { DragPreviewContext } from './schedule-week-drag.types';
-import type { ScheduleEvent } from '../schedule.model';
+import {
+  isScheduleCalendarEvent,
+  type ScheduleEvent,
+  type ScheduleFromCalendarEvent,
+} from '../schedule.model';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { first } from 'rxjs/operators';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
+import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 
 interface PointerPosition {
   x: number;
   y: number;
+}
+
+interface CalendarDropParams {
+  calEv: ScheduleFromCalendarEvent;
+  columnTarget: HTMLElement | null;
+  dropPoint: PointerPosition | null;
+  nativeEl: HTMLElement;
+  ev: CdkDragRelease<ScheduleEvent>;
 }
 
 const DRAG_CLONE_CLASS = 'drag-clone';
@@ -35,6 +48,7 @@ export class ScheduleWeekDragService {
   // Central drag state handler so the component can remain mostly declarative.
   private readonly _store = inject(Store);
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _calendarEventActions = inject(CalendarEventActionsService);
 
   private readonly _isShiftMode = signal(false);
   readonly isShiftMode: Signal<boolean> = this._isShiftMode.asReadonly();
@@ -176,7 +190,10 @@ export class ScheduleWeekDragService {
     const targetDay = this._getDayUnderPointer(pointer.x, pointer.y);
     const isWithinGrid = this._isWithinGrid(pointer, gridRect);
 
-    if (this.isShiftMode()) {
+    const draggedCalendarEvent = this._pluckMovableCalendarEvent(
+      this._currentDragEvent(),
+    );
+    if (this.isShiftMode() && !draggedCalendarEvent) {
       this._handleShiftDragMove(targetEl, pointer, gridRect, targetDay, isWithinGrid);
     } else {
       this._handleTimeDragMove(pointer, gridRect, targetDay, isWithinGrid);
@@ -211,6 +228,7 @@ export class ScheduleWeekDragService {
 
     const sourceEvent = ev.source.data;
     const task = this._pluckTaskFromEvent(sourceEvent);
+    const calEv = this._pluckMovableCalendarEvent(sourceEvent);
     const sourceTaskId = nativeEl.id.replace(T_ID_PREFIX, '');
     const targetTaskId = scheduleEventTarget
       ? scheduleEventTarget.id.replace(T_ID_PREFIX, '')
@@ -221,12 +239,25 @@ export class ScheduleWeekDragService {
       targetTaskId.length > 0 &&
       sourceTaskId !== targetTaskId;
 
+    // Plugin-backed calendar events can be moved directly via their provider.
+    if (!task && calEv) {
+      this._handleCalendarEventDrop({
+        calEv,
+        columnTarget,
+        dropPoint,
+        nativeEl,
+        ev: ev as CdkDragRelease<ScheduleEvent>,
+      });
+    }
+
     // Guard: nothing to do without a task
     if (!task) {
       this._currentDragEvent.set(null);
       this._resetDragRelatedVars();
-      nativeEl.style.transform = 'translate3d(0, 0, 0)';
-      ev.source.reset();
+      if (!calEv) {
+        nativeEl.style.transform = 'translate3d(0, 0, 0)';
+        ev.source.reset();
+      }
       return;
     }
 
@@ -266,6 +297,41 @@ export class ScheduleWeekDragService {
     ev.source.reset();
   }
 
+  private _handleCalendarEventDrop({
+    calEv,
+    columnTarget,
+    dropPoint,
+    nativeEl,
+    ev,
+  }: CalendarDropParams): void {
+    nativeEl.style.pointerEvents = 'none';
+
+    const resetDrag = (): void => {
+      nativeEl.style.transform = 'translate3d(0, 0, 0)';
+      nativeEl.style.pointerEvents = '';
+      ev.source.reset();
+    };
+
+    if (!columnTarget) {
+      resetDrag();
+      return;
+    }
+
+    const targetDay =
+      columnTarget.getAttribute('data-day') ||
+      (dropPoint ? this._getDayUnderPointer(dropPoint.x, dropPoint.y) : null);
+    const scheduleTime =
+      this._lastCalculatedTimestamp ??
+      (dropPoint && targetDay ? this._calculateTimeFromDrop(dropPoint, targetDay) : null);
+
+    if (scheduleTime == null) {
+      resetDrag();
+      return;
+    }
+
+    void this._calendarEventActions.moveToStartTime(calEv, scheduleTime).then(resetDrag);
+  }
+
   refreshPreviewForCurrentPointer(): void {
     if (!this._isDragging()) {
       return;
@@ -286,7 +352,10 @@ export class ScheduleWeekDragService {
       this._lastDropScheduleEvent;
     const isWithinGrid = this._isWithinGrid(pointer, gridRect);
 
-    if (this.isShiftMode()) {
+    const draggedCalendarEvent = this._pluckMovableCalendarEvent(
+      this._currentDragEvent(),
+    );
+    if (this.isShiftMode() && !draggedCalendarEvent) {
       if (targetEl) {
         this._handleShiftDragMove(targetEl, pointer, gridRect, targetDay, isWithinGrid);
       } else {
@@ -484,6 +553,11 @@ export class ScheduleWeekDragService {
         this._dragPreviewContext.set(null);
       }
     } else {
+      if (this._pluckMovableCalendarEvent(this._currentDragEvent())) {
+        this._dragPreviewContext.set(null);
+        this._lastCalculatedTimestamp = null;
+        return;
+      }
       // Show different label based on whether task has scheduled time
       const task = this._pluckTaskFromEvent(this._currentDragEvent());
       const label = task?.dueWithTime ? '✖ Unschedule Time' : '✖ Unschedule from Today';
@@ -729,6 +803,18 @@ export class ScheduleWeekDragService {
       default:
         return null;
     }
+  }
+
+  private _pluckMovableCalendarEvent(
+    event: ScheduleEvent | null,
+  ): ScheduleFromCalendarEvent | null {
+    if (
+      !isScheduleCalendarEvent(event) ||
+      !this._calendarEventActions.canMoveEvent(event.data)
+    ) {
+      return null;
+    }
+    return event.data;
   }
 
   private _handleColumnDrop({
