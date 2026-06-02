@@ -182,7 +182,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this._workContextService.activeWorkContext$,
     this._globalConfigService.tasks$,
   ]).pipe(
-    filter(([projects]) => projects && projects.length > 0),
     map(([projects, workContext, tasksConfig]) => {
       // Priority order:
       // 1. If current work context is a project → use that project
@@ -294,7 +293,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     this.defaultProject$
-      .pipe(first(), takeUntilDestroyed(this._destroyRef))
+      .pipe(
+        filter((defaultProject) => !!defaultProject),
+        first(),
+        takeUntilDestroyed(this._destroyRef),
+      )
       .subscribe((defaultProject) => {
         if (defaultProject) {
           this.stateService.updateProjectId(defaultProject.id);
