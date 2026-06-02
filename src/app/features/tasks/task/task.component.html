@@ -326,6 +326,7 @@
           [ngModel]="projectSearch.searchQuery()"
           (ngModelChange)="projectSearch.searchQuery.set($event)"
           (keydown.arrowdown)="focusFirstProjectItem()"
+          (keydown.enter)="selectFirstProject($event)"
         />
       </div>
       @if (projectSearch.filteredItems()) {

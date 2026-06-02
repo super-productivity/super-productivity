@@ -131,6 +131,15 @@ export class TagToggleMenuListComponent {
     this.tagMenuItems()[0]?.nativeElement.focus();
   }
 
+  selectFirstTag(event: Event): void {
+    const firstTag = this.tagSearch.filteredItems()[0];
+    if (firstTag) {
+      event.preventDefault();
+      this.toggleTag.emit(firstTag.id);
+      this.tagMenuTriggerEl()?.closeMenu();
+    }
+  }
+
   openAddNewTag(): void {
     this._matDialog
       .open(DialogPromptComponent, {

@@ -345,6 +345,24 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this.tagMenuItems()[0]?.nativeElement.focus();
   }
 
+  selectFirstProject(event: Event): void {
+    const firstProject = this.projectSearch.filteredItems()[0];
+    if (firstProject) {
+      event.preventDefault();
+      this.moveTaskToProject(firstProject.id);
+      this.contextMenuTrigger()?.closeMenu();
+    }
+  }
+
+  selectFirstTag(event: Event): void {
+    const firstTag = this.tagSearch.filteredItems()[0];
+    if (firstTag) {
+      event.preventDefault();
+      this.toggleTag(firstTag.id);
+      this.contextMenuTrigger()?.closeMenu();
+    }
+  }
+
   get kb(): KeyboardConfig {
     if (isTouchActive() || !this.isAdvancedControls()) {
       return {} as any;

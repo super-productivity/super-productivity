@@ -266,6 +266,24 @@ export class AddTaskBarActionsComponent {
     this.tagMenuItems()[0]?.nativeElement.focus();
   }
 
+  selectFirstProject(event: Event): void {
+    const firstProject = this.projectSearch.filteredItems()[0];
+    if (firstProject) {
+      event.preventDefault();
+      this.stateService.updateProjectId(firstProject.id);
+      this.projectMenuTrigger()?.closeMenu();
+    }
+  }
+
+  selectFirstTag(event: Event): void {
+    const firstTag = this.tagSearch.filteredItems()[0];
+    if (firstTag) {
+      event.preventDefault();
+      this.toggleTagWithSyntax(firstTag);
+      this.tagsMenuTrigger()?.closeMenu();
+    }
+  }
+
   // Public methods to open menus programmatically
   openProjectMenu(): void {
     this._openMenuProgrammatically('project');

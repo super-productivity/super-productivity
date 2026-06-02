@@ -380,6 +380,7 @@
         [ngModel]="projectSearch.searchQuery()"
         (ngModelChange)="projectSearch.searchQuery.set($event)"
         (keydown.arrowdown)="focusFirstProjectItem()"
+        (keydown.enter)="selectFirstProject($event)"
       />
     </div>
     @if (projectSearch.filteredItems()) {
@@ -431,6 +432,7 @@
         [ngModel]="tagSearch.searchQuery()"
         (ngModelChange)="tagSearch.searchQuery.set($event)"
         (keydown.arrowdown)="focusFirstTagItem()"
+        (keydown.enter)="selectFirstTag($event)"
       />
     </div>
     <div (click)="$event.stopPropagation()">

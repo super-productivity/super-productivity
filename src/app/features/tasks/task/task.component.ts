@@ -702,6 +702,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this.projectMenuItems()[0]?.nativeElement.focus();
   }
 
+  selectFirstProject(event: Event): void {
+    const firstProject = this.projectSearch.filteredItems()[0];
+    if (firstProject) {
+      event.preventDefault();
+      this.moveTaskToProject(firstProject.id);
+      this.projectMenuTrigger()?.closeMenu();
+    }
+  }
+
   _loadProjectListIfNeeded(): void {
     // Only load if not already loaded
     const currentProjectId = this.task().projectId || null;
