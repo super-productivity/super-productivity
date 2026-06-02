@@ -29,6 +29,7 @@ import { isValidSplitTime } from '../../util/is-valid-split-time';
 import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
 import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.util';
+import { getAllMissedDueDates } from './store/get-all-missed-due-dates.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
@@ -186,6 +187,24 @@ export class TaskRepeatCfgService {
 
     if (!taskRepeatCfg.id) {
       throw new Error('No taskRepeatCfg.id');
+    }
+
+    // "Create a task for each missed occurrence" backfill: create a task for
+    // EVERY missed occurrence (capped) instead of only the newest. Only applies
+    // to the catch-up path (target day is today or earlier). Future pre-creation
+    // (e.g. tomorrow) and the mutually-exclusive skipOverdue / waitForCompletion
+    // modes fall through to the single newest-occurrence path below.
+    if (
+      taskRepeatCfg.createForEachMissed &&
+      !taskRepeatCfg.skipOverdue &&
+      !taskRepeatCfg.waitForCompletion &&
+      getDbDateStr(new Date(targetDayDate)) <= this._dateService.todayStr()
+    ) {
+      return this._getActionsForAllMissedOccurrences(
+        taskRepeatCfg,
+        targetDayDate,
+        existingTaskInstances,
+      );
     }
 
     const targetCreated = getNewestPossibleDueDate(
@@ -382,5 +401,168 @@ export class TaskRepeatCfgService {
       }),
       isAddToBottom: taskRepeatCfg.order > 0,
     };
+  }
+
+  /**
+   * "Create a task for each missed occurrence" path: create a task for every missed occurrence since the
+   * last creation up to (and including) the target day, oldest first. Skips
+   * occurrences that already exist or were explicitly deleted, then advances the
+   * config's last-creation pointer to the newest occurrence exactly once (so
+   * skipped duplicates/deletions are not re-evaluated on the next app open).
+   */
+  private async _getActionsForAllMissedOccurrences(
+    taskRepeatCfg: TaskRepeatCfg,
+    targetDayDate: number,
+    existingTaskInstances: Task[],
+  ): Promise<
+    (
+      | ReturnType<typeof TaskSharedActions.addTask>
+      | ReturnType<typeof updateTaskRepeatCfg>
+      | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
+      | ReturnType<typeof addSubTask>
+    )[]
+  > {
+    const missedDueDates = getAllMissedDueDates(taskRepeatCfg, new Date(targetDayDate));
+    if (missedDueDates.length === 0) {
+      return [];
+    }
+
+    const actions: (
+      | ReturnType<typeof TaskSharedActions.addTask>
+      | ReturnType<typeof updateTaskRepeatCfg>
+      | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
+      | ReturnType<typeof addSubTask>
+    )[] = [];
+
+    for (const targetCreated of missedDueDates) {
+      const targetDateStr = getDbDateStr(targetCreated);
+      const expectedTaskId = getRepeatableTaskId(
+        taskRepeatCfg.id as string,
+        targetDateStr,
+      );
+      // Same duplicate guard as the single path: deterministic id OR matching
+      // created-day. `created` is immutable (set to noon on the repeat day),
+      // unlike dueDay which planTasksForToday mutates (#6192).
+      const taskAlreadyExists = existingTaskInstances.some(
+        (taskI) =>
+          taskI.id === expectedTaskId || getDbDateStr(taskI.created) === targetDateStr,
+      );
+      if (taskAlreadyExists) {
+        continue;
+      }
+      if (taskRepeatCfg.deletedInstanceDates?.includes(targetDateStr)) {
+        continue;
+      }
+      actions.push(
+        ...this._buildCreateInstanceActions(taskRepeatCfg, targetCreated, targetDateStr),
+      );
+    }
+
+    const newest = missedDueDates[missedDueDates.length - 1];
+    actions.push(
+      updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: taskRepeatCfg.id,
+          changes: {
+            lastTaskCreation: newest.getTime(),
+            lastTaskCreationDay: getDbDateStr(newest),
+          },
+        },
+      }),
+    );
+
+    return actions;
+  }
+
+  /**
+   * Builds the create actions (addTask + optional schedule + optional subtasks)
+   * for a single occurrence on `targetCreated`. Mirrors the create branch of
+   * `_getActionsForTaskRepeatCfg` but WITHOUT the `updateTaskRepeatCfg` pointer
+   * advance, so callers can create many occurrences and advance the pointer once.
+   */
+  private _buildCreateInstanceActions(
+    taskRepeatCfg: TaskRepeatCfg,
+    targetCreated: Date,
+    targetDateStr: string,
+  ): (
+    | ReturnType<typeof TaskSharedActions.addTask>
+    | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
+    | ReturnType<typeof addSubTask>
+  )[] {
+    const { task, isAddToBottom } = this._getTaskRepeatTemplate(
+      taskRepeatCfg,
+      targetDateStr,
+    );
+    const taskWithTargetDates: Task = {
+      ...task,
+      created: targetCreated.getTime(),
+    };
+
+    const actions: (
+      | ReturnType<typeof TaskSharedActions.addTask>
+      | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
+      | ReturnType<typeof addSubTask>
+    )[] = [
+      TaskSharedActions.addTask({
+        task: taskWithTargetDates,
+        workContextType: taskRepeatCfg.projectId
+          ? WorkContextType.PROJECT
+          : (this._workContextService.activeWorkContextType as WorkContextType),
+        workContextId: taskRepeatCfg.projectId
+          ? taskRepeatCfg.projectId
+          : (this._workContextService.activeWorkContextId as string),
+        isAddToBacklog: false,
+        isAddToBottom,
+        ...getDeadlineAutoPlanFields(
+          this._dateService,
+          taskWithTargetDates.deadlineDay,
+          taskWithTargetDates.deadlineWithTime,
+        ),
+      }),
+    ];
+
+    if (isValidSplitTime(taskRepeatCfg.startTime) && taskRepeatCfg.remindAt) {
+      const dateTime = getDateTimeFromClockString(
+        taskRepeatCfg.startTime as string,
+        targetCreated.getTime(),
+      );
+      actions.push(
+        TaskSharedActions.scheduleTaskWithTime({
+          task: taskWithTargetDates,
+          dueWithTime: dateTime,
+          remindAt: remindOptionToMilliseconds(dateTime, taskRepeatCfg.remindAt),
+          isMoveToBacklog: false,
+          isSkipAutoRemoveFromToday: this._dateService.isToday(dateTime),
+        }),
+      );
+    }
+
+    if (
+      taskRepeatCfg.shouldInheritSubtasks &&
+      taskRepeatCfg.subTaskTemplates &&
+      taskRepeatCfg.subTaskTemplates.length > 0
+    ) {
+      for (const subTask of taskRepeatCfg.subTaskTemplates) {
+        const newSubTask = this._taskService.createNewTaskWithDefaults({
+          title: subTask.title,
+          additional: {
+            notes: subTask.notes ?? '',
+            timeEstimate: subTask.timeEstimate ?? 0,
+            parentId: task.id,
+            projectId: taskRepeatCfg.projectId || undefined,
+            isDone: false, // Always start fresh
+          },
+        });
+
+        actions.push(
+          addSubTask({
+            task: newSubTask,
+            parentId: task.id,
+          }),
+        );
+      }
+    }
+
+    return actions;
   }
 }

@@ -100,6 +100,10 @@ export interface TaskRepeatCfgCopy {
   deletedInstanceDates?: string[];
   // When true, missed/overdue instances are silently skipped instead of being created
   skipOverdue?: boolean;
+  // When true, opening the app after missing several scheduled occurrences creates a
+  // task for EACH missed occurrence (capped at the 30 most recent) instead of only
+  // the newest. Mutually exclusive with skipOverdue/waitForCompletion.
+  createForEachMissed?: boolean;
 
   // CRON-cycle field: standard 5-field cron expression (minute hour day-of-month
   // month day-of-week). Only consulted when repeatCycle === 'CRON'; all other
@@ -145,4 +149,5 @@ export const DEFAULT_TASK_REPEAT_CFG: Omit<TaskRepeatCfgCopy, 'id'> = {
   shouldInheritSubtasks: false,
   disableAutoUpdateSubtasks: false,
   skipOverdue: false,
+  createForEachMissed: false,
 };

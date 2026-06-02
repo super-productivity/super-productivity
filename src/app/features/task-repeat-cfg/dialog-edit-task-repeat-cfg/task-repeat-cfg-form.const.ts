@@ -372,9 +372,22 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
     key: 'skipOverdue',
     type: 'checkbox',
     defaultValue: false,
+    // Mutually exclusive with createForEachMissed (skip-all vs create-all).
+    hideExpression: (model: any) => !!model.createForEachMissed,
     templateOptions: {
       label: T.F.TASK_REPEAT.F.SKIP_OVERDUE,
       description: T.F.TASK_REPEAT.F.SKIP_OVERDUE_DESCRIPTION,
+    },
+  },
+  {
+    key: 'createForEachMissed',
+    type: 'checkbox',
+    defaultValue: false,
+    // Mutually exclusive with skipOverdue (create-all vs skip-all).
+    hideExpression: (model: any) => !!model.skipOverdue,
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.CREATE_FOR_EACH_MISSED,
+      description: T.F.TASK_REPEAT.F.CREATE_FOR_EACH_MISSED_DESCRIPTION,
     },
   },
 ];

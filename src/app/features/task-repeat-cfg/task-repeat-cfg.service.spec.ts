@@ -745,6 +745,98 @@ describe('TaskRepeatCfgService', () => {
     });
   });
 
+  describe('createForEachMissed', () => {
+    const countAddTask = (actions: { type: string }[]): number =>
+      actions.filter((a) => a.type === TaskSharedActions.addTask.type).length;
+
+    it('creates one task per missed occurrence plus a single pointer advance', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2024-01-01',
+        lastTaskCreationDay: '2024-01-01',
+        createForEachMissed: true,
+      };
+      const targetDayDate = new Date(2024, 0, 5).getTime();
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, targetDayDate);
+
+      // 4 missed days (01-02..01-05) -> 4 addTask + 1 updateTaskRepeatCfg
+      expect(countAddTask(actions)).toBe(4);
+      const last = actions[actions.length - 1] as ReturnType<typeof updateTaskRepeatCfg>;
+      expect(last.type).toBe(updateTaskRepeatCfg.type);
+      expect(last.taskRepeatCfg.changes.lastTaskCreationDay).toBe('2024-01-05');
+    });
+
+    it('skips occurrences that already exist but still advances the pointer', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2024-01-01',
+        lastTaskCreationDay: '2024-01-01',
+        createForEachMissed: true,
+      };
+      const targetDayDate = new Date(2024, 0, 4).getTime();
+      // 2024-01-03 already created
+      const existing: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(cfg.id, '2024-01-03'),
+        created: new Date(2024, 0, 3, 12).getTime(),
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([existing]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, targetDayDate);
+
+      // missed 01-02, 01-03, 01-04 -> 01-03 skipped -> 2 addTask + 1 update
+      expect(countAddTask(actions)).toBe(2);
+      const last = actions[actions.length - 1] as ReturnType<typeof updateTaskRepeatCfg>;
+      expect(last.taskRepeatCfg.changes.lastTaskCreationDay).toBe('2024-01-04');
+    });
+
+    it('falls back to single newest occurrence when skipOverdue is also set', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2024-01-01',
+        lastTaskCreationDay: '2024-01-01',
+        createForEachMissed: true,
+        skipOverdue: true,
+      };
+      const targetDayDate = new Date(2024, 0, 5).getTime();
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, targetDayDate);
+
+      // single path: only the newest occurrence is created
+      expect(countAddTask(actions)).toBe(1);
+    });
+
+    it('does not backfill for a future target day (single mode)', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        createForEachMissed: true,
+      };
+      // tomorrow relative to runtime today -> future target -> single mode
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      const targetDayDate = Date.now() + oneDayMs;
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, targetDayDate);
+
+      expect(countAddTask(actions)).toBeLessThanOrEqual(1);
+    });
+  });
+
   describe('getAllUnprocessedRepeatableTasks$', () => {
     it('should return configs including overdue', (done) => {
       const dayDate = new Date(2022, 0, 10).getTime();

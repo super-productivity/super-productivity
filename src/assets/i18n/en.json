@@ -1866,6 +1866,8 @@
         "C_MONTH": "Month",
         "C_WEEK": "Week",
         "C_YEAR": "Year",
+        "CREATE_FOR_EACH_MISSED": "Create a task for each missed occurrence",
+        "CREATE_FOR_EACH_MISSED_DESCRIPTION": "By default, opening the app after several scheduled occurrences were missed (e.g. you were away for a week) creates only a single instance for the most recent occurrence. When enabled, a separate overdue task is created for every missed occurrence instead, so nothing slips through. To avoid flooding your list, at most the 30 most recent missed occurrences are created. Cannot be combined with \"Skip overdue instances\"",
         "CRON_EXPRESSION": "Cron expression",
         "CRON_EXPRESSION_DESCRIPTION": "Cron format: minute hour day-of-month month day-of-week. Example: 0 0 * 3-11 6 (every Saturday, March-November).",
         "CRON_INVALID": "Hmm, couldn't read that schedule. Try a phrase like “every Monday at 9am”, “every weekday”, or “first day of every month” — or a cron expression like “0 9 * * 1”.",
