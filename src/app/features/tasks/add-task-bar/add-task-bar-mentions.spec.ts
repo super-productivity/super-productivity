@@ -168,7 +168,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       component.mentionCfg$.subscribe((config) => {
         expect(config).toBeTruthy();
         expect(config.mentions).toBeTruthy();
-        expect(config.mentions!.length).toBe(3); // tag, due, project mentions
+        expect(config.mentions!.length).toBe(4); // tag, due, project, deadline mentions
 
         const tagMention = config.mentions!.find((m) => m.triggerChar === '#');
         expect(tagMention).toBeTruthy();
