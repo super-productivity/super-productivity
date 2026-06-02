@@ -21,6 +21,9 @@ interface PreviousSwapLike {
 
 interface SortStrategyLike {
   orientation: 'vertical' | 'horizontal';
+  // The list's container element, stable across strategy recreation (CDK always
+  // re-sets it from `DropListRef._container`). Used to scope the patch.
+  _element?: Element;
   _itemPositions: ItemPositionLike[];
   _previousSwap: PreviousSwapLike;
   _sortPredicate: (index: number, item: unknown) => boolean;
@@ -33,6 +36,21 @@ interface DropListRefLike {
 interface CdkDropListInternals {
   _dropListRef?: DropListRefLike;
 }
+
+type GetItemIndexFn = (
+  this: SortStrategyLike,
+  item: unknown,
+  pointerX: number,
+  pointerY: number,
+  delta?: { x: number; y: number },
+) => number;
+
+// Container elements of the task lists that opted into the midpoint rule. The
+// patched prototype method consults this to leave every other vertical CDK list
+// on CDK's stock behaviour. A WeakSet so destroyed lists drop out for free.
+const taskListContainers = new WeakSet<Element>();
+// CDK's original method, captured once before we replace it on the prototype.
+let cdkOriginalGetItemIndex: GetItemIndexFn | null = null;
 
 /**
  * CDK's `SingleAxisSortStrategy` swaps items as soon as the pointer enters
@@ -56,28 +74,67 @@ interface CdkDropListInternals {
  * gives a stable reference even after the placeholder has been re-parented
  * across containers.
  *
- * The strategy class is internal to `@angular/cdk/drag-drop`, so we reach the
- * instance via the `CdkDropList`'s `_dropListRef`. We patch *that list's own*
- * strategy instance (an own property shadowing the prototype method), NOT the
- * shared `SingleAxisSortStrategy.prototype`: every vertical CDK list in the app
- * (planner, notes, boards, tree-dnd) shares that prototype, so patching it would
- * silently change their hit-test too. Only the task lists registered via
- * `DropListService` are patched. A CDK API rename leaves CDK's original
- * behaviour in place with a log.
+ * The strategy class is internal to `@angular/cdk/drag-drop`, so we reach it
+ * via the `CdkDropList`'s `_dropListRef`. We must patch the shared
+ * `SingleAxisSortStrategy.prototype` (not the instance): CDK recreates the
+ * strategy instance on *every* drag start (`DropListRef.withOrientation` runs in
+ * its `beforeStarted` hook), so an instance patch is discarded before the first
+ * pointer move. The prototype is shared by every vertical CDK list in the app
+ * (planner, notes, boards, tree-dnd), so the patched method applies the midpoint
+ * rule only when the strategy's container is a registered task list and
+ * otherwise delegates to CDK's original — keeping the behavioural change scoped.
+ * A CDK API rename leaves CDK's original behaviour in place with a log.
+ *
+ * CDK-internals dependency (validated against @angular/cdk 21.2.13): relies on
+ * `DropListRef._sortStrategy`, `SingleAxisSortStrategy.prototype.
+ * _getItemIndexFromPointerPosition` and `._element`. Scoping assumes a task
+ * list's strategy `_element` is its `cdkDropList` host — true unless one ever
+ * sets a custom `cdkDropListElementContainer`. Re-verify on a CDK upgrade; see
+ * the sibling `_domRect` drag-start workaround in DropListService, the other
+ * CDK reach-in that breaks the same way.
  */
 export const applyMidpointSortPatch = (dropList: CdkDropList): void => {
   const strategy = (dropList as unknown as CdkDropListInternals)._dropListRef
     ?._sortStrategy;
   if (!strategy) return;
-  const target = strategy as unknown as Record<string, unknown>;
-  // Reads through the prototype chain on first patch (catches a CDK rename),
-  // then reads this instance's own shadow on re-register — both are functions.
-  if (typeof target['_getItemIndexFromPointerPosition'] !== 'function') {
+  // Opt this list's container into the midpoint rule. Done on every register
+  // (even after the prototype is patched) so late-mounted lists are covered.
+  if (strategy._element) {
+    taskListContainers.add(strategy._element);
+  }
+  if (cdkOriginalGetItemIndex) return; // prototype already patched
+
+  const proto = Object.getPrototypeOf(strategy) as Record<string, unknown>;
+  const original = proto['_getItemIndexFromPointerPosition'];
+  if (typeof original !== 'function') {
     Log.log('[drop-list] midpoint sort patch skipped — CDK internals changed');
     return;
   }
-  target['_getItemIndexFromPointerPosition'] = midpointGetItemIndex;
+  cdkOriginalGetItemIndex = original as GetItemIndexFn;
+  proto['_getItemIndexFromPointerPosition'] = createScopedMidpointGetItemIndex(
+    cdkOriginalGetItemIndex,
+    (el) => !!el && taskListContainers.has(el),
+  );
 };
+
+/**
+ * Builds the prototype replacement: apply the midpoint rule when the strategy's
+ * container opts in (`isTaskListContainer`), otherwise delegate to CDK's
+ * `original`. Pure (no module state) so the scoping contract is unit-testable.
+ * Exported for tests.
+ */
+export const createScopedMidpointGetItemIndex = (
+  original: GetItemIndexFn,
+  isTaskListContainer: (el: Element | undefined) => boolean,
+): GetItemIndexFn =>
+  function (item, pointerX, pointerY, delta) {
+    // Only opted-in task lists get the midpoint rule; every other vertical list
+    // keeps CDK's stock first-inside hit-test.
+    if (!isTaskListContainer(this._element)) {
+      return original.call(this, item, pointerX, pointerY, delta);
+    }
+    return midpointGetItemIndex.call(this, item, pointerX, pointerY, delta);
+  };
 
 // Exported for tests. Same signature as CDK's original.
 export function midpointGetItemIndex(

@@ -1,4 +1,7 @@
-import { midpointGetItemIndex } from './midpoint-sort-patch';
+import {
+  createScopedMidpointGetItemIndex,
+  midpointGetItemIndex,
+} from './midpoint-sort-patch';
 
 describe('midpoint sort patch', () => {
   // Three stacked items along the vertical axis, each 100px tall, no gap.
@@ -247,6 +250,50 @@ describe('midpoint sort patch', () => {
       // any pointer-inside-rect returns that item's index.
       expect(call(s, draggedOutside, 140, { x: 0, y: 1 })).toBe(1);
       expect(call(s, draggedOutside, 260, { x: 0, y: -1 })).toBe(2);
+    });
+  });
+
+  // CDK recreates the sort-strategy instance on every drag start, so the
+  // midpoint behaviour lives on the shared prototype and is scoped to task
+  // lists by container. These cover that scoping decision in isolation (the
+  // prototype wiring lives in applyMidpointSortPatch, which uses module state).
+  describe('createScopedMidpointGetItemIndex (per-container scoping)', () => {
+    const el = document.createElement('div');
+    // Dragged at top (idx 0); candidate B below it (centre 150). Cursor at 140
+    // is in B's TOP half → the midpoint rule rejects the swap (returns -1),
+    // whereas CDK's stock first-inside would accept it.
+    const strat = (): Strategy & { _element: Element } => ({
+      _element: el,
+      orientation: 'vertical',
+      _itemPositions: [
+        { drag: draggedAtTop, clientRect: rect(0, 100) },
+        { drag: dragB, clientRect: rect(100, 200) },
+        { drag: dragC, clientRect: rect(200, 300) },
+      ],
+      _previousSwap: { drag: null, delta: 0, overlaps: false },
+      _sortPredicate: (): boolean => true,
+    });
+    const STOCK = 1;
+
+    it('applies the midpoint rule when the container opts in', () => {
+      const original = jasmine.createSpy('original').and.returnValue(STOCK);
+      const fn = createScopedMidpointGetItemIndex(original, () => true);
+      const s = strat();
+      expect(
+        fn.call(s as unknown as StrategyCtx, draggedAtTop, 50, 140, { x: 0, y: 1 }),
+      ).toBe(-1); // midpoint rejects; not STOCK
+      expect(original).not.toHaveBeenCalled();
+    });
+
+    it('delegates to CDK original when the container is not a task list', () => {
+      const original = jasmine.createSpy('original').and.returnValue(STOCK);
+      const fn = createScopedMidpointGetItemIndex(original, () => false);
+      const s = strat();
+      expect(
+        fn.call(s as unknown as StrategyCtx, draggedAtTop, 50, 140, { x: 0, y: 1 }),
+      ).toBe(STOCK);
+      expect(original).toHaveBeenCalledOnceWith(draggedAtTop, 50, 140, { x: 0, y: 1 });
+      expect(original.calls.mostRecent().object).toBe(s);
     });
   });
 });
