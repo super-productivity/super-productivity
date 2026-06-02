@@ -30,6 +30,11 @@ export class DropListService {
   private _flushScheduled = false;
   private _activeDragPointer: DragPointer | null = null;
   private _isSubTaskDragStarting = false;
+  private _pointerHit: {
+    x: number;
+    y: number;
+    result: { listModelId: string; isOverRow: boolean } | null;
+  } | null = null;
 
   activeDragPointer(): DragPointer | null {
     return this._activeDragPointer;
@@ -37,6 +42,31 @@ export class DropListService {
 
   setActiveDragPointer(pointer: DragPointer | null): void {
     this._activeDragPointer = pointer;
+    if (!pointer) {
+      this._pointerHit = null;
+    }
+  }
+
+  /**
+   * Memoises a sub-task-list hit-test for one pointer position. During a drag
+   * CDK consults several connected lists' `enterPredicate`s per pointer move,
+   * each running the same `document.elementFromPoint` for the identical coords.
+   * A stationary pointer can't move the DOM (CDK only re-sorts on movement), so
+   * caching by exact coords is safe and collapses those to a single hit-test.
+   * The single-entry cache is keyed by coords (a moved pointer simply misses)
+   * and cleared when the drag ends (`setActiveDragPointer(null)`).
+   */
+  hitTestPointerSubTaskList(
+    x: number,
+    y: number,
+    compute: () => { listModelId: string; isOverRow: boolean } | null,
+  ): { listModelId: string; isOverRow: boolean } | null {
+    if (this._pointerHit && this._pointerHit.x === x && this._pointerHit.y === y) {
+      return this._pointerHit.result;
+    }
+    const result = compute();
+    this._pointerHit = { x, y, result };
+    return result;
   }
 
   /**

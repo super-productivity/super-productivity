@@ -109,33 +109,30 @@ export function midpointGetItemIndex(
       : pointerY >= Math.floor(clientRect.top) &&
         pointerY < Math.floor(clientRect.bottom);
     if (!inside) return false;
-    // Midpoint guard applies during active sort, after the dragged item
-    // already has a position in the cache. During `enter()` (currentIndex
-    // === -1) and during sort calls without delta, keep CDK's first-inside
-    // semantics so the placeholder lands somewhere sensible on entry
-    // instead of falling through to "append at end".
-    if (delta && currentIndex !== -1) {
-      const ptr = isHorizontal ? pointerX : pointerY;
-      const centre = isHorizontal
-        ? (clientRect.left + clientRect.right) / 2
-        : (clientRect.top + clientRect.bottom) / 2;
+    // Midpoint guard applies during active sort of a VERTICAL list, after the
+    // dragged item already has a position in the cache. Scoping it to vertical
+    // keeps the patch's behavioural change to the task lists it was built for
+    // and leaves the app's horizontal lists (boards, issue panel) on CDK's
+    // stock first-inside hit-test — which also sidesteps right-to-left, where
+    // `_itemPositions` is sorted left-ascending so a higher index is visually
+    // *earlier* and the above/below assumption would invert. During `enter()`
+    // (currentIndex === -1) and delta-less sort calls, keep CDK's first-inside
+    // semantics so the placeholder lands somewhere sensible on entry instead
+    // of falling through to "append at end".
+    if (delta && currentIndex !== -1 && !isHorizontal) {
+      const centre = (clientRect.top + clientRect.bottom) / 2;
       if (candidateIdx > currentIndex) {
         // Candidate sits visually below the dragged item — swap only once
         // the cursor crosses into its lower half (so the placeholder moves
         // *after* it).
-        if (ptr < centre) return false;
+        if (pointerY < centre) return false;
       } else {
         // Candidate sits visually above — swap only once the cursor
         // crosses into its upper half.
-        if (ptr > centre) return false;
+        if (pointerY > centre) return false;
       }
     }
     return true;
   });
   return index === -1 || !this._sortPredicate(index, item) ? -1 : index;
 }
-
-// Test-only: reset the singleton flag between specs.
-export const _resetMidpointSortPatchForTests = (): void => {
-  isPatched = false;
-};

@@ -28,6 +28,7 @@ describe('TaskListComponent', () => {
     setActiveDragPointer: jasmine.Spy;
     isSubTaskDragStarting: jasmine.Spy;
     markSubTaskDragStarting: jasmine.Spy;
+    hitTestPointerSubTaskList: jasmine.Spy;
     blockAniTrigger$: { next: jasmine.Spy };
   };
   let store: MockStore;
@@ -67,6 +68,11 @@ describe('TaskListComponent', () => {
         .createSpy('isSubTaskDragStarting')
         .and.returnValue(false),
       markSubTaskDragStarting: jasmine.createSpy('markSubTaskDragStarting'),
+      // Pass-through: tests exercise the real _computePointerSubTaskList; the
+      // per-pointer memo only matters at runtime (not under mocked hit-tests).
+      hitTestPointerSubTaskList: jasmine
+        .createSpy('hitTestPointerSubTaskList')
+        .and.callFake((_x: number, _y: number, compute: () => unknown) => compute()),
       blockAniTrigger$: { next: jasmine.createSpy('next') },
     };
 

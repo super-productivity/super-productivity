@@ -32,7 +32,10 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { WorkContextService } from '../../work-context/work-context.service';
 import { Store } from '@ngrx/store';
 import { moveItemBeforeItem } from '../../../util/move-item-before-item';
-import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
+import {
+  DragPointer,
+  DropListService,
+} from '../../../core-ui/drop-list/drop-list.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { IssueService } from '../../issue/issue.service';
 import { SearchResultItem } from '../../issue/issue.model';
@@ -176,7 +179,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   onDragPointerDown(task: TaskWithSubTasks, event: PointerEvent): void {
     // Seed the pointer position so subtask -> parent-list drags can hit-test
     // the source subtask list before the first pointermove (see
-    // _pointerSubTaskList).
+    // _pointerSubTaskList). A plain tap that never becomes a drag leaves this
+    // value stale, but it's inert: it's only read inside the subtask branch of
+    // enterPredicate during an active drag, and the next real subtask drag
+    // reseeds it here on its own pointerdown.
     if (task.parentId) {
       this.dropListService.setActiveDragPointer({ x: event.clientX, y: event.clientY });
     }
@@ -305,44 +311,66 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   /**
    * Resolves which subtask list (if any) the drag pointer is currently over,
    * and whether it sits over an actual subtask *row* rather than the list's
-   * empty trailing padding.
+   * empty leading/trailing padding.
    *
    * CDK excludes the source list from normal sibling enter-resolution, so we
    * hit-test the live pointer ourselves to keep the enclosing top-level list
    * from stealing in-list sorting. The row distinction matters for the
    * dead-band just above a parent task: an expanded neighbour's subtask-list
-   * box (and its host padding) overshoots a few px below its last row, and
-   * because subtask lists are resolved before the top-level list (sibling
-   * order), a pointer aimed at "the slot above the next parent" would be
-   * greedily claimed by that neighbour and re-parent the subtask. Treating only
-   * a real row as "inside" a list lets that trailing padding convert to a main
-   * task instead.
+   * box (and its padding) overshoots below its last row, and because subtask
+   * lists are resolved before the top-level list (sibling order), a pointer
+   * aimed at "the slot above the next parent" would be greedily claimed by
+   * that neighbour and re-parent the subtask. Treating only a real row (or the
+   * leading pad, below) as "inside" lets that TRAILING padding convert to a
+   * main task instead.
    *
-   * Symmetric to the trailing case, the strip BETWEEN a parent's header and
-   * its first subtask row lives outside `.task-list-inner` (it's the
-   * `.sub-tasks` wrapper margin plus the inner `task-list` host padding) — so
-   * a drop there would otherwise fall through to the top-level list and
-   * convert the subtask to a main task at the parent's slot. The wrapper
-   * fallback below treats that strip as `isOverRow: true` for the SUB list,
-   * so the foreign SUB claims the drop (re-parent as first child) and the
-   * source SUB blocks the top-level (in-list sort stays intact).
+   * The strip BETWEEN a parent's header and its first subtask row is split in
+   * two by the drag-drop padding (see task-list.component.scss): the inner
+   * part lives *inside* `.task-list-inner` (the SUB list's own top padding) and
+   * the outer part is the `.sub-tasks` wrapper margin *outside* it. Both should
+   * claim the drop as a first-child re-parent rather than fall through to the
+   * top-level list — so the first branch reports the leading pad as
+   * `isOverRow: true` (pointer above the first row), and the `.sub-tasks`
+   * wrapper fallback covers the outer margin. The source SUB then blocks the
+   * top-level list, keeping in-list sort intact.
    */
   private _pointerSubTaskList(): { listModelId: string; isOverRow: boolean } | null {
     const pointer = this.dropListService.activeDragPointer();
     if (!pointer) {
       return null;
     }
+    // Memoised per pointer position: CDK consults several connected lists'
+    // enterPredicates per pointer move, each hit-testing the same coords (see
+    // DropListService.hitTestPointerSubTaskList).
+    return this.dropListService.hitTestPointerSubTaskList(pointer.x, pointer.y, () =>
+      this._computePointerSubTaskList(pointer),
+    );
+  }
+
+  private _computePointerSubTaskList(
+    pointer: DragPointer,
+  ): { listModelId: string; isOverRow: boolean } | null {
     const element = document.elementFromPoint(pointer.x, pointer.y);
     if (!element) {
       return null;
     }
     const listEl = element.closest<HTMLElement>('.task-list-inner');
     if (listEl?.dataset['listId'] === 'SUB') {
+      const listModelId = listEl.dataset['id'] ?? '';
       // A `task` ancestor only counts as a row of *this* list — the enclosing
       // parent task is also a `task`, but its nearest list is the top-level one.
       const rowEl = element.closest('task');
-      const isOverRow = !!rowEl && rowEl.closest('.task-list-inner') === listEl;
-      return { listModelId: listEl.dataset['id'] ?? '', isOverRow };
+      if (!!rowEl && rowEl.closest('.task-list-inner') === listEl) {
+        return { listModelId, isOverRow: true };
+      }
+      // Not over a row → the pointer is in this SUB list's own drag-drop
+      // padding (inside the cdkDropList rect). The LEADING pad (above the first
+      // row) is the same first-child re-parent strip the `.sub-tasks` fallback
+      // claims, so report it as a row; the TRAILING pad stays a convert-to-main
+      // dead-band (see method doc).
+      const firstRow = listEl.querySelector<HTMLElement>(':scope > task');
+      const isLeadingPad = !!firstRow && pointer.y < firstRow.getBoundingClientRect().top;
+      return { listModelId, isOverRow: isLeadingPad };
     }
     // Leading-strip fallback: the `.sub-tasks` wrapper extends visually above
     // the cdkDropList element. Each wrapper holds exactly one SUB list (the
@@ -433,10 +461,12 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
             ...targetListData.filteredTasks.filter((t) => t.id !== draggedTask.id),
             draggedTask,
           ];
+    // Log ids only — task objects carry user titles/notes and the log history
+    // is exportable (see core/log rule: never log user content).
     TaskLog.log(srcListData.listModelId, '=>', targetListData.listModelId, {
-      targetTask,
-      draggedTask,
-      newIds,
+      targetTaskId: targetTask?.id,
+      draggedTaskId: draggedTask.id,
+      newIds: newIds.map((t) => t.id),
     });
 
     this.dropListService.blockAniTrigger$.next();

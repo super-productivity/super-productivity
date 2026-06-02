@@ -170,8 +170,13 @@ describe('midpoint sort patch', () => {
     });
   });
 
-  describe('horizontal orientation', () => {
-    it('uses the horizontal midpoint with the same relative-position rule', () => {
+  describe('horizontal orientation falls back to CDK first-inside (patch is vertical-only)', () => {
+    it('swaps as soon as the pointer is inside a sibling, ignoring the midpoint', () => {
+      // The midpoint guard is scoped to vertical lists so the app's horizontal
+      // lists (boards, issue panel) keep CDK's stock behaviour. The vertical
+      // rule would reject a swap while the cursor is in the candidate's near
+      // half; here the swap must be accepted as soon as the pointer is inside
+      // the rect.
       const dragged = { id: 'dragged-h' };
       const right = { id: 'right' };
       const horizontalStrategy: Strategy = {
@@ -183,8 +188,7 @@ describe('midpoint sort patch', () => {
         _previousSwap: { drag: null, delta: 0, overlaps: false },
         _sortPredicate: (): boolean => true,
       };
-      // Right item is "below" (idx>currentIndex) in horizontal terms. Centre x=150.
-      // x=140 — left half — no swap.
+      // x=140 — LEFT half of `right`: the vertical rule would reject, stock accepts.
       expect(
         midpointGetItemIndex.call(
           horizontalStrategy as unknown as StrategyCtx,
@@ -193,8 +197,8 @@ describe('midpoint sort patch', () => {
           25,
           { x: 1, y: 0 },
         ),
-      ).toBe(-1);
-      // x=160 — right half — swap.
+      ).toBe(1);
+      // x=160 — right half: still inside, still swaps.
       expect(
         midpointGetItemIndex.call(
           horizontalStrategy as unknown as StrategyCtx,
@@ -204,6 +208,16 @@ describe('midpoint sort patch', () => {
           { x: 1, y: 0 },
         ),
       ).toBe(1);
+      // x=50 — inside the dragged item itself: never swaps with self.
+      expect(
+        midpointGetItemIndex.call(
+          horizontalStrategy as unknown as StrategyCtx,
+          dragged,
+          50,
+          25,
+          { x: 1, y: 0 },
+        ),
+      ).toBe(-1);
     });
   });
 

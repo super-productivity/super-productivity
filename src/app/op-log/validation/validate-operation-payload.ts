@@ -230,8 +230,8 @@ const validateUpdatePayload = (
   // convertToSubTask uses a compact intent shape rather than { task: { changes } }.
   if (
     entityType === 'TASK' &&
-    typeof p['taskId'] === 'string' &&
-    typeof p['targetParentId'] === 'string'
+    isValidEntityId(p['taskId']) &&
+    isValidEntityId(p['targetParentId'])
   ) {
     return { success: true };
   }
