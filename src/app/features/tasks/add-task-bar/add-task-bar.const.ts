@@ -130,4 +130,13 @@ export const CHRONO_SUGGESTIONS: string[] = [
   'end of week',
   'end of month',
   'end of year',
+
+  // Recurring schedules — the `@+` short syntax. Surfaced under the `@` trigger
+  // so typing `@+` autocompletes these; selecting one inserts `@+<phrase>`,
+  // which shortSyntax() routes to a CRON repeat config (extractCronFromTitle).
+  '+every day',
+  '+every weekday',
+  '+every monday',
+  '+every saturday from march through november',
+  '+on the 1st',
 ];

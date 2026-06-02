@@ -2442,7 +2442,7 @@
       "WORK_START_END_DESCRIPTION": "e.g. 17:00"
     },
     "SHORT_SYNTAX": {
-      "HELP": "<p>Here you can control short syntax options when creating a task</p>",
+      "HELP": "<p>Here you can control short syntax options when creating a task.</p><p><b>Recurring:</b> type <code>@+</code> followed by a schedule to make the task repeat, e.g. <code>@+every monday</code>, <code>@+weekdays</code>, or <code>@+every saturday from march through november</code>. Plain cron also works (<code>@+0 9 * * 1</code>).</p>",
       "IS_ENABLE_DUE": "Enable planned at short syntax (@<planned time>)",
       "IS_ENABLE_PROJECT": "Enable project short syntax (+<project>)",
       "IS_ENABLE_TAG": "Enable tag short syntax (#<tag>)",
