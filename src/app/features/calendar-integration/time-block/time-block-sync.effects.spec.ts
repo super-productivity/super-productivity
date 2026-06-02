@@ -447,4 +447,76 @@ describe('TimeBlockSyncEffects', () => {
     bulkSub.unsubscribe();
     flush();
   }));
+
+  it('uses timeSpent as duration when a done task has time tracked', fakeAsync(() => {
+    getByIdOnce$Spy.and.callFake((id: string) =>
+      of(
+        createTask(id, {
+          isDone: true,
+          timeEstimate: 60 * 60 * 1000, // 60 min
+          timeSpent: 51 * 60 * 1000, // 51 min
+        }),
+      ),
+    );
+
+    actions$.next(
+      TaskSharedActions.updateTask({
+        task: { id: 'task-1', changes: { isDone: true } },
+      }),
+    );
+
+    tick(COALESCE_MS);
+
+    expect(upsertEventSpy).toHaveBeenCalledTimes(1);
+    expect(upsertEventSpy.calls.mostRecent().args[1].durationMs).toBe(51 * 60 * 1000);
+    flush();
+  }));
+
+  it('falls back to timeEstimate when a done task has no time tracked', fakeAsync(() => {
+    getByIdOnce$Spy.and.callFake((id: string) =>
+      of(
+        createTask(id, {
+          isDone: true,
+          timeEstimate: 60 * 60 * 1000,
+          timeSpent: 0,
+        }),
+      ),
+    );
+
+    actions$.next(
+      TaskSharedActions.updateTask({
+        task: { id: 'task-1', changes: { isDone: true } },
+      }),
+    );
+
+    tick(COALESCE_MS);
+
+    expect(upsertEventSpy).toHaveBeenCalledTimes(1);
+    expect(upsertEventSpy.calls.mostRecent().args[1].durationMs).toBe(60 * 60 * 1000);
+    flush();
+  }));
+
+  it('uses the larger of estimate and time spent as duration for a non-done task', fakeAsync(() => {
+    getByIdOnce$Spy.and.callFake((id: string) =>
+      of(
+        createTask(id, {
+          isDone: false,
+          timeEstimate: 60 * 60 * 1000, // 60 min
+          timeSpent: 20 * 60 * 1000, // 20 min
+        }),
+      ),
+    );
+
+    actions$.next(
+      TaskSharedActions.updateTask({
+        task: { id: 'task-1', changes: { timeEstimate: 60 * 60 * 1000 } },
+      }),
+    );
+
+    tick(COALESCE_MS);
+
+    expect(upsertEventSpy).toHaveBeenCalledTimes(1);
+    expect(upsertEventSpy.calls.mostRecent().args[1].durationMs).toBe(60 * 60 * 1000);
+    flush();
+  }));
 });
