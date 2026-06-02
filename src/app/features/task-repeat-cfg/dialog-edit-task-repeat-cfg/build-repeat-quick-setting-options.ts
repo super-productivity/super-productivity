@@ -14,14 +14,19 @@ export const buildRepeatQuickSettingOptions = (
   locale: string,
   translateService: TranslateService,
 ): { value: RepeatQuickSetting; label: string }[] => {
-  const refWeekdayStr = refDate.toLocaleDateString(locale, { weekday: 'long' });
-  const refDayStr = refDate.toLocaleDateString(locale, { day: 'numeric' });
-  const refDayAndMonthStr = refDate.toLocaleDateString(locale, {
+  // Guard against an invalid Date slipping through (e.g. a non-DB date string).
+  // An invalid date makes the weekOfMonth math NaN, so ORDINAL_KEYS[NaN-1] is
+  // undefined and translate's `instant(undefined)` throws, crashing the whole
+  // dialog (#7945). Fall back to "today" so options still render.
+  const safeRefDate = isNaN(refDate.getTime()) ? new Date() : refDate;
+  const refWeekdayStr = safeRefDate.toLocaleDateString(locale, { weekday: 'long' });
+  const refDayStr = safeRefDate.toLocaleDateString(locale, { day: 'numeric' });
+  const refDayAndMonthStr = safeRefDate.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'numeric',
   });
   // 1-based occurrence of refDate's weekday within its month, capped to 4.
-  const weekOfMonth = Math.min(Math.floor((refDate.getDate() - 1) / 7) + 1, 4);
+  const weekOfMonth = Math.min(Math.floor((safeRefDate.getDate() - 1) / 7) + 1, 4);
   const ordinalStr = translateService.instant(ORDINAL_KEYS[weekOfMonth - 1]);
 
   return [

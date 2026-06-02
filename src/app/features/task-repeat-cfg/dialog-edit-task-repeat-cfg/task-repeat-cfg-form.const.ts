@@ -29,7 +29,10 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
   {
     key: 'startDate',
     type: 'date',
-    defaultValue: new Date(),
+    // Default to a 'YYYY-MM-DD' string (not a Date): Formly skips `parsers` on
+    // `defaultValue`, so a raw Date would slip into the model and downstream
+    // `dateStrToUtcDate` would choke on it, crashing the dialog (#7945).
+    defaultValue: getDbDateStr(),
     templateOptions: {
       label: T.F.TASK_REPEAT.F.START_DATE,
       required: true,
