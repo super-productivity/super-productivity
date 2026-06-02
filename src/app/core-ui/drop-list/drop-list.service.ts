@@ -100,8 +100,9 @@ export class DropListService {
   }
 
   registerDropList(dropList: CdkDropList, isSubTaskList = false): void {
-    // Idempotent on second call; reaches into CDK internals to swap the
-    // sort hit-test for a midpoint-crossing rule. See file header.
+    // Swap in a midpoint-crossing sort hit-test for this list. Patches the
+    // list's own CDK strategy instance (not the shared prototype), so the
+    // change stays scoped to task lists. See midpoint-sort-patch header.
     applyMidpointSortPatch(dropList);
     if (isSubTaskList) {
       this._list.unshift(dropList);

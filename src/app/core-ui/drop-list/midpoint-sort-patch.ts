@@ -34,8 +34,6 @@ interface CdkDropListInternals {
   _dropListRef?: DropListRefLike;
 }
 
-let isPatched = false;
-
 /**
  * CDK's `SingleAxisSortStrategy` swaps items as soon as the pointer enters
  * any part of a sibling's `clientRect`. For task lists whose item rects span
@@ -58,22 +56,27 @@ let isPatched = false;
  * gives a stable reference even after the placeholder has been re-parented
  * across containers.
  *
- * The strategy class is internal to `@angular/cdk/drag-drop`, so we reach it
- * via the first `CdkDropList` we see at runtime. Idempotent; a CDK API
- * change just leaves CDK's original behaviour in place with a log.
+ * The strategy class is internal to `@angular/cdk/drag-drop`, so we reach the
+ * instance via the `CdkDropList`'s `_dropListRef`. We patch *that list's own*
+ * strategy instance (an own property shadowing the prototype method), NOT the
+ * shared `SingleAxisSortStrategy.prototype`: every vertical CDK list in the app
+ * (planner, notes, boards, tree-dnd) shares that prototype, so patching it would
+ * silently change their hit-test too. Only the task lists registered via
+ * `DropListService` are patched. A CDK API rename leaves CDK's original
+ * behaviour in place with a log.
  */
 export const applyMidpointSortPatch = (dropList: CdkDropList): void => {
-  if (isPatched) return;
   const strategy = (dropList as unknown as CdkDropListInternals)._dropListRef
     ?._sortStrategy;
   if (!strategy) return;
-  const proto = Object.getPrototypeOf(strategy) as Record<string, unknown>;
-  if (typeof proto['_getItemIndexFromPointerPosition'] !== 'function') {
+  const target = strategy as unknown as Record<string, unknown>;
+  // Reads through the prototype chain on first patch (catches a CDK rename),
+  // then reads this instance's own shadow on re-register — both are functions.
+  if (typeof target['_getItemIndexFromPointerPosition'] !== 'function') {
     Log.log('[drop-list] midpoint sort patch skipped — CDK internals changed');
     return;
   }
-  proto['_getItemIndexFromPointerPosition'] = midpointGetItemIndex;
-  isPatched = true;
+  target['_getItemIndexFromPointerPosition'] = midpointGetItemIndex;
 };
 
 // Exported for tests. Same signature as CDK's original.
