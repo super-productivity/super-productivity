@@ -29,7 +29,7 @@ GEM
     aws-sigv4 (1.12.1)
       aws-eventstream (~> 1, >= 1.0.2)
     babosa (1.0.4)
-    base64 (0.2.0)
+    base64 (0.3.0)
     bigdecimal (4.0.1)
     claide (1.1.0)
     colored (1.2)
@@ -159,7 +159,7 @@ GEM
     httpclient (2.8.3)
     jmespath (1.6.2)
     json (2.7.6)
-    jwt (2.9.3)
+    jwt (2.10.3)
       base64
     logger (1.7.0)
     mini_magick (4.13.2)
