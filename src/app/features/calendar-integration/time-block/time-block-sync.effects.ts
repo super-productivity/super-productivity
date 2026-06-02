@@ -435,7 +435,9 @@ export class TimeBlockSyncEffects {
     task: Task,
     dueWithTime: number,
   ): Promise<void> {
-    const durationMs = Math.max(task.timeEstimate - task.timeSpent, 0) || 30 * 60 * 1000;
+    const durationMs = task.isDone
+      ? task.timeSpent || task.timeEstimate || 30 * 60 * 1000
+      : Math.max(task.timeEstimate, task.timeSpent) || 30 * 60 * 1000;
     await ctx.definition.timeBlock!.upsertEvent(
       task.id,
       {
