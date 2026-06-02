@@ -325,6 +325,13 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   isProjectMenuLoaded = signal(false);
 
+  private _focusProjectInputEffect = effect(() => {
+    const projInput = this.projectSearchInput();
+    if (projInput) {
+      projInput.nativeElement.focus();
+    }
+  });
+
   private _parentTitleEffect = effect((onCleanup) => {
     const t = this.task();
     const isInSubTaskList = this.isInSubTaskList();

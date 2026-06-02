@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   ElementRef,
   inject,
   input,
@@ -54,6 +55,13 @@ export class TagToggleMenuListComponent {
   private _menuTreeService = inject(MenuTreeService);
 
   task = input.required<TaskCopy>();
+
+  private _focusTagsInputEffect = effect(() => {
+    const tagsInput = this.tagsSearchInput();
+    if (tagsInput) {
+      tagsInput.nativeElement.focus();
+    }
+  });
 
   toggleTag = output<string>();
   afterClose = output<void>();

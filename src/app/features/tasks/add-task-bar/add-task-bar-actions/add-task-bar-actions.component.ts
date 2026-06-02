@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   inject,
   input,
@@ -68,6 +69,17 @@ export class AddTaskBarActionsComponent {
   private _translateService = inject(TranslateService);
   private _dateService = inject(DateService);
   stateService = inject(AddTaskBarStateService);
+
+  private _focusSearchInputEffect = effect(() => {
+    const projectSearchInput = this.projectSearchInput();
+    if (projectSearchInput) {
+      projectSearchInput.nativeElement.focus();
+    }
+    const tagsSearchInput = this.tagsSearchInput();
+    if (tagsSearchInput) {
+      tagsSearchInput.nativeElement.focus();
+    }
+  });
 
   T = T;
 

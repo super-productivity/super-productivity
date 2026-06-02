@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   ElementRef,
   inject,
   input,
@@ -139,6 +140,17 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   // eslint-disable-next-line @angular-eslint/no-output-native
   close = output();
+
+  private _focusSearchInputsEffect = effect(() => {
+    const projectSearchInput = this.projectSearchInput();
+    if (projectSearchInput) {
+      projectSearchInput.nativeElement.focus();
+    }
+    const tagsSearchInput = this.tagsSearchInput();
+    if (tagsSearchInput) {
+      tagsSearchInput.nativeElement.focus();
+    }
+  });
 
   contextMenuPosition: { x: string; y: string } = { x: '100px', y: '100px' };
 
