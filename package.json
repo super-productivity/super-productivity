@@ -318,8 +318,9 @@
   },
   "overrides": {
     "app-builder-lib": {
-      "minimatch": "10.1.1"
-    }
+      "minimatch": "10.2.5"
+    },
+    "webpack-dev-server": "5.2.4"
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-x64": "^3.5.4",
