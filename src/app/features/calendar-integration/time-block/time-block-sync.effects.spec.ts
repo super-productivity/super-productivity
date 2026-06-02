@@ -569,7 +569,7 @@ describe('TimeBlockSyncEffects', () => {
     flush();
   }));
 
-  it('uses the larger of estimate and time spent as duration for a non-done task', fakeAsync(() => {
+  it('uses remaining estimate (timeEstimate - timeSpent) as duration for a non-done task', fakeAsync(() => {
     getByIdOnce$Spy.and.callFake((id: string) =>
       of(
         createTask(id, {
@@ -589,7 +589,8 @@ describe('TimeBlockSyncEffects', () => {
     tick(COALESCE_MS);
 
     expect(upsertEventSpy).toHaveBeenCalledTimes(1);
-    expect(upsertEventSpy.calls.mostRecent().args[1].durationMs).toBe(60 * 60 * 1000);
+    // active task → remaining estimated work: 60min estimate - 20min spent = 40min
+    expect(upsertEventSpy.calls.mostRecent().args[1].durationMs).toBe(40 * 60 * 1000);
     flush();
   }));
 });
