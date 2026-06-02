@@ -513,8 +513,14 @@ export class DialogEditTaskRepeatCfgComponent {
   }
 
   private _processQuickSettingForDate<
-    TCfg extends { quickSetting?: string; startDate?: string },
+    TCfg extends { quickSetting?: string; startDate?: string; repeatCycle?: string },
   >(cfg: TCfg): TCfg {
+    // CRON is reachable only inside "Custom recurring config" now (no top-level
+    // CRON quick-setting), so surface any cron config — including legacy ones
+    // saved with quickSetting 'CRON' — as CUSTOM so the dropdown matches.
+    if (cfg.repeatCycle === 'CRON' || cfg.quickSetting === 'CRON') {
+      return { ...cfg, quickSetting: 'CUSTOM' };
+    }
     const SETTINGS_WITHOUT_START_DATE = new Set(['DAILY', 'MONDAY_TO_FRIDAY', 'CUSTOM']);
     if (cfg.quickSetting && !SETTINGS_WITHOUT_START_DATE.has(cfg.quickSetting)) {
       if (!cfg.startDate) {

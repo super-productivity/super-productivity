@@ -99,9 +99,16 @@ const openRepeatCronDialog = async (
   await repeatItem.click();
   const dialog = page.locator('mat-dialog-container');
   await expect(dialog).toBeVisible({ timeout: 10000 });
+  // CRON lives inside "Custom recurring config": pick Custom, then set the
+  // repeatCycle dropdown to "Cron".
   await dialog.locator('mat-select').first().click();
   await page
-    .getByRole('option', { name: /natural language|cron/i })
+    .getByRole('option', { name: /custom/i })
+    .first()
+    .click();
+  await dialog.locator('mat-select').nth(1).click();
+  await page
+    .getByRole('option', { name: /^cron$/i })
     .first()
     .click();
   const cronInput = dialog.locator('input[id*="cronExpression"]').first();
@@ -164,10 +171,16 @@ test.describe('Cron / natural-language recurring tasks', () => {
     const dialog = page.locator('mat-dialog-container');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Switch the quick-setting select to "Cron / natural language".
+    // CRON lives inside "Custom recurring config": pick Custom, then set the
+    // repeatCycle dropdown to "Cron".
     await dialog.locator('mat-select').first().click();
     await page
-      .getByRole('option', { name: /natural language|cron/i })
+      .getByRole('option', { name: /custom/i })
+      .first()
+      .click();
+    await dialog.locator('mat-select').nth(1).click();
+    await page
+      .getByRole('option', { name: /^cron$/i })
       .first()
       .click();
 

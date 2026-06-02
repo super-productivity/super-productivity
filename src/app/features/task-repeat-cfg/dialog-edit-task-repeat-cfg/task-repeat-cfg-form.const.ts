@@ -74,8 +74,9 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
   {
     fieldGroupClassName: 'cron-config-container',
     resetOnHide: false,
+    // CRON lives inside "Custom recurring config" only (selected via the
+    // repeatCycle dropdown) — there is no separate top-level CRON quick-setting.
     hideExpression: (model: any) =>
-      model.quickSetting !== 'CRON' &&
       !(model.quickSetting === 'CUSTOM' && model.repeatCycle === 'CRON'),
     fieldGroup: [
       {
@@ -107,12 +108,15 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
     fieldGroup: [
       {
         fieldGroupClassName: 'repeat-cycle',
-        hideExpression: (model: any) => model.repeatCycle === 'CRON',
         fieldGroup: [
           {
             key: 'repeatEvery',
             type: 'input',
             defaultValue: 1,
+            // Hidden for CRON (the expression defines the full cadence), but the
+            // repeatCycle select below stays visible so the user can switch back.
+            resetOnHide: false,
+            hideExpression: (model: any) => model.repeatCycle === 'CRON',
             templateOptions: {
               label: T.F.TASK_REPEAT.F.REPEAT_EVERY,
               required: true,
