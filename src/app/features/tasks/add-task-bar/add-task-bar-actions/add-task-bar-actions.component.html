@@ -50,6 +50,32 @@
     }
   }
 
+  <button
+    mat-button
+    class="action-btn"
+    data-test="add-task-bar-deadline-btn"
+    (click)="openDeadlineDialog()"
+    [class.has-value]="state().deadlineDate"
+  >
+    <mat-icon>{{ state().deadlineTime ? 'alarm' : 'flag' }}</mat-icon>
+    <span>{{
+      deadlineDateDisplay() || (T.F.TASK.ADD_TASK_BAR.DEADLINE_BUTTON | translate)
+    }}</span>
+  </button>
+
+  @if (state().deadlineDate) {
+    <button
+      mat-button
+      class="clear-btn"
+      data-test="add-task-bar-clear-deadline-btn"
+      (click)="clearDeadline(); $event.stopPropagation()"
+      [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_CLEAR_DEADLINE | translate"
+      matTooltipPosition="above"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  }
+
   @if (!isHideTagBtn() && allTags().length) {
     <button
       #tagsMenuTrigger

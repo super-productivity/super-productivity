@@ -134,6 +134,27 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({ ...state, repeatQuickSetting: null }));
   }
 
+  updateDeadline(deadlineDate: string | null, deadlineTime?: string | null): void {
+    this._taskInputState.update((state) => ({
+      ...state,
+      deadlineDate,
+      deadlineTime: deadlineTime !== undefined ? deadlineTime : state.deadlineTime,
+    }));
+  }
+
+  updateDeadlineRemindOption(deadlineRemindOption: TaskReminderOptionId | null): void {
+    this._taskInputState.update((state) => ({ ...state, deadlineRemindOption }));
+  }
+
+  clearDeadline(): void {
+    this._taskInputState.update((state) => ({
+      ...state,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
+    }));
+  }
+
   resetAfterAdd(): void {
     // Only clear input text and tags, preserve project, date, and estimate
     this._taskInputState.update((state) => ({
@@ -144,6 +165,9 @@ export class AddTaskBarStateService {
       cleanText: null,
       attachments: [],
       repeatQuickSetting: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
     }));
     this.inputTxt.set('');
     // Keep isAutoDetected as is to preserve project selection

@@ -18,6 +18,7 @@ import { ProjectService } from '../../../project/project.service';
 import { TagService } from '../../../tag/tag.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { AddTaskBarStateService } from '../add-task-bar-state.service';
 import { AddTaskBarParserService } from '../add-task-bar-parser.service';
 import { ESTIMATE_OPTIONS } from '../add-task-bar.const';
@@ -51,6 +52,7 @@ type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
     MatMenuTrigger,
     MatMenuItem,
     TranslateModule,
+    DialogDeadlineComponent,
   ],
 })
 export class AddTaskBarActionsComponent {
@@ -133,6 +135,29 @@ export class AddTaskBarActionsComponent {
     return timeStr ? `${dateStr} ${timeStr}` : dateStr;
   });
 
+  deadlineDateDisplay = computed(() => {
+    const state = this.state();
+    if (!state.deadlineDate) return null;
+    const today = this._dateService.getLogicalTodayDate();
+    const date = dateStrToUtcDate(state.deadlineDate);
+    const timeStr = state.deadlineTime
+      ? this._formatTimeForDisplay(state.deadlineTime)
+      : null;
+    if (this.isSameDate(date, today)) {
+      return timeStr || this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TODAY);
+    }
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (!state.deadlineTime && this.isSameDate(date, tomorrow)) {
+      return this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TOMORROW);
+    }
+    const dateStr = date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), {
+      month: 'short',
+      day: 'numeric',
+    });
+    return timeStr ? `${dateStr} ${timeStr}` : dateStr;
+  });
+
   private _formatTimeForDisplay(timeStr: string): string {
     return this._dateTimeFormatService.formatTime(
       getDateTimeFromClockString(timeStr, new Date()),
@@ -195,6 +220,41 @@ export class AddTaskBarActionsComponent {
         this.stateService.updateDate(getDbDateStr(result.date), result.time);
         // No UI access to reminder without a time being set
         this.stateService.updateRemindOption(result.remindOption);
+      }
+      this.refocus.emit();
+      window.setTimeout(() => {
+        if (!this._destroyRef.destroyed) {
+          this.scheduleDialogOpenChange.emit(false);
+        }
+      });
+    });
+  }
+
+  openDeadlineDialog(): void {
+    const state = this.state();
+    this.scheduleDialogOpenChange.emit(true);
+    let dialogRef!: MatDialogRef<DialogDeadlineComponent>;
+    try {
+      dialogRef = this._matDialog.open(DialogDeadlineComponent, {
+        data: {
+          targetDeadlineDay: state.deadlineDate || undefined,
+          targetDeadlineTime: state.deadlineTime || undefined,
+          isSelectDeadlineOnly: true,
+        },
+      });
+    } catch (err) {
+      this.scheduleDialogOpenChange.emit(false);
+      throw err;
+    }
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result && typeof result === 'object') {
+        if (result.date) {
+          this.stateService.updateDeadline(getDbDateStr(result.date), result.time);
+          this.stateService.updateDeadlineRemindOption(result.remindOption);
+        } else if (result.date === null) {
+          this.stateService.clearDeadline();
+        }
       }
       this.refocus.emit();
       window.setTimeout(() => {
@@ -319,6 +379,11 @@ export class AddTaskBarActionsComponent {
           trigger: this.repeatMenuTrigger(),
         };
     }
+  }
+
+  clearDeadline(): void {
+    this.stateService.clearDeadline();
+    this.refocus.emit();
   }
 
   clearDateWithSyntax(): void {

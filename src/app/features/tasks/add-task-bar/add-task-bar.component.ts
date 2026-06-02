@@ -64,6 +64,9 @@ import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
 import { unique } from '../../../util/unique';
 import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
@@ -437,6 +440,28 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         taskData.timeSpentOnDay = state.spent;
       }
 
+      if (state.deadlineDate) {
+        if (state.deadlineTime && isValidSplitTime(state.deadlineTime)) {
+          const deadlineDateObj = dateStrToUtcDate(state.deadlineDate);
+          const deadlineTimestamp = getDateTimeFromClockString(
+            state.deadlineTime,
+            deadlineDateObj,
+          );
+          taskData.deadlineWithTime = deadlineTimestamp;
+          if (
+            state.deadlineRemindOption &&
+            state.deadlineRemindOption !== TaskReminderOptionId.DoNotRemind
+          ) {
+            taskData.deadlineRemindAt = remindOptionToMilliseconds(
+              deadlineTimestamp,
+              state.deadlineRemindOption,
+            );
+          }
+        } else {
+          taskData.deadlineDay = state.deadlineDate;
+        }
+      }
+
       if (state.date) {
         // Parse date components to create date in local timezone
         // This avoids timezone issues when parsing date strings like "2024-01-15"
@@ -713,13 +738,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       ['5']: () => this._callActionMethod('openTagsMenu'),
       ['6']: () => this._callActionMethod('openEstimateMenu'),
       ['7']: () => this._callActionMethod('openRepeatMenu'),
+      ['8']: () => this._callActionMethod('openDeadlineDialog'),
     };
 
     const action = shortcutMap[event.key];
     if (action) {
       event.preventDefault();
-      // Add stopPropagation for action menu shortcuts (3-7)
-      if (['3', '4', '5', '6', '7'].includes(event.key)) {
+      // Add stopPropagation for action menu shortcuts (3-8)
+      if (['3', '4', '5', '6', '7', '8'].includes(event.key)) {
         event.stopPropagation();
       }
       action();
