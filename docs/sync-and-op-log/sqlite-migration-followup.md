@@ -28,6 +28,11 @@ ordered so each item is independently shippable and reviewable.
   transaction with verify-before-commit (op count + last `seq` + vector clock;
   mismatch → rollback). Validated real-Chrome-IDB → sql.js. **Not wired into
   startup** — B3/C2 decide when to run it.
+- ✅ **Backend-aware store init (B3, partial).** `OperationLogStoreService.init()`
+  / `ArchiveStoreService._init()` now call `adapter.init()` and skip the IDB open
+  for self-managing backends (no `adoptConnection`); the IndexedDB path is
+  unchanged. Dead in production until the native token flip. Only the device-gated
+  token override + native `SqliteDb` wrapper remain.
 - ✅ App-private local backup shipped (#7924): `LocalBackupService` writes a
   JSON snapshot every 5 min on Android (`KeyValStore` rows `backup` /
   `backup_prev`) and iOS (`Directory.Data` `super-productivity-backup.json` /
@@ -135,22 +140,24 @@ captured on the next tick.
   `operation-log-stress.benchmark.ts` harness is the lever for the on-device
   perf + behavior pass (see B1 perf note).
 
-### B3. Flip the DI token on native
+### B3. Flip the DI token on native — init fix ✅ landed; token flip device-gated
 
-- **Do:** override `OP_LOG_DB_ADAPTER_FACTORY` to return `SqliteOpLogAdapter`
-  when `IS_NATIVE_PLATFORM`, behind a feature flag defaulting **off**.
-- **⚠️ Must also fix the store init flow (found during B2 stage 2).**
-  `OperationLogStoreService.init()` (and `ArchiveStoreService`) is IDB-shaped: it
-  unconditionally `_openDbWithRetry()`s an IndexedDB connection and hands it to
-  `adapter.adoptConnection?.(db)` — a **no-op for SQLite**, which self-manages.
-  Two consequences on the SQLite path: (a) the adapter's tables are never created
-  (`adapter.init()` is the DDL and is never called → "no such table"), and (b) it
-  still opens the evictable WebView IndexedDB we're trying to escape. So `init()`
-  must, when the backend self-manages (no `adoptConnection`), call
-  `await this._adapter.init()` and **skip the IDB open**. The B2 store-port spec
-  papers over (a) by pre-creating the tables; B3 is where the real fix lands.
-- **Size:** tiny token flip; small-but-careful init change. **Risk:** gated by
-  the flag.
+- ✅ **Backend-aware store init (the half found during B2 stage 2, now done).**
+  `OperationLogStoreService.init()` and `ArchiveStoreService._init()` were
+  IDB-shaped — they unconditionally opened+adopted a WebView IndexedDB connection
+  and never called `adapter.init()`, so on SQLite the tables were never created
+  _and_ the evictable store was still touched. Now: when the adapter exposes no
+  `adoptConnection` (self-managing, e.g. SQLite), `init()` calls
+  `await this._adapter.init()` and **skips the IDB open**; the IndexedDB path is
+  unchanged. Two unit tests cover both branches; the store-port integration spec
+  now drives the store fully on SQLite (no pre-init workaround). The new branch is
+  **dead in production** until the token flip below, so it shipped risk-free.
+- ⏳ **Remains (device-gated):** override `OP_LOG_DB_ADAPTER_FACTORY` to return
+  `SqliteOpLogAdapter` when `IS_NATIVE_PLATFORM`, behind a feature flag defaulting
+  **off**. The factory must hand **both** services' adapters the **same**
+  `SqliteDb` (one SQLite file, all tables) — mirroring how they share one IDB
+  connection today. Needs B1 (the native `SqliteDb` wrapper) first.
+- **Size:** tiny token flip (init change done). **Risk:** gated by the flag.
 
 ---
 
