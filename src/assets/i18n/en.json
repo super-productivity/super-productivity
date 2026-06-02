@@ -1967,6 +1967,8 @@
     },
     "TIME_TRACKING": {
       "B": {
+        "BREAK_SNACK": "Enjoy your break!",
+        "PAUSE_AND_BREAK": "Pause & take a break",
         "SNOOZE": "Snooze {{time}}"
       },
       "B_TTR": {

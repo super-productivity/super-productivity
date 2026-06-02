@@ -31,6 +31,7 @@ import { ofType } from '@ngrx/effects';
 import { idleDialogResult, triggerResetBreakTimer } from '../idle/store/idle.actions';
 import { playSound } from '../../util/play-sound';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { SnackService } from '../../core/snack/snack.service';
 
 const BREAK_TRIGGER_DURATION = 10 * 60 * 1000;
 const PING_UPDATE_BANNER_INTERVAL = 60 * 1000;
@@ -60,6 +61,7 @@ export class TakeABreakService {
   private _bannerService = inject(BannerService);
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _uiHelperService = inject(UiHelperService);
+  private _snackService = inject(SnackService);
 
   otherNoBreakTIme$ = new Subject<number>();
 
@@ -289,7 +291,9 @@ export class TakeABreakService {
           time: msToString(cfg.takeABreak.takeABreakSnoozeTime),
         },
         action: {
-          label: T.F.FOCUS_MODE.START_BREAK,
+          // Not "Start break": this reminder has no break timer/screen, the
+          // button just pauses tracking — so label it for what it does.
+          label: T.F.TIME_TRACKING.B.PAUSE_AND_BREAK,
           fn: () => this.startBreak(),
         },
         action2: {
@@ -318,7 +322,15 @@ export class TakeABreakService {
   }
 
   startBreak(): void {
+    // This reminder isn't a timed-break feature: it just pauses tracking so the
+    // rest counts as a break, then resets the reminder. Show an encouraging
+    // snack so the click clearly does something instead of nothing.
     this._taskService.pauseCurrent();
+    this._snackService.open({
+      type: 'SUCCESS',
+      ico: 'free_breakfast',
+      msg: T.F.TIME_TRACKING.B.BREAK_SNACK,
+    });
     this.resetTimer();
   }
 

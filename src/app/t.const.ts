@@ -2017,6 +2017,8 @@ const T = {
     },
     TIME_TRACKING: {
       B: {
+        BREAK_SNACK: 'F.TIME_TRACKING.B.BREAK_SNACK',
+        PAUSE_AND_BREAK: 'F.TIME_TRACKING.B.PAUSE_AND_BREAK',
         SNOOZE: 'F.TIME_TRACKING.B.SNOOZE',
       },
       B_TTR: {
