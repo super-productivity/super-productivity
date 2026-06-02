@@ -22,15 +22,21 @@
         [ngModel]="tagSearch.searchQuery()"
         (ngModelChange)="tagSearch.searchQuery.set($event)"
         (keydown.arrowdown)="focusFirstTagItem()"
+        (keydown.arrowup)="focusLastTagItem($event)"
         (keydown.enter)="selectFirstTag($event)"
       />
     </div>
     <div (click)="$event.stopPropagation()">
-      @for (tag of tagSearch.filteredItems(); track tag.id) {
+      @for (
+        tag of tagSearch.filteredItems();
+        track tag.id;
+        let isFirst = $first;
+        let isLast = $last
+      ) {
         <button
           #tagItem
           (click)="toggleTag.emit(tag.id)"
-          (keydown)="onTagMenuKeydown($event, tag.id)"
+          (keydown)="onTagMenuKeydown($event, tag.id, isFirst, isLast)"
           mat-menu-item
         >
           @if (task().tagIds.includes(tag.id)) {

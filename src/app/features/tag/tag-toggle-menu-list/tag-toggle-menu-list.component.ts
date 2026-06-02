@@ -112,11 +112,24 @@ export class TagToggleMenuListComponent {
     read: MatMenuTrigger,
   });
 
-  onTagMenuKeydown(ev: KeyboardEvent, tagId: string): void {
+  onTagMenuKeydown(
+    ev: KeyboardEvent,
+    tagId: string,
+    isFirst?: boolean,
+    isLast?: boolean,
+  ): void {
     if (ev.code === 'Space') {
       ev.preventDefault();
       ev.stopPropagation();
       this.toggleTag.emit(tagId);
+    } else if (ev.key === 'ArrowUp' && isFirst) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.tagsSearchInput()?.nativeElement.focus();
+    } else if (ev.key === 'ArrowDown' && isLast) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.tagsSearchInput()?.nativeElement.focus();
     }
   }
 
@@ -137,6 +150,16 @@ export class TagToggleMenuListComponent {
 
   focusFirstTagItem(): void {
     this.tagMenuItems()[0]?.nativeElement.focus();
+  }
+
+  focusLastTagItem(event: KeyboardEvent): void {
+    const items = this.tagMenuItems();
+    const lastItem = items[items.length - 1];
+    if (lastItem) {
+      event.preventDefault();
+      event.stopPropagation();
+      lastItem.nativeElement.focus();
+    }
   }
 
   selectFirstTag(event: Event): void {

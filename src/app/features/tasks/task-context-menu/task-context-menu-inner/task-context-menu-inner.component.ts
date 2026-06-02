@@ -353,8 +353,28 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this.projectMenuItems()[0]?.nativeElement.focus();
   }
 
+  focusLastProjectItem(event: KeyboardEvent): void {
+    const items = this.projectMenuItems();
+    const lastItem = items[items.length - 1];
+    if (lastItem) {
+      event.preventDefault();
+      event.stopPropagation();
+      lastItem.nativeElement.focus();
+    }
+  }
+
   focusFirstTagItem(): void {
     this.tagMenuItems()[0]?.nativeElement.focus();
+  }
+
+  focusLastTagItem(event: KeyboardEvent): void {
+    const items = this.tagMenuItems();
+    const lastItem = items[items.length - 1];
+    if (lastItem) {
+      event.preventDefault();
+      event.stopPropagation();
+      lastItem.nativeElement.focus();
+    }
   }
 
   selectFirstProject(event: Event): void {
@@ -372,6 +392,30 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       event.preventDefault();
       this.toggleTag(firstTag.id);
       this.contextMenuTrigger()?.closeMenu();
+    }
+  }
+
+  onProjectItemKeydown(event: KeyboardEvent, isFirst: boolean, isLast: boolean): void {
+    if (event.key === 'ArrowUp' && isFirst) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.projectSearchInput()?.nativeElement.focus();
+    } else if (event.key === 'ArrowDown' && isLast) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.projectSearchInput()?.nativeElement.focus();
+    }
+  }
+
+  onTagItemKeydown(event: KeyboardEvent, isFirst: boolean, isLast: boolean): void {
+    if (event.key === 'ArrowUp' && isFirst) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.tagsSearchInput()?.nativeElement.focus();
+    } else if (event.key === 'ArrowDown' && isLast) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.tagsSearchInput()?.nativeElement.focus();
     }
   }
 

@@ -326,17 +326,21 @@
           [ngModel]="projectSearch.searchQuery()"
           (ngModelChange)="projectSearch.searchQuery.set($event)"
           (keydown.arrowdown)="focusFirstProjectItem()"
+          (keydown.arrowup)="focusLastProjectItem($event)"
           (keydown.enter)="selectFirstProject($event)"
         />
       </div>
       @if (projectSearch.filteredItems()) {
         @for (
           project of projectSearch.filteredItems();
-          track trackByProjectId($index, project)
+          track trackByProjectId($index, project);
+          let isFirst = $first;
+          let isLast = $last
         ) {
           <button
             #projectItem
             (click)="moveTaskToProject(project.id)"
+            (keydown)="onProjectItemKeydown($event, isFirst, isLast)"
             mat-menu-item
           >
             <mat-icon

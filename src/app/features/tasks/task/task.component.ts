@@ -709,12 +709,34 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this.projectMenuItems()[0]?.nativeElement.focus();
   }
 
+  focusLastProjectItem(event: KeyboardEvent): void {
+    const items = this.projectMenuItems();
+    const lastItem = items[items.length - 1];
+    if (lastItem) {
+      event.preventDefault();
+      event.stopPropagation();
+      lastItem.nativeElement.focus();
+    }
+  }
+
   selectFirstProject(event: Event): void {
     const firstProject = this.projectSearch.filteredItems()[0];
     if (firstProject) {
       event.preventDefault();
       this.moveTaskToProject(firstProject.id);
       this.projectMenuTrigger()?.closeMenu();
+    }
+  }
+
+  onProjectItemKeydown(event: KeyboardEvent, isFirst: boolean, isLast: boolean): void {
+    if (event.key === 'ArrowUp' && isFirst) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.projectSearchInput()?.nativeElement.focus();
+    } else if (event.key === 'ArrowDown' && isLast) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.projectSearchInput()?.nativeElement.focus();
     }
   }
 
