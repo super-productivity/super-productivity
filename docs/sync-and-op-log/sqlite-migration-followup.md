@@ -12,9 +12,22 @@ ordered so each item is independently shippable and reviewable.
 - ✅ `OperationLogStoreService` + `ArchiveStoreService` fully routed through the
   port (no direct `this.db`), behind a DI factory token
   (`OP_LOG_DB_ADAPTER_FACTORY`), IndexedDB-backed on every platform today.
-- ✅ `SqliteOpLogAdapter` fully implemented against a minimal `SqliteDb` port,
-  unit-tested against an in-memory SQLite stand-in. **Not wired to any
-  platform; no native plugin dependency.**
+- ✅ `SqliteOpLogAdapter` fully implemented against a minimal `SqliteDb` port.
+  **Not wired to any platform; no native plugin dependency.**
+- ✅ **Validated against a real SQLite engine (sql.js).** `sql.js` is served into
+  Karma (dev-only; never in the app bundle) and the adapter's behavioral
+  contract runs against both the in-memory fake and real SQLite
+  (`sqlite-op-log-adapter.spec.ts`), plus a store-level second pass through
+  `OperationLogStoreService` (`remote-apply-store-port.integration.spec.ts`).
+  Confirms the real `UNIQUE constraint failed` → `ConstraintError` mapping,
+  `AUTOINCREMENT`-after-`clear()`, compound-index + NULL ranges, and real
+  `BEGIN IMMEDIATE` rollback. **(B2 translation-layer + store-port passes; the
+  on-device real-engine run still remains.)**
+- ✅ **C1 backend migration implemented + tested** (`op-log-backend-migration.ts`):
+  whole-DB copy from any source adapter to any dest adapter in one dest
+  transaction with verify-before-commit (op count + last `seq` + vector clock;
+  mismatch → rollback). Validated real-Chrome-IDB → sql.js. **Not wired into
+  startup** — B3/C2 decide when to run it.
 - ✅ App-private local backup shipped (#7924): `LocalBackupService` writes a
   JSON snapshot every 5 min on Android (`KeyValStore` rows `backup` /
   `backup_prev`) and iOS (`Directory.Data` `super-productivity-backup.json` /
@@ -86,45 +99,79 @@ captured on the next tick.
   IndexedDB — i.e. it reintroduces the eviction risk. Bind SQLite **only** when
   `IS_NATIVE_PLATFORM`; web/PWA/Electron stay on IndexedDB.
 - **Size:** small. **Risk:** native build/CI surface.
+- **⚡ Perf — bake two mitigations into the wrapper from the start.** On native
+  the dominant cost is the Capacitor JS↔native bridge round-trip, not SQLite
+  itself. Reads (`getAll`/`count`) are already one query = one crossing.
+  Single-op append is negligible. The one cliff is **bulk write**:
+  `OperationLogStoreService.appendBatch()` loops `await tx.add()` once per op, so
+  N ops = N crossings. Mitigations (only matter on the bridge; can't be measured
+  with in-process sql.js, so validate on-device):
+  1. **Return `lastId` from the plugin's own `run` response** (it provides it) —
+     never issue a separate `SELECT last_insert_rowid()`, which would double
+     every insert to two crossings.
+  2. **Add an optional bulk path to the port** (e.g. `runBatch(statements)` on
+     `SqliteDb` + an `addBatch` on `OpLogTx`) so `appendBatch` collapses to one
+     crossing via the plugin's `executeSet`. Per-op `seq` recovery from a batched
+     insert needs `RETURNING seq` (SQLite ≥ 3.35) or `last_insert_rowid()`
+     arithmetic over the consecutive AUTOINCREMENT range — pick after confirming
+     the plugin's SQLite version on-device.
 
-### B2. Validate `SqliteOpLogAdapter` against a real engine
+### B2. Validate `SqliteOpLogAdapter` against a real engine — ✅ done (CI), on-device remains
 
-The current 23 specs use an in-memory stand-in that validates the _translation
-layer_, not SQLite itself.
-
-- **Do:** run the adapter once against a real engine. Two options:
-  1. **On-device** integration check (most faithful), or
-  2. wire **sql.js with a served `.wasm`** into a dedicated Karma run (the
-     universal sql.js build statically imports `node:` modules webpack can't
-     bundle, so this needs an asset/proxy entry, not the default builder).
-- **Do also:** parameterize the existing op-log integration harness to run a
-  second pass against `SqliteOpLogAdapter` (the plan's "run the suite against
-  both adapters" gate) — catches autoincrement/unique/range/atomicity gaps the
-  stand-in can't.
-- **Size:** medium. **Risk:** medium — this is where real-SQLite surprises
-  surface (collation/ordering of TEXT keys, NULL handling in compound ranges).
+- ✅ **sql.js in Karma.** `sql.js` is a devDependency, served into Karma as a
+  global script + a proxied `.wasm` (`src/karma.conf.js`), so the webpack `node:`
+  import problem is sidestepped (loaded as a script, not bundled). A ~25-line
+  `SqlJsDb` wrapper (`sql-js-db.test-helper.ts`) satisfies the `SqliteDb` port.
+- ✅ **Adapter contract dual-run.** `sqlite-op-log-adapter.spec.ts` runs the
+  behavioral contract against both the fake and real sql.js; SQL-emission specs
+  stay fake-only. Confirmed the real `UNIQUE constraint failed` → `ConstraintError`
+  mapping, `AUTOINCREMENT`-after-`clear()`, compound-index + NULL ranges, real
+  `BEGIN IMMEDIATE` rollback. No surprises surfaced.
+- ✅ **Store-port second pass.** `remote-apply-store-port.integration.spec.ts`
+  runs the store's composed flows (apply/mark/merge-clock, partial failures,
+  full-state clearing) through `OperationLogStoreService` on both backends.
+- ⏳ **Remains: the on-device real-engine run.** sql.js validates the engine, not
+  the Capacitor bridge or the native plugin's specific SQLite build/flags. The
+  `operation-log-stress.benchmark.ts` harness is the lever for the on-device
+  perf + behavior pass (see B1 perf note).
 
 ### B3. Flip the DI token on native
 
 - **Do:** override `OP_LOG_DB_ADAPTER_FACTORY` to return `SqliteOpLogAdapter`
   when `IS_NATIVE_PLATFORM`, behind a feature flag defaulting **off**.
-- **Size:** tiny. **Risk:** gated by the flag.
+- **⚠️ Must also fix the store init flow (found during B2 stage 2).**
+  `OperationLogStoreService.init()` (and `ArchiveStoreService`) is IDB-shaped: it
+  unconditionally `_openDbWithRetry()`s an IndexedDB connection and hands it to
+  `adapter.adoptConnection?.(db)` — a **no-op for SQLite**, which self-manages.
+  Two consequences on the SQLite path: (a) the adapter's tables are never created
+  (`adapter.init()` is the DDL and is never called → "no such table"), and (b) it
+  still opens the evictable WebView IndexedDB we're trying to escape. So `init()`
+  must, when the backend self-manages (no `adoptConnection`), call
+  `await this._adapter.init()` and **skip the IDB open**. The B2 store-port spec
+  papers over (a) by pre-creating the tables; B3 is where the real fix lands.
+- **Size:** tiny token flip; small-but-careful init change. **Risk:** gated by
+  the flag.
 
 ---
 
 ## Track C — Data migration (native, one-time)
 
-### C1. IDB → SQLite copy on first launch after enabling B3
+### C1. IDB → SQLite copy on first launch after enabling B3 — ✅ algorithm done + tested, wiring remains
 
-- **Do:** when the SQLite DB is empty/absent **and** a legacy `SUP_OPS`
-  IndexedDB exists, copy OPS / STATE*CACHE / VECTOR_CLOCK / CLIENT_ID /
-  ARCHIVE*\* across in one SQLite transaction (reuse the IndexedDB adapter's read
-  side + the SQLite adapter's write side — both already exist).
-- **Verify before commit:** op count, last `seq`, and vector clock match.
-- **Keep the IDB copy** untouched for ≥1 release as a fallback; add cleanup
-  later. Mirror the proven legacy `pf` → `SUP_OPS` migration pattern.
-- **Size:** medium. **Risk:** high (data movement) — mitigated by verify +
-  retain-source.
+- ✅ **Algorithm:** `migrateOpLogBackend(source, dest)` in
+  `op-log-backend-migration.ts` copies **all** stores in one `dest` transaction
+  with verify-before-commit (op count + last `seq` + vector clock; mismatch →
+  rollback, source untouched). Generic `iterate`→`put`: preserves ops `seq`
+  (incl. gaps) via put-honors-seq, writes singletons at their out-of-line key,
+  no per-store special-casing. Adapter-agnostic, so validated real-Chrome-IDB →
+  sql.js in CI; the native plugin dest behaves identically through the port.
+- ⏳ **Remains (wiring, with B3):** detect "SQLite empty/absent **and** legacy
+  `SUP_OPS` present" on first launch and call `migrateOpLogBackend`. Set a
+  migration-complete marker. **Keep the IDB copy** untouched for ≥1 release as a
+  fallback. Note: the copy uses the adapter port's read side, independent of the
+  store-init IDB-open fix in B3.
+- **Risk:** high (data movement) — mitigated by the verify-before-commit safety
+  net (now tested to actually roll back) + retain-source.
 
 ### C2. Staged rollout
 

@@ -29,13 +29,22 @@
 >   minimal `SqliteDb` port, so no native dependency. 23 specs validate the
 >   translation layer + transaction semantics against an in-memory SQLite
 >   stand-in.
-> - ⏳ Remaining for Phase B: add `@capacitor-community/sqlite` + a thin
->   `SqliteDb` wrapper over its `SQLiteDBConnection`, override
->   `OP_LOG_DB_ADAPTER_FACTORY` to return `SqliteOpLogAdapter` when native, and
->   run this adapter once against a REAL SQLite engine on-device (the in-memory
->   fake validates translation, not SQLite itself). The other small IDB
->   consumers (theme, credential, oauth, client-id) are out of the data-loss
->   scope (Phase D).
+> - ✅ **Phase B step 3 — real-engine validation (CI):** `sql.js` served into
+>   Karma drives the adapter's behavioral contract (`sqlite-op-log-adapter.spec.ts`)
+>   and a store-level pass (`remote-apply-store-port.integration.spec.ts`) against
+>   actual SQLite. Confirms the `UNIQUE`→`ConstraintError` mapping,
+>   `AUTOINCREMENT`-after-`clear()`, compound-index/NULL ranges, real
+>   `BEGIN IMMEDIATE` rollback. No surprises.
+> - ✅ **Phase C step (algorithm) — backend migration:** `migrateOpLogBackend`
+>   (`op-log-backend-migration.ts`) copies the whole DB source→dest with
+>   verify-before-commit; tested real-IDB → sql.js. Not yet wired into startup.
+> - ⏳ Remaining (device-gated): add `@capacitor-community/sqlite` + a thin
+>   `SqliteDb` wrapper over its `SQLiteDBConnection` (with the bridge-perf
+>   mitigations — see followup B1), override `OP_LOG_DB_ADAPTER_FACTORY` for
+>   native behind a flag, fix the store `init()` to call `adapter.init()` / skip
+>   the IDB open on SQLite (see followup B3), wire the C1 migration trigger, and
+>   run on-device. The other small IDB consumers (theme, credential, oauth,
+>   client-id) are out of the data-loss scope (Phase D).
 >
 > **Open decisions (need on-device validation):**
 >
