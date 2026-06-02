@@ -51,6 +51,11 @@ const SCHEDULE_AFFECTING_FIELDS: (keyof TaskRepeatCfgCopy)[] = [
   'startDate',
   'repeatCycle',
   'repeatEvery',
+  // CRON cycle: the expression alone determines which days fire, so editing it
+  // must re-anchor lastTaskCreationDay like any other schedule change. Omitting
+  // it left a stale (often future) anchor that silently suppressed all
+  // occurrences after a CRON edit.
+  'cronExpression',
   'monday',
   'tuesday',
   'wednesday',

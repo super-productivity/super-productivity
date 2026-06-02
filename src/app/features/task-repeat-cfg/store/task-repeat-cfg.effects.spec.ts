@@ -2160,6 +2160,58 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       });
     });
 
+    it('should reschedule and re-anchor when only cronExpression changes', (done) => {
+      // Regression: cronExpression was missing from SCHEDULE_AFFECTING_FIELDS,
+      // so editing a CRON schedule left lastTaskCreationDay stale (often parked
+      // on a future occurrence), silently suppressing all future instances.
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'CRON',
+        cronExpression: '0 0 * * *',
+        startDate: todayStr,
+      };
+
+      const firstOccurrence = getNextRepeatOccurrence(updatedCfg as any, new Date())!;
+      const firstOccurrenceStr = getDbDateStr(firstOccurrence);
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { cronExpression: '0 0 * * *' },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: liveTask as any,
+            day: firstOccurrenceStr,
+          }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({
+            lastTaskCreationDay: firstOccurrenceStr,
+          }),
+        );
+        done();
+      });
+    });
+
     it('should dispatch scheduleTaskWithTime when schedule-affecting field changes and task is timed', (done) => {
       const today = new Date();
       const todayStr = getDbDateStr(today);
