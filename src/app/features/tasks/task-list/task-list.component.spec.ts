@@ -285,7 +285,7 @@ describe('TaskListComponent', () => {
         // and the drag converts to a main task at the parent's slot.
         withPointerOverSubListWrapper({ listModelId: 'parent2' }, () => {
           const drag = subtaskDragFrom('parent1');
-          const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
+          const drop = createMockDrop('parent2', 'SUB');
           expect(component.enterPredicate(drag, drop)).toBe(true);
         });
       });
@@ -293,7 +293,7 @@ describe('TaskListComponent', () => {
       it('should block the top-level list when the pointer is in a foreign sublist LEADING wrapper strip (let the foreign SUB claim it for re-parent)', () => {
         withPointerOverSubListWrapper({ listModelId: 'parent2' }, () => {
           const drag = subtaskDragFrom('parent1');
-          const drop = createMockDrop('UNDONE', [{ id: 'parent2' }], 'PARENT');
+          const drop = createMockDrop('UNDONE', 'PARENT');
           expect(component.enterPredicate(drag, drop)).toBe(false);
         });
       });
@@ -301,7 +301,7 @@ describe('TaskListComponent', () => {
       it('should block the top-level list when the pointer is in the SOURCE sublist leading wrapper strip (keep in-list sorting)', () => {
         withPointerOverSubListWrapper({ listModelId: 'parent1' }, () => {
           const drag = subtaskDragFrom('parent1');
-          const drop = createMockDrop('UNDONE', [{ id: 'parent1' }], 'PARENT');
+          const drop = createMockDrop('UNDONE', 'PARENT');
           expect(component.enterPredicate(drag, drop)).toBe(false);
         });
       });
