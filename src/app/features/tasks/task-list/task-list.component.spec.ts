@@ -711,4 +711,132 @@ describe('TaskListComponent', () => {
       expect(sectionServiceMock.removeTaskFromSection).not.toHaveBeenCalled();
     });
   });
+
+  // The public drop() handler turns a CdkDragDrop event into the right action,
+  // including the placement math (newIds order -> anchor). Covers the
+  // event->action translation the reducer specs assume.
+  describe('drop() conversion dispatch', () => {
+    type ListData = {
+      listId: 'PARENT' | 'SUB';
+      listModelId: string;
+      filteredTasks: { id: string }[];
+    };
+    const dropEvent = (opts: {
+      previous: ListData;
+      target: ListData;
+      dragged: MockDragTask;
+      currentIndex: number;
+    }): Parameters<TaskListComponent['drop']>[0] =>
+      ({
+        previousContainer: { data: opts.previous },
+        container: { data: opts.target },
+        item: { data: opts.dragged },
+        previousIndex: 0,
+        currentIndex: opts.currentIndex,
+      }) as unknown as Parameters<TaskListComponent['drop']>[0];
+
+    it('dispatches convertToSubTask when a top-level task is dropped into a subtask list', async () => {
+      await component.drop(
+        dropEvent({
+          previous: {
+            listId: 'PARENT',
+            listModelId: 'UNDONE',
+            filteredTasks: [{ id: 't1' }],
+          },
+          target: {
+            listId: 'SUB',
+            listModelId: 'p1',
+            filteredTasks: [{ id: 's1' }, { id: 's2' }],
+          },
+          dragged: { id: 't1', parentId: null },
+          currentIndex: 1, // onto s2 -> lands before s2 (after s1)
+        }),
+      );
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.convertToSubTask({
+          taskId: 't1',
+          targetParentId: 'p1',
+          afterTaskId: 's1',
+        }),
+      );
+    });
+
+    it('passes afterTaskId null when dropped at the first subtask slot', async () => {
+      await component.drop(
+        dropEvent({
+          previous: {
+            listId: 'PARENT',
+            listModelId: 'UNDONE',
+            filteredTasks: [{ id: 't1' }],
+          },
+          target: {
+            listId: 'SUB',
+            listModelId: 'p1',
+            filteredTasks: [{ id: 's1' }, { id: 's2' }],
+          },
+          dragged: { id: 't1', parentId: null },
+          currentIndex: 0, // onto s1 -> lands before s1 (first child)
+        }),
+      );
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.convertToSubTask({
+          taskId: 't1',
+          targetParentId: 'p1',
+          afterTaskId: null,
+        }),
+      );
+    });
+
+    it('dispatches convertToMainTask when a subtask is dropped into the top-level list', async () => {
+      const dragged: MockDragTask = { id: 's1', parentId: 'p1' };
+      await component.drop(
+        dropEvent({
+          previous: {
+            listId: 'SUB',
+            listModelId: 'p1',
+            filteredTasks: [{ id: 's1' }, { id: 's2' }],
+          },
+          target: {
+            listId: 'PARENT',
+            listModelId: 'UNDONE',
+            filteredTasks: [{ id: 't1' }, { id: 't2' }],
+          },
+          dragged,
+          currentIndex: 1, // onto t2 -> lands before t2 (after t1)
+        }),
+      );
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.convertToMainTask({
+          task: dragged as unknown as TaskWithSubTasks,
+          isPlanForToday: false,
+          afterTaskId: 't1',
+          isDone: false,
+        }),
+      );
+    });
+
+    it('marks the converted task done when dropped into the DONE list', async () => {
+      const dragged: MockDragTask = { id: 's1', parentId: 'p1' };
+      await component.drop(
+        dropEvent({
+          previous: { listId: 'SUB', listModelId: 'p1', filteredTasks: [{ id: 's1' }] },
+          target: { listId: 'PARENT', listModelId: 'DONE', filteredTasks: [] },
+          dragged,
+          currentIndex: 0,
+        }),
+      );
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.convertToMainTask({
+          task: dragged as unknown as TaskWithSubTasks,
+          isPlanForToday: false,
+          afterTaskId: null,
+          isDone: true,
+        }),
+      );
+    });
+  });
 });
