@@ -197,13 +197,15 @@ export class TaskViewCustomizerService {
 
         return { result: { list: sorted, grouped }, isDefault: false };
       }),
-      // Emit the default (uncustomized) list synchronously, but defer the
-      // customized path to the next animation frame. The customized branch does
-      // heavier sort/group/filter work and is driven by change-detection-bound
-      // signals, so a synchronous emit there can re-enter CD. The default branch
-      // is store-driven only — emitting it on the same tick removes the extra
-      // frame between a drag-drop dispatch and the list re-render that otherwise
-      // surfaces as a snap-back flicker on drop.
+      // Emit the default (uncustomized) list synchronously, but keep the
+      // customized path on the animation-frame scheduler. The customized branch
+      // does heavier sort/group/filter work and is driven by the customizer
+      // signals (`toObservable(selectedSort/Group/Filter)`); deferring it
+      // batches the rapid emissions that fire when switching work context (the
+      // original reason this frame-defer was added, commit fddedf3fa6). The
+      // default branch is store-driven only — emitting it on the same tick drops
+      // the extra frame between a drag-drop dispatch and the list re-render that
+      // otherwise surfaces as a snap-back flicker on drop.
       switchMap(({ result, isDefault }) =>
         isDefault ? of(result) : of(result).pipe(observeOn(animationFrameScheduler)),
       ),

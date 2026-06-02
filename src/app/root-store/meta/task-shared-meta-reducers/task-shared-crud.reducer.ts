@@ -208,6 +208,11 @@ const handleConvertToMainTask = (
               dueDay: todayStr,
             }
           : {}),
+        // Dragging a subtask onto the work-view DONE list converts it to a
+        // main task done *today* by design: the DONE list is "done today", so
+        // mark it done, stamp doneOn, drop any prior schedule and set
+        // dueDay=today (TODAY membership is by dueDay). This is intentional even
+        // outside the Today context.
         ...(isDone !== undefined
           ? {
               isDone,
