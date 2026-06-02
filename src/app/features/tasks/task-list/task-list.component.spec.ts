@@ -43,15 +43,14 @@ describe('TaskListComponent', () => {
       data: task,
     }) as unknown as CdkDrag;
 
-  // Helper to create mock CdkDropList with allTasks. listId defaults to
-  // 'PARENT' to mirror top-level task lists; pass 'SUB' for subtask lists.
+  // Helper to create mock CdkDropList. listId defaults to 'PARENT' to
+  // mirror top-level task lists; pass 'SUB' for subtask lists.
   const createMockDrop = (
     listModelId: string,
-    allTasks: Partial<TaskWithSubTasks>[] = [],
     listId: 'PARENT' | 'SUB' = 'PARENT',
   ): CdkDropList =>
     ({
-      data: { listId, listModelId, allTasks },
+      data: { listId, listModelId, filteredTasks: [] },
     }) as unknown as CdkDropList;
 
   beforeEach(async () => {
@@ -117,49 +116,48 @@ describe('TaskListComponent', () => {
   });
 
   describe('enterPredicate', () => {
-    describe('subtasks appearing as top-level items (parent not in list)', () => {
-      it('should allow subtask to reorder within UNDONE list when parent not present', () => {
+    describe('subtasks in parent-level DONE/UNDONE lists', () => {
+      it('should allow subtask to reorder within UNDONE', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        // Parent NOT in allTasks - subtask appears as top-level
-        const drop = createMockDrop('UNDONE', [{ id: 'sub1' }, { id: 'other-task' }]);
+        const drop = createMockDrop('UNDONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should allow subtask to move from UNDONE to DONE when parent not present', () => {
+      it('should allow subtask to move from UNDONE to DONE', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('DONE', [{ id: 'done-task' }]);
+        const drop = createMockDrop('DONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should allow subtask to move from DONE to UNDONE when parent not present', () => {
+      it('should allow subtask to move from DONE to UNDONE', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('UNDONE', [{ id: 'undone-task' }]);
+        const drop = createMockDrop('UNDONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should allow subtask to reorder within DONE list when parent not present', () => {
+      it('should allow subtask to reorder within DONE', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('DONE', [{ id: 'sub1' }, { id: 'other-done' }]);
+        const drop = createMockDrop('DONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
     });
 
-    describe('nested subtasks (parent IS in target list)', () => {
+    describe('subtasks dragged from nested lists', () => {
       it('should allow subtask to drop to UNDONE so it can become a main task', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('UNDONE', [{ id: 'parent1' }, { id: 'other-task' }]);
+        const drop = createMockDrop('UNDONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
       it('should allow subtask to drop to DONE so it can become a completed main task', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('DONE', [{ id: 'parent1' }]);
+        const drop = createMockDrop('DONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
@@ -232,7 +230,7 @@ describe('TaskListComponent', () => {
       it('should block the top-level list while the pointer is over the SOURCE subtask list (even its padding) so in-list sorting keeps working', () => {
         withPointerOverSubList({ listModelId: 'parent1', overRow: false }, () => {
           const drag = subtaskDragFrom('parent1');
-          const drop = createMockDrop('UNDONE', [{ id: 'parent1' }], 'PARENT');
+          const drop = createMockDrop('UNDONE');
           expect(component.enterPredicate(drag, drop)).toBe(false);
         });
       });
@@ -240,7 +238,7 @@ describe('TaskListComponent', () => {
       it('should block the top-level list while the pointer is over a foreign subtask ROW (re-parent intent)', () => {
         withPointerOverSubList({ listModelId: 'parent2', overRow: true }, () => {
           const drag = subtaskDragFrom('parent1');
-          const drop = createMockDrop('UNDONE', [{ id: 'parent2' }], 'PARENT');
+          const drop = createMockDrop('UNDONE');
           expect(component.enterPredicate(drag, drop)).toBe(false);
         });
       });
@@ -248,7 +246,7 @@ describe('TaskListComponent', () => {
       it('should accept the top-level list over a foreign subtask list trailing padding — the dead-band above the next parent (regression: #7905)', () => {
         withPointerOverSubList({ listModelId: 'parent2', overRow: false }, () => {
           const drag = subtaskDragFrom('parent1');
-          const drop = createMockDrop('UNDONE', [{ id: 'parent2' }], 'PARENT');
+          const drop = createMockDrop('UNDONE');
           expect(component.enterPredicate(drag, drop)).toBe(true);
         });
       });
@@ -258,7 +256,7 @@ describe('TaskListComponent', () => {
           { listModelId: 'parent2', overRow: false, enclosingParentTask: true },
           () => {
             const drag = subtaskDragFrom('parent1');
-            const drop = createMockDrop('UNDONE', [{ id: 'parent2' }], 'PARENT');
+            const drop = createMockDrop('UNDONE');
             expect(component.enterPredicate(drag, drop)).toBe(true);
           },
         );
@@ -267,7 +265,7 @@ describe('TaskListComponent', () => {
       it('should reject a foreign subtask list as drop target over its trailing padding (so the drag converts instead of re-parenting)', () => {
         withPointerOverSubList({ listModelId: 'parent2', overRow: false }, () => {
           const drag = subtaskDragFrom('parent1');
-          const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
+          const drop = createMockDrop('parent2', 'SUB');
           expect(component.enterPredicate(drag, drop)).toBe(false);
         });
       });
@@ -275,7 +273,7 @@ describe('TaskListComponent', () => {
       it('should accept a foreign subtask list as drop target over one of its rows (re-parent)', () => {
         withPointerOverSubList({ listModelId: 'parent2', overRow: true }, () => {
           const drag = subtaskDragFrom('parent1');
-          const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
+          const drop = createMockDrop('parent2', 'SUB');
           expect(component.enterPredicate(drag, drop)).toBe(true);
         });
       });
@@ -325,7 +323,7 @@ describe('TaskListComponent', () => {
         Object.assign(drag, {
           dropContainer: { data: { listId: 'SUB', listModelId: 'parent1' } },
         });
-        const drop = createMockDrop('UNDONE', [{ id: 'parent1' }], 'PARENT');
+        const drop = createMockDrop('UNDONE');
 
         try {
           expect(component.enterPredicate(drag, drop)).toBe(true);
@@ -338,7 +336,7 @@ describe('TaskListComponent', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
         // listModelId is the parent task ID (subtask list)
-        const drop = createMockDrop('parent1', [{ id: 'sub1' }, { id: 'sub2' }], 'SUB');
+        const drop = createMockDrop('parent1', 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
@@ -346,7 +344,7 @@ describe('TaskListComponent', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
         // Another task ID (not in PARENT_ALLOWED_LISTS)
-        const drop = createMockDrop('parent2', [{ id: 'sub3' }], 'SUB');
+        const drop = createMockDrop('parent2', 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
@@ -354,7 +352,7 @@ describe('TaskListComponent', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
         // Section drop-lists render with listId='PARENT' and a section id.
-        const drop = createMockDrop('section-abc', [], 'PARENT');
+        const drop = createMockDrop('section-abc');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
     });
@@ -363,28 +361,28 @@ describe('TaskListComponent', () => {
       it('should allow parent task to move from UNDONE to DONE', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('DONE', []);
+        const drop = createMockDrop('DONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
       it('should allow parent task to reorder within UNDONE', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('UNDONE', [{ id: 'task1' }, { id: 'task2' }]);
+        const drop = createMockDrop('UNDONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
       it('should allow parent task to move from DONE to UNDONE', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('UNDONE', []);
+        const drop = createMockDrop('UNDONE');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
       it('should allow parent task to move to BACKLOG', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('BACKLOG', []);
+        const drop = createMockDrop('BACKLOG');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
@@ -392,14 +390,14 @@ describe('TaskListComponent', () => {
         const task = { id: 'task1', parentId: null, subTaskIds: [] };
         const drag = createMockDrag(task);
         // Task ID listed as a subtask drop-list (listId='SUB').
-        const drop = createMockDrop('some-task-id', [], 'SUB');
+        const drop = createMockDrop('some-task-id', 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
       it('should block parent task with subtasks from dropping to subtask list', () => {
         const task = { id: 'task1', parentId: null, subTaskIds: ['sub1'] };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('some-task-id', [], 'SUB');
+        const drop = createMockDrop('some-task-id', 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
 
@@ -411,12 +409,12 @@ describe('TaskListComponent', () => {
           dueDay: '2099-12-25',
         };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('some-task-id', [], 'SUB');
+        const drop = createMockDrop('some-task-id', 'SUB');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
       it('should block timed, repeating, and issue-linked parent tasks from dropping to subtask list', () => {
-        const drop = createMockDrop('some-task-id', [], 'SUB');
+        const drop = createMockDrop('some-task-id', 'SUB');
 
         expect(
           component.enterPredicate(
@@ -459,7 +457,7 @@ describe('TaskListComponent', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
         // Section drop-lists are listId='PARENT' with an arbitrary section id.
-        const drop = createMockDrop('section-xyz', [], 'PARENT');
+        const drop = createMockDrop('section-xyz');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
     });
@@ -468,28 +466,28 @@ describe('TaskListComponent', () => {
       it('should block any task from dropping to OVERDUE', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('OVERDUE', []);
+        const drop = createMockDrop('OVERDUE');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
 
       it('should block subtask from dropping to OVERDUE', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('OVERDUE', []);
+        const drop = createMockDrop('OVERDUE');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
 
       it('should block any task from dropping to LATER_TODAY', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('LATER_TODAY', []);
+        const drop = createMockDrop('LATER_TODAY');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
 
       it('should block subtask from dropping to LATER_TODAY', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('LATER_TODAY', []);
+        const drop = createMockDrop('LATER_TODAY');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
     });
@@ -498,25 +496,14 @@ describe('TaskListComponent', () => {
       it('should allow parent task to drop into ADD_TASK_PANEL', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('ADD_TASK_PANEL', []);
+        const drop = createMockDrop('ADD_TASK_PANEL');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block subtask from dropping to ADD_TASK_PANEL when parent is in list', () => {
+      it('should block subtask from dropping to ADD_TASK_PANEL', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('ADD_TASK_PANEL', [{ id: 'parent1' }]);
-        expect(component.enterPredicate(drag, drop)).toBe(false);
-      });
-
-      it('should block subtask from dropping to ADD_TASK_PANEL even when parent not in list', () => {
-        // ADD_TASK_PANEL is not DONE or UNDONE, so subtasks should be blocked
-        // unless it's a subtask list (task ID)
-        const subtask = { id: 'sub1', parentId: 'parent1' };
-        const drag = createMockDrag(subtask);
-        const drop = createMockDrop('ADD_TASK_PANEL', []);
-        // ADD_TASK_PANEL is in PARENT_ALLOWED_LISTS but not a top-level list (DONE/UNDONE)
-        // So subtasks are blocked unless target is not in PARENT_ALLOWED_LISTS
+        const drop = createMockDrop('ADD_TASK_PANEL');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
     });
@@ -525,39 +512,22 @@ describe('TaskListComponent', () => {
       it('should allow parent task to drop into BACKLOG', () => {
         const task = { id: 'task1', parentId: null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('BACKLOG', []);
+        const drop = createMockDrop('BACKLOG');
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block subtask from dropping to BACKLOG when parent is in list', () => {
+      it('should block subtask from dropping to BACKLOG', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        const drop = createMockDrop('BACKLOG', [{ id: 'parent1' }]);
-        expect(component.enterPredicate(drag, drop)).toBe(false);
-      });
-
-      it('should block subtask from dropping to BACKLOG even when parent not in list', () => {
-        // BACKLOG is in PARENT_ALLOWED_LISTS but not a top-level list (DONE/UNDONE)
-        const subtask = { id: 'sub1', parentId: 'parent1' };
-        const drag = createMockDrag(subtask);
-        const drop = createMockDrop('BACKLOG', []);
+        const drop = createMockDrop('BACKLOG');
         expect(component.enterPredicate(drag, drop)).toBe(false);
       });
     });
 
     describe('edge cases', () => {
-      it('should handle empty allTasks array for subtask check', () => {
+      it('should not require filtered task data for subtask top-level drops', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
         const drag = createMockDrag(subtask);
-        // Empty allTasks - parent definitely not in list
-        const drop = createMockDrop('UNDONE', []);
-        expect(component.enterPredicate(drag, drop)).toBe(true);
-      });
-
-      it('should handle undefined allTasks for subtask check', () => {
-        const subtask = { id: 'sub1', parentId: 'parent1' };
-        const drag = createMockDrag(subtask);
-        // allTasks is undefined (drop.data.allTasks || [] handles this)
         const drop = { data: { listModelId: 'UNDONE' } } as unknown as CdkDropList;
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
@@ -565,7 +535,7 @@ describe('TaskListComponent', () => {
       it('should handle task with empty string parentId as parent task', () => {
         const task = { id: 'task1', parentId: '' as unknown as null };
         const drag = createMockDrag(task);
-        const drop = createMockDrop('UNDONE', []);
+        const drop = createMockDrop('UNDONE');
         // Empty string is falsy, so treated as parent task
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
