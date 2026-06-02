@@ -202,15 +202,11 @@ defineStorePortContract('IndexedDB', async () => []);
 
 defineStorePortContract('sql.js (real SQLite)', async () => {
   // One shared sql.js database; the store's single adapter reads/writes it.
-  // The store's init() is IDB-shaped — it opens+adopts an IndexedDB connection
-  // and never calls the adapter's own init(), so for a self-managing backend
-  // like SQLite the tables would not exist ("no such table"). Create them once
-  // on the shared db here; this mirrors the store-init change Phase B3 must make
-  // on native (call adapter.init() / skip the IDB open when the backend is
-  // SQLite). CREATE TABLE IF NOT EXISTS is idempotent, so the store's per-call
-  // adapters reuse these tables.
+  // OperationLogStoreService.init() now calls adapter.init() for self-managing
+  // backends (no adoptConnection) and skips the IndexedDB open (Phase B3), so the
+  // store itself creates the SQLite tables — no pre-init needed. This spec thus
+  // exercises the store running fully on SQLite with `_db` undefined.
   const db = await createSqlJsDb();
-  await new SqliteOpLogAdapter(db).init();
   return [
     { provide: OP_LOG_DB_ADAPTER_FACTORY, useValue: () => new SqliteOpLogAdapter(db) },
   ];

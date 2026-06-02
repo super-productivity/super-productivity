@@ -81,6 +81,14 @@ export class ArchiveStoreService {
    * all stores.
    */
   private async _init(): Promise<void> {
+    // Self-managing backends (e.g. SQLite) own their handle and create their own
+    // schema via the adapter — no WebView IndexedDB connection needed. Mirrors
+    // OperationLogStoreService.init(); only the adopt-connection (IndexedDB)
+    // backend opens/owns a connection here.
+    if (!this._adapter.adoptConnection) {
+      await this._adapter.init();
+      return;
+    }
     const db = await this._openDbWithRetry();
     db.addEventListener('close', () => {
       Log.warn(

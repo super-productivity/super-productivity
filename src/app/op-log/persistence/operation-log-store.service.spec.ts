@@ -18,6 +18,8 @@ import {
 } from '../../core/util/vector-clock';
 import { limitVectorClockSize, MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
+import { OpLogDbAdapter } from './op-log-db-adapter';
 import {
   IDB_OPEN_RETRIES,
   IDB_OPEN_RETRIES_NON_LOCK,
@@ -91,6 +93,63 @@ describe('OperationLogStoreService', () => {
 
       // All should resolve without error
       await expectAsync(Promise.all(initPromises)).toBeResolved();
+    });
+  });
+
+  describe('init backend selection (Phase B3)', () => {
+    // Build a fresh service whose adapter comes from the given factory.
+    const freshServiceWith = (adapter: OpLogDbAdapter): OperationLogStoreService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          OperationLogStoreService,
+          { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+          { provide: OP_LOG_DB_ADAPTER_FACTORY, useValue: () => adapter },
+        ],
+      });
+      return TestBed.inject(OperationLogStoreService);
+    };
+
+    it('init()s a self-managing adapter (no adoptConnection) and opens NO IndexedDB', async () => {
+      // SQLite-style backend: self-manages its handle, creates its schema via
+      // init(), and never adopts a connection.
+      const initSpy = jasmine.createSpy('init').and.resolveTo(undefined);
+      const adapter = { init: initSpy } as unknown as OpLogDbAdapter;
+      const svc = freshServiceWith(adapter);
+      const openSpy = spyOn(
+        svc as unknown as { _openDbOnce: () => Promise<unknown> },
+        '_openDbOnce',
+      );
+
+      await svc.init();
+
+      expect(initSpy).toHaveBeenCalledTimes(1);
+      expect(openSpy).not.toHaveBeenCalled();
+      // No WebView IndexedDB connection is opened or cached on this path.
+      expect((svc as unknown as { _db: unknown })._db).toBeUndefined();
+    });
+
+    it('opens + adopts a connection for an adopt-connection (IndexedDB) adapter', async () => {
+      const initSpy = jasmine.createSpy('init').and.resolveTo(undefined);
+      const adoptSpy = jasmine.createSpy('adoptConnection');
+      const adapter = {
+        init: initSpy,
+        adoptConnection: adoptSpy,
+      } as unknown as OpLogDbAdapter;
+      const svc = freshServiceWith(adapter);
+      const fakeDb = { addEventListener: (): void => {} };
+      spyOn(
+        svc as unknown as { _openDbOnce: () => Promise<unknown> },
+        '_openDbOnce',
+      ).and.resolveTo(fakeDb);
+
+      await svc.init();
+
+      expect(adoptSpy).toHaveBeenCalledWith(fakeDb);
+      // The IndexedDB backend does NOT use the adapter's own init() (its schema
+      // comes from the IDB upgrade on the adopted connection).
+      expect(initSpy).not.toHaveBeenCalled();
+      expect((svc as unknown as { _db: unknown })._db).toBe(fakeDb);
     });
   });
 
