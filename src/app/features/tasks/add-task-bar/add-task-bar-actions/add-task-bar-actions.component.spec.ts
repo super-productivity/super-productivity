@@ -1050,40 +1050,43 @@ describe('AddTaskBarActionsComponent', () => {
       const mockProject2 = { ...mockProject, id: '2', title: 'Other Project' } as Project;
       (mockProjectService.listSortedForUI as any).set([mockProject, mockProject2]);
 
-      component.projectSearchQuery.set('other');
-      expect(component.filteredProjects()).toEqual([mockProject2]);
+      component.projectSearch.searchQuery.set('other');
+      expect(component.projectSearch.filteredItems()).toEqual([mockProject2]);
 
-      component.projectSearchQuery.set('Test');
-      expect(component.filteredProjects()).toEqual([mockProject]);
+      component.projectSearch.searchQuery.set('Test');
+      expect(component.projectSearch.filteredItems()).toEqual([mockProject]);
 
-      component.projectSearchQuery.set('');
-      expect(component.filteredProjects()).toEqual([mockProject, mockProject2]);
+      component.projectSearch.searchQuery.set('');
+      expect(component.projectSearch.filteredItems()).toEqual([
+        mockProject,
+        mockProject2,
+      ]);
     });
 
     it('should filter tags correctly', () => {
       const mockTag2 = { ...mockTag, id: '2', title: 'important' } as Tag;
       (mockTagService.tagsNoMyDayAndNoListSorted as any).set([mockTag, mockTag2]);
 
-      component.tagSearchQuery.set('import');
-      expect(component.filteredTags()).toEqual([mockTag2]);
+      component.tagSearch.searchQuery.set('import');
+      expect(component.tagSearch.filteredItems()).toEqual([mockTag2]);
 
-      component.tagSearchQuery.set('URGENT');
-      expect(component.filteredTags()).toEqual([mockTag]);
+      component.tagSearch.searchQuery.set('URGENT');
+      expect(component.tagSearch.filteredItems()).toEqual([mockTag]);
 
-      component.tagSearchQuery.set('');
-      expect(component.filteredTags()).toEqual([mockTag, mockTag2]);
+      component.tagSearch.searchQuery.set('');
+      expect(component.tagSearch.filteredItems()).toEqual([mockTag, mockTag2]);
     });
 
     it('should reset project search when menu opens', () => {
-      component.projectSearchQuery.set('something');
+      component.projectSearch.searchQuery.set('something');
       component.onProjectMenuOpened();
-      expect(component.projectSearchQuery()).toBe('');
+      expect(component.projectSearch.searchQuery()).toBe('');
     });
 
     it('should reset tag search when menu opens', () => {
-      component.tagSearchQuery.set('something');
+      component.tagSearch.searchQuery.set('something');
       component.onTagsMenuOpened();
-      expect(component.tagSearchQuery()).toBe('');
+      expect(component.tagSearch.searchQuery()).toBe('');
     });
   });
 });

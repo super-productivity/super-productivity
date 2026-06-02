@@ -10,6 +10,7 @@ import {
   OnDestroy,
   output,
   viewChild,
+  viewChildren,
   ViewEncapsulation,
 } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
@@ -79,9 +80,15 @@ import { TaskLog } from '../../../../core/log';
 import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
 import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
+import { FormsModule } from '@angular/forms';
+import { createSearchFilter } from '../../../../util/create-search-filter';
 
 @Component({
   selector: 'task-context-menu-inner',
+  templateUrl: './task-context-menu-inner.component.html',
+  styleUrl: './task-context-menu-inner.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  encapsulation: ViewEncapsulation.Emulated,
   imports: [
     AsyncPipe,
     MatIcon,
@@ -95,11 +102,8 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
     MatTooltip,
     IssueIconPipe,
     MenuTouchFixDirective,
+    FormsModule,
   ],
-  templateUrl: './task-context-menu-inner.component.html',
-  styleUrl: './task-context-menu-inner.component.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  encapsulation: ViewEncapsulation.Emulated,
 })
 export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _datePipe = inject(LocaleDatePipe);
@@ -163,7 +167,19 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     distinctUntilChanged(),
     switchMap((pid) => this._projectService.getProjectsWithoutIdSorted$(pid || null)),
   );
+  moveToProjectList = toSignal(this.moveToProjectList$, {
+    initialValue: [] as Project[],
+  });
   toggleTagList = this._tagService.tagsNoMyDayAndNoListSorted;
+
+  projectSearch = createSearchFilter(this.moveToProjectList);
+  tagSearch = createSearchFilter(this.toggleTagList);
+
+  projectSearchInput = viewChild<ElementRef<HTMLInputElement>>('projectSearchInput');
+  tagsSearchInput = viewChild<ElementRef<HTMLInputElement>>('tagsSearchInput');
+
+  projectMenuItems = viewChildren('projectItem', { read: ElementRef });
+  tagMenuItems = viewChildren('tagItem', { read: ElementRef });
 
   isShowMoveFromAndToBacklogBtns$: Observable<boolean> =
     this._workContextService.activeWorkContext$.pipe(
@@ -305,6 +321,28 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this._taskFocusService.isTaskContextMenuOpen.set(false);
     this.focusRelatedTaskOrNext();
     this.close.emit();
+  }
+
+  onProjectMenuOpened(): void {
+    this.projectSearch.searchQuery.set('');
+    setTimeout(() => {
+      this.projectSearchInput()?.nativeElement.focus();
+    });
+  }
+
+  onTagsMenuOpened(): void {
+    this.tagSearch.searchQuery.set('');
+    setTimeout(() => {
+      this.tagsSearchInput()?.nativeElement.focus();
+    });
+  }
+
+  focusFirstProjectItem(): void {
+    this.projectMenuItems()[0]?.nativeElement.focus();
+  }
+
+  focusFirstTagItem(): void {
+    this.tagMenuItems()[0]?.nativeElement.focus();
   }
 
   get kb(): KeyboardConfig {

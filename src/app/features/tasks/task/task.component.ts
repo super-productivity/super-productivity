@@ -13,6 +13,7 @@ import {
   OnDestroy,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { TaskService } from '../task.service';
 import { EMPTY, forkJoin, Subscription } from 'rxjs';
@@ -79,6 +80,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { SubTaskTotalTimeSpentPipe } from '../pipes/sub-task-total-time-spent.pipe';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { TagToggleMenuListComponent } from '../../tag/tag-toggle-menu-list/tag-toggle-menu-list.component';
+import { FormsModule } from '@angular/forms';
+import { createSearchFilter } from '../../../util/create-search-filter';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { environment } from '../../../../environments/environment';
@@ -132,6 +135,7 @@ import { MatTooltip } from '@angular/material/tooltip';
     TagToggleMenuListComponent,
     DoneToggleComponent,
     SwipeBlockComponent,
+    FormsModule,
   ],
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
@@ -301,7 +305,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   });
 
   // Lazy-loaded project list - only fetched when project menu opens
-  moveToProjectList = signal<Project[] | undefined>(undefined);
+  moveToProjectList = signal<Project[]>([]);
+  projectSearch = createSearchFilter(this.moveToProjectList);
+  projectSearchInput = viewChild<ElementRef<HTMLInputElement>>('projectSearchInput');
+  projectMenuItems = viewChildren('projectItem', { read: ElementRef });
   private _loadedProjectListForProjectId: string | null | undefined;
   private _moveToProjectListSub?: Subscription;
 
@@ -681,6 +688,18 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       return;
     }
     this.projectMenuTrigger()?.openMenu();
+  }
+
+  onProjectMenuOpened(): void {
+    this.projectSearch.searchQuery.set('');
+    this._loadProjectListIfNeeded();
+    setTimeout(() => {
+      this.projectSearchInput()?.nativeElement.focus();
+    });
+  }
+
+  focusFirstProjectItem(): void {
+    this.projectMenuItems()[0]?.nativeElement.focus();
   }
 
   _loadProjectListIfNeeded(): void {

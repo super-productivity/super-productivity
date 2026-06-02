@@ -37,6 +37,7 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { RepeatQuickSetting } from '../../../task-repeat-cfg/task-repeat-cfg.model';
 import { buildRepeatQuickSettingOptions } from '../../../task-repeat-cfg/dialog-edit-task-repeat-cfg/build-repeat-quick-setting-options';
 import { DateService } from '../../../../core/date/date.service';
+import { createSearchFilter } from '../../../../util/create-search-filter';
 
 type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
 
@@ -92,22 +93,12 @@ export class AddTaskBarActionsComponent {
 
   // Signals for projects and tags (sorted for consistency)
   allProjects = this._projectService.listSortedForUI;
-  projectSearchQuery = signal<string>('');
-  filteredProjects = computed(() => {
-    const q = this.projectSearchQuery().toLowerCase().trim();
-    if (!q) return this.allProjects();
-    return this.allProjects().filter((p) => p.title.toLowerCase().includes(q));
-  });
+  projectSearch = createSearchFilter(this.allProjects);
   selectedProject = computed(() =>
     this.allProjects().find((p) => p.id === this.state().projectId),
   );
   allTags = this._tagService.tagsNoMyDayAndNoListSorted;
-  tagSearchQuery = signal<string>('');
-  filteredTags = computed(() => {
-    const q = this.tagSearchQuery().toLowerCase().trim();
-    if (!q) return this.allTags();
-    return this.allTags().filter((t) => t.title.toLowerCase().includes(q));
-  });
+  tagSearch = createSearchFilter(this.allTags);
   selectedTags = computed(() =>
     this.allTags().filter(
       (t) =>
@@ -254,14 +245,14 @@ export class AddTaskBarActionsComponent {
   }
 
   onProjectMenuOpened(): void {
-    this.projectSearchQuery.set('');
+    this.projectSearch.searchQuery.set('');
     setTimeout(() => {
       this.projectSearchInput()?.nativeElement.focus();
     });
   }
 
   onTagsMenuOpened(): void {
-    this.tagSearchQuery.set('');
+    this.tagSearch.searchQuery.set('');
     setTimeout(() => {
       this.tagsSearchInput()?.nativeElement.focus();
     });

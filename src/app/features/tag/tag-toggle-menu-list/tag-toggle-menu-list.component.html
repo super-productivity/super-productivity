@@ -7,11 +7,27 @@
 <mat-menu
   #menuEl="matMenu"
   (closed)="onMenuClosed()"
+  (menuOpened)="onTagsMenuOpened()"
 >
   <ng-template matMenuContent>
+    <div
+      class="search-container"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+    >
+      <input
+        #tagsSearchInput
+        class="search-input"
+        [placeholder]="T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_PLACEHOLDER | translate"
+        [ngModel]="tagSearch.searchQuery()"
+        (ngModelChange)="tagSearch.searchQuery.set($event)"
+        (keydown.arrowdown)="focusFirstTagItem()"
+      />
+    </div>
     <div (click)="$event.stopPropagation()">
-      @for (tag of toggleTagList(); track $index) {
+      @for (tag of tagSearch.filteredItems(); track tag.id) {
         <button
+          #tagItem
           (click)="toggleTag.emit(tag.id)"
           (keydown)="onTagMenuKeydown($event, tag.id)"
           mat-menu-item
@@ -36,6 +52,14 @@
             >
           }
           {{ tag.title }}
+        </button>
+      }
+      @if (!tagSearch.filteredItems().length) {
+        <button
+          mat-menu-item
+          disabled
+        >
+          {{ T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_NO_RESULTS | translate }}
         </button>
       }
     </div>

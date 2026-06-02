@@ -174,12 +174,12 @@
       #projectSearchInput
       class="search-input"
       [placeholder]="T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_PLACEHOLDER | translate"
-      [ngModel]="projectSearchQuery()"
-      (ngModelChange)="projectSearchQuery.set($event)"
+      [ngModel]="projectSearch.searchQuery()"
+      (ngModelChange)="projectSearch.searchQuery.set($event)"
       (keydown.arrowdown)="focusFirstProjectItem()"
     />
   </div>
-  @for (project of filteredProjects(); track project.id) {
+  @for (project of projectSearch.filteredItems(); track project.id) {
     <button
       #projectItem
       mat-menu-item
@@ -201,7 +201,7 @@
       {{ project.title }}
     </button>
   }
-  @if (!filteredProjects().length) {
+  @if (!projectSearch.filteredItems().length) {
     <button
       mat-menu-item
       disabled
@@ -221,13 +221,13 @@
       #tagsSearchInput
       class="search-input"
       [placeholder]="T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_PLACEHOLDER | translate"
-      [ngModel]="tagSearchQuery()"
-      (ngModelChange)="tagSearchQuery.set($event)"
+      [ngModel]="tagSearch.searchQuery()"
+      (ngModelChange)="tagSearch.searchQuery.set($event)"
       (keydown.arrowdown)="focusFirstTagItem()"
     />
   </div>
   <div (click)="$event.stopPropagation()">
-    @for (tag of filteredTags(); track tag.id) {
+    @for (tag of tagSearch.filteredItems(); track tag.id) {
       <button
         #tagItem
         mat-menu-item
@@ -256,7 +256,7 @@
         {{ tag.title }}
       </button>
     }
-    @if (!filteredTags().length) {
+    @if (!tagSearch.filteredItems().length) {
       <button
         mat-menu-item
         disabled

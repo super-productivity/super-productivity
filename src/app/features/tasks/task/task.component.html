@@ -311,12 +311,30 @@
   <mat-menu
     #projectMenu="matMenu"
     (closed)="focusSelf()"
-    (menuOpened)="_loadProjectListIfNeeded()"
+    (menuOpened)="onProjectMenuOpened()"
   >
     <ng-template matMenuContent>
-      @if (moveToProjectList()) {
-        @for (project of moveToProjectList(); track trackByProjectId($index, project)) {
+      <div
+        class="search-container"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+      >
+        <input
+          #projectSearchInput
+          class="search-input"
+          [placeholder]="T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_PLACEHOLDER | translate"
+          [ngModel]="projectSearch.searchQuery()"
+          (ngModelChange)="projectSearch.searchQuery.set($event)"
+          (keydown.arrowdown)="focusFirstProjectItem()"
+        />
+      </div>
+      @if (projectSearch.filteredItems()) {
+        @for (
+          project of projectSearch.filteredItems();
+          track trackByProjectId($index, project)
+        ) {
           <button
+            #projectItem
             (click)="moveTaskToProject(project.id)"
             mat-menu-item
           >
@@ -328,6 +346,14 @@
             {{ project.title }}
           </button>
         }
+      }
+      @if (!projectSearch.filteredItems().length) {
+        <button
+          mat-menu-item
+          disabled
+        >
+          {{ T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_NO_RESULTS | translate }}
+        </button>
       }
     </ng-template>
   </mat-menu>

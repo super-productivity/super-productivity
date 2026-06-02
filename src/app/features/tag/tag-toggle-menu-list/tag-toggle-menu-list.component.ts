@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   input,
   output,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
 import {
@@ -26,11 +28,21 @@ import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { MenuTreeKind, MenuTreeViewNode } from '../../menu-tree/store/menu-tree.model';
 import { Tag } from '../tag.model';
+import { FormsModule } from '@angular/forms';
+import { createSearchFilter } from '../../../util/create-search-filter';
 
 @Component({
   selector: 'tag-toggle-menu-list',
   standalone: true,
-  imports: [MatIcon, MatMenu, MatMenuContent, MatMenuItem, MatMenuTrigger, TranslatePipe],
+  imports: [
+    MatIcon,
+    MatMenu,
+    MatMenuContent,
+    MatMenuItem,
+    MatMenuTrigger,
+    TranslatePipe,
+    FormsModule,
+  ],
   templateUrl: './tag-toggle-menu-list.component.html',
   styleUrl: './tag-toggle-menu-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -81,6 +93,10 @@ export class TagToggleMenuListComponent {
       isEmojiIcon: tag.icon ? isSingleEmoji(tag.icon) : false,
     }));
   });
+  tagSearch = createSearchFilter(this.toggleTagList);
+  tagsSearchInput = viewChild<ElementRef<HTMLInputElement>>('tagsSearchInput');
+  tagMenuItems = viewChildren('tagItem', { read: ElementRef });
+
   menuEl = viewChild('menuEl', {
     // read: MatMenu,
   });
@@ -102,6 +118,17 @@ export class TagToggleMenuListComponent {
 
   openMenu(ev?: MouseEvent | KeyboardEvent | TouchEvent): void {
     this.tagMenuTriggerEl()?.openMenu();
+  }
+
+  onTagsMenuOpened(): void {
+    this.tagSearch.searchQuery.set('');
+    setTimeout(() => {
+      this.tagsSearchInput()?.nativeElement.focus();
+    });
+  }
+
+  focusFirstTagItem(): void {
+    this.tagMenuItems()[0]?.nativeElement.focus();
   }
 
   openAddNewTag(): void {

@@ -1,4 +1,5 @@
 @use '../../../../styles/_globals.scss' as *;
+@use '../shared-tag-project-styles';
 @use './task.component.mixins' as *;
 @use './task-base';
 @use './task-controls';

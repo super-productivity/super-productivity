@@ -37,3 +37,32 @@
     margin-right: 12px;
   }
 }
+
+.search-container {
+  padding: var(--s) var(--s);
+  border-bottom: 1px solid var(--separator);
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 1;
+
+  .search-input {
+    width: 100%;
+    border: none;
+    background: var(--bg-lightest);
+    padding: var(--s-half) var(--s);
+    border-radius: 20px;
+    outline: none;
+    font-size: var(--font-size-md);
+    color: var(--ink);
+
+    @include darkTheme() {
+      background: var(--c-light-05);
+    }
+
+    &::placeholder {
+      color: var(--ink-muted);
+      opacity: 0.7;
+    }
+  }
+}
