@@ -364,6 +364,38 @@ describe('AddTaskBarComponent', () => {
       const repeatCfg = addRepeatCfgSpy.calls.mostRecent().args[2];
       expect(repeatCfg.startDate).toBe('2024-05-19');
     });
+
+    it('should pass deadlineDay when a deadline date is set without a time', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      component.stateService.updateDeadline('2026-06-15', null);
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.deadlineDay).toBe('2026-06-15');
+      expect(taskData.deadlineWithTime).toBeUndefined();
+    });
+
+    it('should pass deadlineWithTime and deadlineRemindAt when a deadline is set with a time and reminder', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Dentist appointment');
+      component.stateService.updateCleanText('Dentist appointment');
+      component.stateService.updateDeadline('2026-06-15', '14:30');
+      component.stateService.updateDeadlineRemindOption(TaskReminderOptionId.AtStart);
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      const expectedTimestamp = new Date(2026, 5, 15, 14, 30, 0, 0).getTime();
+      expect(taskData.deadlineWithTime).toBe(expectedTimestamp);
+      expect(taskData.deadlineRemindAt).toBe(expectedTimestamp);
+    });
   });
 
   describe('defaultProject$ observable', () => {
