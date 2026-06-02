@@ -198,7 +198,7 @@ export class ShortcutService {
     } else if (checkKeyCombo(ev, keys.triggerSync)) {
       ev.preventDefault();
       if (await this._syncWrapperService.isEnabledAndReady$.pipe(first()).toPromise()) {
-        this._syncWrapperService.sync();
+        this._syncWrapperService.sync(true);
       }
     } else if (
       checkKeyCombo(ev, 'Ctrl+Shift+*') &&

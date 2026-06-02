@@ -159,6 +159,31 @@ export class MainHeaderComponent implements OnDestroy {
     this.globalConfigService.cfg$.pipe(map((cfg) => cfg?.focusMode)),
   );
   isOnline = toSignal(isOnline$);
+  // State-aware tooltip for the sync button: the icon alone (sync_problem /
+  // wifi_off) signals a problem but never explains it. Surfacing the state in
+  // the tooltip is the ambient counterpart to suppressing the transient
+  // network snack on automatic syncs — a persistent problem stays discoverable
+  // by glancing at / hovering the always-present header button.
+  // Precedence mirrors the icon @if cascade in the template (disabled →
+  // offline → error → syncing → in-sync); keep the two in sync.
+  syncTooltip = computed(() => {
+    if (!this.syncIsEnabledAndReady()) {
+      return T.MH.TRIGGER_SYNC;
+    }
+    if (!this.isOnline()) {
+      return T.MH.SYNC_STATE.OFFLINE;
+    }
+    if (this.syncState() === 'ERROR') {
+      return T.MH.SYNC_STATE.ERROR;
+    }
+    if (this.isSyncInProgress()) {
+      return T.MH.SYNC_STATE.SYNCING;
+    }
+    if (this.hasNoPendingOps()) {
+      return T.MH.SYNC_STATE.IN_SYNC;
+    }
+    return T.MH.TRIGGER_SYNC;
+  });
   focusSummaryToday = computed(() =>
     this._metricService.getFocusSummaryForDay(this._dateService.todayStr()),
   );
@@ -281,7 +306,7 @@ export class MainHeaderComponent implements OnDestroy {
   }
 
   sync(): void {
-    this.syncWrapperService.sync().then((r) => {
+    this.syncWrapperService.sync(true).then((r) => {
       if (
         r === SyncStatus.UpdateLocal ||
         r === SyncStatus.UpdateRemoteAll ||

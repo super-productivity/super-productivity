@@ -77,6 +77,7 @@ import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.se
 import { SyncSessionValidationService } from '../../op-log/sync/sync-session-validation.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { isSuperSyncWebSocketAccess } from '@sp/sync-providers/super-sync';
+import { isTransientNetworkError } from '@sp/sync-providers/http';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 
 /**
@@ -252,7 +253,15 @@ export class SyncWrapperService {
     first(),
   );
 
-  async sync(): Promise<SyncStatus | 'HANDLED_ERROR'> {
+  /**
+   * @param isUserTriggered  `true` when the sync was explicitly requested by the
+   *   user (sync button, saving sync config). Automatic syncs (app resume/focus,
+   *   interval, internal retries) pass `false` so that transient network failures
+   *   — common right after Android wakes from Doze, before sockets/DNS recover —
+   *   stay silent instead of flashing a self-healing "temporary network problem"
+   *   snackbar the user never asked about. The next sync cycle retries anyway.
+   */
+  async sync(isUserTriggered = false): Promise<SyncStatus | 'HANDLED_ERROR'> {
     // Block sync if encryption operation is in progress (password change, enable/disable)
     if (this._isEncryptionOperationInProgress$.getValue()) {
       SyncLog.log('Sync blocked: encryption operation in progress');
@@ -275,7 +284,7 @@ export class SyncWrapperService {
     this._hydrationState.openSyncWindow(0);
     // Set SYNCING status so ImmediateUploadService knows not to interfere
     this._providerManager.setSyncStatus('SYNCING');
-    const result = await this._sync().finally(() => {
+    const result = await this._sync(isUserTriggered).finally(() => {
       this._isSyncInProgress$.next(false);
       this._hydrationState.closeSyncWindow();
       // Safeguard: if _sync() threw or completed without setting a final status,
@@ -393,7 +402,7 @@ export class SyncWrapperService {
     this._superSyncWsService.disconnect();
   }
 
-  private async _sync(): Promise<SyncStatus | 'HANDLED_ERROR'> {
+  private async _sync(isUserTriggered: boolean): Promise<SyncStatus | 'HANDLED_ERROR'> {
     const providerId = await firstValueFrom(this.syncProviderId$);
     if (!providerId) {
       throw new Error('No Sync Provider for sync()');
@@ -403,11 +412,14 @@ export class SyncWrapperService {
     // validation failure during the session (download, upload, piggyback,
     // retry, USE_REMOTE force-download) flips the latch; the wrapper reads
     // it once before claiming IN_SYNC. (#7330)
-    return this._sessionValidation.withSession(() => this._syncBody(providerId));
+    return this._sessionValidation.withSession(() =>
+      this._syncBody(providerId, isUserTriggered),
+    );
   }
 
   private async _syncBody(
     providerId: SyncProviderId,
+    isUserTriggered: boolean,
   ): Promise<SyncStatus | 'HANDLED_ERROR'> {
     try {
       // PERF: For legacy sync providers (WebDAV, Dropbox, LocalFile), sync the vector clock
@@ -790,22 +802,46 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else if (this._isTimeoutError(error)) {
-        this._snackService.open({
-          msg: T.F.SYNC.S.TIMEOUT_ERROR,
-          type: 'ERROR',
-          config: { duration: 12000 },
-          translateParams: {
-            suggestion:
-              'Large sync operations may take up to 90 seconds. Please try again.',
-          },
-        });
+        // Like the transient-network branch below, a sync timeout is
+        // self-healing (the next cycle retries) and its "Please try again"
+        // message only makes sense for someone actively waiting — so only
+        // surface it for user-triggered syncs. This also closes the gap where a
+        // connectivity error phrased "timeout" (one word, caught here) would
+        // otherwise still flash on automatic resume syncs while "timed out"
+        // (caught by the transient-network branch) stayed silent.
+        if (isUserTriggered) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.TIMEOUT_ERROR,
+            type: 'ERROR',
+            config: { duration: 12000 },
+            translateParams: {
+              suggestion:
+                'Large sync operations may take up to 90 seconds. Please try again.',
+            },
+          });
+        }
         return 'HANDLED_ERROR';
-      } else if (error instanceof NetworkUnavailableSPError) {
+      } else if (
+        error instanceof NetworkUnavailableSPError ||
+        isTransientNetworkError(error)
+      ) {
+        // Transient + self-healing (the next sync cycle retries). SuperSync
+        // maps connectivity failures to NetworkUnavailableSPError; file-based
+        // providers (Dropbox/WebDAV) surface them as generic errors instead, so
+        // isTransientNetworkError() catches those too (e.g. UnknownHostException,
+        // "could not connect to the server") — provider-agnostic.
+        //
+        // Only surface a snack when the user explicitly asked to sync; for
+        // automatic syncs (notably the auto-sync fired on Android resume, before
+        // sockets/DNS recover from Doze) stay silent to avoid a snack that
+        // flashes and vanishes on its own.
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
-        this._snackService.open({
-          msg: T.F.SYNC.S.NETWORK_ERROR,
-          type: 'WARNING',
-        });
+        if (isUserTriggered) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.NETWORK_ERROR,
+            type: 'WARNING',
+          });
+        }
         return 'HANDLED_ERROR';
       } else if (this._isPermissionError(error)) {
         this._snackService.open({

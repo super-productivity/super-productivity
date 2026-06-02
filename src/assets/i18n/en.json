@@ -2595,6 +2595,12 @@
     "SHARE_TASK_LIST_MARKDOWN": "Share Task List",
     "SHOW_TRACKED_TASK": "Show tracked task",
     "SIDE_PANEL_MENU": "Side Panel Menu",
+    "SYNC_STATE": {
+      "ERROR": "Sync problem — click to retry",
+      "IN_SYNC": "In sync — click to sync now",
+      "OFFLINE": "You're offline — sync resumes when you reconnect",
+      "SYNCING": "Syncing…"
+    },
     "TAGS": "Tags",
     "TASK_LIST": "Task List",
     "TASKS": "Tasks",

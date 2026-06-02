@@ -1001,12 +1001,12 @@ describe('SyncWrapperService', () => {
       );
     });
 
-    it('should handle NetworkUnavailableSPError as transient with WARNING snackbar', async () => {
+    it('should handle NetworkUnavailableSPError with WARNING snackbar when user-triggered', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new NetworkUnavailableSPError()),
       );
 
-      const result = await service.sync();
+      const result = await service.sync(true);
 
       expect(result).toBe('HANDLED_ERROR');
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
@@ -1020,11 +1020,114 @@ describe('SyncWrapperService', () => {
       );
     });
 
+    it('should handle NetworkUnavailableSPError silently for automatic syncs', async () => {
+      // The auto-sync fired on Android resume hits a not-yet-ready network and
+      // throws this transient error; the next cycle retries, so no snack should
+      // flash for the user (regression guard for the resume "network" snack).
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new NetworkUnavailableSPError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+        }),
+      );
+    });
+
+    it('should silence a generic transient network error (file-based providers) for automatic syncs', async () => {
+      // File-based providers (Dropbox/WebDAV) do NOT throw NetworkUnavailableSPError;
+      // a resume-time connectivity failure surfaces as a generic Error (here the
+      // Android UnknownHostException message). isTransientNetworkError() routes it
+      // to the same silent-for-automatic path so the resume snack is gone
+      // regardless of provider — not just SuperSync.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new Error('Unable to resolve host "example.com": No address associated'),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      // Neither the network WARNING nor the catch-all ERROR snack should fire.
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('should show the WARNING snack for a generic transient network error when user-triggered', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new Error('Unable to resolve host "example.com": No address associated'),
+        ),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+          type: 'WARNING',
+        }),
+      );
+    });
+
+    it('should surface a timeout error for user-triggered syncs', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('Request timeout after 90s')),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.TIMEOUT_ERROR,
+        }),
+      );
+    });
+
+    it('should silence a timeout error for automatic syncs', async () => {
+      // A timeout is self-healing like a transient network error; an automatic
+      // resume sync should not flash the "try again" snack nobody is waiting on.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('Request timeout after 90s')),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('should silence a server 504 / gateway timeout for automatic syncs', async () => {
+      // 504/gateway-timeout is matched by _isTimeoutError. Pin that it routes to
+      // the (now-silenced-for-automatic) timeout branch rather than the catch-all
+      // ERROR snack, so a future refactor that re-classifies 504 is caught.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('HTTP 504 Gateway Timeout')),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
     it('should NOT treat a raw HTTP-status Error as a network error', async () => {
-      // Regression guard for the dropped string-shape classifier: an error
-      // whose message contains "500"/"Internal Server Error" used to slip
-      // through the broad regex. Now only `NetworkUnavailableSPError`
-      // qualifies, so this falls through to the catch-all ERROR branch.
+      // Regression guard: an error whose message contains "500"/"Internal Server
+      // Error" must NOT be classified as a transient *network* error
+      // (isTransientNetworkError checks connectivity phrases, not server status),
+      // so it falls through to the catch-all ERROR branch and is surfaced.
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new Error('HTTP 500 Internal Server Error — db down')),
       );
