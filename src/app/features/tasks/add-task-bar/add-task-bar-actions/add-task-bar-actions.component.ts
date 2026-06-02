@@ -3,12 +3,15 @@ import {
   Component,
   computed,
   DestroyRef,
+  ElementRef,
   inject,
   input,
   output,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -44,6 +47,7 @@ type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
+    FormsModule,
     MatButton,
     MatIcon,
     MatTooltip,
@@ -88,10 +92,22 @@ export class AddTaskBarActionsComponent {
 
   // Signals for projects and tags (sorted for consistency)
   allProjects = this._projectService.listSortedForUI;
+  projectSearchQuery = signal<string>('');
+  filteredProjects = computed(() => {
+    const q = this.projectSearchQuery().toLowerCase().trim();
+    if (!q) return this.allProjects();
+    return this.allProjects().filter((p) => p.title.toLowerCase().includes(q));
+  });
   selectedProject = computed(() =>
     this.allProjects().find((p) => p.id === this.state().projectId),
   );
   allTags = this._tagService.tagsNoMyDayAndNoListSorted;
+  tagSearchQuery = signal<string>('');
+  filteredTags = computed(() => {
+    const q = this.tagSearchQuery().toLowerCase().trim();
+    if (!q) return this.allTags();
+    return this.allTags().filter((t) => t.title.toLowerCase().includes(q));
+  });
   selectedTags = computed(() =>
     this.allTags().filter(
       (t) =>
@@ -110,6 +126,10 @@ export class AddTaskBarActionsComponent {
   tagsMenuTrigger = viewChild('tagsMenuTrigger', { read: MatMenuTrigger });
   estimateMenuTrigger = viewChild('estimateMenuTrigger', { read: MatMenuTrigger });
   repeatMenuTrigger = viewChild('repeatMenuTrigger', { read: MatMenuTrigger });
+  projectSearchInput = viewChild<ElementRef<HTMLInputElement>>('projectSearchInput');
+  tagsSearchInput = viewChild<ElementRef<HTMLInputElement>>('tagsSearchInput');
+  projectMenuItems = viewChildren('projectItem', { read: ElementRef });
+  tagMenuItems = viewChildren('tagItem', { read: ElementRef });
 
   // Computed values
   dateDisplay = computed(() => {
@@ -231,6 +251,28 @@ export class AddTaskBarActionsComponent {
 
   onRepeatMenuClick(): void {
     this._handleMenuClick('repeat');
+  }
+
+  onProjectMenuOpened(): void {
+    this.projectSearchQuery.set('');
+    setTimeout(() => {
+      this.projectSearchInput()?.nativeElement.focus();
+    });
+  }
+
+  onTagsMenuOpened(): void {
+    this.tagSearchQuery.set('');
+    setTimeout(() => {
+      this.tagsSearchInput()?.nativeElement.focus();
+    });
+  }
+
+  focusFirstProjectItem(): void {
+    this.projectMenuItems()[0]?.nativeElement.focus();
+  }
+
+  focusFirstTagItem(): void {
+    this.tagMenuItems()[0]?.nativeElement.focus();
   }
 
   // Public methods to open menus programmatically

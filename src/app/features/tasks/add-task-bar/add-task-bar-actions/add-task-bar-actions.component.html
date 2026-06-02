@@ -8,6 +8,7 @@
     [class.auto-detected]="isAutoDetected() && !!selectedProject()"
     [class.menu-open]="isProjectMenuOpen()"
     (click)="onProjectMenuClick()"
+    (menuOpened)="onProjectMenuOpened()"
   >
     @if (isProjectEmojiIcon()) {
       <span
@@ -61,6 +62,7 @@
       [class.has-new-tags]="hasNewTags()"
       [class.menu-open]="isTagsMenuOpen()"
       (click)="onTagsMenuClick()"
+      (menuOpened)="onTagsMenuOpened()"
     >
       <!-- NOTE: we do it this way, since mat-button puts it inside the label otherwise leading to vertical alignment issues -->
       <mat-icon [class.hide]="hasTagsSelected() || state().newTagTitles.length > 0"
@@ -163,8 +165,23 @@
 
 <!-------------- Menus ------------------->
 <mat-menu #projectMenu="matMenu">
-  @for (project of allProjects(); track project.id) {
+  <div
+    class="search-container"
+    (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
+  >
+    <input
+      #projectSearchInput
+      class="search-input"
+      [placeholder]="T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_PLACEHOLDER | translate"
+      [ngModel]="projectSearchQuery()"
+      (ngModelChange)="projectSearchQuery.set($event)"
+      (keydown.arrowdown)="focusFirstProjectItem()"
+    />
+  </div>
+  @for (project of filteredProjects(); track project.id) {
     <button
+      #projectItem
       mat-menu-item
       (click)="stateService.updateProjectId(project.id)"
     >
@@ -184,12 +201,35 @@
       {{ project.title }}
     </button>
   }
+  @if (!filteredProjects().length) {
+    <button
+      mat-menu-item
+      disabled
+    >
+      {{ T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_NO_RESULTS | translate }}
+    </button>
+  }
 </mat-menu>
 
 <mat-menu #tagsMenu="matMenu">
+  <div
+    class="search-container"
+    (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
+  >
+    <input
+      #tagsSearchInput
+      class="search-input"
+      [placeholder]="T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_PLACEHOLDER | translate"
+      [ngModel]="tagSearchQuery()"
+      (ngModelChange)="tagSearchQuery.set($event)"
+      (keydown.arrowdown)="focusFirstTagItem()"
+    />
+  </div>
   <div (click)="$event.stopPropagation()">
-    @for (tag of allTags(); track tag.id) {
+    @for (tag of filteredTags(); track tag.id) {
       <button
+        #tagItem
         mat-menu-item
         (click)="toggleTagWithSyntax(tag)"
         [class.selected]="hasSelectedTag(tag.id)"
@@ -214,6 +254,14 @@
           </mat-icon>
         }
         {{ tag.title }}
+      </button>
+    }
+    @if (!filteredTags().length) {
+      <button
+        mat-menu-item
+        disabled
+      >
+        {{ T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_NO_RESULTS | translate }}
       </button>
     }
   </div>
