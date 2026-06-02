@@ -599,6 +599,69 @@ describe('taskSharedCrudMetaReducer', () => {
         testState,
       );
     });
+
+    // Regression: a fresh client bulk-replaying SuperSync ops hit
+    // "TypeError: r is not iterable" inside handleConvertToMainTask when the
+    // captured op carried a malformed parentTagIds. Two shapes can produce
+    // this — both must survive the reducer:
+    //   (a) parentTagIds is missing AND parent.tagIds is missing
+    //       — the original `??` chain handled this but only by accident.
+    //   (b) parentTagIds is truthy but not an array (e.g. carried through
+    //       as a number/object from a producer bug or legacy op payload)
+    //       — `??` does NOT catch this, only Array.isArray does. This is
+    //       the case the user actually hit during SuperSync replay.
+    it('should not throw when parentTagIds is omitted and parent.tagIds is missing', () => {
+      const parentTask = {
+        ...createMockTask({ id: 'parent-task', projectId: 'project1' }),
+        tagIds: undefined as unknown as string[],
+      };
+      const testState: RootState = {
+        ...baseState,
+        [TASK_FEATURE_NAME]: {
+          ...baseState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseState[TASK_FEATURE_NAME].entities,
+            'parent-task': parentTask,
+          },
+          ids: [...baseState[TASK_FEATURE_NAME].ids, 'parent-task'],
+        },
+      };
+
+      const action = TaskSharedActions.convertToMainTask({
+        task: createMockTask({ id: 'task1', parentId: 'parent-task' }),
+        isPlanForToday: false,
+      });
+
+      expect(() => metaReducer(testState, action)).not.toThrow();
+    });
+
+    it('should not throw when parentTagIds is truthy-but-non-array (legacy/corrupt op)', () => {
+      const parentTask = createMockTask({
+        id: 'parent-task',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+      });
+      const testState: RootState = {
+        ...baseState,
+        [TASK_FEATURE_NAME]: {
+          ...baseState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseState[TASK_FEATURE_NAME].entities,
+            'parent-task': parentTask,
+          },
+          ids: [...baseState[TASK_FEATURE_NAME].ids, 'parent-task'],
+        },
+      };
+
+      const action = TaskSharedActions.convertToMainTask({
+        task: createMockTask({ id: 'task1', parentId: 'parent-task' }),
+        // Truthy non-array bypasses `??` — only Array.isArray catches it.
+        parentTagIds: 0 as unknown as string[],
+        isPlanForToday: false,
+      });
+
+      expect(() => metaReducer(testState, action)).not.toThrow();
+    });
   });
 
   describe('convertToSubTask action', () => {

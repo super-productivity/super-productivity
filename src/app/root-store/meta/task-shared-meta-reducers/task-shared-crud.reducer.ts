@@ -177,7 +177,14 @@ const handleConvertToMainTask = (
   }
 
   const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
-  const resolvedParentTagIds = parentTagIds ?? parentTask.tagIds;
+  // `Array.isArray` guard (not `??`): a truthy non-array `parentTagIds`
+  // from a captured op (seen on long-running SuperSync clients) bypasses
+  // `??` and crashes the spread below. Same for `parentTask.tagIds`.
+  const resolvedParentTagIds = Array.isArray(parentTagIds)
+    ? parentTagIds
+    : Array.isArray(parentTask.tagIds)
+      ? parentTask.tagIds
+      : [];
   const positionConvertedTask = (taskIds: string[]): string[] => {
     // Dropped at the start of DONE → append to the bottom of the done list.
     if (afterTaskId == null && isDone) {
@@ -201,7 +208,9 @@ const handleConvertToMainTask = (
         parentId: undefined,
         // Filter out TODAY_TAG.id - it's a virtual tag where membership is
         // determined by task.dueDay, not by being in tagIds
-        tagIds: parentTask.tagIds.filter((id) => id !== TODAY_TAG.id),
+        tagIds: (Array.isArray(parentTask.tagIds) ? parentTask.tagIds : []).filter(
+          (id) => id !== TODAY_TAG.id,
+        ),
         modified: Date.now(),
         ...(isPlanForToday && !task.dueWithTime
           ? {
