@@ -198,47 +198,6 @@ export class OperationLogSyncService {
       return { kind: 'blocked_fresh_client' };
     }
 
-    // #7985: identity-based example-task cleanup (the deferred "Fix C" of #7980).
-    // `isNeverSyncedAtSyncStart` is captured PRE-download; if hasSyncedOps() is now true,
-    // this cycle's download just ADOPTED a populated remote. A genuinely-fresh client's
-    // onboarding example tasks are throwaway scaffolding every install regenerates;
-    // uploading them onto the adopted remote pollutes it and propagates to every device
-    // (the residual #7980 documented for non-encrypted accounts seeded by normal upload,
-    // where no SYNC_IMPORT fires the incoming-import gate's discard). Reject the example
-    // create ops so the upload never sends them.
-    //
-    // A status read alone is unsafe (download flips hasSyncedOps mid-cycle — #7980 §10);
-    // the PRE-download `isNeverSynced` is what makes this reliable.
-    //
-    // Stranding safety: we discard only from a PRISTINE post-boot batch — example creates
-    // plus the default GLOBAL_CONFIG writes, nothing else. hasMeaningfulPendingOps() is NOT
-    // enough here: it ignores Move/Batch (and planner/board/section) ops, which can reference
-    // an example task id without being "meaningful". Unlike the incoming-SYNC_IMPORT discard
-    // — where SyncImportFilterService drops any concurrent dependent op against the import —
-    // this adoption path has no import to filter them, so a surviving Move would strand a
-    // dangling reference once its create is rejected. Requiring an all-examples+config batch
-    // also preserves the "edited example syncs as real data" property: any user action (edit,
-    // reorder, real task) adds a non-config op and skips the cleanup, so everything uploads.
-    if (isNeverSyncedAtSyncStart && (await this.opLogStore.hasSyncedOps())) {
-      const pendingOps = await this.opLogStore.getUnsynced();
-      const isPristinePostBootBatch = pendingOps.every(
-        (entry) =>
-          isExampleTaskCreateOp(entry) || entry.op.entityType === 'GLOBAL_CONFIG',
-      );
-      if (isPristinePostBootBatch) {
-        const exampleOpIds = pendingOps
-          .filter(isExampleTaskCreateOp)
-          .map((entry) => entry.op.id);
-        if (exampleOpIds.length > 0) {
-          await this._discardExampleTaskOps(exampleOpIds);
-          OpLog.normal(
-            `OperationLogSyncService: Discarded ${exampleOpIds.length} untouched example-task ` +
-              'op(s) — never-synced client adopted a populated remote this sync (#7985).',
-          );
-        }
-      }
-    }
-
     // SERVER MIGRATION CHECK: Passed as callback to execute INSIDE the upload lock.
     // This prevents race conditions where multiple tabs could both detect migration
     // and create duplicate SYNC_IMPORT operations.
