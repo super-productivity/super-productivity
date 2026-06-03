@@ -28,6 +28,7 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { getClockStringFromHours } from '../../../util/get-clock-string-from-hours';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateService } from '../../../core/date/date.service';
@@ -257,21 +258,23 @@ export class DialogDeadlineComponent implements AfterViewInit {
       return;
     }
 
+    // Recover a stray seconds component (e.g. a pasted `13:30:00`) so the time
+    // the user set actually persists instead of silently dropping to a
+    // date-only deadline (#7802). Genuine garbage still fails the guard below.
+    const time = this.selectedTime ? normalizeClockStr(this.selectedTime) : null;
+
     if (this.data.isSelectDeadlineOnly) {
       this._matDialogRef.close({
         date: this.selectedDate,
-        time: this.selectedTime,
+        time,
         remindOption: this.selectedReminderCfgId,
       });
       return;
     }
 
     if (this.task) {
-      if (this.selectedTime && isValidSplitTime(this.selectedTime)) {
-        const deadlineTimestamp = getDateTimeFromClockString(
-          this.selectedTime,
-          this.selectedDate!,
-        );
+      if (time && isValidSplitTime(time)) {
+        const deadlineTimestamp = getDateTimeFromClockString(time, this.selectedDate!);
         const deadlineRemindAt =
           this.selectedReminderCfgId !== TaskReminderOptionId.DoNotRemind
             ? remindOptionToMilliseconds(deadlineTimestamp, this.selectedReminderCfgId)

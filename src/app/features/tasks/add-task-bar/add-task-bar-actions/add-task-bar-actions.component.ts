@@ -28,6 +28,8 @@ import { T } from '../../../../t.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { dateStrToUtcDate } from '../../../../util/date-str-to-utc-date';
 import { getDateTimeFromClockString } from '../../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../../util/is-valid-split-time';
+import { normalizeClockStr } from '../../../../util/normalize-clock-str';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isSingleEmoji } from '../../../../util/extract-first-emoji';
 import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
@@ -158,8 +160,15 @@ export class AddTaskBarActionsComponent {
   });
 
   private _formatTimeForDisplay(timeStr: string): string {
+    // Never let a malformed time crash change detection via the "Invalid clock
+    // string" guard (#7802). Recover a stray seconds component, then fall back
+    // to the raw string for genuinely invalid values rather than throwing.
+    const normalized = normalizeClockStr(timeStr);
+    if (!isValidSplitTime(normalized)) {
+      return timeStr;
+    }
     return this._dateTimeFormatService.formatTime(
-      getDateTimeFromClockString(timeStr, new Date()),
+      getDateTimeFromClockString(normalized, new Date()),
     );
   }
 

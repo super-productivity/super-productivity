@@ -39,6 +39,7 @@ import { TaskService } from '../../tasks/task.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateAdapter, MatOption } from '@angular/material/core';
@@ -161,17 +162,25 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     this._selectedTime.set(value);
   }
 
+  // A `<input type="time">` can yield `HH:MM:SS` (macOS Chrome renders a seconds
+  // segment even with step="60"); recover it to `HH:MM` so the time the user set
+  // survives validation instead of being dropped or crashing the guard (#7802).
+  private _normalizedTime = computed<string | null>(() => {
+    const t = this._selectedTime();
+    return t ? normalizeClockStr(t) : null;
+  });
+
   plannedTimestamp = computed<number | null>(() => {
     const selectedDate = this._selectedDate();
-    const selectedTime = this._selectedTime();
-    // Malformed values (e.g. `HH:MM:SS` pasted into <input type="time">, out-of-range
-    // `25:00`, garbage) would otherwise crash getDateTimeFromClockString and bubble
-    // "Invalid clock string" to the global error handler via scheduleWarnings (#7802).
-    if (!selectedDate || !selectedTime || !isValidSplitTime(selectedTime)) {
+    const normalizedTime = this._normalizedTime();
+    // Out-of-range (`25:00`) or garbage values still fail validation here and
+    // would otherwise crash getDateTimeFromClockString and bubble "Invalid clock
+    // string" to the global error handler via scheduleWarnings (#7802).
+    if (!selectedDate || !normalizedTime || !isValidSplitTime(normalizedTime)) {
       return null;
     }
 
-    return getDateTimeFromClockString(selectedTime, selectedDate as Date);
+    return getDateTimeFromClockString(normalizedTime, selectedDate as Date);
   });
   scheduleWarnings = computed(() => {
     const plannedTimestamp = this.plannedTimestamp();
@@ -421,7 +430,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     if (this.data.isSelectDueOnly) {
       this.close({
         date: this.selectedDate as Date,
-        time: this.selectedTime,
+        time: this._normalizedTime(),
         remindOption: this.selectedReminderCfgId,
       });
       return;
@@ -432,9 +441,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
     this._handleReminderRemoval();
 
-    // Treat malformed time the same as "no time": fall through to day-only planning
-    // rather than crashing in _scheduleWithTime (#7802).
-    const hasValidTime = !!this.selectedTime && isValidSplitTime(this.selectedTime);
+    // Treat genuinely malformed time the same as "no time": fall through to
+    // day-only planning rather than crashing in _scheduleWithTime (#7802).
+    const normalizedTime = this._normalizedTime();
+    const hasValidTime = !!normalizedTime && isValidSplitTime(normalizedTime);
 
     if (hasValidTime) {
       this._scheduleWithTime();
@@ -483,13 +493,14 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _scheduleWithTime(): void {
     // Only schedule if task is provided and time is valid (submit() pre-validates;
     // belt-and-braces guard against direct callers / malformed paste — see #7802).
-    if (!this.data.task || !isValidSplitTime(this.selectedTime ?? undefined)) {
+    const normalizedTime = this._normalizedTime();
+    if (!this.data.task || !normalizedTime || !isValidSplitTime(normalizedTime)) {
       return;
     }
 
     const task = this.data.task;
     const newDate = new Date(
-      getDateTimeFromClockString(this.selectedTime as string, this.selectedDate as Date),
+      getDateTimeFromClockString(normalizedTime, this.selectedDate as Date),
     );
     this._taskService.scheduleTask(
       task,

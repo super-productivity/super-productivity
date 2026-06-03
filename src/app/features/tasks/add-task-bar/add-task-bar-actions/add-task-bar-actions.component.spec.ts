@@ -360,6 +360,44 @@ describe('AddTaskBarActionsComponent', () => {
       expect(result).toContain(expectedLocaleTime('10:00', 'en-US'));
     });
 
+    // Repro for #7802 — a malformed time string in state crashed change
+    // detection via the "Invalid clock string" guard in _formatTimeForDisplay.
+    it('does NOT throw and shows the normalized time for a "13:30:00" state.time', () => {
+      const today = mockDateService.todayStr();
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        date: today,
+        time: '13:30:00',
+      });
+
+      expect(() => component.dateDisplay()).not.toThrow();
+      expect(component.dateDisplay()).toBe(expectedLocaleTime('13:30', 'en-US'));
+    });
+
+    it('does NOT throw for genuinely invalid state.time', () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 4);
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        date: getDbDateStr(futureDate),
+        time: 'abc',
+      });
+
+      expect(() => component.dateDisplay()).not.toThrow();
+    });
+
+    it('does NOT throw and shows the normalized time for a "13:30:00" deadlineTime', () => {
+      const today = mockDateService.todayStr();
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        deadlineDate: today,
+        deadlineTime: '13:30:00',
+      });
+
+      expect(() => component.deadlineDateDisplay()).not.toThrow();
+      expect(component.deadlineDateDisplay()).toBe(expectedLocaleTime('13:30', 'en-US'));
+    });
+
     it('should handle auto-detected state correctly', () => {
       (mockStateService as any)._mockAutoDetectedSignal.set(true);
       const stateWithProject = {
