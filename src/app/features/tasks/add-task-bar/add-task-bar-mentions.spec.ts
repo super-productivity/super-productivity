@@ -231,7 +231,6 @@ describe('AddTaskBarComponent Mentions Integration', () => {
         const firstProject = projectMention!.items![0] as any;
         expect(firstProject.icon).toBeDefined();
         expect(firstProject.color).toBeDefined();
-        expect(firstProject.isProject).toBeTrue();
         done();
       });
     });

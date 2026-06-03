@@ -20,7 +20,6 @@ interface MentionListItem extends MentionItem {
   icon?: string;
   color?: string;
   isEmoji?: boolean;
-  isProject?: boolean;
 }
 
 /**
@@ -85,9 +84,6 @@ export class MentionConfigService {
               icon: project.icon || DEFAULT_PROJECT_ICON,
               color: project.theme?.primary || DEFAULT_PROJECT_COLOR,
               isEmoji: !!project.icon && isSingleEmoji(project.icon),
-              // Projects are distinguished from tags by the presence of 'backlogTaskIds'.
-              // We map them here to MentionListItem for standardized rendering.
-              isProject: true,
             }),
           ),
           labelKey: 'title',
