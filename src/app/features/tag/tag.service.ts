@@ -20,12 +20,15 @@ import { nanoid } from 'nanoid';
 import { DEFAULT_TAG } from './tag.const';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { sortByTitle } from '../../util/sort-by-title';
+import { getRandomWorkContextColor } from '../work-context/work-context-color';
+import { DeletedTagTitlesSidecarService } from '../issue/two-way-sync/deleted-tag-titles-sidecar.service';
 
 @Injectable({
   providedIn: 'root',
 })
 export class TagService {
   private _store$ = inject<Store<TagState>>(Store);
+  private _deletedTagTitlesSidecar = inject(DeletedTagTitlesSidecarService);
 
   tags$: Observable<Tag[]> = this._store$.pipe(select(selectAllTags));
   tags = toSignal(this.tags$, { initialValue: [] });
@@ -58,11 +61,14 @@ export class TagService {
   }
 
   deleteTag(id: string): void {
+    // Sidecar before dispatch so the push-on-delete effect can find titles
+    // without persisting them into the op-log action payload (rule 9).
+    this._deletedTagTitlesSidecar.set(this._getTagTitlesByIds([id]));
     this._store$.dispatch(deleteTag({ id }));
   }
 
   removeTag(id: string): void {
-    this._store$.dispatch(deleteTag({ id }));
+    this.deleteTag(id);
   }
 
   updateColor(id: string, color: string): void {
@@ -74,6 +80,7 @@ export class TagService {
   }
 
   deleteTags(ids: string[]): void {
+    this._deletedTagTitlesSidecar.set(this._getTagTitlesByIds(ids));
     this._store$.dispatch(deleteTags({ ids }));
   }
 
@@ -89,9 +96,9 @@ export class TagService {
       title: tag.title || 'EMPTY',
       created: Date.now(),
       icon: null,
-      color: tag.color || null,
       taskIds: [],
       ...tag,
+      color: tag.color || getRandomWorkContextColor(),
     };
   }
 
@@ -101,5 +108,16 @@ export class TagService {
       id: newTag.id,
       action: addTag({ tag: newTag }),
     };
+  }
+
+  private _getTagTitlesByIds(ids: string[]): string[] {
+    const idSet = new Set(ids);
+    try {
+      return this.tags()
+        .filter((tag) => idSet.has(tag.id))
+        .map((tag) => tag.title);
+    } catch {
+      return [];
+    }
   }
 }

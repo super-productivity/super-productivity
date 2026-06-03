@@ -18,6 +18,15 @@ export const validatePluginManifest = (
   // Only validate critical fields
   if (!manifest?.id) {
     errors.push('Plugin ID is required');
+  } else if (manifest.id.includes(':')) {
+    // ':' is reserved as the persistence key delimiter (composeId). An id
+    // containing it would collide with another plugin's keyed namespace —
+    // and removePluginUserData's prefix sweep would over-match. The bridge
+    // also throws at the persist/load boundary, but rejecting at install
+    // fails fast with a clear message instead of a runtime surprise.
+    errors.push(
+      "Plugin ID must not contain ':' (reserved as the persistence key delimiter)",
+    );
   }
 
   if (!manifest?.name) {

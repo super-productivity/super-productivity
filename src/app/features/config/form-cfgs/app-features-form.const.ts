@@ -111,7 +111,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.HABITS,
-        svgIcon: 'habit',
+        icon: 'heart_check',
       },
     },
     {

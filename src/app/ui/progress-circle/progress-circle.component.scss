@@ -23,7 +23,7 @@
 
 .progress-circle__progress {
   stroke: currentColor;
-  transition: stroke-dashoffset 0.3s ease;
+  transition: stroke-dashoffset var(--transition-duration-m) ease;
 }
 
 .progress-circle__pulse {

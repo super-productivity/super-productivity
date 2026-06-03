@@ -107,7 +107,7 @@
   height: 12px;
   border-radius: 2px;
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: var(--transition-fast);
   flex-shrink: 0;
 
   &.empty {

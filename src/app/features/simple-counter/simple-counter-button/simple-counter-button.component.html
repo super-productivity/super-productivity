@@ -55,12 +55,11 @@
     }
     <!----->
     @if (sc.type === SimpleCounterType.RepeatedCountdownReminder) {
-      @if (sc.isOn) {
-        @if (countdownTime$ | async; as countdownTime) {
-          <progress-circle
-            [progress]="calcCountdownProgress(countdownTime, sc.countdownDuration)"
-          ></progress-circle>
-        }
+      @let countdownTime = countdownTime$ | async;
+      @if (sc.isOn && hasVisibleCountdownTime(sc, countdownTime)) {
+        <progress-circle
+          [progress]="calcCountdownProgress(countdownTime, sc.countdownDuration)"
+        ></progress-circle>
       }
       <button
         (click)="isTimeUp() ? countUpAndNextRepeatCountdownSession() : toggleStopwatch()"
@@ -83,7 +82,7 @@
           <mat-icon class="check-ico">check</mat-icon>
         }
       </button>
-      @if (sc.isOn && (countdownTime$ | async); as countdownTime) {
+      @if (hasVisibleCountdownTime(sc, countdownTime)) {
         <div class="extra-label">{{ countdownTime | msToMinuteClockString }}</div>
       }
       @if (sc.countOnDay[todayStr()] || isTimeUp()) {

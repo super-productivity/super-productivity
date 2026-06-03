@@ -67,11 +67,12 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
     const syncPage = new SyncPage(page);
     const workViewPage = new WorkViewPage(page);
 
-    // Track any sync errors
+    // Track any sync errors — use specific patterns to avoid false positives
+    // from unrelated console output that happens to contain "412" (e.g. body sizes)
     const syncErrors: string[] = [];
     page.on('console', (msg) => {
       const text = msg.text();
-      if (text.includes('412') || text.includes('Precondition Failed')) {
+      if (/HTTP 412|status[:\s]+412|Precondition Failed/i.test(text)) {
         syncErrors.push(text);
       }
     });
@@ -169,7 +170,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
     const syncErrors: string[] = [];
     page.on('console', (msg) => {
       const text = msg.text();
-      if (text.includes('412') || text.includes('Precondition Failed')) {
+      if (/HTTP 412|status[:\s]+412|Precondition Failed/i.test(text)) {
         syncErrors.push(text);
       }
     });
@@ -269,7 +270,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
     const syncErrors: string[] = [];
     page.on('console', (msg) => {
       const text = msg.text();
-      if (text.includes('412') || text.includes('Precondition Failed')) {
+      if (/HTTP 412|status[:\s]+412|Precondition Failed/i.test(text)) {
         syncErrors.push(text);
       }
     });

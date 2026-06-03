@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { ScheduleEvent } from '../schedule.model';
 import { ScheduleEventComponent } from '../schedule-event/schedule-event.component';
-import { formatDate } from '@angular/common';
+import { safeFormatDate } from 'src/app/util/safe-format-date';
 import { T } from '../../../t.const';
 import { ScheduleService } from '../schedule.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
@@ -45,7 +45,9 @@ export class ScheduleMonthComponent {
       const date = new Date(sundayDate);
       date.setDate(sundayDate.getDate() + dayIndex);
       // 'EEE' format gives abbreviated day name (e.g., 'Mon', 'Tue')
-      headers.push(formatDate(date, 'EEE', this._dateTimeFormatService.currentLocale()));
+      headers.push(
+        safeFormatDate(date, 'EEE', this._dateTimeFormatService.currentLocale()),
+      );
     }
 
     return headers;

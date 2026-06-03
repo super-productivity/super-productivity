@@ -20,9 +20,12 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { signal, Signal } from '@angular/core';
 import { AddTaskSuggestion } from './add-task-suggestions.model';
 import { PlannerActions } from '../../planner/store/planner.actions';
-import { TaskCopy } from '../task.model';
+import { TaskCopy, TaskReminderOptionId } from '../task.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
+import { DateService } from '../../../core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -55,6 +58,7 @@ describe('AddTaskBarComponent', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockAddTaskBarIssueSearchService: jasmine.SpyObj<AddTaskBarIssueSearchService>;
+  let mockDateService: jasmine.SpyObj<DateService>;
 
   // Mock data
   const mockProjects: Project[] = [
@@ -181,6 +185,9 @@ describe('AddTaskBarComponent', () => {
       ]),
     );
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
+      cfg: signal({
+        reminder: { defaultTaskRemindOption: TaskReminderOptionId.AtStart },
+      }),
       lang$: new BehaviorSubject<LocalizationConfig>(mockLocalizationConfig),
       misc$: new BehaviorSubject<MiscConfig>(mockMiscConfig),
       tasks$: new BehaviorSubject({ defaultProjectId: null }),
@@ -196,6 +203,14 @@ describe('AddTaskBarComponent', () => {
       'AddTaskBarIssueSearchService',
       ['getFilteredIssueSuggestions$', 'addTaskFromExistingTaskOrIssue'],
     );
+    mockDateService = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+      'getLogicalTodayDate',
+    ]);
+    mockDateService.todayStr.and.callFake(() => getDbDateStr(new Date()));
+    mockDateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    mockDateService.getLogicalTodayDate.and.callFake(() => new Date());
     // Setup method returns
     mockAddTaskBarIssueSearchService.getFilteredIssueSuggestions$.and.returnValue(of([]));
 
@@ -207,6 +222,7 @@ describe('AddTaskBarComponent', () => {
         { provide: ProjectService, useValue: mockProjectService },
         { provide: TagService, useValue: mockTagService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+        { provide: DateService, useValue: mockDateService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: Store, useValue: mockStore },
         { provide: MatDialog, useValue: mockMatDialog },
@@ -282,9 +298,118 @@ describe('AddTaskBarComponent', () => {
 
       expect(mockTaskService.add).not.toHaveBeenCalled();
     });
+
+    it('should keep the active tag selected for subsequent tasks in tag context', async () => {
+      const tagWorkContext: WorkContext = {
+        id: 'tag-1',
+        title: 'Test Tag',
+        type: WorkContextType.TAG,
+      } as WorkContext;
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(tagWorkContext);
+      mockTaskService.add.and.returnValues('task-1', 'task-2');
+
+      fixture.detectChanges();
+
+      component.stateService.updateInputTxt('First task');
+      component.stateService.updateCleanText('First task');
+      await component.addTask();
+
+      expect(component.stateService.state().tagIds).toEqual(['tag-1']);
+
+      component.stateService.updateInputTxt('Second task');
+      component.stateService.updateCleanText('Second task');
+      await component.addTask();
+
+      const secondCall = mockTaskService.add.calls.mostRecent();
+      const secondTaskData = secondCall.args[2] as Partial<TaskCopy>;
+      expect(secondTaskData.tagIds).toEqual(['tag-1']);
+    });
+
+    // #5461: a repeat-preset task with no explicit date must default to the
+    // logical "today" (offset-aware), not the calendar date. These assert the
+    // component reads DateService.todayStr() — a regression to getDbDateStr()
+    // would yield the real wall-clock date instead of the mocked '2024-05-19'.
+    it('should use logical today for the dueDay of a repeat-preset task without a date', async () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Daily standup');
+      component.stateService.updateCleanText('Daily standup');
+      component.stateService.updateRepeatSetting('DAILY');
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.dueDay).toBe('2024-05-19');
+    });
+
+    it('should use logical today for the repeat-config startDate when no date is set', async () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Daily standup');
+      component.stateService.updateCleanText('Daily standup');
+      component.stateService.updateRepeatSetting('DAILY');
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy).toHaveBeenCalled();
+      const repeatCfg = addRepeatCfgSpy.calls.mostRecent().args[2];
+      expect(repeatCfg.startDate).toBe('2024-05-19');
+    });
+
+    it('should pass deadlineDay when a deadline date is set without a time', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      component.stateService.updateDeadline('2026-06-15', null);
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.deadlineDay).toBe('2026-06-15');
+      expect(taskData.deadlineWithTime).toBeUndefined();
+    });
+
+    it('should pass deadlineWithTime and deadlineRemindAt when a deadline is set with a time and reminder', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Dentist appointment');
+      component.stateService.updateCleanText('Dentist appointment');
+      component.stateService.updateDeadline('2026-06-15', '14:30');
+      component.stateService.updateDeadlineRemindOption(TaskReminderOptionId.AtStart);
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      const expectedTimestamp = new Date(2026, 5, 15, 14, 30, 0, 0).getTime();
+      expect(taskData.deadlineWithTime).toBe(expectedTimestamp);
+      expect(taskData.deadlineRemindAt).toBe(expectedTimestamp);
+    });
   });
 
   describe('defaultProject$ observable', () => {
+    it('should use logical today for the default date in TODAY context', () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      fixture.detectChanges();
+
+      expect(component.stateService.state().date).toBe('2024-05-19');
+    });
+
     it('should return current project when in project work context', async () => {
       // Set project work context
       (
@@ -491,6 +616,7 @@ describe('AddTaskBarComponent', () => {
           { provide: TagService, useValue: mockTagService },
           { provide: GlobalConfigService, useValue: mockGlobalConfigService },
           { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+          { provide: DateService, useValue: mockDateService },
           { provide: Store, useValue: mockStore },
           { provide: MatDialog, useValue: mockMatDialog },
           { provide: SnackService, useValue: mockSnackService },
@@ -596,6 +722,48 @@ describe('AddTaskBarComponent', () => {
       component.onDocumentClick(event);
 
       expect(doneSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('IME handling (Integration)', () => {
+    let inputEl: HTMLInputElement;
+
+    beforeEach(() => {
+      component.stateService.updateInputTxt('New Task');
+      fixture.detectChanges();
+      inputEl = fixture.debugElement.nativeElement.querySelector('input');
+    });
+
+    const dispatchEnterKeydown = (options: {
+      isComposing: boolean;
+      keyCode?: number;
+    }): void => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        isComposing: options.isComposing,
+      });
+
+      if (options.keyCode) {
+        Object.defineProperty(event, 'keyCode', { value: options.keyCode });
+      }
+
+      inputEl.dispatchEvent(event);
+      fixture.detectChanges();
+    };
+
+    it('should not add a task when Enter is pressed during IME composition', () => {
+      dispatchEnterKeydown({ isComposing: true });
+      expect(mockTaskService.add).not.toHaveBeenCalled();
+    });
+
+    it('should not add a task when Enter is pressed with keyCode 229 even if isComposing is false', () => {
+      dispatchEnterKeydown({ isComposing: false, keyCode: 229 });
+      expect(mockTaskService.add).not.toHaveBeenCalled();
+    });
+
+    it('should add a task when Enter is pressed and NOT in IME composition', () => {
+      dispatchEnterKeydown({ isComposing: false });
+      expect(mockTaskService.add).toHaveBeenCalled();
     });
   });
 });

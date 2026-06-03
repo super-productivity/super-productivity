@@ -4,7 +4,7 @@
 </h1>
 
 <mat-dialog-content>
-  <p>{{ T.F.SYNC.D_SERVER_MIGRATION_CONFIRM.MESSAGE | translate }}</p>
+  <p [innerHTML]="T.F.SYNC.D_SERVER_MIGRATION_CONFIRM.MESSAGE | translate"></p>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
@@ -16,10 +16,10 @@
   </button>
   <button
     (click)="close(true)"
-    color="primary"
+    color="warn"
     mat-stroked-button
   >
-    <mat-icon aria-hidden="true">cloud_upload</mat-icon>
+    <mat-icon aria-hidden="true">warning</mat-icon>
     {{ T.F.SYNC.D_SERVER_MIGRATION_CONFIRM.CONFIRM | translate }}
   </button>
 </mat-dialog-actions>

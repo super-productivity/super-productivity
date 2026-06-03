@@ -3,6 +3,7 @@ import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import {
   distinctUntilChanged,
+  exhaustMap,
   filter,
   map,
   pairwise,
@@ -13,17 +14,80 @@ import {
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { TaskService } from '../../tasks/task.service';
-import { selectCurrentTask } from '../../tasks/store/task.selectors';
+import {
+  selectCurrentTask,
+  selectIsTaskDataLoaded,
+} from '../../tasks/store/task.selectors';
 import { DroidLog } from '../../../core/log';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
-import { combineLatest, firstValueFrom } from 'rxjs';
+import { combineLatest, firstValueFrom, Subject } from 'rxjs';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { syncTimeSpent } from '../../time-tracking/store/time-tracking.actions';
+
+export type NativeTrackingData = {
+  taskId: string;
+  elapsedMs: number;
+};
+
+type RecoveryRequest = {
+  data: NativeTrackingData;
+  // Diagnostic label for issue #7390 field triage; kept narrow so callers
+  // can't accidentally pass user-derived data into the log.
+  source: 'cold-start' | 'resume';
+};
+
+/**
+ * Parse the JSON string returned by `androidInterface.getTrackingElapsed()`.
+ * Returns null for any falsy/`'null'` input or shape mismatch — the caller
+ * treats null as "native is not tracking anything".
+ *
+ * Exported so unit tests can exercise it without instantiating the effect
+ * (which is gated behind IS_ANDROID_WEB_VIEW).
+ */
+export const parseNativeTrackingData = (
+  elapsedJson: string | null | undefined,
+): NativeTrackingData | null => {
+  if (!elapsedJson || elapsedJson === 'null') {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(elapsedJson);
+  } catch (e) {
+    DroidLog.err('Failed to parse native tracking data', e);
+    return null;
+  }
+
+  // Log a length-only fingerprint instead of the raw payload — the native
+  // contract today is shape-only (taskId/elapsedMs), but we don't want to
+  // burn user content into the exportable log if that ever changes.
+  if (!parsed || typeof parsed !== 'object') {
+    DroidLog.warn('Native service returned non-object tracking data', {
+      length: elapsedJson.length,
+    });
+    return null;
+  }
+
+  const { taskId, elapsedMs } = parsed as Partial<NativeTrackingData>;
+  if (
+    typeof taskId !== 'string' ||
+    typeof elapsedMs !== 'number' ||
+    !Number.isFinite(elapsedMs)
+  ) {
+    DroidLog.warn('Native service returned invalid tracking data', {
+      length: elapsedJson.length,
+    });
+    return null;
+  }
+
+  return { taskId, elapsedMs };
+};
 
 @Injectable()
 export class AndroidForegroundTrackingEffects {
@@ -34,6 +98,15 @@ export class AndroidForegroundTrackingEffects {
   private _snackService = inject(SnackService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
+
+  // Recovery requests funnel through this Subject for the cold-start path.
+  //   Producers: syncTrackingToService$ tap (cold-start), syncOnResume$ tap.
+  //   Consumer:  processRecovery$ (with exhaustMap → coalescing).
+  // exhaustMap intentionally drops concurrent requests while one is in-flight;
+  // this is safe because the native counter is the source of truth and any
+  // in-flight recovery will reconcile it. A dropped trigger represents at
+  // most a few-hundred-ms staleness which self-heals on the next user action.
+  private _recoveryRequest$ = new Subject<RecoveryRequest>();
 
   /**
    * Start/stop the native foreground service when the current task changes.
@@ -48,9 +121,13 @@ export class AndroidForegroundTrackingEffects {
         combineLatest([
           this._store.select(selectCurrentTask),
           this._store.select(selectTimer),
+          this._store.select(selectIsTaskDataLoaded),
         ]).pipe(
           // PERF: Skip during hydration/sync to avoid unnecessary processing
-          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          filter(
+            ([, , isTaskDataLoaded]) =>
+              isTaskDataLoaded && !this._hydrationState.isApplyingRemoteOps(),
+          ),
           map(([currentTask, timer]) => ({
             currentTask,
             isFocusModeActive: timer.purpose !== null,
@@ -88,6 +165,30 @@ export class AndroidForegroundTrackingEffects {
             }
 
             if (currentTask) {
+              // null → task transition can be either a fresh user start or
+              // the post-recovery setCurrentId re-emission. If native is
+              // already tracking the same task, just push the synced
+              // timeSpent via update — calling startTrackingService here
+              // would reset accumulatedMs and clobber the native counter
+              // recovery just reconciled.
+              if (!prevTask) {
+                const nativeData = this._getNativeTrackingData();
+                if (nativeData?.taskId === currentTask.id) {
+                  DroidLog.log(
+                    'Native already tracking this task; updating notification only',
+                    { taskId: currentTask.id },
+                  );
+                  this._safeNativeCall(
+                    () =>
+                      androidInterface.updateTrackingService?.(
+                        currentTask.timeSpent || 0,
+                      ),
+                    'Failed to update tracking service',
+                  );
+                  return;
+                }
+              }
+
               DroidLog.log('Starting tracking service', {
                 taskId: currentTask.id,
                 timeSpent: currentTask.timeSpent,
@@ -103,6 +204,14 @@ export class AndroidForegroundTrackingEffects {
                 true,
               );
             } else {
+              if (!prevTask) {
+                const nativeData = this._getNativeTrackingData();
+                if (nativeData) {
+                  this._recoveryRequest$.next({ data: nativeData, source: 'cold-start' });
+                  return;
+                }
+              }
+
               DroidLog.log('Stopping tracking service');
               this._safeNativeCall(
                 () => androidInterface.stopTrackingService?.(),
@@ -115,6 +224,26 @@ export class AndroidForegroundTrackingEffects {
     );
 
   /**
+   * Drains recovery requests with exhaustMap so concurrent triggers coalesce
+   * onto a single in-flight recovery. The inner promise has its own catch so
+   * a rejected recovery resolves the inner observable cleanly — exhaustMap
+   * stays subscribed and ready for the next request.
+   */
+  processRecovery$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        this._recoveryRequest$.pipe(
+          exhaustMap(({ data, source }) =>
+            this._doRecover(data, source).catch((e) => {
+              DroidLog.err('Recovery failed', e);
+            }),
+          ),
+        ),
+      { dispatch: false },
+    );
+
+  /**
    * When the app resumes from background, sync the elapsed time from the native service.
    */
   syncOnResume$ =
@@ -122,10 +251,20 @@ export class AndroidForegroundTrackingEffects {
     createEffect(
       () =>
         androidInterface.onResume$.pipe(
-          withLatestFrom(this._store.select(selectCurrentTask)),
-          filter(([, currentTask]) => !!currentTask),
+          withLatestFrom(
+            this._store.select(selectCurrentTask),
+            this._store.select(selectIsTaskDataLoaded),
+          ),
+          filter(([, , isTaskDataLoaded]) => isTaskDataLoaded),
           tap(async ([, currentTask]) => {
-            await this._syncElapsedTimeForTask(currentTask!.id);
+            if (currentTask) {
+              await this._syncElapsedTimeForTask(currentTask.id);
+            } else {
+              const nativeData = this._getNativeTrackingData();
+              if (nativeData) {
+                this._recoveryRequest$.next({ data: nativeData, source: 'resume' });
+              }
+            }
           }),
         ),
       { dispatch: false },
@@ -276,6 +415,47 @@ export class AndroidForegroundTrackingEffects {
     }
   }
 
+  private _getNativeTrackingData(): NativeTrackingData | null {
+    return parseNativeTrackingData(androidInterface.getTrackingElapsed?.());
+  }
+
+  /**
+   * Recovery pipeline body. Must only be invoked via `_recoveryRequest$.next`
+   * — calling directly bypasses the exhaustMap coalescing in processRecovery$
+   * and would re-introduce the concurrent-recovery race.
+   */
+  private async _doRecover(
+    nativeData: NativeTrackingData,
+    source: RecoveryRequest['source'],
+  ): Promise<void> {
+    // Issue #7390 diagnostic: `source` distinguishes the cold-start path
+    // (combineLatest fires before onResume) from the resume path. Used to
+    // triage future re-reports — keep this log.
+    DroidLog.log('Recovering active tracking from native service', {
+      source,
+      ...nativeData,
+    });
+
+    const didSync = await this._syncElapsedTimeForTask(nativeData.taskId, nativeData);
+    if (!didSync) {
+      DroidLog.warn('Stopping stale native tracking service after failed recovery', {
+        taskId: nativeData.taskId,
+      });
+      this._safeNativeCall(
+        () => androidInterface.stopTrackingService?.(),
+        'Failed to stop stale tracking service',
+      );
+      return;
+    }
+
+    // setCurrentId synchronously re-runs the syncTrackingToService$ tap.
+    // The null → task transition there checks native data and calls
+    // updateTrackingService instead of startTrackingService when native is
+    // already tracking this task — so the native counter is preserved.
+    this._taskService.setCurrentId(nativeData.taskId);
+    await this._flushPendingOperations();
+  }
+
   /**
    * Force immediate flush of pending operations to IndexedDB.
    * This ensures all dispatched NgRx actions are persisted to the operation log
@@ -302,28 +482,26 @@ export class AndroidForegroundTrackingEffects {
    * Only syncs if the native service is tracking the specified task.
    * Uses async/await with firstValueFrom for reliable observable handling.
    */
-  private async _syncElapsedTimeForTask(taskId: string): Promise<void> {
-    const elapsedJson = androidInterface.getTrackingElapsed?.();
-    DroidLog.log('Syncing elapsed time for task', { taskId, elapsedJson });
+  private async _syncElapsedTimeForTask(
+    taskId: string,
+    nativeTrackingData?: NativeTrackingData,
+  ): Promise<boolean> {
+    const nativeData = nativeTrackingData ?? this._getNativeTrackingData();
+    DroidLog.log('Syncing elapsed time for task', { taskId, nativeData });
 
-    if (!elapsedJson || elapsedJson === 'null') {
+    if (!nativeData) {
       DroidLog.warn('Native service has no tracking data', { taskId });
-      return;
+      return false;
     }
 
     try {
-      const nativeData = JSON.parse(elapsedJson) as {
-        taskId: string;
-        elapsedMs: number;
-      };
-
       // Only sync if native is tracking the same task
       if (nativeData.taskId !== taskId) {
         DroidLog.warn('Native tracking different task, skipping sync', {
           nativeTaskId: nativeData.taskId,
           expectedTaskId: taskId,
         });
-        return;
+        return false;
       }
 
       // Get the task to find its current timeSpent
@@ -334,7 +512,7 @@ export class AndroidForegroundTrackingEffects {
           msg: 'Time tracking sync failed - task not found',
           type: 'WARNING',
         });
-        return;
+        return false;
       }
 
       const currentTimeSpent = task.timeSpent || 0;
@@ -368,7 +546,7 @@ export class AndroidForegroundTrackingEffects {
         );
         // Reset tracking interval to prevent double-counting
         this._globalTrackingIntervalService.resetTrackingStart();
-        return;
+        return true;
       }
 
       if (duration > 0) {
@@ -387,12 +565,15 @@ export class AndroidForegroundTrackingEffects {
         // interval timer to avoid adding the same time again from tick$
         this._globalTrackingIntervalService.resetTrackingStart();
       }
+
+      return true;
     } catch (e) {
       DroidLog.err('Failed to sync elapsed time', e);
       this._snackService.open({
         msg: 'Time tracking sync failed - please check your tracked time',
         type: 'WARNING',
       });
+      return false;
     }
   }
 }

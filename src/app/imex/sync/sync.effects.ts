@@ -135,10 +135,14 @@ export class SyncEffects {
             combineLatest([
               this._syncWrapperService.isEnabledAndReady$,
               this._syncWrapperService.syncInterval$,
+              this._syncWrapperService.syncProviderId$,
             ]).pipe(
-              switchMap(([isEnabledAndReady, syncInterval]) =>
+              switchMap(([isEnabledAndReady, syncInterval, providerId]) =>
                 isEnabledAndReady && syncInterval
-                  ? this._syncTriggerService.getSyncTrigger$(syncInterval)
+                  ? this._syncTriggerService.getSyncTrigger$(
+                      syncInterval,
+                      providerId !== SyncProviderId.SuperSync,
+                    )
                   : EMPTY,
               ),
             ),
@@ -172,6 +176,9 @@ export class SyncEffects {
         tap((x) => SyncLog.log('sync(effect).....', x)),
         // Limit sync frequency to prevent rapid consecutive syncs (e.g., blur event right after initial sync)
         throttleTime(2000, asyncScheduler, { leading: true, trailing: false }),
+        // E2E tests set this flag after setup to prevent auto-sync from interfering
+        // with controlled, sequential sync via the sync button click
+        filter(() => !(globalThis as any).__SP_E2E_BLOCK_AUTO_SYNC),
         withLatestFrom(isOnline$),
         // don't run multiple after each other when dialog is open
         exhaustMap(([trigger, isOnline]) => {

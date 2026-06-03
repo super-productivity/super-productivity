@@ -1,5 +1,14 @@
 @use '../../../styles/_globals.scss' as *;
 
+// THEME AUTHORS: do NOT apply `backdrop-filter`, `filter`, `transform`,
+// `perspective`, `contain: paint/layout/strict`, or `will-change` for any of
+// those on the :host (magic-side-nav). They establish a new containing block
+// for fixed-position descendants — and on mobile the host computes to width:0
+// (hostWidthSignal in magic-side-nav.component.ts), which then collapses the
+// fixed-positioned drawer (.nav-sidenav) and overlay (.nav-backdrop-mobile)
+// to 0 width. The drawer simply won't appear when the user taps the menu.
+// Apply glass/blur/tint to `.nav-sidenav` (inner) instead. See velvet.css and
+// liquid-glass.css for the correct pattern.
 :host {
   --sidenav-width-expanded: var(--side-nav-width, 260px);
   --mobile-breakpoint: 768px;

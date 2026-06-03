@@ -739,13 +739,11 @@ describe('State Validity After Actions', () => {
 
         const action = addNote({ note: newNote });
 
-        // Note actions need to be handled by specific reducers, not meta-reducers
-        // For now, we test that the action structure is correct
-        applyActionAndValidate(appData, action);
+        const { newAppData, validationResult } = applyActionAndValidate(appData, action);
 
-        // Note: The meta-reducers don't handle note actions, so this will pass through
-        // The note reducer would handle this. For now, just verify no crash
-        expect(true).toBe(true);
+        expect(validationResult.isValid).toBe(true);
+        expect(newAppData.note.ids).toContain('note1');
+        expect(newAppData.note.entities.note1).toEqual(newNote);
       });
     });
   });

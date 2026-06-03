@@ -1,0 +1,1 @@
+Added OneDrive sync (desktop/mobile only), a Start break action in break reminders, and improved task swipe menus plus attachment URL handling. Fixed Android edge-to-edge/keyboard layout issues, transient WebView startup recovery, recurring task edge cases, instant done-state updates in search, malformed schedule times, and foreground service reliability.

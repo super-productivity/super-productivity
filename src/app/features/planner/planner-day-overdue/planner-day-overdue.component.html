@@ -17,6 +17,7 @@
     [cdkDropListSortingDisabled]="true"
     [cdkDropListEnterPredicate]="enterPredicate"
     [cdkDropListData]="OVERDUE_LIST_ID"
+    [cdkDropListAutoScrollStep]="8"
   >
     @for (task of overdueTasks(); track task.id) {
       <planner-task

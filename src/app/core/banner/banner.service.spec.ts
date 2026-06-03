@@ -15,7 +15,7 @@ describe('BannerService', () => {
   describe('open()', () => {
     it('should add a new banner when none exists with that id', () => {
       const banner: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Test message',
         ico: 'test_icon',
       };
@@ -27,12 +27,12 @@ describe('BannerService', () => {
 
     it('should update an existing banner with the same id', () => {
       const banner1: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Initial message',
         ico: 'initial_icon',
       };
       const banner2: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Updated message',
         ico: 'updated_icon',
       };
@@ -48,7 +48,7 @@ describe('BannerService', () => {
     // Bug #5974 fix: Ensure nested action properties are updated
     it('should update action properties when reopening same banner', () => {
       const banner1: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Test message',
         action: {
           label: 'Pause',
@@ -57,7 +57,7 @@ describe('BannerService', () => {
         },
       };
       const banner2: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Test message',
         action: {
           label: 'Play',
@@ -75,7 +75,7 @@ describe('BannerService', () => {
 
     it('should create a new object reference when updating banner', () => {
       const banner1: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Initial message',
       };
 
@@ -83,7 +83,7 @@ describe('BannerService', () => {
       const firstRef = service.activeBanner();
 
       const banner2: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Updated message',
       };
       service.open(banner2);
@@ -97,31 +97,31 @@ describe('BannerService', () => {
   describe('dismiss()', () => {
     it('should remove a banner by id', () => {
       const banner: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Test message',
       };
 
       service.open(banner);
       expect(service.activeBanner()).toBeTruthy();
 
-      service.dismiss(BannerId.FocusMode);
+      service.dismiss(BannerId.TakeABreak);
       expect(service.activeBanner()).toBeNull();
     });
 
     it('should not throw when dismissing non-existent banner', () => {
-      expect(() => service.dismiss(BannerId.FocusMode)).not.toThrow();
+      expect(() => service.dismiss(BannerId.TakeABreak)).not.toThrow();
     });
   });
 
   describe('dismissAll()', () => {
     it('should remove all banners with the specified id', () => {
       const banner: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Test message',
       };
 
       service.open(banner);
-      service.dismissAll(BannerId.FocusMode);
+      service.dismissAll(BannerId.TakeABreak);
 
       expect(service.activeBanner()).toBeNull();
     });

@@ -24,6 +24,7 @@ describe('EncryptionPasswordChangeService', () => {
     mockSyncProvider = jasmine.createSpyObj('SyncProvider', ['setPrivateCfg']);
     mockSyncProvider.id = SyncProviderId.SuperSync;
     mockSyncProvider.supportsOperationSync = true;
+    mockSyncProvider.providerMode = 'superSyncOps';
     mockSyncProvider.privateCfg = {
       load: jasmine.createSpy('load').and.returnValue(
         Promise.resolve({

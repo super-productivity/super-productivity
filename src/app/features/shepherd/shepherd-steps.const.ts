@@ -1,4 +1,5 @@
-import { StepOptions } from 'shepherd.js';
+import type Shepherd from 'shepherd.js';
+type StepOptions = Shepherd.Step.StepOptions;
 import { nextOnObs, twoWayObs } from './shepherd-helper';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskService } from '../tasks/task.service';

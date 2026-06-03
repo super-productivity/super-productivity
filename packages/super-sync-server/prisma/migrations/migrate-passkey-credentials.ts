@@ -15,7 +15,7 @@
  * Run with: npx ts-node prisma/migrations/migrate-passkey-credentials.ts
  */
 
-import { PrismaClient } from '../../src/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -39,7 +39,7 @@ const migratePasskeyCredentials = async (): Promise<void> => {
   for (const passkey of passkeys) {
     try {
       // Convert stored bytes to UTF-8 string (this gives us the base64url string)
-      const storedAsUtf8 = Buffer.from(passkey.credentialId).toString('utf-8');
+      const storedAsUtf8 = passkey.credentialId.toString('utf-8');
 
       // Check if it looks like a valid base64url string
       // Base64url uses only A-Z, a-z, 0-9, -, _
@@ -66,7 +66,7 @@ const migratePasskeyCredentials = async (): Promise<void> => {
       }
 
       console.log(`Passkey ${passkey.id} (user ${passkey.userId}):`);
-      console.log(`  Old (hex): ${Buffer.from(passkey.credentialId).toString('hex')}`);
+      console.log(`  Old (hex): ${passkey.credentialId.toString('hex')}`);
       console.log(`  Old as UTF-8 (base64url): ${storedAsUtf8}`);
       console.log(`  New raw (hex): ${rawCredentialId.toString('hex')}`);
       console.log(`  New as base64url: ${rawCredentialId.toString('base64url')}`);

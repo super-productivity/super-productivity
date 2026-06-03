@@ -1,4 +1,9 @@
 import { inject, Injectable, OnDestroy } from '@angular/core';
+import {
+  planDownloadFullStateUpload,
+  planDownloadGapReset,
+  planDownloadedDataEncryptionState,
+} from '@sp/sync-core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
 import { Operation } from '../core/operation.types';
@@ -158,15 +163,23 @@ export class OperationLogDownloadService implements OnDestroy {
 
         // Capture snapshot state from first response (file-based sync providers only)
         // This is only present when downloading from seq 0 (fresh download)
-        if (!snapshotState && response.snapshotState) {
+        if (
+          syncProvider.providerMode === 'fileSnapshotOps' &&
+          !snapshotState &&
+          response.snapshotState
+        ) {
           snapshotState = response.snapshotState;
           OpLog.normal(
             'OperationLogDownloadService: Received snapshotState for fresh download bootstrap',
           );
         }
 
+        const gapResetPlan = planDownloadGapReset({
+          gapDetected: response.gapDetected,
+          hasResetForGap,
+        });
         // Handle gap detection: server was reset or client has stale lastServerSeq
-        if (response.gapDetected && !hasResetForGap) {
+        if (gapResetPlan.shouldReset) {
           OpLog.normal(
             `OperationLogDownloadService: Gap detected (sinceSeq=${sinceSeq}, latestSeq=${response.latestSeq}). ` +
               `Resetting to 0 and re-downloading.`,
@@ -235,10 +248,25 @@ export class OperationLogDownloadService implements OnDestroy {
         const hasEncryptedOps = syncOps.some((op) => op.isPayloadEncrypted);
         if (hasEncryptedOps) {
           if (!encryptKey) {
-            // No encryption key available - throw error to let sync wrapper show password dialog
-            OpLog.error(
-              'OperationLogDownloadService: Received encrypted operations but no encryption key is configured.',
-            );
+            // No encryption key available - throw to let the sync wrapper show the
+            // password dialog. Severity depends on history: a client that has never
+            // synced AND has no local encryption config is EXPECTED to hit this on
+            // first connect to an encrypted dataset (it just needs the password
+            // prompt), so log it quietly. Anything else — an already-synced client, or
+            // one whose local config still flags encryption on but has no key (the
+            // dropped-credential signature, e.g. after a wiped op store) — is dangerous,
+            // so keep it loud. See SyncCredentialStore.load.
+            const everSynced = await this.opLogStore.hasSyncedOps();
+            const localEncryptionEnabled = syncProvider.isEncryptionEnabled
+              ? await syncProvider.isEncryptionEnabled()
+              : false;
+            const msg =
+              'OperationLogDownloadService: Received encrypted operations but no encryption key is configured.';
+            if (everSynced || localEncryptionEnabled) {
+              OpLog.error(msg);
+            } else {
+              OpLog.normal(msg);
+            }
             throw new DecryptNoPasswordError(
               'Encrypted data received but no encryption password is configured',
             );
@@ -296,12 +324,14 @@ export class OperationLogDownloadService implements OnDestroy {
       // a full state snapshot to seed the new server with its data.
       // IMPORTANT: If we received a snapshotState, the server is NOT empty - it has data
       // in snapshot form. This happens when another client uploaded a SYNC_IMPORT.
-      if (
-        hasResetForGap &&
-        allNewOps.length === 0 &&
-        finalLatestSeq === 0 &&
-        !snapshotState
-      ) {
+      const gapMigrationPlan = planDownloadFullStateUpload({
+        currentNeedsFullStateUpload: needsFullStateUpload,
+        hasResetForGap,
+        downloadedOpCount: allNewOps.length,
+        finalLatestSeq,
+        hasSnapshotState: !!snapshotState,
+      });
+      if (gapMigrationPlan.needsFullStateUpload) {
         needsFullStateUpload = true;
         OpLog.normal(
           'OperationLogDownloadService: Server migration detected - gap on empty server. ' +
@@ -324,17 +354,27 @@ export class OperationLogDownloadService implements OnDestroy {
           `allNewOps=${allNewOps.length}, finalLatestSeq=${finalLatestSeq}, lastServerSeq=${lastServerSeq}`,
       );
       // IMPORTANT: If we have a snapshotState, the server is NOT empty - skip migration check
-      if (
-        !needsFullStateUpload &&
-        allNewOps.length === 0 &&
-        finalLatestSeq === 0 &&
-        !snapshotState
-      ) {
+      const shouldCheckSyncedOpsPlan = planDownloadFullStateUpload({
+        currentNeedsFullStateUpload: needsFullStateUpload,
+        hasResetForGap,
+        downloadedOpCount: allNewOps.length,
+        finalLatestSeq,
+        hasSnapshotState: !!snapshotState,
+      });
+      if (shouldCheckSyncedOpsPlan.shouldCheckHasSyncedOps) {
         const hasSyncedOps = await this.opLogStore.hasSyncedOps();
         OpLog.verbose(
           `OperationLogDownloadService: [DEBUG] Empty server detected, hasSyncedOps=${hasSyncedOps}`,
         );
-        if (hasSyncedOps) {
+        const emptyServerMigrationPlan = planDownloadFullStateUpload({
+          currentNeedsFullStateUpload: needsFullStateUpload,
+          hasResetForGap,
+          downloadedOpCount: allNewOps.length,
+          finalLatestSeq,
+          hasSnapshotState: !!snapshotState,
+          hasSyncedOps,
+        });
+        if (emptyServerMigrationPlan.needsFullStateUpload) {
           needsFullStateUpload = true;
           OpLog.normal(
             'OperationLogDownloadService: Server migration detected - empty server with synced ops. ' +
@@ -377,13 +417,16 @@ export class OperationLogDownloadService implements OnDestroy {
     // Determine if server has only unencrypted data.
     // This is true when we downloaded ops AND none of them were encrypted.
     // This indicates another client disabled encryption.
-    const serverHasOnlyUnencryptedData = sawAnyOps && !sawEncryptedOp;
+    const { serverHasOnlyUnencryptedData } = planDownloadedDataEncryptionState({
+      sawAnyOps,
+      sawEncryptedOp,
+    });
 
     // Return latestServerSeq so caller can persist it AFTER storing ops in IndexedDB.
     // This ensures localStorage (lastServerSeq) and IndexedDB (ops) stay in sync.
-    return {
+    const baseResult = {
       newOps: allNewOps,
-      success: true,
+      success: true as const,
       failedFileCount: 0,
       needsFullStateUpload,
       latestServerSeq: finalLatestSeq,
@@ -391,10 +434,22 @@ export class OperationLogDownloadService implements OnDestroy {
       ...(forceFromSeq0 && allOpClocks.length > 0 ? { allOpClocks } : {}),
       // Include snapshot vector clock when snapshot optimization was used
       ...(snapshotVectorClock ? { snapshotVectorClock } : {}),
-      // Include snapshot state for file-based sync fresh downloads
-      ...(snapshotState ? { snapshotState } : {}),
       // Include encryption state detection for mismatch handling
       ...(serverHasOnlyUnencryptedData ? { serverHasOnlyUnencryptedData } : {}),
+    };
+
+    if (syncProvider.providerMode === 'fileSnapshotOps') {
+      return {
+        ...baseResult,
+        providerMode: 'fileSnapshotOps',
+        // Include snapshot state for file-based sync fresh downloads
+        ...(snapshotState ? { snapshotState } : {}),
+      };
+    }
+
+    return {
+      ...baseResult,
+      providerMode: 'superSyncOps',
     };
   }
 

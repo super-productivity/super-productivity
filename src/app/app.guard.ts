@@ -16,8 +16,7 @@ import { Store } from '@ngrx/store';
 import { selectIsOverlayShown } from './features/focus-mode/store/focus-mode.selectors';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
-import { TODAY_TAG } from './features/tag/tag.const';
-import { INBOX_PROJECT } from './features/project/project.const';
+import { getStartPageUrlPath } from './features/config/default-start-page.util';
 
 @Injectable({ providedIn: 'root' })
 export class ActiveWorkContextGuard {
@@ -107,6 +106,7 @@ export class ValidProjectIdGuard {
 @Injectable({ providedIn: 'root' })
 export class DefaultStartPageGuard {
   private _globalConfigService = inject(GlobalConfigService);
+  private _projectService = inject(ProjectService);
   private _dataInitStateService = inject(DataInitStateService);
   private _router = inject(Router);
 
@@ -117,15 +117,32 @@ export class DefaultStartPageGuard {
     return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
       concatMap(() => this._globalConfigService.misc$),
       take(1),
-      map((miscCfg) => {
-        const TODAY = 0;
-        const INBOX = 1;
-        if ((miscCfg?.defaultStartPage ?? TODAY) === INBOX) {
-          return this._router.parseUrl(`/project/${INBOX_PROJECT.id}/tasks`);
-        } else {
-          return this._router.parseUrl(`/tag/${TODAY_TAG.id}/tasks`);
-        }
-      }),
+      concatMap((miscCfg) => this._resolve(miscCfg?.defaultStartPage)),
+    );
+  }
+
+  private _resolve(startPage: number | string | undefined): Observable<UrlTree> {
+    const appFeatures = this._globalConfigService.appFeatures();
+
+    if (typeof startPage === 'string' && startPage.length > 0) {
+      // Project id — look it up so getStartPageUrlPath can fall back to Today
+      // when the project is missing, archived, or hidden from the menu.
+      return this._projectService.getByIdOnce$(startPage).pipe(
+        catchError((err) => {
+          Log.warn(
+            `DefaultStartPageGuard: failed to look up project '${startPage}'`,
+            err,
+          );
+          return of(undefined);
+        }),
+        map((project) =>
+          this._router.parseUrl(getStartPageUrlPath(startPage, appFeatures, project)),
+        ),
+      );
+    }
+
+    return of(
+      this._router.parseUrl(getStartPageUrlPath(startPage, appFeatures, undefined)),
     );
   }
 }

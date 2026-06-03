@@ -1,53 +1,28 @@
-import { Directory } from '@capacitor/filesystem';
-import { LocalFileSyncBase } from './local-file-sync-base';
-import { LocalFileSyncPrivateCfg } from '../../../core/types/sync.types';
-import { SafService } from './droid-saf/saf.service';
+import {
+  LocalFileSyncAndroid as PackageLocalFileSyncAndroid,
+  type LocalFileSyncAndroidDeps,
+} from '@sp/sync-providers/local-file';
+import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
+import { SyncCredentialStore } from '../../credential-store.service';
+import { SyncProviderId } from '../../provider.const';
 import { SafFileAdapter } from './droid-saf/saf-file-adapter';
-import { SyncLog } from '../../../../core/log';
+import { SafService } from './droid-saf/saf.service';
 
-export class LocalFileSyncAndroid extends LocalFileSyncBase {
-  constructor(public directory = Directory.Documents) {
-    super(
-      new SafFileAdapter(async () => {
-        const cfg = await this.privateCfg.load();
-        return cfg?.safFolderUri;
-      }),
-    );
-  }
+const buildLocalFileSyncAndroidDeps = (): LocalFileSyncAndroidDeps => {
+  const credentialStore = new SyncCredentialStore(SyncProviderId.LocalFile);
+  return {
+    logger: OP_LOG_SYNC_LOGGER,
+    fileAdapter: new SafFileAdapter(async () => {
+      const cfg = await credentialStore.load();
+      return cfg?.safFolderUri;
+    }),
+    credentialStore: credentialStore as LocalFileSyncAndroidDeps['credentialStore'],
+    saf: {
+      selectFolder: () => SafService.selectFolder(),
+      checkPermission: (uri) => SafService.checkPermission(uri),
+    },
+  };
+};
 
-  async isReady(): Promise<boolean> {
-    const privateCfg = await this.privateCfg.load();
-    // Check if SAF is enabled and has valid permissions
-    if (privateCfg?.safFolderUri?.length) {
-      const hasPermission = await SafService.checkPermission(privateCfg.safFolderUri);
-      if (!hasPermission) {
-        // SAF was enabled but permission was revoked
-        await this.privateCfg.updatePartial({ safFolderUri: undefined });
-        return false;
-      }
-      return true;
-    }
-    return false;
-  }
-
-  async setupSaf(): Promise<string> {
-    try {
-      const uri = await SafService.selectFolder();
-      await this.privateCfg.upsertPartial({
-        safFolderUri: uri,
-      });
-      return uri;
-    } catch (error) {
-      SyncLog.err('Failed to setup SAF:', error);
-      throw error;
-    }
-  }
-
-  async setPrivateCfg(privateCfg: LocalFileSyncPrivateCfg): Promise<void> {
-    await this.privateCfg.setComplete(privateCfg);
-  }
-
-  async getFilePath(targetPath: string): Promise<string> {
-    return targetPath;
-  }
-}
+export const createLocalFileSyncAndroid = (): PackageLocalFileSyncAndroid =>
+  new PackageLocalFileSyncAndroid(buildLocalFileSyncAndroidDeps());

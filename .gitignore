@@ -58,6 +58,9 @@ chromedriver.log
 /docs/tmp
 .eslintcache
 
+# tsconfig composite build info
+**/*.tsbuildinfo
+
 
 # System Files
 .DS_Store
@@ -74,9 +77,12 @@ src/app/**/*.js
 src/app/**/*.js.map
 # added
 build/hub
+build/generated-release-notes/
 electron/**/*.js
 !electron/scripts/bundle-preload.js
 electron/**/*.js.map
+electron/bin/wayland-idle-helper
+electron/wayland-idle-helper/target/
 
 # mac os deployment
 *.provisionprofile
@@ -94,9 +100,6 @@ electron-builder.win-store.yaml
 /.claude/
 .aider*
 
-/packages/plugin-api/dist/**/*.*
-/packages/plugin-api/src/**/*.js
-/packages/plugin-api/src/**/*.js.map
 
 #
 perf-metrics-create-tasks.json
@@ -119,3 +122,6 @@ data/
 /.secrets.example
 
 .worktrees/
+
+# Generated App Store Connect "What's New" notes (see tools/prepare-appstore-release-notes.js)
+/fastlane/appstore_metadata

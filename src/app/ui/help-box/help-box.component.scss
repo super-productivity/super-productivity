@@ -1,7 +1,7 @@
 :host {
   display: block;
   position: sticky;
-  top: 16px;
+  top: var(--s2);
   background: var(--bg);
   z-index: 200;
   margin: var(--s);
@@ -18,8 +18,8 @@
 
   .close-btn {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: var(--s-half);
+    right: var(--s-half);
   }
 
   //.help-box-content {}
@@ -27,7 +27,7 @@
   :host-context([dir='rtl']) {
     .close-btn {
       right: unset;
-      left: 4px;
+      left: var(--s-half);
     }
   }
 }

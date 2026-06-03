@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, Input, output } from '@angular/core';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { GlobalConfigSectionKey, SoundConfig } from '../global-config.model';
+import { GlobalConfigFormSectionKey, SoundConfig } from '../global-config.model';
 import { ProjectCfgFormKey } from '../../project/project.model';
 import { exists } from 'src/app/util/exists';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -49,7 +49,7 @@ export class ConfigSoundFormComponent {
   }
 
   readonly save = output<{
-    sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey;
+    sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey;
     config: SoundConfig;
   }>();
 

@@ -7,7 +7,7 @@
           mat-icon-button
           (click)="shareHeatmap()"
           [disabled]="isSharing()"
-          [matTooltip]="T.F.METRIC.CMP.SHARE_HEATMAP | translate"
+          [matTooltip]="'Share Heatmap' | translate"
         >
           @if (isSharing()) {
             <mat-icon>hourglass_empty</mat-icon>

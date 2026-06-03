@@ -19,7 +19,14 @@
 
 @if (ip.isEnabled) {
   <!---->
-  @if (ip.issueProviderKey === 'JIRA' && IS_WEB_EXTENSION_REQUIRED_FOR_JIRA) {
+  @if (
+    ip.issueProviderKey === 'JIRA' &&
+    IS_WEB_EXTENSION_REQUIRED_FOR_JIRA &&
+    !isJiraDirectFetchEnabled()
+  ) {
+    <div [ngClass]="HelperClasses.isHideForAdvancedFeatures">
+      <p [innerHTML]="T.F.ISSUE.CROSS_ORIGIN_BROWSER_WARNING | translate"></p>
+    </div>
     <div [ngClass]="HelperClasses.isHideForAdvancedFeatures">
       <p [innerHTML]="T.G.EXTENSION_INFO | translate"></p>
     </div>
@@ -60,7 +67,7 @@
             matSuffix
             style="cursor: pointer"
             (click)="unPinSearch()"
-            [matTooltip]="T.F.ISSUE.SEARCH.CLEAR_PINNED_SEARCH | translate"
+            [matTooltip]="'Clear pinned search query'"
             >bookmark</mat-icon
           >
         } @else if (
@@ -71,7 +78,7 @@
             matSuffix
             style="cursor: pointer"
             (click)="pinSearch()"
-            [matTooltip]="T.F.ISSUE.SEARCH.REMEMBER_SEARCH | translate"
+            [matTooltip]="'Remember search query'"
             >bookmark_add</mat-icon
           >
         }

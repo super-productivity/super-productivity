@@ -236,6 +236,42 @@ describe('MentionDirective', () => {
 
       expect(result).toEqual(items);
     });
+
+    it('should match substrings, not just prefixes', () => {
+      const items = [
+        { label: 'xxaaxx' },
+        { label: 'aabb' },
+        { label: 'bbaa' },
+        { label: 'cccc' },
+      ];
+
+      const result = mentionFilter('aa', items);
+
+      // Prefix match comes first; remaining mid-string matches preserve input order.
+      expect(result).toEqual([{ label: 'aabb' }, { label: 'xxaaxx' }, { label: 'bbaa' }]);
+    });
+
+    it('should match substrings for plain string items', () => {
+      const items = ['xxaaxx', 'aabb', 'bbaa', 'cccc'];
+
+      const result = mentionFilter('aa', items);
+
+      expect(result).toEqual(['aabb', 'xxaaxx', 'bbaa']);
+    });
+
+    it('should rank prefix matches above mid-string matches', () => {
+      // Input order is intentionally non-alphabetical so we can prove the
+      // sort is by match position, not by label or input order.
+      const items = [
+        { label: 'ccbb' }, // 'bb' at index 2
+        { label: 'aabb' }, // 'bb' at index 2
+        { label: 'bbcc' }, // 'bb' at index 0  ← should rank first
+      ];
+
+      const result = mentionFilter('bb', items);
+
+      expect(result).toEqual([{ label: 'bbcc' }, { label: 'ccbb' }, { label: 'aabb' }]);
+    });
   });
 
   describe('stopEvent', () => {

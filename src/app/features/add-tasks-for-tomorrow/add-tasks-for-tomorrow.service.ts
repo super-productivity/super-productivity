@@ -69,10 +69,11 @@ export class AddTasksForTomorrowService {
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   async addAllDueTomorrow(): Promise<'ADDED' | void> {
+    const todayStr = this._dateService.todayStr();
+    const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
     const dueRepeatCfgs = await this._repeatableForTomorrow$.pipe(first()).toPromise();
 
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-    const tomorrow = Date.now() - this._dateService.startOfNextDayDiff + ONE_DAY_MS;
+    const tomorrow = this._dateService.getLogicalTomorrowMs();
 
     const promises = dueRepeatCfgs.sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
       return this._taskRepeatCfgService.createRepeatableTask(repeatCfg, tomorrow);
@@ -127,7 +128,7 @@ export class AddTasksForTomorrowService {
       });
     }
 
-    this._movePlannedTasksToToday(allDueSorted);
+    this._movePlannedTasksToToday(allDueSorted, todayStr, startOfNextDayDiffMs);
 
     if (allDueSorted.length) {
       return 'ADDED';
@@ -136,11 +137,17 @@ export class AddTasksForTomorrowService {
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   async addAllDueToday(): Promise<'ADDED' | void> {
-    const todayDate = new Date(Date.now() - this._dateService.startOfNextDayDiff);
+    const todayDate = this._dateService.getLogicalTodayDate();
     const todayTS = todayDate.getTime();
     const todayStr = this._dateService.todayStr();
+    const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
 
     TaskLog.log('[AddTasksForTomorrow] Starting addAllDueToday', { todayStr });
+
+    // Yield to event loop before reading so any in-flight store updates
+    // (e.g. the re-anchor dispatch from rescheduleTaskOnRepeatCfgUpdate$)
+    // have fully propagated before the selector is evaluated. (#7923)
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     const dueRepeatCfgs = await this._taskRepeatCfgService
       .getAllUnprocessedRepeatableTasks$(todayDate.getTime())
@@ -216,18 +223,24 @@ export class AddTasksForTomorrowService {
       });
     }
 
-    this._movePlannedTasksToToday(allDueSorted);
+    this._movePlannedTasksToToday(allDueSorted, todayStr, startOfNextDayDiffMs);
 
     if (allDueSorted.length) {
       return 'ADDED';
     }
   }
 
-  private _movePlannedTasksToToday(plannedTasks: TaskCopy[]): void {
+  private _movePlannedTasksToToday(
+    plannedTasks: TaskCopy[],
+    today: string,
+    startOfNextDayDiffMs: number,
+  ): void {
     if (plannedTasks.length) {
       this._store.dispatch(
         TaskSharedActions.planTasksForToday({
           taskIds: plannedTasks.map((t) => t.id),
+          today,
+          startOfNextDayDiffMs,
           isSkipRemoveReminder: true,
         }),
       );

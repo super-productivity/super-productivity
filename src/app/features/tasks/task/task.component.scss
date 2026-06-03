@@ -7,8 +7,8 @@
   background: var(--bg-lighter);
   box-shadow: var(--whiteframe-shadow-8dp);
   transition:
-    background 150ms ease-out,
-    box-shadow 150ms ease-out;
+    background var(--transition-duration-s) ease-out,
+    box-shadow var(--transition-duration-s) ease-out;
 
   .box {
     box-shadow: none;

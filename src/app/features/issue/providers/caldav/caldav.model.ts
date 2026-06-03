@@ -13,5 +13,7 @@ export interface CaldavCfg extends BaseIssueProviderCfg {
   username: string | null;
   password: string | null;
   categoryFilter: string | null;
+  isAddSubTasks?: boolean;
+  pollIntervalMinutes?: number;
   twoWaySync?: CaldavTwoWaySyncCfg;
 }

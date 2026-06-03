@@ -18,6 +18,7 @@ import { TimeTrackingState } from '../time-tracking/time-tracking.model';
 import { first } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import { selectTimeTrackingState } from '../time-tracking/store/time-tracking.selectors';
+import { isValidEntityId } from '../../op-log/validation/is-valid-entity-id';
 
 /**
  * Maps tasks to archive format by:
@@ -57,6 +58,55 @@ const mapTasksToArchiveFormat = (
       doneOn,
     };
   });
+};
+
+export const sanitizeTasksForArchiving = (
+  tasksIn: TaskWithSubTasks[],
+  logPrefix: string,
+): TaskWithSubTasks[] => {
+  let droppedRootTasks = 0;
+  let droppedSubTasks = 0;
+
+  const sanitizedTasks = tasksIn.flatMap((task) => {
+    if (!task || !isValidEntityId(task.id)) {
+      droppedRootTasks++;
+      return [];
+    }
+
+    const subTasks = (task.subTasks || []).filter((subTask) => {
+      const isValid = !!subTask && isValidEntityId(subTask.id);
+      if (!isValid) {
+        droppedSubTasks++;
+      }
+      return isValid;
+    });
+
+    // Keep subTaskIds in sync with the surviving subTasks so the archived
+    // parent cannot carry dangling references when subtasks are dropped.
+    const survivingSubTaskIds = new Set(subTasks.map((st) => st.id));
+    const subTaskIds = Array.isArray(task.subTaskIds)
+      ? task.subTaskIds.filter((id) => survivingSubTaskIds.has(id))
+      : [];
+
+    return [
+      {
+        ...task,
+        subTasks,
+        subTaskIds,
+      },
+    ];
+  });
+
+  if (droppedRootTasks > 0 || droppedSubTasks > 0) {
+    Log.warn(`[ArchiveService] ${logPrefix}: Dropped malformed archive payload tasks`, {
+      droppedRootTasks,
+      droppedSubTasks,
+      originalTaskCount: tasksIn.length,
+      sanitizedTaskCount: sanitizedTasks.length,
+    });
+  }
+
+  return sanitizedTasks;
 };
 
 /*
@@ -108,16 +158,18 @@ export class ArchiveService {
   // it is usually triggered every work-day once
   async moveTasksToArchiveAndFlushArchiveIfDue(tasks: TaskWithSubTasks[]): Promise<void> {
     const now = Date.now();
-    const flatTasks = flattenTasks(tasks);
+    const sanitizedTasks = sanitizeTasksForArchiving(tasks, 'moveToArchive');
+    const flatTasks = flattenTasks(sanitizedTasks);
 
     Log.log('[ArchiveService] moveTasksToArchiveAndFlushArchiveIfDue:', {
       inputTasksCount: tasks.length,
+      sanitizedTaskCount: sanitizedTasks.length,
       flatTasksCount: flatTasks.length,
       taskIds: flatTasks.map((t) => t.id),
     });
 
     if (!flatTasks.length) {
-      Log.log('[ArchiveService] No tasks to archive after flattening');
+      Log.log('[ArchiveService] No valid tasks to archive after flattening');
       return;
     }
 
@@ -267,16 +319,18 @@ export class ArchiveService {
    */
   async writeTasksToArchiveForRemoteSync(tasks: TaskWithSubTasks[]): Promise<void> {
     const now = Date.now();
-    const flatTasks = flattenTasks(tasks);
+    const sanitizedTasks = sanitizeTasksForArchiving(tasks, 'Remote sync');
+    const flatTasks = flattenTasks(sanitizedTasks);
 
     Log.log('[ArchiveService] writeTasksToArchiveForRemoteSync:', {
       inputTasksCount: tasks.length,
+      sanitizedTaskCount: sanitizedTasks.length,
       flatTasksCount: flatTasks.length,
       taskIds: flatTasks.map((t) => t.id),
     });
 
     if (!flatTasks.length) {
-      Log.log('[ArchiveService] No tasks to archive for remote sync');
+      Log.log('[ArchiveService] No valid tasks to archive for remote sync');
       return;
     }
 

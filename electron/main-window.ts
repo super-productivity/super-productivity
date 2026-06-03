@@ -12,22 +12,30 @@ import {
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
 import * as path from 'path';
 import { join, normalize } from 'path';
-import { format } from 'url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
-import { readFileSync, stat } from 'fs';
+import { readFileSync, stat, writeFileSync } from 'fs';
 import { error, log } from 'electron-log/main';
-import { IS_MAC } from './common.const';
+import { IS_MAC, IS_GNOME_DESKTOP } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
   hideTaskWidget,
   showTaskWidget,
 } from './task-widget/task-widget';
+import { ensureIndicator } from './indicator';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
+import { markGpuStartupSuccess } from './gpu-startup-guard';
 
 let mainWin: BrowserWindow;
+
+// Compact WCO band on Win/Linux. Native button width is OS-controlled
+// (~138px total); only height is configurable. Lower values may be
+// clamped to the OS minimum (~24–28px on Win11) — Electron silently
+// floors instead of rejecting. Stays well clear of the vertical action
+// strip which positions itself --bar-height (48px) down.
+const WCO_HEIGHT = 24;
 
 /**
  * Returns theme-aware background color for titlebar overlay.
@@ -52,6 +60,42 @@ export const getWin = (): BrowserWindow => {
     throw new Error('No main window');
   }
   return mainWinModule.win;
+};
+
+// How long the "quit requested" intent survives before auto-clearing.
+// Long enough to cover normal before-close IPC (sync, finish-day prompt);
+// short enough that if the user cancels finish-day and then clicks the
+// window close button, they get their normal minimize-to-tray behavior
+// rather than being re-prompted indefinitely.
+const QUIT_REQUEST_TIMEOUT_MS = 5_000;
+
+let isQuitRequested = false;
+let quitRequestResetTimer: NodeJS.Timeout | undefined;
+
+const getIsQuitRequested = (): boolean => isQuitRequested;
+
+const setIsQuitRequested = (flag: boolean): void => {
+  if (quitRequestResetTimer) clearTimeout(quitRequestResetTimer);
+  isQuitRequested = flag;
+  quitRequestResetTimer = flag
+    ? setTimeout(() => {
+        isQuitRequested = false;
+        quitRequestResetTimer = undefined;
+      }, QUIT_REQUEST_TIMEOUT_MS)
+    : undefined;
+};
+
+export const closeWinAndQuit = (quitApp: () => void): void => {
+  if (mainWin && !mainWin.isDestroyed()) {
+    // Ensure the close handler takes the real close path (not the minimize-to-tray
+    // hide branch) so the before-close IPC flow (sync, finish-day) completes.
+    setIsQuitRequested(true);
+    mainWin.close();
+  } else {
+    // No window to drive the IPC flow through — quit directly. No flag
+    // needed: the close handler that reads it cannot run without a window.
+    quitApp();
+  }
 };
 
 export const getIsAppReady = (): boolean => {
@@ -92,10 +136,23 @@ export const createWindow = async ({
     simpleStore[SimpleStoreKey.IS_USE_CUSTOM_WINDOW_TITLE_BAR];
   const legacyIsUseObsidianStyleHeader =
     simpleStore[SimpleStoreKey.LEGACY_IS_USE_OBSIDIAN_STYLE_HEADER];
-  const isUseCustomWindowTitleBar =
-    persistedIsUseCustomWindowTitleBar ?? legacyIsUseObsidianStyleHeader ?? true;
-  const titleBarStyle: BrowserWindowConstructorOptions['titleBarStyle'] =
-    isUseCustomWindowTitleBar || IS_MAC ? 'hidden' : 'default';
+  const userPrefersCustomWindowTitleBar =
+    persistedIsUseCustomWindowTitleBar ??
+    legacyIsUseObsidianStyleHeader ??
+    !IS_GNOME_DESKTOP;
+  // GNOME + Wayland combinations can miss native controls when titleBarStyle is hidden.
+  // Force native decorations on GNOME to keep window controls available.
+  const isUseCustomWindowTitleBar = IS_GNOME_DESKTOP
+    ? false
+    : userPrefersCustomWindowTitleBar;
+  // On macOS use 'hiddenInset' so AppKit positions the traffic lights at the
+  // standard inset other native apps use (Notes, Mail, VS Code) instead of
+  // crowding the top-left corner. Other platforms keep the existing logic.
+  const titleBarStyle: BrowserWindowConstructorOptions['titleBarStyle'] = IS_MAC
+    ? 'hiddenInset'
+    : isUseCustomWindowTitleBar
+      ? 'hidden'
+      : 'default';
   // Determine initial symbol color based on system theme preference
   const initialSymbolColor = nativeTheme.shouldUseDarkColors ? '#fff' : '#000';
   const titleBarOverlay: BrowserWindowConstructorOptions['titleBarOverlay'] =
@@ -103,10 +160,20 @@ export const createWindow = async ({
       ? {
           color: getTitleBarColor(nativeTheme.shouldUseDarkColors),
           symbolColor: initialSymbolColor,
-          height: 44,
+          height: WCO_HEIGHT,
         }
       : undefined;
 
+  // The store-screenshot pipeline forces a fixed 1280×800 window so the
+  // PNG dimensions match what the Mac App Store accepts (2560×1600 @2x).
+  // On laptop displays, menu bar + dock leave less than 800pt available
+  // below the menu bar, so by default macOS clamps `setBounds(800)` down
+  // to the available area and the captured PNG ends up 20–40 px short of
+  // the required height. Setting `enableLargerThanScreen` lets the
+  // window keep its configured 800pt outer height regardless. Gated on
+  // the env var the screenshot fixture sets so normal users still get
+  // the default screen-clamping behavior.
+  const isScreenshotMode = process.env.SP_SCREENSHOT_MODE === '1';
   mainWin = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
@@ -117,12 +184,11 @@ export const createWindow = async ({
     title: IS_DEV ? 'Super Productivity D' : 'Super Productivity',
     titleBarStyle,
     titleBarOverlay,
+    enableLargerThanScreen: isScreenshotMode,
     show: false,
     webPreferences: {
       scrollBounce: true,
       backgroundThrottling: false,
-      // CORS is handled at the session level via onBeforeSendHeaders (strips Origin)
-      // and onHeadersReceived (injects Access-Control-Allow-* headers)
       webSecurity: true,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -175,14 +241,11 @@ export const createWindow = async ({
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Headers', ['*']);
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Methods', ['*']);
 
-    // CORS preflight must return 2xx to pass the browser check. Stripping
-    // the Origin header (above) can cause some servers to respond with a
-    // non-200 status for OPTIONS, which the browser rejects even with the
-    // injected CORS headers.
-    const statusLine =
-      details.method === 'OPTIONS' && details.statusCode >= 300
-        ? 'HTTP/1.1 200 OK'
-        : undefined;
+    // CORS preflight must return 2xx to pass the browser check. Force all
+    // OPTIONS responses to 200 OK unconditionally: some servers reject
+    // preflights with 401 (auth required, < 300) or 405 (>= 300), both of
+    // which the browser rejects even with the injected CORS headers.
+    const statusLine = details.method === 'OPTIONS' ? 'HTTP/1.1 200 OK' : undefined;
 
     callback({
       responseHeaders,
@@ -203,16 +266,33 @@ export const createWindow = async ({
   });
 
   mainWindowState.manage(mainWin);
+  setWasMaximizedBeforeHide(mainWin.isMaximized());
+
+  // Fix for #7276: electron-window-state saves state in its `closed` handler,
+  // which calls win.isMaximized() on an already-hidden window (tray/shortcut
+  // hide → quit). electron#27838 makes isMaximized() return false in that
+  // case, so the persisted state loses the maximized flag. will-quit is the
+  // only process-level hook guaranteed to fire after every window `closed`
+  // event, so the library's write has always completed by the time we patch.
+  app.once('will-quit', () => {
+    if (!getWasMaximizedBeforeHide()) return;
+    const file = path.join(app.getPath('userData'), 'window-state.json');
+    try {
+      const state = JSON.parse(readFileSync(file, 'utf8'));
+      if (!state || typeof state !== 'object' || Array.isArray(state)) return;
+      if (state.isMaximized === true) return;
+      state.isMaximized = true;
+      writeFileSync(file, JSON.stringify(state));
+    } catch (err) {
+      error('Failed to patch window-state.json for maximized flag:', err);
+    }
+  });
 
   const url = customUrl
     ? customUrl
     : IS_DEV
       ? 'http://localhost:4200'
-      : format({
-          pathname: normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html')),
-          protocol: 'file:',
-          slashes: true,
-        });
+      : `file://${normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html'))}`;
 
   mainWin.loadURL(url).then(() => {
     // Set window title for dev mode
@@ -274,6 +354,11 @@ export const createWindow = async ({
   // listen for app ready
   ipcMain.on(IPC.APP_READY, () => {
     mainWinModule.isAppReady = true;
+    // Signal the GPU startup guard that the full boot chain completed
+    // (including Angular init) — not just that the compositor painted a
+    // frame. This avoids clearing the crash counter on blank/broken
+    // renderers that still fire `ready-to-show`.
+    markGpuStartupSuccess();
   });
 
   // Register F11 key handler for fullscreen toggle
@@ -305,7 +390,7 @@ export const createWindow = async ({
         mainWin.setTitleBarOverlay({
           color: getTitleBarColor(isDarkMode),
           symbolColor,
-          height: 44,
+          height: WCO_HEIGHT,
         });
       } catch (e) {
         // setTitleBarOverlay may not be available on all platforms
@@ -332,10 +417,23 @@ function initWinEventListeners(app: Electron.App): void {
     const urlObj = new URL(url);
     urlObj.pathname = urlObj.pathname.replace('//', '/');
     const wellFormedUrl = urlObj.toString();
-    const wasOpened = shell.openExternal(wellFormedUrl);
-    if (!wasOpened) {
-      shell.openExternal(wellFormedUrl);
-    }
+    // shell.openExternal returns Promise<void>; surface the failure to the
+    // renderer (snack via IPC.ERROR) so users on sandboxed packagings
+    // (Flatpak without OpenURI portal, etc.) see why nothing happened.
+    shell.openExternal(wellFormedUrl).catch((err) => {
+      error('Failed to open external URL via shell.openExternal:', err);
+      // Best-effort renderer notification — guard against the case where the
+      // frontend isn't ready (e.g. during shutdown or pre-load), in which
+      // case errorHandlerWithFrontendInform throws synchronously.
+      try {
+        errorHandlerWithFrontendInform(
+          'Could not open the link in your browser. Copy the URL manually if available.',
+          err,
+        );
+      } catch (informErr) {
+        error('Could not surface open-external failure to renderer:', informErr);
+      }
+    });
   };
 
   // open new window links in browser
@@ -404,7 +502,7 @@ function createMenu(quitApp: () => void): void {
         {
           label: 'Quit',
           accelerator: 'CmdOrCtrl+Q',
-          click: quitApp,
+          click: () => closeWinAndQuit(quitApp),
         },
       ],
     },
@@ -455,15 +553,20 @@ const appCloseHandler = (app: App): void => {
 
   mainWin.on('close', (event) => {
     // NOTE: this might not work if we run a second instance of the app
-    log('close, isQuiting:', getIsQuiting());
+    log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
     if (!getIsQuiting()) {
-      event.preventDefault();
-      if (getIsMinimizeToTray()) {
-        setWasMaximizedBeforeHide(mainWin.isMaximized());
-        mainWin.hide();
-        showTaskWidget();
-        return;
+      if (getIsMinimizeToTray() && !getIsQuitRequested()) {
+        const indicator = ensureIndicator();
+        if (indicator) {
+          event.preventDefault();
+          setWasMaximizedBeforeHide(mainWin.isMaximized());
+          mainWin.hide();
+          showTaskWidget();
+          return;
+        }
       }
+
+      event.preventDefault();
 
       if (ids.length > 0) {
         log('Actions to wait for ', ids);
@@ -475,6 +578,10 @@ const appCloseHandler = (app: App): void => {
   });
 
   mainWin.on('closed', () => {
+    // Clear any pending reset timer so it doesn't keep the event loop alive
+    // after the window is gone.
+    setIsQuitRequested(false);
+
     // Dereference the window object
     mainWin = null;
     mainWinModule.win = null;
@@ -497,6 +604,10 @@ const appMinimizeHandler = (app: App): void => {
     // @ts-ignore
     mainWin.on('minimize', (event: Event) => {
       if (getIsMinimizeToTray()) {
+        const indicator = ensureIndicator();
+        if (!indicator) {
+          return;
+        }
         event.preventDefault();
         setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();

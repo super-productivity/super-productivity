@@ -16,6 +16,13 @@ describe('privacyExport', () => {
       expect(result.password).not.toBe('secret123');
     });
 
+    it('should mask loginName field', () => {
+      const input = { loginName: 'john@example.com' };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.loginName).toMatch(/^loginName__\d+$/);
+      expect(result.loginName).not.toBe('john@example.com');
+    });
+
     it('should mask token field', () => {
       const input = { token: 'abc123xyz' };
       const result = JSON.parse(privacyExport(input));
@@ -264,6 +271,35 @@ describe('privacyExport', () => {
       expect(result.empty).toEqual({});
       expect(result.emptyArray).toEqual([]);
       expect(result.username).toMatch(/^username__\d+$/);
+    });
+  });
+
+  describe('calendar regex filter fields', () => {
+    it('should mask filterIncludeRegex field', () => {
+      const input = { filterIncludeRegex: 'Meeting|Standup' };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.filterIncludeRegex).toMatch(/^filterIncludeRegex__\d+$/);
+      expect(result.filterIncludeRegex).not.toBe('Meeting|Standup');
+    });
+
+    it('should mask filterExcludeRegex field', () => {
+      const input = { filterExcludeRegex: 'Lunch|ClientName|Blocker' };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.filterExcludeRegex).toMatch(/^filterExcludeRegex__\d+$/);
+      expect(result.filterExcludeRegex).not.toBe('Lunch|ClientName|Blocker');
+    });
+
+    it('should mask both regex fields in a calendar provider config', () => {
+      const input = {
+        id: 'provider-123',
+        icalUrl: 'https://example.com/calendar.ics',
+        filterIncludeRegex: 'Team|Project Alpha',
+        filterExcludeRegex: 'Lunch|john.doe@company.com',
+      };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.filterIncludeRegex).toMatch(/^filterIncludeRegex__\d+$/);
+      expect(result.filterExcludeRegex).toMatch(/^filterExcludeRegex__\d+$/);
+      expect(result.id).toBe('provider-123');
     });
   });
 

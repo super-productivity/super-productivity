@@ -7,7 +7,6 @@
  * 2. setMonth overflow in yearly date calculations
  * 3. setDate-before-setMonth order bug in getNewestPossibleDueDate
  */
-import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { getNewestPossibleDueDate } from './get-newest-possible-due-date.util';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
@@ -23,25 +22,6 @@ describe('Issue #6765 verification', () => {
   // HYPOTHESIS 1: undefined startDate → fallback to 1970-01-01 → January 1st
   // ========================================================================
   describe('Hypothesis 1: undefined startDate produces January 1st for YEARLY', () => {
-    it('getFirstRepeatOccurrence with undefined startDate should produce January occurrence', () => {
-      const today = new Date('2026-03-08T12:00:00');
-      const cfg = createCfg({
-        repeatCycle: 'YEARLY',
-        repeatEvery: 1,
-        startDate: undefined,
-        lastTaskCreationDay: undefined,
-      });
-
-      const result = getFirstRepeatOccurrence(cfg, today);
-
-      // With undefined startDate, fallback is 1970-01-01
-      // So month=0 (January), day=1 → yearly recurrence on January 1st
-      expect(result).not.toBeNull();
-      expect(result!.getMonth()).toBe(0); // January
-      expect(result!.getDate()).toBe(1);
-      // This confirms the hypothesis: undefined startDate → January 1st
-    });
-
     it('getNextRepeatOccurrence with undefined startDate should produce January occurrence', () => {
       const today = new Date('2026-03-08T12:00:00');
       const cfg = createCfg({
@@ -79,22 +59,6 @@ describe('Issue #6765 verification', () => {
   // HYPOTHESIS 1b: Correct startDate (May 1st) should NOT produce January
   // ========================================================================
   describe('Correct startDate (May 1st) should preserve month/day', () => {
-    it('getFirstRepeatOccurrence with May 1st startDate returns May 1st', () => {
-      const today = new Date('2026-03-08T12:00:00');
-      const cfg = createCfg({
-        repeatCycle: 'YEARLY',
-        repeatEvery: 1,
-        startDate: '2026-05-01',
-      });
-
-      const result = getFirstRepeatOccurrence(cfg, today);
-
-      expect(result).not.toBeNull();
-      expect(result!.getFullYear()).toBe(2026);
-      expect(result!.getMonth()).toBe(4); // May (0-indexed)
-      expect(result!.getDate()).toBe(1);
-    });
-
     it('getNextRepeatOccurrence with May 1st startDate returns May 1st next year', () => {
       const today = new Date('2026-03-08T12:00:00');
       const cfg = createCfg({
@@ -260,22 +224,6 @@ describe('Issue #6765 verification', () => {
   // EXACT USER SCENARIO from issue #6765
   // ========================================================================
   describe('Exact issue #6765 scenario: yearly May 1st created on March 8', () => {
-    it('getFirstRepeatOccurrence should return May 1, 2026', () => {
-      const today = new Date('2026-03-08T12:00:00');
-      const cfg = createCfg({
-        repeatCycle: 'YEARLY',
-        repeatEvery: 1,
-        startDate: '2026-05-01',
-      });
-
-      const result = getFirstRepeatOccurrence(cfg, today);
-
-      expect(result).not.toBeNull();
-      expect(result!.getFullYear()).toBe(2026);
-      expect(result!.getMonth()).toBe(4); // May
-      expect(result!.getDate()).toBe(1);
-    });
-
     it('getNewestPossibleDueDate should return null (start date in future)', () => {
       const today = new Date('2026-03-08T12:00:00');
       const cfg = createCfg({

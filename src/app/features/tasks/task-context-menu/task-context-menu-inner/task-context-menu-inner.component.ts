@@ -21,6 +21,8 @@ import {
   MatMenuItem,
   MatMenuTrigger,
 } from '@angular/material/menu';
+import { MatDivider } from '@angular/material/divider';
+import { ESTIMATE_OPTIONS } from '../../add-task-bar/add-task-bar.const';
 import { Task, TaskCopy, TaskWithSubTasks } from '../../task.model';
 import { EMPTY, forkJoin, from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
@@ -39,7 +41,6 @@ import { TaskService } from '../../task.service';
 import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
-import { TaskAttachmentService } from '../../task-attachment/task-attachment.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { ProjectService } from '../../../project/project.service';
 import { _MISSING_PROJECT_ } from '../../../project/project.const';
@@ -49,7 +50,6 @@ import { KeyboardConfig } from '../../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { DialogTimeEstimateComponent } from '../../dialog-time-estimate/dialog-time-estimate.component';
-import { DialogEditTaskAttachmentComponent } from '../../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { throttle } from '../../../../util/decorators';
 import { DialogConfirmComponent } from '../../../../ui/dialog-confirm/dialog-confirm.component';
 import { Update } from '@ngrx/entity';
@@ -88,6 +88,7 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
     MatMenu,
     MatMenuContent,
     MatMenuItem,
+    MatDivider,
     TranslateModule,
     MatMenuTrigger,
     MatIconButton,
@@ -106,7 +107,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
-  private readonly _attachmentService = inject(TaskAttachmentService);
   private readonly _elementRef = inject(ElementRef);
   private readonly _snackService = inject(SnackService);
   private readonly _projectService = inject(ProjectService);
@@ -121,6 +121,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
+  readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
 
   isAdvancedControls = input<boolean>(false);
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
@@ -164,13 +165,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   );
   toggleTagList = this._tagService.tagsNoMyDayAndNoListSorted;
 
-  // isShowMoveFromAndToBacklogBtns$: Observable<boolean> = this._task$.pipe(
-  //   take(1),
-  //   switchMap((task) =>
-  //     task.projectId ? this._projectService.getByIdOnce$(task.projectId) : EMPTY,
-  //   ),
-  //   map((project) => project.isEnableBacklog),
-  // );
   isShowMoveFromAndToBacklogBtns$: Observable<boolean> =
     this._workContextService.activeWorkContext$.pipe(
       take(1),
@@ -296,7 +290,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     // Focus the task element after context menu closes
     // Use setTimeout to ensure menu has fully closed and DOM is settled
     setTimeout(() => {
-      const taskElement = document.querySelector(`#t-${this.task.id}`) as HTMLElement;
+      const taskElement = document.getElementById(`t-${this.task.id}`);
       if (taskElement) {
         taskElement.focus();
         // Ensure focusedTaskId is set even if focus event doesn't fire
@@ -325,7 +319,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     const btns = Array.from(
       t?.closest('.quick-access')?.querySelectorAll('button') || [],
     );
-    //   const btns = Array.from(t?.querySelectorAll('button') || []);
 
     const currentIndex = btns.indexOf(t as HTMLButtonElement);
 
@@ -436,18 +429,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       .subscribe(() => this.focusRelatedTaskOrNext());
   }
 
-  addAttachment(): void {
-    this._matDialog
-      .open(DialogEditTaskAttachmentComponent, {
-        data: {},
-      })
-      .afterClosed()
-      .subscribe((result) => {
-        if (result) {
-          this._attachmentService.addAttachment(this.task.id, result);
-        }
-        this.focusRelatedTaskOrNext();
-      });
+  setEstimate(ms: number): void {
+    if (ms === this.task.timeEstimate) {
+      return;
+    }
+    this._taskService.update(this.task.id, { timeEstimate: ms });
   }
 
   addSubTask(): void {
@@ -516,6 +502,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: [this.task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         parentTaskMap: { [this.task.id]: this.task.parentId },
         isShowSnack: true,
       }),
@@ -687,7 +675,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _highlightSourceTask(): void {
-    const taskEl = document.querySelector(`#t-${this.task.id}`);
+    const taskEl = document.getElementById(`t-${this.task.id}`);
     if (!taskEl) {
       return;
     }
@@ -732,11 +720,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         nextFirstDayOfWeek.setDate(nextFirstDayOfWeek.getDate() + dayOffset);
         this._schedule(nextFirstDayOfWeek);
         break;
-      // case 4:
-      //   const nextMonth = tDate;
-      //   nextMonth.setMonth(nextMonth.getMonth() + 1);
-      //   this._schedule(nextMonth);
-      //   break;
     }
   }
 

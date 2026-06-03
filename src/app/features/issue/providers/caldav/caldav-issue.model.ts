@@ -11,6 +11,8 @@ export type CaldavIssueReduced = Readonly<{
   item_url: string;
   summary: string;
   start?: number;
+  /** True when DTSTART is a VALUE=DATE (all-day) property, not a DATE-TIME. */
+  isAllDay?: boolean;
   labels: string[];
   etag_hash: number;
   related_to?: string;
@@ -19,6 +21,8 @@ export type CaldavIssueReduced = Readonly<{
 export type CaldavIssue = CaldavIssueReduced &
   Readonly<{
     due?: number;
+    /** True when DUE is a VALUE=DATE (all-day) property, not a DATE-TIME. */
+    isDueAllDay?: boolean;
     note?: string;
     status?: CaldavIssueStatus;
     priority?: number;

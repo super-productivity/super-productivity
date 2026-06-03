@@ -43,7 +43,7 @@ spec:
         - name: migrate-db
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ['sh', '-c', 'npx prisma@5.22.0 migrate deploy']
+          command: ['sh', '-c', 'sh scripts/migrate-deploy.sh']
           env:
             {{- if .Values.postgresql.enabled }}
             - name: POSTGRES_USER

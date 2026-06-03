@@ -23,6 +23,7 @@ import { FormlyTagSelectionComponent } from './formly-tag-selection/formly-tag-s
 import { FormlyBtnComponent } from './formly-button/formly-btn.component';
 import { FormlyImageInputComponent } from './formly-image-input/formly-image-input.component';
 import { ColorInputComponent } from '../features/config/color-input/color-input.component';
+import { StartPageSelectComponent } from '../features/config/start-page-select/start-page-select.component';
 import { FormlySlideToggleComponent } from './formly-slide-toggle/formly-slide-toggle.component';
 import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-picker.component';
 
@@ -81,6 +82,12 @@ import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-pick
           name: 'project-select',
           component: SelectProjectComponent,
           // technically no input, but as the properties get us what we need...
+          extends: 'input',
+          wrappers: ['form-field'],
+        },
+        {
+          name: 'start-page-select',
+          component: StartPageSelectComponent,
           extends: 'input',
           wrappers: ['form-field'],
         },

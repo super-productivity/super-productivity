@@ -51,7 +51,7 @@ describe('ExampleTasksService', () => {
         {
           provide: SyncTriggerService,
           useValue: {
-            afterInitialSyncDoneAndDataLoadedInitially$: syncReady$,
+            afterInitialSyncDoneStrict$: syncReady$,
           },
         },
         { provide: TaskService, useValue: taskService },
@@ -93,11 +93,12 @@ describe('ExampleTasksService', () => {
       expect(action.workContextType).toBe(WorkContextType.PROJECT);
       expect(action.isAddToBacklog).toBe(false);
       expect(action.isAddToBottom).toBe(true);
+      expect(action.isExampleTask).toBe(true);
     }
     expect(localStorage.getItem(LS.EXAMPLE_TASKS_CREATED)).toBe('true');
   });
 
-  it('should NOT create example tasks when tasks already exist', () => {
+  it('should NOT create example tasks when tasks already exist, but mark onboarding done', () => {
     store.overrideSelector(selectAllTasks, [
       { id: 'existing', title: 'Existing' } as Task,
     ]);
@@ -107,7 +108,8 @@ describe('ExampleTasksService', () => {
 
     expect(taskService.createNewTaskWithDefaults).not.toHaveBeenCalled();
     expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(localStorage.getItem(LS.EXAMPLE_TASKS_CREATED)).toBeNull();
+    // Flag is set so a future empty-task startup does not recreate example tasks (#7976).
+    expect(localStorage.getItem(LS.EXAMPLE_TASKS_CREATED)).toBe('true');
   });
 
   it('should NOT create example tasks when localStorage flag is already set', () => {

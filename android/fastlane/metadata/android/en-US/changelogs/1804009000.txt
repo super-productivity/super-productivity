@@ -1,0 +1,10 @@
+- update README to reflect state of wiki (#7450)
+- prevent header stretching on expansion (#7443)
+- lock  etc
+- load overlay chunk immediately to avoid blank screen
+- correct misleading LWW fallback diagnostics
+- fix lint errors in lww-update meta-reducer spec
+- re-anchor schedule when startDate moves earlier (#7423)
+- generalize LWW recreate defaults and backfill task projectId
+- show route name on Search/Upcoming/Support us/Settings
+- add regression for recurring missed-day bug #4559

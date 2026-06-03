@@ -28,5 +28,16 @@
       <mat-icon class="lock-icon">lock</mat-icon>
       {{ 'ONBOARDING.PRIVACY_HINT' | translate }}
     </p>
+    <p class="sync-cta">
+      {{ 'ONBOARDING.SYNC_CTA' | translate }}
+      <button
+        type="button"
+        class="sync-cta-link"
+        [disabled]="!!selectedPreset()"
+        (click)="setupSync()"
+      >
+        {{ 'ONBOARDING.SYNC_CTA_LINK' | translate }}
+      </button>
+    </p>
   </div>
 </div>

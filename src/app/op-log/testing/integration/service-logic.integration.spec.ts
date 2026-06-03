@@ -12,14 +12,14 @@ import { ValidateStateService } from '../../validation/validate-state.service';
 import { RepairOperationService } from '../../validation/repair-operation.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import {
-  SyncProviderServiceInterface,
+  SyncProviderBase,
   OperationSyncCapable,
   OpUploadResponse,
   OpDownloadResponse,
   SyncOperation,
 } from '../../sync-providers/provider.interface';
 import { SyncProviderId } from '../../sync-providers/provider.const';
-import { SuperSyncPrivateCfg } from '../../sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { provideMockStore } from '@ngrx/store/testing';
 import {
   ActionType,
@@ -41,11 +41,11 @@ import { resetTestUuidCounter } from './helpers/test-client.helper';
 import { LockService } from '../../sync/lock.service';
 import { SchemaMigrationService } from '../../persistence/schema-migration.service';
 import {
-  mockDecrypt,
-  mockEncrypt,
-  mockEncryptBatch,
-  mockDecryptBatch,
-} from '../helpers/mock-encryption.helper';
+  clearSessionKeyCache,
+  decrypt,
+  encrypt,
+  setArgon2ParamsForTesting,
+} from '@sp/sync-core';
 import { TranslateService } from '@ngx-translate/core';
 import { SuperSyncStatusService } from '../../sync/super-sync-status.service';
 import { ServerMigrationService } from '../../sync/server-migration.service';
@@ -55,13 +55,15 @@ import { RejectedOpsHandlerService } from '../../sync/rejected-ops-handler.servi
 import { SyncHydrationService } from '../../persistence/sync-hydration.service';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
+import { OperationLogEffects } from '../../capture/operation-log.effects';
 
 // Mock Sync Provider that supports operation sync
 class MockOperationSyncProvider
-  implements SyncProviderServiceInterface<SyncProviderId>, OperationSyncCapable
+  implements SyncProviderBase<SyncProviderId>, OperationSyncCapable
 {
   id = SyncProviderId.SuperSync;
   supportsOperationSync = true;
+  providerMode = 'superSyncOps' as const;
   maxConcurrentRequests = 1;
 
   // Mock configuration
@@ -196,6 +198,16 @@ class MockOperationSyncProvider
 }
 
 describe('Service Logic Integration', () => {
+  // Use real encryption with weakened Argon2 params; the session cache means
+  // derivation happens once per password across the whole spec.
+  beforeAll(() => {
+    setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
+  });
+
+  afterAll(() => {
+    setArgon2ParamsForTesting();
+  });
+
   let syncService: OperationLogSyncService;
   let opLogStore: OperationLogStoreService;
   let mockProvider: MockOperationSyncProvider;
@@ -411,18 +423,20 @@ describe('Service Logic Integration', () => {
           provide: TranslateService,
           useValue: jasmine.createSpyObj('TranslateService', ['instant']),
         },
+        {
+          // RemoteOpsProcessingService lazily resolves OperationLogEffects via
+          // Injector to flush deferred local actions after remote apply (#7700).
+          provide: OperationLogEffects,
+          useValue: {
+            processDeferredActions: () => Promise.resolve(),
+          },
+        },
       ],
     });
 
     syncService = TestBed.inject(OperationLogSyncService);
     opLogStore = TestBed.inject(OperationLogStoreService);
-
-    // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
-    const encryptionService = TestBed.inject(OperationEncryptionService);
-    spyOn(encryptionService as any, '_encrypt').and.callFake(mockEncrypt);
-    spyOn(encryptionService as any, '_decrypt').and.callFake(mockDecrypt);
-    spyOn(encryptionService as any, '_encryptBatch').and.callFake(mockEncryptBatch);
-    spyOn(encryptionService as any, '_decryptBatch').and.callFake(mockDecryptBatch);
+    clearSessionKeyCache();
 
     mockProvider = new MockOperationSyncProvider();
 
@@ -465,10 +479,7 @@ describe('Service Logic Integration', () => {
       expect(typeof uploadedOp.payload).toBe('string');
 
       // Attempt to decrypt to verify correctness
-      const decryptedPayloadStr = await mockDecrypt(
-        uploadedOp.payload as string,
-        TEST_KEY,
-      );
+      const decryptedPayloadStr = await decrypt(uploadedOp.payload as string, TEST_KEY);
       const decryptedPayload = JSON.parse(decryptedPayloadStr);
       expect(decryptedPayload).toEqual(op.payload);
     });
@@ -479,7 +490,7 @@ describe('Service Logic Integration', () => {
 
       // 2. Prepare encrypted remote operation
       const payload = { title: 'Remote Secret' };
-      const encryptedPayload = await mockEncrypt(JSON.stringify(payload), TEST_KEY);
+      const encryptedPayload = await encrypt(JSON.stringify(payload), TEST_KEY);
 
       const remoteOp: SyncOperation = {
         id: 'op-remote-1',
@@ -582,14 +593,14 @@ describe('Service Logic Integration', () => {
      * 4. Client B comes online and uploads its ops to server
      * 5. Client A downloads B's ops
      *
-     * Expected: B's ops should be KEPT because the import has no knowledge of
-     * client-b at all (independent timeline). The import was created in complete
-     * ignorance of client-b, so it can't claim to supersede client-b's ops.
+     * Expected: B's ops should be filtered because they lack causal knowledge of
+     * the import. SYNC_IMPORT is a clean-slate operation, so CONCURRENT ops without
+     * proof that they saw the import are discarded.
      *
-     * This test verifies the unknown-client exception works correctly at the
-     * integration level (through the full sync service flow).
+     * This test verifies the clean-slate filtering works correctly at the
+     * integration level through the full sync service flow.
      */
-    it('should keep CONCURRENT ops from unknown client after SYNC_IMPORT', async (): Promise<void> => {
+    it('should filter CONCURRENT ops from unknown client after SYNC_IMPORT', async (): Promise<void> => {
       // 1. Store already has a SYNC_IMPORT from a previous sync (Client A imported)
       const importOp: Operation = {
         id: 'import-op-1',
@@ -648,12 +659,9 @@ describe('Service Logic Integration', () => {
       // 4. Download and process remote ops
       await syncService.downloadRemoteOps(mockProvider);
 
-      // 5. EXPECTED: Both ops should be KEPT - import has no knowledge of client-b
-      // (independent timeline, unknown client exception)
-      expect(applierSpy.applyOperations.calls.count()).toBeGreaterThan(0);
-      const appliedOps = applierSpy.applyOperations.calls.mostRecent().args[0];
-      expect(appliedOps.find((op: Operation) => op.id === 'offline-op-1')).toBeDefined();
-      expect(appliedOps.find((op: Operation) => op.id === 'offline-op-2')).toBeDefined();
+      // 5. EXPECTED: Both ops should be filtered - neither proves knowledge of
+      // the clean-slate import.
+      expect(applierSpy.applyOperations).not.toHaveBeenCalled();
     });
 
     /**
@@ -720,8 +728,8 @@ describe('Service Logic Integration', () => {
      * Even if client B's clock is ahead (ops have future timestamps), vector clocks
      * correctly identify that B had no knowledge of the import.
      *
-     * Note: The import clock includes client-b so the unknown-client exception
-     * does not apply — this tests filtering of a KNOWN client's CONCURRENT ops.
+     * Note: The import clock includes client-b, making this an explicit known
+     * stale-client case.
      */
     it('should filter offline ops even when client clock was ahead (clock drift)', async (): Promise<void> => {
       // 1. Store has SYNC_IMPORT (import knows about client-b from prior communication)

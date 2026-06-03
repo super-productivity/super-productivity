@@ -56,7 +56,7 @@ This directory contains visual diagrams explaining the Operation Log sync archit
 | [../operation-log-architecture.md](../operation-log-architecture.md) | Comprehensive architecture reference |
 | [../operation-rules.md](../operation-rules.md)                       | Design rules and guidelines          |
 | [../vector-clocks.md](../vector-clocks.md)                           | Vector clock implementation details  |
-| [../quick-reference.md](../quick-reference.md)                       | Quick lookup for common patterns     |
+| [../contributor-sync-model.md](../contributor-sync-model.md)         | The single sync invariant (effects)  |
 
 ## Diagram Conventions
 

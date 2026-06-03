@@ -29,7 +29,10 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
   {
     key: 'startDate',
     type: 'date',
-    defaultValue: new Date(),
+    // Default to a 'YYYY-MM-DD' string (not a Date): Formly skips `parsers` on
+    // `defaultValue`, so a raw Date would slip into the model and downstream
+    // `dateStrToUtcDate` would choke on it, crashing the dialog (#7945).
+    defaultValue: getDbDateStr(),
     templateOptions: {
       label: T.F.TASK_REPEAT.F.START_DATE,
       required: true,
@@ -90,6 +93,50 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
                 { value: 'WEEKLY', label: T.F.TASK_REPEAT.F.C_WEEK },
                 { value: 'MONTHLY', label: T.F.TASK_REPEAT.F.C_MONTH },
                 { value: 'YEARLY', label: T.F.TASK_REPEAT.F.C_YEAR },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        fieldGroupClassName: 'monthly-anchor',
+        resetOnHide: false,
+        hideExpression: (model: any) => model.repeatCycle !== 'MONTHLY',
+        fieldGroup: [
+          {
+            key: 'monthlyWeekOfMonth',
+            type: 'select',
+            // Picking the "Day of month" sentinel clears the anchor; the
+            // gatekeeper falls back to legacy day-of-month behavior.
+            defaultValue: null,
+            templateOptions: {
+              label: T.F.TASK_REPEAT.F.WEEK_OF_MONTH,
+              options: [
+                { value: null, label: T.F.TASK_REPEAT.F.MONTHLY_MODE_DAY_OF_MONTH },
+                { value: 1, label: T.F.TASK_REPEAT.F.ORD_FIRST },
+                { value: 2, label: T.F.TASK_REPEAT.F.ORD_SECOND },
+                { value: 3, label: T.F.TASK_REPEAT.F.ORD_THIRD },
+                { value: 4, label: T.F.TASK_REPEAT.F.ORD_FOURTH },
+                { value: -1, label: T.F.TASK_REPEAT.F.ORD_LAST },
+              ],
+            },
+          },
+          {
+            key: 'monthlyWeekday',
+            type: 'select',
+            defaultValue: 1,
+            resetOnHide: false,
+            hideExpression: (model: any) => model.monthlyWeekOfMonth == null,
+            templateOptions: {
+              label: T.F.TASK_REPEAT.F.WEEKDAY,
+              options: [
+                { value: 1, label: T.F.TASK_REPEAT.F.MONDAY },
+                { value: 2, label: T.F.TASK_REPEAT.F.TUESDAY },
+                { value: 3, label: T.F.TASK_REPEAT.F.WEDNESDAY },
+                { value: 4, label: T.F.TASK_REPEAT.F.THURSDAY },
+                { value: 5, label: T.F.TASK_REPEAT.F.FRIDAY },
+                { value: 6, label: T.F.TASK_REPEAT.F.SATURDAY },
+                { value: 0, label: T.F.TASK_REPEAT.F.SUNDAY },
               ],
             },
           },
@@ -220,12 +267,6 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       if (model.quickSetting !== 'CUSTOM') {
         return true;
       }
-      if (model.repeatCycle === 'DAILY' && model.repeatEvery === 1) {
-        return true;
-      }
-      if (model.repeatCycle === 'WEEKLY' && model.repeatEvery === 1) {
-        return true;
-      }
       return false;
     },
     templateOptions: {
@@ -276,6 +317,15 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       description: T.F.TASK_REPEAT.F.DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION,
     },
     className: 'sp-formly-child-option',
+  },
+  {
+    key: 'waitForCompletion',
+    type: 'checkbox',
+    defaultValue: false,
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION,
+      description: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION_DESCRIPTION,
+    },
   },
   {
     key: 'skipOverdue',

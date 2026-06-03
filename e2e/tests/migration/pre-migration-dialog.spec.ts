@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/test.fixture';
+import { skipOnboardingForE2E } from '../../utils/waits';
 
 /**
  * Pre-migration Dialog E2E Tests
@@ -118,6 +119,12 @@ test.describe('@migration Pre-migration Dialog', () => {
     });
 
     const page = await context.newPage();
+    await page.addInitScript(skipOnboardingForE2E);
+
+    // Fresh storage means the first-run onboarding preset screen takes over and
+    // hides the side-nav (visibility:hidden, see #7885), which this test isn't
+    // about. Skip it before boot like the shared fixture does.
+    await context.addInitScript(skipOnboardingForE2E);
 
     try {
       // Navigate to app

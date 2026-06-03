@@ -10,9 +10,11 @@ import com.superproductivity.superproductivity.service.ReminderNotificationHelpe
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 
 /**
- * Re-registers all saved alarms after device reboot.
- * Android clears all AlarmManager alarms on restart, so this receiver
- * reads persisted alarm data and re-schedules them.
+ * Re-registers all saved alarms after device reboot or app update.
+ * Android clears all AlarmManager alarms on both events, so this receiver
+ * reads persisted alarm data and re-schedules them. Without the app-update
+ * path, reminders would silently stop firing after a Play Store auto-update
+ * until the user next opens the app.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -21,9 +23,11 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        val action = intent.action
+        if (action != Intent.ACTION_BOOT_COMPLETED &&
+            action != Intent.ACTION_MY_PACKAGE_REPLACED) return
 
-        Log.d(TAG, "Boot completed, re-registering alarms")
+        Log.d(TAG, "Received $action, re-registering alarms")
 
         val alarms = ReminderAlarmStore.getAll(context)
         if (alarms.isEmpty()) {

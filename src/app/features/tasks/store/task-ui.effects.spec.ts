@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, take } from 'rxjs';
 import { TaskUiEffects } from './task-ui.effects';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TaskService } from '../task.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { SnackParams } from '../../../core/snack/snack.model';
@@ -13,13 +13,17 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { Router } from '@angular/router';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { T } from '../../../t.const';
-import { Task } from '../task.model';
+import { Task, TaskWithSubTasks } from '../task.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { Action } from '@ngrx/store';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { DateService } from '../../../core/date/date.service';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { selectUnplannedDeadlineTasksForToday } from './task.selectors';
+import { Banner } from '../../../core/banner/banner.model';
 
 describe('TaskUiEffects', () => {
   let effects: TaskUiEffects;
@@ -28,6 +32,7 @@ describe('TaskUiEffects', () => {
   let taskServiceMock: jasmine.SpyObj<TaskService>;
   let navigateToTaskServiceMock: jasmine.SpyObj<NavigateToTaskService>;
   let layoutServiceMock: jasmine.SpyObj<LayoutService>;
+  let bannerServiceMock: jasmine.SpyObj<BannerService>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -67,6 +72,12 @@ describe('TaskUiEffects', () => {
       isAddToBacklog: false,
       isAddToBottom: false,
     });
+
+  // overrideSelector pins values on the module-level selector via setResult().
+  // Reset after each test so the override doesn't leak into other spec files.
+  afterEach(() => {
+    TestBed.inject(MockStore).resetSelectors();
+  });
 
   describe('taskCreatedSnack$ with visible task', () => {
     beforeEach(() => {
@@ -238,8 +249,217 @@ describe('TaskUiEffects', () => {
       actions$.next(createAddTaskAction(task));
     });
 
+    it('should NOT show snack when task has no title', (done) => {
+      const task = createMockTask({
+        id: 'new-task-456',
+        projectId: 'project-1',
+        title: '',
+      });
+      let emitted = false;
+
+      effects.taskCreatedSnack$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(createAddTaskAction(task));
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        expect(snackServiceMock.open).not.toHaveBeenCalled();
+        done();
+      }, 10);
+    });
+
     afterEach(() => {
       localStorage.removeItem(LS.ONBOARDING_HINTS_DONE);
+    });
+  });
+
+  describe('snackDelete$', () => {
+    const createMockTaskWithSubTasks = (
+      overrides: Partial<TaskWithSubTasks> = {},
+    ): TaskWithSubTasks => ({
+      ...createMockTask(),
+      subTasks: [],
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      actions$ = new Subject<Action>();
+      snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
+      taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
+      navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
+        'navigate',
+      ]);
+      layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskUiEffects,
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+          provideMockStore({
+            initialState: {},
+            selectors: [{ selector: selectProjectById, value: null }],
+          }),
+          { provide: SnackService, useValue: snackServiceMock },
+          { provide: TaskService, useValue: taskServiceMock },
+          { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
+          { provide: LayoutService, useValue: layoutServiceMock },
+          { provide: WorkContextService, useValue: { mainListTaskIds$: of([]) } },
+          {
+            provide: NotifyService,
+            useValue: jasmine.createSpyObj('NotifyService', ['notify']),
+          },
+          {
+            provide: BannerService,
+            useValue: jasmine.createSpyObj('BannerService', ['open', 'dismiss']),
+          },
+          {
+            provide: GlobalConfigService,
+            useValue: { sound$: of({ doneSound: null }) },
+          },
+          { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
+        ],
+      });
+
+      effects = TestBed.inject(TaskUiEffects);
+    });
+
+    it('should show the undo snack when deleting a task that has a title', () => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(
+        TaskSharedActions.deleteTask({
+          task: createMockTaskWithSubTasks({ title: 'Real task' }),
+        }),
+      );
+
+      expect(snackServiceMock.open).toHaveBeenCalled();
+      const snackParams = snackServiceMock.open.calls.mostRecent().args[0] as SnackParams;
+      expect(snackParams.actionStr).toBe(T.G.UNDO);
+      sub.unsubscribe();
+    });
+
+    it('should NOT show the undo snack when deleting a blank task', () => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(
+        TaskSharedActions.deleteTask({
+          task: createMockTaskWithSubTasks({ title: '' }),
+        }),
+      );
+
+      expect(snackServiceMock.open).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
+    it('should NOT show the undo snack when deleting a blank sub task', () => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(
+        TaskSharedActions.deleteTask({
+          task: createMockTaskWithSubTasks({ title: '  ', parentId: 'parent-1' }),
+        }),
+      );
+
+      expect(snackServiceMock.open).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
+    it('should show the undo snack when deleting a blank-titled task that has data', () => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(
+        TaskSharedActions.deleteTask({
+          task: createMockTaskWithSubTasks({ title: '', timeSpent: 5000 }),
+        }),
+      );
+
+      expect(snackServiceMock.open).toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+  });
+
+  describe('deadlineTodayBanner$', () => {
+    let store: MockStore;
+
+    beforeEach(() => {
+      actions$ = new Subject<Action>();
+      snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
+      taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId', 'update']);
+      navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
+        'navigate',
+      ]);
+      layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+      bannerServiceMock = jasmine.createSpyObj('BannerService', ['open', 'dismiss']);
+      const dateServiceMock = jasmine.createSpyObj('DateService', [
+        'todayStr',
+        'getStartOfNextDayDiffMs',
+      ]);
+      dateServiceMock.todayStr.and.returnValue('2024-06-14');
+      dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(60 * 60 * 1000);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskUiEffects,
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+          provideMockStore({
+            selectors: [
+              { selector: selectProjectById, value: null },
+              {
+                selector: selectUnplannedDeadlineTasksForToday,
+                value: [createMockTask({ id: 'deadline-1' })],
+              },
+            ],
+          }),
+          { provide: SnackService, useValue: snackServiceMock },
+          { provide: TaskService, useValue: taskServiceMock },
+          { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
+          { provide: LayoutService, useValue: layoutServiceMock },
+          {
+            provide: WorkContextService,
+            useValue: { mainListTaskIds$: of([]) },
+          },
+          {
+            provide: NotifyService,
+            useValue: jasmine.createSpyObj('NotifyService', ['notify']),
+          },
+          { provide: BannerService, useValue: bannerServiceMock },
+          {
+            provide: GlobalConfigService,
+            useValue: { sound$: of({ doneSound: null }) },
+          },
+          { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
+          { provide: DateService, useValue: dateServiceMock },
+          {
+            provide: HydrationStateService,
+            useValue: jasmine.createSpyObj('HydrationStateService', {
+              isApplyingRemoteOps: false,
+            }),
+          },
+        ],
+      });
+
+      effects = TestBed.inject(TaskUiEffects);
+      store = TestBed.inject(MockStore);
+      spyOn(store, 'dispatch');
+    });
+
+    it('should dispatch planTasksForToday with replay date fields from banner action', (done) => {
+      effects.deadlineTodayBanner$.pipe(take(1)).subscribe({
+        next: () => {
+          const bannerParams = bannerServiceMock.open.calls.mostRecent()
+            .args[0] as Banner;
+
+          bannerParams.action!.fn();
+
+          expect(store.dispatch).toHaveBeenCalledWith(
+            TaskSharedActions.planTasksForToday({
+              taskIds: ['deadline-1'],
+              today: '2024-06-14',
+              startOfNextDayDiffMs: 60 * 60 * 1000,
+            }),
+          );
+          done();
+        },
+        error: done.fail,
+      });
     });
   });
 });

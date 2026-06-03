@@ -2,6 +2,7 @@ import { IpcRendererEvent } from 'electron';
 import {
   GlobalConfigState,
   TakeABreakConfig,
+  TaskWidgetConfig,
 } from '../src/app/features/config/global-config.model';
 import { KeyboardConfig } from '../src/app/features/config/keyboard-config.model';
 import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
@@ -18,12 +19,17 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
 
 export interface ElectronAPI {
   on(
     channel: string,
     listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
   ): void;
+
+  // SYNC
+  // ----
+  getDistChannel(): ElectronDistChannel | null;
 
   // INVOKE
   // ------
@@ -48,7 +54,7 @@ export interface ElectronAPI {
 
   fileSyncRemove(args: { filePath: string }): Promise<unknown | Error>;
 
-  fileSyncListFiles(args: { dirPath: string }): Promise<string[] | Error>; // NEW
+  fileSyncListFiles(args: { dirPath: string }): Promise<string[] | Error>;
 
   checkDirExists(args: { dirPath: string }): Promise<true | Error>;
 
@@ -58,7 +64,12 @@ export interface ElectronAPI {
     properties: string[];
     title?: string;
     defaultPath?: string;
+    filters?: { name: string; extensions: string[] }[];
   }): Promise<string[] | undefined>;
+
+  toFileUrl(filePath: string): Promise<string>;
+
+  readLocalImageAsDataUrl(filePathOrUrl: string): Promise<string | null>;
 
   // checkDirExists(dirPath: string): Promise<true | Error>;
 
@@ -86,7 +97,11 @@ export interface ElectronAPI {
 
   isLinux(): boolean;
 
+  isGnomeDesktop(): boolean;
+
   isMacOS(): boolean;
+
+  isAppleSilicon(): boolean;
 
   isSnap(): boolean;
 
@@ -170,6 +185,8 @@ export interface ElectronAPI {
   sendAppSettingsToElectron(globalCfg: GlobalConfigState): void;
 
   sendSettingsUpdate(globalCfg: GlobalConfigState): void;
+
+  updateTaskWidgetSettings(cfg: TaskWidgetConfig): void;
 
   updateTitleBarDarkMode(isDarkMode: boolean): void;
 

@@ -133,6 +133,33 @@
   }
 }
 
+.nav-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  margin-right: var(--s-half);
+
+  &.nav-icon-emoji {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+    font-size: 16px;
+    font-feature-settings: normal;
+    font-variation-settings: normal;
+    text-transform: none;
+    letter-spacing: normal;
+    overflow-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}
+
 .nav-child-item {
   position: relative;
 

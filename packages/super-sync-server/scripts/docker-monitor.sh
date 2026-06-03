@@ -39,7 +39,7 @@ shift || true
 
 case "$COMMAND" in
   # Basic monitoring commands (compiled scripts)
-  stats|usage|usage-history|active-users|logs|ops)
+  stats|usage|usage-history|active-users|active-users-quick|logs|ops)
     echo -e "${YELLOW}Running: monitor.js $COMMAND $@${NC}"
     docker exec -it "$CONTAINER_NAME" node dist/scripts/monitor.js "$COMMAND" "$@"
     ;;
@@ -92,6 +92,7 @@ Basic Monitoring (uses compiled scripts):
   usage-history [--tail N]      View usage trends
   active-users [--threshold N]  Active user counts and engagement
     [--limit N]
+  active-users-quick [--limit N] Fast active-user listing (sync_devices only)
   ops [--user ID] [--tail N]    Recent operations analysis
   logs [--tail N] [--search X]  View server logs
 

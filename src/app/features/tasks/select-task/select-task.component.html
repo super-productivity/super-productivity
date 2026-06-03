@@ -42,7 +42,11 @@
           }
           <!---->
         }
-        <span [innerHTML]="task.title"></span>
+        <span
+          [innerHTML]="task.title"
+          [matTooltip]="task.title || ''"
+          [matTooltipDisabled]="!task.title"
+        ></span>
       </mat-option>
     }
   </mat-autocomplete>

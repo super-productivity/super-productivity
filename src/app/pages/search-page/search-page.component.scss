@@ -22,9 +22,18 @@
 
     mat-list-item {
       cursor: pointer !important;
+      height: auto !important;
+      min-height: var(--s6);
+
+      &::ng-deep .mdc-list-item {
+        height: auto !important;
+        min-height: var(--s6);
+        padding-top: var(--s);
+        padding-bottom: var(--s);
+      }
 
       &:hover {
-        background-color: rgba(0, 0, 0, 0.04) !important;
+        background-color: var(--state-hover) !important;
 
         .view-details-btn {
           opacity: 0.4;
@@ -54,7 +63,8 @@
               font-weight: 500;
             }
 
-            .task-archived {
+            .task-archived,
+            .task-done {
               text-decoration: line-through;
             }
 

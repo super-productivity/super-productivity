@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   signal,
   ViewChild,
@@ -68,6 +69,8 @@ export interface DialogSelectDateTimeData {
 export class DialogSelectDateTimeComponent {
   @ViewChild('datepickerInput') datepickerInput!: NgModel;
   @ViewChild('timepickerInput') timepickerInput!: NgModel;
+  @ViewChild('datepickerInputEl') datepickerInputEl?: ElementRef<HTMLInputElement>;
+  @ViewChild('timepickerInputEl') timepickerInputEl?: ElementRef<HTMLInputElement>;
 
   private readonly _dialogData = inject<DialogSelectDateTimeData>(MAT_DIALOG_DATA);
   private readonly _dialogRef = inject(
@@ -119,6 +122,16 @@ export class DialogSelectDateTimeComponent {
   }
 
   onSaveClick(): void {
-    this._dialogRef.close(this.dateTime()!.getTime());
+    this._commitPendingInputValue();
+
+    const dateTime = this.dateTime();
+    if (dateTime) {
+      this._dialogRef.close(dateTime.getTime());
+    }
+  }
+
+  private _commitPendingInputValue(): void {
+    this.datepickerInputEl?.nativeElement.blur();
+    this.timepickerInputEl?.nativeElement.blur();
   }
 }

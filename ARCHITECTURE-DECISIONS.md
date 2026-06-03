@@ -69,6 +69,101 @@ This document tracks significant architectural decisions and patterns in the Sup
 
 ---
 
+### 3. Sync Package Boundary Direction
+
+**Status**: ✅ Active (since May 2026)
+
+**Decision**: Operation-log sync code is split by dependency direction:
+`src/app` composes host-specific wiring, `@sp/sync-providers` owns bundled
+provider implementations, and `@sp/sync-core` owns framework-agnostic reusable
+sync primitives.
+
+**Rationale**:
+
+- Keeps reusable sync algorithms independent of Angular, NgRx, app models, and
+  provider implementations
+- Prevents provider IDs, app action/entity enums, validation schemas, UI, OAuth,
+  and platform bridges from leaking into the core engine package
+- Gives boundary lint a clear rule: packages never import app code, and
+  providers consume only public sync-core exports
+
+**Implementation**:
+
+- ESLint rejects Angular, NgRx, app, shared-schema, sync-core deep imports, and
+  dynamic imports inside package sources
+- `@sp/sync-core` has no runtime dependencies and owns vector-clock algorithms
+  used by client/server compatibility paths
+- `packages/shared-schema` compatibility-re-exports generic vector-clock
+  algorithms from `@sp/sync-core`; `@sp/sync-core` must not import
+  `@sp/shared-schema`
+- `@sp/sync-providers` depends on public `@sp/sync-core` plus provider runtime
+  helpers, while app factories inject credentials, platform bridges, validators,
+  OAuth routing, and config
+
+**Documentation**: [`docs/sync-and-op-log/package-boundaries.md`](docs/sync-and-op-log/package-boundaries.md)
+
+**Key Files**:
+
+- [`packages/sync-core/src/index.ts`](packages/sync-core/src/index.ts) - Core public API
+- [`packages/sync-providers/src/index.ts`](packages/sync-providers/src/index.ts) - Provider public API
+- [`eslint.config.js`](eslint.config.js) - Package boundary enforcement
+- [`src/app/op-log/sync-providers/sync-providers.factory.ts`](src/app/op-log/sync-providers/sync-providers.factory.ts) - App-side provider composition
+
+**When to Update This Pattern**:
+
+- Moving sync code between app and packages
+- Adding a package export or dependency
+- Adding a provider implementation or plugin-facing provider contract
+- Changing vector-clock ownership or shared-schema compatibility
+
+---
+
+### 4. Batch Uploads Under RepeatableRead
+
+**Status**: ✅ Active (since May 2026)
+
+**Decision**: SuperSync batch uploads derive conflict-safety from the shared
+`user_sync_state.lastSeq` row write that reserves server sequence numbers, not
+from PostgreSQL RepeatableRead snapshot isolation alone.
+
+**Rationale**:
+
+- PostgreSQL RepeatableRead does not provide full serializable snapshot isolation
+- Two concurrent upload transactions can both pass conflict prefetch checks when
+  they read the same pre-insert snapshot
+- Reserving sequence numbers through one `user_sync_state.lastSeq` row forces
+  accepted writers for the same user to serialize on that row lock
+- If two batches race, the later writer blocks on the row and the transaction
+  retry path handles the serialization failure rather than silently accepting
+  conflicting operations
+
+**Implementation**:
+
+- Batch upload conflict detection runs in memory against prefetched latest
+  entity rows and updates that map as operations are accepted
+- Accepted operations reserve one contiguous sequence range with
+  `INSERT ... ON CONFLICT ... DO UPDATE SET last_seq = last_seq + delta`
+- The batch insert does not use `skipDuplicates`; an unexpected unique conflict
+  aborts the transaction and lets the request retry
+- Removing or sharding the `lastSeq` write requires replacing this safety
+  mechanism with an equivalent per-user serialization primitive
+
+**Documentation**: [`docs/sync-and-op-log/diagrams/02-server-sync.md`](docs/sync-and-op-log/diagrams/02-server-sync.md)
+
+**Key Files**:
+
+- [`packages/super-sync-server/src/sync/sync.service.ts`](packages/super-sync-server/src/sync/sync.service.ts) - Upload transaction and batch primitive
+- [`packages/super-sync-server/prisma/schema.prisma`](packages/super-sync-server/prisma/schema.prisma) - `user_sync_state.last_seq`
+
+**When to Update This Pattern**:
+
+- Changing upload conflict detection
+- Changing server sequence assignment
+- Changing transaction isolation for upload operations
+- Introducing multi-writer or multi-region upload processing
+
+---
+
 ## How to Use This Document
 
 ### When Making Architectural Changes

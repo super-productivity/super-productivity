@@ -209,16 +209,13 @@
     <mat-card-title>Community Plugins</mat-card-title>
   </mat-card-header>
   <mat-card-content>
-    <div
-      class="warning-content"
-      style="margin-bottom: 16px; color: var(--warn)"
-    >
-      <p>
-        <strong>⚠️ WARNING:</strong> These plugins are developed by the community and are
-        <strong>NOT</strong> reviewed or guaranteed by the Super Productivity team.
-        Install and use them at your own risk. They might contain malicious code or break
-        your application.
-      </p>
+    <div class="install-warning">
+      <mat-icon>warning</mat-icon>
+      <span>
+        These plugins are developed by the community and are NOT reviewed or guaranteed by
+        the Super Productivity team. Install and use them at your own risk — they might
+        contain malicious code or break your application.
+      </span>
     </div>
 
     <div class="community-plugins-list">
@@ -231,6 +228,29 @@
               >{{ plugin.name }}</a
             >
           </h3>
+          <p class="plugin-author">
+            <span>
+              by
+              @if (plugin.authorUrl) {
+                <a
+                  [href]="plugin.authorUrl"
+                  target="_blank"
+                  >{{ plugin.author }}</a
+                >
+              } @else {
+                {{ plugin.author }}
+              }
+            </span>
+            @if (plugin.stars !== undefined) {
+              <span
+                class="plugin-stars"
+                [attr.aria-label]="plugin.stars + ' stars'"
+              >
+                <mat-icon>star</mat-icon>
+                {{ plugin.stars }}
+              </span>
+            }
+          </p>
           <p class="plugin-desc">{{ plugin.shortDescription }}</p>
         </div>
       }

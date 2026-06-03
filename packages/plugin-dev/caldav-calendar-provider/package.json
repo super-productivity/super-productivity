@@ -15,6 +15,7 @@
     "vitest": "^4.1.0"
   },
   "dependencies": {
-    "@super-productivity/plugin-api": "file:../../plugin-api"
+    "@super-productivity/plugin-api": "file:../../plugin-api",
+    "ical.js": "^2.2.1"
   }
 }

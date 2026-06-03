@@ -25,7 +25,7 @@
 <add-task-inline
   style="margin-bottom: 8px"
   [additionalFields]="additionalTaskFields()"
-  [tagsToRemove]="panelCfg().excludedTagIds"
+  [tagsToRemove]="tagsToRemoveForInlineCreate()"
   [taskIdsToExclude]="panelCfg().taskIds"
   [isNoDefaults]="true"
   (afterTaskAdd)="afterTaskAdd($event)"
@@ -35,6 +35,7 @@
   class="task-items"
   cdkDropList
   [cdkDropListData]="panelCfg()"
+  [cdkDropListSortingDisabled]="!isManualOrder()"
   (cdkDropListDropped)="drop($event)"
 >
   @for (task of tasks(); track task.id) {

@@ -8,7 +8,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { of } from 'rxjs';
-import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 
 describe('InlineMarkdownComponent', () => {
   let component: InlineMarkdownComponent;
@@ -35,7 +35,6 @@ describe('InlineMarkdownComponent', () => {
         MarkdownModule.forRoot(),
         NoopAnimationsModule,
         TranslateModule.forRoot(),
-        TranslatePipe,
       ],
       providers: [
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
@@ -638,6 +637,30 @@ describe('InlineMarkdownComponent', () => {
       // Assert
       expect(component.modelCopy()).toBe('- [ ] ');
       expect(component.changed.emit).toHaveBeenCalledOnceWith('- [ ] ');
+    });
+
+    it('should preserve default template content when toggling checklist (issue #7786)', () => {
+      // Arrange — task has no saved notes but a default template is visible
+      spyOn(component.changed, 'emit');
+      const defaultTemplate = '**How can I best achieve it now?**';
+      component.model = defaultTemplate;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — visible template preserved, checkbox appended below
+      const finalText = component.modelCopy();
+      expect(finalText).toContain(defaultTemplate);
+      expect(finalText).toContain('- [ ] ');
+      expect(component.changed.emit).toHaveBeenCalledTimes(1);
     });
 
     it('should insert checklist item after cursor line, not at end', () => {

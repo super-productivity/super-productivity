@@ -24,6 +24,7 @@ export enum ActionType {
   BOARDS_UPDATE = '[Boards] Update Board',
   BOARDS_UPDATE_PANEL_CFG = '[Boards] Update Panel Cfg',
   BOARDS_UPDATE_PANEL_TASK_IDS = '[Boards] Update Panel Cfg TaskIds',
+  BOARDS_SORT = '[Boards] Sort Boards',
 
   // GlobalConfig actions (C)
   GLOBAL_CONFIG_UPDATE_SECTION = '[Global Config] Update Global Config Section',
@@ -51,6 +52,7 @@ export enum ActionType {
   TASK_SHARED_MOVE_TO_ARCHIVE = '[Task Shared] moveToArchive',
   TASK_SHARED_RESTORE = '[Task Shared] restoreTask',
   TASK_SHARED_RESTORE_DELETED = '[Task Shared] restoreDeletedTask',
+  TASK_SHARED_CONVERT_TO_SUB = '[Task Shared] convertToSubTask',
   TASK_SHARED_CONVERT_TO_MAIN = '[Task Shared] convertToMainTask',
   TASK_SHARED_SCHEDULE_WITH_TIME = '[Task Shared] scheduleTaskWithTime',
   TASK_SHARED_RESCHEDULE_WITH_TIME = '[Task Shared] reScheduleTaskWithTime',
@@ -70,6 +72,7 @@ export enum ActionType {
   TASK_SHARED_DELETE_REPEAT_CFG = '[Task Shared] deleteTaskRepeatCfg',
   TASK_SHARED_APPLY_SHORT_SYNTAX = '[Task Shared] applyShortSyntax',
   TASK_SHARED_SET_DEADLINE = '[Task Shared] setDeadline',
+  TASK_SHARED_PLAN_DEADLINE_FOR_TODAY = '[Task Shared] planDeadlineTasksForToday',
   TASK_SHARED_REMOVE_DEADLINE = '[Task Shared] removeDeadline',
   TASK_SHARED_CLEAR_DEADLINE_REMINDER = '[Task Shared] clearDeadlineReminder',
 
@@ -130,6 +133,14 @@ export enum ActionType {
   REPEAT_CFG_DELETE_MULTIPLE = '[TaskRepeatCfg] Delete multiple TaskRepeatCfgs',
   REPEAT_CFG_DELETE_INSTANCE = '[TaskRepeatCfg] Delete Single Instance',
   REPEAT_CFG_UPSERT = '[TaskRepeatCfg] Upsert TaskRepeatCfg',
+
+  // Section actions (S)
+  SECTION_ADD = '[Section] Add Section',
+  SECTION_DELETE = '[Section] Delete Section',
+  SECTION_UPDATE = '[Section] Update Section',
+  SECTION_UPDATE_ORDER = '[Section] Update Section Order',
+  SECTION_ADD_TASK = '[Section] Add Task to Section',
+  SECTION_REMOVE_TASK = '[Section] Remove Task from Section',
 
   // SimpleCounter actions (S)
   COUNTER_ADD = '[SimpleCounter] Add SimpleCounter',

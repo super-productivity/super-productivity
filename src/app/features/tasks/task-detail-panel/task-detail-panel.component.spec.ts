@@ -1,4 +1,6 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { ComponentRef, NO_ERRORS_SCHEMA } from '@angular/core';
+import { EMPTY, of } from 'rxjs';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
@@ -10,12 +12,12 @@ import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.serv
 import { MatDialog } from '@angular/material/dialog';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { Store } from '@ngrx/store';
+import { MentionConfigService } from '../mention-config.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MarkdownModule } from 'ngx-markdown';
-import { of } from 'rxjs';
-import { ComponentRef, NO_ERRORS_SCHEMA } from '@angular/core';
 import { DEFAULT_TASK, TaskWithSubTasks } from '../task.model';
+import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
 
 const MOCK_TASK: TaskWithSubTasks = {
   ...(DEFAULT_TASK as TaskWithSubTasks),
@@ -102,6 +104,7 @@ describe('TaskDetailPanelComponent paste handler', () => {
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
         { provide: Store, useValue: mockStore },
+        { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
       ],
     }).compileComponents();
 
@@ -220,4 +223,108 @@ describe('TaskDetailPanelComponent paste handler', () => {
       expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();
     }));
   });
+});
+
+const fakeTask = (id: string): TaskWithSubTasks =>
+  ({ id, subTasks: [], tagIds: [] }) as unknown as TaskWithSubTasks;
+
+/**
+ * Regression coverage for the #6578 stale-focus race: a deferred auto-focus
+ * scheduled while the panel showed one task must not steal focus once the
+ * panel has switched to a different task (e.g. the user arrow-navigated the
+ * list). The e2e suite only surfaces this under load, so the timing is proven
+ * deterministically here with fakeAsync.
+ */
+describe('TaskDetailPanelComponent stale-focus guard', () => {
+  let component: TaskDetailPanelComponent;
+  let fixture: ComponentFixture<TaskDetailPanelComponent>;
+
+  const makeItem = (): TaskDetailItemComponent =>
+    ({
+      elementRef: { nativeElement: { focus: jasmine.createSpy('focus') } },
+    }) as unknown as TaskDetailItemComponent;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [TaskDetailPanelComponent],
+      providers: [
+        {
+          provide: TaskService,
+          useValue: {
+            taskDetailPanelTargetPanel$: EMPTY,
+            selectedTaskId: () => undefined,
+            getByIdWithSubTaskData$: () => of(null),
+            update: () => undefined,
+            setSelectedId: () => undefined,
+            focusTaskIfPossible: () => undefined,
+          },
+        },
+        { provide: TaskAttachmentService, useValue: {} },
+        { provide: ClipboardImageService, useValue: {} },
+        { provide: LayoutService, useValue: {} },
+        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        { provide: IssueService, useValue: { getById$: () => of(null) } },
+        {
+          provide: TaskRepeatCfgService,
+          useValue: { getTaskRepeatCfgByIdAllowUndefined$: () => of(null) },
+        },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
+        { provide: MatDialog, useValue: {} },
+        { provide: Store, useValue: { select: () => EMPTY, dispatch: () => undefined } },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+      ],
+    })
+      // Drop the real template/child components — only the focus timing logic is under test.
+      .overrideComponent(TaskDetailPanelComponent, {
+        set: { template: '', imports: [], schemas: [NO_ERRORS_SCHEMA] },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(TaskDetailPanelComponent);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('task', fakeTask('B'));
+    fixture.detectChanges();
+  });
+
+  it('does not auto-focus the panel when the task changed before the timer fires', fakeAsync(() => {
+    // One rendered item so the unguarded code path *would* call focusItem.
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+
+    // Scheduled while showing task B...
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    // ...then the user navigates the list to task A before the 150ms timer fires.
+    fixture.componentRef.setInput('task', fakeTask('A'));
+
+    tick(200);
+
+    expect(focusItemSpy).not.toHaveBeenCalled();
+  }));
+
+  it('auto-focuses the first item when the task is unchanged', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+
+    tick(200);
+
+    expect(focusItemSpy).toHaveBeenCalled();
+  }));
+
+  it('focusItem does not steal focus once the panel switched tasks', fakeAsync(() => {
+    const item = makeItem();
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [item];
+
+    component.focusItem(item, 0);
+    fixture.componentRef.setInput('task', fakeTask('A'));
+
+    tick(50);
+
+    expect(item.elementRef.nativeElement.focus).not.toHaveBeenCalled();
+  }));
 });

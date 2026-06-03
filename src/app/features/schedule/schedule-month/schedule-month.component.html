@@ -1,7 +1,3 @@
-<header class="month-header">
-  <div class="month-title">{{ daysToShow()[14] | localeDate: 'LLLL yyyy' }}</div>
-</header>
-
 <div class="month-grid-container">
   @for (header of weekdayHeaders(); track $index) {
     <div class="weekday-header">{{ header }}</div>

@@ -11,7 +11,9 @@ export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
 let pendingUrls: string[] = [];
 
 export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): void => {
-  log('Processing protocol URL:', url);
+  // Redact query params before logging — OAuth code/state are credentials
+  const redactedUrl = url.split('?')[0].split('#')[0];
+  log('Processing protocol URL:', redactedUrl);
 
   // Only process after window is ready
   if (!mainWin || !mainWin.webContents) {
@@ -34,6 +36,13 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
     log('Protocol path parts:', pathParts);
 
     switch (action) {
+      case 'oauth-callback':
+        log('Received OAuth callback URL via app protocol');
+        if (mainWin && mainWin.webContents) {
+          mainWin.webContents.send(IPC.OAUTH_CALLBACK, { url });
+          showOrFocus(mainWin);
+        }
+        break;
       case 'create-task':
         if (pathParts.length > 0) {
           const taskTitle = decodeURIComponent(pathParts[0]);
@@ -76,8 +85,16 @@ export const initializeProtocolHandling = (
   // Register protocol handler
   if (IS_DEV && process.defaultApp) {
     if (process.argv.length >= 2) {
+      const launchArgsForProtocol = [path.resolve(process.argv[1])];
+      const userDataDirArg = process.argv.find((arg) =>
+        arg.startsWith('--user-data-dir='),
+      );
+      if (userDataDirArg) {
+        launchArgsForProtocol.push(userDataDirArg);
+      }
+
       appInstance.setAsDefaultProtocolClient(PROTOCOL_NAME, process.execPath, [
-        path.resolve(process.argv[1]),
+        ...launchArgsForProtocol,
       ]);
     }
   } else {
@@ -111,7 +128,7 @@ export const initializeProtocolHandling = (
   // Handle protocol URL passed as command line argument for testing
   process.argv.forEach((val) => {
     if (val && val.startsWith(PROTOCOL_PREFIX)) {
-      log('Protocol URL from command line:', val);
+      log('Protocol URL from command line:', val.split('?')[0].split('#')[0]);
       // Process after app is ready
       appInstance.whenReady().then(() => {
         processProtocolUrl(val, getMainWindow());

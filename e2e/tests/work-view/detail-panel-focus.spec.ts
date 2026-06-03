@@ -86,6 +86,32 @@ test.describe('Detail Panel Focus Sync', () => {
     await expect(page.locator(DETAIL_PANEL)).not.toBeVisible();
   });
 
+  test('should move focus into detail panel when opening via ArrowRight', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+
+    await workViewPage.addTask('ArrowRight Focus Task');
+    await expect(taskPage.getAllTasks()).toHaveCount(1);
+
+    const task = taskPage.getTask(1);
+    await task.focus();
+
+    // Press ArrowRight to open the detail panel — focus should move into the panel.
+    await page.keyboard.press('ArrowRight');
+
+    // Wait for the panel to open and auto-focus its first item.
+    await expect(page.locator(DETAIL_PANEL)).toBeVisible();
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => !!document.activeElement?.closest('task-detail-panel')),
+      )
+      .toBe(true);
+  });
+
   test('should keep focus in task list after panel switches', async ({
     page,
     workViewPage,

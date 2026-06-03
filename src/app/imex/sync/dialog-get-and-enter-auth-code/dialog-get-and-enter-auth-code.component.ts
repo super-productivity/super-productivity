@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, OnDestroy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  OnDestroy,
+  signal,
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -17,6 +23,8 @@ import { OAuthCallbackHandlerService } from '../oauth-callback-handler.service';
 import { Subscription } from 'rxjs';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { SnackService } from '../../../core/snack/snack.service';
+import { IS_ELECTRON } from '../../../app.constants';
+import { validateOAuthState } from '../oauth-state.util';
 
 @Component({
   selector: 'dialog-get-and-enter-auth-code',
@@ -53,37 +61,46 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
   T: typeof T = T;
   token?: string;
 
-  // Always use manual code entry flow (show input field)
+  // Always use manual code entry flow (show input field on all platforms).
+  // The automatic deep-link redirect flow was reverted: it requires the
+  // redirect URI to be registered in the Dropbox developer console, and
+  // Android may kill the app during auth, losing the in-memory code verifier.
   readonly isNativePlatform = false;
+  // Flips to true once the user clicks "Get Auth Code". When true, the paste
+  // field is rendered at the top of the dialog — keeps the field above the
+  // iOS on-screen keyboard (discussion #7340).
+  readonly codeRequested = signal(false);
+  readonly isElectron = IS_ELECTRON;
   private _authCodeSub?: Subscription;
 
   constructor() {
     this._matDialogRef.disableClose = true;
 
-    // On mobile, listen for OAuth callback
-    if (this.isNativePlatform) {
+    // Listen for OAuth callback on native and Electron for automatic auth completion.
+    if (this.isNativePlatform || this.isElectron) {
+      const expectedProvider = this.data.providerName.toLowerCase();
       this._authCodeSub = this._oauthCallbackHandler.authCodeReceived$.subscribe(
         (data) => {
-          if (data.provider === 'dropbox') {
-            if (data.error) {
-              // Handle error from OAuth provider
-              const errorMsg = data.error_description || data.error;
-              this._snackService.open({
-                type: 'ERROR',
-                msg: `Authentication failed: ${errorMsg}`,
-              });
-              this.close();
-            } else if (data.code) {
-              this.token = data.code;
-              this.close(this.token);
-            } else {
-              // Unexpected case - no code and no error
-              this._snackService.open({
-                type: 'ERROR',
-                msg: 'Authentication failed: No authorization code received',
-              });
-              this.close();
-            }
+          if (data.provider !== expectedProvider) {
+            return;
+          }
+
+          if (data.error) {
+            const errorMsg = data.error_description || data.error;
+            this._snackService.open({
+              type: 'ERROR',
+              msg: `Authentication failed: ${errorMsg}`,
+            });
+            this.close();
+          } else if (data.code) {
+            this.token = data.code;
+            this.close(this.token);
+          } else {
+            this._snackService.open({
+              type: 'ERROR',
+              msg: 'Authentication failed: No authorization code received',
+            });
+            this.close();
           }
         },
       );
@@ -95,6 +112,65 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
   }
 
   close(token?: string): void {
-    this._matDialogRef.close(token?.trim());
+    this._matDialogRef.close(this._normalizeAuthCodeInput(token));
+  }
+
+  private _normalizeAuthCodeInput(token?: string): string | undefined {
+    const trimmed = token?.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    let codeFromInput: string | undefined;
+
+    // Allow pasting the full callback URL and extract `code` automatically.
+    try {
+      const parsedUrl = new URL(trimmed);
+      codeFromInput = parsedUrl.searchParams.get('code') ?? undefined;
+
+      // Validate state parameter when present (CSRF protection for manual paste).
+      // For OneDrive full-URL paste, state is required — missing state means the
+      // callback URL is malformed or attacker-crafted. Raw code-only paste (no URL)
+      // is fine: it won't match the PKCE verifier on token exchange.
+      const stateFromUrl = parsedUrl.searchParams.get('state');
+      if (this.data.providerName.toLowerCase() === 'onedrive') {
+        // Missing and mismatched state both fail closed with the same retry
+        // message — the user can't act differently on the two cases.
+        if (!stateFromUrl || !validateOAuthState('onedrive', stateFromUrl)) {
+          this._snackService.open({
+            type: 'ERROR',
+            msg: T.F.SYNC.S.OAUTH_STATE_INVALID,
+          });
+          return undefined;
+        }
+      }
+    } catch {
+      // Not a URL, continue with other extraction attempts.
+    }
+
+    if (codeFromInput) {
+      return codeFromInput;
+    }
+
+    // An attacker-supplied code is harmless here — it won't match the user's
+    // PKCE verifier, so the token exchange will fail with invalid_grant.
+    const codeMatch = trimmed.match(/(?:^|[?&#])code=([^&#]+)/i);
+    if (codeMatch?.[1]) {
+      try {
+        return decodeURIComponent(codeMatch[1]);
+      } catch {
+        return codeMatch[1];
+      }
+    }
+
+    return trimmed;
+  }
+
+  // iOS Safari only opens the keyboard when .focus() runs synchronously in the
+  // same task as the user gesture — must stay in this click handler, not an
+  // effect.
+  onGetAuthCode(input: HTMLInputElement): void {
+    this.codeRequested.set(true);
+    input.focus();
   }
 }

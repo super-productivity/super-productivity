@@ -47,6 +47,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { CalendarContextInfoTarget } from '../providers/calendar/calendar.model';
 import { IssueIconPipe } from '../issue-icon/issue-icon.pipe';
 import { JiraAdditionalCfgComponent } from '../providers/jira/jira-view-components/jira-cfg/jira-additional-cfg.component';
+import { JiraCfg } from '../providers/jira/jira.model';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
@@ -59,7 +60,8 @@ import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
-import { OAuthFlowConfig } from '@super-productivity/plugin-api';
+import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
+import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 // ClickUp is now a plugin — no built-in config component needed
 import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
@@ -350,6 +352,9 @@ export class DialogEditIssueProviderComponent {
   }
 
   async connectOAuth(oauthConfig: OAuthFlowConfig): Promise<void> {
+    if (this.isOAuthUnavailableInWeb(oauthConfig)) {
+      return;
+    }
     const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
     if (!pluginId) {
       return;
@@ -357,20 +362,28 @@ export class DialogEditIssueProviderComponent {
     this.isOAuthConnecting.set(true);
     try {
       await this._pluginBridge.startOAuthFlow(pluginId, oauthConfig);
-      this.isOAuthConnected.set(true);
-      this._snackService.open({
-        type: 'SUCCESS',
-        msg: T.F.ISSUE.S.OAUTH_CONNECTED,
-      });
-      await this._loadDynamicOptions();
     } catch (e) {
+      const detail = (e instanceof Error ? e.message : String(e))
+        .replace(/\s+/g, ' ')
+        .slice(0, 200);
+      IssueLog.err('OAuth connect failed', { message: detail });
       this._snackService.open({
         type: 'ERROR',
-        msg: T.F.ISSUE.S.OAUTH_FAILED,
+        msg: detail ? T.F.ISSUE.S.OAUTH_FAILED_WITH_DETAIL : T.F.ISSUE.S.OAUTH_FAILED,
+        translateParams: { detail },
       });
+      return;
     } finally {
       this.isOAuthConnecting.set(false);
     }
+    this.isOAuthConnected.set(true);
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg: T.F.ISSUE.S.OAUTH_CONNECTED,
+    });
+    // _loadDynamicOptions surfaces its own per-field error snacks; failures
+    // here must not be reported as OAuth failures (the connection succeeded).
+    await this._loadDynamicOptions();
   }
 
   async disconnectOAuth(): Promise<void> {
@@ -386,6 +399,14 @@ export class DialogEditIssueProviderComponent {
   protected readonly IS_ANDROID_WEB_VIEW = IS_ANDROID_WEB_VIEW;
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
+
+  protected get isJiraDirectFetchEnabled(): boolean {
+    return !!(this.model as Partial<JiraCfg>).allowFetchFallback;
+  }
+
+  protected isOAuthUnavailableInWeb(oauthConfig: OAuthFlowConfig): boolean {
+    return !IS_ELECTRON && !IS_NATIVE_PLATFORM && !oauthConfig.webClientId;
+  }
 
   /**
    * @returns true if all fields loaded successfully, false if any failed
@@ -490,6 +511,26 @@ export class DialogEditIssueProviderComponent {
       migrated['readCalendarIds'] = [migrated['calendarId'] as string];
       migrated['writeCalendarId'] = migrated['writeCalendarId'] || migrated['calendarId'];
     }
+    const defaultPluginConfig = this._getDefaultPluginConfig();
+    const defaultTwoWaySync = defaultPluginConfig['twoWaySync'] as
+      | Record<string, PluginSyncDirection>
+      | undefined;
+    if (defaultTwoWaySync) {
+      const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+      const isPushSupported = !!provider?.definition.updateIssue;
+      const currentTwoWaySync =
+        (migrated['twoWaySync'] as Record<string, PluginSyncDirection> | undefined) ?? {};
+      const normalizedCurrentTwoWaySync = Object.fromEntries(
+        Object.entries(currentTwoWaySync).map(([field, direction]) => [
+          field,
+          this._normalizeSyncDirectionForCapabilities(direction, isPushSupported),
+        ]),
+      );
+      migrated['twoWaySync'] = {
+        ...defaultTwoWaySync,
+        ...normalizedCurrentTwoWaySync,
+      };
+    }
     return { ...model, pluginConfig: migrated } as Partial<IssueProvider>;
   }
 
@@ -497,15 +538,30 @@ export class DialogEditIssueProviderComponent {
     if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
       return {};
     }
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    const isPushSupported = !!provider?.definition.updateIssue;
     const fieldMappings = this._pluginRegistry.getFieldMappings(this.issueProviderKey);
     if (!fieldMappings?.length) {
       return {};
     }
     const twoWaySync: Record<string, string> = {};
     for (const m of fieldMappings) {
-      twoWaySync[m.taskField] = m.defaultDirection;
+      twoWaySync[m.taskField] = this._normalizeSyncDirectionForCapabilities(
+        m.defaultDirection as PluginSyncDirection,
+        isPushSupported,
+      );
     }
     return { twoWaySync };
+  }
+
+  private _normalizeSyncDirectionForCapabilities(
+    direction: PluginSyncDirection,
+    isPushSupported: boolean,
+  ): PluginSyncDirection {
+    if (!isPushSupported && (direction === 'pushOnly' || direction === 'both')) {
+      return 'pullOnly';
+    }
+    return direction;
   }
 
   private _getPluginFormSection(): ConfigFormSection<IssueIntegrationCfg> | undefined {
@@ -610,11 +666,17 @@ export class DialogEditIssueProviderComponent {
     pluginKey: IssueProviderKey,
     fieldMappings: { taskField: string; issueField: string; defaultDirection: string }[],
   ): unknown {
+    const provider = this._pluginRegistry.getProvider(pluginKey);
+    const isPushSupported = !!provider?.definition.updateIssue;
     const syncDirectionOptions = [
       { value: 'off', label: T.F.ISSUE.TWO_WAY_SYNC.OFF },
       { value: 'pullOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PULL_ONLY },
-      { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
-      { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+      ...(isPushSupported
+        ? [
+            { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
+            { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+          ]
+        : []),
     ];
     const TASK_FIELD_LABELS: Record<string, string> = {
       isDone: T.F.ISSUE.TWO_WAY_SYNC.STATUS,
@@ -623,6 +685,7 @@ export class DialogEditIssueProviderComponent {
       dueDay: T.F.ISSUE.TWO_WAY_SYNC.DUE_DAY,
       dueWithTime: T.F.ISSUE.TWO_WAY_SYNC.DUE_WITH_TIME,
       timeEstimate: T.F.ISSUE.TWO_WAY_SYNC.TIME_ESTIMATE,
+      tagIds: T.F.ISSUE.TWO_WAY_SYNC.TAGS,
     };
     const syncFields: any[] = fieldMappings.map((m) => ({
       key: ('pluginConfig.twoWaySync.' + m.taskField) as keyof IssueIntegrationCfg,
@@ -632,7 +695,6 @@ export class DialogEditIssueProviderComponent {
         options: syncDirectionOptions,
       },
     }));
-    const provider = this._pluginRegistry.getProvider(pluginKey);
     if (provider?.definition.createIssue) {
       syncFields.push({
         key: 'pluginConfig.isAutoCreateIssues',
@@ -644,6 +706,16 @@ export class DialogEditIssueProviderComponent {
         props: {
           label: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_ISSUES,
           description: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_ISSUES_DESCRIPTION,
+        },
+      });
+    }
+    if (provider?.definition.fieldMappings?.some((m) => m.taskField === 'tagIds')) {
+      syncFields.push({
+        key: 'pluginConfig.isAutoCreateTags',
+        type: 'checkbox',
+        props: {
+          label: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_TAGS,
+          description: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_TAGS_DESCRIPTION,
         },
       });
     }

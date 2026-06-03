@@ -10,6 +10,7 @@ import { taskSharedSchedulingMetaReducer } from './task-shared-meta-reducers/tas
 import { taskSharedDeadlineMetaReducer } from './task-shared-meta-reducers/task-shared-deadline.reducer';
 import { projectSharedMetaReducer } from './task-shared-meta-reducers/project-shared.reducer';
 import { tagSharedMetaReducer } from './task-shared-meta-reducers/tag-shared.reducer';
+import { sectionSharedMetaReducer } from './task-shared-meta-reducers/section-shared.reducer';
 import { issueProviderSharedMetaReducer } from './task-shared-meta-reducers/issue-provider-shared.reducer';
 import { taskRepeatCfgSharedMetaReducer } from './task-shared-meta-reducers/task-repeat-cfg-shared.reducer';
 import { plannerSharedMetaReducer } from './task-shared-meta-reducers/planner-shared.reducer';
@@ -36,6 +37,14 @@ import { actionLoggerReducer } from './action-logger.reducer';
  * ## Phase 3: Undo/Delete Capture
  * Captures task context before deletion for undo functionality.
  * Must run before CRUD operations that actually delete.
+ *
+ * ## Phase 3.5: Pre-CRUD Entity-Cascade Snapshots
+ * Meta-reducers that must read task/project/tag state BEFORE Phase 4
+ * mutates it (e.g. resolving a task's old projectId on
+ * moveToOtherProject, or its old tagIds on updateTask). Once Phase 4
+ * applies, those values are gone.
+ * - sectionShared: section.taskIds cleanup on task move/delete + tag
+ *   removal; orphan-section removal on project/tag delete.
  *
  * ## Phase 4: Core CRUD Operations
  * Task add/update/delete with project & tag cleanup.
@@ -88,6 +97,12 @@ export const META_REDUCERS: MetaReducer[] = [
   // Captures task context before deletion for undo/restore.
   undoTaskDeleteMetaReducer,
 
+  // sectionSharedMetaReducer must run BEFORE taskSharedCrudMetaReducer because
+  // it needs to expand subTaskIds via state.task.entities for the deleteTasks
+  // bulk action — once Phase 4 strips the parent, the subtask references are
+  // gone and section.taskIds entries pointing at removed subtasks would leak.
+  sectionSharedMetaReducer, // Task deletion → prune section.taskIds (incl. subtasks)
+
   // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 4: CORE CRUD OPERATIONS (Ordered by dependency)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -129,7 +144,9 @@ export const META_REDUCERS: MetaReducer[] = [
  * Critical constraints:
  * 1. operationCaptureMetaReducer MUST be at index 0 (captures state BEFORE any modifications)
  * 2. bulkOperationsMetaReducer MUST be at index 1 (unwraps bulk dispatches early)
- * 3. actionLoggerReducer MUST be last (pure logging after all modifications)
+ * 3. sectionSharedMetaReducer (Phase 3.5) MUST run before taskSharedCrudMetaReducer
+ *    (it reads pre-CRUD task state for moveToOtherProject and updateTask handlers)
+ * 4. actionLoggerReducer MUST be last (pure logging after all modifications)
  */
 const validateMetaReducerOrdering = (): void => {
   if (!isDevMode()) {
@@ -149,6 +166,17 @@ const validateMetaReducerOrdering = (): void => {
   if (META_REDUCERS[1] !== bulkOperationsMetaReducer) {
     errors.push(
       'bulkOperationsMetaReducer MUST be at index 1 to unwrap bulk dispatches early',
+    );
+  }
+
+  // Phase 3.5: sectionSharedMetaReducer must precede taskSharedCrudMetaReducer.
+  // It needs to read state.task.entities for moveToOtherProject (oldProjectId)
+  // and updateTask (oldTagIds) — values that Phase 4 mutates away.
+  const sectionIdx = META_REDUCERS.indexOf(sectionSharedMetaReducer);
+  const crudIdx = META_REDUCERS.indexOf(taskSharedCrudMetaReducer);
+  if (sectionIdx === -1 || crudIdx === -1 || sectionIdx >= crudIdx) {
+    errors.push(
+      'sectionSharedMetaReducer MUST run before taskSharedCrudMetaReducer (Phase 3.5 — pre-CRUD state read)',
     );
   }
 

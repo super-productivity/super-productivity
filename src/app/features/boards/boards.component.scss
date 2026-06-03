@@ -73,3 +73,14 @@
   max-height: 100%;
   overflow: auto;
 }
+
+::ng-deep .boards-drag-preview {
+  min-width: 0 !important;
+  background: transparent;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+::ng-deep .boards-drag-preview.cdk-drag-animating {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}

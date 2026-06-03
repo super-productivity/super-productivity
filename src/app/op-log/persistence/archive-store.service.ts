@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { IDBPDatabase, openDB } from 'idb';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import {
@@ -9,13 +9,16 @@ import {
   ArchiveStoreEntry,
 } from './db-keys.const';
 import { runDbUpgrade } from './db-upgrade';
+import { OpLogDbAdapter } from './op-log-db-adapter';
+import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
 import {
-  ARCHIVE_STORE_NOT_INITIALIZED,
   isConnectionClosingError,
+  isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
+  IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
@@ -51,6 +54,11 @@ interface ArchiveDBSchema {
 export class ArchiveStoreService {
   private _db?: IDBPDatabase<ArchiveDBSchema>;
   private _initPromise?: Promise<void>;
+  // Phase A migration seam: archive reads/writes route through this adapter,
+  // which operates on this service's own SUP_OPS connection (adopted in
+  // _init, released on close/versionchange and on the iOS connection-closing
+  // retry path). Phase B: backend comes from DI.
+  private readonly _adapter: OpLogDbAdapter = inject(OP_LOG_DB_ADAPTER_FACTORY)();
 
   private async _ensureInit(): Promise<void> {
     if (!this._db) {
@@ -73,6 +81,14 @@ export class ArchiveStoreService {
    * all stores.
    */
   private async _init(): Promise<void> {
+    // Self-managing backends (e.g. SQLite) own their handle and create their own
+    // schema via the adapter — no WebView IndexedDB connection needed. Mirrors
+    // OperationLogStoreService.init(); only the adopt-connection (IndexedDB)
+    // backend opens/owns a connection here.
+    if (!this._adapter.adoptConnection) {
+      await this._adapter.init();
+      return;
+    }
     const db = await this._openDbWithRetry();
     db.addEventListener('close', () => {
       Log.warn(
@@ -80,15 +96,33 @@ export class ArchiveStoreService {
       );
       this._db = undefined;
       this._initPromise = undefined;
+      this._adapter.adoptConnection?.(undefined);
+    });
+    // A newer tab is upgrading SUP_OPS (a future schema bump). Close now so this
+    // connection does not block the upgrade; the next access reopens
+    // transparently via _ensureInit().
+    db.addEventListener('versionchange', () => {
+      db.close();
+      this._db = undefined;
+      this._initPromise = undefined;
+      this._adapter.adoptConnection?.(undefined);
     });
     this._db = db;
+    this._adapter.adoptConnection?.(db);
   }
 
+  /**
+   * See OperationLogStoreService._openDbWithRetry for the rationale behind the
+   * lock-vs-non-lock retry budget split.
+   *
+   * @see https://github.com/super-productivity/super-productivity/issues/7191
+   */
   private async _openDbWithRetry(): Promise<IDBPDatabase<ArchiveDBSchema>> {
-    const totalAttempts = 1 + IDB_OPEN_RETRIES;
+    let maxRetries = IDB_OPEN_RETRIES;
+    let attempt = 1;
     let lastError: unknown;
 
-    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    while (attempt <= 1 + maxRetries) {
       try {
         return await openDB<ArchiveDBSchema>(DB_NAME, DB_VERSION, {
           upgrade: (db, oldVersion, _newVersion, transaction) => {
@@ -98,7 +132,18 @@ export class ArchiveStoreService {
       } catch (e) {
         lastError = e;
 
+        // Non-lock errors fall back to a short retry budget so we don't block
+        // the op-log subsystem for 31s before surfacing the error to the user.
+        // See OperationLogStoreService._openDbWithRetry for details.
+        if (attempt === 1 && !isLockRelatedIdbOpenError(e)) {
+          maxRetries = IDB_OPEN_RETRIES_NON_LOCK;
+        }
+
+        const totalAttempts = 1 + maxRetries;
         if (attempt < totalAttempts) {
+          // Exponential backoff: BASE * 2^(attempt-1). Lock errors retry up to
+          // IDB_OPEN_RETRIES times (~31s total); non-lock errors truncate at
+          // IDB_OPEN_RETRIES_NON_LOCK (~7s total).
           const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
           Log.warn(
             `[ArchiveStore] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
@@ -106,17 +151,19 @@ export class ArchiveStoreService {
           );
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
+
+        attempt++;
       }
     }
 
-    throw new IndexedDBOpenError(lastError);
-  }
-
-  private get db(): IDBPDatabase<ArchiveDBSchema> {
-    if (!this._db) {
-      throw new Error(ARCHIVE_STORE_NOT_INITIALIZED);
-    }
-    return this._db;
+    // Final-failure log. The wrapper's `.message` already carries the original
+    // error name + message (see IndexedDBOpenError), and `originalError`
+    // carries the raw object — so logging the wrapper exposes the underlying
+    // cause needed for diagnostics (e.g. distinguishing Chromium LevelDB locks
+    // from WebKit's iOS "Connection to Indexed Database server lost", #7415).
+    const err = new IndexedDBOpenError(lastError);
+    Log.err('[ArchiveStore] IndexedDB open failed after all retries.', err);
+    throw err;
   }
 
   /**
@@ -134,6 +181,7 @@ export class ArchiveStoreService {
         Log.warn('[ArchiveStore] Connection closing error detected, re-opening...', e);
         this._db = undefined;
         this._initPromise = undefined;
+        this._adapter.adoptConnection?.(undefined);
         return await fn();
       }
       throw e;
@@ -151,7 +199,10 @@ export class ArchiveStoreService {
   async loadArchiveYoung(): Promise<ArchiveModel | undefined> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      const entry = await this.db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY);
+      const entry = await this._adapter.get<ArchiveStoreEntry>(
+        STORE_NAMES.ARCHIVE_YOUNG,
+        SINGLETON_KEY,
+      );
       return entry?.data;
     });
   }
@@ -163,7 +214,7 @@ export class ArchiveStoreService {
   async saveArchiveYoung(data: ArchiveModel): Promise<void> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      await this.db.put(STORE_NAMES.ARCHIVE_YOUNG, {
+      await this._adapter.put(STORE_NAMES.ARCHIVE_YOUNG, {
         id: SINGLETON_KEY,
         data,
         lastModified: Date.now(),
@@ -178,7 +229,10 @@ export class ArchiveStoreService {
   async loadArchiveOld(): Promise<ArchiveModel | undefined> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      const entry = await this.db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
+      const entry = await this._adapter.get<ArchiveStoreEntry>(
+        STORE_NAMES.ARCHIVE_OLD,
+        SINGLETON_KEY,
+      );
       return entry?.data;
     });
   }
@@ -190,7 +244,7 @@ export class ArchiveStoreService {
   async saveArchiveOld(data: ArchiveModel): Promise<void> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      await this.db.put(STORE_NAMES.ARCHIVE_OLD, {
+      await this._adapter.put(STORE_NAMES.ARCHIVE_OLD, {
         id: SINGLETON_KEY,
         data,
         lastModified: Date.now(),
@@ -205,7 +259,7 @@ export class ArchiveStoreService {
   async hasArchiveYoung(): Promise<boolean> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      const entry = await this.db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY);
+      const entry = await this._adapter.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY);
       return !!entry;
     });
   }
@@ -217,7 +271,7 @@ export class ArchiveStoreService {
   async hasArchiveOld(): Promise<boolean> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      const entry = await this.db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
+      const entry = await this._adapter.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
       return !!entry;
     });
   }
@@ -237,22 +291,23 @@ export class ArchiveStoreService {
   ): Promise<void> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      const tx = this.db.transaction(
+      const now = Date.now();
+      await this._adapter.transaction(
         [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD],
         'readwrite',
+        async (tx) => {
+          await tx.put(STORE_NAMES.ARCHIVE_YOUNG, {
+            id: SINGLETON_KEY,
+            data: archiveYoung,
+            lastModified: now,
+          });
+          await tx.put(STORE_NAMES.ARCHIVE_OLD, {
+            id: SINGLETON_KEY,
+            data: archiveOld,
+            lastModified: now,
+          });
+        },
       );
-      const now = Date.now();
-      await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).put({
-        id: SINGLETON_KEY,
-        data: archiveYoung,
-        lastModified: now,
-      });
-      await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).put({
-        id: SINGLETON_KEY,
-        data: archiveOld,
-        lastModified: now,
-      });
-      await tx.done;
     });
   }
 
@@ -263,13 +318,14 @@ export class ArchiveStoreService {
   async _clearAllDataForTesting(): Promise<void> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      const tx = this.db.transaction(
+      await this._adapter.transaction(
         [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD],
         'readwrite',
+        async (tx) => {
+          await tx.clear(STORE_NAMES.ARCHIVE_YOUNG);
+          await tx.clear(STORE_NAMES.ARCHIVE_OLD);
+        },
       );
-      await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
-      await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
-      await tx.done;
     });
   }
 }

@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { of, Subject } from 'rxjs';
@@ -12,6 +12,8 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { DEFAULT_TASK, Task } from '../task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { DateService } from '../../../core/date/date.service';
+import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
 
 describe('TaskRelatedModelEffects', () => {
   let effects: TaskRelatedModelEffects;
@@ -19,6 +21,7 @@ describe('TaskRelatedModelEffects', () => {
   let store: MockStore;
   let taskService: jasmine.SpyObj<TaskService>;
   let hydrationStateService: jasmine.SpyObj<HydrationStateService>;
+  let dateService: jasmine.SpyObj<DateService>;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -37,6 +40,12 @@ describe('TaskRelatedModelEffects', () => {
       'isApplyingRemoteOps',
     ]);
     hydrationStateServiceSpy.isApplyingRemoteOps.and.returnValue(false);
+    const dateServiceSpy = jasmine.createSpyObj<DateService>('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+    ]);
+    dateServiceSpy.todayStr.and.returnValue(getDbDateStr());
+    dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(0);
 
     TestBed.configureTestingModule({
       providers: [
@@ -46,6 +55,7 @@ describe('TaskRelatedModelEffects', () => {
           selectors: [{ selector: selectTodayTaskIds, value: [] }],
         }),
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: DateService, useValue: dateServiceSpy },
         {
           provide: GlobalConfigService,
           useValue: {
@@ -63,6 +73,7 @@ describe('TaskRelatedModelEffects', () => {
     hydrationStateService = TestBed.inject(
       HydrationStateService,
     ) as jasmine.SpyObj<HydrationStateService>;
+    dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
   });
 
   afterEach(() => {
@@ -70,19 +81,92 @@ describe('TaskRelatedModelEffects', () => {
     actions$.complete();
   });
 
+  describe('autoAddTodayTagOnTracking', () => {
+    const dispatchAddTimeSpent = (task: Task): void => {
+      actions$.next(
+        TimeTrackingActions.addTimeSpent({
+          task,
+          date: dateService.todayStr(),
+          duration: 1000,
+          isFromTrackingReminder: false,
+        }),
+      );
+    };
+
+    it('should dispatch planTasksForToday when tracking an unscheduled task', (done) => {
+      const task = createTask('task-1', {
+        dueDay: undefined,
+        dueWithTime: undefined,
+      });
+
+      effects.autoAddTodayTagOnTracking.subscribe({
+        next: (action) => {
+          expect(action).toEqual(
+            jasmine.objectContaining({
+              taskIds: ['task-1'],
+              today: dateService.todayStr(),
+              startOfNextDayDiffMs: dateService.getStartOfNextDayDiffMs(),
+            }),
+          );
+          done();
+        },
+        error: done.fail,
+      });
+
+      dispatchAddTimeSpent(task);
+    });
+
+    it('should NOT dispatch planTasksForToday when tracked task has an existing dueDay', fakeAsync(() => {
+      const task = createTask('task-1', {
+        dueDay: '2026-05-16',
+        dueWithTime: undefined,
+      });
+      let emitted = false;
+      const subscription = effects.autoAddTodayTagOnTracking.subscribe(() => {
+        emitted = true;
+      });
+
+      dispatchAddTimeSpent(task);
+      tick();
+
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
+
+    it('should NOT dispatch planTasksForToday when tracked task has dueWithTime', fakeAsync(() => {
+      const task = createTask('task-1', {
+        dueDay: undefined,
+        dueWithTime: Date.now(),
+      });
+      let emitted = false;
+      const subscription = effects.autoAddTodayTagOnTracking.subscribe(() => {
+        emitted = true;
+      });
+
+      dispatchAddTimeSpent(task);
+      tick();
+
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
+  });
+
   describe('autoAddTodayTagOnMarkAsDone', () => {
-    it('should dispatch planTasksForToday when task is marked done and dueDay is not today', (done) => {
+    it('should dispatch planTasksForToday when an unscheduled task is marked done', (done) => {
       const task = createTask('task-1', {
         parentId: undefined,
-        dueDay: undefined, // NOT set to today
+        dueDay: undefined,
+        dueWithTime: undefined,
       });
       taskService.getByIdOnce$.and.returnValue(of(task));
 
       effects.autoAddTodayTagOnMarkAsDone.subscribe({
         next: (action) => {
           expect(action).toEqual(
-            TaskSharedActions.planTasksForToday({
+            jasmine.objectContaining({
               taskIds: ['task-1'],
+              today: dateService.todayStr(),
+              startOfNextDayDiffMs: dateService.getStartOfNextDayDiffMs(),
             }),
           );
           done();
@@ -97,7 +181,53 @@ describe('TaskRelatedModelEffects', () => {
       );
     });
 
-    it('should NOT dispatch planTasksForToday when task is marked done but already has dueDay set to today', (done) => {
+    it('should NOT dispatch planTasksForToday when marked done task has an existing dueDay', fakeAsync(() => {
+      const task = createTask('task-1', {
+        parentId: undefined,
+        dueDay: '2026-05-16',
+      });
+      taskService.getByIdOnce$.and.returnValue(of(task));
+
+      let emitted = false;
+      const subscription = effects.autoAddTodayTagOnMarkAsDone.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
+
+    it('should NOT dispatch planTasksForToday when marked done task has dueWithTime', fakeAsync(() => {
+      const task = createTask('task-1', {
+        parentId: undefined,
+        dueWithTime: Date.now(),
+      });
+      taskService.getByIdOnce$.and.returnValue(of(task));
+
+      let emitted = false;
+      const subscription = effects.autoAddTodayTagOnMarkAsDone.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
+
+    it('should NOT dispatch planTasksForToday when task is marked done but already has dueDay set to today', fakeAsync(() => {
       const today = getDbDateStr();
       const task = createTask('task-1', {
         parentId: undefined,
@@ -115,16 +245,13 @@ describe('TaskRelatedModelEffects', () => {
           task: { id: 'task-1', changes: { isDone: true } },
         }),
       );
+      tick();
 
-      // Wait a bit to ensure no emission
-      setTimeout(() => {
-        expect(emitted).toBe(false);
-        subscription.unsubscribe();
-        done();
-      }, 100);
-    });
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
 
-    it('should NOT dispatch planTasksForToday when task has a parent', (done) => {
+    it('should NOT dispatch planTasksForToday when task has a parent', fakeAsync(() => {
       const task = createTask('task-1', {
         parentId: 'parent-task', // Has parent
         dueDay: undefined,
@@ -141,15 +268,13 @@ describe('TaskRelatedModelEffects', () => {
           task: { id: 'task-1', changes: { isDone: true } },
         }),
       );
+      tick();
 
-      setTimeout(() => {
-        expect(emitted).toBe(false);
-        subscription.unsubscribe();
-        done();
-      }, 100);
-    });
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
 
-    it('should NOT dispatch when hydration is in progress', (done) => {
+    it('should NOT dispatch when hydration is in progress', fakeAsync(() => {
       hydrationStateService.isApplyingRemoteOps.and.returnValue(true);
 
       const task = createTask('task-1', {
@@ -168,15 +293,13 @@ describe('TaskRelatedModelEffects', () => {
           task: { id: 'task-1', changes: { isDone: true } },
         }),
       );
+      tick();
 
-      setTimeout(() => {
-        expect(emitted).toBe(false);
-        subscription.unsubscribe();
-        done();
-      }, 100);
-    });
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
 
-    it('should NOT dispatch when isDone is false', (done) => {
+    it('should NOT dispatch when isDone is false', fakeAsync(() => {
       const task = createTask('task-1', {
         parentId: undefined,
         dueDay: undefined,
@@ -193,12 +316,10 @@ describe('TaskRelatedModelEffects', () => {
           task: { id: 'task-1', changes: { isDone: false } },
         }),
       );
+      tick();
 
-      setTimeout(() => {
-        expect(emitted).toBe(false);
-        subscription.unsubscribe();
-        done();
-      }, 100);
-    });
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
   });
 });

@@ -1,0 +1,10 @@
+- Feat/issue 7362 9d46d3 (#7363)
+- add 3-month inactive-account deletion clause
+- improve Dropbox auth dialog UX on sandboxed Linux (#7139)
+- break iOS WebDAV conflict-dialog loop (#7339)
+- run unit tests when plugin code changes
+- inline countdown wrapper, document set invariant
+- reject inherited fields when creating subtask via REST
+- drop dead addAttachment from task context menu
+- open attachment dialog via detail panel after #7314
+- google calendar text exceeding background (#7361)

@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
-import { filter, first, switchMap } from 'rxjs/operators';
+import { filter, first, switchMap, tap } from 'rxjs/operators';
 import { selectAllTasks } from '../../features/tasks/store/task.selectors';
 import { TaskService } from '../../features/tasks/task.service';
 import { T } from '../../t.const';
@@ -54,10 +54,26 @@ export class ExampleTasksService {
       return;
     }
 
-    this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
+    // Wait for the STRICT initial-sync signal. For SuperSync the non-strict signal
+    // resolves immediately (before the first download completes), so example tasks
+    // would be created before an incoming SYNC_IMPORT lands and then collide with it.
+    // Waiting for the actual initial sync means any imported tasks are already in the
+    // store, so the `length === 0` guard below short-circuits and no example tasks are
+    // created on a fresh synced client (this also covers file-based providers, which
+    // the op-log conflict gate cannot). The `isExampleTask` marker on the dispatched
+    // action below stays as a safety net for the narrow case where example tasks are
+    // created on a still-empty server and an import arrives before they are uploaded.
+    this._syncTriggerService.afterInitialSyncDoneStrict$
       .pipe(
         first(),
         switchMap(() => this._store.select(selectAllTasks).pipe(first())),
+        // Tasks already exist (e.g. synced from another device): mark onboarding done
+        // so a future empty-task startup does not recreate example tasks. (#7976)
+        tap((tasks) => {
+          if (tasks.length > 0) {
+            localStorage.setItem(LS.EXAMPLE_TASKS_CREATED, 'true');
+          }
+        }),
         filter((tasks) => tasks.length === 0),
         switchMap(() => {
           const keys = EXAMPLE_TASK_DEFS.flatMap((def) => [def.titleKey, def.notesKey]);
@@ -77,7 +93,13 @@ export class ExampleTasksService {
             additional: { notes: translations[def.notesKey] },
             ...TASK_CONTEXT,
           });
-          this._store.dispatch(TaskSharedActions.addTask({ task, ...TASK_CONTEXT }));
+          this._store.dispatch(
+            TaskSharedActions.addTask({
+              task,
+              ...TASK_CONTEXT,
+              isExampleTask: true,
+            }),
+          );
         }
         localStorage.setItem(LS.EXAMPLE_TASKS_CREATED, 'true');
       });

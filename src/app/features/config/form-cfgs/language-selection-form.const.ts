@@ -42,6 +42,7 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
           { label: T.GCF.LANG.ZH_TW, value: LanguageCode.zh_tw },
           { label: T.GCF.LANG.RO, value: LanguageCode.ro },
           { label: T.GCF.LANG.RO_MD, value: LanguageCode.ro_md },
+          { label: T.GCF.LANG.VI, value: LanguageCode.vi },
         ],
       },
     },

@@ -5,6 +5,8 @@ import { TaskService } from '../../features/tasks/task.service';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
+import { TODAY_TAG } from '../../features/tag/tag.const';
+import { DateService } from '../date/date.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
 import {
   LocalRestApiRequestPayload,
@@ -17,6 +19,7 @@ describe('LocalRestApiHandlerService', () => {
   let taskArchiveServiceMock: jasmine.SpyObj<TaskArchiveService>;
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
   let tagServiceMock: jasmine.SpyObj<TagService>;
+  let dateServiceMock: jasmine.SpyObj<DateService>;
   let requestHandler: ((payload: LocalRestApiRequestPayload) => void) | null = null;
   let responsePromiseResolve: ((response: LocalRestApiResponsePayload) => void) | null =
     null;
@@ -83,6 +86,17 @@ describe('LocalRestApiHandlerService', () => {
     return responsePromise;
   };
 
+  const expectTaskIds = (
+    response: LocalRestApiResponsePayload,
+    expectedIds: string[],
+  ): void => {
+    expect(response.body.ok).toBe(true);
+    if (!response.body.ok) {
+      throw new Error(`Expected success response, got ${response.body.error.code}`);
+    }
+    expect((response.body.data as Task[]).map((task) => task.id)).toEqual(expectedIds);
+  };
+
   beforeEach(() => {
     requestHandler = null;
     responsePromiseResolve = null;
@@ -93,6 +107,7 @@ describe('LocalRestApiHandlerService', () => {
       'TaskService',
       [
         'add',
+        'addSubTaskTo',
         'update',
         'remove',
         'setCurrentId',
@@ -108,6 +123,7 @@ describe('LocalRestApiHandlerService', () => {
       },
     );
     (taskServiceMock as any).add.and.returnValue('new-task-id');
+    (taskServiceMock as any).addSubTaskTo.and.returnValue('new-subtask-id');
 
     taskArchiveServiceMock = jasmine.createSpyObj(
       'TaskArchiveService',
@@ -135,6 +151,14 @@ describe('LocalRestApiHandlerService', () => {
       },
     );
 
+    dateServiceMock = jasmine.createSpyObj<DateService>(
+      'DateService',
+      ['todayStr', 'getStartOfNextDayDiffMs'],
+      {},
+    );
+    dateServiceMock.todayStr.and.returnValue('2026-05-12');
+    dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
+
     TestBed.configureTestingModule({
       providers: [
         LocalRestApiHandlerService,
@@ -142,6 +166,7 @@ describe('LocalRestApiHandlerService', () => {
         { provide: TaskArchiveService, useValue: taskArchiveServiceMock },
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: TagService, useValue: tagServiceMock },
+        { provide: DateService, useValue: dateServiceMock },
       ],
     });
 
@@ -198,6 +223,7 @@ describe('LocalRestApiHandlerService', () => {
 
         expect(response.body.ok).toBe(true);
         expect(response.status).toBe(200);
+        expectTaskIds(response, ['task-1', 'task-2']);
       });
 
       it('should filter tasks by query', async () => {
@@ -211,7 +237,7 @@ describe('LocalRestApiHandlerService', () => {
           createRequest('GET', '/tasks', { query: { query: 'milk' } }),
         );
 
-        expect(response.body.ok).toBe(true);
+        expectTaskIds(response, ['task-1']);
       });
 
       it('should filter tasks by projectId', async () => {
@@ -225,7 +251,7 @@ describe('LocalRestApiHandlerService', () => {
           createRequest('GET', '/tasks', { query: { projectId: 'project-1' } }),
         );
 
-        expect(response.body.ok).toBe(true);
+        expectTaskIds(response, ['task-1']);
       });
 
       it('should filter tasks by tagId', async () => {
@@ -239,7 +265,155 @@ describe('LocalRestApiHandlerService', () => {
           createRequest('GET', '/tasks', { query: { tagId: 'tag-1' } }),
         );
 
+        expectTaskIds(response, ['task-1']);
+      });
+
+      it('should filter tasks by the virtual TODAY tag using dueDay', async () => {
+        const tasks = [
+          createMockTask('task-1', { dueDay: '2026-05-12' }),
+          createMockTask('task-2', { dueDay: '2026-05-13' }),
+          createMockTask('task-3', { dueDay: '2026-05-11' }),
+          createMockTask('task-4'),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+
+        const response = await sendRequestAndWait(
+          createRequest('GET', '/tasks', { query: { tagId: TODAY_TAG.id } }),
+        );
+
+        expectTaskIds(response, ['task-1']);
+      });
+
+      it('should combine the virtual TODAY tag filter with projectId and query', async () => {
+        const tasks = [
+          createMockTask('task-1', {
+            title: 'Buy milk',
+            projectId: 'project-1',
+            dueDay: '2026-05-12',
+          }),
+          createMockTask('task-2', {
+            title: 'Buy bread',
+            projectId: 'project-2',
+            dueDay: '2026-05-12',
+          }),
+          createMockTask('task-3', {
+            title: 'Walk dog',
+            projectId: 'project-1',
+            dueDay: '2026-05-12',
+          }),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+
+        const response = await sendRequestAndWait(
+          createRequest('GET', '/tasks', {
+            query: { tagId: TODAY_TAG.id, projectId: 'project-1', query: 'milk' },
+          }),
+        );
+
+        expectTaskIds(response, ['task-1']);
+      });
+
+      it('should include done virtual TODAY tasks when includeDone=true', async () => {
+        const tasks = [
+          createMockTask('task-1', { dueDay: '2026-05-12', isDone: false }),
+          createMockTask('task-2', { dueDay: '2026-05-12', isDone: true }),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+
+        const response = await sendRequestAndWait(
+          createRequest('GET', '/tasks', {
+            query: { tagId: TODAY_TAG.id, includeDone: 'true' },
+          }),
+        );
+
+        expectTaskIds(response, ['task-1', 'task-2']);
+      });
+
+      it('should filter virtual TODAY tasks by dueWithTime and start-of-next-day offset', async () => {
+        dateServiceMock.todayStr.and.returnValue('2026-02-15');
+        dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(4 * 60 * 60 * 1000);
+        const tasks = [
+          createMockTask('task-1', {
+            dueWithTime: new Date(2026, 1, 16, 2, 0).getTime(),
+          }),
+          createMockTask('task-2', {
+            dueWithTime: new Date(2026, 1, 16, 5, 0).getTime(),
+          }),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+
+        const response = await sendRequestAndWait(
+          createRequest('GET', '/tasks', { query: { tagId: TODAY_TAG.id } }),
+        );
+
+        expectTaskIds(response, ['task-1']);
+      });
+
+      it('should let dueWithTime take priority over dueDay for the virtual TODAY tag', async () => {
+        const tasks = [
+          createMockTask('task-1', {
+            dueDay: '2026-05-12',
+            dueWithTime: new Date(2026, 4, 13, 10, 0).getTime(),
+          }),
+          createMockTask('task-2', {
+            dueDay: '2026-05-12',
+          }),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+
+        const response = await sendRequestAndWait(
+          createRequest('GET', '/tasks', { query: { tagId: TODAY_TAG.id } }),
+        );
+
+        expectTaskIds(response, ['task-2']);
+      });
+
+      it('should not fail the virtual TODAY filter for invalid dueWithTime values', async () => {
+        const tasks = [
+          createMockTask('task-1', {
+            dueDay: '2026-05-12',
+            dueWithTime: -1,
+          }),
+          createMockTask('task-2', {
+            dueWithTime: -1,
+          }),
+          createMockTask('task-3', {
+            dueDay: '2026-05-12',
+            dueWithTime: 8_640_000_000_000_001,
+          }),
+          createMockTask('task-4', {
+            dueWithTime: 8_640_000_000_000_001,
+          }),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+
+        const response = await sendRequestAndWait(
+          createRequest('GET', '/tasks', { query: { tagId: TODAY_TAG.id } }),
+        );
+
+        expectTaskIds(response, ['task-1', 'task-3']);
+      });
+
+      it('should filter TODAY virtual tag by due fields', async () => {
+        // Noon UTC on 2026-05-12 — resolves to 2026-05-12 in both Europe/Berlin
+        // (UTC+2 DST) and America/Los_Angeles (UTC-7 DST) test timezones.
+        const dueTimeToday = new Date('2026-05-12T12:00:00Z').getTime();
+        const tasks = [
+          createMockTask('due-day', { dueDay: '2026-05-12' }),
+          createMockTask('due-time', { dueWithTime: dueTimeToday }),
+          createMockTask('normal-tag', { tagIds: [TODAY_TAG.id] }),
+          createMockTask('tomorrow', { dueDay: '2026-05-13' }),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+
+        const response = await sendRequestAndWait(
+          createRequest('GET', '/tasks', { query: { tagId: TODAY_TAG.id } }),
+        );
+
         expect(response.body.ok).toBe(true);
+        expect(
+          ((response.body as { data: Task[] }).data || []).map((task) => task.id),
+        ).toEqual(['due-day', 'due-time']);
       });
 
       it('should exclude done tasks by default', async () => {
@@ -251,7 +425,7 @@ describe('LocalRestApiHandlerService', () => {
 
         const response = await sendRequestAndWait(createRequest('GET', '/tasks'));
 
-        expect(response.body.ok).toBe(true);
+        expectTaskIds(response, ['task-1']);
       });
 
       it('should include done tasks when includeDone=true', async () => {
@@ -265,11 +439,11 @@ describe('LocalRestApiHandlerService', () => {
           createRequest('GET', '/tasks', { query: { includeDone: 'true' } }),
         );
 
-        expect(response.body.ok).toBe(true);
+        expectTaskIds(response, ['task-1', 'task-2']);
       });
 
       it('should return archived tasks when source=archived', async () => {
-        const archivedTask = createMockTask('archivedTask1', { isDone: true });
+        const archivedTask = createMockTask('archivedTask1');
         (taskArchiveServiceMock as any).load.and.returnValue(
           Promise.resolve({
             ids: ['archivedTask1'],
@@ -282,6 +456,7 @@ describe('LocalRestApiHandlerService', () => {
         );
 
         expect(response.body.ok).toBe(true);
+        expectTaskIds(response, ['archivedTask1']);
         expect(taskArchiveServiceMock.load).toHaveBeenCalled();
       });
 
@@ -298,6 +473,7 @@ describe('LocalRestApiHandlerService', () => {
         );
 
         expect(response.body.ok).toBe(true);
+        expectTaskIds(response, ['task-1']);
         expect(taskServiceMock.getAllTasksEverywhere).toHaveBeenCalled();
       });
     });
@@ -351,8 +527,6 @@ describe('LocalRestApiHandlerService', () => {
               title: 'New Task',
               notes: 'allowed',
               id: 'injected-id',
-              subTaskIds: ['injected'],
-              parentId: 'injected-parent',
             },
           }),
         );
@@ -360,6 +534,128 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
           title: 'New Task',
           notes: 'allowed',
+        });
+      });
+
+      it('should reject subTaskIds in body with 400', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', subTaskIds: ['s1'] },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      describe('with parentId (create subtask)', () => {
+        it('should create a subtask when parentId refers to an existing top-level task', async () => {
+          const parentTask = createMockTask('parent-1', { projectId: 'project-1' });
+          const newSubTask = createMockTask('new-subtask-id', {
+            parentId: 'parent-1',
+            projectId: 'project-1',
+          });
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (id: string) =>
+              id === 'parent-1' ? of(parentTask) : of(newSubTask),
+          });
+
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'Child', parentId: 'parent-1', notes: 'child notes' },
+            }),
+          );
+
+          expect(response.body.ok).toBe(true);
+          expect(response.status).toBe(201);
+          expect(taskServiceMock.addSubTaskTo).toHaveBeenCalledWith('parent-1', {
+            title: 'Child',
+            notes: 'child notes',
+          });
+          expect(taskServiceMock.add).not.toHaveBeenCalled();
+        });
+
+        it('should return 404 when parentId does not exist', async () => {
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(undefined),
+          });
+
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'Child', parentId: 'does-not-exist' },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(404);
+          expect((response.body as any).error.code).toBe('PARENT_NOT_FOUND');
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        });
+
+        it('should return 400 when parentId refers to a task that is itself a subtask', async () => {
+          const nestedParent = createMockTask('parent-1', { parentId: 'grandparent' });
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(nestedParent),
+          });
+
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'Child', parentId: 'parent-1' },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('INVALID_PARENT');
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        });
+
+        it('should return 400 when parentId is not a string', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'Child', parentId: 123 },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        });
+
+        it('should return 400 when projectId is sent alongside parentId', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: {
+                title: 'Child',
+                parentId: 'parent-1',
+                projectId: 'mismatched-project',
+              },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        });
+
+        it('should return 400 when tagIds is sent alongside parentId', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: {
+                title: 'Child',
+                parentId: 'parent-1',
+                tagIds: ['tag-1'],
+              },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
         });
       });
     });
@@ -440,18 +736,49 @@ describe('LocalRestApiHandlerService', () => {
 
         await sendRequestAndWait(
           createRequest('PATCH', '/tasks/task-1', {
-            body: {
-              title: 'Updated',
-              id: 'injected-id',
-              subTaskIds: ['injected'],
-              parentId: 'injected-parent',
-            },
+            body: { title: 'Updated', id: 'injected-id' },
           }),
         );
 
         expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
           title: 'Updated',
         });
+      });
+
+      it('should reject parentId in PATCH body with 400', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title: 'Updated', parentId: 'some-parent' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should reject subTaskIds in PATCH body with 400', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title: 'Updated', subTaskIds: ['s1'] },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
     });
 

@@ -8,6 +8,8 @@ export interface PluginSearchResult {
   url?: string;
   status?: string;
   assignee?: string;
+  /** Labels/tags used by tagIds field mappings during initial import */
+  labels?: string[];
   /** Event start timestamp (ms) - required for agenda view */
   start?: number;
   /** Precise due-with-time timestamp (ms) for timed events. When set, the task is
@@ -19,6 +21,8 @@ export interface PluginSearchResult {
   isAllDay?: boolean;
   /** Event description / body text */
   description?: string;
+  /** Provider-specific fields used by issue display and field mappings */
+  [key: string]: unknown;
 }
 
 export interface PluginIssue {
@@ -62,7 +66,19 @@ export interface PluginCommentsConfig {
 export type PluginSyncDirection = 'off' | 'pullOnly' | 'pushOnly' | 'both';
 
 export interface PluginFieldMapping {
-  taskField: 'isDone' | 'title' | 'notes' | 'dueDay' | 'dueWithTime' | 'timeEstimate';
+  /**
+   * `tagIds` maps Super Productivity tags by title/label, not by internal tag id:
+   * - `toIssueValue` receives a sorted string[] of local tag titles.
+   * - `toTaskValue` must return a string[] of tag titles/labels to match or create locally.
+   */
+  taskField:
+    | 'isDone'
+    | 'title'
+    | 'notes'
+    | 'dueDay'
+    | 'dueWithTime'
+    | 'timeEstimate'
+    | 'tagIds';
   issueField: string;
   defaultDirection: PluginSyncDirection;
   /** Task fields to clear when this field is set (e.g. dueWithTime and dueDay are mutually exclusive) */

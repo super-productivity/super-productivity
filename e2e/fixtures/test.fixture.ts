@@ -1,4 +1,5 @@
-import { BrowserContext, test as base } from '@playwright/test';
+import { test as base } from '@playwright/test';
+import type { BrowserContext, ConsoleMessage } from '@playwright/test';
 import { WorkViewPage } from '../pages/work-view.page';
 import { ProjectPage } from '../pages/project.page';
 import { TaskPage } from '../pages/task.page';
@@ -9,7 +10,12 @@ import { SyncPage } from '../pages/sync.page';
 import { TagPage } from '../pages/tag.page';
 import { NotePage } from '../pages/note.page';
 import { SideNavPage } from '../pages/side-nav.page';
-import { waitForAppReady } from '../utils/waits';
+import { skipOnboardingForE2E, waitForAppReady } from '../utils/waits';
+import {
+  assertNoRuntimeBrowserErrors,
+  attachPageErrorCollector,
+  installDevErrorDialogHandler,
+} from '../utils/runtime-errors';
 
 type TestFixtures = {
   workViewPage: WorkViewPage;
@@ -28,17 +34,31 @@ type TestFixtures = {
 };
 
 export const test = base.extend<TestFixtures>({
-  // Create isolated context for each test
-  isolatedContext: async ({ browser, baseURL }, use, testInfo) => {
+  // Create isolated context for each test.
+  // We use Playwright's merged `contextOptions` fixture so future option additions
+  // propagate automatically instead of requiring this list to stay in sync by hand.
+  isolatedContext: async (
+    { browser, contextOptions, baseURL, actionTimeout, navigationTimeout },
+    use,
+    testInfo,
+  ) => {
     const url = baseURL || testInfo.project.use.baseURL || 'http://localhost:4242';
-    // Create a new context with isolated storage
+    const baseUserAgent = contextOptions.userAgent ?? 'PLAYWRIGHT';
+
     const context = await browser.newContext({
+      ...contextOptions,
       // Each test gets its own storage state
       storageState: undefined,
       // Preserve the base userAgent and add worker index for debugging
-      userAgent: `PLAYWRIGHT PLAYWRIGHT-WORKER-${testInfo.workerIndex}`,
+      userAgent: `${baseUserAgent} PLAYWRIGHT-WORKER-${testInfo.workerIndex}`,
       baseURL: url,
     });
+
+    // Use !== undefined so a configured `0` (Playwright's "no timeout") is honored.
+    if (actionTimeout !== undefined) context.setDefaultTimeout(actionTimeout);
+    if (navigationTimeout !== undefined) {
+      context.setDefaultNavigationTimeout(navigationTimeout);
+    }
 
     await use(context);
 
@@ -49,25 +69,20 @@ export const test = base.extend<TestFixtures>({
   // Override page to use isolated context
   page: async ({ isolatedContext }, use) => {
     const page = await isolatedContext.newPage();
+    // Page errors are uncaught JS exceptions in the app — almost always test-relevant.
+    // Each error is logged via console.error as it arrives (so it stays visible even
+    // when the test fails for another reason), then aggregated and thrown at teardown
+    // if the test otherwise passed.
+    const runtimeErrors = attachPageErrorCollector(page, 'page');
+    installDevErrorDialogHandler(page, 'page');
 
     // Skip onboarding, hints, and example tasks before the app boots.
     // This runs before any page JavaScript, so Angular sees the flags immediately.
-    await page.addInitScript(() => {
-      localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
-      localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
-      localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-    });
+    await page.addInitScript(skipOnboardingForE2E);
 
     try {
-      // Always log uncaught page errors — they are almost always test-relevant
-      page.on('pageerror', (error) => {
-        console.error('Page error:', error.message);
-      });
-
-      // Only log verbose console messages when E2E_VERBOSE is set
       if (process.env.E2E_VERBOSE) {
-        page.on('console', (msg) => {
+        page.on('console', (msg: ConsoleMessage) => {
           console.log(`Console ${msg.type()}:`, msg.text());
         });
       }
@@ -90,7 +105,17 @@ export const test = base.extend<TestFixtures>({
 
       await waitForAppReady(page);
 
-      await use(page);
+      let testFailed = false;
+      try {
+        await use(page);
+      } catch (error) {
+        testFailed = true;
+        throw error;
+      } finally {
+        if (!testFailed) {
+          assertNoRuntimeBrowserErrors(runtimeErrors, 'page');
+        }
+      }
     } finally {
       // Cleanup - make sure context is still available
       if (!page.isClosed()) {

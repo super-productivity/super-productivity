@@ -259,7 +259,7 @@ test.describe('Bug #5954: Pomodoro timer sync issues', () => {
      * The fix ensures the focus overlay appears so user can select/create a task.
      * https://github.com/super-productivity/super-productivity/issues/5954#issuecomment-3753395324
      */
-    test('should keep overlay visible when starting session with all tasks done', async ({
+    test('should keep overlay visible and disable play button when all tasks done', async ({
       page,
       testPrefix,
       taskPage,
@@ -269,6 +269,9 @@ test.describe('Bug #5954: Pomodoro timer sync issues', () => {
       const mainFocusButton = page
         .getByRole('button')
         .filter({ hasText: 'center_focus_strong' });
+
+      // Navigate to work view
+      await page.goto('/');
 
       // Step 1: Create a task and mark it as done immediately
       await workViewPage.waitForTaskList();
@@ -285,43 +288,35 @@ test.describe('Bug #5954: Pomodoro timer sync issues', () => {
       await mainFocusButton.click();
       await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
 
-      // Step 3: Select Pomodoro mode and start session
+      // Step 3: Select Pomodoro mode
       await selectPomodoroMode(page);
+
+      // Step 4: Verify the overlay remains visible (fix for bug #5954) and
+      // the play button is disabled because no task is tracked. Focus mode
+      // now requires a current task — the user is prompted to pick one.
+      await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
 
       const playButton = page.locator('focus-mode-main button.play-button');
       await expect(playButton).toBeVisible({ timeout: 2000 });
-      await playButton.click();
+      await expect(playButton).toBeDisabled();
 
-      // Wait for any countdown to complete
-      const countdownComponent = page.locator('focus-mode-countdown');
-      try {
-        const isVisible = await countdownComponent.isVisible().catch(() => false);
-        if (isVisible) {
-          await expect(countdownComponent).not.toBeVisible({ timeout: 15000 });
-        }
-      } catch {
-        // Countdown may be skipped
-      }
-
-      // Step 4: Verify the overlay remains visible (fix for bug #5954)
-      // The showFocusOverlay action should be dispatched when no valid task exists
-      await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
-
-      // Session should be in progress (timer running)
-      const completeSessionBtn = page.locator('focus-mode-main .complete-session-btn');
-      await expect(completeSessionBtn).toBeVisible({ timeout: 10000 });
+      // The "select task to focus" placeholder gives the user a way out.
+      const taskPlaceholder = page.locator('focus-mode-main .task-title-placeholder');
+      await expect(taskPlaceholder).toBeVisible({ timeout: 2000 });
     });
 
-    test('should keep overlay visible when last tracked task was completed', async ({
+    test('should keep overlay visible and disable play button when last tracked task was completed', async ({
       page,
       testPrefix,
-      taskPage,
     }) => {
       const workViewPage = new WorkViewPage(page, testPrefix);
       const focusModeOverlay = page.locator('focus-mode-overlay');
       const mainFocusButton = page
         .getByRole('button')
         .filter({ hasText: 'center_focus_strong' });
+
+      // Navigate to work view
+      await page.goto('/');
 
       // Step 1: Create task and start tracking
       await workViewPage.waitForTaskList();
@@ -335,7 +330,18 @@ test.describe('Bug #5954: Pomodoro timer sync issues', () => {
       const playButton = page.locator('.play-btn.tour-playBtn').first();
       await playButton.waitFor({ state: 'visible' });
       await playButton.click();
-      await expect(task).toHaveClass(/isCurrent/, { timeout: 5000 });
+
+      // Wait for navigation triggered by task tracking to complete
+      await page.waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 });
+      await page.waitForTimeout(1000);
+
+      // Wait for task list to be visible
+      await workViewPage.waitForTaskList();
+
+      // Re-locate the task after navigation
+      const trackedTask = page.locator('task').first();
+      await expect(trackedTask).toBeVisible({ timeout: 5000 });
+      await expect(trackedTask).toHaveClass(/isCurrent/, { timeout: 5000 });
 
       // Wait for Angular to finish re-rendering the task hover controls
       // When isCurrent changes, the hover controls switch from play to pause button
@@ -344,38 +350,28 @@ test.describe('Bug #5954: Pomodoro timer sync issues', () => {
       // Step 2: Mark task as done using keyboard shortcut
       // This bypasses the button click issue caused by continuous re-renders
       // from the progress bar while tracking is active
-      await task.focus();
+      await trackedTask.focus();
       await page.keyboard.press('d'); // Keyboard shortcut for toggle done
-      await expect(task).toHaveClass(/isDone/, { timeout: 5000 });
-      await expect(task).not.toHaveClass(/isCurrent/, { timeout: 5000 });
+      await expect(trackedTask).toHaveClass(/isDone/, { timeout: 5000 });
+      await expect(trackedTask).not.toHaveClass(/isCurrent/, { timeout: 5000 });
 
-      // Step 3: Open focus mode and try to start session
+      // Step 3: Open focus mode
       await mainFocusButton.click();
       await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
 
       await selectPomodoroMode(page);
 
-      const sessionPlayButton = page.locator('focus-mode-main button.play-button');
-      await expect(sessionPlayButton).toBeVisible({ timeout: 2000 });
-      await sessionPlayButton.click();
-
-      // Wait for countdown
-      const countdownComponent = page.locator('focus-mode-countdown');
-      try {
-        const isVisible = await countdownComponent.isVisible().catch(() => false);
-        if (isVisible) {
-          await expect(countdownComponent).not.toBeVisible({ timeout: 15000 });
-        }
-      } catch {
-        // Countdown may be skipped
-      }
-
-      // Step 4: Verify overlay stays visible for task selection
+      // Step 4: Verify overlay stays visible (fix for bug #5954) and the
+      // play button is disabled because no task is current. Focus mode
+      // requires a current task — the user is prompted to pick one.
       await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
 
-      // Session should still start (timer runs, user can select task from overlay)
-      const completeSessionBtn = page.locator('focus-mode-main .complete-session-btn');
-      await expect(completeSessionBtn).toBeVisible({ timeout: 10000 });
+      const sessionPlayButton = page.locator('focus-mode-main button.play-button');
+      await expect(sessionPlayButton).toBeVisible({ timeout: 2000 });
+      await expect(sessionPlayButton).toBeDisabled();
+
+      const taskPlaceholder = page.locator('focus-mode-main .task-title-placeholder');
+      await expect(taskPlaceholder).toBeVisible({ timeout: 2000 });
     });
   });
 });

@@ -1,15 +1,8 @@
-import { PrismaClient } from './generated/prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '@prisma/client';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is required');
-}
-
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
-});
+// Initialize Prisma Client
+// Log queries in development for debugging
 export const prisma = new PrismaClient({
-  adapter,
   log:
     process.env.NODE_ENV === 'development'
       ? ['query', 'info', 'warn', 'error']
@@ -17,12 +10,7 @@ export const prisma = new PrismaClient({
 });
 
 // Re-export types for convenience
-export type {
-  User,
-  Operation,
-  UserSyncState,
-  SyncDevice,
-} from './generated/prisma/client';
+export type { User, Operation, UserSyncState, SyncDevice } from '@prisma/client';
 
 // Helper to disconnect on shutdown
 export const disconnectDb = async (): Promise<void> => {

@@ -194,10 +194,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Jak a kde hodnotit",
-      "BTN_DONT_BOTHER": "Znovu mě neobtěžujte",
-      "TITLE": "🙈 Prosím, odpusťte nám, ale...",
-      "TXT": "Projektu nesmírně pomůžete <strong>udělením dobrého hodnocení, pokud se vám líbí!</strong>"
+      "A_HOW": "Jak hodnotit",
+      "BTN_DONT_BOTHER": "Příště se neptat",
+      "BTN_FEEDBACK": "Poslat zpětnou vazbu",
+      "BTN_LATER": "Možná později",
+      "BTN_RATE_APP_STORE": "Ohodnotit v App Store",
+      "BTN_RATE_PLAY_STORE": "Ohodnotit v Play Store",
+      "FEEDBACK_BACK": "Zpět",
+      "FEEDBACK_CONTRIBUTE": "Přispět do projektu",
+      "FEEDBACK_CONTRIBUTE_DESC": "Kód, design, překlady a další",
+      "FEEDBACK_PRIVATE": "Napsat e-mail správci",
+      "FEEDBACK_PRIVATE_DESC": "Poslat soukromou zprávu",
+      "FEEDBACK_PUBLIC": "Napsat na GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Ostatní mohou vidět a reagovat",
+      "FEEDBACK_TITLE": "Jak chcete pomoci?",
+      "TITLE": "Líbí se vám Super Productivity?",
+      "TXT": "Je to <strong>bezplatný projekt s otevřeným zdrojovým kódem</strong>, který vytvářejí nadšenci – žádné sledování, žádné reklamy. Hodnocení nebo krátká zpráva pomáhá, aby si jej našlo více lidí."
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
@@ -1878,7 +1890,8 @@
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Zadejte úplnou URL adresu záložního JSON souboru ze Super Productivity, který chcete importovat.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Importovat z URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Importovat z URL",
-    "PRIVACY_EXPORT": "Exportovat anonymizovaná data (pro odeslání na contact@super-productivity.com pro ladění)",
+    "PRIVACY_EXPORT": "Exportovat data (anonymizovaná)",
+    "PRIVACY_EXPORT_DESCRIPTION": "Exportovat anonymizovaná data (pro odeslání na contact@super-productivity.com pro ladění)",
     "S_BACKUP_DOWNLOADED": "Záloha byla stažena do složky dokumentů Android",
     "S_ERR_IMPORT_FAILED": "Importování dat selhalo",
     "S_ERR_INVALID_DATA": "Import selhal: Neplatný formát JSON",

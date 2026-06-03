@@ -5,6 +5,7 @@ import {
   Component,
   computed,
   inject,
+  signal,
   viewChild,
 } from '@angular/core';
 import {
@@ -37,6 +38,8 @@ import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateAdapter, MatOption } from '@angular/material/core';
@@ -52,9 +55,14 @@ import {
 import { MatSelect } from '@angular/material/select';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatInput } from '@angular/material/input';
+import { TimeStepDirective } from '../../../ui/time-step/time-step.directive';
 import { Log } from '../../../core/log';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
+import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
+import { selectTimelineConfig } from '../../config/store/global-config.reducer';
+import { getTimeConflictTaskIds } from '../../tasks/util/get-time-conflict-task-ids';
+import { isTaskOutsideWorkHours } from '../../tasks/util/is-task-outside-work-hours';
 
 const DEFAULT_TIME = '09:00';
 
@@ -77,6 +85,7 @@ const DEFAULT_TIME = '09:00';
     MatLabel,
     MatSuffix,
     MatPrefix,
+    TimeStepDirective,
   ],
   templateUrl: './dialog-schedule-task.component.html',
   styleUrl: './dialog-schedule-task.component.scss',
@@ -101,6 +110,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
   private readonly _dateAdapter = inject(DateAdapter);
+  private readonly _tasksWithDueTimeSorted = this._store.selectSignal(
+    selectAllTasksWithDueTimeSorted,
+  );
+  private readonly _timelineConfig = this._store.selectSignal(selectTimelineConfig);
 
   // Wait for localization config to be loaded before rendering calendar
   // This ensures DateAdapter.getFirstDayOfWeek() returns the correct value
@@ -115,8 +128,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
   task: TaskCopy | undefined = this.data.task;
 
-  selectedDate: Date | string | null = null;
-  selectedTime: string | null = null;
+  private _selectedDate = signal<Date | string | null>(null);
+  private _selectedTime = signal<string | null>(null);
   selectedReminderCfgId!: TaskReminderOptionId;
 
   plannedDayForTask: string | null = null;
@@ -127,6 +140,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   // private _prevSelectedQuickAccessDate: Date | null = null;
   // private _prevQuickAccessAction: number | null = null;
   private _timeCheckVal: string | null = null;
+  private _previewTaskId = '__schedule-preview__';
 
   private _defaultTaskRemindCfgId = computed(
     () =>
@@ -134,6 +148,73 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         ?.defaultTaskRemindOption as TaskReminderOptionId) ??
       DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
   );
+  get selectedDate(): Date | string | null {
+    return this._selectedDate();
+  }
+  set selectedDate(value: Date | string | null) {
+    this._selectedDate.set(value);
+  }
+
+  get selectedTime(): string | null {
+    return this._selectedTime();
+  }
+  set selectedTime(value: string | null) {
+    this._selectedTime.set(value);
+  }
+
+  // A `<input type="time">` can yield `HH:MM:SS` (macOS Chrome renders a seconds
+  // segment even with step="60"); recover it to `HH:MM` so the time the user set
+  // survives validation instead of being dropped or crashing the guard (#7802).
+  private _normalizedTime = computed<string | null>(() => {
+    const t = this._selectedTime();
+    return t ? normalizeClockStr(t) : null;
+  });
+
+  plannedTimestamp = computed<number | null>(() => {
+    const selectedDate = this._selectedDate();
+    const normalizedTime = this._normalizedTime();
+    // Out-of-range (`25:00`) or garbage values still fail validation here and
+    // would otherwise crash getDateTimeFromClockString and bubble "Invalid clock
+    // string" to the global error handler via scheduleWarnings (#7802).
+    if (!selectedDate || !normalizedTime || !isValidSplitTime(normalizedTime)) {
+      return null;
+    }
+
+    return getDateTimeFromClockString(normalizedTime, selectedDate as Date);
+  });
+  scheduleWarnings = computed(() => {
+    const plannedTimestamp = this.plannedTimestamp();
+    if (!plannedTimestamp) {
+      return {
+        hasOverlap: false,
+        isOutsideWorkHours: false,
+      };
+    }
+
+    const candidateTask = {
+      id: this._previewTaskId,
+      dueWithTime: plannedTimestamp,
+      timeEstimate: this.task?.timeEstimate || 0,
+      timeSpent: this.task?.timeSpent || 0,
+      subTaskIds: this.task?.subTaskIds || [],
+      isDone: false,
+      projectId: this.task?.projectId || '',
+      timeSpentOnDay: this.task?.timeSpentOnDay || {},
+      attachments: this.task?.attachments || [],
+      title: this.task?.title || '',
+      tagIds: this.task?.tagIds || [],
+      created: this.task?.created || 0,
+    };
+    const conflictIds = getTimeConflictTaskIds([
+      ...this._tasksWithDueTimeSorted().filter((task) => task.id !== this.task?.id),
+      candidateTask,
+    ]);
+
+    return {
+      hasOverlap: conflictIds.has(this._previewTaskId),
+      isOutsideWorkHours: isTaskOutsideWorkHours(candidateTask, this._timelineConfig()),
+    };
+  });
 
   async ngAfterViewInit(): Promise<void> {
     // Handle case when task is provided
@@ -349,7 +430,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     if (this.data.isSelectDueOnly) {
       this.close({
         date: this.selectedDate as Date,
-        time: this.selectedTime,
+        time: this._normalizedTime(),
         remindOption: this.selectedReminderCfgId,
       });
       return;
@@ -360,7 +441,12 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
     this._handleReminderRemoval();
 
-    if (this.selectedTime) {
+    // Treat genuinely malformed time the same as "no time": fall through to
+    // day-only planning rather than crashing in _scheduleWithTime (#7802).
+    const normalizedTime = this._normalizedTime();
+    const hasValidTime = !!normalizedTime && isValidSplitTime(normalizedTime);
+
+    if (hasValidTime) {
       this._scheduleWithTime();
     } else if (
       this.data.task &&
@@ -405,16 +491,17 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   }
 
   private _scheduleWithTime(): void {
-    // Only schedule if task is provided
-    if (!this.data.task) {
+    // Only schedule if task is provided and time is valid (submit() pre-validates;
+    // belt-and-braces guard against direct callers / malformed paste — see #7802).
+    const normalizedTime = this._normalizedTime();
+    if (!this.data.task || !normalizedTime || !isValidSplitTime(normalizedTime)) {
       return;
     }
 
     const task = this.data.task;
     const newDate = new Date(
-      getDateTimeFromClockString(this.selectedTime as string, this.selectedDate as Date),
+      getDateTimeFromClockString(normalizedTime, this.selectedDate as Date),
     );
-
     this._taskService.scheduleTask(
       task,
       newDate.getTime(),

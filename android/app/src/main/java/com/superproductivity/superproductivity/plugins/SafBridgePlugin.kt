@@ -2,7 +2,9 @@ package com.superproductivity.superproductivity.plugins
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Process
 import android.provider.DocumentsContract
 import androidx.activity.result.ActivityResult
 import androidx.documentfile.provider.DocumentFile
@@ -40,18 +42,26 @@ class SafBridgePlugin : Plugin() {
     @ActivityCallback
     private fun handleFolderSelectionResult(call: PluginCall, result: ActivityResult) {
         if (result.resultCode == Activity.RESULT_OK) {
-            val uri = result.data?.data
+            val resultData = result.data
+            val uri = resultData?.data
             if (uri != null) {
-                // Take persistable permission
+                // Use only the flags that were actually granted by the result intent.
+                // Applying flags not present in the result throws SecurityException on some devices.
+                // resultData is Intent? but uri != null proves resultData is non-null here;
+                // Kotlin cannot infer this transitively, so !! is required and safe.
+                val grantedFlags = resultData!!.flags and
+                        (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 try {
-                    val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                    context.contentResolver.takePersistableUriPermission(uri, grantedFlags)
                 } catch (e: SecurityException) {
-                    // Some devices/Android versions fail to persist SAF permission
-                    android.util.Log.w("SafBridgePlugin", "Failed to persist URI permission: ${e.message}")
-                    call.reject("Failed to persist folder permission: ${e.message}")
-                    return
+                    // Some devices/OEM ROMs fail to persist SAF permission even when
+                    // FLAG_GRANT_PERSISTABLE_URI_PERMISSION was requested. Fall through and
+                    // still return the URI — it will work for this session even if it can't
+                    // be persisted across reboots (user will need to re-select next launch).
+                    android.util.Log.w(
+                        "SafBridgePlugin",
+                        "Could not persist URI permission (session-only access): ${e.message}",
+                    )
                 }
 
                 val ret = JSObject()
@@ -208,8 +218,19 @@ class SafBridgePlugin : Plugin() {
 
         try {
             val uri = Uri.parse(uriString)
-            val persistedUris = context.contentResolver.persistedUriPermissions
-            val hasPermission = persistedUris.any { it.uri == uri && it.isReadPermission && it.isWritePermission }
+            // Check both persistent grants (survive reboots) and temporary session grants
+            // (active for current app session only). This is required to support devices/OEM
+            // ROMs where takePersistableUriPermission throws SecurityException — on those
+            // devices the session grant is still valid even though it could not be persisted.
+            val pid = Process.myPid()
+            val uid = Process.myUid()
+            val canRead = context.checkUriPermission(
+                uri, pid, uid, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            ) == PackageManager.PERMISSION_GRANTED
+            val canWrite = context.checkUriPermission(
+                uri, pid, uid, Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            ) == PackageManager.PERMISSION_GRANTED
+            val hasPermission = canRead && canWrite
 
             val ret = JSObject()
             ret.put("hasPermission", hasPermission)

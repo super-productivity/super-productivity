@@ -11,6 +11,7 @@ import {
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
+  MatDialogState,
   MatDialogTitle,
 } from '@angular/material/dialog';
 import { Task, TaskWithReminderData } from '../task.model';
@@ -36,6 +37,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { DateService } from '../../../core/date/date.service';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
@@ -72,6 +74,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private _reminderService = inject(ReminderService);
+  private _dateService = inject(DateService);
   data = inject<{
     reminders: TaskWithReminderData[];
   }>(MAT_DIALOG_DATA);
@@ -127,10 +130,13 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _subs: Subscription = new Subscription();
   // Track dismissed reminder IDs to prevent stale data from worker re-triggering them
   private _dismissedReminderIds = new Set<string>();
+  // Stored separately so it can be cancelled eagerly when the dialog begins closing,
+  // preventing race conditions where a worker tick updates a mid-animation dialog.
+  private _onRemindersActiveSub: Subscription = Subscription.EMPTY;
 
   constructor() {
-    this._subs.add(
-      this._reminderService.onRemindersActive$.subscribe((reminders) => {
+    this._onRemindersActiveSub = this._reminderService.onRemindersActive$.subscribe(
+      (reminders) => {
         // Filter out reminders that were already dismissed in this dialog session
         const filtered = reminders.filter((r) => !this._dismissedReminderIds.has(r.id));
         if (filtered.length > 0) {
@@ -144,14 +150,26 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         } else {
           this._close();
         }
-      }),
+      },
     );
+    this._subs.add(this._onRemindersActiveSub);
     this._subs.add(
       this.isMultiple$.subscribe((isMultiple) => (this.isMultiple = isMultiple)),
     );
   }
 
   ngOnDestroy(): void {
+    // Clear any deadline reminders that were shown but not explicitly handled
+    // (e.g. user closed via ESC/backdrop). Without this, the reminder worker
+    // re-detects the past-due deadlineRemindAt every 10s and the dialog reopens
+    // indefinitely. Explicit user actions add the task to _dismissedReminderIds,
+    // so this only fires for genuinely unhandled reminders. The deadline date
+    // itself is preserved — only the reminder timestamp is cleared.
+    this._deadlineReminderTaskIds.forEach((taskId) => {
+      if (!this._dismissedReminderIds.has(taskId)) {
+        this._store.dispatch(TaskSharedActions.clearDeadlineReminder({ taskId }));
+      }
+    });
     this._subs.unsubscribe();
   }
 
@@ -159,6 +177,8 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: [task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         parentTaskMap: {
           [task.id]: task.parentId,
         },
@@ -252,6 +272,10 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
             this._removeTaskFromList(task.id);
           }
           if (isCloseAfter) {
+            // If edit was cancelled (wasEdited false), the task stays out of
+            // _dismissedReminderIds, so ngOnDestroy clears deadlineRemindAt —
+            // same treatment as ESC. Intentional: prevents the worker from
+            // re-firing the past-due reminder every 10s.
             this._close();
           }
         }),
@@ -301,6 +325,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
           if (task.isDeadlineReminder) {
             this._clearDeadlineReminder(task);
           }
+          this._dismissedReminderIds.add(task.id);
           this._finalizeBulkAction();
         }
       }),
@@ -314,6 +339,8 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: selectedTasks.map((t) => t.id),
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         parentTaskMap: selectedTasks.reduce((acc, next: Task) => {
           return { ...acc, [next.id as string]: next.parentId };
         }, {}),
@@ -326,6 +353,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       .filter((t) => t.isDeadlineReminder)
       .forEach((t) => this._clearDeadlineReminder(t));
 
+    selectedTasks.forEach((t) => this._dismissedReminderIds.add(t.id));
     this._finalizeBulkAction();
   }
 
@@ -393,6 +421,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       if (task.isDeadlineReminder) {
         this._clearDeadlineReminder(task);
       }
+      this._dismissedReminderIds.add(task.id);
     });
     this._finalizeBulkAction();
   }
@@ -406,6 +435,12 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   }
 
   private _close(): void {
+    if (this._matDialogRef.getState() !== MatDialogState.OPEN) {
+      return;
+    }
+    // Stop listening for new reminders immediately so a worker tick during the
+    // close animation cannot update the view while it is being torn down.
+    this._onRemindersActiveSub.unsubscribe();
     this._menuTriggers().forEach((trigger) => {
       trigger.closeMenu();
     });

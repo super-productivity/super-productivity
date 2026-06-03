@@ -3,6 +3,8 @@ PODS:
     - CapacitorCordova
   - CapacitorApp (7.1.2):
     - Capacitor
+  - CapacitorBrowser (7.0.4):
+    - Capacitor
   - CapacitorCordova (7.6.0)
   - CapacitorFilesystem (7.1.8):
     - Capacitor
@@ -24,6 +26,7 @@ PODS:
 DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorApp (from `../../node_modules/@capacitor/app`)"
+  - "CapacitorBrowser (from `../../node_modules/@capacitor/browser`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorFilesystem (from `../../node_modules/@capacitor/filesystem`)"
   - "CapacitorKeyboard (from `../../node_modules/@capacitor/keyboard`)"
@@ -42,6 +45,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorApp:
     :path: "../../node_modules/@capacitor/app"
+  CapacitorBrowser:
+    :path: "../../node_modules/@capacitor/browser"
   CapacitorCordova:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorFilesystem:
@@ -62,6 +67,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Capacitor: 6e644e9e3369368ac601c77a0fad57f34b78aaa6
   CapacitorApp: f01a913211780e0718dae9750442c3e23f96e106
+  CapacitorBrowser: affdd32ab6a1822942eb55095b3c5ecf3f656a9d
   CapacitorCordova: f163aa2e84b79efc54d6a75b305bc7e05fb80c5d
   CapacitorFilesystem: c63fc54df41e5a6761785a7f3c49dc696c22e296
   CapacitorKeyboard: 2fa1e17aec16aef8b01adbc20e8fc295db46104d
@@ -72,6 +78,6 @@ SPEC CHECKSUMS:
   CapawesomeCapacitorBackgroundTask: e17ea2608e9bdd14889d8eba2d793ff9c337db6c
   IONFilesystemLib: 21a63377696b2d8fab5632ecfb7d2ac67bddb68a
 
-PODFILE CHECKSUM: 1a75bbacc3e8b45101e240dc2d00b00a87b98534
+PODFILE CHECKSUM: 4409a51ed03f4ba0e523ba9e063dae69c327d22a
 
 COCOAPODS: 1.16.2

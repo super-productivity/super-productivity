@@ -40,8 +40,9 @@
     <ng-content> </ng-content>
 
     @if (isShowChecklistToggle() && isMarkdownFormattingEnabled()) {
+      <!--  -->
       <button
-        [matTooltip]="T.G.ADD_CHECKLIST_ITEM | translate"
+        [matTooltip]="'Add checklist item'"
         (mousedown)="$event.preventDefault()"
         (click)="toggleChecklistMode($event)"
         mat-icon-button
@@ -50,7 +51,7 @@
       </button>
     }
     <button
-      [matTooltip]="T.G.OPEN_FULLSCREEN | translate"
+      [matTooltip]="'Open in fullscreen'"
       (mousedown)="$event.preventDefault()"
       (click)="openFullScreen()"
       mat-icon-button

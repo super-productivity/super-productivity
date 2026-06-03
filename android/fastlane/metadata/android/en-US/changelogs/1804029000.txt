@@ -1,0 +1,2 @@
+- fix snap build
+- bump runner to macos-26 for iOS 26 SDK

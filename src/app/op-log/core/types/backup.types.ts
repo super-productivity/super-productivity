@@ -21,6 +21,7 @@ export interface AppStateSnapshot {
   pluginUserData: unknown;
   pluginMetadata: unknown;
   reminders: unknown;
+  section: unknown;
   archiveYoung: ArchiveModel;
   archiveOld: ArchiveModel;
 }

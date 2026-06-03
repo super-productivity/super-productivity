@@ -1,14 +1,13 @@
 import { Injectable, signal, inject, effect } from '@angular/core';
-import { Observable, animationFrameScheduler, combineLatest } from 'rxjs';
+import { Observable, animationFrameScheduler, combineLatest, of } from 'rxjs';
 import { map, observeOn, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { selectAllProjects } from '../project/store/project.selectors';
-import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { selectAllTags } from './../tag/store/tag.reducer';
 import { Store } from '@ngrx/store';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { computed } from '@angular/core';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { getWeekRange } from '../../util/get-week-range';
@@ -18,6 +17,7 @@ import { ProjectService } from '../project/project.service';
 import { TagService } from '../tag/tag.service';
 import {
   SortOption,
+  CustomizerContextState,
   DEFAULT_OPTIONS,
   FilterOption,
   GroupOption,
@@ -27,6 +27,7 @@ import {
   FILTER_SCHEDULE,
   SORT_ORDER,
   FILTER_COMMON,
+  OPTIONS,
 } from './types';
 import { DateAdapter } from '@angular/material/core';
 import { lsGetJSON, lsSetJSON } from '../../util/ls-util';
@@ -34,6 +35,10 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
+
+const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
+  (opt) => opt.type !== GROUP_OPTION_TYPE.project,
+);
 
 @Injectable({ providedIn: 'root' })
 export class TaskViewCustomizerService {
@@ -47,15 +52,10 @@ export class TaskViewCustomizerService {
   private _collator: Intl.Collator | null = null;
   private _collatorLocale: string | null = null;
 
-  public selectedSort = signal<SortOption>(
-    lsGetJSON<SortOption>(LS.TASK_VIEW_CUSTOMIZER_SORT, DEFAULT_OPTIONS.sort),
-  );
-  public selectedGroup = signal<GroupOption>(
-    lsGetJSON<GroupOption>(LS.TASK_VIEW_CUSTOMIZER_GROUP, DEFAULT_OPTIONS.group),
-  );
-  public selectedFilter = signal<FilterOption>(
-    lsGetJSON<FilterOption>(LS.TASK_VIEW_CUSTOMIZER_FILTER, DEFAULT_OPTIONS.filter),
-  );
+  public selectedSort = signal<SortOption>(DEFAULT_OPTIONS.sort);
+  public selectedGroup = signal<GroupOption>(DEFAULT_OPTIONS.group);
+  public selectedFilter = signal<FilterOption>(DEFAULT_OPTIONS.filter);
+  public collapsedGroupIds = signal<string[]>([]);
 
   isCustomized = computed(() => {
     return [
@@ -65,21 +65,59 @@ export class TaskViewCustomizerService {
     ].some((x) => x !== null);
   });
 
+  private _isInProject = toSignal(this._workContextService.isActiveWorkContextProject$, {
+    initialValue: false,
+  });
+
+  // "Group By: Project" would collapse into a single group inside a single-project
+  // view, so offer it only for tag contexts. See issue #7279.
+  availableGroupOptions = computed(() =>
+    this._isInProject() ? GROUP_OPTIONS_NO_PROJECT : OPTIONS.group.list,
+  );
+
+  private _stateByContext: Record<string, CustomizerContextState> = lsGetJSON<
+    Record<string, CustomizerContextState>
+  >(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, {});
+  private _currentContextKey: string | null = null;
+
   constructor() {
     this._initProjects();
     this._initTags();
 
-    effect(() => {
-      lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_SORT, this.selectedSort());
-    });
+    // Load stored customizations for the active work context, and reset to
+    // defaults when switching contexts so filters don't leak across them.
+    this._workContextService.activeWorkContextTypeAndId$
+      .pipe(takeUntilDestroyed())
+      .subscribe(({ activeId, activeType }) => {
+        this._currentContextKey = `${activeType}:${activeId}`;
+        const stored = this._stateByContext[this._currentContextKey];
+        this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+        this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
+        this.selectedFilter.set(stored?.filter ?? DEFAULT_OPTIONS.filter);
+        this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
+      });
 
     effect(() => {
-      lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_GROUP, this.selectedGroup());
+      const sort = this.selectedSort();
+      const group = this.selectedGroup();
+      const filter = this.selectedFilter();
+      const collapsedGroupIds = this.collapsedGroupIds();
+      if (!this._currentContextKey) return;
+      this._stateByContext = {
+        ...this._stateByContext,
+        [this._currentContextKey]: { sort, group, filter, collapsedGroupIds },
+      };
+      lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, this._stateByContext);
     });
+  }
 
-    effect(() => {
-      lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_FILTER, this.selectedFilter());
-    });
+  toggleGroupExpansion(groupId: string): void {
+    const current = this.collapsedGroupIds();
+    if (current.includes(groupId)) {
+      this.collapsedGroupIds.set(current.filter((id) => id !== groupId));
+    } else {
+      this.collapsedGroupIds.set([...current, groupId]);
+    }
   }
 
   private _allProjects: Project[] = [];
@@ -111,27 +149,30 @@ export class TaskViewCustomizerService {
     }
   }
 
+  private _sanitizeGroupForContext(
+    stored: GroupOption | undefined,
+    activeType: WorkContextType,
+  ): GroupOption {
+    if (!stored) return DEFAULT_OPTIONS.group;
+    if (
+      activeType === WorkContextType.PROJECT &&
+      stored.type === GROUP_OPTION_TYPE.project
+    ) {
+      return DEFAULT_OPTIONS.group;
+    }
+    return stored;
+  }
+
   customizeUndoneTasks(undoneTasks$: Observable<TaskWithSubTasks[]>): Observable<{
     list: TaskWithSubTasks[];
     grouped?: Record<string, TaskWithSubTasks[]>;
   }> {
-    const group$ = toObservable(this.selectedGroup);
-    const tasks$ = group$.pipe(
-      switchMap((group) => {
-        const isCrossContext =
-          group.type === GROUP_OPTION_TYPE.project ||
-          group.type === GROUP_OPTION_TYPE.tag;
-        return isCrossContext ? this._allUndoneTasksWithSubTasks$() : undoneTasks$;
-      }),
-    );
-
     return combineLatest([
-      tasks$,
+      undoneTasks$,
       toObservable(this.selectedSort),
-      group$,
+      toObservable(this.selectedGroup),
       toObservable(this.selectedFilter),
     ]).pipe(
-      observeOn(animationFrameScheduler),
       map(([tasks, sort, group, filter]) => {
         const normalizedFilterVal = filter.preset?.trim();
         const filterValueToUse = normalizedFilterVal ?? '';
@@ -141,7 +182,7 @@ export class TaskViewCustomizerService {
         const isDefaultGroup = !group.type;
 
         if (isDefaultFilter && isDefaultSort && isDefaultGroup) {
-          return { list: tasks };
+          return { result: { list: tasks }, isDefault: true };
         }
 
         const filtered = isDefaultFilter
@@ -154,29 +195,20 @@ export class TaskViewCustomizerService {
           ? this.applyGrouping(sorted, group.type)
           : undefined;
 
-        return { list: sorted, grouped };
+        return { result: { list: sorted, grouped }, isDefault: false };
       }),
-    );
-  }
-
-  private _allUndoneTasksWithSubTasks$(): Observable<TaskWithSubTasks[]> {
-    return this.store.select(selectAllTasksWithSubTasks).pipe(
-      map((tasks) => {
-        const hiddenProjectIds = new Set(
-          this._allProjects
-            .filter((p) => p.isHiddenFromMenu || p.isArchived)
-            .map((p) => p.id),
-        );
-        const backlogTaskIds = new Set(
-          this._allProjects.flatMap((p) => p.backlogTaskIds || []),
-        );
-        return tasks.filter(
-          (task) =>
-            !task.isDone &&
-            (!task.projectId || !hiddenProjectIds.has(task.projectId)) &&
-            !backlogTaskIds.has(task.id),
-        );
-      }),
+      // Emit the default (uncustomized) list synchronously, but keep the
+      // customized path on the animation-frame scheduler. The customized branch
+      // does heavier sort/group/filter work and is driven by the customizer
+      // signals (`toObservable(selectedSort/Group/Filter)`); deferring it
+      // batches the rapid emissions that fire when switching work context (the
+      // original reason this frame-defer was added, commit fddedf3fa6). The
+      // default branch is store-driven only — emitting it on the same tick drops
+      // the extra frame between a drag-drop dispatch and the list re-render that
+      // otherwise surfaces as a snap-back flicker on drop.
+      switchMap(({ result, isDefault }) =>
+        isDefault ? of(result) : of(result).pipe(observeOn(animationFrameScheduler)),
+      ),
     );
   }
 

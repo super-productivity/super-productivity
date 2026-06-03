@@ -1,28 +1,106 @@
-<h1 mat-dialog-title>{{ T.F.D_RATE.TITLE | translate }}</h1>
+@if (view() === 'main') {
+  <h1 mat-dialog-title>{{ T.F.D_RATE.TITLE | translate }}</h1>
 
-<mat-dialog-content>
-  <div style="max-width: 400px">
+  <mat-dialog-content>
     <p [innerHTML]="T.F.D_RATE.TXT | translate"></p>
 
-    <p>
+    <div class="action-list">
       <a
-        mat-button
-        color="primary"
+        class="action-item action-item--primary"
+        [href]="cta.url"
         target="_blank"
-        href="https://github.com/super-productivity/super-productivity/blob/master/docs/how-to-rate.md"
-        ><mat-icon>open_in_new</mat-icon>
-        <strong>{{ T.F.D_RATE.A_HOW | translate }}</strong></a
+        rel="noopener noreferrer"
+        (click)="close('rate')"
       >
-    </p>
-  </div>
-</mat-dialog-content>
+        <mat-icon class="action-item-icon">star</mat-icon>
+        <span class="action-item-text">{{ cta.labelKey | translate }}</span>
+        <mat-icon class="action-item-trailing">open_in_new</mat-icon>
+      </a>
+      <button
+        type="button"
+        class="action-item"
+        (click)="showFeedback()"
+      >
+        <mat-icon class="action-item-icon">chat_bubble_outline</mat-icon>
+        <span class="action-item-text">{{ T.F.D_RATE.BTN_FEEDBACK | translate }}</span>
+        <mat-icon class="action-item-trailing">arrow_forward</mat-icon>
+      </button>
+    </div>
+  </mat-dialog-content>
 
-<mat-dialog-actions align="end">
-  <button
-    [mat-dialog-close]="true"
-    mat-stroked-button
-    color="primary"
-  >
-    {{ T.F.D_RATE.BTN_DONT_BOTHER | translate }}
-  </button>
-</mat-dialog-actions>
+  <mat-dialog-actions class="footer-actions">
+    <button
+      mat-button
+      type="button"
+      class="opt-out-link"
+      (click)="close('never')"
+    >
+      {{ T.F.D_RATE.BTN_DONT_BOTHER | translate }}
+    </button>
+    <span class="spacer"></span>
+    <button
+      mat-button
+      type="button"
+      (click)="close('later')"
+    >
+      {{ T.F.D_RATE.BTN_LATER | translate }}
+    </button>
+  </mat-dialog-actions>
+} @else {
+  <h1 mat-dialog-title>{{ T.F.D_RATE.FEEDBACK_TITLE | translate }}</h1>
+
+  <mat-dialog-content>
+    <div class="action-list">
+      <a
+        class="action-item"
+        [href]="discussionsUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        (click)="close('feedback')"
+      >
+        <mat-icon class="action-item-icon">forum</mat-icon>
+        <span class="action-item-text">
+          <strong>{{ T.F.D_RATE.FEEDBACK_PUBLIC | translate }}</strong>
+          <small>{{ T.F.D_RATE.FEEDBACK_PUBLIC_DESC | translate }}</small>
+        </span>
+        <mat-icon class="action-item-trailing">open_in_new</mat-icon>
+      </a>
+      <a
+        class="action-item"
+        [href]="mailtoUrl"
+        (click)="close('feedback')"
+      >
+        <mat-icon class="action-item-icon">mail</mat-icon>
+        <span class="action-item-text">
+          <strong>{{ T.F.D_RATE.FEEDBACK_PRIVATE | translate }}</strong>
+          <small>{{ T.F.D_RATE.FEEDBACK_PRIVATE_DESC | translate }}</small>
+        </span>
+      </a>
+      <a
+        class="action-item"
+        [href]="contributingUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        (click)="close('feedback')"
+      >
+        <mat-icon class="action-item-icon">volunteer_activism</mat-icon>
+        <span class="action-item-text">
+          <strong>{{ T.F.D_RATE.FEEDBACK_CONTRIBUTE | translate }}</strong>
+          <small>{{ T.F.D_RATE.FEEDBACK_CONTRIBUTE_DESC | translate }}</small>
+        </span>
+        <mat-icon class="action-item-trailing">open_in_new</mat-icon>
+      </a>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="start">
+    <button
+      mat-button
+      type="button"
+      (click)="showMain()"
+    >
+      <mat-icon>arrow_back</mat-icon>
+      {{ T.F.D_RATE.FEEDBACK_BACK | translate }}
+    </button>
+  </mat-dialog-actions>
+}

@@ -220,9 +220,15 @@ describe('Race Condition Integration Tests', () => {
       let fastCompleted = false;
       let slowStarted = false;
 
+      // Resolves the moment the slow callback actually begins executing, so the
+      // test never relies on a fixed delay being long enough under load.
+      let signalSlowStarted!: () => void;
+      const slowStartedPromise = new Promise<void>((r) => (signalSlowStarted = r));
+
       // First request holds the lock for a while
       const slowRequest = lockService.request(lockName, async () => {
         slowStarted = true;
+        signalSlowStarted();
         await new Promise((r) => setTimeout(r, 100));
       });
 
@@ -232,11 +238,12 @@ describe('Race Condition Integration Tests', () => {
       });
 
       // Wait for slow to start
-      await new Promise((r) => setTimeout(r, 20));
+      await slowStartedPromise;
       expect(slowStarted).toBe(true);
 
-      // Fast should not have completed yet
-      // (it's waiting for the lock)
+      // Fast must not have completed yet: it is queued behind the lock the slow
+      // request still holds.
+      expect(fastCompleted).toBe(false);
 
       // Wait for both to complete
       await Promise.all([slowRequest, fastRequest]);

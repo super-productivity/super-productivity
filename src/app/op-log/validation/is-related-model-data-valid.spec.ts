@@ -1,6 +1,7 @@
 import { AppDataComplete } from '../model/model-config';
 import { OpLog } from '../../core/log';
 import { TODAY_TAG } from '../../features/tag/tag.const';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 
 describe('isRelatedModelDataValid', () => {
   let isRelatedModelDataValid: any;
@@ -13,6 +14,7 @@ describe('isRelatedModelDataValid', () => {
     spyOn(OpLog, 'warn');
     spyOn(OpLog, 'err');
     spyOn(OpLog, 'critical');
+    spyOn(OP_LOG_SYNC_LOGGER, 'log');
     /* eslint-disable @typescript-eslint/no-require-imports */
     // Reset modules to allow re-importing with mocks
     // @ts-ignore
@@ -56,6 +58,83 @@ describe('isRelatedModelDataValid', () => {
 
     const result = isRelatedModelDataValid(partialData as AppDataComplete);
     expect(result).toBe(false);
+  });
+
+  it('should log validity error metadata without raw app data', () => {
+    const privateProjectTitle = 'Private Project Title';
+    const data: any = {
+      project: {
+        ids: ['p1'],
+        entities: {
+          p1: {
+            id: 'p1',
+            title: privateProjectTitle,
+            taskIds: ['missing-task'],
+            backlogTaskIds: [],
+            noteIds: [],
+          },
+        },
+      },
+      tag: { ids: [], entities: {} },
+      task: { ids: [], entities: {} },
+      taskRepeatCfg: { ids: [], entities: {} },
+      archiveYoung: { task: { ids: [], entities: {} } },
+      archiveOld: { task: { ids: [], entities: {} } },
+      note: { ids: [], entities: {}, todayOrder: [] },
+      issueProvider: { ids: [], entities: {} },
+      reminders: [],
+      menuTree: { projectTree: [], tagTree: [] },
+    };
+
+    const result = isRelatedModelDataValid(data as AppDataComplete);
+
+    expect(result).toBe(false);
+    expect(OP_LOG_SYNC_LOGGER.log).toHaveBeenCalledWith(
+      '[is-related-model-data-valid] Validity error info',
+      jasmine.objectContaining({
+        error: 'Missing task data for project',
+        tid: 'missing-task',
+        projectId: 'p1',
+      }),
+    );
+    expect(
+      JSON.stringify((OP_LOG_SYNC_LOGGER.log as jasmine.Spy).calls.allArgs()),
+    ).not.toContain(privateProjectTitle);
+  });
+
+  it('should not log raw invalid menu tree node kinds', () => {
+    const privateNodeKind = 'Private Invalid Node Kind';
+    const data: any = {
+      project: { ids: [], entities: {} },
+      tag: { ids: [], entities: {} },
+      task: { ids: [], entities: {} },
+      taskRepeatCfg: { ids: [], entities: {} },
+      archiveYoung: { task: { ids: [], entities: {} } },
+      archiveOld: { task: { ids: [], entities: {} } },
+      note: { ids: [], entities: {}, todayOrder: [] },
+      issueProvider: { ids: [], entities: {} },
+      reminders: [],
+      menuTree: {
+        projectTree: [{ id: 'tree-node-id', k: privateNodeKind }],
+        tagTree: [],
+      },
+    };
+
+    const result = isRelatedModelDataValid(data as AppDataComplete);
+
+    expect(result).toBe(false);
+    expect(OP_LOG_SYNC_LOGGER.log).toHaveBeenCalledWith(
+      '[is-related-model-data-valid] Validity error info',
+      jasmine.objectContaining({
+        error: 'Invalid node kind in projectTree',
+        treeType: 'projectTree',
+        id: 'tree-node-id',
+        nodeKind: 'unknown',
+      }),
+    );
+    expect(
+      JSON.stringify((OP_LOG_SYNC_LOGGER.log as jasmine.Spy).calls.allArgs()),
+    ).not.toContain(privateNodeKind);
   });
 
   it('should fail validation when task has non-existent repeatCfgId', () => {

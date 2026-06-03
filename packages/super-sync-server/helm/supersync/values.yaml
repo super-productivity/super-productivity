@@ -38,6 +38,16 @@ supersync:
   cors:
     # -- Comma-separated list of allowed CORS origins
     origins: "https://app.super-productivity.com"
+  cleanup:
+    # -- Max old operation ids selected/deleted for one user in a cleanup pass.
+    oldOpsDeleteBatchSize: 5000
+    # -- Max old operations deleted across all users in one cleanup pass.
+    oldOpsMaxDeletedPerRun: 25000
+  batchUpload:
+    # -- Enable the batched upload implementation. Requires payloadBytesBackfillComplete=true.
+    enabled: false
+    # -- Set only after running `npm run migrate-payload-bytes` to completion.
+    payloadBytesBackfillComplete: false
   webauthn:
     # -- WebAuthn relying party display name
     rpName: "Super Productivity Sync"
@@ -171,12 +181,15 @@ service:
   port: 80
 
 # -- Resource requests and limits for the SuperSync container
+# Snapshot upload/replay can hold decompressed request data plus replay state
+# near MAX_SNAPSHOT_DECOMPRESSED_BYTES and MAX_REPLAY_STATE_SIZE_BYTES; the
+# image sets NODE_OPTIONS=--max-old-space-size=896 for a 1Gi memory limit.
 resources:
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 512Mi
   limits:
-    memory: 256Mi
+    memory: 1Gi
 
 # -- Horizontal Pod Autoscaler configuration
 autoscaling:

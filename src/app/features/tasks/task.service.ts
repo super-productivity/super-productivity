@@ -104,6 +104,7 @@ import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
+import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 
 @Injectable({
   providedIn: 'root',
@@ -411,6 +412,11 @@ export class TaskService {
         workContextType,
         isAddToBacklog,
         isAddToBottom,
+        ...getDeadlineAutoPlanFields(
+          this._dateService,
+          task.deadlineDay,
+          task.deadlineWithTime,
+        ),
       }),
     );
     return task && task.id;
@@ -435,7 +441,13 @@ export class TaskService {
   }
 
   addToToday(task: TaskWithSubTasks): void {
-    this._store.dispatch(TaskSharedActions.planTasksForToday({ taskIds: [task.id] }));
+    this._store.dispatch(
+      TaskSharedActions.planTasksForToday({
+        taskIds: [task.id],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+      }),
+    );
   }
 
   remove(task: TaskWithSubTasks): void {
@@ -757,17 +769,29 @@ export class TaskService {
       }),
     );
 
-    this._focusNewlyCreatedTask(task.id, !task.title?.trim().length);
+    this.focusTaskById(task.id, !task.title?.trim().length);
 
     return task.id;
   }
 
-  private _focusNewlyCreatedTask(taskId: string, shouldStartEditing: boolean): void {
-    // Use double-RAF to ensure Angular has completed rendering after change detection.
-    // First RAF queues after the current frame, second RAF runs after the render.
+  /**
+   * Focus a task element by id, deferred via double-RAF so it runs after
+   * Angular renders the next frame. When `shouldStartEditing` is true and
+   * the task's title is empty at the time of focus, also enter title edit
+   * mode. Used both by newly-created tasks and by callers that want to
+   * focus an existing task (e.g. an empty sibling on Mod+Enter).
+   */
+  focusTaskById(taskId: string, shouldStartEditing: boolean): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const taskElement = document.getElementById(`t-${taskId}`);
+        // Prefer the in-panel instance when both the main list and the side
+        // detail panel render the same task (e.g. a just-created sub-task in
+        // the parent's sub-task list). Focusing the panel copy preserves the
+        // user's current context (parent stays selected) and on mobile lands
+        // on a visible input rather than the main-list copy that the panel
+        // overlays (#7120).
+        const allEls = document.querySelectorAll<HTMLElement>(`#t-${CSS.escape(taskId)}`);
+        const taskElement = allEls[allEls.length - 1];
         if (!taskElement) return;
 
         taskElement.focus();
@@ -849,31 +873,34 @@ export class TaskService {
   }
 
   async moveToArchive(tasks: TaskWithSubTasks | TaskWithSubTasks[]): Promise<void> {
-    // Add comprehensive validation and logging
     if (!tasks) {
-      console.error('[TaskService] moveToArchive called with null/undefined tasks');
+      TaskLog.err('[TaskService] moveToArchive called with null/undefined tasks');
       return;
     }
 
     if (!Array.isArray(tasks)) {
-      console.warn('[TaskService] moveToArchive converting single task to array', tasks);
+      TaskLog.warn('[TaskService] moveToArchive converting single task to array', {
+        id: tasks.id,
+      });
       tasks = [tasks];
     }
 
-    // Double-check it's an array after conversion
-    if (!Array.isArray(tasks)) {
-      console.error('[TaskService] Failed to convert tasks to array:', tasks);
-      throw new Error('moveToArchive: tasks could not be converted to array');
+    if (!tasks.length) {
+      TaskLog.log('[TaskService] No tasks to archive');
+      return;
     }
 
     TaskLog.log('[TaskService] moveToArchive called with:', {
       count: tasks.length,
-      taskIds: tasks.map((t) => t?.id || 'undefined'),
+      taskIds: tasks.map((t) => t?.id),
       tasksType: typeof tasks,
       isArray: Array.isArray(tasks),
     });
 
-    // NOTE: we only update real parents since otherwise we move sub-tasks without their parent into the archive
+    // NOTE: malformed tasks (missing/invalid ids) are dropped inside archive.service
+    // via sanitizeTasksForArchiving, which also covers writeTasksToArchiveForRemoteSync.
+    // We only update real parents here since otherwise we'd move sub-tasks without
+    // their parent into the archive.
     const subTasks = tasks.filter((t) => t?.parentId);
     const parentTasks = tasks.filter((t) => t && !t.parentId);
 
@@ -925,7 +952,13 @@ export class TaskService {
   moveToCurrentWorkContext(task: TaskWithSubTasks | Task): void {
     if (this._workContextService.activeWorkContextType === WorkContextType.TAG) {
       if (this._workContextService.activeWorkContextId === TODAY_TAG.id) {
-        this._store.dispatch(TaskSharedActions.planTasksForToday({ taskIds: [task.id] }));
+        this._store.dispatch(
+          TaskSharedActions.planTasksForToday({
+            taskIds: [task.id],
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+          }),
+        );
       } else {
         this.updateTags(task, [this._workContextService.activeWorkContextId as string]);
       }

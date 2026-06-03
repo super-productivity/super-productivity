@@ -1,13 +1,17 @@
 package com.superproductivity.superproductivity
 
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.WindowManager
 import android.webkit.JsResult
 import android.webkit.ServiceWorkerClient
 import android.webkit.ServiceWorkerController
@@ -20,14 +24,18 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.superproductivity.superproductivity.app.LaunchDecider
+import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.util.printWebViewVersion
 import com.superproductivity.superproductivity.webview.JavaScriptInterface
 import com.superproductivity.superproductivity.webview.WebHelper
 import com.superproductivity.superproductivity.webview.WebViewBlockActivity
 import com.superproductivity.superproductivity.webview.WebViewCompatibilityChecker
+import com.superproductivity.superproductivity.webview.WebViewRecovery
 import com.superproductivity.superproductivity.webview.WebViewRequestHandler
+import org.json.JSONObject
 
 
 /**
@@ -38,6 +46,7 @@ class FullscreenActivity : AppCompatActivity() {
     private lateinit var javaScriptInterface: JavaScriptInterface
     private lateinit var webView: WebView
     private lateinit var wvContainer: FrameLayout
+    private var isForegroundServiceFailureReceiverRegistered = false
     private var webViewRequestHandler = WebViewRequestHandler(this, BuildConfig.ONLINE_SERVICE_HOST)
     val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -45,12 +54,32 @@ class FullscreenActivity : AppCompatActivity() {
 //        if (BuildConfig.DEBUG) "https://test-app.super-productivity.com" else "https://app.super-productivity.com"
         "${BuildConfig.ONLINE_SERVICE_PROTOCOL}://${BuildConfig.ONLINE_SERVICE_HOST}"
 
+    private val foregroundServiceFailureReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ForegroundServiceFailure.ACTION) {
+                return
+            }
+            val service = intent.getStringExtra(ForegroundServiceFailure.EXTRA_SERVICE) ?: return
+            val reason = intent.getStringExtra(ForegroundServiceFailure.EXTRA_REASON) ?: return
+            callJSInterfaceFunctionIfExists(
+                "next",
+                "onForegroundServiceStartFailed$",
+                "{service:${JSONObject.quote(service)},reason:${JSONObject.quote(reason)}}"
+            )
+        }
+    }
+
     @Suppress("ReplaceCallWithBinaryOperator")
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.v("TW", "FullScreenActivity: onCreate")
         super.onCreate(savedInstanceState)
 
-        val compatibility = WebViewCompatibilityChecker.evaluate(this)
+        val compatibility = try {
+            WebViewCompatibilityChecker.evaluate(this)
+        } catch (e: Throwable) {
+            showWebViewInitFailureOrThrow("WebView compatibility check failed", e)
+            return
+        }
         if (compatibility.isBlocked) {
             WebViewBlockActivity.present(this, compatibility)
             finish()
@@ -72,7 +101,19 @@ class FullscreenActivity : AppCompatActivity() {
             return
         }
 
-        initWebView()
+        if (!initWebView()) {
+            recoverOrShowWebViewInitFailure(
+                message = "Failed to instantiate WebView",
+                error = null,
+                compatibility = compatibility,
+            )
+            return
+        }
+
+        // We made it past the pre-flight version check and the WebView is alive.
+        // Persist the detected version so a transient mis-read on a later launch
+        // can't lock the user out, and clear any prior user override if healthy.
+        WebViewCompatibilityChecker.recordSuccessfulLoad(this, compatibility.majorVersion)
 
         // FOR TESTING HTML INPUTS QUICKLY
 ////        webView = (application as App).wv
@@ -87,6 +128,11 @@ class FullscreenActivity : AppCompatActivity() {
         setContentView(R.layout.activity_fullscreen)
         wvContainer = findViewById(R.id.webview_container)
         wvContainer.addView(webView)
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            foregroundServiceFailureReceiver,
+            IntentFilter(ForegroundServiceFailure.ACTION)
+        )
+        isForegroundServiceFailureReceiverRegistered = true
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else {
@@ -118,14 +164,18 @@ class FullscreenActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
         // Save scoped storage permission on Android 10+
         storageHelper.onSaveInstanceState(outState)
-        webView.saveState(outState)
+        if (::webView.isInitialized) {
+            webView.saveState(outState)
+        }
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         // Restore scoped storage permission on Android 10+
         super.onRestoreInstanceState(savedInstanceState)
         storageHelper.onRestoreInstanceState(savedInstanceState)
-        webView.restoreState(savedInstanceState);
+        if (::webView.isInitialized) {
+            webView.restoreState(savedInstanceState)
+        }
     }
 
     override fun onPause() {
@@ -151,86 +201,193 @@ class FullscreenActivity : AppCompatActivity() {
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
-    private fun initWebView() {
-        webView = WebHelper().instanceView(this)
-        if (BuildConfig.DEBUG) {
-            Toast.makeText(this, "DEBUG: $appUrl", Toast.LENGTH_SHORT).show()
+    private fun initWebView(): Boolean {
+        try {
+            webView = WebHelper().instanceView(this)
+            if (BuildConfig.DEBUG) {
+                Toast.makeText(this, "DEBUG: $appUrl", Toast.LENGTH_SHORT).show()
 //            webView.clearCache(true)
 //            webView.clearHistory()
-            WebView.setWebContentsDebuggingEnabled(true); // necessary to enable chrome://inspect of webviews on physical remote Android devices, but not for AVD emulator, as the latter automatically enables debug build features
-        }
-        printWebViewVersion(webView)
-
-        webView.loadUrl(appUrl)
-        supportActionBar?.hide()
-        javaScriptInterface = JavaScriptInterface(this, webView)
-        webView.addJavascriptInterface(javaScriptInterface, WINDOW_INTERFACE_PROPERTY)
-        if (BuildConfig.FLAVOR.equals("fdroid")) {
-            webView.addJavascriptInterface(javaScriptInterface, WINDOW_PROPERTY_F_DROID)
-            // not ready in time, that's why we create a second JS interface just to fill the prop
-            // callJavaScriptFunction("window.$WINDOW_PROPERTY_F_DROID=true")
-        }
-
-        val swController = ServiceWorkerController.getInstance()
-        swController.setServiceWorkerClient(@RequiresApi(Build.VERSION_CODES.N)
-        object : ServiceWorkerClient() {
-            override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? {
-                return webViewRequestHandler.interceptWebRequest(request)
+                WebView.setWebContentsDebuggingEnabled(true); // necessary to enable chrome://inspect of webviews on physical remote Android devices, but not for AVD emulator, as the latter automatically enables debug build features
             }
-        })
+            printWebViewVersion(webView)
 
-        webView.webViewClient = object : WebViewClient() {
-            @Deprecated("Deprecated in Java")
-            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-                return webViewRequestHandler.handleUrlLoading(view, url)
+            webView.loadUrl(appUrl)
+            supportActionBar?.hide()
+            javaScriptInterface = JavaScriptInterface(this, webView)
+            webView.addJavascriptInterface(javaScriptInterface, WINDOW_INTERFACE_PROPERTY)
+            if (BuildConfig.FLAVOR.equals("fdroid")) {
+                webView.addJavascriptInterface(javaScriptInterface, WINDOW_PROPERTY_F_DROID)
+                // not ready in time, that's why we create a second JS interface just to fill the prop
+                // callJavaScriptFunction("window.$WINDOW_PROPERTY_F_DROID=true")
             }
 
-            override fun shouldInterceptRequest(
-                view: WebView?,
-                request: WebResourceRequest?
-            ): WebResourceResponse? {
-                return webViewRequestHandler.interceptWebRequest(request)
-            }
-        }
+            val swController = ServiceWorkerController.getInstance()
+            swController.setServiceWorkerClient(@RequiresApi(Build.VERSION_CODES.N)
+            object : ServiceWorkerClient() {
+                override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? {
+                    return webViewRequestHandler.interceptWebRequest(request)
+                }
+            })
 
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onJsAlert(
-                view: WebView,
-                url: String,
-                message: String,
-                result: JsResult
-            ): Boolean {
-                Log.v("TW", "onJsAlert")
-                val builder: AlertDialog.Builder = AlertDialog.Builder(this@FullscreenActivity)
-                builder.setMessage(message)
-                    .setNeutralButton("OK") { dialog, _ ->
-                        dialog.dismiss()
+            webView.webViewClient = object : WebViewClient() {
+                @Deprecated("Deprecated in Java")
+                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                    return webViewRequestHandler.handleUrlLoading(view, url)
+                }
+
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): WebResourceResponse? {
+                    return webViewRequestHandler.interceptWebRequest(request)
+                }
+            }
+
+            webView.webChromeClient = object : WebChromeClient() {
+                override fun onJsAlert(
+                    view: WebView,
+                    url: String,
+                    message: String,
+                    result: JsResult
+                ): Boolean {
+                    Log.v("TW", "onJsAlert")
+                    if (isFinishing || isDestroyed) {
+                        result.cancel()
+                        return true
                     }
-                    .create()
-                    .show()
-                result.cancel()
-                return super.onJsAlert(view, url, message, result)
-            }
+                    var handled = false
+                    try {
+                        AlertDialog.Builder(this@FullscreenActivity)
+                            .setMessage(message)
+                            .setNeutralButton(android.R.string.ok) { _, _ ->
+                                handled = true
+                                result.confirm()
+                            }
+                            .setOnDismissListener { if (!handled) result.cancel() }
+                            .create()
+                            .show()
+                    } catch (e: WindowManager.BadTokenException) {
+                        // Activity window token invalid between isFinishing check
+                        // and show() (e.g. onDestroy scheduled by the system).
+                        Log.w("TW", "onJsAlert: window token invalid", e)
+                        if (!handled) result.cancel()
+                    } catch (e: IllegalStateException) {
+                        Log.w("TW", "onJsAlert: illegal state", e)
+                        if (!handled) result.cancel()
+                    }
+                    return true
+                }
 
-            override fun onJsConfirm(
-                view: WebView,
-                url: String,
-                message: String,
-                result: JsResult
-            ): Boolean {
-                AlertDialog.Builder(this@FullscreenActivity)
-                    .setMessage(message)
-                    .setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }
-                    .setNegativeButton(android.R.string.cancel) { _, _ -> result.cancel() }
-                    .create()
-                    .show()
-                return true
+                override fun onJsConfirm(
+                    view: WebView,
+                    url: String,
+                    message: String,
+                    result: JsResult
+                ): Boolean {
+                    if (isFinishing || isDestroyed) {
+                        result.cancel()
+                        return true
+                    }
+                    var handled = false
+                    try {
+                        AlertDialog.Builder(this@FullscreenActivity)
+                            .setMessage(message)
+                            .setPositiveButton(android.R.string.ok) { _, _ ->
+                                handled = true
+                                result.confirm()
+                            }
+                            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                                handled = true
+                                result.cancel()
+                            }
+                            .setOnDismissListener { if (!handled) result.cancel() }
+                            .create()
+                            .show()
+                    } catch (e: WindowManager.BadTokenException) {
+                        Log.w("TW", "onJsConfirm: window token invalid", e)
+                        if (!handled) result.cancel()
+                    } catch (e: IllegalStateException) {
+                        Log.w("TW", "onJsConfirm: illegal state", e)
+                        if (!handled) result.cancel()
+                    }
+                    return true
+                }
             }
+        } catch (e: Throwable) {
+            if (!WebViewCompatibilityChecker.isLikelyWebViewInitFailure(e)) {
+                throw e
+            }
+            Log.e("SP-WebView", "Failed to initialize WebView", e)
+            return false
         }
+        return true
     }
+
+    private fun showWebViewInitFailureOrThrow(message: String, error: Throwable) {
+        if (!WebViewCompatibilityChecker.isLikelyWebViewInitFailure(error)) {
+            throw error
+        }
+        recoverOrShowWebViewInitFailure(message, error, null)
+    }
+
+    /**
+     * WebView init failures are usually transient, and the user's own workaround is
+     * to relaunch the app — so attempt that automatically once (via [WebViewRecovery])
+     * before surfacing the terminal block screen. [WebViewCompatibilityChecker]
+     * caps this at one relaunch per window so a genuinely broken provider still
+     * reaches the block screen instead of boot-looping. → issue #7518.
+     *
+     * No re-entry guard is needed here (unlike CapacitorMainActivity): every call
+     * site returns immediately, so this fires at most once per onCreate pass.
+     */
+    private fun recoverOrShowWebViewInitFailure(
+        message: String,
+        error: Throwable?,
+        compatibility: WebViewCompatibilityChecker.Result?,
+    ) {
+        if (WebViewCompatibilityChecker.canRetryInitFailure(this)) {
+            Log.w("SP-WebView", "$message - scheduling one-shot WebView recovery relaunch")
+            WebViewRecovery.scheduleRelaunch(this)
+            return
+        }
+        showWebViewInitFailure(message, error, compatibility)
+    }
+
+    private fun showWebViewInitFailure(
+        message: String,
+        error: Throwable? = null,
+        compatibility: WebViewCompatibilityChecker.Result? = null,
+    ) {
+        if (error == null) {
+            Log.e("SP-WebView", "$message - finishing activity")
+        } else {
+            Log.e("SP-WebView", "$message - finishing activity", error)
+        }
+        WebViewBlockActivity.present(this, webViewInitFailureResult(compatibility))
+        finish()
+    }
+
+    private fun webViewInitFailureResult(
+        compatibility: WebViewCompatibilityChecker.Result? = null,
+    ): WebViewCompatibilityChecker.Result =
+        (compatibility ?: WebViewCompatibilityChecker.Result(
+            status = WebViewCompatibilityChecker.Status.BLOCK,
+            majorVersion = null,
+            providerPackage = null,
+            providerVersionName = null,
+            source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
+        )).copy(
+            status = WebViewCompatibilityChecker.Status.BLOCK,
+            source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
+        )
 
 
     private fun callJSInterfaceFunctionIfExists(fnName: String, objectPath: String, fnParam: String = "") {
+        if (!::javaScriptInterface.isInitialized) {
+            Log.w("TW", "javaScriptInterface not initialized yet. Skipping JS call.")
+            return
+        }
         val fnFullName = "window.$WINDOW_INTERFACE_PROPERTY.$objectPath.$fnName"
         val fullObjectPath = "window.$WINDOW_INTERFACE_PROPERTY.$objectPath"
         javaScriptInterface.callJavaScriptFunction("if($fullObjectPath && $fnFullName)$fnFullName($fnParam)")
@@ -238,8 +395,8 @@ class FullscreenActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        Log.v("TW", "onBackPressed ${webView.canGoBack().toString()}")
-        if (webView.canGoBack()) {
+        if (::webView.isInitialized && webView.canGoBack()) {
+            Log.v("TW", "onBackPressed canGoBack=true")
             webView.goBack()
         } else {
             super.onBackPressed()
@@ -250,6 +407,12 @@ class FullscreenActivity : AppCompatActivity() {
         // Ensure wvContainer is initialized before removing the view
         if (::wvContainer.isInitialized) {
             wvContainer.removeView(webView)
+        }
+        if (isForegroundServiceFailureReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                foregroundServiceFailureReceiver
+            )
+            isForegroundServiceFailureReceiverRegistered = false
         }
         super.onDestroy()
     }

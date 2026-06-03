@@ -27,6 +27,9 @@ interface TaskAttachmentSelectType {
   title: string;
 }
 
+// RFC 3986 scheme: ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) followed by ":".
+const HAS_URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
 @Component({
   selector: 'dialog-edit-task-attachment',
   templateUrl: './dialog-edit-task-attachment.component.html',
@@ -81,15 +84,21 @@ export class DialogEditTaskAttachmentComponent {
       return;
     }
 
+    this.attachmentCopy.path = this.attachmentCopy.path.trim();
+
     if (
-      this.attachmentCopy.type === 'LINK' &&
+      (this.attachmentCopy.type === 'LINK' || this.attachmentCopy.type === 'IMG') &&
       this.attachmentCopy.path &&
-      // don't prepend for all valid RFC3986 URIs
-      !this.attachmentCopy.path.match(
-        /((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)/,
-      )
+      !HAS_URL_SCHEME_RE.test(this.attachmentCopy.path)
     ) {
-      this.attachmentCopy.path = 'http://' + this.attachmentCopy.path;
+      // protocol-relative "//example.com" → "http://example.com" (avoid "http:////")
+      this.attachmentCopy.path = this.attachmentCopy.path.startsWith('//')
+        ? 'http:' + this.attachmentCopy.path
+        : 'http://' + this.attachmentCopy.path;
+    }
+
+    if (!this.attachmentCopy.path) {
+      return;
     }
 
     this.close(this.attachmentCopy);
@@ -98,12 +107,24 @@ export class DialogEditTaskAttachmentComponent {
   mapTypeToLabel(type: TaskAttachmentType): string {
     switch (type) {
       case 'FILE':
-        return T.F.ATTACHMENT.DIALOG_EDIT.LABELS.LINK;
+        return T.F.ATTACHMENT.DIALOG_EDIT.LABELS.FILE;
       case 'IMG':
         return T.F.ATTACHMENT.DIALOG_EDIT.LABELS.IMG;
       case 'LINK':
       default:
         return T.F.ATTACHMENT.DIALOG_EDIT.LABELS.LINK;
+    }
+  }
+
+  mapTypeToPlaceholder(type: TaskAttachmentType): string {
+    switch (type) {
+      case 'FILE':
+        return T.F.ATTACHMENT.DIALOG_EDIT.PLACEHOLDERS.FILE;
+      case 'IMG':
+        return T.F.ATTACHMENT.DIALOG_EDIT.PLACEHOLDERS.IMG;
+      case 'LINK':
+      default:
+        return T.F.ATTACHMENT.DIALOG_EDIT.PLACEHOLDERS.LINK;
     }
   }
 

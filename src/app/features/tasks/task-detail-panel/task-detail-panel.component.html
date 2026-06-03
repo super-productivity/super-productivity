@@ -88,7 +88,7 @@
       class="input-item --estimate"
     >
       <ng-container input-title>
-        <mat-icon>timer</mat-icon>
+        <mat-icon>hourglass_empty</mat-icon>
         <span>{{ T.F.TASK.ADDITIONAL_INFO.TIME | translate }}</span>
       </ng-container>
       <ng-container input-value>
@@ -160,6 +160,16 @@
         <div class="reminder-value">
           {{ task().deadlineDay | localDateStr: '' }}
         </div>
+      }
+      @if (task().deadlineWithTime || task().deadlineDay) {
+        <button
+          mat-icon-button
+          class="quick-chip"
+          (click)="removeDeadline($event)"
+          [matTooltip]="T.F.TASK.CMP.REMOVE_DEADLINE | translate"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
       }
     </ng-container>
   </task-detail-item>
@@ -300,7 +310,7 @@
       class="input-item"
     >
       <ng-container input-title>
-        <mat-icon svgIcon="repeat"></mat-icon>
+        <mat-icon>repeat</mat-icon>
         <span>{{ T.F.TASK.ADDITIONAL_INFO.REPEAT | translate }}</span>
       </ng-container>
       <ng-container input-value>

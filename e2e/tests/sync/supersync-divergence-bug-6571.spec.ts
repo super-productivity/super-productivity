@@ -46,7 +46,61 @@ test.describe('@supersync Bug #6571: Sync divergence reproduction', () => {
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
 
-      // ─── Step 2: Client A creates 3 tasks and syncs ───
+      // ─── Step 2: Install route interception on Client B BEFORE tasks are created ───
+      // Must be installed early to catch ops that arrive via auto-sync or
+      // piggybacked ops, not just during explicit syncAndWait().
+      let intercepted = false;
+      let droppedOpCount = 0;
+
+      // Intercept sync API to drop one TASK Create op from the response.
+      // entityType/opType are NOT encrypted (only payload is).
+      // On the wire, opType uses abbreviations: CRT, UPD, DEL.
+      // Ops can arrive via GET (download) or as piggybackedOps in POST (upload response).
+      const dropOneCrtOp = (ops: any[]): any[] => {
+        let droppedOne = false;
+        return ops.filter((serverOp: any) => {
+          if (droppedOne) return true;
+          const op = serverOp.op;
+          if (op && op.entityType === 'TASK' && op.opType === 'CRT') {
+            droppedOne = true;
+            droppedOpCount++;
+            return false;
+          }
+          return true;
+        });
+      };
+
+      await clientB.page.route('**/api/sync/ops**', async (route) => {
+        if (intercepted) {
+          await route.continue();
+          return;
+        }
+
+        const response = await route.fetch();
+        const body = await response.json();
+        // Check GET response (body.ops) and POST response (body.piggybackedOps)
+        if (body.ops && Array.isArray(body.ops) && body.ops.length > 0) {
+          body.ops = dropOneCrtOp(body.ops);
+        } else if (
+          body.piggybackedOps &&
+          Array.isArray(body.piggybackedOps) &&
+          body.piggybackedOps.length > 0
+        ) {
+          body.piggybackedOps = dropOneCrtOp(body.piggybackedOps);
+        }
+
+        if (droppedOpCount > 0) {
+          intercepted = true;
+        }
+
+        await route.fulfill({
+          status: response.status(),
+          headers: response.headers(),
+          body: JSON.stringify(body),
+        });
+      });
+
+      // ─── Step 3: Client A creates 3 tasks and syncs ───
       const task1 = `Task1-${testRunId}`;
       const task2 = `Task2-${testRunId}`;
       const task3 = `Task3-${testRunId}`;
@@ -54,6 +108,9 @@ test.describe('@supersync Bug #6571: Sync divergence reproduction', () => {
       await clientA.workView.addTask(task1);
       await clientA.workView.addTask(task2);
       await clientA.workView.addTask(task3);
+
+      // Wait for IndexedDB persistence before syncing
+      await clientA.page.waitForTimeout(1000);
 
       await clientA.sync.syncAndWait();
 
@@ -63,53 +120,6 @@ test.describe('@supersync Bug #6571: Sync divergence reproduction', () => {
       await waitForTask(clientA.page, task3);
       const countA = await getTaskCount(clientA);
       expect(countA).toBe(3);
-
-      // ─── Step 3: Install route interception on Client B ───
-      // Drop TASK Create ops from the download response.
-      // entityType and opType are NOT encrypted — only payload is.
-      // This simulates ops being lost during processing (as caused by bugs 1-4).
-      let intercepted = false;
-      let droppedOpCount = 0;
-
-      // Intercept download API to drop one TASK Create op.
-      // entityType/opType are NOT encrypted (only payload is).
-      // On the wire, opType uses abbreviations: CRT, UPD, DEL.
-      await clientB.page.route('**/api/sync/ops**', async (route) => {
-        if (route.request().method() !== 'GET') {
-          await route.continue();
-          return;
-        }
-        if (intercepted) {
-          await route.continue();
-          return;
-        }
-
-        const response = await route.fetch();
-        const body = await response.json();
-
-        if (body.ops && Array.isArray(body.ops) && body.ops.length > 0) {
-          let droppedOne = false;
-          body.ops = body.ops.filter((serverOp: any) => {
-            if (droppedOne) return true;
-            const op = serverOp.op;
-            if (op && op.entityType === 'TASK' && op.opType === 'CRT') {
-              droppedOne = true;
-              droppedOpCount++;
-              return false;
-            }
-            return true;
-          });
-          if (droppedOpCount > 0) {
-            intercepted = true;
-          }
-        }
-
-        await route.fulfill({
-          status: response.status(),
-          headers: response.headers(),
-          body: JSON.stringify(body),
-        });
-      });
 
       // ─── Step 4: Client B syncs — downloads ops with one dropped ───
       await clientB.sync.syncAndWait();

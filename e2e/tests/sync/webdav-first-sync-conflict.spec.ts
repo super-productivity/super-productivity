@@ -534,4 +534,195 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     await closeContextsSafely(contextA, contextB, contextC);
   });
+
+  /**
+   * Regression test for issue #7339:
+   * "WebDAV/Dropbox conflict popup appears every minute on iOS"
+   *
+   * Reproduces the steady-state where one client uploaded a *snapshot*
+   * (not regular ops) and a second client, after downloading it, makes a
+   * local change and syncs. The file-based adapter's snapshot-replacement
+   * detection then fires on every download because (clientId mismatch +
+   * empty recentOps), and pre-fix `OperationLogSyncService` throws
+   * `LocalDataConflictError` even though the second client's clock strictly
+   * dominates the remote snapshot's clock — so there is no real conflict.
+   *
+   * To set up the snapshot file (recentOps=[]) we need someone to do a
+   * snapshot upload. The simplest way in e2e is the USE_LOCAL conflict
+   * resolution path, which calls `forceUploadLocalState` → SYNC_IMPORT.
+   * Hence the 3-client setup.
+   *
+   * Setup:
+   * - Client SEED: regular ops upload (file: clientId=SEED, recentOps=[seedOp]).
+   * - Client A: connects with own data → conflict dialog → USE_LOCAL →
+   *   uploads snapshot (file: clientId=A, recentOps=[], snapshotClock={clientA}).
+   * - Client B: fresh, downloads A's snapshot cleanly (B's clock = {clientA}).
+   *
+   * Trigger: Client B adds a task → B's clock = {clientA, clientB:1}, which
+   * strictly dominates A's snapshot clock {clientA}.
+   *
+   * Pre-fix: B's next sync detects snapshot replacement (clientId=A != B,
+   * recentOps=[]), returns snapshotState, throws LocalDataConflictError
+   * because B has 1 meaningful pending op — dialog appears every sync.
+   * Post-fix: vector-clock guard skips the dialog because local dominates
+   * remote.
+   */
+  test('should NOT loop conflict dialog when downstream client edits after foreign snapshot (#7339)', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    test.slow();
+    const SYNC_FOLDER_NAME = generateSyncFolderName('e2e-issue-7339');
+    await createSyncFolder(request, SYNC_FOLDER_NAME);
+    const WEBDAV_CONFIG = {
+      ...WEBDAV_CONFIG_TEMPLATE,
+      syncFolderPath: `/${SYNC_FOLDER_NAME}`,
+    };
+    const url = baseURL || 'http://localhost:4242';
+
+    // --- Client SEED: regular ops upload, populates server ---
+    const { context: contextSeed, page: pageSeed } = await setupSyncClient(browser, url);
+    const syncPageSeed = new SyncPage(pageSeed);
+    const workViewPageSeed = new WorkViewPage(pageSeed);
+    await workViewPageSeed.waitForTaskList();
+
+    await syncPageSeed.setupWebdavSync(WEBDAV_CONFIG);
+    const taskSeed = 'Seed task - ' + Date.now();
+    await workViewPageSeed.addTask(taskSeed);
+    await waitForStatePersistence(pageSeed);
+    await syncPageSeed.triggerSync();
+    await waitForSyncComplete(pageSeed, syncPageSeed);
+    console.log('[Test] SEED uploaded initial data');
+
+    // --- Client A: own data → conflict → USE_LOCAL → uploads SNAPSHOT ---
+    // We use a raw context (not setupSyncClient) because we want the MAT
+    // conflict dialog to actually appear (setupSyncClient only auto-accepts
+    // window.confirm, which is fine — but we'll need to interact with the
+    // MAT dialog manually here).
+    const contextA = await browser.newContext({ baseURL: url });
+    const pageA = await contextA.newPage();
+    await pageA.goto('/');
+    await waitForAppReady(pageA);
+
+    const syncPageA = new SyncPage(pageA);
+    const workViewPageA = new WorkViewPage(pageA);
+    await workViewPageA.waitForTaskList();
+
+    const taskA = 'Snapshot uploader task - ' + Date.now();
+    await workViewPageA.addTask(taskA);
+    await waitForStatePersistence(pageA);
+
+    await syncPageA.setupWebdavSync(WEBDAV_CONFIG);
+    const conflictDialogA = pageA.locator('mat-dialog-container', {
+      hasText: 'Conflicting Data',
+    });
+    await expect(conflictDialogA).toBeVisible({ timeout: 30000 });
+    await conflictDialogA.locator('button', { hasText: /Keep local/i }).click();
+    // Possible "are you sure?" overwrite confirmation
+    const confirmDialogA = pageA.locator('dialog-confirm');
+    try {
+      await confirmDialogA.waitFor({ state: 'visible', timeout: 3000 });
+      await confirmDialogA
+        .locator('button[color="warn"], button:has-text("OK")')
+        .first()
+        .click();
+    } catch {
+      // No confirmation needed
+    }
+    await waitForSyncComplete(pageA, syncPageA, 30000);
+    console.log('[Test] A uploaded SNAPSHOT via USE_LOCAL');
+
+    // --- Client B: fresh, downloads A's snapshot ---
+    const { context: contextB, page: pageB } = await setupSyncClient(browser, url);
+
+    // Capture sync-related console output for debugging.
+    pageB.on('console', (msg) => {
+      const text = msg.text();
+      if (
+        text.includes('OperationLogSyncService') ||
+        text.includes('FileBasedSyncAdapter') ||
+        text.includes('LocalDataConflict') ||
+        text.includes('Gap detected') ||
+        text.includes('snapshot') ||
+        text.includes('Local clock is at-or-ahead')
+      ) {
+        console.log(`[B] ${text}`);
+      }
+    });
+
+    const syncPageB = new SyncPage(pageB);
+    const workViewPageB = new WorkViewPage(pageB);
+    await workViewPageB.waitForTaskList();
+
+    await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
+    await waitForSyncComplete(pageB, syncPageB, 30000);
+    console.log('[Test] B downloaded snapshot');
+
+    // Confirm B has A's task (snapshot was hydrated, not B's seed task —
+    // SEED's data was overwritten when A picked USE_LOCAL).
+    await expect(pageB.locator('task', { hasText: taskA })).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(pageB.locator('task', { hasText: taskSeed })).not.toBeVisible();
+
+    // --- Trigger: B adds a task ---
+    const taskB = 'Task from B - ' + Date.now();
+    await workViewPageB.addTask(taskB);
+    await waitForStatePersistence(pageB);
+
+    // Poll until the TASK op is in IDB so triggerSync's download phase
+    // sees an unsynced op (avoids racing the addTask IDB write).
+    await pageB.waitForFunction(
+      () =>
+        new Promise<boolean>((resolve) => {
+          const dbReq = indexedDB.open('SUP_OPS');
+          dbReq.onsuccess = () => {
+            const db = dbReq.result;
+            try {
+              const tx = db.transaction('ops', 'readonly');
+              const all = tx.objectStore('ops').getAll();
+              all.onsuccess = () => {
+                const unsynced = (
+                  all.result as { syncedAt?: number; rejectedAt?: number }[]
+                ).filter((op) => !op.syncedAt && !op.rejectedAt);
+                resolve(unsynced.length > 0);
+              };
+              all.onerror = () => resolve(false);
+            } catch {
+              resolve(false);
+            }
+          };
+          dbReq.onerror = () => resolve(false);
+        }),
+      { timeout: 10000 },
+    );
+    console.log('[Test] B added local task (TASK op queued in IDB)');
+
+    await syncPageB.triggerSync();
+
+    const conflictDialogB = pageB.locator('mat-dialog-container', {
+      hasText: 'Conflicting Data',
+    });
+    await pageB.waitForTimeout(3000);
+    expect(await conflictDialogB.isVisible()).toBe(false);
+    console.log('[Test] Verified NO conflict dialog after change-and-sync');
+
+    await waitForSyncComplete(pageB, syncPageB, 30000);
+
+    // Second sync — pre-fix would re-trigger the dialog because the snapshot
+    // file's clientId is still A, recentOps still empty. The fix's guard
+    // should keep firing.
+    await syncPageB.triggerSync();
+    await pageB.waitForTimeout(3000);
+    expect(await conflictDialogB.isVisible()).toBe(false);
+    console.log('[Test] Verified NO conflict dialog on second sync (loop broken)');
+
+    await waitForSyncComplete(pageB, syncPageB, 30000);
+
+    await expect(pageB.locator('task', { hasText: taskA })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskB })).toBeVisible();
+
+    await closeContextsSafely(contextSeed, contextA, contextB);
+  });
 });

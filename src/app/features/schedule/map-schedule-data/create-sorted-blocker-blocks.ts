@@ -2,6 +2,8 @@ import { TaskWithDueTime } from '../../tasks/task.model';
 
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { devError } from '../../../util/dev-error';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import {
   BlockedBlock,
@@ -81,8 +83,9 @@ const createBlockerBlocksForScheduledRepeatProjections = (
     i++;
 
     allRepeatableTasksForDay.forEach((repeatCfg) => {
-      if (!repeatCfg.startTime) {
-        throw new Error('Timeline: No startTime for repeat projection');
+      if (!repeatCfg.startTime || !isValidSplitTime(repeatCfg.startTime)) {
+        devError('Timeline: Invalid or missing startTime for repeat projection');
+        return;
       }
       const start = getDateTimeFromClockString(repeatCfg.startTime, currentDayTimestamp);
       const end = start + (repeatCfg.defaultEstimate || 0);

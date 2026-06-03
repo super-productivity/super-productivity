@@ -1,4 +1,4 @@
-import { test } from '../../fixtures/test.fixture';
+import { expect, test } from '../../fixtures/test.fixture';
 
 test.describe('Schedule overlap', () => {
   test('should display multiple tasks starting the same time', async ({
@@ -41,10 +41,9 @@ test.describe('Schedule overlap', () => {
         // left corner should always be visible to click on
         .click({ position: { x: 0, y: 0 } });
       // Clicking on the task should bring up its details panel
-      await page
-        .locator('task-detail-panel')
-        .filter({ hasText: taskDescription })
-        .isVisible();
+      await expect(
+        page.locator('task-detail-panel').filter({ hasText: taskDescription }),
+      ).toBeVisible();
     };
 
     await checkTaskAccessible('task1');

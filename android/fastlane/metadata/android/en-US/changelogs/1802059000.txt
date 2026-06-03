@@ -1,0 +1,9 @@
+- add §17 — multi-agent review + 5-agent depth research
+- add GPU startup guard for confined Linux packages
+- revive §12 PR #7273 — n=2 field data fires the revisit trigger
+- update §16 with nekufa report (n=2, vendor-agnostic)
+- equalize community plugin card heights
+- credit community plugin authors with stars and alpha sort
+- drop dead body-level transition-duration overrides
+- migrate hardcoded values to design tokens
+- add design-token scales (typography, radius, focus-ring)

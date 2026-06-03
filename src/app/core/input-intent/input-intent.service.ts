@@ -2,6 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { inject, Injectable, NgZone, signal } from '@angular/core';
 import { deviceType } from 'detect-it';
 import { BodyClass } from '../../app.constants';
+import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 
 export type InputIntent = 'mouse' | 'touch';
 
@@ -12,11 +13,8 @@ export type InputIntent = 'mouse' | 'touch';
 export const _inputIntentSignal = signal<InputIntent>('mouse');
 
 /**
- * Tracks the current input method (mouse vs touch) on non-mouseOnly devices
- * via Pointer Events API. On mouseOnly devices, does nothing.
- *
- * This allows devices misclassified as touchOnly by detect-it (e.g. Windows
- * touchscreen laptops) to recover to mouse mode on the first mouse move.
+ * Tracks the current input method (mouse vs touch) on hybrid devices
+ * via Pointer Events API. On non-hybrid devices, does nothing.
  *
  * Toggles the existing body classes (isTouchPrimary/isMousePrimary)
  * dynamically so that all existing SCSS rules work without changes.
@@ -33,8 +31,14 @@ export class InputIntentService {
       return;
     }
 
-    // Set initial state: default to touch on touchOnly, mouse on hybrid
-    this._setIntent(deviceType === 'touchOnly' ? 'touch' : 'mouse');
+    // Write initial body classes directly: _setIntent's equality guard would
+    // skip the mouse->mouse case, leaving hybrid devices with neither class set
+    // until the first pointer event (issue #7132).
+    const initialIntent: InputIntent = IS_TOUCH_PRIMARY ? 'touch' : 'mouse';
+    _inputIntentSignal.set(initialIntent);
+    const initialBody = this._document.body.classList;
+    initialBody.toggle(BodyClass.isTouchPrimary, initialIntent === 'touch');
+    initialBody.toggle(BodyClass.isMousePrimary, initialIntent === 'mouse');
 
     this._zone.runOutsideAngular(() => {
       window.addEventListener(

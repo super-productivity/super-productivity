@@ -28,15 +28,21 @@ export const updateTag = createAction(
   }),
 );
 
-export const deleteTag = createAction('[Tag] Delete Tag', (tagProps: { id: string }) => ({
-  ...tagProps,
-  meta: {
-    isPersistent: true,
-    entityType: 'TAG',
-    entityId: tagProps.id,
-    opType: OpType.Delete,
-  } satisfies PersistentActionMeta,
-}));
+export const deleteTag = createAction(
+  '[Tag] Delete Tag',
+  // Tag titles for the push-on-delete two-way-sync effect ride on
+  // DeletedTagTitlesSidecarService — never in the action payload, so user
+  // content stays out of the exportable op-log (rule 9).
+  (tagProps: { id: string }) => ({
+    ...tagProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'TAG',
+      entityId: tagProps.id,
+      opType: OpType.Delete,
+    } satisfies PersistentActionMeta,
+  }),
+);
 
 export const deleteTags = createAction(
   '[Tag] Delete multiple Tags',

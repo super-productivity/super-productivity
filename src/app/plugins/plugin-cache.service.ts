@@ -8,6 +8,7 @@ export interface CachedPlugin {
   indexHtml?: string;
   icon?: string;
   translations?: Record<string, string>; // language code -> JSON string
+  configSchema?: string;
   uploadDate: number;
 }
 
@@ -57,6 +58,7 @@ export class PluginCacheService {
     indexHtml?: string,
     icon?: string,
     translations?: Record<string, string>,
+    configSchema?: string,
   ): Promise<void> {
     // Log plugin data sizes for debugging
     const translationsSize = translations
@@ -105,6 +107,7 @@ export class PluginCacheService {
       indexHtml,
       icon,
       translations,
+      configSchema,
       uploadDate: Date.now(),
     };
 

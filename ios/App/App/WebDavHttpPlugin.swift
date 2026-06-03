@@ -13,6 +13,15 @@ public class WebDavHttpPlugin: CAPPlugin, CAPBridgedPlugin {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 30
+        // Sync correctness (#7144): never serve WebDAV responses from the HTTP
+        // cache. A cached GET of sync-data.json hides remote changes AND defeats
+        // the content-hash conflict check (the pre-upload GET returns the same
+        // stale body), so the client silently overwrites newer remote data and
+        // loses it. URLSessionConfiguration.default ships a shared URLCache and
+        // the default .useProtocolCachePolicy, so iOS caches these GETs while
+        // Android (OkHttp, no cache) and web (fetch `cache: 'no-store'`) do not.
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
         return URLSession(configuration: config)
     }()
 

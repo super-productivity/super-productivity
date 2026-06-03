@@ -61,7 +61,7 @@ This ensures:
 
 **Files:**
 
-- `src/app/op-log/sync-providers/super-sync/super-sync.model.ts`
+- `packages/sync-providers/src/super-sync/super-sync.model.ts`
 - `src/app/features/config/global-config.model.ts`
 
 **Changes:**
@@ -81,7 +81,7 @@ export interface SuperSyncPrivateCfg extends SyncProviderPrivateCfgBase {
 
 ### Phase 2: Encryption Function (0.5 day)
 
-**File:** `src/app/op-log/encryption/encryption.ts`
+**File:** `packages/sync-core/src/encryption.ts`
 
 **Add:**
 
@@ -193,18 +193,18 @@ async getEncryptKey(): Promise<string | undefined> {
 
 ## Files to Modify
 
-| File                                                           | Changes                                            |
-| -------------------------------------------------------------- | -------------------------------------------------- |
-| `src/app/op-log/sync-providers/super-sync/super-sync.model.ts` | Add `isAutoEncryptionEnabled`, `autoEncryptionKey` |
-| `src/app/op-log/encryption/encryption.ts`                      | Add `deriveKeyFromHighEntropy()`                   |
-| `src/app/op-log/sync-providers/super-sync/super-sync.ts`       | Modify `getEncryptKey()`                           |
-| `src/app/op-log/sync/operation-encryption.service.ts`          | Support pre-derived keys                           |
-| `src/app/features/config/form-cfgs/sync-form.const.ts`         | Add UI toggle                                      |
-| `src/app/features/config/global-config.model.ts`               | Add `isAutoEncryptionEnabled` to `SuperSyncConfig` |
-| `src/app/imex/sync/auto-encryption-enable.service.ts`          | NEW: Enable flow                                   |
-| `src/app/imex/sync/auto-encryption-disable.service.ts`         | NEW: Disable flow                                  |
-| `src/assets/i18n/en.json`                                      | Add translation keys                               |
-| `src/app/t.const.ts`                                           | Add translation constants                          |
+| File                                                         | Changes                                            |
+| ------------------------------------------------------------ | -------------------------------------------------- |
+| `packages/sync-providers/src/super-sync/super-sync.model.ts` | Add `isAutoEncryptionEnabled`, `autoEncryptionKey` |
+| `packages/sync-core/src/encryption.ts`                       | Add `deriveKeyFromHighEntropy()`                   |
+| `src/app/op-log/sync-providers/super-sync/super-sync.ts`     | Modify `getEncryptKey()`                           |
+| `src/app/op-log/sync/operation-encryption.service.ts`        | Support pre-derived keys                           |
+| `src/app/features/config/form-cfgs/sync-form.const.ts`       | Add UI toggle                                      |
+| `src/app/features/config/global-config.model.ts`             | Add `isAutoEncryptionEnabled` to `SuperSyncConfig` |
+| `src/app/imex/sync/auto-encryption-enable.service.ts`        | NEW: Enable flow                                   |
+| `src/app/imex/sync/auto-encryption-disable.service.ts`       | NEW: Disable flow                                  |
+| `src/assets/i18n/en.json`                                    | Add translation keys                               |
+| `src/app/t.const.ts`                                         | Add translation constants                          |
 
 ---
 

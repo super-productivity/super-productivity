@@ -1,0 +1,39 @@
+<mat-select
+  [errorStateMatcher]="errorStateMatcher"
+  [formControl]="formControl"
+  [formlyAttributes]="field"
+  [id]="id"
+>
+  <mat-option [value]="DefaultStartPage.Today">{{
+    T.G.TODAY_TAG_TITLE | translate
+  }}</mat-option>
+
+  <!-- Legacy: render only when the user still has the old numeric Inbox value,
+       so the dropdown reflects their stored selection. Picking any other
+       option removes it from the list on the next change detection pass. -->
+  @if (formControl.value === DefaultStartPage.Inbox) {
+    <mat-option [value]="DefaultStartPage.Inbox">{{
+      T.G.INBOX_PROJECT_TITLE | translate
+    }}</mat-option>
+  }
+
+  @if (appFeatures().isPlannerEnabled) {
+    <mat-option [value]="DefaultStartPage.Planner">{{
+      T.MH.PLANNER | translate
+    }}</mat-option>
+  }
+  @if (appFeatures().isSchedulerEnabled) {
+    <mat-option [value]="DefaultStartPage.Schedule">{{
+      T.MH.SCHEDULE | translate
+    }}</mat-option>
+  }
+  @if (appFeatures().isBoardsEnabled) {
+    <mat-option [value]="DefaultStartPage.Boards">{{
+      T.MH.BOARDS | translate
+    }}</mat-option>
+  }
+
+  @for (opt of projects(); track opt.id) {
+    <mat-option [value]="opt.id">{{ opt.title }}</mat-option>
+  }
+</mat-select>

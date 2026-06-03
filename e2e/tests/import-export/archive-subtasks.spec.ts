@@ -53,46 +53,50 @@ const readDownloadedFile = async (download: Download): Promise<string> => {
 };
 
 /**
- * Helper to mark all visible tasks as done
- * Uses hover → wait for done button → click pattern from task-crud tests
+ * Helper to mark all tasks as done.
+ *
+ * Clicks the done-toggle of the first still-undone row until none remain. The
+ * done-toggle is always rendered at the e2e viewport width (it is only
+ * opacity-hidden inside <352px containers), so we click it directly rather than
+ * hovering `.first-line` first: that hover intermittently timed out for 15s when
+ * the targeted row was mid mark-done animation or a collapsing subtask (the
+ * cause of this spec's CI flakiness).
  */
 const markAllTasksDone = async (page: Page): Promise<void> => {
-  // Wait for tasks to be visible
   await page.waitForSelector(TASK_SEL, { state: 'visible', timeout: 10000 });
 
-  let attempts = 0;
-  const maxAttempts = 6;
+  // Only target visible rows: a subtask that collapses under a freshly-done
+  // parent cannot be interacted with and must never be selected.
+  const undoneVisible = page.locator(`${TASK_SEL}:not(.isDone):visible`);
 
-  while (attempts < maxAttempts) {
-    const undoneLocator = page.locator('task:not(.isDone)');
-    const undoneCount = await undoneLocator.count();
-    console.log(
-      `[markAllTasksDone] Attempt ${attempts + 1}: ${undoneCount} undone tasks`,
-    );
+  // The work-view list animates and reorders rows as tasks are marked done, so
+  // a normal click can wait the full 15s actionTimeout for a row to become
+  // "stable" — the source of this spec's CI flakiness. Instead keep
+  // force-clicking the first undone row's own done-toggle (`.first()`: a parent
+  // renders its toggle before any nested subtask toggle) until none remain. A
+  // missed click — the row moved mid-animation — is simply retried on the next
+  // poll, and finishing the last subtask auto-completes its parent so the count
+  // can drop by more than one.
+  await expect
+    .poll(
+      async () => {
+        const remaining = await undoneVisible.count();
+        if (remaining > 0) {
+          await undoneVisible
+            .first()
+            .locator(TASK_DONE_BTN)
+            .first()
+            .click({ force: true })
+            .catch(() => {});
+        }
+        return remaining;
+      },
+      { timeout: 30000, intervals: [300] },
+    )
+    .toBe(0);
 
-    if (undoneCount === 0) break;
-
-    // Get the first undone task using Playwright locator
-    const firstUndone = undoneLocator.first();
-    // Must hover over .first-line to trigger hover controls
-    // Use .first() because parent tasks contain nested subtask .first-lines
-    const firstLine = firstUndone.locator('.first-line').first();
-    await firstLine.hover();
-
-    // Wait for the done button to become visible after hover
-    // Use .first() for same reason - parent has nested subtask done buttons
-    const doneBtn = firstUndone.locator(TASK_DONE_BTN).first();
-    await doneBtn.waitFor({ state: 'visible', timeout: 2000 });
-
-    // Click the done button
-    await doneBtn.click();
-    await page.waitForTimeout(500);
-
-    attempts++;
-  }
-
-  const finalCount = await page.locator('task:not(.isDone)').count();
-  console.log(`[markAllTasksDone] Finished: ${finalCount} undone tasks remain`);
+  // No row — visible or collapsed — may remain undone before finish-day.
+  await expect(page.locator(`${TASK_SEL}:not(.isDone)`)).toHaveCount(0);
 };
 
 /**

@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { FormlyFieldConfig, FormlyFormOptions, FormlyModule } from '@ngx-formly/core';
 import { FormsModule, ReactiveFormsModule, UntypedFormGroup } from '@angular/forms';
-import { GlobalConfigSectionKey } from '../global-config.model';
+import { GlobalConfigFormSectionKey } from '../global-config.model';
 import { ProjectCfgFormKey } from '../../project/project.model';
 import { T } from '../../../t.const';
 import { exists } from '../../../util/exists';
@@ -25,11 +25,11 @@ export class ConfigFormComponent {
   T: typeof T = T;
   cfg = input.required<Record<string, unknown>>();
   formCfg = input.required<FormlyFieldConfig[]>();
-  sectionKey = input<GlobalConfigSectionKey | ProjectCfgFormKey>();
+  sectionKey = input<GlobalConfigFormSectionKey | ProjectCfgFormKey>();
   fields = computed(() => adjustToLiveFormlyForm(this.formCfg()));
 
   save = output<{
-    sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey;
+    sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey;
     config: unknown;
   }>();
   form: UntypedFormGroup = new UntypedFormGroup({});

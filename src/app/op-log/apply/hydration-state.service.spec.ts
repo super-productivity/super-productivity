@@ -1,4 +1,5 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import type { RemoteApplyWindowPort } from '@sp/sync-core';
 import { HydrationStateService } from './hydration-state.service';
 import { getIsApplyingRemoteOps } from '../capture/operation-capture.meta-reducer';
 
@@ -14,12 +15,31 @@ describe('HydrationStateService', () => {
     // Ensure clean state - meta-reducer flag may be dirty from previous tests
     service.endApplyingRemoteOps();
     service.clearPostSyncCooldown();
+    service.closeSyncWindow();
   });
 
   describe('initial state', () => {
     it('should start with isApplyingRemoteOps as false', () => {
       expect(service.isApplyingRemoteOps()).toBeFalse();
     });
+  });
+
+  describe('RemoteApplyWindowPort contract', () => {
+    it('should expose remote apply window state through the port methods', fakeAsync(() => {
+      const port: RemoteApplyWindowPort = service;
+
+      port.startApplyingRemoteOps();
+      expect(port.isApplyingRemoteOps?.()).toBeTrue();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      port.startPostSyncCooldown(50);
+      port.endApplyingRemoteOps();
+      expect(port.isApplyingRemoteOps?.()).toBeFalse();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      tick(100);
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
   });
 
   describe('startApplyingRemoteOps', () => {
@@ -186,15 +206,108 @@ describe('HydrationStateService', () => {
       expect(service.isInSyncWindow()).toBeFalse();
     });
 
-    it('should auto-clear cooldown after timeout', (done) => {
+    it('should auto-clear cooldown after timeout', fakeAsync(() => {
       service.startPostSyncCooldown(50); // 50ms for fast test
       expect(service.isInSyncWindow()).toBeTrue();
 
-      setTimeout(() => {
-        expect(service.isInSyncWindow()).toBeFalse();
-        done();
-      }, 100);
+      tick(100);
+
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
+  });
+
+  describe('explicit sync window', () => {
+    // Regression coverage for the I_RESUME_APP gap (see `isInSyncWindow` JSDoc).
+    it('should set isInSyncWindow to true when openSyncWindow is called', () => {
+      expect(service.isInSyncWindow()).toBeFalse();
+
+      service.openSyncWindow();
+
+      expect(service.isInSyncWindow()).toBeTrue();
     });
+
+    it('should clear isInSyncWindow when closeSyncWindow is called', () => {
+      service.openSyncWindow();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      service.closeSyncWindow();
+
+      expect(service.isInSyncWindow()).toBeFalse();
+    });
+
+    it('should stay open across openSyncWindow → applying → close', () => {
+      service.openSyncWindow();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      service.startApplyingRemoteOps();
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      service.endApplyingRemoteOps();
+      // closeSyncWindow hasn't been called yet — still open
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      service.closeSyncWindow();
+      expect(service.isInSyncWindow()).toBeFalse();
+    });
+
+    it('closeSyncWindow is idempotent when no window is open', () => {
+      expect(service.isInSyncWindow()).toBeFalse();
+      expect(() => service.closeSyncWindow()).not.toThrow();
+      expect(service.isInSyncWindow()).toBeFalse();
+    });
+
+    it('failsafe auto-closes the window if closeSyncWindow is never called', fakeAsync(() => {
+      service.openSyncWindow(50); // 50ms failsafe for fast test
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      tick(100);
+
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
+
+    it('closeSyncWindow cancels a pending failsafe', fakeAsync(() => {
+      service.openSyncWindow(50);
+      service.closeSyncWindow();
+      expect(service.isInSyncWindow()).toBeFalse();
+
+      // Wait past failsafe; should remain closed
+      tick(100);
+
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
+
+    it('failsafeMs=0 skips the failsafe entirely', fakeAsync(() => {
+      // Simulates `SyncWrapperService.sync()` opening the window without a
+      // wall-clock timer because its `finally` is authoritative. The window
+      // must stay open until explicitly closed, regardless of duration.
+      service.openSyncWindow(0);
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      // After what would have been the default failsafe interval, the window
+      // must still be open.
+      tick(50);
+
+      expect(service.isInSyncWindow()).toBeTrue();
+      service.closeSyncWindow();
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
+
+    it('reopening restarts the failsafe', fakeAsync(() => {
+      service.openSyncWindow(50);
+      // Re-open with a longer failsafe before the first one fires
+      setTimeout(() => service.openSyncWindow(200), 25);
+
+      tick(80);
+
+      // At 80ms the original 50ms timer would have fired but the new 200ms
+      // timer (started at 25ms, fires at 225ms) still holds the window open
+      expect(service.isInSyncWindow()).toBeTrue();
+
+      tick(200);
+
+      // At 250ms the second timer should have fired
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
   });
 
   describe('edge cases', () => {
@@ -212,7 +325,7 @@ describe('HydrationStateService', () => {
       expect(service.isApplyingRemoteOps()).toBeFalse();
     });
 
-    it('should handle multiple rapid cooldown starts', (done) => {
+    it('should handle multiple rapid cooldown starts', fakeAsync(() => {
       // Start multiple cooldowns in rapid succession - only the last one matters
       service.startPostSyncCooldown(50);
       service.startPostSyncCooldown(100);
@@ -221,13 +334,12 @@ describe('HydrationStateService', () => {
       expect(service.isInSyncWindow()).toBeTrue();
 
       // After 75ms, should still be in window (last cooldown was 50ms, but timer restarted)
-      setTimeout(() => {
-        expect(service.isInSyncWindow()).toBeFalse();
-        done();
-      }, 100);
-    });
+      tick(100);
 
-    it('should properly cleanup when clearPostSyncCooldown is called during active cooldown', (done) => {
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
+
+    it('should properly cleanup when clearPostSyncCooldown is called during active cooldown', fakeAsync(() => {
       service.startPostSyncCooldown(200);
       expect(service.isInSyncWindow()).toBeTrue();
 
@@ -236,11 +348,10 @@ describe('HydrationStateService', () => {
       expect(service.isInSyncWindow()).toBeFalse();
 
       // Wait past the original timeout - should still be false (timer was cleared)
-      setTimeout(() => {
-        expect(service.isInSyncWindow()).toBeFalse();
-        done();
-      }, 250);
-    });
+      tick(250);
+
+      expect(service.isInSyncWindow()).toBeFalse();
+    }));
 
     it('should handle interleaved start/end/cooldown calls', () => {
       // Complex sequence that might occur during rapid sync operations

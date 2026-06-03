@@ -7,7 +7,7 @@ import {
   waitForTask,
   startTimeTracking,
   stopTimeTracking,
-  getTaskElement,
+  waitForTaskTimeSpent,
   markTaskDone,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -61,19 +61,19 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       await startTimeTracking(clientA, taskName);
       console.log('[Archive Time Test] Started time tracking');
 
-      // Wait for time to accumulate (reduced from 5000ms to 2000ms)
-      await clientA.page.waitForTimeout(2000);
+      // Wait for the first global tracking tick before stopping. A fixed sleep can
+      // race the app timer under CI load and leave the task with 0 recorded time.
+      await waitForTaskTimeSpent(clientA, taskName, 10000);
 
       // Stop tracking
       await stopTimeTracking(clientA, taskName);
       console.log('[Archive Time Test] Stopped time tracking');
 
-      // Capture tracked time
-      const taskLocatorA = getTaskElement(clientA, taskName);
-      const timeVal = taskLocatorA.locator('.time-wrapper .time-val').first();
-      await expect(timeVal).toBeVisible({ timeout: 5000 });
-      const trackedTime = await timeVal.textContent();
-      console.log(`[Archive Time Test] Tracked time: ${trackedTime}`);
+      // Capture tracked time from persisted state. The row can hide the visual
+      // time while hover controls are mounted, and sub-minute values render as
+      // "-" in the UI.
+      const trackedTimeMs = await waitForTaskTimeSpent(clientA, taskName, 5000);
+      console.log(`[Archive Time Test] Tracked time: ${trackedTimeMs}ms`);
 
       // Mark as done
       await markTaskDone(clientA, taskName);
@@ -278,17 +278,14 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       await waitForAppReady(clientB.page);
       await waitForTask(clientB.page, taskName);
 
-      const taskA = getTaskElement(clientA, taskName);
-      const taskB = getTaskElement(clientB, taskName);
+      const timeA = await waitForTaskTimeSpent(clientA, taskName, 10000);
+      const timeB = await waitForTaskTimeSpent(clientB, taskName, 10000);
 
-      const timeA = await taskA.locator('.time-wrapper .time-val').first().textContent();
-      const timeB = await taskB.locator('.time-wrapper .time-val').first().textContent();
-
-      console.log(`[Concurrent Time Test] Client A final time: ${timeA}`);
-      console.log(`[Concurrent Time Test] Client B final time: ${timeB}`);
+      console.log(`[Concurrent Time Test] Client A final time: ${timeA}ms`);
+      console.log(`[Concurrent Time Test] Client B final time: ${timeB}ms`);
 
       // Times should match (LWW resolution)
-      expect(timeA?.trim()).toBe(timeB?.trim());
+      expect(timeA).toBe(timeB);
 
       console.log('[Concurrent Time Test] Time tracking resolved consistently');
     } finally {

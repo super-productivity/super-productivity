@@ -14,6 +14,7 @@ import { CommonModule, NgStyle } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MatDivider } from '@angular/material/divider';
 import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TreeDndComponent } from '../../../ui/tree-dnd/tree.component';
@@ -32,7 +33,9 @@ import {
 import { MenuTreeService } from '../../../features/menu-tree/menu-tree.service';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { DEFAULT_PROJECT_ICON } from '../../../features/project/project.const';
+import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
+import { Router } from '@angular/router';
 
 const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
 
@@ -49,6 +52,7 @@ const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
     TranslatePipe,
     TreeDndComponent,
     NavItemComponent,
+    MatDivider,
   ],
   templateUrl: './nav-list-tree.component.html',
   styleUrls: ['./nav-list-tree.component.scss'],
@@ -58,6 +62,7 @@ const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
 export class NavListTreeComponent implements OnDestroy {
   private readonly _navConfigService = inject(MagicNavConfigService);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private readonly _router = inject(Router);
   private _expandAnimationTimeoutId: number | null = null;
 
   item = input.required<NavTreeItem>();
@@ -70,10 +75,12 @@ export class NavListTreeComponent implements OnDestroy {
   readonly T = T;
   readonly WorkContextType = WorkContextType;
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
+  readonly isSingleEmoji = isSingleEmoji;
   readonly MenuTreeKind = MenuTreeKind;
 
   // Access to service methods and data for visibility menu (includes Inbox for unhiding)
   readonly allUnarchivedProjects = this._navConfigService.allUnarchivedProjects;
+  readonly archivedProjectsCount = this._navConfigService.archivedProjectsCount;
 
   // ViewChild for visibility menu trigger to close menu after toggling
   visibilityMenuTrigger = viewChild('visibilityBtn', { read: MatMenuTrigger });
@@ -129,6 +136,11 @@ export class NavListTreeComponent implements OnDestroy {
     this._navConfigService.toggleProjectVisibility(projectId);
     // Close menu to prevent stale positioning after DOM update (#5955)
     this.visibilityMenuTrigger()?.closeMenu();
+  }
+
+  goToArchivedProjects(): void {
+    this.visibilityMenuTrigger()?.closeMenu();
+    this._router.navigateByUrl('/archived-projects');
   }
 
   onFolderMoreButton(event: MouseEvent, node: TreeNode<MenuTreeViewNode>): void {

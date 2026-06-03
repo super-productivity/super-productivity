@@ -24,6 +24,7 @@ describe('TaskShortcutService', () => {
     togglePlay: 'Y',
     taskEditTitle: 'Enter',
     taskToggleDetailPanelOpen: 'I',
+    taskOpenNotesPanel: 'N',
     taskOpenNotesFullscreen: 'Shift+N',
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
@@ -46,12 +47,17 @@ describe('TaskShortcutService', () => {
     moveTaskToBottom: null,
   };
 
-  const createKeyboardEvent = (key: string, code?: string): KeyboardEvent => {
+  const createKeyboardEvent = (
+    key: string,
+    code?: string,
+    init: KeyboardEventInit = {},
+  ): KeyboardEvent => {
     return new KeyboardEvent('keydown', {
       key,
       code: code || (key.length === 1 ? `Key${key.toUpperCase()}` : key),
       bubbles: true,
       cancelable: true,
+      ...init,
     });
   };
 
@@ -98,6 +104,7 @@ describe('TaskShortcutService', () => {
       it('should delegate to focused task component togglePlayPause method', () => {
         // Arrange
         const mockTaskComponent = {
+          task: () => ({ id: 'focused-task-1' }),
           togglePlayPause: jasmine.createSpy('togglePlayPause'),
           taskContextMenu: () => undefined, // No context menu open
         };
@@ -229,6 +236,7 @@ describe('TaskShortcutService', () => {
       it('should use focused task even when selected task is different', () => {
         // Arrange
         const mockTaskComponent = {
+          task: () => ({ id: 'focused-task-1' }),
           togglePlayPause: jasmine.createSpy('togglePlayPause'),
           taskContextMenu: () => undefined, // No context menu open
         };
@@ -251,6 +259,25 @@ describe('TaskShortcutService', () => {
   });
 
   describe('other shortcuts require focused task', () => {
+    it('should delegate taskOpenNotesPanel shortcut to focused task component', () => {
+      const mockTaskComponent = {
+        task: () => ({ id: 'focused-task-1' }),
+        openNotesPanel: jasmine.createSpy('openNotesPanel'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('N');
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(mockTaskComponent.openNotesPanel).toHaveBeenCalled();
+    });
+
     it('should return false for non-togglePlay shortcuts when no focused task', () => {
       // Arrange
       mockTaskFocusService.focusedTaskId.set(null);
@@ -268,6 +295,220 @@ describe('TaskShortcutService', () => {
         // Assert
         expect(result).toBe(false);
       }
+    });
+  });
+
+  describe('copy focused task title shortcut', () => {
+    let originalClipboardDescriptor: PropertyDescriptor | undefined;
+    let writeText: jasmine.Spy;
+
+    beforeEach(() => {
+      writeText = jasmine.createSpy('writeText').and.returnValue(Promise.resolve());
+      originalClipboardDescriptor = Object.getOwnPropertyDescriptor(
+        navigator,
+        'clipboard',
+      );
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      });
+      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set({
+        task: () => ({ id: 'focused-task-1', title: 'Task title to copy' }),
+        taskContextMenu: () => undefined,
+      });
+    });
+
+    afterEach(() => {
+      if (originalClipboardDescriptor) {
+        Object.defineProperty(navigator, 'clipboard', originalClipboardDescriptor);
+      } else {
+        delete (navigator as { clipboard?: Clipboard }).clipboard;
+      }
+      originalClipboardDescriptor = undefined;
+    });
+
+    it('should copy the focused task title on Ctrl+C', () => {
+      const event = createKeyboardEvent('c', 'KeyC', { ctrlKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(writeText).toHaveBeenCalledWith('Task title to copy');
+      expect(event.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should copy the focused task title on Cmd+C', () => {
+      const event = createKeyboardEvent('c', 'KeyC', { metaKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(writeText).toHaveBeenCalledWith('Task title to copy');
+      expect(event.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should fire on non-Latin keyboard layouts (key=Cyrillic, code=KeyC)', () => {
+      // Cyrillic 'с' (U+0441) — what the physical KeyC produces on a
+      // Russian layout. The shortcut must still trigger so behavior matches
+      // the browser's native Ctrl+C, which binds on physical position.
+      const event = createKeyboardEvent('с', 'KeyC', { ctrlKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(writeText).toHaveBeenCalledWith('Task title to copy');
+      expect(event.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should not override native copy when the event target is an input', () => {
+      const input = document.createElement('input');
+      const event = createKeyboardEvent('c', 'KeyC', { metaKey: true });
+      Object.defineProperty(event, 'target', { configurable: true, value: input });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(false);
+      expect(writeText).not.toHaveBeenCalled();
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('should not override native copy when text is selected', () => {
+      spyOn(window, 'getSelection').and.returnValue({
+        toString: () => 'selected text',
+      } as unknown as Selection);
+      const event = createKeyboardEvent('c', 'KeyC', { ctrlKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(false);
+      expect(writeText).not.toHaveBeenCalled();
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('focusedTaskId recovery from active element', () => {
+    /**
+     * Regression: a `focusout` from a textarea inside a task can clear
+     * focusedTaskId without a paired focusin firing on the task host (e.g.
+     * after addSubtask's title-commit refocuses the host that was already
+     * the implicit focus target). The shortcut handler must recover the
+     * id from document.activeElement so keystrokes don't silently drop.
+     *
+     * Tests stub `document.activeElement` directly rather than calling
+     * `el.focus()` — headless Chrome only updates activeElement when the
+     * test iframe has window focus, which is not guaranteed inside a
+     * large suite (other tests can steal/drop focus).
+     */
+    let taskEl: HTMLElement;
+    let activeElementStubbed = false;
+
+    const stubActiveElement = (el: Element | null): void => {
+      Object.defineProperty(document, 'activeElement', {
+        configurable: true,
+        get: () => el,
+      });
+      activeElementStubbed = true;
+    };
+
+    afterEach(() => {
+      if (activeElementStubbed) {
+        delete (document as unknown as { activeElement?: unknown }).activeElement;
+        activeElementStubbed = false;
+      }
+      taskEl?.remove();
+    });
+
+    const createTaskEl = (taskId: string): HTMLElement => {
+      const el = document.createElement('task');
+      el.setAttribute('data-task-id', taskId);
+      document.body.appendChild(el);
+      return el;
+    };
+
+    it('recovers focusedTaskId from document.activeElement and dispatches the shortcut', () => {
+      taskEl = createTaskEl('recovered-task');
+      stubActiveElement(taskEl);
+
+      const mockTaskComponent = {
+        task: () => ({ id: 'recovered-task' }),
+        toggleDoneKeyboard: jasmine.createSpy('toggleDoneKeyboard'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set(null); // simulate the bug
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('D');
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(mockTaskComponent.toggleDoneKeyboard).toHaveBeenCalled();
+    });
+
+    it('skips delegation when active element id does not match lastFocusedTaskComponent', () => {
+      // active element is a different task than lastFocusedTaskComponent
+      taskEl = createTaskEl('other-task');
+      stubActiveElement(taskEl);
+
+      const mockTaskComponent = {
+        task: () => ({ id: 'stale-task' }),
+        toggleDoneKeyboard: jasmine.createSpy('toggleDoneKeyboard'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set(null);
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('D');
+
+      const result = service.handleTaskShortcuts(event);
+
+      // Recovery picks up 'other-task' from DOM, but lastFocusedTaskComponent
+      // points at 'stale-task' — guard prevents delegating to wrong component.
+      expect(result).toBe(true); // shortcut matched, just didn't delegate
+      expect(mockTaskComponent.toggleDoneKeyboard).not.toHaveBeenCalled();
+    });
+
+    it('returns false when active element is outside any task', () => {
+      // body is the active element (not inside a <task>)
+      stubActiveElement(document.body);
+      mockTaskFocusService.focusedTaskId.set(null);
+      mockTaskFocusService.lastFocusedTaskComponent.set(null);
+
+      const event = createKeyboardEvent('D');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(false);
+    });
+
+    it('recovers when active element is a descendant of <task> (e.g. button inside)', () => {
+      // Real-world shape: a focused button inside a task host. closest('task')
+      // walks up to the host so recovery still resolves the id.
+      taskEl = createTaskEl('host-with-child-focus');
+      const innerBtn = document.createElement('button');
+      taskEl.appendChild(innerBtn);
+      stubActiveElement(innerBtn);
+
+      const mockTaskComponent = {
+        task: () => ({ id: 'host-with-child-focus' }),
+        toggleDoneKeyboard: jasmine.createSpy('toggleDoneKeyboard'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set(null);
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('D');
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(mockTaskComponent.toggleDoneKeyboard).toHaveBeenCalled();
     });
   });
 });

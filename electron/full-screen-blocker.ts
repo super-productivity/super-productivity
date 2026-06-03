@@ -1,7 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { TakeABreakConfig } from '../src/app/features/config/global-config.model';
-import { format } from 'url';
 import { join, normalize } from 'path';
 
 export const initFullScreenBlocker = (IS_DEV: boolean): void => {
@@ -35,19 +34,15 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
       win.setFullScreenable(false);
       isFullScreenWindowOpen = true;
       win.loadURL(
-        format({
-          pathname: normalize(
-            join(
-              __dirname,
-              IS_DEV
-                ? '../src/static/break-reminder-overlay.html'
-                : '../dist/static/break-reminder-overlay.html',
-            ),
+        `file://${normalize(
+          join(
+            __dirname,
+            IS_DEV
+              ? '../src/static/break-reminder-overlay.html'
+              : '../dist/static/break-reminder-overlay.html',
           ),
-          protocol: 'file:',
-          slashes: true,
-        }) +
-          `#msg=${encodeURI(msg)}&img=${encodeURI(randomImgUrl)}&time=${
+        )}` +
+          `#msg=${encodeURIComponent(msg)}&img=${encodeURIComponent(randomImgUrl ?? '')}&time=${
             takeABreakCfg.timedFullScreenBlockerDuration
           }`,
       );

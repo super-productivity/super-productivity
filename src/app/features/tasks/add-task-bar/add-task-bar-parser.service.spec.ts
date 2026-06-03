@@ -20,6 +20,8 @@ describe('AddTaskBarParserService', () => {
       'updateEstimate',
       'updateDate',
       'updateAttachments',
+      'updateDeadline',
+      'updateDeadlineRemindOption',
       'isAutoDetected',
       'state',
     ]);
@@ -30,11 +32,15 @@ describe('AddTaskBarParserService', () => {
     const defaultMockState = {
       projectId: null,
       tagIds: [],
+      tagIdsFromTxt: [],
       newTagTitles: [],
       date: null,
       time: null,
       estimate: null,
       cleanText: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
     };
     mockStateServiceSpy.state.and.returnValue(defaultMockState);
 
@@ -91,6 +97,8 @@ describe('AddTaskBarParserService', () => {
       mockStateService.setAutoDetectedProjectId.calls.reset();
       mockStateService.updateProjectId.calls.reset();
       mockStateService.updateAttachments.calls.reset();
+      mockStateService.updateDeadline.calls.reset();
+      mockStateService.updateDeadlineRemindOption.calls.reset();
     });
 
     it('should handle empty text', async () => {
@@ -280,10 +288,59 @@ describe('AddTaskBarParserService', () => {
       });
     });
 
-    describe('Parsing Integration', () => {
-      it('should call updateEstimate when parsing text', async () => {
+    describe('Deadline Parsing', () => {
+      it('should parse deadline date with !friday', async () => {
+        const text = 'Do taxes !friday';
         await service.parseAndUpdateText(
-          'Task with potential time estimate',
+          text,
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalled();
+        const [deadlineDate, deadlineTime] =
+          mockStateService.updateDeadline.calls.mostRecent().args;
+        expect(typeof deadlineDate).toBe('string');
+        expect(deadlineTime).toBeNull();
+      });
+
+      it('should ignore bare trailing !', async () => {
+        const text = 'Task done!';
+        await service.parseAndUpdateText(
+          text,
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(null, null);
+      });
+
+      it('should handle simple hour match like !12', async () => {
+        const text = 'Meeting !12';
+        await service.parseAndUpdateText(
+          text,
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalled();
+        const [deadlineDate, deadlineTime] =
+          mockStateService.updateDeadline.calls.mostRecent().args;
+        expect(typeof deadlineDate).toBe('string');
+        expect(deadlineTime).toBe('12:00');
+      });
+    });
+
+    describe('Parsing Integration', () => {
+      it('should call updateEstimate when text contains estimate syntax', async () => {
+        await service.parseAndUpdateText(
+          'Task with estimate 30m',
           mockConfig,
           mockProjects,
           mockTags,
@@ -293,7 +350,7 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateEstimate).toHaveBeenCalled();
       });
 
-      it('should handle null time estimates', async () => {
+      it('should not call updateEstimate for text without estimate on first parse', async () => {
         await service.parseAndUpdateText(
           'Simple task',
           mockConfig,
@@ -302,7 +359,24 @@ describe('AddTaskBarParserService', () => {
           mockDefaultProject,
         );
 
-        expect(mockStateService.updateEstimate).toHaveBeenCalledWith(null);
+        expect(mockStateService.updateEstimate).not.toHaveBeenCalled();
+      });
+
+      it('should not call updateEstimate when typing text without estimate syntax for the first time', async () => {
+        // Simulates: user sets estimate via dropdown, then types task title.
+        // The parser has no previous result (first parse after empty input).
+        // Since the parsed estimate is null and there's no previous result to
+        // diff against, updateEstimate should NOT be called to avoid wiping
+        // out the dropdown-set value.
+        await service.parseAndUpdateText(
+          'My new task',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateEstimate).not.toHaveBeenCalled();
       });
 
       it('should call updateSpent when parsing text', async () => {
@@ -478,6 +552,32 @@ describe('AddTaskBarParserService', () => {
       it('should handle date at end', async () => {
         const input = 'Task content @today';
         const result = service.removeShortSyntaxFromInput(input, 'date');
+        expect(result).toBe('Task content');
+      });
+    });
+
+    describe('deadline removal', () => {
+      it('should remove deadline syntax', async () => {
+        const input = 'Task !today !16:30 !2024-01-15';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
+        expect(result).toBe('Task');
+      });
+
+      it('should handle complex date formats', async () => {
+        const input = 'Meeting !tomorrow !next-week !2024-12-25';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
+        expect(result).toBe('Meeting');
+      });
+
+      it('should handle deadline at beginning', async () => {
+        const input = '!today Task content';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
+        expect(result).toBe('Task content');
+      });
+
+      it('should handle deadline at end', async () => {
+        const input = 'Task content !today';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
         expect(result).toBe('Task content');
       });
     });
